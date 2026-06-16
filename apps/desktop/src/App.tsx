@@ -123,16 +123,16 @@ const App: React.FC = () => {
   // Dynamic Navigation items based on onboarding status
   const navItems = isStationReady
     ? [
-        { label: 'Dashboard', path: '/dashboard', icon: '📊' },
-        { label: 'Shifts', path: '/shifts', icon: '⛽', roles: ['Owner', 'Manager', 'Staff'] },
-        { label: 'Station Overview', path: '/setup/station', icon: '⚙️', roles: ['Owner', 'Manager'] },
-        { label: 'Expenses', path: '/expenses', icon: '💸' },
-        { label: 'Purchases', path: '/purchases', icon: '🛒', roles: ['Owner', 'Manager', 'Accountant'] },
-        { label: 'Customers', path: '/customers', icon: '👥' },
-        { label: 'Reports', path: '/reports', icon: '📈', roles: ['Owner', 'Manager', 'Accountant'] },
+        { label: 'Dashboard', path: '/dashboard' },
+        { label: 'Shifts', path: '/shifts', roles: ['Owner', 'Manager', 'Staff'] },
+        { label: 'Station Overview', path: '/setup/station', roles: ['Owner', 'Manager'] },
+        { label: 'Expenses', path: '/expenses' },
+        { label: 'Purchases', path: '/purchases', roles: ['Owner', 'Manager', 'Accountant'] },
+        { label: 'Customers', path: '/customers' },
+        { label: 'Reports', path: '/reports', roles: ['Owner', 'Manager', 'Accountant'] },
       ]
     : [
-        { label: 'Onboarding Setup', path: '/onboarding', icon: '⚙️', roles: ['Owner', 'Manager'] }
+        { label: 'Onboarding Setup', path: '/onboarding', roles: ['Owner', 'Manager'] }
       ];
 
   const renderContent = () => {

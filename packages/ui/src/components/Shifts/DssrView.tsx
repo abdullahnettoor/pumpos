@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { CloudShiftService } from '../../services/cloud.js';
 import { StatusBadge } from '../StatusBadge.js';
+import { ArrowLeft, Printer, Unlock, AlertTriangle } from 'lucide-react';
 
 const shiftService = new CloudShiftService();
 
@@ -82,7 +83,7 @@ export const DssrView: React.FC<DssrViewProps> = ({
             color: 'var(--text-default)'
           }}
         >
-          ← Back to Workspace
+          <ArrowLeft size={13} style={{ marginRight: '6px' }} /> Back to Workspace
         </button>
 
         <div style={{ display: 'flex', gap: '8px' }}>
@@ -100,7 +101,7 @@ export const DssrView: React.FC<DssrViewProps> = ({
               color: 'var(--text-default)'
             }}
           >
-            🖨️ Print DSSR
+            <Printer size={13} style={{ marginRight: '6px' }} /> Print DSSR
           </button>
 
           {canReopen && (
@@ -119,7 +120,11 @@ export const DssrView: React.FC<DssrViewProps> = ({
                 color: 'var(--state-danger-fg)'
               }}
             >
-              {reopening ? 'Reopening...' : '🔓 Reopen Shift'}
+              {reopening ? 'Reopening...' : (
+                <>
+                  <Unlock size={13} style={{ marginRight: '6px' }} /> Reopen Shift
+                </>
+              )}
             </button>
           )}
         </div>
@@ -177,7 +182,9 @@ export const DssrView: React.FC<DssrViewProps> = ({
           fontSize: '12px',
           border: '1px solid var(--border-soft)'
         }}>
-          <strong style={{ display: 'block', marginBottom: '6px' }}>⚠️ Warnings Captured at Close Time:</strong>
+          <strong style={{ display: 'block', marginBottom: '6px' }}>
+            <AlertTriangle size={14} style={{ marginRight: '6px', verticalAlign: 'middle', display: 'inline' }} /> Warnings Captured at Close Time:
+          </strong>
           <ul style={{ margin: 0, paddingLeft: '20px' }}>
             {warnings.map((warn: string, idx: number) => (
               <li key={idx} style={{ marginTop: '4px' }}>{warn}</li>

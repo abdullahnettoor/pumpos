@@ -3,6 +3,7 @@ import { CloudShiftService } from '../../services/cloud.js';
 import { StatusBadge } from '../StatusBadge.js';
 import { DssrView } from './DssrView.js';
 import { Station } from '@pump/shared';
+import { FileText, User, Save, Lock, AlertTriangle, Check, Fuel, Info, Play } from 'lucide-react';
 
 const shiftService = new CloudShiftService();
 
@@ -299,7 +300,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
                 cursor: 'pointer'
               }}
             >
-              📄 View Last DSSR
+              <FileText size={13} style={{ marginRight: '6px' }} /> View Last DSSR
             </button>
           )}
         </div>
@@ -318,7 +319,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px 24px' }}>
               {activeShift.staffAssignments.map((sa: any, idx: number) => (
                 <div key={idx} style={{ fontSize: '13px', color: 'var(--text-default)' }}>
-                  🧑‍✈️ <strong>{sa.userName}</strong> assigned to dispenser <strong>{sa.duName}</strong>
+                  <User size={13} style={{ marginRight: '6px', display: 'inline-block', verticalAlign: 'middle' }} /> <strong>{sa.userName}</strong> assigned to dispenser <strong>{sa.duName}</strong>
                 </div>
               ))}
             </div>
@@ -418,7 +419,11 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
                 cursor: 'pointer'
               }}
             >
-              {savingProgress ? 'Saving...' : '💾 Save Readings Progress'}
+              {savingProgress ? 'Saving...' : (
+                <>
+                  <Save size={13} style={{ marginRight: '6px' }} /> Save Readings Progress
+                </>
+              )}
             </button>
 
             <button
@@ -435,7 +440,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
                 cursor: 'pointer'
               }}
             >
-              🔒 Close Shift & Compile DSSR
+              <Lock size={13} style={{ marginRight: '6px' }} /> Close Shift & Compile DSSR
             </button>
           </div>
         ) : (
@@ -481,7 +486,9 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
                 fontSize: '12px',
                 border: '1px solid var(--border-soft)'
               }}>
-                <span style={{ fontWeight: 700 }}>⚠️ Shift Warning Indicators Raised:</span>
+                <span style={{ fontWeight: 700 }}>
+                  <AlertTriangle size={14} style={{ marginRight: '6px', verticalAlign: 'middle', display: 'inline' }} /> Shift Warning Indicators Raised:
+                </span>
                 <ul style={{ margin: '6px 0 0 0', paddingLeft: '20px' }}>
                   {warnings.map((w, idx) => (
                     <li key={idx} style={{ marginTop: '3px' }}>{w}</li>
@@ -518,7 +525,11 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
                   cursor: (warnings.length === 0 || confirmWarningsChecked) ? 'pointer' : 'not-allowed'
                 }}
               >
-                {isClosing ? 'Compiling DSSR...' : '✓ Confirm Close Shift'}
+                {isClosing ? 'Compiling DSSR...' : (
+                  <>
+                    <Check size={13} style={{ marginRight: '6px' }} /> Confirm Close Shift
+                  </>
+                )}
               </button>
 
 
@@ -572,7 +583,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
               cursor: 'pointer'
             }}
           >
-            📄 View Last DSSR
+            <FileText size={13} style={{ marginRight: '6px' }} /> View Last DSSR
           </button>
         )}
       </div>
@@ -653,7 +664,9 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
                 const assigned = staffAssignments.find((a) => a.duId === du.id);
                 return (
                   <div key={du.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
-                    <span style={{ fontSize: '13px', color: 'var(--text-default)' }}>⛽ Dispenser <strong>{du.name}</strong></span>
+                    <span style={{ fontSize: '13px', color: 'var(--text-default)' }}>
+                      <Fuel size={13} style={{ marginRight: '6px', verticalAlign: 'middle', display: 'inline' }} /> Dispenser <strong>{du.name}</strong>
+                    </span>
                     <select
                       value={assigned?.userId ?? ''}
                       onChange={(e) => handleStaffAssignmentChange(du.id, e.target.value)}
@@ -697,7 +710,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
               color: 'var(--text-muted)',
               border: '1px solid var(--border-soft)'
             }}>
-              💡 <strong>First Operational Shift:</strong> Since there is no previous shift history for this station, please specify the initial opening readings for all nozzles.
+              <Info size={14} style={{ color: 'var(--brand-primary)', marginRight: '6px', verticalAlign: 'middle', display: 'inline' }} /> <strong>First Operational Shift:</strong> Since there is no previous shift history for this station, please specify the initial opening readings for all nozzles.
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px' }}>
               {nozzles.map((nz: any) => {
@@ -745,7 +758,11 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
               cursor: 'pointer'
             }}
           >
-            {isOpening ? 'Opening Shift...' : '🚀 Start Shift Operations'}
+            {isOpening ? 'Opening Shift...' : (
+              <>
+                <Play size={13} style={{ fill: 'currentColor', marginRight: '6px' }} /> Start Shift Operations
+              </>
+            )}
           </button>
         </div>
       </form>

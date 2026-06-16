@@ -3,6 +3,7 @@ import { CloudShiftService } from '../../services/cloud.js';
 import { StatusBadge } from '../StatusBadge.js';
 import { SyncIndicator } from '../SyncIndicator.js';
 import { Station, ShiftDashboardSummary } from '@pump/shared';
+import { RefreshCw, Play, Plus, FileText, Unlock, AlertTriangle, Lock } from 'lucide-react';
 
 const shiftService = new CloudShiftService();
 
@@ -148,7 +149,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
               gap: '6px',
             }}
           >
-            🔄 Sync Status
+            <RefreshCw size={13} style={{ marginRight: '4px' }} /> Sync Status
           </button>
         </div>
       </div>
@@ -223,7 +224,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                   gap: '6px'
                 }}
               >
-                ⛽ Resume Shift Workspace
+                <Play size={13} style={{ fill: 'currentColor', marginRight: '6px' }} /> Resume Shift Workspace
               </button>
             ) : (
               <button
@@ -245,7 +246,15 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                   gap: '6px'
                 }}
               >
-                {isAccountant ? '🔒 Accountants Cannot Open Shifts' : '➕ Open Shift'}
+                {isAccountant ? (
+                  <>
+                    <Lock size={13} style={{ marginRight: '6px' }} /> Accountants Cannot Open Shifts
+                  </>
+                ) : (
+                  <>
+                    <Plus size={13} style={{ marginRight: '6px' }} /> Open Shift
+                  </>
+                )}
               </button>
             )}
           </div>
@@ -315,7 +324,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                     cursor: 'pointer'
                   }}
                 >
-                  📄 View Last DSSR
+                  <FileText size={13} style={{ marginRight: '6px' }} /> View Last DSSR
                 </button>
 
                 {canReopenLastShift && (
@@ -334,7 +343,11 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                       cursor: 'pointer'
                     }}
                   >
-                    {isReopening ? 'Reopening...' : '🔓 Reopen'}
+                    {isReopening ? 'Reopening...' : (
+                      <>
+                        <Unlock size={13} style={{ marginRight: '6px' }} /> Reopen
+                      </>
+                    )}
                   </button>
                 )}
               </>
@@ -359,7 +372,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
           boxShadow: 'var(--shadow-sm)'
         }}>
           <span>
-            ⚠️ <strong>Reopen Window Active:</strong> You can reopen the recently closed shift until{' '}
+            <AlertTriangle size={14} style={{ color: 'var(--state-warning-fg)', marginRight: '6px', verticalAlign: 'middle', display: 'inline' }} /> <strong>Reopen Window Active:</strong> You can reopen the recently closed shift until{' '}
             <strong>{new Date(gracePeriodExpiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</strong>.
           </span>
           <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
