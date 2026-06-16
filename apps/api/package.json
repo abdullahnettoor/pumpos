@@ -1,0 +1,21 @@
+{
+  "name": "apps-api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev src/index.ts",
+    "deploy": "wrangler deploy src/index.ts",
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@pump/db": "*",
+    "@pump/shared": "*",
+    "hono": "^4.4.2"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240529.0",
+    "typescript": "^5.4.5",
+    "wrangler": "^3.57.2"
+  }
+}

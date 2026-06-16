@@ -1,0 +1,1 @@
+ALTER TABLE "stations" ADD COLUMN "onboarding_status" varchar(50) DEFAULT 'NOT_STARTED' NOT NULL;

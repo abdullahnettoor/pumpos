@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1781437225250,
+      "tag": "0000_overconfident_sentry",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1781539406271,
+      "tag": "0001_parallel_wallop",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1781542862400,
+      "tag": "0002_create_auth_trigger",
+      "breakpoints": true
+    }
+  ]
+}
