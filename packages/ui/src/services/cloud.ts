@@ -278,3 +278,55 @@ export class CloudShiftService {
   }
 }
 
+export class CloudTransactionService {
+  async getShiftTransactions(shiftId: string): Promise<any> {
+    return request<any>(`/transactions/shifts/${shiftId}/transactions`);
+  }
+
+  async getExpenseCategories(): Promise<any> {
+    return request<any>('/transactions/expense-categories');
+  }
+
+  async getSuppliers(): Promise<any> {
+    return request<any>('/transactions/suppliers');
+  }
+
+  async getCustomers(): Promise<any> {
+    return request<any>('/transactions/customers');
+  }
+
+  async getExpenses(): Promise<any[]> {
+    return request<any[]>('/transactions/expenses');
+  }
+
+  async getPurchases(): Promise<any[]> {
+    return request<any[]>('/transactions/purchases');
+  }
+
+  async getCollections(): Promise<any[]> {
+    return request<any[]>('/transactions/collections');
+  }
+
+  async recordExpense(payload: { shiftId: string; categoryId: string; amount: number; description?: string }): Promise<any> {
+    return request<any>('/transactions/expenses', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async recordPurchase(payload: { shiftId: string; supplierId: string; productId: string; quantity: number; unitPrice: number; invoiceNumber?: string; notes?: string }): Promise<any> {
+    return request<any>('/transactions/purchases', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async recordCollection(payload: { shiftId: string; customerId?: string; amount: number; paymentMethod: 'Cash' | 'Card' | 'UPI' | 'Credit'; notes?: string }): Promise<any> {
+    return request<any>('/transactions/collections', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+}
+
+

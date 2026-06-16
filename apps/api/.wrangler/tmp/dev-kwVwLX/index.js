@@ -10051,6 +10051,7 @@ var stations = pgTable("stations", {
   phone: varchar("phone", { length: 50 }),
   settings: jsonb("settings").default({
     shift_grace_minutes: 15,
+    shift_lock_grace_days: 3,
     offline_warning_days: 3,
     offline_critical_days: 7
   }).notNull(),
@@ -17235,10 +17236,12 @@ var stationSchema = external_exports.object({
   phone: external_exports.string().optional().nullable(),
   settings: external_exports.object({
     shift_grace_minutes: external_exports.number().int().min(0).default(15),
+    shift_lock_grace_days: external_exports.number().int().min(0).default(3),
     offline_warning_days: external_exports.number().int().min(1).default(3),
     offline_critical_days: external_exports.number().int().min(1).default(7)
   }).default({
     shift_grace_minutes: 15,
+    shift_lock_grace_days: 3,
     offline_warning_days: 3,
     offline_critical_days: 7
   }),
@@ -17299,6 +17302,28 @@ var syncEventSchema = external_exports.object({
   payload: external_exports.record(external_exports.any()),
   status: external_exports.enum(["PENDING", "PROCESSING", "SYNCED", "FAILED"]).default("PENDING"),
   retryCount: external_exports.number().int().nonnegative().default(0)
+});
+var shiftExpenseSchema = external_exports.object({
+  shiftId: external_exports.string().uuid("Invalid shift ID"),
+  categoryId: external_exports.string().uuid("Invalid category ID"),
+  amount: external_exports.number().positive("Expense amount must be positive"),
+  description: external_exports.string().max(255).optional().nullable()
+});
+var shiftPurchaseSchema = external_exports.object({
+  shiftId: external_exports.string().uuid("Invalid shift ID"),
+  supplierId: external_exports.string().uuid("Invalid supplier ID"),
+  productId: external_exports.string().uuid("Invalid product ID"),
+  quantity: external_exports.number().positive("Quantity must be positive"),
+  unitPrice: external_exports.number().positive("Price must be positive"),
+  invoiceNumber: external_exports.string().max(100).optional().nullable(),
+  notes: external_exports.string().max(500).optional().nullable()
+});
+var shiftCollectionSchema = external_exports.object({
+  shiftId: external_exports.string().uuid("Invalid shift ID"),
+  customerId: external_exports.string().uuid("Invalid customer ID").optional().nullable(),
+  amount: external_exports.number().positive("Amount must be positive"),
+  paymentMethod: external_exports.enum(["Cash", "Card", "UPI", "Credit"]),
+  notes: external_exports.string().max(500).optional().nullable()
 });
 
 // ../../packages/shared/dist/permissions/guards.js
@@ -17972,6 +17997,453 @@ stationSetupRouter.post("/onboarding/complete", async (c) => {
   }
 });
 
+// src/routes/transactions.ts
+var transactionsRouter = new Hono2();
+async function compileDssrSnapshot(db, shiftId) {
+  const [shift] = await db.select().from(schema_exports.shifts).where(eq(schema_exports.shifts.id, shiftId)).limit(1);
+  if (!shift)
+    return;
+  const [template] = await db.select().from(schema_exports.shiftTemplates).where(eq(schema_exports.shiftTemplates.id, shift.shiftTemplateId)).limit(1);
+  const [closedByUser] = shift.closedBy ? await db.select().from(schema_exports.users).where(eq(schema_exports.users.id, shift.closedBy)).limit(1) : [null];
+  const rawNozzleReadings = await db.select().from(schema_exports.nozzleReadings).where(eq(schema_exports.nozzleReadings.shiftId, shiftId));
+  const enrichedReadingsSnapshot = await Promise.all(
+    rawNozzleReadings.map(async (nr) => {
+      const [nz] = await db.select().from(schema_exports.nozzles).where(eq(schema_exports.nozzles.id, nr.nozzleId)).limit(1);
+      const [prod] = nz ? await db.select().from(schema_exports.products).where(eq(schema_exports.products.id, nz.productId)).limit(1) : [null];
+      return {
+        nozzleId: nr.nozzleId,
+        productId: nz?.productId ?? "Unknown",
+        nozzleName: nz?.name ?? "Unknown",
+        productName: prod?.name ?? "Unknown",
+        productCode: prod?.code ?? "Unknown",
+        openingReading: Number(nr.openingReading),
+        closingReading: Number(nr.closingReading),
+        volumeSold: Number(nr.volumeSold)
+      };
+    })
+  );
+  const totalVolumeSold = enrichedReadingsSnapshot.reduce((sum, r) => sum + r.volumeSold, 0);
+  const expenses2 = await db.select().from(schema_exports.expenses).where(eq(schema_exports.expenses.shiftId, shiftId));
+  const purchases2 = await db.select().from(schema_exports.purchases).where(eq(schema_exports.purchases.shiftId, shiftId));
+  const collections2 = await db.select().from(schema_exports.collections).where(eq(schema_exports.collections.shiftId, shiftId));
+  const openingCashNum = Number(shift.openingCash);
+  const closingCashNum = Number(shift.closingCash ?? 0);
+  const cashCollectionsSum = collections2.filter((c) => c.paymentMethod === "Cash").reduce((sum, c) => sum + Number(c.amount), 0);
+  const cardCollectionsSum = collections2.filter((c) => c.paymentMethod === "Card").reduce((sum, c) => sum + Number(c.amount), 0);
+  const upiCollectionsSum = collections2.filter((c) => c.paymentMethod === "UPI").reduce((sum, c) => sum + Number(c.amount), 0);
+  const creditSalesSum = collections2.filter((c) => c.paymentMethod === "Credit").reduce((sum, c) => sum + Number(c.amount), 0);
+  const cashExpensesSum = expenses2.reduce((sum, e) => sum + Number(e.amount), 0);
+  const expectedCash = openingCashNum + cashCollectionsSum - cashExpensesSum;
+  const cashVariance = closingCashNum - expectedCash;
+  const warnings = [];
+  if (closingCashNum === 0 && openingCashNum > 0) {
+    warnings.push("Closing cash is \u20B90, which is highly unusual.");
+  }
+  if (totalVolumeSold === 0) {
+    warnings.push("Zero volume was sold across all nozzles this shift.");
+  }
+  if (Math.abs(cashVariance) > 100) {
+    warnings.push(`Cash discrepancy detected! Variance is \u20B9${cashVariance.toLocaleString("en-IN")}`);
+  }
+  const expensesList = await Promise.all(
+    expenses2.map(async (e) => {
+      const [cat] = await db.select().from(schema_exports.expenseCategories).where(eq(schema_exports.expenseCategories.id, e.categoryId)).limit(1);
+      return {
+        id: e.id,
+        amount: Number(e.amount),
+        description: e.description ?? "",
+        categoryName: cat?.name ?? "General",
+        createdAt: e.createdAt
+      };
+    })
+  );
+  const purchasesList = await Promise.all(
+    purchases2.map(async (p) => {
+      const [sup] = await db.select().from(schema_exports.suppliers).where(eq(schema_exports.suppliers.id, p.supplierId)).limit(1);
+      return {
+        id: p.id,
+        amount: Number(p.amount),
+        notes: p.notes ?? "",
+        supplierName: sup?.name ?? "Unknown",
+        documentNumber: p.documentNumber,
+        createdAt: p.createdAt
+      };
+    })
+  );
+  const collectionsList = await Promise.all(
+    collections2.map(async (c) => {
+      const [cust] = c.customerId ? await db.select().from(schema_exports.customers).where(eq(schema_exports.customers.id, c.customerId)).limit(1) : [null];
+      return {
+        id: c.id,
+        amount: Number(c.amount),
+        paymentMethod: c.paymentMethod,
+        notes: c.notes ?? "",
+        customerName: cust?.name ?? "Walk-in Customer",
+        documentNumber: c.documentNumber,
+        createdAt: c.createdAt
+      };
+    })
+  );
+  const snapshotData = {
+    shiftId,
+    templateName: template?.name ?? "Unknown",
+    openedAt: shift.openedAt,
+    closedAt: shift.closedAt,
+    openedBy: shift.openedBy,
+    closedBy: shift.closedBy,
+    closedByName: closedByUser?.fullName ?? "Staff",
+    openingCash: openingCashNum,
+    closingCash: closingCashNum,
+    expectedCash,
+    cashVariance,
+    cashCollectionsSum,
+    cardCollectionsSum,
+    upiCollectionsSum,
+    creditSalesSum,
+    cashExpensesSum,
+    nozzleReadings: enrichedReadingsSnapshot,
+    totalVolumeSold,
+    expenses: expensesList,
+    purchases: purchasesList,
+    collections: collectionsList,
+    warnings
+  };
+  await db.delete(schema_exports.dssrSnapshots).where(eq(schema_exports.dssrSnapshots.shiftId, shiftId));
+  await db.insert(schema_exports.dssrSnapshots).values({
+    shiftId,
+    snapshotData,
+    generatedAt: /* @__PURE__ */ new Date()
+  });
+}
+__name(compileDssrSnapshot, "compileDssrSnapshot");
+async function ensureShiftNotLocked(db, shiftId) {
+  const [shift] = await db.select().from(schema_exports.shifts).where(eq(schema_exports.shifts.id, shiftId)).limit(1);
+  if (!shift)
+    return false;
+  if (shift.status === "LOCKED")
+    return false;
+  if (shift.status === "CLOSED" && shift.closedAt) {
+    const [station] = await db.select().from(schema_exports.stations).where(eq(schema_exports.stations.id, shift.stationId)).limit(1);
+    const lockGraceDays = station?.settings?.shift_lock_grace_days ?? 3;
+    const closedTime = new Date(shift.closedAt).getTime();
+    const lockExpiryTime = closedTime + lockGraceDays * 24 * 60 * 60 * 1e3;
+    if (Date.now() > lockExpiryTime) {
+      await db.update(schema_exports.shifts).set({ status: "LOCKED", lockedAt: new Date(lockExpiryTime) }).where(eq(schema_exports.shifts.id, shiftId));
+      return false;
+    }
+  }
+  return true;
+}
+__name(ensureShiftNotLocked, "ensureShiftNotLocked");
+transactionsRouter.get("/shifts/:id/transactions", async (c) => {
+  const db = c.var.db;
+  const shiftId = c.req.param("id");
+  try {
+    const expenses2 = await db.select().from(schema_exports.expenses).where(eq(schema_exports.expenses.shiftId, shiftId));
+    const enrichedExpenses = await Promise.all(
+      expenses2.map(async (e) => {
+        const [cat] = await db.select().from(schema_exports.expenseCategories).where(eq(schema_exports.expenseCategories.id, e.categoryId)).limit(1);
+        return { ...e, categoryName: cat?.name ?? "General" };
+      })
+    );
+    const purchases2 = await db.select().from(schema_exports.purchases).where(eq(schema_exports.purchases.shiftId, shiftId));
+    const enrichedPurchases = await Promise.all(
+      purchases2.map(async (p) => {
+        const [sup] = await db.select().from(schema_exports.suppliers).where(eq(schema_exports.suppliers.id, p.supplierId)).limit(1);
+        return { ...p, supplierName: sup?.name ?? "Unknown" };
+      })
+    );
+    const collections2 = await db.select().from(schema_exports.collections).where(eq(schema_exports.collections.shiftId, shiftId));
+    const enrichedCollections = await Promise.all(
+      collections2.map(async (cl) => {
+        const [cust] = cl.customerId ? await db.select().from(schema_exports.customers).where(eq(schema_exports.customers.id, cl.customerId)).limit(1) : [null];
+        return { ...cl, customerName: cust?.name ?? "Walk-in Customer" };
+      })
+    );
+    return c.json({
+      success: true,
+      data: {
+        expenses: enrichedExpenses,
+        purchases: enrichedPurchases,
+        collections: enrichedCollections
+      }
+    });
+  } catch (err) {
+    return c.json({ success: false, error: { code: "SERVER_ERROR", message: err.message } }, 500);
+  }
+});
+transactionsRouter.get("/expense-categories", async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  try {
+    let list = await db.select().from(schema_exports.expenseCategories).where(eq(schema_exports.expenseCategories.organizationId, user.organizationId));
+    if (list.length === 0) {
+      const defaults = [
+        { name: "Staff Tea & Snacks", isSystem: true },
+        { name: "Office Stationery", isSystem: true },
+        { name: "Generator Diesel", isSystem: true },
+        { name: "Cleaning & Hygiene", isSystem: true },
+        { name: "General Miscellaneous", isSystem: true }
+      ];
+      for (const item of defaults) {
+        await db.insert(schema_exports.expenseCategories).values({
+          organizationId: user.organizationId,
+          name: item.name,
+          isSystem: item.isSystem
+        });
+      }
+      list = await db.select().from(schema_exports.expenseCategories).where(eq(schema_exports.expenseCategories.organizationId, user.organizationId));
+    }
+    return c.json({ success: true, data: list });
+  } catch (err) {
+    return c.json({ success: false, error: { code: "SERVER_ERROR", message: err.message } }, 500);
+  }
+});
+transactionsRouter.get("/suppliers", async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  try {
+    let list = await db.select().from(schema_exports.suppliers).where(and(eq(schema_exports.suppliers.organizationId, user.organizationId), eq(schema_exports.suppliers.isActive, true)));
+    if (list.length === 0) {
+      const defaults = ["Indian Oil Corporation Ltd", "Bharat Petroleum Corporation Ltd", "Local Lubricants Distributor"];
+      for (const name of defaults) {
+        await db.insert(schema_exports.suppliers).values({
+          organizationId: user.organizationId,
+          name,
+          isActive: true
+        });
+      }
+      list = await db.select().from(schema_exports.suppliers).where(and(eq(schema_exports.suppliers.organizationId, user.organizationId), eq(schema_exports.suppliers.isActive, true)));
+    }
+    return c.json({ success: true, data: list });
+  } catch (err) {
+    return c.json({ success: false, error: { code: "SERVER_ERROR", message: err.message } }, 500);
+  }
+});
+transactionsRouter.get("/customers", async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  try {
+    let list = await db.select().from(schema_exports.customers).where(and(eq(schema_exports.customers.organizationId, user.organizationId), eq(schema_exports.customers.isActive, true)));
+    if (list.length === 0) {
+      const defaults = [
+        { name: "KSRTC State Bus Depot", customerType: "Credit" },
+        { name: "V-Trans Logistics fleet", customerType: "Fleet" },
+        { name: "Local Public School Bus", customerType: "Credit" }
+      ];
+      for (const item of defaults) {
+        await db.insert(schema_exports.customers).values({
+          organizationId: user.organizationId,
+          name: item.name,
+          customerType: item.customerType,
+          isActive: true
+        });
+      }
+      list = await db.select().from(schema_exports.customers).where(and(eq(schema_exports.customers.organizationId, user.organizationId), eq(schema_exports.customers.isActive, true)));
+    }
+    return c.json({ success: true, data: list });
+  } catch (err) {
+    return c.json({ success: false, error: { code: "SERVER_ERROR", message: err.message } }, 500);
+  }
+});
+transactionsRouter.post("/expenses", async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  try {
+    const body = await c.req.json();
+    const parsed = shiftExpenseSchema.parse(body);
+    const editable = await ensureShiftNotLocked(db, parsed.shiftId);
+    if (!editable) {
+      return c.json({ success: false, error: { code: "FORBIDDEN", message: "Target shift is locked" } }, 403);
+    }
+    const [newExpense] = await db.insert(schema_exports.expenses).values({
+      shiftId: parsed.shiftId,
+      categoryId: parsed.categoryId,
+      amount: String(parsed.amount),
+      description: parsed.description,
+      status: "ACTIVE",
+      createdAt: /* @__PURE__ */ new Date(),
+      updatedAt: /* @__PURE__ */ new Date()
+    }).returning();
+    const [shift] = await db.select().from(schema_exports.shifts).where(eq(schema_exports.shifts.id, parsed.shiftId)).limit(1);
+    if (shift.status === "CLOSED") {
+      await compileDssrSnapshot(db, parsed.shiftId);
+    }
+    return c.json({ success: true, data: newExpense });
+  } catch (err) {
+    return c.json({ success: false, error: { code: "VALIDATION_ERROR", message: err.message } }, 400);
+  }
+});
+transactionsRouter.post("/purchases", async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  try {
+    const body = await c.req.json();
+    const parsed = shiftPurchaseSchema.parse(body);
+    const editable = await ensureShiftNotLocked(db, parsed.shiftId);
+    if (!editable) {
+      return c.json({ success: false, error: { code: "FORBIDDEN", message: "Target shift is locked" } }, 403);
+    }
+    const docNum = `PURCH-${Date.now().toString().slice(-6)}`;
+    const totalAmount = parsed.quantity * parsed.unitPrice;
+    const [newPurchase] = await db.insert(schema_exports.purchases).values({
+      documentNumber: docNum,
+      shiftId: parsed.shiftId,
+      supplierId: parsed.supplierId,
+      invoiceNumber: parsed.invoiceNumber,
+      amount: String(totalAmount),
+      notes: parsed.notes,
+      createdAt: /* @__PURE__ */ new Date()
+    }).returning();
+    await db.insert(schema_exports.stockMovements).values({
+      shiftId: parsed.shiftId,
+      productId: parsed.productId,
+      movementType: "Purchase",
+      quantity: String(parsed.quantity),
+      referenceType: "PURCHASE",
+      referenceId: newPurchase.id,
+      notes: parsed.notes,
+      createdAt: /* @__PURE__ */ new Date()
+    });
+    await db.insert(schema_exports.supplierTransactions).values({
+      shiftId: parsed.shiftId,
+      supplierId: parsed.supplierId,
+      transactionType: "Purchase",
+      amount: String(totalAmount),
+      referenceType: "PURCHASE",
+      referenceId: newPurchase.id,
+      notes: parsed.notes,
+      createdAt: /* @__PURE__ */ new Date()
+    });
+    const [shift] = await db.select().from(schema_exports.shifts).where(eq(schema_exports.shifts.id, parsed.shiftId)).limit(1);
+    if (shift.status === "CLOSED") {
+      await compileDssrSnapshot(db, parsed.shiftId);
+    }
+    return c.json({ success: true, data: newPurchase });
+  } catch (err) {
+    return c.json({ success: false, error: { code: "VALIDATION_ERROR", message: err.message } }, 400);
+  }
+});
+transactionsRouter.post("/collections", async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  try {
+    const body = await c.req.json();
+    const parsed = shiftCollectionSchema.parse(body);
+    const editable = await ensureShiftNotLocked(db, parsed.shiftId);
+    if (!editable) {
+      return c.json({ success: false, error: { code: "FORBIDDEN", message: "Target shift is locked" } }, 403);
+    }
+    const docNum = `COLL-${Date.now().toString().slice(-6)}`;
+    let targetCustomerId = parsed.customerId;
+    if (!targetCustomerId) {
+      const [defaultCust] = await db.select().from(schema_exports.customers).where(eq(schema_exports.customers.organizationId, user.organizationId)).limit(1);
+      if (!defaultCust) {
+        const [seeded] = await db.insert(schema_exports.customers).values({
+          organizationId: user.organizationId,
+          name: "General Cash Customer",
+          customerType: "Credit",
+          isActive: true
+        }).returning();
+        targetCustomerId = seeded.id;
+      } else {
+        targetCustomerId = defaultCust.id;
+      }
+    }
+    const [newCollection] = await db.insert(schema_exports.collections).values({
+      documentNumber: docNum,
+      shiftId: parsed.shiftId,
+      customerId: targetCustomerId,
+      amount: String(parsed.amount),
+      paymentMethod: parsed.paymentMethod,
+      notes: parsed.notes,
+      createdAt: /* @__PURE__ */ new Date()
+    }).returning();
+    if (targetCustomerId) {
+      await db.insert(schema_exports.customerTransactions).values({
+        shiftId: parsed.shiftId,
+        customerId: targetCustomerId,
+        transactionType: parsed.paymentMethod === "Credit" ? "Credit Sale" : "Collection",
+        amount: String(parsed.amount),
+        referenceType: "COLLECTION",
+        referenceId: newCollection.id,
+        notes: parsed.notes,
+        createdAt: /* @__PURE__ */ new Date()
+      });
+    }
+    const [shift] = await db.select().from(schema_exports.shifts).where(eq(schema_exports.shifts.id, parsed.shiftId)).limit(1);
+    if (shift.status === "CLOSED") {
+      await compileDssrSnapshot(db, parsed.shiftId);
+    }
+    return c.json({ success: true, data: newCollection });
+  } catch (err) {
+    return c.json({ success: false, error: { code: "VALIDATION_ERROR", message: err.message } }, 400);
+  }
+});
+transactionsRouter.get("/expenses", async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  try {
+    const list = await db.select().from(schema_exports.expenses).innerJoin(schema_exports.shifts, eq(schema_exports.expenses.shiftId, schema_exports.shifts.id)).where(eq(schema_exports.shifts.organizationId, user.organizationId));
+    const enriched = await Promise.all(
+      list.map(async (row) => {
+        const e = row.expenses;
+        const [cat] = await db.select().from(schema_exports.expenseCategories).where(eq(schema_exports.expenseCategories.id, e.categoryId)).limit(1);
+        return {
+          ...e,
+          categoryName: cat?.name ?? "General",
+          shiftDate: row.shifts.openedAt
+        };
+      })
+    );
+    return c.json({ success: true, data: enriched });
+  } catch (err) {
+    return c.json({ success: false, error: { code: "SERVER_ERROR", message: err.message } }, 500);
+  }
+});
+transactionsRouter.get("/purchases", async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  try {
+    const list = await db.select().from(schema_exports.purchases).innerJoin(schema_exports.shifts, eq(schema_exports.purchases.shiftId, schema_exports.shifts.id)).where(eq(schema_exports.shifts.organizationId, user.organizationId));
+    const enriched = await Promise.all(
+      list.map(async (row) => {
+        const p = row.purchases;
+        const [sup] = await db.select().from(schema_exports.suppliers).where(eq(schema_exports.suppliers.id, p.supplierId)).limit(1);
+        return {
+          ...p,
+          supplierName: sup?.name ?? "Unknown Supplier",
+          shiftDate: row.shifts.openedAt
+        };
+      })
+    );
+    return c.json({ success: true, data: enriched });
+  } catch (err) {
+    return c.json({ success: false, error: { code: "SERVER_ERROR", message: err.message } }, 500);
+  }
+});
+transactionsRouter.get("/collections", async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  try {
+    const list = await db.select().from(schema_exports.collections).innerJoin(schema_exports.shifts, eq(schema_exports.collections.shiftId, schema_exports.shifts.id)).where(eq(schema_exports.shifts.organizationId, user.organizationId));
+    const enriched = await Promise.all(
+      list.map(async (row) => {
+        const col = row.collections;
+        const [cust] = col.customerId ? await db.select().from(schema_exports.customers).where(eq(schema_exports.customers.id, col.customerId)).limit(1) : [null];
+        return {
+          ...col,
+          customerName: cust?.name ?? "Walk-in Customer",
+          shiftDate: row.shifts.openedAt
+        };
+      })
+    );
+    return c.json({ success: true, data: enriched });
+  } catch (err) {
+    return c.json({ success: false, error: { code: "SERVER_ERROR", message: err.message } }, 500);
+  }
+});
+
 // src/routes/shifts.ts
 var shiftsRouter = new Hono2();
 function hasStationAccess(user, stationId) {
@@ -18046,10 +18518,11 @@ shiftsRouter.get("/status", async (c) => {
       let lockedAt = dbLastShift.lockedAt;
       if (currentStatus === "CLOSED" && dbLastShift.closedAt) {
         const closedTime = new Date(dbLastShift.closedAt).getTime();
-        const expiryTime = closedTime + graceMinutes * 60 * 1e3;
+        const lockGraceDays = station?.settings?.shift_lock_grace_days ?? 3;
+        const lockExpiryTime = closedTime + lockGraceDays * 24 * 60 * 60 * 1e3;
         const now = Date.now();
-        if (now > expiryTime) {
-          lockedAt = new Date(expiryTime);
+        if (now > lockExpiryTime) {
+          lockedAt = new Date(lockExpiryTime);
           currentStatus = "LOCKED";
           await db.update(schema_exports.shifts).set({
             status: "LOCKED",
@@ -18057,7 +18530,10 @@ shiftsRouter.get("/status", async (c) => {
             updatedAt: /* @__PURE__ */ new Date()
           }).where(eq(schema_exports.shifts.id, dbLastShift.id));
         } else {
-          gracePeriodExpiresAt = new Date(expiryTime).toISOString();
+          const reopenExpiryTime = closedTime + graceMinutes * 60 * 1e3;
+          if (now <= reopenExpiryTime) {
+            gracePeriodExpiresAt = new Date(reopenExpiryTime).toISOString();
+          }
         }
       }
       const [template] = await db.select().from(schema_exports.shiftTemplates).where(eq(schema_exports.shiftTemplates.id, dbLastShift.shiftTemplateId)).limit(1);
@@ -18066,7 +18542,7 @@ shiftsRouter.get("/status", async (c) => {
         const [closedByUser] = await db.select().from(schema_exports.users).where(eq(schema_exports.users.id, dbLastShift.closedBy)).limit(1);
         closedByName = closedByUser?.fullName ?? "System";
       }
-      if (currentStatus === "CLOSED" && canReopenShift(user.role)) {
+      if (currentStatus === "CLOSED" && gracePeriodExpiresAt && canReopenShift(user.role)) {
         canReopenLastShift = true;
       }
       lastShift = {
@@ -18306,44 +18782,9 @@ shiftsRouter.post("/close", async (c) => {
       closingCash: String(parsed.closingCash),
       updatedAt: closedAt
     }).where(eq(schema_exports.shifts.id, shiftId)).returning();
-    const totalVolumeSold = enrichedReadingsSnapshot.reduce((sum, r) => sum + r.volumeSold, 0);
-    const openingCashNum = Number(activeShift.openingCash);
-    const closingCashNum = parsed.closingCash;
-    const cashNetChange = closingCashNum - openingCashNum;
-    const warnings = [];
-    if (closingCashNum === 0 && openingCashNum > 0) {
-      warnings.push("Closing cash is \u20B90, which is highly unusual.");
-    }
-    if (totalVolumeSold === 0) {
-      warnings.push("Zero volume was sold across all nozzles this shift.");
-    }
-    for (const rd of enrichedReadingsSnapshot) {
-      if (rd.volumeSold > 5e3) {
-        warnings.push(`High volume variance alert: Nozzle ${rd.nozzleName} sold ${rd.volumeSold} L.`);
-      }
-    }
-    const [template] = await db.select().from(schema_exports.shiftTemplates).where(eq(schema_exports.shiftTemplates.id, activeShift.shiftTemplateId)).limit(1);
-    const [closedByUser] = await db.select().from(schema_exports.users).where(eq(schema_exports.users.id, user.id)).limit(1);
-    const snapshotData = {
-      shiftId: activeShift.id,
-      templateName: template?.name ?? "Unknown",
-      openedAt: activeShift.openedAt,
-      closedAt,
-      openedBy: activeShift.openedBy,
-      closedBy: user.id,
-      closedByName: closedByUser?.fullName ?? "Staff",
-      openingCash: openingCashNum,
-      closingCash: closingCashNum,
-      cashNetChange,
-      nozzleReadings: enrichedReadingsSnapshot,
-      totalVolumeSold,
-      warnings
-    };
-    await db.insert(schema_exports.dssrSnapshots).values({
-      shiftId,
-      snapshotData,
-      generatedAt: closedAt
-    });
+    await compileDssrSnapshot(db, shiftId);
+    const [dssr] = await db.select().from(schema_exports.dssrSnapshots).where(eq(schema_exports.dssrSnapshots.shiftId, shiftId)).limit(1);
+    const snapshotData = dssr?.snapshotData || {};
     await db.insert(schema_exports.businessEvents).values({
       eventId: crypto.randomUUID(),
       eventType: "SHIFT_CLOSED",
@@ -18622,6 +19063,7 @@ api.get("/session", (c) => {
 });
 api.route("/setup", stationSetupRouter);
 api.route("/shifts", shiftsRouter);
+api.route("/transactions", transactionsRouter);
 app.route("/api", api);
 var src_default2 = app;
 

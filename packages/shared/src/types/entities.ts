@@ -39,6 +39,7 @@ export interface Station {
   phone?: string | null;
   settings: {
     shift_grace_minutes: number;
+    shift_lock_grace_days: number;
     offline_warning_days: number;
     offline_critical_days: number;
   };
@@ -390,3 +391,29 @@ export interface SyncEvent {
   createdAt: string;
   syncedAt?: string | null;
 }
+
+export interface ExpensePayload {
+  shiftId: string;
+  categoryId: string;
+  amount: number;
+  description?: string;
+}
+
+export interface PurchasePayload {
+  shiftId: string;
+  supplierId: string;
+  productId: string;
+  quantity: number;
+  unitPrice: number;
+  invoiceNumber?: string;
+  notes?: string;
+}
+
+export interface CollectionPayload {
+  shiftId: string;
+  customerId?: string; // Optional if walk-in, required for credit customer
+  amount: number;
+  paymentMethod: 'Cash' | 'Card' | 'UPI' | 'Credit';
+  notes?: string;
+}
+

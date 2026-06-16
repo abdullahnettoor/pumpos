@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { CloudShiftService } from '../../services/cloud.js';
 import { StatusBadge } from '../StatusBadge.js';
 import { ArrowLeft, Printer, Unlock, AlertTriangle } from 'lucide-react';
+import { ShiftTransactionsPanel } from './ShiftTransactionsPanel.js';
 
 const shiftService = new CloudShiftService();
 
@@ -12,6 +13,8 @@ interface DssrViewProps {
   gracePeriodExpiresAt?: string | null;
   onReopenSuccess: () => void;
   onBack?: () => void;
+  shiftStatus?: 'CLOSED' | 'LOCKED';
+  onTransactionAdded?: () => void;
 }
 
 export const DssrView: React.FC<DssrViewProps> = ({
@@ -21,6 +24,8 @@ export const DssrView: React.FC<DssrViewProps> = ({
   gracePeriodExpiresAt,
   onReopenSuccess,
   onBack,
+  shiftStatus = 'CLOSED',
+  onTransactionAdded,
 }) => {
   const [reopening, setReopening] = useState(false);
 
@@ -36,9 +41,19 @@ export const DssrView: React.FC<DssrViewProps> = ({
     openingCash,
     closingCash,
     cashNetChange,
-    nozzleReadings,
-    totalVolumeSold,
-    warnings,
+    nozzleReadings = [],
+    totalVolumeSold = 0,
+    warnings = [],
+    expectedCash = Number(openingCash),
+    cashVariance = 0,
+    cashCollectionsSum = 0,
+    cardCollectionsSum = 0,
+    upiCollectionsSum = 0,
+    creditSalesSum = 0,
+    cashExpensesSum = 0,
+    expenses = [],
+    purchases = [],
+    collections = [],
   } = snapshotData;
 
   const handleReopen = async () => {
@@ -233,7 +248,7 @@ export const DssrView: React.FC<DssrViewProps> = ({
 
       {/* Cash Reconciliation Summary */}
       <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
-        Cash Reconciliation
+        Cash Reconciliation & Variances
       </h3>
       <div style={{
         border: '1px solid var(--border-strong)',
@@ -241,33 +256,182 @@ export const DssrView: React.FC<DssrViewProps> = ({
         display: 'flex',
         flexDirection: 'column',
         fontSize: '13px',
-        overflow: 'hidden'
+        overflow: 'hidden',
+        marginBottom: '28px'
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid var(--border-soft)' }}>
-          <span>Opening Cash (Float)</span>
+          <span>Opening Cash Float</span>
           <span style={{ fontWeight: 600, fontFamily: 'var(--font-mono)' }}>₹{Number(openingCash).toLocaleString('en-IN')}</span>
         </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid var(--border-soft)', color: 'var(--state-success-fg)' }}>
+          <span>(+) Cash Collections</span>
+          <span style={{ fontWeight: 600, fontFamily: 'var(--font-mono)' }}>+ ₹{Number(cashCollectionsSum).toLocaleString('en-IN')}</span>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid var(--border-soft)', color: 'var(--brand-danger)' }}>
+          <span>(-) Petty Cash Expenses</span>
+          <span style={{ fontWeight: 600, fontFamily: 'var(--font-mono)' }}>- ₹{Number(cashExpensesSum).toLocaleString('en-IN')}</span>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid var(--border-soft)', fontWeight: 600 }}>
+          <span>Expected Cash in Drawer</span>
+          <span style={{ fontWeight: 600, fontFamily: 'var(--font-mono)' }}>₹{Number(expectedCash).toLocaleString('en-IN')}</span>
+        </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid var(--border-soft)' }}>
-          <span>Closing Cash (Collected)</span>
+          <span>Actual Closing Cash (Entered)</span>
           <span style={{ fontWeight: 600, fontFamily: 'var(--font-mono)' }}>₹{Number(closingCash).toLocaleString('en-IN')}</span>
         </div>
         <div style={{
           display: 'flex',
           justifyContent: 'space-between',
-          padding: '14px 16px',
-          backgroundColor: 'var(--bg-surface-alt)',
+          padding: '12px 16px',
+          backgroundColor: Math.abs(cashVariance) > 100 ? 'var(--state-danger-bg)' : 'var(--bg-surface-alt)',
           fontWeight: 700,
-          fontSize: '14px'
+          fontSize: '14px',
+          color: Math.abs(cashVariance) > 100 ? 'var(--state-danger-fg)' : 'var(--text-strong)'
         }}>
-          <span>Net Shift Cash Flow</span>
+          <span>Cash Variance</span>
           <span style={{
-            fontFamily: 'var(--font-mono)',
-            color: cashNetChange >= 0 ? 'var(--state-success-fg)' : 'var(--state-danger-fg)'
+            fontFamily: 'var(--font-mono)'
           }}>
-            {cashNetChange >= 0 ? '+' : ''}₹{Number(cashNetChange).toLocaleString('en-IN')}
+            {cashVariance > 0 ? '+' : ''}₹{Number(cashVariance).toLocaleString('en-IN')}
+            {cashVariance === 0 ? ' (Perfect Match)' : Math.abs(cashVariance) > 100 ? ` (Discrepancy)` : ''}
           </span>
         </div>
       </div>
+
+      {/* Non-Cash Collections & Ledger Sales */}
+      <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
+        Non-Cash Payments & Credit Sales
+      </h3>
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+        gap: '16px',
+        marginBottom: '32px'
+      }}>
+        <div style={{ padding: '12px', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', backgroundColor: 'var(--bg-surface)' }}>
+          <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', fontWeight: 600 }}>Card Payments</span>
+          <strong style={{ fontSize: '15px', color: 'var(--text-strong)', fontFamily: 'var(--font-mono)' }}>₹{Number(cardCollectionsSum).toLocaleString('en-IN')}</strong>
+        </div>
+        <div style={{ padding: '12px', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', backgroundColor: 'var(--bg-surface)' }}>
+          <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', fontWeight: 600 }}>UPI/QR Payments</span>
+          <strong style={{ fontSize: '15px', color: 'var(--text-strong)', fontFamily: 'var(--font-mono)' }}>₹{Number(upiCollectionsSum).toLocaleString('en-IN')}</strong>
+        </div>
+        <div style={{ padding: '12px', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', backgroundColor: 'var(--bg-surface)' }}>
+          <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', fontWeight: 600 }}>Credit Account Sales</span>
+          <strong style={{ fontSize: '15px', color: 'var(--brand-warning)', fontFamily: 'var(--font-mono)' }}>₹{Number(creditSalesSum).toLocaleString('en-IN')}</strong>
+        </div>
+      </div>
+
+      {/* Shift Transaction Logs Breakdown */}
+      {expenses.length > 0 && (
+        <div style={{ marginBottom: '28px' }}>
+          <h4 style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>
+            Shift Petty Cash Expenses
+          </h4>
+          <table style={{ width: '100%', fontSize: '12px', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid var(--border-strong)', textAlign: 'left', color: 'var(--text-muted)' }}>
+                <th style={{ padding: '6px 8px' }}>Category</th>
+                <th style={{ padding: '6px 8px' }}>Description</th>
+                <th style={{ padding: '6px 8px', textAlign: 'right' }}>Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {expenses.map((e: any, idx: number) => (
+                <tr key={idx} style={{ borderBottom: '1px solid var(--border-soft)' }}>
+                  <td style={{ padding: '6px 8px', fontWeight: 600 }}>{e.categoryName}</td>
+                  <td style={{ padding: '6px 8px', color: 'var(--text-muted)' }}>{e.description}</td>
+                  <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600, color: 'var(--brand-danger)' }}>- ₹{Number(e.amount).toLocaleString('en-IN')}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {purchases.length > 0 && (
+        <div style={{ marginBottom: '28px' }}>
+          <h4 style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>
+            Supplier Fuel Intakes
+          </h4>
+          <table style={{ width: '100%', fontSize: '12px', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid var(--border-strong)', textAlign: 'left', color: 'var(--text-muted)' }}>
+                <th style={{ padding: '6px 8px' }}>Supplier</th>
+                <th style={{ padding: '6px 8px' }}>Ref / Invoice</th>
+                <th style={{ padding: '6px 8px' }}>Notes</th>
+                <th style={{ padding: '6px 8px', textAlign: 'right' }}>Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {purchases.map((p: any, idx: number) => (
+                <tr key={idx} style={{ borderBottom: '1px solid var(--border-soft)' }}>
+                  <td style={{ padding: '6px 8px', fontWeight: 600 }}>{p.supplierName}</td>
+                  <td style={{ padding: '6px 8px', color: 'var(--text-default)' }}>{p.documentNumber} {p.invoiceNumber ? `(${p.invoiceNumber})` : ''}</td>
+                  <td style={{ padding: '6px 8px', color: 'var(--text-muted)' }}>{p.notes}</td>
+                  <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600 }}>₹{Number(p.amount).toLocaleString('en-IN')}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {collections.length > 0 && (
+        <div style={{ marginBottom: '32px' }}>
+          <h4 style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>
+            Collections & Account Sales Logs
+          </h4>
+          <table style={{ width: '100%', fontSize: '12px', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid var(--border-strong)', textAlign: 'left', color: 'var(--text-muted)' }}>
+                <th style={{ padding: '6px 8px' }}>Customer</th>
+                <th style={{ padding: '6px 8px' }}>Method</th>
+                <th style={{ padding: '6px 8px' }}>Notes</th>
+                <th style={{ padding: '6px 8px', textAlign: 'right' }}>Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {collections.map((c: any, idx: number) => (
+                <tr key={idx} style={{ borderBottom: '1px solid var(--border-soft)' }}>
+                  <td style={{ padding: '6px 8px', fontWeight: 600 }}>{c.customerName}</td>
+                  <td style={{ padding: '6px 8px' }}>
+                    <span style={{
+                      backgroundColor: c.paymentMethod === 'Credit' ? 'var(--state-warning-bg)' : 'var(--state-success-bg)',
+                      color: c.paymentMethod === 'Credit' ? 'var(--state-warning-fg)' : 'var(--state-success-fg)',
+                      padding: '1px 6px',
+                      borderRadius: '4px',
+                      fontSize: '10px',
+                      fontWeight: 600
+                    }}>
+                      {c.paymentMethod}
+                    </span>
+                  </td>
+                  <td style={{ padding: '6px 8px', color: 'var(--text-muted)' }}>{c.notes}</td>
+                  <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600, color: c.paymentMethod === 'Credit' ? 'var(--text-muted)' : 'var(--state-success-fg)' }}>
+                    ₹{Number(c.amount).toLocaleString('en-IN')}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Late Transaction Auditing Console (Visible to Owner, Manager, Accountant when CLOSED, read-only when LOCKED) */}
+      {userRole !== 'Staff' && (
+        <div style={{ marginTop: '32px', marginBottom: '32px' }} className="no-print">
+          <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
+            Audit Adjustments & Transaction Entry
+          </h3>
+          <ShiftTransactionsPanel
+            shiftId={shiftId}
+            nozzles={nozzleReadings}
+            onTransactionAdded={onTransactionAdded}
+            isReadOnly={shiftStatus === 'LOCKED'}
+          />
+        </div>
+      )}
 
       {/* Signatures placeholder for paper outputs */}
       <div style={{

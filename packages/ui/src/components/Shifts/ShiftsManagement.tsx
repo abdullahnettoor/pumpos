@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { CloudShiftService } from '../../services/cloud.js';
+import { CloudShiftService, CloudTransactionService } from '../../services/cloud.js';
 import { StatusBadge } from '../StatusBadge.js';
 import { DssrView } from './DssrView.js';
+import { ShiftTransactionsPanel } from './ShiftTransactionsPanel.js';
 import { Station } from '@pump/shared';
-import { FileText, User, Save, Lock, AlertTriangle, Check, Fuel, Info, Play } from 'lucide-react';
+import { FileText, User, Save, Lock, AlertTriangle, Check, Fuel, Info, Play, RefreshCw } from 'lucide-react';
 
 const shiftService = new CloudShiftService();
 
@@ -40,8 +41,30 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   const [confirmWarningsChecked, setConfirmWarningsChecked] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
 
+  const [shiftTotals, setShiftTotals] = useState({ cashCollections: 0, cashExpenses: 0 });
+
+  const loadShiftTotals = async (shiftId: string) => {
+    try {
+      const txService = new CloudTransactionService();
+      const txs = await txService.getShiftTransactions(shiftId);
+      const cashCollections = txs.collections
+        .filter((c: any) => c.paymentMethod === 'Cash')
+        .reduce((sum: number, c: any) => sum + Number(c.amount), 0);
+      const cashExpenses = txs.expenses
+        .reduce((sum: number, e: any) => sum + Number(e.amount), 0);
+      
+      setShiftTotals({ cashCollections, cashExpenses });
+    } catch (err) {
+      console.error('Failed to load shift totals', err);
+    }
+  };
+
   // Reactively compute close warnings when close flow is active
   const warnings: string[] = [];
+  const openingCashNum = data?.activeShift ? Number(data.activeShift.openingCash) : 0;
+  const expectedCash = openingCashNum + shiftTotals.cashCollections - shiftTotals.cashExpenses;
+  const cashVariance = closingCash - expectedCash;
+
   if (data?.activeShift && isPreparingClose) {
     let zeroVolumeCount = 0;
     for (const nr of data.activeShift.nozzleReadings) {
@@ -60,9 +83,11 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     if (zeroVolumeCount === data.activeShift.nozzleReadings.length) {
       warnings.push('Zero fuel volume was sold across all nozzles during this shift.');
     }
-    const openingCashNum = Number(data.activeShift.openingCash);
-    if (closingCash === 0 && openingCashNum > 0) {
+    if (closingCash === 0 && expectedCash > 0) {
       warnings.push('Closing cash is ₹0, indicating no collections entered.');
+    }
+    if (Math.abs(cashVariance) > 100) {
+      warnings.push(`Cash discrepancy detected! Variance is ₹${cashVariance.toLocaleString('en-IN')} (Expected: ₹${expectedCash.toLocaleString('en-IN')}, Entered: ₹${closingCash.toLocaleString('en-IN')})`);
     }
   }
 
@@ -112,6 +137,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
             readingsMap[nr.nozzleId] = Number(nr.closingReading);
           });
           setClosingReadings(readingsMap);
+          loadShiftTotals(statusData.activeShift.id);
         }
       }
     } catch (err: any) {
@@ -260,6 +286,8 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         userRole={userRole}
         canReopen={canReopenLastShift}
         gracePeriodExpiresAt={gracePeriodExpiresAt}
+        shiftStatus={lastShift?.status}
+        onTransactionAdded={loadShiftStatus}
         onReopenSuccess={() => {
           setViewingDssr(false);
           loadShiftStatus();
@@ -401,6 +429,13 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
           </table>
         </div>
 
+        {/* Shift Transactions & Logbook */}
+        <ShiftTransactionsPanel
+          shiftId={activeShift.id}
+          nozzles={data.nozzles}
+          onTransactionAdded={loadShiftStatus}
+        />
+
         {/* Save / Close Shift Inline Cards */}
         {!isPreparingClose ? (
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -457,24 +492,63 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
               Reconciliation Review
             </h3>
 
+            {/* Expected Cash Calculations Card */}
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '12px',
+              padding: '16px',
+              backgroundColor: 'var(--bg-surface-alt)',
+              borderRadius: 'var(--radius-input)',
+              border: '1px solid var(--border-soft)'
+            }}>
+              <h4 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-strong)' }}>Financial Reconciliation Checklist</h4>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+                <span>Opening Cash Float:</span>
+                <span style={{ fontFamily: 'var(--font-mono)' }}>₹{openingCashNum.toLocaleString('en-IN')}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: 'var(--state-success-fg)' }}>
+                <span>(+) Cash Collections:</span>
+                <span style={{ fontFamily: 'var(--font-mono)' }}>+ ₹{shiftTotals.cashCollections.toLocaleString('en-IN')}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: 'var(--brand-danger)' }}>
+                <span>(-) Petty Cash Expenses:</span>
+                <span style={{ fontFamily: 'var(--font-mono)' }}>- ₹{shiftTotals.cashExpenses.toLocaleString('en-IN')}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', fontWeight: 700, borderTop: '1px solid var(--border-strong)', paddingTop: '8px', marginTop: '4px', color: 'var(--text-strong)' }}>
+                <span>Expected Cash in Drawer:</span>
+                <span style={{ fontFamily: 'var(--font-mono)' }}>₹{expectedCash.toLocaleString('en-IN')}</span>
+              </div>
+            </div>
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-default)' }}>
                 1. Enter Closing Cash Collected (Float + Sales Cash):
               </label>
-              <input
-                type="number"
-                value={closingCash}
-                onChange={(e) => setClosingCash(Number(e.target.value))}
-                style={{
-                  width: '200px',
-                  height: '32px',
-                  padding: '0 12px',
-                  border: '1px solid var(--border-strong)',
-                  borderRadius: 'var(--radius-input)',
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: '13px'
-                }}
-              />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <input
+                  type="number"
+                  value={closingCash}
+                  onChange={(e) => setClosingCash(Number(e.target.value))}
+                  style={{
+                    width: '200px',
+                    height: '32px',
+                    padding: '0 12px',
+                    border: '1px solid var(--border-strong)',
+                    borderRadius: 'var(--radius-input)',
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '13px'
+                  }}
+                />
+                <span style={{
+                  fontSize: '13px',
+                  fontWeight: 700,
+                  color: cashVariance === 0 ? 'var(--state-success-fg)' : 'var(--brand-danger)'
+                }}>
+                  Variance: {cashVariance > 0 ? '+' : ''}₹{cashVariance.toLocaleString('en-IN')}
+                  {cashVariance === 0 ? ' (Perfect Match)' : cashVariance > 0 ? ' (Cash Surplus)' : ' (Cash Shortage)'}
+                </span>
+              </div>
             </div>
 
             {warnings.length > 0 && (

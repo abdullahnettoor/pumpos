@@ -22,6 +22,7 @@ export const stations = pgTable('stations', {
   phone: varchar('phone', { length: 50 }),
   settings: jsonb('settings').default({
     shift_grace_minutes: 15,
+    shift_lock_grace_days: 3,
     offline_warning_days: 3,
     offline_critical_days: 7,
   }).notNull(),

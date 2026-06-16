@@ -6,6 +6,7 @@ import { eq } from 'drizzle-orm';
 import { Role } from '@pump/shared';
 import { stationSetupRouter } from './routes/station-setup.js';
 import { shiftsRouter } from './routes/shifts.js';
+import { transactionsRouter } from './routes/transactions.js';
 
 
 const keyCache = new Map<string, CryptoKey>();
@@ -270,6 +271,7 @@ api.get('/session', (c) => {
 // Mount routes
 api.route('/setup', stationSetupRouter);
 api.route('/shifts', shiftsRouter);
+api.route('/transactions', transactionsRouter);
 
 
 // Mount authenticated group

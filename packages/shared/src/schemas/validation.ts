@@ -13,10 +13,12 @@ export const stationSchema = z.object({
   phone: z.string().optional().nullable(),
   settings: z.object({
     shift_grace_minutes: z.number().int().min(0).default(15),
+    shift_lock_grace_days: z.number().int().min(0).default(3),
     offline_warning_days: z.number().int().min(1).default(3),
     offline_critical_days: z.number().int().min(1).default(7),
   }).default({
     shift_grace_minutes: 15,
+    shift_lock_grace_days: 3,
     offline_warning_days: 3,
     offline_critical_days: 7,
   }),
@@ -92,3 +94,29 @@ export const syncEventSchema = z.object({
   status: z.enum(['PENDING', 'PROCESSING', 'SYNCED', 'FAILED']).default('PENDING'),
   retryCount: z.number().int().nonnegative().default(0),
 });
+
+export const shiftExpenseSchema = z.object({
+  shiftId: z.string().uuid('Invalid shift ID'),
+  categoryId: z.string().uuid('Invalid category ID'),
+  amount: z.number().positive('Expense amount must be positive'),
+  description: z.string().max(255).optional().nullable(),
+});
+
+export const shiftPurchaseSchema = z.object({
+  shiftId: z.string().uuid('Invalid shift ID'),
+  supplierId: z.string().uuid('Invalid supplier ID'),
+  productId: z.string().uuid('Invalid product ID'),
+  quantity: z.number().positive('Quantity must be positive'),
+  unitPrice: z.number().positive('Price must be positive'),
+  invoiceNumber: z.string().max(100).optional().nullable(),
+  notes: z.string().max(500).optional().nullable(),
+});
+
+export const shiftCollectionSchema = z.object({
+  shiftId: z.string().uuid('Invalid shift ID'),
+  customerId: z.string().uuid('Invalid customer ID').optional().nullable(),
+  amount: z.number().positive('Amount must be positive'),
+  paymentMethod: z.enum(['Cash', 'Card', 'UPI', 'Credit']),
+  notes: z.string().max(500).optional().nullable(),
+});
+

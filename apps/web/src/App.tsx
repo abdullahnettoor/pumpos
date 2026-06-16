@@ -6,6 +6,9 @@ import {
   StationOverview, 
   DashboardOverview,
   ShiftsManagement,
+  ExpensesList,
+  PurchasesList,
+  CustomersList,
   CloudStationService, 
   setAuthToken, 
   supabase 
@@ -301,26 +304,11 @@ const App: React.FC = () => {
           />
         );
       case '/expenses':
-        return (
-          <div className="animate-fade-in">
-            <h1 style={{ fontSize: '24px', fontWeight: 700 }}>Expenses Tracker</h1>
-            <p style={{ color: '#9ca3af', marginTop: '8px' }}>Log and reconcile daily operational expenses.</p>
-          </div>
-        );
+        return <ExpensesList />;
       case '/purchases':
-        return (
-          <div className="animate-fade-in">
-            <h1 style={{ fontSize: '24px', fontWeight: 700 }}>Supplier Purchases</h1>
-            <p style={{ color: '#9ca3af', marginTop: '8px' }}>Record product inventory purchases and payments.</p>
-          </div>
-        );
+        return <PurchasesList />;
       case '/customers':
-        return (
-          <div className="animate-fade-in">
-            <h1 style={{ fontSize: '24px', fontWeight: 700 }}>Customer Accounts</h1>
-            <p style={{ color: '#9ca3af', marginTop: '8px' }}>Track fleet balances and credit limits.</p>
-          </div>
-        );
+        return <CustomersList />;
       case '/reports':
         return (
           <div className="animate-fade-in">

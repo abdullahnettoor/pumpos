@@ -9,6 +9,7 @@ import {
   canReopenShift,
   Role,
 } from '@pump/shared';
+import { compileDssrSnapshot } from './transactions.js';
 
 type Variables = {
   db: DbClient;
@@ -163,12 +164,13 @@ shiftsRouter.get('/status', async (c) => {
       // Self-Healing Lock Transition Check
       if (currentStatus === 'CLOSED' && dbLastShift.closedAt) {
         const closedTime = new Date(dbLastShift.closedAt).getTime();
-        const expiryTime = closedTime + graceMinutes * 60 * 1000;
+        const lockGraceDays = (station?.settings as any)?.shift_lock_grace_days ?? 3;
+        const lockExpiryTime = closedTime + lockGraceDays * 24 * 60 * 60 * 1000;
         const now = Date.now();
 
-        if (now > expiryTime) {
+        if (now > lockExpiryTime) {
           // Grace period expired, automatically lock the shift
-          lockedAt = new Date(expiryTime);
+          lockedAt = new Date(lockExpiryTime);
           currentStatus = 'LOCKED';
 
           await db
@@ -180,7 +182,11 @@ shiftsRouter.get('/status', async (c) => {
             })
             .where(eq(schema.shifts.id, dbLastShift.id));
         } else {
-          gracePeriodExpiresAt = new Date(expiryTime).toISOString();
+          // Reopen grace minutes check
+          const reopenExpiryTime = closedTime + graceMinutes * 60 * 1000;
+          if (now <= reopenExpiryTime) {
+            gracePeriodExpiresAt = new Date(reopenExpiryTime).toISOString();
+          }
         }
       }
 
@@ -203,7 +209,7 @@ shiftsRouter.get('/status', async (c) => {
       }
 
       // Check reopen permission
-      if (currentStatus === 'CLOSED' && canReopenShift(user.role)) {
+      if (currentStatus === 'CLOSED' && gracePeriodExpiresAt && canReopenShift(user.role)) {
         canReopenLastShift = true;
       }
 
@@ -576,60 +582,17 @@ shiftsRouter.post('/close', async (c) => {
       .where(eq(schema.shifts.id, shiftId))
       .returning();
 
-    // 1. Generate DSSR Snapshot JSONB payload
-    const totalVolumeSold = enrichedReadingsSnapshot.reduce((sum, r) => sum + r.volumeSold, 0);
-    const openingCashNum = Number(activeShift.openingCash);
-    const closingCashNum = parsed.closingCash;
-    const cashNetChange = closingCashNum - openingCashNum;
+    // Compile DSSR Snapshot reactively (computes expected cash, cash variance, lists transactions)
+    await compileDssrSnapshot(db, shiftId);
 
-    // Check for warnings
-    const warnings = [];
-    if (closingCashNum === 0 && openingCashNum > 0) {
-      warnings.push('Closing cash is ₹0, which is highly unusual.');
-    }
-    if (totalVolumeSold === 0) {
-      warnings.push('Zero volume was sold across all nozzles this shift.');
-    }
-    for (const rd of enrichedReadingsSnapshot) {
-      if (rd.volumeSold > 5000) {
-        warnings.push(`High volume variance alert: Nozzle ${rd.nozzleName} sold ${rd.volumeSold} L.`);
-      }
-    }
-
-    const [template] = await db
+    // Retrieve the compiled snapshot data
+    const [dssr] = await db
       .select()
-      .from(schema.shiftTemplates)
-      .where(eq(schema.shiftTemplates.id, activeShift.shiftTemplateId))
+      .from(schema.dssrSnapshots)
+      .where(eq(schema.dssrSnapshots.shiftId, shiftId))
       .limit(1);
 
-    const [closedByUser] = await db
-      .select()
-      .from(schema.users)
-      .where(eq(schema.users.id, user.id))
-      .limit(1);
-
-    const snapshotData = {
-      shiftId: activeShift.id,
-      templateName: template?.name ?? 'Unknown',
-      openedAt: activeShift.openedAt,
-      closedAt,
-      openedBy: activeShift.openedBy,
-      closedBy: user.id,
-      closedByName: closedByUser?.fullName ?? 'Staff',
-      openingCash: openingCashNum,
-      closingCash: closingCashNum,
-      cashNetChange,
-      nozzleReadings: enrichedReadingsSnapshot,
-      totalVolumeSold,
-      warnings,
-    };
-
-    // Save DSSR Snapshot
-    await db.insert(schema.dssrSnapshots).values({
-      shiftId,
-      snapshotData,
-      generatedAt: closedAt,
-    });
+    const snapshotData = dssr?.snapshotData || {};
 
     // Log Business Event
     await db.insert(schema.businessEvents).values({
@@ -639,7 +602,7 @@ shiftsRouter.post('/close', async (c) => {
       stationId: activeShift.stationId,
       entityType: 'SHIFT',
       entityId: shiftId,
-      payload: snapshotData,
+      payload: snapshotData as any,
       occurredAt: closedAt,
     });
 
