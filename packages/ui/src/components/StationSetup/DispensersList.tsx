@@ -7,6 +7,7 @@ import {
 } from '../../services/cloud.js';
 import { DispenserUnit, Tank, Product, Nozzle } from '@pump/shared';
 import { StatusBadge } from '../StatusBadge.js';
+import { Drawer } from '../Drawer.js';
 
 const dispenserService = new CloudDispenserService();
 const tankService = new CloudTankService();
@@ -275,209 +276,236 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
         </div>
       )}
 
-      {/* Inline Form Card */}
-      {isFormOpen && (
-        <div
-          style={{
-            backgroundColor: 'var(--bg-surface)',
-            padding: '20px',
-            borderRadius: 'var(--radius-card)',
-            border: '1px solid var(--brand-primary)',
-            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.02)',
-          }}
-        >
-          <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)', borderBottom: '1px solid var(--border-soft)', paddingBottom: '8px', marginBottom: '16px' }}>
-            Add Dispenser Island
-          </h3>
-          <form onSubmit={handleCreate} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-              <div className="form-group">
-                <label className="form-label">Dispenser Name</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  placeholder="e.g. Dispenser 01"
-                  value={name}
-                  onChange={(e) => handleNameChange(e.target.value)}
-                  required
-                />
-              </div>
+      {/* Dispenser Creation Drawer */}
+      <Drawer
+        isOpen={isFormOpen}
+        onClose={() => {
+          resetForm();
+          setIsFormOpen(false);
+        }}
+        title="Add Dispenser Island"
+      >
+        <form onSubmit={handleCreate} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Dispenser Name *</label>
+            <input
+              type="text"
+              style={{
+                height: '32px',
+                padding: '0 8px',
+                borderRadius: 'var(--radius-input)',
+                border: '1px solid var(--border-strong)',
+                fontSize: '13px',
+              }}
+              placeholder="e.g. Dispenser 01"
+              value={name}
+              onChange={(e) => handleNameChange(e.target.value)}
+              required
+            />
+          </div>
 
-              <div className="form-group">
-                <label className="form-label">Code / Reference ID</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  placeholder="e.g. DU-01"
-                  value={code}
-                  onChange={(e) => { setCode(e.target.value); setIsCodeEdited(true); }}
-                  required
-                />
-              </div>
-            </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Code / Reference ID *</label>
+            <input
+              type="text"
+              style={{
+                height: '32px',
+                padding: '0 8px',
+                borderRadius: 'var(--radius-input)',
+                border: '1px solid var(--border-strong)',
+                fontSize: '13px',
+              }}
+              placeholder="e.g. DU-01"
+              value={code}
+              onChange={(e) => { setCode(e.target.value); setIsCodeEdited(true); }}
+              required
+            />
+          </div>
 
-            {/* Inline Nozzles Mapping Row Inputs */}
-            <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-strong)' }}>Map Nozzles</span>
-                <button
-                  type="button"
-                  onClick={addNozzleRow}
-                  style={{
-                    padding: '4px 8px',
-                    backgroundColor: 'var(--bg-canvas)',
-                    border: '1px solid var(--border-strong)',
-                    color: 'var(--text-default)',
-                    borderRadius: 'var(--radius-button)',
-                    fontSize: '11px',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                  }}
-                >
-                  + Add Nozzle
-                </button>
-              </div>
-
-              {nozzlesList.length > 0 ? (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '12px' }}>
-                  {nozzlesList.map((nozzle, idx) => {
-                    const filteredTanks = tanks.filter(t => t.productId === nozzle.productId);
-                    return (
-                      <div
-                        key={idx}
-                        style={{
-                          padding: '12px',
-                          border: '1px solid var(--border-soft)',
-                          borderRadius: '6px',
-                          backgroundColor: 'var(--bg-canvas)',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: '8px'
-                        }}
-                      >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)' }}>Nozzle #{idx + 1}</span>
-                          <button
-                            type="button"
-                            onClick={() => removeNozzleRow(idx)}
-                            style={{
-                              border: 'none',
-                              background: 'none',
-                              color: 'var(--state-danger-fg)',
-                              cursor: 'pointer',
-                              fontSize: '11px',
-                              fontWeight: 600
-                            }}
-                          >
-                            Remove
-                          </button>
-                        </div>
-
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                          <div className="form-group">
-                            <label className="form-label" style={{ fontSize: '11px' }}>Name</label>
-                            <input
-                              type="text"
-                              value={nozzle.name}
-                              onChange={(e) => handleNozzleNameChange(idx, e.target.value)}
-                              className="form-input"
-                              style={{ height: '28px', fontSize: '12px' }}
-                              required
-                            />
-                          </div>
-                          <div className="form-group">
-                            <label className="form-label" style={{ fontSize: '11px' }}>Reading (Liters)</label>
-                            <input
-                              type="number"
-                              value={nozzle.currentReading}
-                              onChange={(e) => handleNozzleReadingChange(idx, parseFloat(e.target.value) || 0)}
-                              className="form-input mono-num"
-                              style={{ height: '28px', fontSize: '12px' }}
-                              required
-                            />
-                          </div>
-                        </div>
-
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                          <div className="form-group">
-                            <label className="form-label" style={{ fontSize: '11px' }}>Fuel</label>
-                            <select
-                              value={nozzle.productId}
-                              onChange={(e) => handleNozzleProductChange(idx, e.target.value)}
-                              className="form-input"
-                              style={{ height: '28px', fontSize: '12px', padding: '0 4px' }}
-                            >
-                              {products.map(p => (
-                                <option key={p.id} value={p.id}>{p.name}</option>
-                              ))}
-                            </select>
-                          </div>
-                          <div className="form-group">
-                            <label className="form-label" style={{ fontSize: '11px' }}>Tank</label>
-                            <select
-                              value={nozzle.tankId}
-                              onChange={(e) => handleNozzleTankChange(idx, e.target.value)}
-                              className="form-input"
-                              style={{ height: '28px', fontSize: '12px', padding: '0 4px' }}
-                            >
-                              <option value="">-- Select Tank --</option>
-                              {filteredTanks.map(t => (
-                                <option key={t.id} value={t.id}>{t.name}</option>
-                              ))}
-                            </select>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <p style={{ fontSize: '11px', color: 'var(--text-muted)', fontStyle: 'italic', textAlign: 'center', padding: '12px' }}>
-                  No nozzles mapped yet. Click "+ Add Nozzle" to connect fuel lines to this dispenser.
-                </p>
-              )}
-            </div>
-
-            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', borderTop: '1px solid var(--border-soft)', paddingTop: '12px' }}>
+          {/* Nozzles Mapping Section */}
+          <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-strong)' }}>Map Nozzles</span>
               <button
                 type="button"
-                onClick={() => {
-                  resetForm();
-                  setIsFormOpen(false);
-                }}
+                onClick={addNozzleRow}
                 style={{
-                  height: '32px',
-                  padding: '0 16px',
-                  backgroundColor: 'transparent',
+                  padding: '4px 8px',
+                  backgroundColor: 'var(--bg-canvas)',
                   border: '1px solid var(--border-strong)',
                   color: 'var(--text-default)',
                   borderRadius: 'var(--radius-button)',
-                  fontSize: '13px',
-                  cursor: 'pointer',
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                style={{
-                  height: '32px',
-                  padding: '0 16px',
-                  backgroundColor: 'var(--brand-primary)',
-                  border: 'none',
-                  color: '#ffffff',
-                  borderRadius: 'var(--radius-button)',
+                  fontSize: '11px',
                   fontWeight: 600,
-                  fontSize: '13px',
                   cursor: 'pointer',
                 }}
               >
-                Create Dispenser
+                + Add Nozzle
               </button>
             </div>
-          </form>
-        </div>
-      )}
+
+            {nozzlesList.length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {nozzlesList.map((nozzle, idx) => {
+                  const filteredTanks = tanks.filter(t => t.productId === nozzle.productId);
+                  return (
+                    <div
+                      key={idx}
+                      style={{
+                        padding: '12px',
+                        border: '1px solid var(--border-soft)',
+                        borderRadius: '6px',
+                        backgroundColor: 'var(--bg-surface-alt)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '8px'
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)' }}>Nozzle #{idx + 1}</span>
+                        <button
+                          type="button"
+                          onClick={() => removeNozzleRow(idx)}
+                          style={{
+                            border: 'none',
+                            background: 'none',
+                            color: 'var(--state-danger-fg)',
+                            cursor: 'pointer',
+                            fontSize: '11px',
+                            fontWeight: 600
+                          }}
+                        >
+                          Remove
+                        </button>
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                        <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          <label style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Name</label>
+                          <input
+                            type="text"
+                            value={nozzle.name}
+                            onChange={(e) => handleNozzleNameChange(idx, e.target.value)}
+                            style={{
+                              height: '28px',
+                              padding: '0 8px',
+                              borderRadius: 'var(--radius-input)',
+                              border: '1px solid var(--border-strong)',
+                              fontSize: '12px',
+                            }}
+                            required
+                          />
+                        </div>
+                        <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          <label style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Reading (Liters)</label>
+                          <input
+                            type="number"
+                            value={nozzle.currentReading}
+                            onChange={(e) => handleNozzleReadingChange(idx, parseFloat(e.target.value) || 0)}
+                            style={{
+                              height: '28px',
+                              padding: '0 8px',
+                              borderRadius: 'var(--radius-input)',
+                              border: '1px solid var(--border-strong)',
+                              fontSize: '12px',
+                            }}
+                            required
+                          />
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                        <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          <label style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Fuel</label>
+                          <select
+                            value={nozzle.productId}
+                            onChange={(e) => handleNozzleProductChange(idx, e.target.value)}
+                            style={{
+                              height: '28px',
+                              padding: '0 4px',
+                              borderRadius: 'var(--radius-input)',
+                              border: '1px solid var(--border-strong)',
+                              fontSize: '12px',
+                              backgroundColor: 'var(--bg-surface)'
+                            }}
+                          >
+                            {products.map(p => (
+                              <option key={p.id} value={p.id}>{p.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          <label style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Tank</label>
+                          <select
+                            value={nozzle.tankId}
+                            onChange={(e) => handleNozzleTankChange(idx, e.target.value)}
+                            style={{
+                              height: '28px',
+                              padding: '0 4px',
+                              borderRadius: 'var(--radius-input)',
+                              border: '1px solid var(--border-strong)',
+                              fontSize: '12px',
+                              backgroundColor: 'var(--bg-surface)'
+                            }}
+                          >
+                            <option value="">-- Select Tank --</option>
+                            {filteredTanks.map(t => (
+                              <option key={t.id} value={t.id}>{t.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p style={{ fontSize: '11px', color: 'var(--text-muted)', fontStyle: 'italic', textAlign: 'center', padding: '12px' }}>
+                No nozzles mapped yet. Click "+ Add Nozzle" to connect fuel lines to this dispenser.
+              </p>
+            )}
+          </div>
+
+          <div style={{ display: 'flex', gap: '12px', marginTop: '12px' }}>
+            <button
+              type="submit"
+              style={{
+                flex: 1,
+                height: '32px',
+                backgroundColor: 'var(--brand-primary)',
+                color: 'white',
+                border: 'none',
+                borderRadius: 'var(--radius-button)',
+                fontWeight: 600,
+                fontSize: '13px',
+                cursor: 'pointer',
+              }}
+            >
+              Create Dispenser
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                resetForm();
+                setIsFormOpen(false);
+              }}
+              style={{
+                flex: 1,
+                height: '32px',
+                backgroundColor: 'var(--bg-surface-alt)',
+                color: 'var(--text-default)',
+                border: '1px solid var(--border-strong)',
+                borderRadius: 'var(--radius-button)',
+                fontWeight: 600,
+                fontSize: '13px',
+                cursor: 'pointer',
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      </Drawer>
 
       {/* DU Grid View */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px' }}>

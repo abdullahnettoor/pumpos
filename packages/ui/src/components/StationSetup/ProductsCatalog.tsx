@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { CloudProductService } from '../../services/cloud.js';
 import { Product } from '@pump/shared';
 import { StatusBadge } from '../StatusBadge.js';
+import { Drawer } from '../Drawer.js';
 
 const productService = new CloudProductService();
 let isSeedingFuels = false;
@@ -194,174 +195,196 @@ export const ProductsCatalog: React.FC = () => {
           </button>
         )}
       </div>
+      {/* Product Creation/Edit Drawer */}
+      <Drawer
+        isOpen={isFormOpen}
+        onClose={() => {
+          resetForm();
+          setIsFormOpen(false);
+        }}
+        title={editingProduct ? 'Edit Catalog Item' : 'New Catalog Item'}
+      >
+        <form onSubmit={handleCreateOrUpdate} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Product Name *</label>
+            <input
+              type="text"
+              style={{
+                height: '32px',
+                padding: '0 8px',
+                borderRadius: 'var(--radius-input)',
+                border: '1px solid var(--border-strong)',
+                fontSize: '13px',
+              }}
+              value={name}
+              onChange={(e) => handleNameChange(e.target.value)}
+              placeholder="e.g. Petrol (MS) or Engine Oil 4T"
+              required
+            />
+          </div>
 
-      {/* Inline Form Panel */}
-      {isFormOpen && (
-        <div
-          style={{
-            backgroundColor: 'var(--bg-surface)',
-            padding: '20px',
-            borderRadius: 'var(--radius-card)',
-            border: '1px solid var(--brand-primary)',
-            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.02)',
-          }}
-        >
-          <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)', borderBottom: '1px solid var(--border-soft)', paddingBottom: '8px', marginBottom: '16px' }}>
-            {editingProduct ? 'Edit Catalog Item' : 'New Catalog Item'}
-          </h3>
-          <form onSubmit={handleCreateOrUpdate} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-              <div className="form-group">
-                <label className="form-label">Product Name</label>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Product Code *</label>
+            <input
+              type="text"
+              style={{
+                height: '32px',
+                padding: '0 8px',
+                borderRadius: 'var(--radius-input)',
+                border: '1px solid var(--border-strong)',
+                fontSize: '13px',
+              }}
+              value={code}
+              onChange={(e) => handleCodeChange(e.target.value)}
+              placeholder="e.g. MS or HSD"
+              required
+            />
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Product Type *</label>
+            <select
+              value={productType}
+              onChange={(e) => setProductType(e.target.value as any)}
+              style={{
+                height: '32px',
+                padding: '0 8px',
+                borderRadius: 'var(--radius-input)',
+                border: '1px solid var(--border-strong)',
+                fontSize: '13px',
+                backgroundColor: 'var(--bg-surface)'
+              }}
+            >
+              <option value="FUEL">FUEL</option>
+              <option value="LUBRICANT">LUBRICANT</option>
+              <option value="ACCESSORY">ACCESSORY</option>
+              <option value="SERVICE">SERVICE</option>
+            </select>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Sales Unit *</label>
+            <input
+              type="text"
+              style={{
+                height: '32px',
+                padding: '0 8px',
+                borderRadius: 'var(--radius-input)',
+                border: '1px solid var(--border-strong)',
+                fontSize: '13px',
+              }}
+              value={unit}
+              onChange={(e) => setUnit(e.target.value)}
+              placeholder="e.g. Liters, Nos"
+              required
+            />
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', margin: '4px 0' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <input
+                type="checkbox"
+                id="stockTracked"
+                checked={stockTracked}
+                onChange={(e) => setStockTracked(e.target.checked)}
+                style={{ cursor: 'pointer' }}
+              />
+              <label htmlFor="stockTracked" style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-strong)', cursor: 'pointer' }}>
+                Track Inventory (Maintain stock levels automatically)
+              </label>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <input
+                type="checkbox"
+                id="isTaxable"
+                checked={isTaxable}
+                onChange={(e) => setIsTaxable(e.target.checked)}
+                style={{ cursor: 'pointer' }}
+              />
+              <label htmlFor="isTaxable" style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-strong)', cursor: 'pointer' }}>
+                Taxable Product (Apply GST rate on sales)
+              </label>
+            </div>
+          </div>
+
+          {isTaxable && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', borderTop: '1px solid var(--border-soft)', paddingTop: '12px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>GST Rate (%)</label>
                 <input
-                  type="text"
-                  className="form-input"
-                  value={name}
-                  onChange={(e) => handleNameChange(e.target.value)}
-                  placeholder="e.g. Petrol (MS) or Engine Oil 4T"
-                  required
+                  type="number"
+                  style={{
+                    height: '32px',
+                    padding: '0 8px',
+                    borderRadius: 'var(--radius-input)',
+                    border: '1px solid var(--border-strong)',
+                    fontSize: '13px',
+                  }}
+                  value={gstRate}
+                  onChange={(e) => setGstRate(parseInt(e.target.value))}
                 />
               </div>
-              <div className="form-group">
-                <label className="form-label">Product Code</label>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>HSN Code</label>
                 <input
                   type="text"
-                  className="form-input"
-                  value={code}
-                  onChange={(e) => handleCodeChange(e.target.value)}
-                  placeholder="e.g. MS or HSD"
-                  required
+                  style={{
+                    height: '32px',
+                    padding: '0 8px',
+                    borderRadius: 'var(--radius-input)',
+                    border: '1px solid var(--border-strong)',
+                    fontSize: '13px',
+                  }}
+                  value={hsnCode}
+                  onChange={(e) => setHsnCode(e.target.value)}
+                  placeholder="e.g. 2710"
                 />
               </div>
             </div>
+          )}
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-              <div className="form-group">
-                <label className="form-label">Product Type</label>
-                <select
-                  value={productType}
-                  onChange={(e) => setProductType(e.target.value as any)}
-                  className="form-input"
-                  style={{ height: '36px', width: '100%' }}
-                >
-                  <option value="FUEL">FUEL</option>
-                  <option value="LUBRICANT">LUBRICANT</option>
-                  <option value="ACCESSORY">ACCESSORY</option>
-                  <option value="SERVICE">SERVICE</option>
-                </select>
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Sales Unit</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  value={unit}
-                  onChange={(e) => setUnit(e.target.value)}
-                  placeholder="e.g. Liters, Nos"
-                  required
-                />
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', gap: '32px', margin: '4px 0' }}>
-              <div className="switch-container">
-                <div className="switch-label-group">
-                  <span className="switch-title">Track Inventory</span>
-                  <span className="switch-description">Maintain stock levels automatically</span>
-                </div>
-                <label className="switch">
-                  <input
-                    type="checkbox"
-                    className="switch-input"
-                    checked={stockTracked}
-                    onChange={(e) => setStockTracked(e.target.checked)}
-                  />
-                  <span className="switch-slider"></span>
-                </label>
-              </div>
-
-              <div className="switch-container">
-                <div className="switch-label-group">
-                  <span className="switch-title">Taxable Product</span>
-                  <span className="switch-description">Apply GST rate on sales</span>
-                </div>
-                <label className="switch">
-                  <input
-                    type="checkbox"
-                    className="switch-input"
-                    checked={isTaxable}
-                    onChange={(e) => setIsTaxable(e.target.checked)}
-                  />
-                  <span className="switch-slider"></span>
-                </label>
-              </div>
-            </div>
-
-            {isTaxable && (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', borderTop: '1px solid var(--border-soft)', paddingTop: '16px' }}>
-                <div className="form-group">
-                  <label className="form-label">GST Rate (%)</label>
-                  <input
-                    type="number"
-                    className="form-input mono-num"
-                    value={gstRate}
-                    onChange={(e) => setGstRate(parseInt(e.target.value))}
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">HSN Code</label>
-                  <input
-                    type="text"
-                    className="form-input mono-num"
-                    value={hsnCode}
-                    onChange={(e) => setHsnCode(e.target.value)}
-                    placeholder="e.g. 2710"
-                  />
-                </div>
-              </div>
-            )}
-
-            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', borderTop: '1px solid var(--border-soft)', paddingTop: '12px' }}>
-              <button
-                type="button"
-                onClick={() => {
-                  resetForm();
-                  setIsFormOpen(false);
-                }}
-                style={{
-                  height: '32px',
-                  padding: '0 16px',
-                  backgroundColor: 'transparent',
-                  border: '1px solid var(--border-strong)',
-                  color: 'var(--text-default)',
-                  borderRadius: 'var(--radius-button)',
-                  fontSize: '13px',
-                  cursor: 'pointer',
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                style={{
-                  height: '32px',
-                  padding: '0 16px',
-                  backgroundColor: 'var(--brand-primary)',
-                  border: 'none',
-                  color: '#ffffff',
-                  borderRadius: 'var(--radius-button)',
-                  fontWeight: 600,
-                  fontSize: '13px',
-                  cursor: 'pointer',
-                }}
-              >
-                {editingProduct ? 'Save Changes' : 'Create Item'}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
+          <div style={{ display: 'flex', gap: '12px', marginTop: '12px' }}>
+            <button
+              type="submit"
+              style={{
+                flex: 1,
+                height: '32px',
+                backgroundColor: 'var(--brand-primary)',
+                color: 'white',
+                border: 'none',
+                borderRadius: 'var(--radius-button)',
+                fontWeight: 600,
+                fontSize: '13px',
+                cursor: 'pointer',
+              }}
+            >
+              {editingProduct ? 'Save Changes' : 'Create Item'}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                resetForm();
+                setIsFormOpen(false);
+              }}
+              style={{
+                flex: 1,
+                height: '32px',
+                backgroundColor: 'var(--bg-surface-alt)',
+                color: 'var(--text-default)',
+                border: '1px solid var(--border-strong)',
+                borderRadius: 'var(--radius-button)',
+                fontWeight: 600,
+                fontSize: '13px',
+                cursor: 'pointer',
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      </Drawer>
 
       {/* Product List Table */}
       <div style={{ overflowX: 'auto', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-card)', backgroundColor: 'var(--bg-surface)' }}>

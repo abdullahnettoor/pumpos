@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { CloudShiftTemplateService } from '../../services/cloud.js';
 import { ShiftTemplate } from '@pump/shared';
 import { StatusBadge } from '../StatusBadge.js';
+import { Drawer } from '../Drawer.js';
 
 const templateService = new CloudShiftTemplateService();
 
@@ -180,97 +181,108 @@ export const ShiftTemplates: React.FC = () => {
         </div>
       )}
 
-      {/* Inline Form Card */}
-      {isFormOpen && (
-        <div
-          style={{
-            backgroundColor: 'var(--bg-surface)',
-            padding: '20px',
-            borderRadius: 'var(--radius-card)',
-            border: '1px solid var(--brand-primary)',
-            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.02)',
-          }}
-        >
-          <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)', borderBottom: '1px solid var(--border-soft)', paddingBottom: '8px', marginBottom: '16px' }}>
-            Add Shift Template
-          </h3>
-          <form onSubmit={handleCreate} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
-              <div className="form-group">
-                <label className="form-label">Shift Name</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  placeholder="e.g. Morning Shift"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  required
-                />
-              </div>
+      {/* Shift timing Creation Drawer */}
+      <Drawer
+        isOpen={isFormOpen}
+        onClose={() => {
+          resetForm();
+          setIsFormOpen(false);
+        }}
+        title="Add Shift Template"
+      >
+        <form onSubmit={handleCreate} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Shift Name *</label>
+            <input
+              type="text"
+              style={{
+                height: '32px',
+                padding: '0 8px',
+                borderRadius: 'var(--radius-input)',
+                border: '1px solid var(--border-strong)',
+                fontSize: '13px',
+              }}
+              placeholder="e.g. Morning Shift"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+            />
+          </div>
 
-              <div className="form-group">
-                <label className="form-label">Start Time</label>
-                <input
-                  type="time"
-                  className="form-input"
-                  value={startTime}
-                  onChange={(e) => setStartTime(e.target.value)}
-                  required
-                />
-              </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Start Time *</label>
+            <input
+              type="time"
+              style={{
+                height: '32px',
+                padding: '0 8px',
+                borderRadius: 'var(--radius-input)',
+                border: '1px solid var(--border-strong)',
+                fontSize: '13px',
+              }}
+              value={startTime}
+              onChange={(e) => setStartTime(e.target.value)}
+              required
+            />
+          </div>
 
-              <div className="form-group">
-                <label className="form-label">End Time</label>
-                <input
-                  type="time"
-                  className="form-input"
-                  value={endTime}
-                  onChange={(e) => setEndTime(e.target.value)}
-                  required
-                />
-              </div>
-            </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>End Time *</label>
+            <input
+              type="time"
+              style={{
+                height: '32px',
+                padding: '0 8px',
+                borderRadius: 'var(--radius-input)',
+                border: '1px solid var(--border-strong)',
+                fontSize: '13px',
+              }}
+              value={endTime}
+              onChange={(e) => setEndTime(e.target.value)}
+              required
+            />
+          </div>
 
-            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', borderTop: '1px solid var(--border-soft)', paddingTop: '12px' }}>
-              <button
-                type="button"
-                onClick={() => {
-                  resetForm();
-                  setIsFormOpen(false);
-                }}
-                style={{
-                  height: '32px',
-                  padding: '0 16px',
-                  backgroundColor: 'transparent',
-                  border: '1px solid var(--border-strong)',
-                  color: 'var(--text-default)',
-                  borderRadius: 'var(--radius-button)',
-                  fontSize: '13px',
-                  cursor: 'pointer',
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                style={{
-                  height: '32px',
-                  padding: '0 16px',
-                  backgroundColor: 'var(--brand-primary)',
-                  border: 'none',
-                  color: '#ffffff',
-                  borderRadius: 'var(--radius-button)',
-                  fontWeight: 600,
-                  fontSize: '13px',
-                  cursor: 'pointer',
-                }}
-              >
-                Create Shift
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
+          <div style={{ display: 'flex', gap: '12px', marginTop: '12px' }}>
+            <button
+              type="submit"
+              style={{
+                flex: 1,
+                height: '32px',
+                backgroundColor: 'var(--brand-primary)',
+                color: 'white',
+                border: 'none',
+                borderRadius: 'var(--radius-button)',
+                fontWeight: 600,
+                fontSize: '13px',
+                cursor: 'pointer',
+              }}
+            >
+              Create Shift
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                resetForm();
+                setIsFormOpen(false);
+              }}
+              style={{
+                flex: 1,
+                height: '32px',
+                backgroundColor: 'var(--bg-surface-alt)',
+                color: 'var(--text-default)',
+                border: '1px solid var(--border-strong)',
+                borderRadius: 'var(--radius-button)',
+                fontWeight: 600,
+                fontSize: '13px',
+                cursor: 'pointer',
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      </Drawer>
 
       {/* Shifts Grid View */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '16px' }}>
