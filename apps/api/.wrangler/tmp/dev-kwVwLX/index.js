@@ -18816,12 +18816,16 @@ shiftsRouter.get("/status", async (c) => {
           const [nz] = await db.select().from(schema_exports.nozzles).where(eq(schema_exports.nozzles.id, nr.nozzleId)).limit(1);
           const [prod] = nz ? await db.select().from(schema_exports.products).where(eq(schema_exports.products.id, nz.productId)).limit(1) : [null];
           const [tnk] = nz ? await db.select().from(schema_exports.tanks).where(eq(schema_exports.tanks.id, nz.tankId)).limit(1) : [null];
+          const [du] = nz ? await db.select().from(schema_exports.dispenserUnits).where(eq(schema_exports.dispenserUnits.id, nz.duId)).limit(1) : [null];
           return {
             ...nr,
             nozzleName: nz?.name ?? "Unknown",
             productName: prod?.name ?? "Unknown",
             productCode: prod?.code ?? "Unknown",
-            tankName: tnk?.name ?? "Unknown"
+            tankName: tnk?.name ?? "Unknown",
+            duId: nz?.duId ?? null,
+            duName: du?.name ?? "Unknown",
+            duCode: du?.code ?? "Unknown"
           };
         })
       );

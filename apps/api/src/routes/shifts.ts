@@ -100,12 +100,18 @@ shiftsRouter.get('/status', async (c) => {
           const [tnk] = nz 
             ? await db.select().from(schema.tanks).where(eq(schema.tanks.id, nz.tankId)).limit(1)
             : [null];
+          const [du] = nz
+            ? await db.select().from(schema.dispenserUnits).where(eq(schema.dispenserUnits.id, nz.duId)).limit(1)
+            : [null];
           return {
             ...nr,
             nozzleName: nz?.name ?? 'Unknown',
             productName: prod?.name ?? 'Unknown',
             productCode: prod?.code ?? 'Unknown',
             tankName: tnk?.name ?? 'Unknown',
+            duId: nz?.duId ?? null,
+            duName: du?.name ?? 'Unknown',
+            duCode: du?.code ?? 'Unknown',
           };
         })
       );

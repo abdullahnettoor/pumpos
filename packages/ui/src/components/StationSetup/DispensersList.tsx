@@ -56,7 +56,7 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
 
       setDispensers(duList);
       setTanks(tankList);
-      
+
       const fuels = prodList.filter((p) => p.productType === 'FUEL' && p.isActive);
       setProducts(fuels);
       setNozzles(nozzleList);
@@ -95,10 +95,11 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
   const addNozzleRow = () => {
     const defaultProduct = products[0]?.id || '';
     const defaultTank = tanks.find(t => t.productId === defaultProduct)?.id || '';
+    const nextNozzleNum = nozzles.length + nozzlesList.length + 1;
     setNozzlesList(prev => [
       ...prev,
       {
-        name: `N${prev.length + 1}`,
+        name: `N${nextNozzleNum}`,
         productId: defaultProduct,
         tankId: defaultTank,
         currentReading: 1000
@@ -173,19 +174,21 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
     }
   };
 
-  const prefillSuggestion = () => {
+  const prefillDualNozzles = () => {
     const petrol = products.find(p => p.code === 'MS');
     const diesel = products.find(p => p.code === 'HSD');
     const petrolTank = tanks.find(t => t.productId === petrol?.id);
     const dieselTank = tanks.find(t => t.productId === diesel?.id);
 
-    setName('Dispenser Unit 1');
-    setCode('DU-01');
+    setName(`Dispenser Unit ${dispensers.length + 1}`);
+    setCode(`DU-${String(dispensers.length + 1).padStart(2, '0')}`);
 
+    const baseNozzleNum = nozzles.length + 1;
     const recommendedNozzles: NozzleInput[] = [];
+
     if (petrol && petrolTank) {
       recommendedNozzles.push({
-        name: 'N1',
+        name: `N${baseNozzleNum}`,
         productId: petrol.id,
         tankId: petrolTank.id,
         currentReading: 1000
@@ -193,7 +196,53 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
     }
     if (diesel && dieselTank) {
       recommendedNozzles.push({
-        name: 'N2',
+        name: `N${baseNozzleNum + recommendedNozzles.length}`,
+        productId: diesel.id,
+        tankId: dieselTank.id,
+        currentReading: 1000
+      });
+    }
+
+    setNozzlesList(recommendedNozzles);
+    setIsFormOpen(true);
+  };
+
+  const prefillQuadNozzles = () => {
+    const petrol = products.find(p => p.code === 'MS');
+    const diesel = products.find(p => p.code === 'HSD');
+    const petrolTank = tanks.find(t => t.productId === petrol?.id);
+    const dieselTank = tanks.find(t => t.productId === diesel?.id);
+
+    setName(`Dispenser Unit ${dispensers.length + 1}`);
+    setCode(`DU-${String(dispensers.length + 1).padStart(2, '0')}`);
+
+    const baseNozzleNum = nozzles.length + 1;
+    const recommendedNozzles: NozzleInput[] = [];
+
+    if (petrol && petrolTank) {
+      recommendedNozzles.push({
+        name: `N${baseNozzleNum}`,
+        productId: petrol.id,
+        tankId: petrolTank.id,
+        currentReading: 1000
+      });
+      recommendedNozzles.push({
+        name: `N${baseNozzleNum + 1}`,
+        productId: petrol.id,
+        tankId: petrolTank.id,
+        currentReading: 1000
+      });
+    }
+    if (diesel && dieselTank) {
+      const currentLen = recommendedNozzles.length;
+      recommendedNozzles.push({
+        name: `N${baseNozzleNum + currentLen}`,
+        productId: diesel.id,
+        tankId: dieselTank.id,
+        currentReading: 1000
+      });
+      recommendedNozzles.push({
+        name: `N${baseNozzleNum + currentLen + 1}`,
         productId: diesel.id,
         tankId: dieselTank.id,
         currentReading: 1000
@@ -208,7 +257,7 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }} className="animate-fade-in">
-      
+
       {/* Header & Add Button */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
@@ -239,7 +288,7 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
       </div>
 
       {/* Recommended Configuration Suggestions Banner */}
-      {dispensers.length === 0 && products.length > 0 && tanks.length > 0 && (
+      {products.length > 0 && tanks.length > 0 && (
         <div style={{
           backgroundColor: 'var(--bg-surface-alt)',
           padding: '16px 20px',
@@ -251,28 +300,47 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
           gap: '16px'
         }}>
           <div>
-            <span style={{ fontWeight: 600, fontSize: '13px', color: 'var(--text-strong)' }}>Recommended Layout</span>
+            <span style={{ fontWeight: 600, fontSize: '13px', color: 'var(--text-strong)' }}>Recommended Layout Templates</span>
             <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
-              We recommend setting up a Dispenser Unit with two nozzles (Petrol and Diesel). Click to pre-fill the form, edit initial readings, and save:
+              Select a template to pre-fill the form with standard dispenser configurations:
             </p>
           </div>
-          <button
-            onClick={prefillSuggestion}
-            style={{
-              height: '30px',
-              padding: '0 12px',
-              backgroundColor: 'var(--brand-primary)',
-              color: '#ffffff',
-              border: 'none',
-              borderRadius: 'var(--radius-button)',
-              fontWeight: 600,
-              fontSize: '12px',
-              cursor: 'pointer',
-              whiteSpace: 'nowrap'
-            }}
-          >
-            + Sug. Dual Dispenser (DU-01)
-          </button>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              onClick={prefillDualNozzles}
+              style={{
+                height: '30px',
+                padding: '0 12px',
+                backgroundColor: 'var(--brand-primary)',
+                color: '#ffffff',
+                border: 'none',
+                borderRadius: 'var(--radius-button)',
+                fontWeight: 600,
+                fontSize: '12px',
+                cursor: 'pointer',
+                whiteSpace: 'nowrap'
+              }}
+            >
+              Auto-fill Dual Dispenser (2 Nozzles)
+            </button>
+            <button
+              onClick={prefillQuadNozzles}
+              style={{
+                height: '30px',
+                padding: '0 12px',
+                backgroundColor: 'var(--bg-surface)',
+                color: 'var(--text-strong)',
+                border: '1px solid var(--border-strong)',
+                borderRadius: 'var(--radius-button)',
+                fontWeight: 600,
+                fontSize: '12px',
+                cursor: 'pointer',
+                whiteSpace: 'nowrap'
+              }}
+            >
+              Auto-fill Quad Dispenser (4 Nozzles)
+            </button>
+          </div>
         </div>
       )}
 

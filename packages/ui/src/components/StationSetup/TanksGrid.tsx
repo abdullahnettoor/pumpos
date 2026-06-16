@@ -22,6 +22,11 @@ export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
   const [productId, setProductId] = useState('');
   const [capacity, setCapacity] = useState(20000);
 
+  // Quick add states
+  const [quickPetrolCapacity, setQuickPetrolCapacity] = useState('15000');
+  const [quickDieselCapacity, setQuickDieselCapacity] = useState('20000');
+  const [quickSubmitting, setQuickSubmitting] = useState(false);
+
   useEffect(() => {
     loadData();
   }, [stationId]);
@@ -68,6 +73,40 @@ export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
       loadData();
     } catch (err: any) {
       alert(err.message || 'Failed to create tank');
+    }
+  };
+
+  const handleQuickAdd = async (fuelCode: 'MS' | 'HSD', capStr: string) => {
+    const fuel = fuelProducts.find(p => p.code === fuelCode);
+    if (!fuel) {
+      alert(`Please define active ${fuelCode === 'MS' ? 'Petrol (MS)' : 'Diesel (HSD)'} in the catalog first.`);
+      return;
+    }
+    const cap = parseInt(capStr);
+    if (!cap || cap <= 0) {
+      alert('Please enter a valid capacity');
+      return;
+    }
+
+    try {
+      setQuickSubmitting(true);
+      const sameProductTanksCount = tanks.filter(t => t.productId === fuel.id).length;
+      const tankName = fuelCode === 'MS' 
+        ? `Petrol Tank ${sameProductTanksCount + 1}` 
+        : `Diesel Tank ${sameProductTanksCount + 1}`;
+
+      await tankService.createTank({
+        stationId,
+        name: tankName,
+        productId: fuel.id,
+        capacity: cap,
+      });
+
+      await loadData();
+    } catch (err: any) {
+      alert(err.message || 'Failed to create tank');
+    } finally {
+      setQuickSubmitting(false);
     }
   };
 
@@ -126,59 +165,104 @@ export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
         )}
       </div>
 
-      {/* Recommended Configuration Suggestions Banner */}
-      {tanks.length === 0 && fuelProducts.length > 0 && (
+      {/* Quick Add Tanks Panel */}
+      {fuelProducts.length > 0 && (
         <div style={{
           backgroundColor: 'var(--bg-surface-alt)',
-          padding: '16px 20px',
+          padding: '14px 20px',
           borderRadius: 'var(--radius-card)',
           border: '1px solid var(--border-soft)',
           display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          gap: '16px'
+          flexDirection: 'column',
+          gap: '12px'
         }}>
           <div>
-            <span style={{ fontWeight: 600, fontSize: '13px', color: 'var(--text-strong)' }}>Recommended Layout</span>
+            <span style={{ fontWeight: 600, fontSize: '13px', color: 'var(--text-strong)' }}>Quick Add Storage Tanks</span>
             <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
-              We recommend setting up underground storage tanks. Click a template to pre-fill the form, customize the liters, and save:
+              Add a new Petrol or Diesel underground storage tank instantly by entering its capacity:
             </p>
           </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button
-              onClick={() => prefillSuggestion('MS')}
-              style={{
-                height: '30px',
-                padding: '0 12px',
-                backgroundColor: 'var(--bg-surface)',
-                color: 'var(--text-strong)',
-                border: '1px solid var(--border-strong)',
-                borderRadius: 'var(--radius-button)',
-                fontWeight: 600,
-                fontSize: '12px',
-                cursor: 'pointer',
-                whiteSpace: 'nowrap'
-              }}
-            >
-              + Sug. Petrol Tank (15 KL)
-            </button>
-            <button
-              onClick={() => prefillSuggestion('HSD')}
-              style={{
-                height: '30px',
-                padding: '0 12px',
-                backgroundColor: 'var(--bg-surface)',
-                color: 'var(--text-strong)',
-                border: '1px solid var(--border-strong)',
-                borderRadius: 'var(--radius-button)',
-                fontWeight: 600,
-                fontSize: '12px',
-                cursor: 'pointer',
-                whiteSpace: 'nowrap'
-              }}
-            >
-              + Sug. Diesel Tank (20 KL)
-            </button>
+
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '24px', alignItems: 'center' }}>
+            {/* Petrol Quick Add */}
+            {fuelProducts.some(p => p.code === 'MS') && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-strong)' }}>Petrol Tank (MS):</span>
+                <input
+                  type="number"
+                  placeholder="Liters"
+                  value={quickPetrolCapacity}
+                  onChange={(e) => setQuickPetrolCapacity(e.target.value)}
+                  disabled={quickSubmitting}
+                  style={{
+                    width: '100px',
+                    height: '28px',
+                    padding: '0 8px',
+                    borderRadius: 'var(--radius-input)',
+                    border: '1px solid var(--border-strong)',
+                    fontSize: '12px',
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => handleQuickAdd('MS', quickPetrolCapacity)}
+                  disabled={quickSubmitting}
+                  style={{
+                    height: '28px',
+                    padding: '0 12px',
+                    backgroundColor: 'var(--brand-primary)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: 'var(--radius-button)',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    cursor: quickSubmitting ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  Quick Add
+                </button>
+              </div>
+            )}
+
+            {/* Diesel Quick Add */}
+            {fuelProducts.some(p => p.code === 'HSD') && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-strong)' }}>Diesel Tank (HSD):</span>
+                <input
+                  type="number"
+                  placeholder="Liters"
+                  value={quickDieselCapacity}
+                  onChange={(e) => setQuickDieselCapacity(e.target.value)}
+                  disabled={quickSubmitting}
+                  style={{
+                    width: '100px',
+                    height: '28px',
+                    padding: '0 8px',
+                    borderRadius: 'var(--radius-input)',
+                    border: '1px solid var(--border-strong)',
+                    fontSize: '12px',
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => handleQuickAdd('HSD', quickDieselCapacity)}
+                  disabled={quickSubmitting}
+                  style={{
+                    height: '28px',
+                    padding: '0 12px',
+                    backgroundColor: 'var(--brand-primary)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: 'var(--radius-button)',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    cursor: quickSubmitting ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  Quick Add
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
