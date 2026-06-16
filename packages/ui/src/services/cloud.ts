@@ -245,8 +245,8 @@ export class CloudUserAssignmentService implements IUserAssignmentService {
 }
 
 export class CloudShiftService {
-  async getShiftStatus(stationId: string): Promise<any> {
-    return request<any>(`/shifts/status?stationId=${stationId}`);
+  async getShiftStatus(stationId: string, lite: boolean = false): Promise<any> {
+    return request<any>(`/shifts/status?stationId=${stationId}${lite ? '&lite=true' : ''}`);
   }
 
   async openShift(payload: ShiftOpenPayload): Promise<any> {
@@ -287,12 +287,52 @@ export class CloudTransactionService {
     return request<any>('/transactions/expense-categories');
   }
 
-  async getSuppliers(): Promise<any> {
-    return request<any>('/transactions/suppliers');
+  async getSuppliers(activeOnly: boolean = true): Promise<any> {
+    return request<any>(`/transactions/suppliers?activeOnly=${activeOnly}`);
   }
 
-  async getCustomers(): Promise<any> {
-    return request<any>('/transactions/customers');
+  async createSupplier(payload: { name: string; phone?: string | null; isActive?: boolean; metadata?: { gstin?: string | null; pan?: string | null; tradeName?: string | null; billingAddress?: string | null } | null }): Promise<any> {
+    return request<any>('/transactions/suppliers', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async updateSupplier(id: string, payload: { name: string; phone?: string | null; isActive?: boolean; metadata?: { gstin?: string | null; pan?: string | null; tradeName?: string | null; billingAddress?: string | null } | null }): Promise<any> {
+    return request<any>(`/transactions/suppliers/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async deleteSupplier(id: string): Promise<any> {
+    return request<any>(`/transactions/suppliers/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async getCustomers(activeOnly: boolean = true): Promise<any> {
+    return request<any>(`/transactions/customers?activeOnly=${activeOnly}`);
+  }
+
+  async createCustomer(payload: { name: string; phone?: string | null; customerType: 'Regular' | 'Credit' | 'Fleet'; creditLimit?: number | null; fleetCode?: string | null; isActive?: boolean; metadata?: { gstin?: string | null; pan?: string | null; tradeName?: string | null; billingAddress?: string | null } | null }): Promise<any> {
+    return request<any>('/transactions/customers', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async updateCustomer(id: string, payload: { name: string; phone?: string | null; customerType: 'Regular' | 'Credit' | 'Fleet'; creditLimit?: number | null; fleetCode?: string | null; isActive?: boolean; metadata?: { gstin?: string | null; pan?: string | null; tradeName?: string | null; billingAddress?: string | null } | null }): Promise<any> {
+    return request<any>(`/transactions/customers/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async deleteCustomer(id: string): Promise<any> {
+    return request<any>(`/transactions/customers/${id}`, {
+      method: 'DELETE',
+    });
   }
 
   async getExpenses(): Promise<any[]> {
@@ -326,6 +366,18 @@ export class CloudTransactionService {
       method: 'POST',
       body: JSON.stringify(payload),
     });
+  }
+
+  async getInventoryStatus(stationId: string): Promise<any[]> {
+    return request<any[]>(`/transactions/inventory/status?stationId=${stationId}`);
+  }
+
+  async getInventoryMovements(stationId: string): Promise<any[]> {
+    return request<any[]>(`/transactions/inventory/movements?stationId=${stationId}`);
+  }
+
+  async getInventoryVariances(stationId: string): Promise<any[]> {
+    return request<any[]>(`/transactions/inventory/variances?stationId=${stationId}`);
   }
 }
 

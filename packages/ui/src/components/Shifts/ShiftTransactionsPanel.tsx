@@ -264,56 +264,20 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
 
         <div style={{ display: 'flex', gap: '8px', marginBottom: '-1px' }}>
           <button
+            className={`btn ${activeTab === 'expenses' ? 'btn-ghost' : ''} btn-md`} style={{ borderBottom: activeTab === 'expenses' ? '2px solid var(--brand-primary)' : '2px solid transparent' }}
             onClick={() => setActiveTab('expenses')}
-            style={{
-              padding: '8px 16px',
-              fontSize: '13px',
-              fontWeight: 600,
-              color: activeTab === 'expenses' ? 'var(--text-strong)' : 'var(--text-muted)',
-              borderBottom: activeTab === 'expenses' ? '2px solid var(--brand-primary)' : '2px solid transparent',
-              background: 'transparent',
-              border: 'none',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-            }}
           >
             <Coins size={14} /> Petty Expenses
           </button>
           <button
+            className={`btn ${activeTab === 'purchases' ? 'btn-ghost' : ''} btn-md`} style={{ borderBottom: activeTab === 'purchases' ? '2px solid var(--brand-primary)' : '2px solid transparent' }}
             onClick={() => setActiveTab('purchases')}
-            style={{
-              padding: '8px 16px',
-              fontSize: '13px',
-              fontWeight: 600,
-              color: activeTab === 'purchases' ? 'var(--text-strong)' : 'var(--text-muted)',
-              borderBottom: activeTab === 'purchases' ? '2px solid var(--brand-primary)' : '2px solid transparent',
-              background: 'transparent',
-              border: 'none',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-            }}
           >
             <ShoppingCart size={14} /> Fuel Deliveries (Purchases)
           </button>
           <button
+            className={`btn ${activeTab === 'collections' ? 'btn-ghost' : ''} btn-md`} style={{ borderBottom: activeTab === 'collections' ? '2px solid var(--brand-primary)' : '2px solid transparent' }}
             onClick={() => setActiveTab('collections')}
-            style={{
-              padding: '8px 16px',
-              fontSize: '13px',
-              fontWeight: 600,
-              color: activeTab === 'collections' ? 'var(--text-strong)' : 'var(--text-muted)',
-              borderBottom: activeTab === 'collections' ? '2px solid var(--brand-primary)' : '2px solid transparent',
-              background: 'transparent',
-              border: 'none',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-            }}
           >
             <CreditCard size={14} /> Credit Sales & Collections
           </button>

@@ -54,6 +54,8 @@ export const DssrView: React.FC<DssrViewProps> = ({
     expenses = [],
     purchases = [],
     collections = [],
+    stockVariances = [],
+    dipReadings = [],
   } = snapshotData;
 
   const handleReopen = async () => {
@@ -72,68 +74,29 @@ export const DssrView: React.FC<DssrViewProps> = ({
   };
 
   return (
-    <div style={{
-      maxWidth: '800px',
-      margin: '0 auto',
-      backgroundColor: 'var(--bg-surface)',
-      border: '1px solid var(--border-soft)',
-      borderRadius: 'var(--radius-card)',
-      padding: '32px',
-      fontFamily: 'var(--font-sans)',
-      boxShadow: 'var(--shadow-sm)'
-    }}>
+    <div className="card card-comfortable" style={{ maxWidth: '800px', margin: '0 auto' }}>
       {/* Header controls */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', borderBottom: '1px solid var(--border-soft)', paddingBottom: '16px' }} className="no-print">
         <button
+          className="btn btn-secondary btn-sm"
           onClick={onBack}
-          style={{
-            height: '32px',
-            padding: '0 12px',
-            fontSize: '12px',
-            fontWeight: 600,
-            backgroundColor: 'var(--bg-surface-alt)',
-            border: '1px solid var(--border-strong)',
-            borderRadius: 'var(--radius-button)',
-            cursor: 'pointer',
-            color: 'var(--text-default)'
-          }}
         >
-          <ArrowLeft size={13} style={{ marginRight: '6px' }} /> Back to Workspace
+          <ArrowLeft size={13} /> Back to Workspace
         </button>
 
         <div style={{ display: 'flex', gap: '8px' }}>
           <button
+            className="btn btn-secondary btn-sm"
             onClick={() => window.print()}
-            style={{
-              height: '32px',
-              padding: '0 12px',
-              fontSize: '12px',
-              fontWeight: 600,
-              backgroundColor: 'var(--bg-surface)',
-              border: '1px solid var(--border-strong)',
-              borderRadius: 'var(--radius-button)',
-              cursor: 'pointer',
-              color: 'var(--text-default)'
-            }}
           >
-            <Printer size={13} style={{ marginRight: '6px' }} /> Print DSSR
+            <Printer size={13} /> Print DSSR
           </button>
 
           {canReopen && (
             <button
+              className="btn btn-danger btn-sm"
               onClick={handleReopen}
               disabled={reopening}
-              style={{
-                height: '32px',
-                padding: '0 12px',
-                fontSize: '12px',
-                fontWeight: 600,
-                backgroundColor: 'var(--state-danger-bg)',
-                border: '1px solid var(--border-soft)',
-                borderRadius: 'var(--radius-button)',
-                cursor: 'pointer',
-                color: 'var(--state-danger-fg)'
-              }}
             >
               {reopening ? 'Reopening...' : (
                 <>
@@ -245,6 +208,97 @@ export const DssrView: React.FC<DssrViewProps> = ({
           </tr>
         </tbody>
       </table>
+
+      {/* Tank Physical Dip Reconciliation */}
+      {dipReadings && dipReadings.length > 0 && (
+        <>
+          <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
+            Tank Physical Dip Reconciliation
+          </h3>
+          <table style={{
+            width: '100%',
+            borderCollapse: 'collapse',
+            marginBottom: '32px',
+            fontSize: '13px'
+          }}>
+            <thead>
+              <tr style={{ borderBottom: '2px solid var(--border-strong)', textAlign: 'left', color: 'var(--text-muted)' }}>
+                <th style={{ padding: '8px 12px', fontWeight: 600 }}>Tank</th>
+                <th style={{ padding: '8px 12px', fontWeight: 600 }}>Product</th>
+                <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Tank Capacity</th>
+                <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Physical Actual Stock</th>
+              </tr>
+            </thead>
+            <tbody>
+              {dipReadings.map((dr: any, idx: number) => (
+                <tr key={idx} style={{ borderBottom: '1px solid var(--border-soft)' }}>
+                  <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--text-strong)' }}>{dr.tankName}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text-default)' }}>{dr.productName} ({dr.productCode})</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{Number(dr.capacity).toLocaleString('en-IN')} L</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, color: 'var(--text-strong)', fontFamily: 'var(--font-mono)' }}>{Number(dr.actualQuantity).toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} L</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      )}
+
+      {/* Stock Variance Reconciliation */}
+      {stockVariances && stockVariances.length > 0 && (
+        <>
+          <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
+            Product Stock Variances
+          </h3>
+          <table style={{
+            width: '100%',
+            borderCollapse: 'collapse',
+            marginBottom: '32px',
+            fontSize: '13px'
+          }}>
+            <thead>
+              <tr style={{ borderBottom: '2px solid var(--border-strong)', textAlign: 'left', color: 'var(--text-muted)' }}>
+                <th style={{ padding: '8px 12px', fontWeight: 600 }}>Product</th>
+                <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Expected Stock</th>
+                <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Physical Actual</th>
+                <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Variance</th>
+                <th style={{ padding: '8px 12px', fontWeight: 600 }}>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {stockVariances.map((sv: any, idx: number) => {
+                const diff = sv.varianceQuantity;
+                const isSevere = sv.expectedQuantity > 0 && Math.abs(diff) > 0.005 * sv.expectedQuantity;
+                let diffColor = 'var(--text-strong)';
+                if (diff < 0) {
+                  diffColor = 'var(--state-danger-fg)';
+                } else if (diff > 0) {
+                  diffColor = 'var(--state-success-fg)';
+                }
+
+                return (
+                  <tr key={idx} style={{ borderBottom: '1px solid var(--border-soft)' }}>
+                    <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--text-strong)' }}>{sv.productName} ({sv.productCode})</td>
+                    <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{Number(sv.expectedQuantity).toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} L</td>
+                    <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{Number(sv.actualQuantity).toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} L</td>
+                    <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, color: diffColor, fontFamily: 'var(--font-mono)' }}>
+                      {diff > 0 ? '+' : ''}{diff.toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} L
+                    </td>
+                    <td style={{ padding: '10px 12px', fontSize: '11px' }}>
+                      {isSevere ? (
+                        <span style={{ color: 'var(--state-warning-fg)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                          <AlertTriangle size={12} /> Discrepancy (&gt;0.5%)
+                        </span>
+                      ) : (
+                        <span style={{ color: 'var(--state-success-fg)', fontWeight: 600 }}>Normal</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </>
+      )}
 
       {/* Cash Reconciliation Summary */}
       <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.02em' }}>

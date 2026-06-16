@@ -2,8 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { CloudShiftService } from '../../services/cloud.js';
 import { StatusBadge } from '../StatusBadge.js';
 import { SyncIndicator } from '../SyncIndicator.js';
-import { Station, ShiftDashboardSummary } from '@pump/shared';
-import { RefreshCw, Play, Plus, FileText, Unlock, AlertTriangle, Lock } from 'lucide-react';
+import { LoadingSpinner } from '../LoadingSpinner.js';
+import { Station } from '@pump/shared';
+import { Play, Plus, FileText, Unlock, AlertTriangle, Lock } from 'lucide-react';
 
 const shiftService = new CloudShiftService();
 
@@ -23,7 +24,6 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   const [summary, setSummary] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [syncStatus, setSyncStatus] = useState<'synced' | 'pending'>('synced');
   const [isReopening, setIsReopening] = useState(false);
 
   useEffect(() => {
@@ -45,13 +45,6 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleSync = () => {
-    setSyncStatus('pending');
-    setTimeout(() => {
-      setSyncStatus('synced');
-    }, 1200);
   };
 
   const handleReopen = async (shiftId: string) => {
@@ -79,9 +72,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
 
   if (loading) {
     return (
-      <div style={{ padding: '40px', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '13px' }}>
-        Loading operational summary metrics...
-      </div>
+      <LoadingSpinner text="Loading operational summary metrics..." />
     );
   }
 
@@ -129,28 +120,8 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
           <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '2px' }}>
             Station Control Center: <strong style={{ color: 'var(--text-default)' }}>{selectedStation.name}</strong> ({selectedStation.code})
           </p>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <SyncIndicator status={syncStatus === 'pending' ? 'pending' : 'synced'} pendingCount={syncStatus === 'pending' ? 1 : 0} />
-          <button
-            onClick={handleSync}
-            style={{
-              height: '32px',
-              padding: '0 12px',
-              fontSize: '12px',
-              fontWeight: 600,
-              backgroundColor: 'var(--bg-surface)',
-              border: '1px solid var(--border-strong)',
-              color: 'var(--text-default)',
-              borderRadius: 'var(--radius-button)',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-            }}
-          >
-            <RefreshCw size={13} style={{ marginRight: '4px' }} /> Sync Status
-          </button>
+        </div>          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <SyncIndicator status="synced" pendingCount={0} />
         </div>
       </div>
 
@@ -158,18 +129,9 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' }}>
         
         {/* Active Shift Card */}
-        <div style={{
-          backgroundColor: 'var(--bg-surface)',
-          padding: '24px',
-          borderRadius: 'var(--radius-card)',
-          border: '1px solid var(--border-soft)',
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'space-between',
-          minHeight: '180px',
-        }}>
+        <div className="card card-default" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', minHeight: '180px' }}>
           <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div className="flex justify-between items-center">
               <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 Shift Operations
               </span>
@@ -207,44 +169,18 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
           <div style={{ marginTop: '20px' }}>
             {activeShift ? (
               <button
+                className="btn btn-primary btn-md"
+                style={{ width: '100%' }}
                 onClick={() => onNavigate('/shifts')}
-                style={{
-                  width: '100%',
-                  height: '38px',
-                  backgroundColor: 'var(--brand-primary)',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: 'var(--radius-button)',
-                  fontWeight: 600,
-                  fontSize: '13px',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '6px'
-                }}
               >
-                <Play size={13} style={{ fill: 'currentColor', marginRight: '6px' }} /> Resume Shift Workspace
+                <Play size={13} /> Resume Shift Workspace
               </button>
             ) : (
               <button
+                className={`btn ${isAccountant ? 'btn-secondary' : 'btn-primary'} btn-md`}
+                style={{ width: '100%' }}
                 onClick={() => onNavigate('/shifts')}
                 disabled={isAccountant}
-                style={{
-                  width: '100%',
-                  height: '38px',
-                  backgroundColor: isAccountant ? 'var(--bg-surface-alt)' : 'var(--brand-primary)',
-                  color: isAccountant ? 'var(--text-muted)' : 'white',
-                  border: isAccountant ? '1px solid var(--border-soft)' : 'none',
-                  borderRadius: 'var(--radius-button)',
-                  fontWeight: 600,
-                  fontSize: '13px',
-                  cursor: isAccountant ? 'not-allowed' : 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '6px'
-                }}
               >
                 {isAccountant ? (
                   <>
@@ -261,16 +197,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
         </div>
 
         {/* Latest DSSR Output Card */}
-        <div style={{
-          backgroundColor: 'var(--bg-surface)',
-          padding: '24px',
-          borderRadius: 'var(--radius-card)',
-          border: '1px solid var(--border-soft)',
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'space-between',
-          minHeight: '180px',
-        }}>
+        <div className="card card-default" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', minHeight: '180px' }}>
           <div>
             <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               Authoritative Outputs (DSSR)
@@ -311,37 +238,19 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
             {lastShift && (
               <>
                 <button
+                  className="btn btn-secondary btn-sm"
+                  style={{ flex: 1 }}
                   onClick={() => onNavigate('/shifts')}
-                  style={{
-                    flex: 1,
-                    height: '34px',
-                    backgroundColor: 'var(--bg-surface-alt)',
-                    border: '1px solid var(--border-strong)',
-                    color: 'var(--text-strong)',
-                    borderRadius: 'var(--radius-button)',
-                    fontWeight: 600,
-                    fontSize: '12px',
-                    cursor: 'pointer'
-                  }}
                 >
-                  <FileText size={13} style={{ marginRight: '6px' }} /> View Last DSSR
+                  <FileText size={13} /> View Last DSSR
                 </button>
 
                 {canReopenLastShift && (
                   <button
+                    className="btn btn-danger btn-sm"
+                    style={{ flex: 1 }}
                     onClick={() => handleReopen(lastShift.id)}
                     disabled={isReopening}
-                    style={{
-                      flex: 1,
-                      height: '34px',
-                      backgroundColor: 'var(--state-danger-bg)',
-                      border: '1px solid var(--border-soft)',
-                      color: 'var(--state-danger-fg)',
-                      borderRadius: 'var(--radius-button)',
-                      fontWeight: 600,
-                      fontSize: '12px',
-                      cursor: 'pointer'
-                    }}
                   >
                     {isReopening ? 'Reopening...' : (
                       <>

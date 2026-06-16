@@ -35,6 +35,7 @@ shiftsRouter.get('/status', async (c) => {
   const db = c.var.db;
   const user = c.var.user;
   const stationId = c.req.query('stationId');
+  const lite = c.req.query('lite') === 'true';
 
   if (!stationId) {
     return c.json({ success: false, error: { code: 'BAD_REQUEST', message: 'Missing stationId' } }, 400);
@@ -228,6 +229,19 @@ shiftsRouter.get('/status', async (c) => {
         .where(eq(schema.dssrSnapshots.shiftId, dbLastShift.id))
         .limit(1);
       lastDssr = dssr ?? null;
+    }
+
+    if (lite) {
+      return c.json({
+        success: true,
+        data: {
+          activeShift,
+          lastShift,
+          lastDssr,
+          canReopenLastShift,
+          gracePeriodExpiresAt,
+        },
+      });
     }
 
     // 4. Fetch additional setup helpers for open/assignment
@@ -556,6 +570,20 @@ shiftsRouter.post('/close', async (c) => {
       const [nz] = await db.select().from(schema.nozzles).where(eq(schema.nozzles.id, rd.nozzleId)).limit(1);
       const [prod] = nz ? await db.select().from(schema.products).where(eq(schema.products.id, nz.productId)).limit(1) : [null];
 
+      // Record inventory consumption (Sale)
+      if (nz && nz.productId && volume > 0) {
+        await db.insert(schema.stockMovements).values({
+          shiftId,
+          productId: nz.productId,
+          movementType: 'Sale',
+          quantity: String(-volume),
+          referenceType: 'NOZZLE_READING',
+          referenceId: rd.nozzleId,
+          notes: `Sales from nozzle ${nz.name}`,
+          createdAt: new Date(),
+        });
+      }
+
       enrichedReadingsSnapshot.push({
         nozzleId: rd.nozzleId,
         nozzleName: nz?.name ?? 'Unknown',
@@ -565,6 +593,74 @@ shiftsRouter.post('/close', async (c) => {
         closingReading: closing,
         volumeSold: volume,
       });
+    }
+
+    // Process actual physical dip readings
+    if (parsed.dipReadings && parsed.dipReadings.length > 0) {
+      // Fetch all tanks for this station
+      const stationTanks = await db
+        .select()
+        .from(schema.tanks)
+        .where(and(eq(schema.tanks.stationId, activeShift.stationId), eq(schema.tanks.organizationId, user.organizationId)));
+
+      // Group actual quantities by product ID
+      const actualsByProduct: Record<string, number> = {};
+      for (const dr of parsed.dipReadings) {
+        const tank = stationTanks.find((t) => t.id === dr.tankId);
+        if (tank) {
+          actualsByProduct[tank.productId] = (actualsByProduct[tank.productId] || 0) + dr.actualQuantity;
+        }
+      }
+
+      // Reconcile and calculate variance per product
+      for (const productId of Object.keys(actualsByProduct)) {
+        const actualQuantity = actualsByProduct[productId];
+
+        // Sum of all stock movements for this product in this station (including the nozzle sales just inserted)
+        const movements = await db
+          .select({
+            quantity: schema.stockMovements.quantity,
+          })
+          .from(schema.stockMovements)
+          .innerJoin(schema.shifts, eq(schema.stockMovements.shiftId, schema.shifts.id))
+          .where(
+            and(
+              eq(schema.shifts.stationId, activeShift.stationId),
+              eq(schema.stockMovements.productId, productId)
+            )
+          );
+
+        const expectedStock = movements.reduce((sum, m) => sum + Number(m.quantity), 0);
+        const variance = actualQuantity - expectedStock;
+
+        // Insert stock variance
+        const [insertedVariance] = await db
+          .insert(schema.stockVariances)
+          .values({
+            shiftId,
+            productId,
+            expectedQuantity: String(expectedStock),
+            actualQuantity: String(actualQuantity),
+            varianceQuantity: String(variance),
+            reason: variance !== 0 ? `Physical reconciliation variance at shift close` : 'No variance',
+            createdAt: new Date(),
+          })
+          .returning();
+
+        // Adjust ledger to match physical reading via Variance movement
+        if (variance !== 0) {
+          await db.insert(schema.stockMovements).values({
+            shiftId,
+            productId,
+            movementType: 'Variance',
+            quantity: String(variance),
+            referenceType: 'STOCK_VARIANCE',
+            referenceId: insertedVariance.id,
+            notes: `Physical reconciliation adjustment (expected: ${expectedStock}, actual: ${actualQuantity})`,
+            createdAt: new Date(),
+          });
+        }
+      }
     }
 
     const closedAt = new Date();
@@ -582,8 +678,8 @@ shiftsRouter.post('/close', async (c) => {
       .where(eq(schema.shifts.id, shiftId))
       .returning();
 
-    // Compile DSSR Snapshot reactively (computes expected cash, cash variance, lists transactions)
-    await compileDssrSnapshot(db, shiftId);
+    // Compile DSSR Snapshot reactively with closing dip readings
+    await compileDssrSnapshot(db, shiftId, parsed.dipReadings);
 
     // Retrieve the compiled snapshot data
     const [dssr] = await db

@@ -5,6 +5,7 @@ import { ProductsCatalog } from './ProductsCatalog.js';
 import { TanksGrid } from './TanksGrid.js';
 import { DispensersList } from './DispensersList.js';
 import { ShiftTemplates } from './ShiftTemplates.js';
+import { LoadingSpinner } from '../LoadingSpinner.js';
 
 const stationService = new CloudStationService();
 
@@ -104,7 +105,7 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
   };
 
   if (loading) {
-    return <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>Loading station overview...</div>;
+    return <LoadingSpinner text="Loading station overview..." />;
   }
 
   return (
@@ -143,18 +144,8 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
           </select>
           {/* Note: Multi-station creation is kept, but default MVP handles single station */}
           <button
+            className="btn btn-primary btn-sm"
             onClick={handleCreateStation}
-            style={{
-              height: '32px',
-              padding: '0 12px',
-              backgroundColor: 'var(--brand-primary)',
-              color: '#ffffff',
-              border: 'none',
-              borderRadius: 'var(--radius-button)',
-              fontWeight: 600,
-              fontSize: '13px',
-              cursor: 'pointer',
-            }}
           >
             + Create Station
           </button>
@@ -273,34 +264,14 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
                     <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '12px', borderTop: '1px solid var(--border-soft)', paddingTop: '12px' }}>
                       <button
                         type="button"
+                        className="btn btn-secondary btn-sm"
                         onClick={() => setEditing(false)}
-                        style={{
-                          height: '32px',
-                          padding: '0 12px',
-                          backgroundColor: 'transparent',
-                          border: '1px solid var(--border-strong)',
-                          color: 'var(--text-default)',
-                          borderRadius: 'var(--radius-button)',
-                          fontSize: '13px',
-                          fontWeight: 500,
-                          cursor: 'pointer',
-                        }}
                       >
                         Cancel
                       </button>
                       <button
                         type="submit"
-                        style={{
-                          height: '32px',
-                          padding: '0 12px',
-                          backgroundColor: 'var(--brand-primary)',
-                          border: 'none',
-                          color: '#ffffff',
-                          borderRadius: 'var(--radius-button)',
-                          fontWeight: 600,
-                          fontSize: '13px',
-                          cursor: 'pointer',
-                        }}
+                        className="btn btn-primary btn-sm"
                       >
                         Save Configuration
                       </button>
@@ -314,18 +285,8 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
                         <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Status: <strong style={{ color: onboardingStatus === 'READY_FOR_OPERATIONS' ? 'var(--state-success-fg)' : 'var(--state-warning-fg)' }}>{onboardingStatus.replace(/_/g, ' ')}</strong></p>
                       </div>
                       <button
+                        className="btn btn-secondary btn-sm"
                         onClick={() => setEditing(true)}
-                        style={{
-                          height: '28px',
-                          padding: '0 10px',
-                          backgroundColor: 'var(--bg-surface-alt)',
-                          border: '1px solid var(--border-soft)',
-                          color: 'var(--text-default)',
-                          borderRadius: 'var(--radius-button)',
-                          fontSize: '12px',
-                          fontWeight: 500,
-                          cursor: 'pointer',
-                        }}
                       >
                         Edit General Parameters
                       </button>

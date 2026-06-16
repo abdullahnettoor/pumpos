@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 
 export interface DrawerProps {
   isOpen: boolean;
@@ -27,7 +28,7 @@ export const Drawer: React.FC<DrawerProps> = ({
 
   if (!isOpen) return null;
 
-  return (
+  return createPortal(
     <>
       {/* Backdrop */}
       <div className="drawer-backdrop" onClick={onClose} />
@@ -57,6 +58,7 @@ export const Drawer: React.FC<DrawerProps> = ({
           </div>
         )}
       </div>
-    </>
+    </>,
+    document.body
   );
 };

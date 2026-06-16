@@ -174,6 +174,7 @@ export interface ShiftOpenPayload {
 export interface ShiftClosePayload {
   closingCash: number;
   nozzleReadings: { nozzleId: string; closingReading: number }[];
+  dipReadings?: { tankId: string; actualQuantity: number }[];
 }
 
 export interface ShiftDashboardSummary {

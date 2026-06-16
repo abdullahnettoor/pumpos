@@ -4,7 +4,8 @@ import { StatusBadge } from '../StatusBadge.js';
 import { DssrView } from './DssrView.js';
 import { ShiftTransactionsPanel } from './ShiftTransactionsPanel.js';
 import { Station } from '@pump/shared';
-import { FileText, User, Save, Lock, AlertTriangle, Check, Fuel, Info, Play, RefreshCw } from 'lucide-react';
+import { FileText, User, Save, Lock, AlertTriangle, Check, Fuel, Info, Play } from 'lucide-react';
+import { LoadingSpinner } from '../LoadingSpinner.js';
 
 const shiftService = new CloudShiftService();
 
@@ -40,20 +41,59 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   const [closingCash, setClosingCash] = useState(0);
   const [confirmWarningsChecked, setConfirmWarningsChecked] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
+  const [stationTanks, setStationTanks] = useState<any[]>([]);
+  const [dipReadings, setDipReadings] = useState<Record<string, number>>({});
 
-  const [shiftTotals, setShiftTotals] = useState({ cashCollections: 0, cashExpenses: 0 });
+  const [shiftTotals, setShiftTotals] = useState({
+    cashCollections: 0,
+    cashExpenses: 0,
+    cardCollections: 0,
+    upiCollections: 0,
+    creditSales: 0,
+    expenseCount: 0,
+    purchaseCount: 0,
+    purchaseTotal: 0,
+  });
 
   const loadShiftTotals = async (shiftId: string) => {
     try {
       const txService = new CloudTransactionService();
       const txs = await txService.getShiftTransactions(shiftId);
+      
       const cashCollections = txs.collections
         .filter((c: any) => c.paymentMethod === 'Cash')
         .reduce((sum: number, c: any) => sum + Number(c.amount), 0);
+      
+      const cardCollections = txs.collections
+        .filter((c: any) => c.paymentMethod === 'Card')
+        .reduce((sum: number, c: any) => sum + Number(c.amount), 0);
+      
+      const upiCollections = txs.collections
+        .filter((c: any) => c.paymentMethod === 'UPI')
+        .reduce((sum: number, c: any) => sum + Number(c.amount), 0);
+      
+      const creditSales = txs.collections
+        .filter((c: any) => c.paymentMethod === 'Credit')
+        .reduce((sum: number, c: any) => sum + Number(c.amount), 0);
+
       const cashExpenses = txs.expenses
         .reduce((sum: number, e: any) => sum + Number(e.amount), 0);
       
-      setShiftTotals({ cashCollections, cashExpenses });
+      const expenseCount = txs.expenses.length;
+      
+      const purchaseCount = txs.purchases.length;
+      const purchaseTotal = txs.purchases.reduce((sum: number, p: any) => sum + Number(p.amount), 0);
+      
+      setShiftTotals({
+        cashCollections,
+        cashExpenses,
+        cardCollections,
+        upiCollections,
+        creditSales,
+        expenseCount,
+        purchaseCount,
+        purchaseTotal,
+      });
     } catch (err) {
       console.error('Failed to load shift totals', err);
     }
@@ -138,6 +178,20 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
           });
           setClosingReadings(readingsMap);
           loadShiftTotals(statusData.activeShift.id);
+
+          // Fetch tank status for physical dip entry at close time
+          try {
+            const txService = new CloudTransactionService();
+            const tanksData = await txService.getInventoryStatus(selectedStation.id);
+            setStationTanks(tanksData || []);
+            const initialDips: Record<string, number> = {};
+            tanksData.forEach((t: any) => {
+              initialDips[t.id] = t.currentVolume;
+            });
+            setDipReadings(initialDips);
+          } catch (tankErr) {
+            console.error('Failed to load tanks for physical dip entry:', tankErr);
+          }
         }
       }
     } catch (err: any) {
@@ -237,9 +291,15 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         closingReading,
       }));
 
+      const dipReadingsArray = Object.entries(dipReadings).map(([tankId, actualQuantity]) => ({
+        tankId,
+        actualQuantity,
+      }));
+
       await shiftService.closeShift(data.activeShift.id, {
         closingCash,
         nozzleReadings: readingsArray,
+        dipReadings: dipReadingsArray,
       });
 
       setIsPreparingClose(false);
@@ -262,9 +322,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
 
   if (loading) {
     return (
-      <div style={{ padding: '40px', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '13px' }}>
-        Resolving shift workspace states...
-      </div>
+      <LoadingSpinner text="Resolving shift workspace states..." />
     );
   }
 
@@ -316,31 +374,17 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
           </div>
           {lastDssr && (
             <button
+              className="btn btn-secondary btn-sm"
               onClick={() => setViewingDssr(true)}
-              style={{
-                height: '32px',
-                padding: '0 12px',
-                fontSize: '12px',
-                backgroundColor: 'var(--bg-surface-alt)',
-                border: '1px solid var(--border-soft)',
-                borderRadius: 'var(--radius-button)',
-                color: 'var(--text-strong)',
-                cursor: 'pointer'
-              }}
             >
-              <FileText size={13} style={{ marginRight: '6px' }} /> View Last DSSR
+              <FileText size={13} /> View Last DSSR
             </button>
           )}
         </div>
 
         {/* Assigned Operators list */}
         {activeShift.staffAssignments && activeShift.staffAssignments.length > 0 && (
-          <div style={{
-            backgroundColor: 'var(--bg-surface)',
-            border: '1px solid var(--border-soft)',
-            borderRadius: 'var(--radius-card)',
-            padding: '16px 20px',
-          }}>
+          <div className="card card-compact">
             <h3 style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>
               Shift Staff Assignments
             </h3>
@@ -355,12 +399,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         )}
 
         {/* Core nozzle grid */}
-        <div style={{
-          backgroundColor: 'var(--bg-surface)',
-          border: '1px solid var(--border-soft)',
-          borderRadius: 'var(--radius-card)',
-          overflow: 'hidden'
-        }}>
+        <div className="card" style={{ overflow: 'hidden' }}>
           <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-soft)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)' }}>
               Nozzle Readings Grid
@@ -429,65 +468,102 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
           </table>
         </div>
 
-        {/* Shift Transactions & Logbook */}
-        <ShiftTransactionsPanel
-          shiftId={activeShift.id}
-          nozzles={data.nozzles}
-          onTransactionAdded={loadShiftStatus}
-        />
+        {/* Shift Totals Summary Card */}
+        <div style={{
+          backgroundColor: 'var(--bg-surface)',
+          border: '1px solid var(--border-soft)',
+          borderRadius: 'var(--radius-card)',
+          padding: '20px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '16px',
+          marginTop: '8px',
+          marginBottom: '8px'
+        }}>
+          <div>
+            <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)' }}>
+              Operational Summary (Current Shift)
+            </h3>
+            <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
+              Real-time summary of transactions logged via sidebar modules for this active shift.
+            </p>
+          </div>
+
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+            gap: '16px'
+          }}>
+            <div style={{ padding: '12px', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', backgroundColor: 'var(--bg-canvas)' }}>
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', fontWeight: 600 }}>Petty Expenses</span>
+              <strong style={{ fontSize: '15px', color: 'var(--brand-danger)', fontFamily: 'var(--font-mono)' }}>
+                ₹{shiftTotals.cashExpenses.toLocaleString('en-IN')}
+              </strong>
+              <span style={{ fontSize: '10px', color: 'var(--text-faint)', display: 'block', marginTop: '2px' }}>
+                {shiftTotals.expenseCount} items recorded
+              </span>
+            </div>
+
+            <div style={{ padding: '12px', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', backgroundColor: 'var(--bg-canvas)' }}>
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', fontWeight: 600 }}>Cash Collections</span>
+              <strong style={{ fontSize: '15px', color: 'var(--state-success-fg)', fontFamily: 'var(--font-mono)' }}>
+                ₹{shiftTotals.cashCollections.toLocaleString('en-IN')}
+              </strong>
+            </div>
+
+            <div style={{ padding: '12px', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', backgroundColor: 'var(--bg-canvas)' }}>
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', fontWeight: 600 }}>Card & UPI</span>
+              <strong style={{ fontSize: '15px', color: 'var(--text-strong)', fontFamily: 'var(--font-mono)' }}>
+                ₹{(shiftTotals.cardCollections + shiftTotals.upiCollections).toLocaleString('en-IN')}
+              </strong>
+              <span style={{ fontSize: '10px', color: 'var(--text-faint)', display: 'block', marginTop: '2px' }}>
+                Card: ₹{shiftTotals.cardCollections.toLocaleString('en-IN')} • UPI: ₹{shiftTotals.upiCollections.toLocaleString('en-IN')}
+              </span>
+            </div>
+
+            <div style={{ padding: '12px', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', backgroundColor: 'var(--bg-canvas)' }}>
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', fontWeight: 600 }}>Credit Fleet Sales</span>
+              <strong style={{ fontSize: '15px', color: 'var(--brand-warning)', fontFamily: 'var(--font-mono)' }}>
+                ₹{shiftTotals.creditSales.toLocaleString('en-IN')}
+              </strong>
+            </div>
+
+            <div style={{ padding: '12px', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', backgroundColor: 'var(--bg-canvas)' }}>
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', fontWeight: 600 }}>Supplier Purchases</span>
+              <strong style={{ fontSize: '15px', color: 'var(--brand-secondary)', fontFamily: 'var(--font-mono)' }}>
+                ₹{shiftTotals.purchaseTotal.toLocaleString('en-IN')}
+              </strong>
+              <span style={{ fontSize: '10px', color: 'var(--text-faint)', display: 'block', marginTop: '2px' }}>
+                {shiftTotals.purchaseCount} drops recorded
+              </span>
+            </div>
+          </div>
+        </div>
 
         {/* Save / Close Shift Inline Cards */}
         {!isPreparingClose ? (
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <button
+              className="btn btn-secondary btn-md"
               onClick={handleSaveProgress}
               disabled={savingProgress}
-              style={{
-                height: '38px',
-                padding: '0 16px',
-                backgroundColor: 'var(--bg-surface)',
-                border: '1px solid var(--border-strong)',
-                color: 'var(--text-strong)',
-                borderRadius: 'var(--radius-button)',
-                fontWeight: 600,
-                fontSize: '13px',
-                cursor: 'pointer'
-              }}
             >
               {savingProgress ? 'Saving...' : (
                 <>
-                  <Save size={13} style={{ marginRight: '6px' }} /> Save Readings Progress
+                  <Save size={13} /> Save Readings Progress
                 </>
               )}
             </button>
 
             <button
+              className="btn btn-primary btn-md"
               onClick={handlePrepareClose}
-              style={{
-                height: '38px',
-                padding: '0 18px',
-                backgroundColor: 'var(--brand-primary)',
-                color: 'white',
-                border: 'none',
-                borderRadius: 'var(--radius-button)',
-                fontWeight: 600,
-                fontSize: '13px',
-                cursor: 'pointer'
-              }}
             >
-              <Lock size={13} style={{ marginRight: '6px' }} /> Close Shift & Compile DSSR
+              <Lock size={13} /> Close Shift & Compile DSSR
             </button>
           </div>
         ) : (
-          <div style={{
-            backgroundColor: 'var(--bg-surface)',
-            border: '1px solid var(--border-strong)',
-            padding: '24px',
-            borderRadius: 'var(--radius-card)',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '16px'
-          }} className="animate-fade-in">
+          <div className="card card-default animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '16px', borderColor: 'var(--border-strong)' }}>
             <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-strong)' }}>
               Reconciliation Review
             </h3>
@@ -551,6 +627,59 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
               </div>
             </div>
 
+            {stationTanks.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', borderTop: '1px solid var(--border-soft)', paddingTop: '16px', marginTop: '8px' }}>
+                <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-default)' }}>
+                  2. Enter Physical Dip Readings (Actual Stock level in Liters):
+                </label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {stationTanks.map((tank) => (
+                    <div
+                      key={tank.id}
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        backgroundColor: 'var(--bg-canvas)',
+                        padding: '10px 14px',
+                        borderRadius: 'var(--radius-input)',
+                        border: '1px solid var(--border-soft)',
+                      }}
+                    >
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: '13px', color: 'var(--text-strong)' }}>
+                          {tank.name}
+                        </div>
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                          Product: {tank.productName} • Expected Stock: <strong>{tank.currentVolume.toFixed(1)} L</strong>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <input
+                          type="number"
+                          step="0.1"
+                          placeholder="0.0"
+                          value={dipReadings[tank.id] ?? ''}
+                          onChange={(e) => setDipReadings({ ...dipReadings, [tank.id]: Number(e.target.value) })}
+                          style={{
+                            width: '120px',
+                            height: '32px',
+                            padding: '0 8px',
+                            border: '1px solid var(--border-strong)',
+                            borderRadius: 'var(--radius-input)',
+                            fontFamily: 'var(--font-mono)',
+                            fontSize: '13px',
+                            textAlign: 'right',
+                          }}
+                        />
+                        <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Liters</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {warnings.length > 0 && (
               <div style={{
                 backgroundColor: 'var(--state-warning-bg)',
@@ -585,19 +714,9 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
 
             <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
               <button
+                className={`btn ${(warnings.length === 0 || confirmWarningsChecked) ? 'btn-primary' : 'btn-secondary'} btn-md`}
                 onClick={handleCloseShift}
                 disabled={(warnings.length > 0 && !confirmWarningsChecked) || isClosing}
-                style={{
-                  height: '36px',
-                  padding: '0 16px',
-                  backgroundColor: (warnings.length === 0 || confirmWarningsChecked) ? 'var(--brand-primary)' : 'var(--bg-surface-alt)',
-                  color: (warnings.length === 0 || confirmWarningsChecked) ? 'white' : 'var(--text-muted)',
-                  border: (warnings.length === 0 || confirmWarningsChecked) ? 'none' : '1px solid var(--border-soft)',
-                  borderRadius: 'var(--radius-button)',
-                  fontWeight: 600,
-                  fontSize: '12px',
-                  cursor: (warnings.length === 0 || confirmWarningsChecked) ? 'pointer' : 'not-allowed'
-                }}
               >
                 {isClosing ? 'Compiling DSSR...' : (
                   <>
@@ -608,18 +727,8 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
 
 
               <button
+                className="btn btn-secondary btn-md"
                 onClick={() => setIsPreparingClose(false)}
-                style={{
-                  height: '36px',
-                  padding: '0 16px',
-                  backgroundColor: 'var(--bg-surface-alt)',
-                  border: '1px solid var(--border-strong)',
-                  color: 'var(--text-strong)',
-                  borderRadius: 'var(--radius-button)',
-                  fontWeight: 600,
-                  fontSize: '12px',
-                  cursor: 'pointer'
-                }}
               >
                 Cancel
               </button>
@@ -645,33 +754,16 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         </div>
         {lastDssr && (
           <button
+            className="btn btn-secondary btn-sm"
             onClick={() => setViewingDssr(true)}
-            style={{
-              height: '32px',
-              padding: '0 12px',
-              fontSize: '12px',
-              backgroundColor: 'var(--bg-surface-alt)',
-              border: '1px solid var(--border-soft)',
-              borderRadius: 'var(--radius-button)',
-              color: 'var(--text-strong)',
-              cursor: 'pointer'
-            }}
           >
-            <FileText size={13} style={{ marginRight: '6px' }} /> View Last DSSR
+            <FileText size={13} /> View Last DSSR
           </button>
         )}
       </div>
 
       {/* Main Open Shift Form */}
-      <form onSubmit={handleOpenShift} style={{
-        backgroundColor: 'var(--bg-surface)',
-        border: '1px solid var(--border-soft)',
-        padding: '24px',
-        borderRadius: 'var(--radius-card)',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '20px'
-      }}>
+      <form onSubmit={handleOpenShift} className="card card-default" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
         {/* Shift details row */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '20px' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
@@ -819,18 +911,8 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: '16px', display: 'flex', justifyContent: 'flex-end' }}>
           <button
             type="submit"
+            className="btn btn-primary btn-md"
             disabled={isOpening}
-            style={{
-              height: '38px',
-              padding: '0 24px',
-              backgroundColor: 'var(--brand-primary)',
-              color: 'white',
-              border: 'none',
-              borderRadius: 'var(--radius-button)',
-              fontWeight: 600,
-              fontSize: '13px',
-              cursor: 'pointer'
-            }}
           >
             {isOpening ? 'Opening Shift...' : (
               <>

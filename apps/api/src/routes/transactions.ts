@@ -1,10 +1,12 @@
 import { Hono } from 'hono';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, desc } from 'drizzle-orm';
 import { schema, DbClient } from '@pump/db';
 import {
   shiftExpenseSchema,
   shiftPurchaseSchema,
   shiftCollectionSchema,
+  customerCreateSchema,
+  supplierCreateSchema,
   Role,
 } from '@pump/shared';
 
@@ -22,7 +24,11 @@ type Variables = {
 export const transactionsRouter = new Hono<{ Variables: Variables }>();
 
 // Helper to compile DSSR Snapshot reactively
-export async function compileDssrSnapshot(db: DbClient, shiftId: string) {
+export async function compileDssrSnapshot(
+  db: DbClient,
+  shiftId: string,
+  closingDipReadings?: { tankId: string; actualQuantity: number }[]
+) {
   const [shift] = await db
     .select()
     .from(schema.shifts)
@@ -165,6 +171,75 @@ export async function compileDssrSnapshot(db: DbClient, shiftId: string) {
     })
   );
 
+  // Fetch stock variances for this shift
+  const stockVariances = await db
+    .select()
+    .from(schema.stockVariances)
+    .where(eq(schema.stockVariances.shiftId, shiftId));
+
+  const stockVariancesList = await Promise.all(
+    stockVariances.map(async (v) => {
+      const [prod] = await db
+        .select()
+        .from(schema.products)
+        .where(eq(schema.products.id, v.productId))
+        .limit(1);
+
+      return {
+        id: v.id,
+        productId: v.productId,
+        productName: prod?.name ?? 'Unknown',
+        productCode: prod?.code ?? 'Unknown',
+        expectedQuantity: Number(v.expectedQuantity),
+        actualQuantity: Number(v.actualQuantity),
+        varianceQuantity: Number(v.varianceQuantity),
+        reason: v.reason ?? '',
+      };
+    })
+  );
+
+  // Compile warnings for stock variances (flag if variance exceeds 0.5% of expected stock)
+  for (const sv of stockVariancesList) {
+    if (sv.expectedQuantity > 0 && Math.abs(sv.varianceQuantity) > 0.005 * sv.expectedQuantity) {
+      warnings.push(`Stock discrepancy for ${sv.productName}! Variance is ${sv.varianceQuantity.toFixed(2)} Liters`);
+    }
+  }
+
+  // Construct dip readings snapshot
+  let dipReadingsSnapshot: any[] = [];
+  if (closingDipReadings && closingDipReadings.length > 0) {
+    dipReadingsSnapshot = await Promise.all(
+      closingDipReadings.map(async (dr) => {
+        const [tank] = await db
+          .select()
+          .from(schema.tanks)
+          .where(eq(schema.tanks.id, dr.tankId))
+          .limit(1);
+        const [prod] = tank
+          ? await db.select().from(schema.products).where(eq(schema.products.id, tank.productId)).limit(1)
+          : [null];
+        return {
+          tankId: dr.tankId,
+          tankName: tank?.name ?? 'Unknown Tank',
+          productName: prod?.name ?? 'Unknown',
+          productCode: prod?.code ?? 'Unknown',
+          capacity: tank ? Number(tank.capacity) : 0,
+          actualQuantity: dr.actualQuantity,
+        };
+      })
+    );
+  } else {
+    // Try to get from existing snapshot
+    const [existingDssr] = await db
+      .select()
+      .from(schema.dssrSnapshots)
+      .where(eq(schema.dssrSnapshots.shiftId, shiftId))
+      .limit(1);
+    if (existingDssr && (existingDssr.snapshotData as any)?.dipReadings) {
+      dipReadingsSnapshot = (existingDssr.snapshotData as any).dipReadings;
+    }
+  }
+
   const snapshotData = {
     shiftId,
     templateName: template?.name ?? 'Unknown',
@@ -187,6 +262,8 @@ export async function compileDssrSnapshot(db: DbClient, shiftId: string) {
     expenses: expensesList,
     purchases: purchasesList,
     collections: collectionsList,
+    stockVariances: stockVariancesList,
+    dipReadings: dipReadingsSnapshot,
     warnings,
   };
 
@@ -305,18 +382,27 @@ transactionsRouter.get('/expense-categories', async (c) => {
   }
 });
 
-// GET /api/shifts/suppliers
+// GET /api/transactions/suppliers
 transactionsRouter.get('/suppliers', async (c) => {
   const db = c.var.db;
   const user = c.var.user;
+  const activeOnly = c.req.query('activeOnly') !== 'false';
 
   try {
-    let list = await db
-      .select()
-      .from(schema.suppliers)
-      .where(and(eq(schema.suppliers.organizationId, user.organizationId), eq(schema.suppliers.isActive, true)));
+    let list;
+    if (activeOnly) {
+      list = await db
+        .select()
+        .from(schema.suppliers)
+        .where(and(eq(schema.suppliers.organizationId, user.organizationId), eq(schema.suppliers.isActive, true)));
+    } else {
+      list = await db
+        .select()
+        .from(schema.suppliers)
+        .where(eq(schema.suppliers.organizationId, user.organizationId));
+    }
 
-    if (list.length === 0) {
+    if (list.length === 0 && activeOnly) {
       // Seed standard suppliers
       const defaults = ['Indian Oil Corporation Ltd', 'Bharat Petroleum Corporation Ltd', 'Local Lubricants Distributor'];
       for (const name of defaults) {
@@ -338,18 +424,113 @@ transactionsRouter.get('/suppliers', async (c) => {
   }
 });
 
-// GET /api/shifts/customers
-transactionsRouter.get('/customers', async (c) => {
+// POST /api/transactions/suppliers
+transactionsRouter.post('/suppliers', async (c) => {
   const db = c.var.db;
   const user = c.var.user;
 
   try {
-    let list = await db
-      .select()
-      .from(schema.customers)
-      .where(and(eq(schema.customers.organizationId, user.organizationId), eq(schema.customers.isActive, true)));
+    const body = await c.req.json();
+    const parsed = supplierCreateSchema.parse(body);
 
-    if (list.length === 0) {
+    const [newSup] = await db
+      .insert(schema.suppliers)
+      .values({
+        organizationId: user.organizationId,
+        name: parsed.name,
+        phone: parsed.phone,
+        isActive: parsed.isActive,
+        metadata: parsed.metadata,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .returning();
+
+    return c.json({ success: true, data: newSup });
+  } catch (err: any) {
+    return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: err.message } }, 400);
+  }
+});
+
+// PUT /api/transactions/suppliers/:id
+transactionsRouter.put('/suppliers/:id', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  const id = c.req.param('id');
+
+  try {
+    const body = await c.req.json();
+    const parsed = supplierCreateSchema.parse(body);
+
+    const [updatedSup] = await db
+      .update(schema.suppliers)
+      .set({
+        name: parsed.name,
+        phone: parsed.phone,
+        isActive: parsed.isActive,
+        metadata: parsed.metadata,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(schema.suppliers.id, id), eq(schema.suppliers.organizationId, user.organizationId)))
+      .returning();
+
+    if (!updatedSup) {
+      return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Supplier not found' } }, 404);
+    }
+
+    return c.json({ success: true, data: updatedSup });
+  } catch (err: any) {
+    return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: err.message } }, 400);
+  }
+});
+
+// DELETE /api/transactions/suppliers/:id (Soft delete)
+transactionsRouter.delete('/suppliers/:id', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  const id = c.req.param('id');
+
+  try {
+    const [deletedSup] = await db
+      .update(schema.suppliers)
+      .set({
+        isActive: false,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(schema.suppliers.id, id), eq(schema.suppliers.organizationId, user.organizationId)))
+      .returning();
+
+    if (!deletedSup) {
+      return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Supplier not found' } }, 404);
+    }
+
+    return c.json({ success: true, data: deletedSup });
+  } catch (err: any) {
+    return c.json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }, 500);
+  }
+});
+
+// GET /api/transactions/customers
+transactionsRouter.get('/customers', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  const activeOnly = c.req.query('activeOnly') !== 'false';
+
+  try {
+    let list;
+    if (activeOnly) {
+      list = await db
+        .select()
+        .from(schema.customers)
+        .where(and(eq(schema.customers.organizationId, user.organizationId), eq(schema.customers.isActive, true)));
+    } else {
+      list = await db
+        .select()
+        .from(schema.customers)
+        .where(eq(schema.customers.organizationId, user.organizationId));
+    }
+
+    if (list.length === 0 && activeOnly) {
       // Seed standard customers
       const defaults = [
         { name: 'KSRTC State Bus Depot', customerType: 'Credit' },
@@ -371,6 +552,98 @@ transactionsRouter.get('/customers', async (c) => {
     }
 
     return c.json({ success: true, data: list });
+  } catch (err: any) {
+    return c.json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }, 500);
+  }
+});
+
+// POST /api/transactions/customers
+transactionsRouter.post('/customers', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+
+  try {
+    const body = await c.req.json();
+    const parsed = customerCreateSchema.parse(body);
+
+    const [newCust] = await db
+      .insert(schema.customers)
+      .values({
+        organizationId: user.organizationId,
+        name: parsed.name,
+        phone: parsed.phone,
+        customerType: parsed.customerType,
+        creditLimit: parsed.creditLimit ? String(parsed.creditLimit) : null,
+        fleetCode: parsed.fleetCode,
+        isActive: parsed.isActive,
+        metadata: parsed.metadata,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .returning();
+
+    return c.json({ success: true, data: newCust });
+  } catch (err: any) {
+    return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: err.message } }, 400);
+  }
+});
+
+// PUT /api/transactions/customers/:id
+transactionsRouter.put('/customers/:id', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  const id = c.req.param('id');
+
+  try {
+    const body = await c.req.json();
+    const parsed = customerCreateSchema.parse(body);
+
+    const [updatedCust] = await db
+      .update(schema.customers)
+      .set({
+        name: parsed.name,
+        phone: parsed.phone,
+        customerType: parsed.customerType,
+        creditLimit: parsed.creditLimit ? String(parsed.creditLimit) : null,
+        fleetCode: parsed.fleetCode,
+        isActive: parsed.isActive,
+        metadata: parsed.metadata,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(schema.customers.id, id), eq(schema.customers.organizationId, user.organizationId)))
+      .returning();
+
+    if (!updatedCust) {
+      return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Customer not found' } }, 404);
+    }
+
+    return c.json({ success: true, data: updatedCust });
+  } catch (err: any) {
+    return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: err.message } }, 400);
+  }
+});
+
+// DELETE /api/transactions/customers/:id (Soft delete)
+transactionsRouter.delete('/customers/:id', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  const id = c.req.param('id');
+
+  try {
+    const [deletedCust] = await db
+      .update(schema.customers)
+      .set({
+        isActive: false,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(schema.customers.id, id), eq(schema.customers.organizationId, user.organizationId)))
+      .returning();
+
+    if (!deletedCust) {
+      return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Customer not found' } }, 404);
+    }
+
+    return c.json({ success: true, data: deletedCust });
   } catch (err: any) {
     return c.json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }, 500);
   }
@@ -635,6 +908,187 @@ transactionsRouter.get('/collections', async (c) => {
         };
       })
     );
+    return c.json({ success: true, data: enriched });
+  } catch (err: any) {
+    return c.json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }, 500);
+  }
+});
+
+// Helper to check if user has access to station
+function hasStationAccess(user: any, stationId: string): boolean {
+  if (user.role === 'Owner') return true;
+  return user.assignedStationIds.includes(stationId);
+}
+
+// GET /api/transactions/inventory/status
+transactionsRouter.get('/inventory/status', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  const stationId = c.req.query('stationId');
+
+  if (!stationId) {
+    return c.json({ success: false, error: { code: 'BAD_REQUEST', message: 'Missing stationId' } }, 400);
+  }
+
+  if (!hasStationAccess(user, stationId)) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+  }
+
+  try {
+    const stationTanks = await db
+      .select()
+      .from(schema.tanks)
+      .where(and(eq(schema.tanks.stationId, stationId), eq(schema.tanks.organizationId, user.organizationId)));
+
+    const enrichedTanks = await Promise.all(
+      stationTanks.map(async (t) => {
+        const [prod] = await db
+          .select()
+          .from(schema.products)
+          .where(eq(schema.products.id, t.productId))
+          .limit(1);
+
+        const movements = await db
+          .select({
+            quantity: schema.stockMovements.quantity,
+          })
+          .from(schema.stockMovements)
+          .innerJoin(schema.shifts, eq(schema.stockMovements.shiftId, schema.shifts.id))
+          .where(
+            and(
+              eq(schema.shifts.stationId, stationId),
+              eq(schema.stockMovements.productId, t.productId)
+            )
+          );
+
+        const currentVolume = movements.reduce((sum, m) => sum + Number(m.quantity), 0);
+
+        return {
+          id: t.id,
+          name: t.name,
+          productId: t.productId,
+          productName: prod?.name ?? 'Unknown',
+          productCode: prod?.code ?? 'Unknown',
+          capacity: Number(t.capacity),
+          currentVolume: Math.max(0, currentVolume),
+        };
+      })
+    );
+
+    return c.json({ success: true, data: enrichedTanks });
+  } catch (err: any) {
+    return c.json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }, 500);
+  }
+});
+
+// GET /api/transactions/inventory/movements
+transactionsRouter.get('/inventory/movements', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  const stationId = c.req.query('stationId');
+
+  if (!stationId) {
+    return c.json({ success: false, error: { code: 'BAD_REQUEST', message: 'Missing stationId' } }, 400);
+  }
+
+  if (!hasStationAccess(user, stationId)) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+  }
+
+  try {
+    const list = await db
+      .select({
+        movement: schema.stockMovements,
+        shift: schema.shifts,
+      })
+      .from(schema.stockMovements)
+      .innerJoin(schema.shifts, eq(schema.stockMovements.shiftId, schema.shifts.id))
+      .where(
+        and(
+          eq(schema.shifts.stationId, stationId),
+          eq(schema.shifts.organizationId, user.organizationId)
+        )
+      )
+      .orderBy(desc(schema.stockMovements.createdAt));
+
+    const enriched = await Promise.all(
+      list.map(async (row) => {
+        const m = row.movement;
+        const [prod] = await db
+          .select()
+          .from(schema.products)
+          .where(eq(schema.products.id, m.productId))
+          .limit(1);
+
+        return {
+          ...m,
+          quantity: Number(m.quantity),
+          productName: prod?.name ?? 'Unknown',
+          productCode: prod?.code ?? 'Unknown',
+          shiftDate: row.shift.openedAt,
+          shiftStatus: row.shift.status,
+        };
+      })
+    );
+
+    return c.json({ success: true, data: enriched });
+  } catch (err: any) {
+    return c.json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }, 500);
+  }
+});
+
+// GET /api/transactions/inventory/variances
+transactionsRouter.get('/inventory/variances', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  const stationId = c.req.query('stationId');
+
+  if (!stationId) {
+    return c.json({ success: false, error: { code: 'BAD_REQUEST', message: 'Missing stationId' } }, 400);
+  }
+
+  if (!hasStationAccess(user, stationId)) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+  }
+
+  try {
+    const list = await db
+      .select({
+        variance: schema.stockVariances,
+        shift: schema.shifts,
+      })
+      .from(schema.stockVariances)
+      .innerJoin(schema.shifts, eq(schema.stockVariances.shiftId, schema.shifts.id))
+      .where(
+        and(
+          eq(schema.shifts.stationId, stationId),
+          eq(schema.shifts.organizationId, user.organizationId)
+        )
+      )
+      .orderBy(desc(schema.stockVariances.createdAt));
+
+    const enriched = await Promise.all(
+      list.map(async (row) => {
+        const v = row.variance;
+        const [prod] = await db
+          .select()
+          .from(schema.products)
+          .where(eq(schema.products.id, v.productId))
+          .limit(1);
+
+        return {
+          ...v,
+          expectedQuantity: Number(v.expectedQuantity),
+          actualQuantity: Number(v.actualQuantity),
+          varianceQuantity: Number(v.varianceQuantity),
+          productName: prod?.name ?? 'Unknown',
+          productCode: prod?.code ?? 'Unknown',
+          shiftDate: row.shift.openedAt,
+          shiftStatus: row.shift.status,
+        };
+      })
+    );
+
     return c.json({ success: true, data: enriched });
   } catch (err: any) {
     return c.json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }, 500);

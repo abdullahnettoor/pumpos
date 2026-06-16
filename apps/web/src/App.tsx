@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   AppShell, 
   Login, 
@@ -9,6 +9,7 @@ import {
   ExpensesList,
   PurchasesList,
   CustomersList,
+  InventoryList,
   CloudStationService, 
   setAuthToken, 
   supabase 
@@ -31,6 +32,7 @@ const App: React.FC = () => {
   const [userRole, setUserRole] = useState<'Owner' | 'Manager' | 'Accountant' | 'Staff' | null>(null);
   const [userName, setUserName] = useState<string>('');
   const [profileError, setProfileError] = useState<string | null>(null);
+  const lastUserIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     // 1. Check current active session
@@ -47,12 +49,20 @@ const App: React.FC = () => {
   }, []);
 
   const handleSession = async (currentSession: any) => {
+    const isSameUser = lastUserIdRef.current === (currentSession?.user?.id || null);
     setSession(currentSession);
     setProfileError(null);
 
     if (currentSession) {
       // Pass the JWT token to our request headers wrapper
       setAuthToken(currentSession.access_token);
+
+      // If it's the same user session and we've already resolved permissions, skip resetting/re-fetching
+      if (isSameUser && userRole) {
+        return;
+      }
+
+      lastUserIdRef.current = currentSession.user.id;
       setSelectedStation(null);
       setStations([]);
       
@@ -72,7 +82,8 @@ const App: React.FC = () => {
           if (active.onboardingStatus !== 'READY_FOR_OPERATIONS') {
             setCurrentPath('/onboarding');
           } else {
-            setCurrentPath('/dashboard');
+            // Only direct to dashboard if currently on onboarding or login
+            setCurrentPath((prev) => (prev === '/onboarding' || prev === '/login') ? '/dashboard' : prev);
           }
         } else {
           // No stations configured yet
@@ -82,11 +93,13 @@ const App: React.FC = () => {
         console.error('Failed to resolve backend profile:', err);
         setProfileError(err.message || 'Verification failed. Profile not found.');
         setUserRole(null);
+        lastUserIdRef.current = null;
       } finally {
         setLoading(false);
       }
     } else {
       // Clear token and states
+      lastUserIdRef.current = null;
       setAuthToken('');
       setStations([]);
       setSelectedStation(null);
@@ -131,6 +144,7 @@ const App: React.FC = () => {
         { label: 'Station Overview', path: '/setup/station', roles: ['Owner', 'Manager'] },
         { label: 'Expenses', path: '/expenses' },
         { label: 'Purchases', path: '/purchases', roles: ['Owner', 'Manager', 'Accountant'] },
+        { label: 'Inventory', path: '/inventory', roles: ['Owner', 'Manager', 'Accountant'] },
         { label: 'Customers', path: '/customers' },
         { label: 'Reports', path: '/reports', roles: ['Owner', 'Manager', 'Accountant'] },
       ]
@@ -304,11 +318,13 @@ const App: React.FC = () => {
           />
         );
       case '/expenses':
-        return <ExpensesList />;
+        return <ExpensesList selectedStation={selectedStation} />;
       case '/purchases':
-        return <PurchasesList />;
+        return <PurchasesList selectedStation={selectedStation} />;
+      case '/inventory':
+        return <InventoryList selectedStation={selectedStation} />;
       case '/customers':
-        return <CustomersList />;
+        return <CustomersList selectedStation={selectedStation} />;
       case '/reports':
         return (
           <div className="animate-fade-in">

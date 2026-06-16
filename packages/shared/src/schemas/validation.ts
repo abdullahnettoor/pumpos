@@ -73,6 +73,12 @@ export const shiftCloseSchema = z.object({
       closingReading: z.number().nonnegative('Closing reading must be non-negative'),
     })
   ),
+  dipReadings: z.array(
+    z.object({
+      tankId: z.string().uuid('Invalid tank ID'),
+      actualQuantity: z.number().nonnegative('Actual quantity must be non-negative'),
+    })
+  ).optional(),
 });
 
 
@@ -118,5 +124,32 @@ export const shiftCollectionSchema = z.object({
   amount: z.number().positive('Amount must be positive'),
   paymentMethod: z.enum(['Cash', 'Card', 'UPI', 'Credit']),
   notes: z.string().max(500).optional().nullable(),
+});
+
+export const customerCreateSchema = z.object({
+  name: z.string().min(1, 'Name is required').max(255),
+  phone: z.string().max(50).optional().nullable(),
+  customerType: z.enum(['Regular', 'Credit', 'Fleet']).default('Regular'),
+  creditLimit: z.number().nonnegative().optional().nullable(),
+  fleetCode: z.string().max(100).optional().nullable(),
+  isActive: z.boolean().default(true),
+  metadata: z.object({
+    gstin: z.string().max(15).optional().nullable(),
+    pan: z.string().max(10).optional().nullable(),
+    tradeName: z.string().max(255).optional().nullable(),
+    billingAddress: z.string().max(500).optional().nullable(),
+  }).optional().nullable(),
+});
+
+export const supplierCreateSchema = z.object({
+  name: z.string().min(1, 'Name is required').max(255),
+  phone: z.string().max(50).optional().nullable(),
+  isActive: z.boolean().default(true),
+  metadata: z.object({
+    gstin: z.string().max(15).optional().nullable(),
+    pan: z.string().max(10).optional().nullable(),
+    tradeName: z.string().max(255).optional().nullable(),
+    billingAddress: z.string().max(500).optional().nullable(),
+  }).optional().nullable(),
 });
 
