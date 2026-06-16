@@ -5,5 +5,9 @@ export * from './components/Drawer.js';
 export { Login } from './components/Auth/Login.js';
 export { OnboardingWizard } from './components/StationSetup/OnboardingWizard.js';
 export { StationOverview } from './components/StationSetup/StationOverview.js';
+export { DashboardOverview } from './components/Dashboard/DashboardOverview.js';
+export { ShiftsManagement } from './components/Shifts/ShiftsManagement.js';
+export { DssrView } from './components/Shifts/DssrView.js';
 export { supabase } from './services/supabase.js';
 export * from './services/cloud.js';
+

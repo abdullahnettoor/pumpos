@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { 
   AppShell, 
-  StatusBadge, 
   Login, 
   OnboardingWizard, 
   StationOverview, 
+  DashboardOverview,
+  ShiftsManagement,
   CloudStationService, 
   setAuthToken, 
   supabase 
@@ -15,7 +16,7 @@ const stationService = new CloudStationService();
 
 const App: React.FC = () => {
   const [currentPath, setCurrentPath] = useState('/dashboard');
-  const [syncStatus, setSyncStatus] = useState<'online' | 'offline' | 'synced' | 'pending' | 'failed'>('synced');
+  const [syncStatus] = useState<'online' | 'offline' | 'synced' | 'pending' | 'failed'>('synced');
   
   // Track globally active/selected station for setup context
   const [stations, setStations] = useState<Station[]>([]);
@@ -275,54 +276,12 @@ const App: React.FC = () => {
         );
       case '/dashboard':
         return (
-          <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            <h1 style={{ fontSize: '20px', fontWeight: 600, color: 'var(--text-strong)' }}>Welcome to PumpERP</h1>
-            <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Your offline-first operational control center.</p>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px', marginTop: '8px' }}>
-              <div style={{ backgroundColor: 'var(--bg-surface)', padding: '16px', borderRadius: 'var(--radius-card)', border: '1px solid var(--border-soft)' }}>
-                <h3 style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Active Shift Status</h3>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '8px' }}>
-                  <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)' }}>Morning Shift #0294</span>
-                  <StatusBadge status="OPEN" type="success" />
-                </div>
-              </div>
-
-              <div style={{ backgroundColor: 'var(--bg-surface)', padding: '16px', borderRadius: 'var(--radius-card)', border: '1px solid var(--border-soft)' }}>
-                <h3 style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Daily Sales</h3>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginTop: '8px' }}>
-                  <span style={{ fontSize: '20px', fontWeight: 700, color: 'var(--text-strong)', fontFamily: 'var(--font-mono)' }}>₹ 1,48,250</span>
-                  <span style={{ color: 'var(--state-success-fg)', fontSize: '11px', fontWeight: 600 }}>+12% vs yesterday</span>
-                </div>
-              </div>
-
-              <div style={{ backgroundColor: 'var(--bg-surface)', padding: '16px', borderRadius: 'var(--radius-card)', border: '1px solid var(--border-soft)' }}>
-                <h3 style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Sync Queue</h3>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '8px' }}>
-                  <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)' }}>All Events Synced</span>
-                  <button 
-                    onClick={() => {
-                      setSyncStatus('pending');
-                      setTimeout(() => setSyncStatus('synced'), 1500);
-                    }}
-                    style={{
-                      height: '24px',
-                      padding: '0 8px',
-                      fontSize: '11px',
-                      backgroundColor: 'var(--brand-primary)',
-                      border: 'none',
-                      color: 'white',
-                      borderRadius: '4px',
-                      cursor: 'pointer',
-                      fontWeight: 600
-                    }}
-                  >
-                    Sync Now
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
+          <DashboardOverview
+            selectedStation={selectedStation}
+            userRole={userRole || 'Staff'}
+            userName={userName}
+            onNavigate={setCurrentPath}
+          />
         );
       
       case '/setup/station':
@@ -335,10 +294,11 @@ const App: React.FC = () => {
 
       case '/shifts':
         return (
-          <div className="animate-fade-in">
-            <h1 style={{ fontSize: '24px', fontWeight: 700 }}>Shifts Management</h1>
-            <p style={{ color: '#9ca3af', marginTop: '8px' }}>Manage shift templates and active operations.</p>
-          </div>
+          <ShiftsManagement
+            selectedStation={selectedStation}
+            userRole={userRole || 'Staff'}
+            userName={userName}
+          />
         );
       case '/expenses':
         return (

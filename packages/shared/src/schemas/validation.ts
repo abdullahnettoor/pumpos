@@ -45,6 +45,35 @@ export const shiftSchema = z.object({
   openingCash: z.number().nonnegative('Opening cash must be non-negative'),
 });
 
+export const shiftOpenSchema = z.object({
+  stationId: z.string().uuid('Invalid station ID'),
+  shiftTemplateId: z.string().uuid('Invalid shift template ID'),
+  openingCash: z.number().nonnegative('Opening cash must be non-negative'),
+  staffAssignments: z.array(
+    z.object({
+      userId: z.string().uuid('Invalid user ID'),
+      duId: z.string().uuid('Invalid dispenser unit ID'),
+    })
+  ).optional(),
+  initialReadings: z.array(
+    z.object({
+      nozzleId: z.string().uuid('Invalid nozzle ID'),
+      openingReading: z.number().nonnegative('Opening reading must be non-negative'),
+    })
+  ).optional(),
+});
+
+export const shiftCloseSchema = z.object({
+  closingCash: z.number().nonnegative('Closing cash must be non-negative'),
+  nozzleReadings: z.array(
+    z.object({
+      nozzleId: z.string().uuid('Invalid nozzle ID'),
+      closingReading: z.number().nonnegative('Closing reading must be non-negative'),
+    })
+  ),
+});
+
+
 export const nozzleReadingSchema = z.object({
   nozzleId: z.string().uuid('Invalid nozzle ID'),
   openingReading: z.number().nonnegative('Opening reading must be non-negative'),

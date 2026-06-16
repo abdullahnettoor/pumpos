@@ -162,6 +162,28 @@ export interface Shift {
   updatedAt: string;
 }
 
+export interface ShiftOpenPayload {
+  stationId: string;
+  shiftTemplateId: string;
+  openingCash: number;
+  staffAssignments?: { userId: string; duId: string }[];
+  initialReadings?: { nozzleId: string; openingReading: number }[];
+}
+
+export interface ShiftClosePayload {
+  closingCash: number;
+  nozzleReadings: { nozzleId: string; closingReading: number }[];
+}
+
+export interface ShiftDashboardSummary {
+  activeShift: (Shift & { templateName: string; openedByName: string }) | null;
+  lastShift: (Shift & { templateName: string; closedByName: string }) | null;
+  lastDssr: DssrSnapshot | null;
+  canReopenLastShift: boolean;
+  gracePeriodExpiresAt?: string | null;
+}
+
+
 export interface ShiftStaffAssignment {
   id: string;
   shiftId: string;

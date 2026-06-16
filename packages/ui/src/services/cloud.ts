@@ -13,6 +13,8 @@ import {
   Nozzle,
   ShiftTemplate,
   User,
+  ShiftOpenPayload,
+  ShiftClosePayload,
 } from '@pump/shared';
 
 // Base API configuration
@@ -241,3 +243,38 @@ export class CloudUserAssignmentService implements IUserAssignmentService {
     });
   }
 }
+
+export class CloudShiftService {
+  async getShiftStatus(stationId: string): Promise<any> {
+    return request<any>(`/shifts/status?stationId=${stationId}`);
+  }
+
+  async openShift(payload: ShiftOpenPayload): Promise<any> {
+    return request<any>('/shifts/open', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async updateNozzleReadings(shiftId: string, readings: { nozzleId: string; closingReading: number }[]): Promise<any> {
+    return request<any>('/shifts/readings', {
+      method: 'PUT',
+      body: JSON.stringify({ shiftId, readings }),
+    });
+  }
+
+  async closeShift(shiftId: string, payload: ShiftClosePayload): Promise<any> {
+    return request<any>('/shifts/close', {
+      method: 'POST',
+      body: JSON.stringify({ shiftId, payload }),
+    });
+  }
+
+  async reopenShift(shiftId: string): Promise<any> {
+    return request<any>('/shifts/reopen', {
+      method: 'POST',
+      body: JSON.stringify({ shiftId }),
+    });
+  }
+}
+

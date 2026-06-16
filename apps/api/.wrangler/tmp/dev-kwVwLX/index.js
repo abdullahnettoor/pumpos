@@ -17263,6 +17263,26 @@ var shiftSchema = external_exports.object({
   shiftTemplateId: external_exports.string().uuid("Invalid shift template ID"),
   openingCash: external_exports.number().nonnegative("Opening cash must be non-negative")
 });
+var shiftOpenSchema = external_exports.object({
+  stationId: external_exports.string().uuid("Invalid station ID"),
+  shiftTemplateId: external_exports.string().uuid("Invalid shift template ID"),
+  openingCash: external_exports.number().nonnegative("Opening cash must be non-negative"),
+  staffAssignments: external_exports.array(external_exports.object({
+    userId: external_exports.string().uuid("Invalid user ID"),
+    duId: external_exports.string().uuid("Invalid dispenser unit ID")
+  })).optional(),
+  initialReadings: external_exports.array(external_exports.object({
+    nozzleId: external_exports.string().uuid("Invalid nozzle ID"),
+    openingReading: external_exports.number().nonnegative("Opening reading must be non-negative")
+  })).optional()
+});
+var shiftCloseSchema = external_exports.object({
+  closingCash: external_exports.number().nonnegative("Closing cash must be non-negative"),
+  nozzleReadings: external_exports.array(external_exports.object({
+    nozzleId: external_exports.string().uuid("Invalid nozzle ID"),
+    closingReading: external_exports.number().nonnegative("Closing reading must be non-negative")
+  }))
+});
 var nozzleReadingSchema = external_exports.object({
   nozzleId: external_exports.string().uuid("Invalid nozzle ID"),
   openingReading: external_exports.number().nonnegative("Opening reading must be non-negative"),
@@ -17292,6 +17312,18 @@ function isAuthorizedForStation(user, resource) {
   return user.assignedStationIds.includes(resource.stationId);
 }
 __name(isAuthorizedForStation, "isAuthorizedForStation");
+function canOpenShift(role) {
+  return role === "Owner" || role === "Manager" || role === "Staff";
+}
+__name(canOpenShift, "canOpenShift");
+function canCloseShift(role) {
+  return role === "Owner" || role === "Manager" || role === "Staff";
+}
+__name(canCloseShift, "canCloseShift");
+function canReopenShift(role) {
+  return role === "Owner" || role === "Manager";
+}
+__name(canReopenShift, "canReopenShift");
 function canManageProduct(role) {
   return role === "Owner" || role === "Manager";
 }
@@ -17940,6 +17972,455 @@ stationSetupRouter.post("/onboarding/complete", async (c) => {
   }
 });
 
+// src/routes/shifts.ts
+var shiftsRouter = new Hono2();
+function hasStationAccess(user, stationId) {
+  if (user.role === "Owner")
+    return true;
+  return user.assignedStationIds.includes(stationId);
+}
+__name(hasStationAccess, "hasStationAccess");
+shiftsRouter.get("/status", async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  const stationId = c.req.query("stationId");
+  if (!stationId) {
+    return c.json({ success: false, error: { code: "BAD_REQUEST", message: "Missing stationId" } }, 400);
+  }
+  if (!hasStationAccess(user, stationId)) {
+    return c.json({ success: false, error: { code: "FORBIDDEN", message: "No access to this station" } }, 403);
+  }
+  try {
+    const [station] = await db.select().from(schema_exports.stations).where(and(eq(schema_exports.stations.id, stationId), eq(schema_exports.stations.organizationId, user.organizationId)));
+    if (!station) {
+      return c.json({ success: false, error: { code: "NOT_FOUND", message: "Station not found" } }, 404);
+    }
+    const graceMinutes = station.settings?.shift_grace_minutes ?? 15;
+    const [dbActiveShift] = await db.select().from(schema_exports.shifts).where(and(eq(schema_exports.shifts.stationId, stationId), eq(schema_exports.shifts.status, "OPEN"))).limit(1);
+    let activeShift = null;
+    if (dbActiveShift) {
+      const [template] = await db.select().from(schema_exports.shiftTemplates).where(eq(schema_exports.shiftTemplates.id, dbActiveShift.shiftTemplateId)).limit(1);
+      const [openedByUser] = await db.select().from(schema_exports.users).where(eq(schema_exports.users.id, dbActiveShift.openedBy)).limit(1);
+      const rawNozzleReadings = await db.select().from(schema_exports.nozzleReadings).where(eq(schema_exports.nozzleReadings.shiftId, dbActiveShift.id));
+      const enrichedReadings = await Promise.all(
+        rawNozzleReadings.map(async (nr) => {
+          const [nz] = await db.select().from(schema_exports.nozzles).where(eq(schema_exports.nozzles.id, nr.nozzleId)).limit(1);
+          const [prod] = nz ? await db.select().from(schema_exports.products).where(eq(schema_exports.products.id, nz.productId)).limit(1) : [null];
+          const [tnk] = nz ? await db.select().from(schema_exports.tanks).where(eq(schema_exports.tanks.id, nz.tankId)).limit(1) : [null];
+          return {
+            ...nr,
+            nozzleName: nz?.name ?? "Unknown",
+            productName: prod?.name ?? "Unknown",
+            productCode: prod?.code ?? "Unknown",
+            tankName: tnk?.name ?? "Unknown"
+          };
+        })
+      );
+      const rawAssignments = await db.select().from(schema_exports.shiftStaffAssignments).where(eq(schema_exports.shiftStaffAssignments.shiftId, dbActiveShift.id));
+      const enrichedAssignments = await Promise.all(
+        rawAssignments.map(async (sa) => {
+          const [staffUser] = await db.select().from(schema_exports.users).where(eq(schema_exports.users.id, sa.userId)).limit(1);
+          const [du] = await db.select().from(schema_exports.dispenserUnits).where(eq(schema_exports.dispenserUnits.id, sa.duId)).limit(1);
+          return {
+            ...sa,
+            userName: staffUser?.fullName ?? "Unknown",
+            duName: du?.name ?? "Unknown"
+          };
+        })
+      );
+      activeShift = {
+        ...dbActiveShift,
+        templateName: template?.name ?? "Custom",
+        openedByName: openedByUser?.fullName ?? "System",
+        nozzleReadings: enrichedReadings,
+        staffAssignments: enrichedAssignments
+      };
+    }
+    const [dbLastShift] = await db.select().from(schema_exports.shifts).where(and(eq(schema_exports.shifts.stationId, stationId), ne(schema_exports.shifts.status, "OPEN"))).orderBy(desc(schema_exports.shifts.closedAt), desc(schema_exports.shifts.createdAt)).limit(1);
+    let lastShift = null;
+    let lastDssr = null;
+    let canReopenLastShift = false;
+    let gracePeriodExpiresAt = null;
+    if (dbLastShift) {
+      let currentStatus = dbLastShift.status;
+      let lockedAt = dbLastShift.lockedAt;
+      if (currentStatus === "CLOSED" && dbLastShift.closedAt) {
+        const closedTime = new Date(dbLastShift.closedAt).getTime();
+        const expiryTime = closedTime + graceMinutes * 60 * 1e3;
+        const now = Date.now();
+        if (now > expiryTime) {
+          lockedAt = new Date(expiryTime);
+          currentStatus = "LOCKED";
+          await db.update(schema_exports.shifts).set({
+            status: "LOCKED",
+            lockedAt,
+            updatedAt: /* @__PURE__ */ new Date()
+          }).where(eq(schema_exports.shifts.id, dbLastShift.id));
+        } else {
+          gracePeriodExpiresAt = new Date(expiryTime).toISOString();
+        }
+      }
+      const [template] = await db.select().from(schema_exports.shiftTemplates).where(eq(schema_exports.shiftTemplates.id, dbLastShift.shiftTemplateId)).limit(1);
+      let closedByName = "System";
+      if (dbLastShift.closedBy) {
+        const [closedByUser] = await db.select().from(schema_exports.users).where(eq(schema_exports.users.id, dbLastShift.closedBy)).limit(1);
+        closedByName = closedByUser?.fullName ?? "System";
+      }
+      if (currentStatus === "CLOSED" && canReopenShift(user.role)) {
+        canReopenLastShift = true;
+      }
+      lastShift = {
+        ...dbLastShift,
+        status: currentStatus,
+        lockedAt,
+        templateName: template?.name ?? "Custom",
+        closedByName
+      };
+      const [dssr] = await db.select().from(schema_exports.dssrSnapshots).where(eq(schema_exports.dssrSnapshots.shiftId, dbLastShift.id)).limit(1);
+      lastDssr = dssr ?? null;
+    }
+    const templates = await db.select().from(schema_exports.shiftTemplates).where(and(eq(schema_exports.shiftTemplates.organizationId, user.organizationId), eq(schema_exports.shiftTemplates.isActive, true)));
+    const rawNozzles = await db.select().from(schema_exports.nozzles).where(and(eq(schema_exports.nozzles.stationId, stationId), eq(schema_exports.nozzles.organizationId, user.organizationId)));
+    const nozzles2 = await Promise.all(
+      rawNozzles.map(async (nz) => {
+        const [prod] = await db.select().from(schema_exports.products).where(eq(schema_exports.products.id, nz.productId)).limit(1);
+        const [tnk] = await db.select().from(schema_exports.tanks).where(eq(schema_exports.tanks.id, nz.tankId)).limit(1);
+        return {
+          ...nz,
+          productName: prod?.name ?? "Unknown",
+          productCode: prod?.code ?? "Unknown",
+          tankName: tnk?.name ?? "Unknown"
+        };
+      })
+    );
+    const staff = await db.select().from(schema_exports.users).where(and(eq(schema_exports.users.organizationId, user.organizationId), eq(schema_exports.users.status, "ACTIVE")));
+    const dispensers = await db.select().from(schema_exports.dispenserUnits).where(and(eq(schema_exports.dispenserUnits.stationId, stationId), eq(schema_exports.dispenserUnits.status, "ACTIVE")));
+    return c.json({
+      success: true,
+      data: {
+        activeShift,
+        lastShift,
+        lastDssr,
+        canReopenLastShift,
+        gracePeriodExpiresAt,
+        templates,
+        nozzles: nozzles2,
+        staff,
+        dispensers
+      }
+    });
+  } catch (err) {
+    return c.json({ success: false, error: { code: "SERVER_ERROR", message: err.message } }, 500);
+  }
+});
+shiftsRouter.post("/open", async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  if (!canOpenShift(user.role)) {
+    return c.json({ success: false, error: { code: "FORBIDDEN", message: "Insufficient role permissions to open shift" } }, 403);
+  }
+  try {
+    const body = await c.req.json();
+    const parsed = shiftOpenSchema.parse(body);
+    if (!hasStationAccess(user, parsed.stationId)) {
+      return c.json({ success: false, error: { code: "FORBIDDEN", message: "No access to this station" } }, 403);
+    }
+    const [existing] = await db.select().from(schema_exports.shifts).where(and(eq(schema_exports.shifts.stationId, parsed.stationId), eq(schema_exports.shifts.status, "OPEN"))).limit(1);
+    if (existing) {
+      return c.json({ success: false, error: { code: "BAD_REQUEST", message: "A shift is already active at this station." } }, 400);
+    }
+    const [newShift] = await db.insert(schema_exports.shifts).values({
+      organizationId: user.organizationId,
+      stationId: parsed.stationId,
+      shiftTemplateId: parsed.shiftTemplateId,
+      status: "OPEN",
+      openedBy: user.id,
+      openedAt: /* @__PURE__ */ new Date(),
+      openingCash: String(parsed.openingCash),
+      createdAt: /* @__PURE__ */ new Date(),
+      updatedAt: /* @__PURE__ */ new Date()
+    }).returning();
+    if (parsed.staffAssignments && parsed.staffAssignments.length > 0) {
+      for (const assign of parsed.staffAssignments) {
+        await db.insert(schema_exports.shiftStaffAssignments).values({
+          shiftId: newShift.id,
+          userId: assign.userId,
+          duId: assign.duId,
+          assignedAt: /* @__PURE__ */ new Date()
+        });
+      }
+    }
+    const nozzles2 = await db.select().from(schema_exports.nozzles).where(eq(schema_exports.nozzles.stationId, parsed.stationId));
+    for (const nozzle of nozzles2) {
+      const [lastReading] = await db.select().from(schema_exports.nozzleReadings).where(eq(schema_exports.nozzleReadings.nozzleId, nozzle.id)).orderBy(desc(schema_exports.nozzleReadings.createdAt)).limit(1);
+      let openingVal = 0;
+      if (lastReading) {
+        openingVal = Number(lastReading.closingReading);
+      } else {
+        const initial = parsed.initialReadings?.find((ir) => ir.nozzleId === nozzle.id);
+        if (initial) {
+          openingVal = initial.openingReading;
+        } else {
+          openingVal = Number(nozzle.currentReading);
+        }
+      }
+      await db.insert(schema_exports.nozzleReadings).values({
+        shiftId: newShift.id,
+        nozzleId: nozzle.id,
+        openingReading: String(openingVal),
+        closingReading: String(openingVal),
+        // Initially same as opening
+        volumeSold: "0",
+        createdAt: /* @__PURE__ */ new Date()
+      });
+    }
+    await db.insert(schema_exports.businessEvents).values({
+      eventId: crypto.randomUUID(),
+      eventType: "SHIFT_OPENED",
+      organizationId: user.organizationId,
+      stationId: parsed.stationId,
+      entityType: "SHIFT",
+      entityId: newShift.id,
+      payload: {
+        shiftId: newShift.id,
+        openedBy: user.id,
+        openedAt: newShift.openedAt,
+        openingCash: parsed.openingCash
+      },
+      occurredAt: /* @__PURE__ */ new Date()
+    });
+    return c.json({ success: true, data: newShift });
+  } catch (err) {
+    return c.json({ success: false, error: { code: "VALIDATION_ERROR", message: err.message } }, 400);
+  }
+});
+shiftsRouter.put("/readings", async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  try {
+    const body = await c.req.json();
+    const { shiftId, readings } = body;
+    if (!shiftId || !readings || !Array.isArray(readings)) {
+      return c.json({ success: false, error: { code: "BAD_REQUEST", message: "Missing shiftId or readings array" } }, 400);
+    }
+    const [activeShift] = await db.select().from(schema_exports.shifts).where(and(eq(schema_exports.shifts.id, shiftId), eq(schema_exports.shifts.status, "OPEN"))).limit(1);
+    if (!activeShift) {
+      return c.json({ success: false, error: { code: "BAD_REQUEST", message: "Shift is not active or not found" } }, 400);
+    }
+    if (!hasStationAccess(user, activeShift.stationId)) {
+      return c.json({ success: false, error: { code: "FORBIDDEN", message: "No access to this station" } }, 403);
+    }
+    for (const rd of readings) {
+      const [nr] = await db.select().from(schema_exports.nozzleReadings).where(and(eq(schema_exports.nozzleReadings.shiftId, shiftId), eq(schema_exports.nozzleReadings.nozzleId, rd.nozzleId))).limit(1);
+      if (nr) {
+        const opening = Number(nr.openingReading);
+        const closing = Number(rd.closingReading);
+        const volume = Math.max(0, closing - opening);
+        await db.update(schema_exports.nozzleReadings).set({
+          closingReading: String(closing),
+          volumeSold: String(volume)
+        }).where(eq(schema_exports.nozzleReadings.id, nr.id));
+      }
+    }
+    return c.json({ success: true, message: "Readings updated successfully" });
+  } catch (err) {
+    return c.json({ success: false, error: { code: "SERVER_ERROR", message: err.message } }, 500);
+  }
+});
+shiftsRouter.post("/close", async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  if (!canCloseShift(user.role)) {
+    return c.json({ success: false, error: { code: "FORBIDDEN", message: "Insufficient role permissions to close shift" } }, 403);
+  }
+  try {
+    const body = await c.req.json();
+    const { shiftId, payload } = body;
+    if (!shiftId || !payload) {
+      return c.json({ success: false, error: { code: "BAD_REQUEST", message: "Missing shiftId or payload" } }, 400);
+    }
+    const parsed = shiftCloseSchema.parse(payload);
+    const [activeShift] = await db.select().from(schema_exports.shifts).where(and(eq(schema_exports.shifts.id, shiftId), eq(schema_exports.shifts.status, "OPEN"))).limit(1);
+    if (!activeShift) {
+      return c.json({ success: false, error: { code: "BAD_REQUEST", message: "Shift is not open or not found" } }, 400);
+    }
+    if (!hasStationAccess(user, activeShift.stationId)) {
+      return c.json({ success: false, error: { code: "FORBIDDEN", message: "No access to this station" } }, 403);
+    }
+    const rawNozzleReadings = await db.select().from(schema_exports.nozzleReadings).where(eq(schema_exports.nozzleReadings.shiftId, shiftId));
+    const activeNozzles = await db.select().from(schema_exports.nozzles).where(eq(schema_exports.nozzles.stationId, activeShift.stationId));
+    for (const nozzle of activeNozzles) {
+      const match2 = parsed.nozzleReadings.find((r) => r.nozzleId === nozzle.id);
+      if (!match2) {
+        return c.json({
+          success: false,
+          error: {
+            code: "VALIDATION_ERROR",
+            message: `Missing closing reading input for nozzle ${nozzle.name}`
+          }
+        }, 400);
+      }
+      const dbNr = rawNozzleReadings.find((r) => r.nozzleId === nozzle.id);
+      const opening = dbNr ? Number(dbNr.openingReading) : 0;
+      if (match2.closingReading < opening) {
+        return c.json({
+          success: false,
+          error: {
+            code: "VALIDATION_ERROR",
+            message: `Closing reading for nozzle ${nozzle.name} (${match2.closingReading}) cannot be less than opening reading (${opening})`
+          }
+        }, 400);
+      }
+    }
+    const enrichedReadingsSnapshot = [];
+    for (const rd of parsed.nozzleReadings) {
+      const dbNr = rawNozzleReadings.find((r) => r.nozzleId === rd.nozzleId);
+      const opening = dbNr ? Number(dbNr.openingReading) : 0;
+      const closing = rd.closingReading;
+      const volume = closing - opening;
+      await db.update(schema_exports.nozzleReadings).set({
+        closingReading: String(closing),
+        volumeSold: String(volume)
+      }).where(and(eq(schema_exports.nozzleReadings.shiftId, shiftId), eq(schema_exports.nozzleReadings.nozzleId, rd.nozzleId)));
+      await db.update(schema_exports.nozzles).set({
+        currentReading: String(closing),
+        updatedAt: /* @__PURE__ */ new Date()
+      }).where(eq(schema_exports.nozzles.id, rd.nozzleId));
+      const [nz] = await db.select().from(schema_exports.nozzles).where(eq(schema_exports.nozzles.id, rd.nozzleId)).limit(1);
+      const [prod] = nz ? await db.select().from(schema_exports.products).where(eq(schema_exports.products.id, nz.productId)).limit(1) : [null];
+      enrichedReadingsSnapshot.push({
+        nozzleId: rd.nozzleId,
+        nozzleName: nz?.name ?? "Unknown",
+        productName: prod?.name ?? "Unknown",
+        productCode: prod?.code ?? "Unknown",
+        openingReading: opening,
+        closingReading: closing,
+        volumeSold: volume
+      });
+    }
+    const closedAt = /* @__PURE__ */ new Date();
+    const [closedShift] = await db.update(schema_exports.shifts).set({
+      status: "CLOSED",
+      closedBy: user.id,
+      closedAt,
+      closingCash: String(parsed.closingCash),
+      updatedAt: closedAt
+    }).where(eq(schema_exports.shifts.id, shiftId)).returning();
+    const totalVolumeSold = enrichedReadingsSnapshot.reduce((sum, r) => sum + r.volumeSold, 0);
+    const openingCashNum = Number(activeShift.openingCash);
+    const closingCashNum = parsed.closingCash;
+    const cashNetChange = closingCashNum - openingCashNum;
+    const warnings = [];
+    if (closingCashNum === 0 && openingCashNum > 0) {
+      warnings.push("Closing cash is \u20B90, which is highly unusual.");
+    }
+    if (totalVolumeSold === 0) {
+      warnings.push("Zero volume was sold across all nozzles this shift.");
+    }
+    for (const rd of enrichedReadingsSnapshot) {
+      if (rd.volumeSold > 5e3) {
+        warnings.push(`High volume variance alert: Nozzle ${rd.nozzleName} sold ${rd.volumeSold} L.`);
+      }
+    }
+    const [template] = await db.select().from(schema_exports.shiftTemplates).where(eq(schema_exports.shiftTemplates.id, activeShift.shiftTemplateId)).limit(1);
+    const [closedByUser] = await db.select().from(schema_exports.users).where(eq(schema_exports.users.id, user.id)).limit(1);
+    const snapshotData = {
+      shiftId: activeShift.id,
+      templateName: template?.name ?? "Unknown",
+      openedAt: activeShift.openedAt,
+      closedAt,
+      openedBy: activeShift.openedBy,
+      closedBy: user.id,
+      closedByName: closedByUser?.fullName ?? "Staff",
+      openingCash: openingCashNum,
+      closingCash: closingCashNum,
+      cashNetChange,
+      nozzleReadings: enrichedReadingsSnapshot,
+      totalVolumeSold,
+      warnings
+    };
+    await db.insert(schema_exports.dssrSnapshots).values({
+      shiftId,
+      snapshotData,
+      generatedAt: closedAt
+    });
+    await db.insert(schema_exports.businessEvents).values({
+      eventId: crypto.randomUUID(),
+      eventType: "SHIFT_CLOSED",
+      organizationId: user.organizationId,
+      stationId: activeShift.stationId,
+      entityType: "SHIFT",
+      entityId: shiftId,
+      payload: snapshotData,
+      occurredAt: closedAt
+    });
+    return c.json({ success: true, data: closedShift });
+  } catch (err) {
+    return c.json({ success: false, error: { code: "VALIDATION_ERROR", message: err.message } }, 400);
+  }
+});
+shiftsRouter.post("/reopen", async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  if (!canReopenShift(user.role)) {
+    return c.json({ success: false, error: { code: "FORBIDDEN", message: "Only Owners and Managers are allowed to reopen shifts." } }, 403);
+  }
+  try {
+    const body = await c.req.json();
+    const { shiftId } = body;
+    if (!shiftId) {
+      return c.json({ success: false, error: { code: "BAD_REQUEST", message: "Missing shiftId" } }, 400);
+    }
+    const [shift] = await db.select().from(schema_exports.shifts).where(eq(schema_exports.shifts.id, shiftId)).limit(1);
+    if (!shift) {
+      return c.json({ success: false, error: { code: "NOT_FOUND", message: "Shift not found" } }, 404);
+    }
+    if (!hasStationAccess(user, shift.stationId)) {
+      return c.json({ success: false, error: { code: "FORBIDDEN", message: "No access to this station" } }, 403);
+    }
+    if (shift.status !== "CLOSED") {
+      return c.json({ success: false, error: { code: "BAD_REQUEST", message: `Cannot reopen shift with status: ${shift.status}` } }, 400);
+    }
+    const [station] = await db.select().from(schema_exports.stations).where(eq(schema_exports.stations.id, shift.stationId)).limit(1);
+    const graceMinutes = station?.settings?.shift_grace_minutes ?? 15;
+    const closedTime = shift.closedAt ? new Date(shift.closedAt).getTime() : 0;
+    const expiryTime = closedTime + graceMinutes * 60 * 1e3;
+    if (Date.now() > expiryTime) {
+      await db.update(schema_exports.shifts).set({
+        status: "LOCKED",
+        lockedAt: new Date(expiryTime),
+        updatedAt: /* @__PURE__ */ new Date()
+      }).where(eq(schema_exports.shifts.id, shiftId));
+      return c.json({ success: false, error: { code: "FORBIDDEN", message: "Reopen grace period has expired. Shift is locked." } }, 403);
+    }
+    const [reopenedShift] = await db.update(schema_exports.shifts).set({
+      status: "OPEN",
+      closedBy: null,
+      closedAt: null,
+      closingCash: null,
+      updatedAt: /* @__PURE__ */ new Date()
+    }).where(eq(schema_exports.shifts.id, shiftId)).returning();
+    await db.delete(schema_exports.dssrSnapshots).where(eq(schema_exports.dssrSnapshots.shiftId, shiftId));
+    await db.insert(schema_exports.businessEvents).values({
+      eventId: crypto.randomUUID(),
+      eventType: "SHIFT_REOPENED",
+      organizationId: user.organizationId,
+      stationId: shift.stationId,
+      entityType: "SHIFT",
+      entityId: shiftId,
+      payload: {
+        shiftId,
+        reopenedBy: user.id,
+        reopenedAt: reopenedShift.updatedAt
+      },
+      occurredAt: /* @__PURE__ */ new Date()
+    });
+    return c.json({ success: true, data: reopenedShift });
+  } catch (err) {
+    return c.json({ success: false, error: { code: "SERVER_ERROR", message: err.message } }, 500);
+  }
+});
+
 // src/index.ts
 var keyCache = /* @__PURE__ */ new Map();
 var app = new Hono2();
@@ -18140,6 +18621,7 @@ api.get("/session", (c) => {
   });
 });
 api.route("/setup", stationSetupRouter);
+api.route("/shifts", shiftsRouter);
 app.route("/api", api);
 var src_default2 = app;
 
