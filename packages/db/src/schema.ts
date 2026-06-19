@@ -46,7 +46,7 @@ export const users = pgTable('users', {
   organizationId: uuid('organization_id').references(() => organizations.id).notNull(),
   authUserId: uuid('auth_user_id'), // Supabase auth link
   fullName: varchar('full_name', { length: 255 }).notNull(),
-  email: varchar('email', { length: 255 }).notNull(),
+  email: varchar('email', { length: 255 }),
   phone: varchar('phone', { length: 50 }),
   status: varchar('status', { length: 20 }).default('ACTIVE').notNull(), // 'ACTIVE', 'INACTIVE'
   createdAt: timestamp('created_at').defaultNow().notNull(),

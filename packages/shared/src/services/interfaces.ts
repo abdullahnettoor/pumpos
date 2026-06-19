@@ -52,7 +52,9 @@ export interface IShiftTemplateService {
 }
 
 export interface IUserAssignmentService {
-  listUsers(orgId: string): Promise<User[]>;
+  listUsers(): Promise<User[]>;
   assignUserToStation(userId: string, stationId: string): Promise<void>;
   setUserRole(userId: string, role: string): Promise<void>;
+  createUser(data: any): Promise<User>;
+  updateUser(id: string, data: any): Promise<User>;
 }

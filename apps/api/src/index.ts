@@ -21,7 +21,7 @@ type Variables = {
   db: DbClient;
   user: {
     id: string;
-    email: string;
+    email: string | null;
     organizationId: string;
     role: Role;
     assignedStationIds: string[];

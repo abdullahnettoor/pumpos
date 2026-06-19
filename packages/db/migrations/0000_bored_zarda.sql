@@ -329,7 +329,7 @@ CREATE TABLE "users" (
 	"organization_id" uuid NOT NULL,
 	"auth_user_id" uuid,
 	"full_name" varchar(255) NOT NULL,
-	"email" varchar(255) NOT NULL,
+	"email" varchar(255),
 	"phone" varchar(50),
 	"status" varchar(20) DEFAULT 'ACTIVE' NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL,
@@ -434,8 +434,10 @@ DECLARE
   v_full_name text;
   v_default_role text;
 BEGIN
-  -- 1. Check if user already exists by email in public.users
-  SELECT id INTO v_existing_user_id FROM public.users WHERE email = NEW.email;
+  -- 1. Check if user already exists by email in public.users (only if email is provided)
+  IF NEW.email IS NOT NULL THEN
+    SELECT id INTO v_existing_user_id FROM public.users WHERE email = NEW.email;
+  END IF;
 
   IF v_existing_user_id IS NOT NULL THEN
     -- User exists (Invitation Flow)

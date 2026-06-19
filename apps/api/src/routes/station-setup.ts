@@ -467,14 +467,14 @@ stationSetupRouter.post('/users', validateJson(userSchema, 'BAD_REQUEST'), async
   }
 
   const parsed = c.req.valid('json');
-  const body = await c.req.json(); // we still need raw body for stationIds and role which are not in userSchema (or we can get them from raw body)
+  const body = await c.req.json(); // we still need raw body for stationIds and role
 
   const [newUser] = await db
     .insert(schema.users)
     .values({
       organizationId: user.organizationId,
       fullName: parsed.fullName,
-      email: parsed.email,
+      email: (parsed.email && parsed.email.trim() !== '') ? parsed.email : null,
       phone: parsed.phone,
       status: parsed.status,
     })
@@ -497,6 +497,68 @@ stationSetupRouter.post('/users', validateJson(userSchema, 'BAD_REQUEST'), async
   }
 
   return c.json({ success: true, data: newUser });
+});
+
+stationSetupRouter.put('/users/:id', validateJson(userSchema.partial(), 'BAD_REQUEST'), async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  const id = c.req.param('id');
+
+  if (!canManageUsers(user.role)) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Only Owners can manage users' } }, 403);
+  }
+
+  const parsed = c.req.valid('json');
+  const body = await c.req.json();
+
+  const [updatedUser] = await db
+    .update(schema.users)
+    .set({
+      fullName: parsed.fullName,
+      email: (parsed.email !== undefined) ? ((parsed.email && parsed.email.trim() !== '') ? parsed.email : null) : undefined,
+      phone: parsed.phone,
+      status: parsed.status,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(schema.users.id, id),
+        eq(schema.users.organizationId, user.organizationId)
+      )
+    )
+    .returning();
+
+  if (!updatedUser) {
+    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'User not found' } }, 404);
+  }
+
+  // Update role if provided
+  if (body.role) {
+    await db
+      .delete(schema.userRoles)
+      .where(eq(schema.userRoles.userId, id));
+
+    await db.insert(schema.userRoles).values({
+      userId: id,
+      role: body.role,
+    });
+  }
+
+  // Update station assignments if provided
+  if (body.stationIds && Array.isArray(body.stationIds)) {
+    await db
+      .delete(schema.userStationAssignments)
+      .where(eq(schema.userStationAssignments.userId, id));
+
+    for (const sid of body.stationIds) {
+      await db.insert(schema.userStationAssignments).values({
+        userId: id,
+        stationId: sid,
+      });
+    }
+  }
+
+  return c.json({ success: true, data: updatedUser });
 });
 
 // ----------------------------------------------------

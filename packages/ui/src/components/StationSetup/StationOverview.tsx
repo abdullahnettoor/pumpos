@@ -6,6 +6,7 @@ import { TanksGrid } from './TanksGrid.js';
 import { DispensersList } from './DispensersList.js';
 import { ShiftTemplates } from './ShiftTemplates.js';
 import { LoadingSpinner } from '../LoadingSpinner.js';
+import { UserRolesAssignment } from './UserRolesAssignment.js';
 
 const stationService = new CloudStationService();
 
@@ -21,7 +22,7 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
   const [stationsList, setStationsList] = useState<Station[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
-  const [activeTab, setActiveTab] = useState<'general' | 'products' | 'tanks' | 'dispensers' | 'shifts'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'products' | 'tanks' | 'dispensers' | 'shifts' | 'roster'>('general');
 
   // General tab form states
   const [name, setName] = useState('');
@@ -162,7 +163,8 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
               { id: 'products', label: 'Products Catalog' },
               { id: 'tanks', label: 'Storage Tanks' },
               { id: 'dispensers', label: 'Dispenser Units' },
-              { id: 'shifts', label: 'Shift Templates' }
+              { id: 'shifts', label: 'Shift Templates' },
+              { id: 'roster', label: 'Team Roster' }
             ].map((tab) => {
               const isActive = activeTab === tab.id;
               return (
@@ -321,6 +323,7 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
             {activeTab === 'tanks' && <TanksGrid stationId={selectedStation.id} />}
             {activeTab === 'dispensers' && <DispensersList stationId={selectedStation.id} />}
             {activeTab === 'shifts' && <ShiftTemplates />}
+            {activeTab === 'roster' && <UserRolesAssignment />}
           </div>
         </div>
       ) : (

@@ -868,7 +868,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
                       <option value="">-- Unassigned --</option>
                       {staff && staff.map((u: any) => (
                         <option key={u.id} value={u.id}>
-                          {u.fullName}
+                          {u.fullName} {!u.email ? ' (Attendant)' : ''}
                         </option>
                       ))}
                     </select>

@@ -242,6 +242,13 @@ export class CloudUserAssignmentService implements IUserAssignmentService {
       body: JSON.stringify(data),
     });
   }
+
+  async updateUser(id: string, data: any): Promise<User> {
+    return request<User>(`/setup/users/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
 }
 
 export class CloudShiftService {

@@ -10182,7 +10182,7 @@ var users = pgTable("users", {
   authUserId: uuid("auth_user_id"),
   // Supabase auth link
   fullName: varchar("full_name", { length: 255 }).notNull(),
-  email: varchar("email", { length: 255 }).notNull(),
+  email: varchar("email", { length: 255 }),
   phone: varchar("phone", { length: 50 }),
   status: varchar("status", { length: 20 }).default("ACTIVE").notNull(),
   // 'ACTIVE', 'INACTIVE'
@@ -17357,7 +17357,7 @@ var stationSchema = external_exports.object({
 });
 var userSchema = external_exports.object({
   fullName: external_exports.string().min(2, "Full name must be at least 2 characters"),
-  email: external_exports.string().email("Invalid email address"),
+  email: external_exports.string().email("Invalid email address").or(external_exports.literal("")).optional().nullable(),
   phone: external_exports.string().optional().nullable(),
   status: external_exports.enum(["ACTIVE", "INACTIVE"]).default("ACTIVE")
 });
@@ -17932,7 +17932,7 @@ stationSetupRouter.post("/users", validateJson(userSchema, "BAD_REQUEST"), async
   const [newUser] = await db.insert(schema_exports.users).values({
     organizationId: user.organizationId,
     fullName: parsed.fullName,
-    email: parsed.email,
+    email: parsed.email && parsed.email.trim() !== "" ? parsed.email : null,
     phone: parsed.phone,
     status: parsed.status
   }).returning();
@@ -17949,6 +17949,48 @@ stationSetupRouter.post("/users", validateJson(userSchema, "BAD_REQUEST"), async
     }
   }
   return c.json({ success: true, data: newUser });
+});
+stationSetupRouter.put("/users/:id", validateJson(userSchema.partial(), "BAD_REQUEST"), async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  const id = c.req.param("id");
+  if (!canManageUsers(user.role)) {
+    return c.json({ success: false, error: { code: "FORBIDDEN", message: "Only Owners can manage users" } }, 403);
+  }
+  const parsed = c.req.valid("json");
+  const body = await c.req.json();
+  const [updatedUser] = await db.update(schema_exports.users).set({
+    fullName: parsed.fullName,
+    email: parsed.email !== void 0 ? parsed.email && parsed.email.trim() !== "" ? parsed.email : null : void 0,
+    phone: parsed.phone,
+    status: parsed.status,
+    updatedAt: /* @__PURE__ */ new Date()
+  }).where(
+    and(
+      eq(schema_exports.users.id, id),
+      eq(schema_exports.users.organizationId, user.organizationId)
+    )
+  ).returning();
+  if (!updatedUser) {
+    return c.json({ success: false, error: { code: "NOT_FOUND", message: "User not found" } }, 404);
+  }
+  if (body.role) {
+    await db.delete(schema_exports.userRoles).where(eq(schema_exports.userRoles.userId, id));
+    await db.insert(schema_exports.userRoles).values({
+      userId: id,
+      role: body.role
+    });
+  }
+  if (body.stationIds && Array.isArray(body.stationIds)) {
+    await db.delete(schema_exports.userStationAssignments).where(eq(schema_exports.userStationAssignments.userId, id));
+    for (const sid of body.stationIds) {
+      await db.insert(schema_exports.userStationAssignments).values({
+        userId: id,
+        stationId: sid
+      });
+    }
+  }
+  return c.json({ success: true, data: updatedUser });
 });
 stationSetupRouter.put("/tanks/:id", async (c) => {
   const db = c.var.db;
