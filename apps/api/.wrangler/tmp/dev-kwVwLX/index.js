@@ -18487,13 +18487,11 @@ transactionsRouter.get("/expense-categories", async (c) => {
         { name: "Cleaning & Hygiene", isSystem: true },
         { name: "General Miscellaneous", isSystem: true }
       ];
-      for (const item of defaults) {
-        await db.insert(schema_exports.expenseCategories).values({
-          organizationId: user.organizationId,
-          name: item.name,
-          isSystem: item.isSystem
-        });
-      }
+      await db.insert(schema_exports.expenseCategories).values(defaults.map((item) => ({
+        organizationId: user.organizationId,
+        name: item.name,
+        isSystem: item.isSystem
+      }))).onConflictDoNothing();
       list = await db.select().from(schema_exports.expenseCategories).where(eq(schema_exports.expenseCategories.organizationId, user.organizationId));
     }
     return c.json({ success: true, data: list });
@@ -18511,17 +18509,6 @@ transactionsRouter.get("/suppliers", async (c) => {
       list = await db.select().from(schema_exports.suppliers).where(and(eq(schema_exports.suppliers.organizationId, user.organizationId), eq(schema_exports.suppliers.isActive, true)));
     } else {
       list = await db.select().from(schema_exports.suppliers).where(eq(schema_exports.suppliers.organizationId, user.organizationId));
-    }
-    if (list.length === 0 && activeOnly) {
-      const defaults = ["Indian Oil Corporation Ltd", "Bharat Petroleum Corporation Ltd", "Local Lubricants Distributor"];
-      for (const name of defaults) {
-        await db.insert(schema_exports.suppliers).values({
-          organizationId: user.organizationId,
-          name,
-          isActive: true
-        });
-      }
-      list = await db.select().from(schema_exports.suppliers).where(and(eq(schema_exports.suppliers.organizationId, user.organizationId), eq(schema_exports.suppliers.isActive, true)));
     }
     return c.json({ success: true, data: list });
   } catch (err) {

@@ -364,13 +364,15 @@ transactionsRouter.get('/expense-categories', async (c) => {
         { name: 'Cleaning & Hygiene', isSystem: true },
         { name: 'General Miscellaneous', isSystem: true },
       ];
-      for (const item of defaults) {
-        await db.insert(schema.expenseCategories).values({
+      
+      await db.insert(schema.expenseCategories)
+        .values(defaults.map(item => ({
           organizationId: user.organizationId,
           name: item.name,
-          isSystem: item.isSystem,
-        });
-      }
+          isSystem: item.isSystem
+        })))
+        .onConflictDoNothing();
+
       list = await db
         .select()
         .from(schema.expenseCategories)
@@ -401,22 +403,6 @@ transactionsRouter.get('/suppliers', async (c) => {
         .select()
         .from(schema.suppliers)
         .where(eq(schema.suppliers.organizationId, user.organizationId));
-    }
-
-    if (list.length === 0 && activeOnly) {
-      // Seed standard suppliers
-      const defaults = ['Indian Oil Corporation Ltd', 'Bharat Petroleum Corporation Ltd', 'Local Lubricants Distributor'];
-      for (const name of defaults) {
-        await db.insert(schema.suppliers).values({
-          organizationId: user.organizationId,
-          name,
-          isActive: true,
-        });
-      }
-      list = await db
-        .select()
-        .from(schema.suppliers)
-        .where(and(eq(schema.suppliers.organizationId, user.organizationId), eq(schema.suppliers.isActive, true)));
     }
 
     return c.json({ success: true, data: list });
