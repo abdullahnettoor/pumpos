@@ -9,6 +9,7 @@ import {
   supplierCreateSchema,
   Role,
 } from '@pump/shared';
+import { validateJson } from '../utils/validator.js';
 
 type Variables = {
   db: DbClient;
@@ -425,63 +426,53 @@ transactionsRouter.get('/suppliers', async (c) => {
 });
 
 // POST /api/transactions/suppliers
-transactionsRouter.post('/suppliers', async (c) => {
+transactionsRouter.post('/suppliers', validateJson(supplierCreateSchema), async (c) => {
   const db = c.var.db;
   const user = c.var.user;
 
-  try {
-    const body = await c.req.json();
-    const parsed = supplierCreateSchema.parse(body);
+  const parsed = c.req.valid('json');
 
-    const [newSup] = await db
-      .insert(schema.suppliers)
-      .values({
-        organizationId: user.organizationId,
-        name: parsed.name,
-        phone: parsed.phone,
-        isActive: parsed.isActive,
-        metadata: parsed.metadata,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .returning();
+  const [newSup] = await db
+    .insert(schema.suppliers)
+    .values({
+      organizationId: user.organizationId,
+      name: parsed.name,
+      phone: parsed.phone,
+      isActive: parsed.isActive,
+      metadata: parsed.metadata,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .returning();
 
-    return c.json({ success: true, data: newSup });
-  } catch (err: any) {
-    return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: err.message } }, 400);
-  }
+  return c.json({ success: true, data: newSup });
 });
 
 // PUT /api/transactions/suppliers/:id
-transactionsRouter.put('/suppliers/:id', async (c) => {
+transactionsRouter.put('/suppliers/:id', validateJson(supplierCreateSchema), async (c) => {
   const db = c.var.db;
   const user = c.var.user;
   const id = c.req.param('id');
 
-  try {
-    const body = await c.req.json();
-    const parsed = supplierCreateSchema.parse(body);
+  const parsed = c.req.valid('json');
 
-    const [updatedSup] = await db
-      .update(schema.suppliers)
-      .set({
-        name: parsed.name,
-        phone: parsed.phone,
-        isActive: parsed.isActive,
-        metadata: parsed.metadata,
-        updatedAt: new Date(),
-      })
-      .where(and(eq(schema.suppliers.id, id), eq(schema.suppliers.organizationId, user.organizationId)))
-      .returning();
+  const [updatedSup] = await db
+    .update(schema.suppliers)
+    .set({
+      name: parsed.name,
+      phone: parsed.phone,
+      isActive: parsed.isActive,
+      metadata: parsed.metadata,
+      updatedAt: new Date(),
+    })
+    .where(and(eq(schema.suppliers.id, id), eq(schema.suppliers.organizationId, user.organizationId)))
+    .returning();
 
-    if (!updatedSup) {
-      return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Supplier not found' } }, 404);
-    }
-
-    return c.json({ success: true, data: updatedSup });
-  } catch (err: any) {
-    return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: err.message } }, 400);
+  if (!updatedSup) {
+    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Supplier not found' } }, 404);
   }
+
+  return c.json({ success: true, data: updatedSup });
 });
 
 // DELETE /api/transactions/suppliers/:id (Soft delete)
@@ -558,69 +549,59 @@ transactionsRouter.get('/customers', async (c) => {
 });
 
 // POST /api/transactions/customers
-transactionsRouter.post('/customers', async (c) => {
+transactionsRouter.post('/customers', validateJson(customerCreateSchema), async (c) => {
   const db = c.var.db;
   const user = c.var.user;
 
-  try {
-    const body = await c.req.json();
-    const parsed = customerCreateSchema.parse(body);
+  const parsed = c.req.valid('json');
 
-    const [newCust] = await db
-      .insert(schema.customers)
-      .values({
-        organizationId: user.organizationId,
-        name: parsed.name,
-        phone: parsed.phone,
-        customerType: parsed.customerType,
-        creditLimit: parsed.creditLimit ? String(parsed.creditLimit) : null,
-        fleetCode: parsed.fleetCode,
-        isActive: parsed.isActive,
-        metadata: parsed.metadata,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .returning();
+  const [newCust] = await db
+    .insert(schema.customers)
+    .values({
+      organizationId: user.organizationId,
+      name: parsed.name,
+      phone: parsed.phone,
+      customerType: parsed.customerType,
+      creditLimit: parsed.creditLimit ? String(parsed.creditLimit) : null,
+      fleetCode: parsed.fleetCode,
+      isActive: parsed.isActive,
+      metadata: parsed.metadata,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .returning();
 
-    return c.json({ success: true, data: newCust });
-  } catch (err: any) {
-    return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: err.message } }, 400);
-  }
+  return c.json({ success: true, data: newCust });
 });
 
 // PUT /api/transactions/customers/:id
-transactionsRouter.put('/customers/:id', async (c) => {
+transactionsRouter.put('/customers/:id', validateJson(customerCreateSchema), async (c) => {
   const db = c.var.db;
   const user = c.var.user;
   const id = c.req.param('id');
 
-  try {
-    const body = await c.req.json();
-    const parsed = customerCreateSchema.parse(body);
+  const parsed = c.req.valid('json');
 
-    const [updatedCust] = await db
-      .update(schema.customers)
-      .set({
-        name: parsed.name,
-        phone: parsed.phone,
-        customerType: parsed.customerType,
-        creditLimit: parsed.creditLimit ? String(parsed.creditLimit) : null,
-        fleetCode: parsed.fleetCode,
-        isActive: parsed.isActive,
-        metadata: parsed.metadata,
-        updatedAt: new Date(),
-      })
-      .where(and(eq(schema.customers.id, id), eq(schema.customers.organizationId, user.organizationId)))
-      .returning();
+  const [updatedCust] = await db
+    .update(schema.customers)
+    .set({
+      name: parsed.name,
+      phone: parsed.phone,
+      customerType: parsed.customerType,
+      creditLimit: parsed.creditLimit ? String(parsed.creditLimit) : null,
+      fleetCode: parsed.fleetCode,
+      isActive: parsed.isActive,
+      metadata: parsed.metadata,
+      updatedAt: new Date(),
+    })
+    .where(and(eq(schema.customers.id, id), eq(schema.customers.organizationId, user.organizationId)))
+    .returning();
 
-    if (!updatedCust) {
-      return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Customer not found' } }, 404);
-    }
-
-    return c.json({ success: true, data: updatedCust });
-  } catch (err: any) {
-    return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: err.message } }, 400);
+  if (!updatedCust) {
+    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Customer not found' } }, 404);
   }
+
+  return c.json({ success: true, data: updatedCust });
 });
 
 // DELETE /api/transactions/customers/:id (Soft delete)
@@ -650,14 +631,13 @@ transactionsRouter.delete('/customers/:id', async (c) => {
 });
 
 // POST /api/expenses
-transactionsRouter.post('/expenses', async (c) => {
+transactionsRouter.post('/expenses', validateJson(shiftExpenseSchema), async (c) => {
   const db = c.var.db;
   const user = c.var.user;
 
-  try {
-    const body = await c.req.json();
-    const parsed = shiftExpenseSchema.parse(body);
+  const parsed = c.req.valid('json');
 
+  try {
     const editable = await ensureShiftNotLocked(db, parsed.shiftId);
     if (!editable) {
       return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Target shift is locked' } }, 403);
@@ -684,19 +664,18 @@ transactionsRouter.post('/expenses', async (c) => {
 
     return c.json({ success: true, data: newExpense });
   } catch (err: any) {
-    return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: err.message } }, 400);
+    return c.json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }, 500);
   }
 });
 
 // POST /api/purchases
-transactionsRouter.post('/purchases', async (c) => {
+transactionsRouter.post('/purchases', validateJson(shiftPurchaseSchema), async (c) => {
   const db = c.var.db;
   const user = c.var.user;
 
-  try {
-    const body = await c.req.json();
-    const parsed = shiftPurchaseSchema.parse(body);
+  const parsed = c.req.valid('json');
 
+  try {
     const editable = await ensureShiftNotLocked(db, parsed.shiftId);
     if (!editable) {
       return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Target shift is locked' } }, 403);
@@ -749,19 +728,18 @@ transactionsRouter.post('/purchases', async (c) => {
 
     return c.json({ success: true, data: newPurchase });
   } catch (err: any) {
-    return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: err.message } }, 400);
+    return c.json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }, 500);
   }
 });
 
 // POST /api/collections
-transactionsRouter.post('/collections', async (c) => {
+transactionsRouter.post('/collections', validateJson(shiftCollectionSchema), async (c) => {
   const db = c.var.db;
   const user = c.var.user;
 
-  try {
-    const body = await c.req.json();
-    const parsed = shiftCollectionSchema.parse(body);
+  const parsed = c.req.valid('json');
 
+  try {
     const editable = await ensureShiftNotLocked(db, parsed.shiftId);
     if (!editable) {
       return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Target shift is locked' } }, 403);
@@ -824,7 +802,7 @@ transactionsRouter.post('/collections', async (c) => {
 
     return c.json({ success: true, data: newCollection });
   } catch (err: any) {
-    return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: err.message } }, 400);
+    return c.json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }, 500);
   }
 });
 

@@ -96,6 +96,39 @@ var compose = /* @__PURE__ */ __name((middleware, onError, onNotFound) => {
   };
 }, "compose");
 
+// ../../node_modules/hono/dist/http-exception.js
+var HTTPException = /* @__PURE__ */ __name(class extends Error {
+  res;
+  status;
+  /**
+   * Creates an instance of `HTTPException`.
+   * @param status - HTTP status code for the exception. Defaults to 500.
+   * @param options - Additional options for the exception.
+   */
+  constructor(status = 500, options) {
+    super(options?.message, { cause: options?.cause });
+    this.res = options?.res;
+    this.status = status;
+  }
+  /**
+   * Returns the response object associated with the exception.
+   * If a response object is not provided, a new response is created with the error message and status code.
+   * @returns The response object.
+   */
+  getResponse() {
+    if (this.res) {
+      const newResponse = new Response(this.res.body, {
+        status: this.status,
+        headers: this.res.headers
+      });
+      return newResponse;
+    }
+    return new Response(this.message, {
+      status: this.status
+    });
+  }
+}, "HTTPException");
+
 // ../../node_modules/hono/dist/request/constants.js
 var GET_MATCH_RESULT = /* @__PURE__ */ Symbol();
 
@@ -2215,6 +2248,80 @@ var cors = /* @__PURE__ */ __name((options) => {
     }
   }, "cors2");
 }, "cors");
+
+// ../../node_modules/hono/dist/utils/cookie.js
+var validCookieNameRegEx = /^[\w!#$%&'*.^`|~+-]+$/;
+var validCookieValueRegEx = /^[ !#-:<-[\]-~]*$/;
+var trimCookieWhitespace = /* @__PURE__ */ __name((value) => {
+  let start = 0;
+  let end = value.length;
+  while (start < end) {
+    const charCode = value.charCodeAt(start);
+    if (charCode !== 32 && charCode !== 9) {
+      break;
+    }
+    start++;
+  }
+  while (end > start) {
+    const charCode = value.charCodeAt(end - 1);
+    if (charCode !== 32 && charCode !== 9) {
+      break;
+    }
+    end--;
+  }
+  return start === 0 && end === value.length ? value : value.slice(start, end);
+}, "trimCookieWhitespace");
+var parse = /* @__PURE__ */ __name((cookie, name) => {
+  if (name && cookie.indexOf(name) === -1) {
+    return {};
+  }
+  const pairs = cookie.split(";");
+  const parsedCookie = /* @__PURE__ */ Object.create(null);
+  for (const pairStr of pairs) {
+    const valueStartPos = pairStr.indexOf("=");
+    if (valueStartPos === -1) {
+      continue;
+    }
+    const cookieName = trimCookieWhitespace(pairStr.substring(0, valueStartPos));
+    if (name && name !== cookieName || !validCookieNameRegEx.test(cookieName) || cookieName in parsedCookie) {
+      continue;
+    }
+    let cookieValue = trimCookieWhitespace(pairStr.substring(valueStartPos + 1));
+    if (cookieValue.startsWith('"') && cookieValue.endsWith('"')) {
+      cookieValue = cookieValue.slice(1, -1);
+    }
+    if (validCookieValueRegEx.test(cookieValue)) {
+      parsedCookie[cookieName] = cookieValue.indexOf("%") !== -1 ? tryDecode(cookieValue, decodeURIComponent_) : cookieValue;
+      if (name) {
+        break;
+      }
+    }
+  }
+  return parsedCookie;
+}, "parse");
+
+// ../../node_modules/hono/dist/helper/cookie/index.js
+var getCookie = /* @__PURE__ */ __name((c, key, prefix) => {
+  const cookie = c.req.raw.headers.get("Cookie");
+  if (typeof key === "string") {
+    if (!cookie) {
+      return void 0;
+    }
+    let finalKey = key;
+    if (prefix === "secure") {
+      finalKey = "__Secure-" + key;
+    } else if (prefix === "host") {
+      finalKey = "__Host-" + key;
+    }
+    const obj2 = parse(cookie, finalKey);
+    return obj2[finalKey];
+  }
+  if (!cookie) {
+    return {};
+  }
+  const obj = parse(cookie);
+  return obj;
+}, "getCookie");
 
 // ../../node_modules/hono/dist/utils/encode.js
 var decodeBase64Url = /* @__PURE__ */ __name((str) => {
@@ -17391,6 +17498,141 @@ function canManageUsers(role) {
 }
 __name(canManageUsers, "canManageUsers");
 
+// ../../node_modules/hono/dist/utils/buffer.js
+var bufferToFormData = /* @__PURE__ */ __name((arrayBuffer, contentType) => {
+  const response = new Response(arrayBuffer, {
+    headers: {
+      "Content-Type": contentType
+    }
+  });
+  return response.formData();
+}, "bufferToFormData");
+
+// ../../node_modules/hono/dist/validator/validator.js
+var jsonRegex = /^application\/([a-z-\.]+\+)?json(;\s*[a-zA-Z0-9\-]+\=([^;]+))*$/;
+var multipartRegex = /^multipart\/form-data(;\s?boundary=[a-zA-Z0-9'"()+_,\-./:=?]+)?$/;
+var urlencodedRegex = /^application\/x-www-form-urlencoded(;\s*[a-zA-Z0-9\-]+\=([^;]+))*$/;
+var validator = /* @__PURE__ */ __name((target, validationFunc) => {
+  return async (c, next) => {
+    let value = {};
+    const contentType = c.req.header("Content-Type");
+    switch (target) {
+      case "json":
+        if (!contentType || !jsonRegex.test(contentType)) {
+          break;
+        }
+        try {
+          value = await c.req.json();
+        } catch {
+          const message = "Malformed JSON in request body";
+          throw new HTTPException(400, { message });
+        }
+        break;
+      case "form": {
+        if (!contentType || !(multipartRegex.test(contentType) || urlencodedRegex.test(contentType))) {
+          break;
+        }
+        let formData;
+        if (c.req.bodyCache.formData) {
+          formData = await c.req.bodyCache.formData;
+        } else {
+          try {
+            const arrayBuffer = await c.req.arrayBuffer();
+            formData = await bufferToFormData(arrayBuffer, contentType);
+            c.req.bodyCache.formData = formData;
+          } catch (e) {
+            let message = "Malformed FormData request.";
+            message += e instanceof Error ? ` ${e.message}` : ` ${String(e)}`;
+            throw new HTTPException(400, { message });
+          }
+        }
+        const form = /* @__PURE__ */ Object.create(null);
+        formData.forEach((value2, key) => {
+          if (key.endsWith("[]")) {
+            ;
+            (form[key] ??= []).push(value2);
+          } else if (Array.isArray(form[key])) {
+            ;
+            form[key].push(value2);
+          } else if (Object.hasOwn(form, key)) {
+            form[key] = [form[key], value2];
+          } else {
+            form[key] = value2;
+          }
+        });
+        value = form;
+        break;
+      }
+      case "query":
+        value = Object.fromEntries(
+          Object.entries(c.req.queries()).map(([k, v]) => {
+            return v.length === 1 ? [k, v[0]] : [k, v];
+          })
+        );
+        break;
+      case "param":
+        value = c.req.param();
+        break;
+      case "header":
+        value = c.req.header();
+        break;
+      case "cookie":
+        value = getCookie(c);
+        break;
+    }
+    const res = await validationFunc(value, c);
+    if (res instanceof Response) {
+      return res;
+    }
+    c.req.addValidatedData(target, res);
+    return await next();
+  };
+}, "validator");
+
+// ../../node_modules/@hono/zod-validator/dist/index.js
+function zValidatorFunction(target, schema, hook, options) {
+  return validator(target, async (value, c) => {
+    let validatorValue = value;
+    if (target === "header" && "_def" in schema || target === "header" && "_zod" in schema) {
+      const schemaKeys = Object.keys("in" in schema ? schema.in.shape : schema.shape);
+      const caseInsensitiveKeymap = Object.fromEntries(schemaKeys.map((key) => [key.toLowerCase(), key]));
+      validatorValue = Object.fromEntries(Object.entries(value).map(([key, value$1]) => [caseInsensitiveKeymap[key] || key, value$1]));
+    }
+    const result = options && options.validationFunction ? await options.validationFunction(schema, validatorValue) : await schema.safeParseAsync(validatorValue);
+    if (hook) {
+      const hookResult = await hook({
+        data: validatorValue,
+        ...result,
+        target
+      }, c);
+      if (hookResult) {
+        if (hookResult instanceof Response)
+          return hookResult;
+        if ("response" in hookResult)
+          return hookResult.response;
+      }
+    }
+    if (!result.success)
+      return c.json(result, 400);
+    return result.data;
+  });
+}
+__name(zValidatorFunction, "zValidatorFunction");
+var zValidator = zValidatorFunction;
+
+// src/utils/validator.ts
+var validateJson = /* @__PURE__ */ __name((schema, errorCode = "VALIDATION_ERROR") => zValidator("json", schema, (result, c) => {
+  if (!result.success) {
+    return c.json({
+      success: false,
+      error: {
+        code: errorCode,
+        message: result.error.errors.map((e) => `${e.path.join(".")}: ${e.message}`).join(", ") || result.error.message
+      }
+    }, 400);
+  }
+}), "validateJson");
+
 // src/routes/station-setup.ts
 var stationSetupRouter = new Hono2();
 function checkWriteAccess(c, stationId) {
@@ -17414,62 +17656,52 @@ stationSetupRouter.get("/stations", async (c) => {
   );
   return c.json({ success: true, data: visible });
 });
-stationSetupRouter.post("/stations", async (c) => {
+stationSetupRouter.post("/stations", validateJson(stationSchema), async (c) => {
   const db = c.var.db;
   const user = c.var.user;
   if (user.role !== "Owner") {
     return c.json({ success: false, error: { code: "FORBIDDEN", message: "Only Owners can create stations" } }, 403);
   }
-  try {
-    const body = await c.req.json();
-    const parsed = stationSchema.parse(body);
-    const [newStation] = await db.insert(schema_exports.stations).values({
-      organizationId: user.organizationId,
-      name: parsed.name,
-      code: parsed.code,
-      address: parsed.address,
-      phone: parsed.phone,
-      settings: parsed.settings,
-      onboardingStatus: parsed.onboardingStatus,
-      isActive: parsed.isActive
-    }).returning();
-    return c.json({ success: true, data: newStation });
-  } catch (err) {
-    return c.json({ success: false, error: { code: "VALIDATION_ERROR", message: err.message } }, 400);
-  }
+  const parsed = c.req.valid("json");
+  const [newStation] = await db.insert(schema_exports.stations).values({
+    organizationId: user.organizationId,
+    name: parsed.name,
+    code: parsed.code,
+    address: parsed.address,
+    phone: parsed.phone,
+    settings: parsed.settings,
+    onboardingStatus: parsed.onboardingStatus,
+    isActive: parsed.isActive
+  }).returning();
+  return c.json({ success: true, data: newStation });
 });
-stationSetupRouter.put("/stations/:id", async (c) => {
+stationSetupRouter.put("/stations/:id", validateJson(stationSchema.partial()), async (c) => {
   const db = c.var.db;
   const user = c.var.user;
   const stationId = c.req.param("id");
   if (!checkWriteAccess(c, stationId)) {
     return c.json({ success: false, error: { code: "FORBIDDEN", message: "Insufficient write permissions for this station" } }, 403);
   }
-  try {
-    const body = await c.req.json();
-    const parsed = stationSchema.partial().parse(body);
-    const [updated] = await db.update(schema_exports.stations).set({
-      name: parsed.name,
-      code: parsed.code,
-      address: parsed.address,
-      phone: parsed.phone,
-      settings: parsed.settings,
-      onboardingStatus: parsed.onboardingStatus,
-      isActive: parsed.isActive,
-      updatedAt: /* @__PURE__ */ new Date()
-    }).where(
-      and(
-        eq(schema_exports.stations.id, stationId),
-        eq(schema_exports.stations.organizationId, user.organizationId)
-      )
-    ).returning();
-    if (!updated) {
-      return c.json({ success: false, error: { code: "NOT_FOUND", message: "Station not found" } }, 404);
-    }
-    return c.json({ success: true, data: updated });
-  } catch (err) {
-    return c.json({ success: false, error: { code: "VALIDATION_ERROR", message: err.message } }, 400);
+  const parsed = c.req.valid("json");
+  const [updated] = await db.update(schema_exports.stations).set({
+    name: parsed.name,
+    code: parsed.code,
+    address: parsed.address,
+    phone: parsed.phone,
+    settings: parsed.settings,
+    onboardingStatus: parsed.onboardingStatus,
+    isActive: parsed.isActive,
+    updatedAt: /* @__PURE__ */ new Date()
+  }).where(
+    and(
+      eq(schema_exports.stations.id, stationId),
+      eq(schema_exports.stations.organizationId, user.organizationId)
+    )
+  ).returning();
+  if (!updated) {
+    return c.json({ success: false, error: { code: "NOT_FOUND", message: "Station not found" } }, 404);
   }
+  return c.json({ success: true, data: updated });
 });
 stationSetupRouter.get("/products", async (c) => {
   const db = c.var.db;
@@ -17689,38 +17921,34 @@ stationSetupRouter.get("/users", async (c) => {
   );
   return c.json({ success: true, data: mapped });
 });
-stationSetupRouter.post("/users", async (c) => {
+stationSetupRouter.post("/users", validateJson(userSchema, "BAD_REQUEST"), async (c) => {
   const db = c.var.db;
   const user = c.var.user;
   if (!canManageUsers(user.role)) {
     return c.json({ success: false, error: { code: "FORBIDDEN", message: "Only Owners can manage users" } }, 403);
   }
-  try {
-    const body = await c.req.json();
-    const parsed = userSchema.parse(body);
-    const [newUser] = await db.insert(schema_exports.users).values({
-      organizationId: user.organizationId,
-      fullName: parsed.fullName,
-      email: parsed.email,
-      phone: parsed.phone,
-      status: parsed.status
-    }).returning();
-    await db.insert(schema_exports.userRoles).values({
-      userId: newUser.id,
-      role: body.role || "Staff"
-    });
-    if (body.stationIds && Array.isArray(body.stationIds)) {
-      for (const sid of body.stationIds) {
-        await db.insert(schema_exports.userStationAssignments).values({
-          userId: newUser.id,
-          stationId: sid
-        });
-      }
+  const parsed = c.req.valid("json");
+  const body = await c.req.json();
+  const [newUser] = await db.insert(schema_exports.users).values({
+    organizationId: user.organizationId,
+    fullName: parsed.fullName,
+    email: parsed.email,
+    phone: parsed.phone,
+    status: parsed.status
+  }).returning();
+  await db.insert(schema_exports.userRoles).values({
+    userId: newUser.id,
+    role: body.role || "Staff"
+  });
+  if (body.stationIds && Array.isArray(body.stationIds)) {
+    for (const sid of body.stationIds) {
+      await db.insert(schema_exports.userStationAssignments).values({
+        userId: newUser.id,
+        stationId: sid
+      });
     }
-    return c.json({ success: true, data: newUser });
-  } catch (err) {
-    return c.json({ success: false, error: { code: "BAD_REQUEST", message: err.message } }, 400);
   }
+  return c.json({ success: true, data: newUser });
 });
 stationSetupRouter.put("/tanks/:id", async (c) => {
   const db = c.var.db;
@@ -18300,47 +18528,37 @@ transactionsRouter.get("/suppliers", async (c) => {
     return c.json({ success: false, error: { code: "SERVER_ERROR", message: err.message } }, 500);
   }
 });
-transactionsRouter.post("/suppliers", async (c) => {
+transactionsRouter.post("/suppliers", validateJson(supplierCreateSchema), async (c) => {
   const db = c.var.db;
   const user = c.var.user;
-  try {
-    const body = await c.req.json();
-    const parsed = supplierCreateSchema.parse(body);
-    const [newSup] = await db.insert(schema_exports.suppliers).values({
-      organizationId: user.organizationId,
-      name: parsed.name,
-      phone: parsed.phone,
-      isActive: parsed.isActive,
-      metadata: parsed.metadata,
-      createdAt: /* @__PURE__ */ new Date(),
-      updatedAt: /* @__PURE__ */ new Date()
-    }).returning();
-    return c.json({ success: true, data: newSup });
-  } catch (err) {
-    return c.json({ success: false, error: { code: "VALIDATION_ERROR", message: err.message } }, 400);
-  }
+  const parsed = c.req.valid("json");
+  const [newSup] = await db.insert(schema_exports.suppliers).values({
+    organizationId: user.organizationId,
+    name: parsed.name,
+    phone: parsed.phone,
+    isActive: parsed.isActive,
+    metadata: parsed.metadata,
+    createdAt: /* @__PURE__ */ new Date(),
+    updatedAt: /* @__PURE__ */ new Date()
+  }).returning();
+  return c.json({ success: true, data: newSup });
 });
-transactionsRouter.put("/suppliers/:id", async (c) => {
+transactionsRouter.put("/suppliers/:id", validateJson(supplierCreateSchema), async (c) => {
   const db = c.var.db;
   const user = c.var.user;
   const id = c.req.param("id");
-  try {
-    const body = await c.req.json();
-    const parsed = supplierCreateSchema.parse(body);
-    const [updatedSup] = await db.update(schema_exports.suppliers).set({
-      name: parsed.name,
-      phone: parsed.phone,
-      isActive: parsed.isActive,
-      metadata: parsed.metadata,
-      updatedAt: /* @__PURE__ */ new Date()
-    }).where(and(eq(schema_exports.suppliers.id, id), eq(schema_exports.suppliers.organizationId, user.organizationId))).returning();
-    if (!updatedSup) {
-      return c.json({ success: false, error: { code: "NOT_FOUND", message: "Supplier not found" } }, 404);
-    }
-    return c.json({ success: true, data: updatedSup });
-  } catch (err) {
-    return c.json({ success: false, error: { code: "VALIDATION_ERROR", message: err.message } }, 400);
+  const parsed = c.req.valid("json");
+  const [updatedSup] = await db.update(schema_exports.suppliers).set({
+    name: parsed.name,
+    phone: parsed.phone,
+    isActive: parsed.isActive,
+    metadata: parsed.metadata,
+    updatedAt: /* @__PURE__ */ new Date()
+  }).where(and(eq(schema_exports.suppliers.id, id), eq(schema_exports.suppliers.organizationId, user.organizationId))).returning();
+  if (!updatedSup) {
+    return c.json({ success: false, error: { code: "NOT_FOUND", message: "Supplier not found" } }, 404);
   }
+  return c.json({ success: true, data: updatedSup });
 });
 transactionsRouter.delete("/suppliers/:id", async (c) => {
   const db = c.var.db;
@@ -18391,53 +18609,43 @@ transactionsRouter.get("/customers", async (c) => {
     return c.json({ success: false, error: { code: "SERVER_ERROR", message: err.message } }, 500);
   }
 });
-transactionsRouter.post("/customers", async (c) => {
+transactionsRouter.post("/customers", validateJson(customerCreateSchema), async (c) => {
   const db = c.var.db;
   const user = c.var.user;
-  try {
-    const body = await c.req.json();
-    const parsed = customerCreateSchema.parse(body);
-    const [newCust] = await db.insert(schema_exports.customers).values({
-      organizationId: user.organizationId,
-      name: parsed.name,
-      phone: parsed.phone,
-      customerType: parsed.customerType,
-      creditLimit: parsed.creditLimit ? String(parsed.creditLimit) : null,
-      fleetCode: parsed.fleetCode,
-      isActive: parsed.isActive,
-      metadata: parsed.metadata,
-      createdAt: /* @__PURE__ */ new Date(),
-      updatedAt: /* @__PURE__ */ new Date()
-    }).returning();
-    return c.json({ success: true, data: newCust });
-  } catch (err) {
-    return c.json({ success: false, error: { code: "VALIDATION_ERROR", message: err.message } }, 400);
-  }
+  const parsed = c.req.valid("json");
+  const [newCust] = await db.insert(schema_exports.customers).values({
+    organizationId: user.organizationId,
+    name: parsed.name,
+    phone: parsed.phone,
+    customerType: parsed.customerType,
+    creditLimit: parsed.creditLimit ? String(parsed.creditLimit) : null,
+    fleetCode: parsed.fleetCode,
+    isActive: parsed.isActive,
+    metadata: parsed.metadata,
+    createdAt: /* @__PURE__ */ new Date(),
+    updatedAt: /* @__PURE__ */ new Date()
+  }).returning();
+  return c.json({ success: true, data: newCust });
 });
-transactionsRouter.put("/customers/:id", async (c) => {
+transactionsRouter.put("/customers/:id", validateJson(customerCreateSchema), async (c) => {
   const db = c.var.db;
   const user = c.var.user;
   const id = c.req.param("id");
-  try {
-    const body = await c.req.json();
-    const parsed = customerCreateSchema.parse(body);
-    const [updatedCust] = await db.update(schema_exports.customers).set({
-      name: parsed.name,
-      phone: parsed.phone,
-      customerType: parsed.customerType,
-      creditLimit: parsed.creditLimit ? String(parsed.creditLimit) : null,
-      fleetCode: parsed.fleetCode,
-      isActive: parsed.isActive,
-      metadata: parsed.metadata,
-      updatedAt: /* @__PURE__ */ new Date()
-    }).where(and(eq(schema_exports.customers.id, id), eq(schema_exports.customers.organizationId, user.organizationId))).returning();
-    if (!updatedCust) {
-      return c.json({ success: false, error: { code: "NOT_FOUND", message: "Customer not found" } }, 404);
-    }
-    return c.json({ success: true, data: updatedCust });
-  } catch (err) {
-    return c.json({ success: false, error: { code: "VALIDATION_ERROR", message: err.message } }, 400);
+  const parsed = c.req.valid("json");
+  const [updatedCust] = await db.update(schema_exports.customers).set({
+    name: parsed.name,
+    phone: parsed.phone,
+    customerType: parsed.customerType,
+    creditLimit: parsed.creditLimit ? String(parsed.creditLimit) : null,
+    fleetCode: parsed.fleetCode,
+    isActive: parsed.isActive,
+    metadata: parsed.metadata,
+    updatedAt: /* @__PURE__ */ new Date()
+  }).where(and(eq(schema_exports.customers.id, id), eq(schema_exports.customers.organizationId, user.organizationId))).returning();
+  if (!updatedCust) {
+    return c.json({ success: false, error: { code: "NOT_FOUND", message: "Customer not found" } }, 404);
   }
+  return c.json({ success: true, data: updatedCust });
 });
 transactionsRouter.delete("/customers/:id", async (c) => {
   const db = c.var.db;
@@ -18456,12 +18664,11 @@ transactionsRouter.delete("/customers/:id", async (c) => {
     return c.json({ success: false, error: { code: "SERVER_ERROR", message: err.message } }, 500);
   }
 });
-transactionsRouter.post("/expenses", async (c) => {
+transactionsRouter.post("/expenses", validateJson(shiftExpenseSchema), async (c) => {
   const db = c.var.db;
   const user = c.var.user;
+  const parsed = c.req.valid("json");
   try {
-    const body = await c.req.json();
-    const parsed = shiftExpenseSchema.parse(body);
     const editable = await ensureShiftNotLocked(db, parsed.shiftId);
     if (!editable) {
       return c.json({ success: false, error: { code: "FORBIDDEN", message: "Target shift is locked" } }, 403);
@@ -18481,15 +18688,14 @@ transactionsRouter.post("/expenses", async (c) => {
     }
     return c.json({ success: true, data: newExpense });
   } catch (err) {
-    return c.json({ success: false, error: { code: "VALIDATION_ERROR", message: err.message } }, 400);
+    return c.json({ success: false, error: { code: "SERVER_ERROR", message: err.message } }, 500);
   }
 });
-transactionsRouter.post("/purchases", async (c) => {
+transactionsRouter.post("/purchases", validateJson(shiftPurchaseSchema), async (c) => {
   const db = c.var.db;
   const user = c.var.user;
+  const parsed = c.req.valid("json");
   try {
-    const body = await c.req.json();
-    const parsed = shiftPurchaseSchema.parse(body);
     const editable = await ensureShiftNotLocked(db, parsed.shiftId);
     if (!editable) {
       return c.json({ success: false, error: { code: "FORBIDDEN", message: "Target shift is locked" } }, 403);
@@ -18531,15 +18737,14 @@ transactionsRouter.post("/purchases", async (c) => {
     }
     return c.json({ success: true, data: newPurchase });
   } catch (err) {
-    return c.json({ success: false, error: { code: "VALIDATION_ERROR", message: err.message } }, 400);
+    return c.json({ success: false, error: { code: "SERVER_ERROR", message: err.message } }, 500);
   }
 });
-transactionsRouter.post("/collections", async (c) => {
+transactionsRouter.post("/collections", validateJson(shiftCollectionSchema), async (c) => {
   const db = c.var.db;
   const user = c.var.user;
+  const parsed = c.req.valid("json");
   try {
-    const body = await c.req.json();
-    const parsed = shiftCollectionSchema.parse(body);
     const editable = await ensureShiftNotLocked(db, parsed.shiftId);
     if (!editable) {
       return c.json({ success: false, error: { code: "FORBIDDEN", message: "Target shift is locked" } }, 403);
@@ -18587,7 +18792,7 @@ transactionsRouter.post("/collections", async (c) => {
     }
     return c.json({ success: true, data: newCollection });
   } catch (err) {
-    return c.json({ success: false, error: { code: "VALIDATION_ERROR", message: err.message } }, 400);
+    return c.json({ success: false, error: { code: "SERVER_ERROR", message: err.message } }, 500);
   }
 });
 transactionsRouter.get("/expenses", async (c) => {
@@ -18942,15 +19147,14 @@ shiftsRouter.get("/status", async (c) => {
     return c.json({ success: false, error: { code: "SERVER_ERROR", message: err.message } }, 500);
   }
 });
-shiftsRouter.post("/open", async (c) => {
+shiftsRouter.post("/open", validateJson(shiftOpenSchema), async (c) => {
   const db = c.var.db;
   const user = c.var.user;
   if (!canOpenShift(user.role)) {
     return c.json({ success: false, error: { code: "FORBIDDEN", message: "Insufficient role permissions to open shift" } }, 403);
   }
+  const parsed = c.req.valid("json");
   try {
-    const body = await c.req.json();
-    const parsed = shiftOpenSchema.parse(body);
     if (!hasStationAccess2(user, parsed.stationId)) {
       return c.json({ success: false, error: { code: "FORBIDDEN", message: "No access to this station" } }, 403);
     }
@@ -19056,19 +19260,18 @@ shiftsRouter.put("/readings", async (c) => {
     return c.json({ success: false, error: { code: "SERVER_ERROR", message: err.message } }, 500);
   }
 });
-shiftsRouter.post("/close", async (c) => {
+var shiftCloseRequestSchema = external_exports.object({
+  shiftId: external_exports.string().uuid("Invalid shift ID"),
+  payload: shiftCloseSchema
+});
+shiftsRouter.post("/close", validateJson(shiftCloseRequestSchema), async (c) => {
   const db = c.var.db;
   const user = c.var.user;
   if (!canCloseShift(user.role)) {
     return c.json({ success: false, error: { code: "FORBIDDEN", message: "Insufficient role permissions to close shift" } }, 403);
   }
+  const { shiftId, payload: parsed } = c.req.valid("json");
   try {
-    const body = await c.req.json();
-    const { shiftId, payload } = body;
-    if (!shiftId || !payload) {
-      return c.json({ success: false, error: { code: "BAD_REQUEST", message: "Missing shiftId or payload" } }, 400);
-    }
-    const parsed = shiftCloseSchema.parse(payload);
     const [activeShift] = await db.select().from(schema_exports.shifts).where(and(eq(schema_exports.shifts.id, shiftId), eq(schema_exports.shifts.status, "OPEN"))).limit(1);
     if (!activeShift) {
       return c.json({ success: false, error: { code: "BAD_REQUEST", message: "Shift is not open or not found" } }, 400);

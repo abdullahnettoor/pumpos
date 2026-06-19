@@ -10,6 +10,7 @@ import {
   userSchema,
   Role,
 } from '@pump/shared';
+import { validateJson } from '../utils/validator.js';
 
 type Variables = {
   db: DbClient;
@@ -60,7 +61,7 @@ stationSetupRouter.get('/stations', async (c) => {
 });
 
 // POST /api/setup/stations
-stationSetupRouter.post('/stations', async (c) => {
+stationSetupRouter.post('/stations', validateJson(stationSchema), async (c) => {
   const db = c.var.db;
   const user = c.var.user;
 
@@ -68,32 +69,27 @@ stationSetupRouter.post('/stations', async (c) => {
     return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Only Owners can create stations' } }, 403);
   }
 
-  try {
-    const body = await c.req.json();
-    const parsed = stationSchema.parse(body);
+  const parsed = c.req.valid('json');
 
-    const [newStation] = await db
-      .insert(schema.stations)
-      .values({
-        organizationId: user.organizationId,
-        name: parsed.name,
-        code: parsed.code,
-        address: parsed.address,
-        phone: parsed.phone,
-        settings: parsed.settings,
-        onboardingStatus: parsed.onboardingStatus,
-        isActive: parsed.isActive,
-      })
-      .returning();
+  const [newStation] = await db
+    .insert(schema.stations)
+    .values({
+      organizationId: user.organizationId,
+      name: parsed.name,
+      code: parsed.code,
+      address: parsed.address,
+      phone: parsed.phone,
+      settings: parsed.settings,
+      onboardingStatus: parsed.onboardingStatus,
+      isActive: parsed.isActive,
+    })
+    .returning();
 
-    return c.json({ success: true, data: newStation });
-  } catch (err: any) {
-    return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: err.message } }, 400);
-  }
+  return c.json({ success: true, data: newStation });
 });
 
 // PUT /api/setup/stations/:id
-stationSetupRouter.put('/stations/:id', async (c) => {
+stationSetupRouter.put('/stations/:id', validateJson(stationSchema.partial()), async (c) => {
   const db = c.var.db;
   const user = c.var.user;
   const stationId = c.req.param('id');
@@ -102,38 +98,33 @@ stationSetupRouter.put('/stations/:id', async (c) => {
     return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient write permissions for this station' } }, 403);
   }
 
-  try {
-    const body = await c.req.json();
-    const parsed = stationSchema.partial().parse(body);
+  const parsed = c.req.valid('json');
 
-    const [updated] = await db
-      .update(schema.stations)
-      .set({
-        name: parsed.name,
-        code: parsed.code,
-        address: parsed.address,
-        phone: parsed.phone,
-        settings: parsed.settings,
-        onboardingStatus: parsed.onboardingStatus,
-        isActive: parsed.isActive,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(schema.stations.id, stationId),
-          eq(schema.stations.organizationId, user.organizationId)
-        )
+  const [updated] = await db
+    .update(schema.stations)
+    .set({
+      name: parsed.name,
+      code: parsed.code,
+      address: parsed.address,
+      phone: parsed.phone,
+      settings: parsed.settings,
+      onboardingStatus: parsed.onboardingStatus,
+      isActive: parsed.isActive,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(schema.stations.id, stationId),
+        eq(schema.stations.organizationId, user.organizationId)
       )
-      .returning();
+    )
+    .returning();
 
-    if (!updated) {
-      return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Station not found' } }, 404);
-    }
-
-    return c.json({ success: true, data: updated });
-  } catch (err: any) {
-    return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: err.message } }, 400);
+  if (!updated) {
+    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Station not found' } }, 404);
   }
+
+  return c.json({ success: true, data: updated });
 });
 
 // ----------------------------------------------------
@@ -467,7 +458,7 @@ stationSetupRouter.get('/users', async (c) => {
   return c.json({ success: true, data: mapped });
 });
 
-stationSetupRouter.post('/users', async (c) => {
+stationSetupRouter.post('/users', validateJson(userSchema, 'BAD_REQUEST'), async (c) => {
   const db = c.var.db;
   const user = c.var.user;
 
@@ -475,41 +466,37 @@ stationSetupRouter.post('/users', async (c) => {
     return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Only Owners can manage users' } }, 403);
   }
 
-  try {
-    const body = await c.req.json();
-    const parsed = userSchema.parse(body);
+  const parsed = c.req.valid('json');
+  const body = await c.req.json(); // we still need raw body for stationIds and role which are not in userSchema (or we can get them from raw body)
 
-    const [newUser] = await db
-      .insert(schema.users)
-      .values({
-        organizationId: user.organizationId,
-        fullName: parsed.fullName,
-        email: parsed.email,
-        phone: parsed.phone,
-        status: parsed.status,
-      })
-      .returning();
+  const [newUser] = await db
+    .insert(schema.users)
+    .values({
+      organizationId: user.organizationId,
+      fullName: parsed.fullName,
+      email: parsed.email,
+      phone: parsed.phone,
+      status: parsed.status,
+    })
+    .returning();
 
-    // Insert user role
-    await db.insert(schema.userRoles).values({
-      userId: newUser.id,
-      role: body.role || 'Staff',
-    });
+  // Insert user role
+  await db.insert(schema.userRoles).values({
+    userId: newUser.id,
+    role: body.role || 'Staff',
+  });
 
-    // Insert station assignments
-    if (body.stationIds && Array.isArray(body.stationIds)) {
-      for (const sid of body.stationIds) {
-        await db.insert(schema.userStationAssignments).values({
-          userId: newUser.id,
-          stationId: sid,
-        });
-      }
+  // Insert station assignments
+  if (body.stationIds && Array.isArray(body.stationIds)) {
+    for (const sid of body.stationIds) {
+      await db.insert(schema.userStationAssignments).values({
+        userId: newUser.id,
+        stationId: sid,
+      });
     }
-
-    return c.json({ success: true, data: newUser });
-  } catch (err: any) {
-    return c.json({ success: false, error: { code: 'BAD_REQUEST', message: err.message } }, 400);
   }
+
+  return c.json({ success: true, data: newUser });
 });
 
 // ----------------------------------------------------

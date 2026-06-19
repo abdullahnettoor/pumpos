@@ -9,6 +9,7 @@
     "build": "tsc -b"
   },
   "dependencies": {
+    "@hono/zod-validator": "^0.8.0",
     "@pump/db": "*",
     "@pump/shared": "*",
     "hono": "^4.4.2"

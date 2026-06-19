@@ -10,6 +10,8 @@ import {
   Role,
 } from '@pump/shared';
 import { compileDssrSnapshot } from './transactions.js';
+import { z } from 'zod';
+import { validateJson } from '../utils/validator.js';
 
 type Variables = {
   db: DbClient;
@@ -304,7 +306,7 @@ shiftsRouter.get('/status', async (c) => {
 });
 
 // POST /api/shifts/open
-shiftsRouter.post('/open', async (c) => {
+shiftsRouter.post('/open', validateJson(shiftOpenSchema), async (c) => {
   const db = c.var.db;
   const user = c.var.user;
 
@@ -312,10 +314,9 @@ shiftsRouter.post('/open', async (c) => {
     return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient role permissions to open shift' } }, 403);
   }
 
-  try {
-    const body = await c.req.json();
-    const parsed = shiftOpenSchema.parse(body);
+  const parsed = c.req.valid('json');
 
+  try {
     if (!hasStationAccess(user, parsed.stationId)) {
       return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
     }
@@ -380,7 +381,7 @@ shiftsRouter.post('/open', async (c) => {
         openingVal = Number(lastReading.closingReading);
       } else {
         // Fall back to initialReadings from body
-        const initial = parsed.initialReadings?.find((ir) => ir.nozzleId === nozzle.id);
+        const initial = parsed.initialReadings?.find((ir: any) => ir.nozzleId === nozzle.id);
         if (initial) {
           openingVal = initial.openingReading;
         } else {
@@ -477,8 +478,13 @@ shiftsRouter.put('/readings', async (c) => {
   }
 });
 
+const shiftCloseRequestSchema = z.object({
+  shiftId: z.string().uuid('Invalid shift ID'),
+  payload: shiftCloseSchema,
+});
+
 // POST /api/shifts/close
-shiftsRouter.post('/close', async (c) => {
+shiftsRouter.post('/close', validateJson(shiftCloseRequestSchema), async (c) => {
   const db = c.var.db;
   const user = c.var.user;
 
@@ -486,16 +492,9 @@ shiftsRouter.post('/close', async (c) => {
     return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient role permissions to close shift' } }, 403);
   }
 
+  const { shiftId, payload: parsed } = c.req.valid('json');
+
   try {
-    const body = await c.req.json();
-    const { shiftId, payload } = body;
-
-    if (!shiftId || !payload) {
-      return c.json({ success: false, error: { code: 'BAD_REQUEST', message: 'Missing shiftId or payload' } }, 400);
-    }
-
-    const parsed = shiftCloseSchema.parse(payload);
-
     const [activeShift] = await db
       .select()
       .from(schema.shifts)
@@ -523,7 +522,7 @@ shiftsRouter.post('/close', async (c) => {
       .where(eq(schema.nozzles.stationId, activeShift.stationId));
 
     for (const nozzle of activeNozzles) {
-      const match = parsed.nozzleReadings.find((r) => r.nozzleId === nozzle.id);
+      const match = parsed.nozzleReadings.find((r: any) => r.nozzleId === nozzle.id);
       if (!match) {
         return c.json({
           success: false,

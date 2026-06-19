@@ -3,6 +3,9 @@ import { CloudTransactionService, CloudShiftService } from '../services/cloud.js
 import { User, ShieldAlert, CreditCard, DollarSign, Plus, Info, Edit, Check, Settings, Scale } from 'lucide-react';
 import { LoadingSpinner } from './LoadingSpinner.js';
 import { Drawer } from './Drawer.js';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { customerCreateSchema, shiftCollectionSchema } from '@pump/shared';
 
 const transactionService = new CloudTransactionService();
 const shiftService = new CloudShiftService();
@@ -23,37 +26,74 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation })
   const [allCustomers, setAllCustomers] = useState<any[]>([]); // All customers for management
   const [activeShift, setActiveShift] = useState<any | null>(null);
 
-  // Transaction Form States
-  const [customerId, setCustomerId] = useState('');
-  const [amount, setAmount] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'Card' | 'UPI' | 'Credit'>('Cash');
-  const [notes, setNotes] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
-
   // CRUD Drawer States
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<any | null>(null); // null = Creating, object = Editing
   
-  // Drawer Form Fields
-  const [custName, setCustName] = useState('');
-  const [custPhone, setCustPhone] = useState('');
-  const [custType, setCustType] = useState<'Regular' | 'Credit' | 'Fleet'>('Regular');
-  const [custCreditLimit, setCustCreditLimit] = useState('');
-  const [custFleetCode, setCustFleetCode] = useState('');
-  const [custIsActive, setCustIsActive] = useState(true);
-  const [custGstin, setCustGstin] = useState('');
-  const [custPan, setCustPan] = useState('');
-  const [custTradeName, setCustTradeName] = useState('');
-  const [custBillingAddress, setCustBillingAddress] = useState('');
-  const [drawerSubmitting, setDrawerSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
   const [drawerError, setDrawerError] = useState<string | null>(null);
+
+  // 1. Log Credit Transaction / Collection Form
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    watch,
+    reset,
+    formState: { errors: formErrors, isSubmitting: submitting }
+  } = useForm({
+    resolver: zodResolver(shiftCollectionSchema),
+    defaultValues: {
+      shiftId: '',
+      customerId: '',
+      amount: '' as any,
+      paymentMethod: 'Cash' as const,
+      notes: '',
+    }
+  });
+
+  const paymentMethod = watch('paymentMethod');
+  const customerId = watch('customerId');
+
+  // 2. Customer Drawer Form (Create/Edit)
+  const {
+    register: registerCust,
+    handleSubmit: handleSubmitCust,
+    setValue: setValueCust,
+    watch: watchCust,
+    reset: resetCust,
+    formState: { errors: custErrors, isSubmitting: drawerSubmitting }
+  } = useForm({
+    resolver: zodResolver(customerCreateSchema),
+    defaultValues: {
+      name: '',
+      phone: '',
+      customerType: 'Regular' as const,
+      creditLimit: 50000 as any,
+      fleetCode: '',
+      isActive: true,
+      metadata: {
+        gstin: '',
+        pan: '',
+        tradeName: '',
+        billingAddress: '',
+      }
+    }
+  });
+
+  const custType = watchCust('customerType');
 
   useEffect(() => {
     if (selectedStation) {
       loadData();
     }
   }, [selectedStation]);
+
+  useEffect(() => {
+    if (activeShift) {
+      setValue('shiftId', activeShift.id);
+    }
+  }, [activeShift, setValue]);
 
   const loadData = async () => {
     try {
@@ -71,9 +111,9 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation })
       setActiveShift(status.activeShift || null);
 
       if (activeList && activeList.length > 0) {
-        setCustomerId(activeList[0].id);
+        setValue('customerId', activeList[0].id);
       } else {
-        setCustomerId('');
+        setValue('customerId', '');
       }
     } catch (err: any) {
       setError(err.message || 'Failed to load customers data');
@@ -82,92 +122,91 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation })
     }
   };
 
-  const handleAddCollection = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const onAddCollection = async (data: any) => {
     setFormError(null);
-    if (!activeShift || !amount) return;
-
-    if (paymentMethod === 'Credit' && !customerId) {
+    if (data.paymentMethod === 'Credit' && !data.customerId) {
       setFormError('A customer account must be selected for Credit Fleet Sales.');
       return;
     }
 
     try {
-      setSubmitting(true);
       await transactionService.recordCollection({
-        shiftId: activeShift.id,
-        customerId: customerId || undefined,
-        amount: Number(amount),
-        paymentMethod,
-        notes: notes || undefined,
+        shiftId: data.shiftId,
+        customerId: data.customerId || undefined,
+        amount: Number(data.amount),
+        paymentMethod: data.paymentMethod,
+        notes: data.notes || undefined,
       });
 
-      // Clear Form & Reload
-      setAmount('');
-      setNotes('');
+      reset({
+        shiftId: activeShift?.id || '',
+        customerId: customers[0]?.id || '',
+        amount: '' as any,
+        paymentMethod: 'Cash' as const,
+        notes: '',
+      });
       await loadData();
     } catch (err: any) {
       setFormError(err.message || 'Failed to record entry');
-    } finally {
-      setSubmitting(false);
     }
   };
 
   const openCreateDrawer = () => {
     setEditingCustomer(null);
-    setCustName('');
-    setCustPhone('');
-    setCustType('Regular');
-    setCustCreditLimit('50000');
-    setCustFleetCode('');
-    setCustIsActive(true);
-    setCustGstin('');
-    setCustPan('');
-    setCustTradeName('');
-    setCustBillingAddress('');
+    resetCust({
+      name: '',
+      phone: '',
+      customerType: 'Regular',
+      creditLimit: 50000 as any,
+      fleetCode: '',
+      isActive: true,
+      metadata: {
+        gstin: '',
+        pan: '',
+        tradeName: '',
+        billingAddress: '',
+      }
+    });
     setDrawerError(null);
     setIsDrawerOpen(true);
   };
 
   const openEditDrawer = (cust: any) => {
     setEditingCustomer(cust);
-    setCustName(cust.name);
-    setCustPhone(cust.phone || '');
-    setCustType(cust.customerType);
-    setCustCreditLimit(cust.creditLimit ? String(cust.creditLimit) : '');
-    setCustFleetCode(cust.fleetCode || '');
-    setCustIsActive(cust.isActive);
     const meta = cust.metadata || {};
-    setCustGstin(meta.gstin || '');
-    setCustPan(meta.pan || '');
-    setCustTradeName(meta.tradeName || '');
-    setCustBillingAddress(meta.billingAddress || '');
+    resetCust({
+      name: cust.name,
+      phone: cust.phone || '',
+      customerType: cust.customerType,
+      creditLimit: cust.creditLimit ? Number(cust.creditLimit) : (cust.customerType === 'Regular' ? null : 50000) as any,
+      fleetCode: cust.fleetCode || '',
+      isActive: cust.isActive,
+      metadata: {
+        gstin: meta.gstin || '',
+        pan: meta.pan || '',
+        tradeName: meta.tradeName || '',
+        billingAddress: meta.billingAddress || '',
+      }
+    });
     setDrawerError(null);
     setIsDrawerOpen(true);
   };
 
-  const handleSaveCustomer = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const onSaveCustomer = async (data: any) => {
     setDrawerError(null);
-    if (!custName) {
-      setDrawerError('Name is required');
-      return;
-    }
-
     try {
-      setDrawerSubmitting(true);
       const payload = {
-        name: custName,
-        phone: custPhone || null,
-        customerType: custType,
-        creditLimit: (custType === 'Credit' || custType === 'Fleet') && custCreditLimit ? Number(custCreditLimit) : null,
-        fleetCode: custType === 'Fleet' ? custFleetCode : null,
-        isActive: custIsActive,
+        name: data.name,
+        phone: data.phone || null,
+        customerType: data.customerType,
+        creditLimit: (data.customerType === 'Credit' || data.customerType === 'Fleet') && data.creditLimit ? Number(data.creditLimit) : null,
+        fleetCode: data.customerType === 'Fleet' ? data.fleetCode : null,
+        isActive: data.isActive,
         metadata: {
-          gstin: custGstin || null,
-          pan: custPan || null,
-          tradeName: custTradeName || null,
-          billingAddress: custBillingAddress || null,
+          gstin: data.metadata?.gstin || null,
+          pan: data.metadata?.pan || null,
+          tradeName: data.metadata?.tradeName || null,
+          billingAddress: data.metadata?.billingAddress || null,
         },
       };
 
@@ -181,8 +220,6 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation })
       await loadData();
     } catch (err: any) {
       setDrawerError(err.message || 'Failed to save customer');
-    } finally {
-      setDrawerSubmitting(false);
     }
   };
 
@@ -325,7 +362,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation })
               )}
 
               {activeShift ? (
-                <form onSubmit={handleAddCollection} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <form onSubmit={handleSubmit(onAddCollection)} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                   <div style={{
                     backgroundColor: 'var(--state-info-bg)',
                     color: 'var(--state-info-fg)',
@@ -347,7 +384,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation })
                         <button
                           key={method}
                           type="button"
-                          onClick={() => setPaymentMethod(method)}
+                          onClick={() => setValue('paymentMethod', method)}
                           disabled={submitting}
                           style={{
                             height: '32px',
@@ -371,8 +408,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation })
                       Customer Account {paymentMethod === 'Credit' ? '(Required)' : '(Optional for Walk-in)'}
                     </label>
                     <select
-                      value={customerId}
-                      onChange={(e) => setCustomerId(e.target.value)}
+                      {...register('customerId')}
                       disabled={submitting}
                       style={{
                         height: '32px',
@@ -387,6 +423,11 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation })
                         <option key={cust.id} value={cust.id}>{cust.name} ({cust.customerType})</option>
                       ))}
                     </select>
+                    {formErrors.customerId && (
+                      <span style={{ color: 'var(--state-danger-fg)', fontSize: '11px' }}>
+                        {formErrors.customerId.message}
+                      </span>
+                    )}
                   </div>
 
                   <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -394,8 +435,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation })
                     <input
                       type="number"
                       placeholder="0.00"
-                      value={amount}
-                      onChange={(e) => setAmount(e.target.value)}
+                      {...register('amount', { valueAsNumber: true })}
                       disabled={submitting}
                       required
                       style={{
@@ -406,6 +446,11 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation })
                         fontSize: '13px',
                       }}
                     />
+                    {formErrors.amount && (
+                      <span style={{ color: 'var(--state-danger-fg)', fontSize: '11px' }}>
+                        {formErrors.amount.message}
+                      </span>
+                    )}
                   </div>
 
                   <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -413,8 +458,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation })
                     <input
                       type="text"
                       placeholder="Slip code, transaction ref..."
-                      value={notes}
-                      onChange={(e) => setNotes(e.target.value)}
+                      {...register('notes')}
                       disabled={submitting}
                       style={{
                         height: '32px',
@@ -424,11 +468,16 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation })
                         fontSize: '13px',
                       }}
                     />
+                    {formErrors.notes && (
+                      <span style={{ color: 'var(--state-danger-fg)', fontSize: '11px' }}>
+                        {formErrors.notes.message}
+                      </span>
+                    )}
                   </div>
 
                   <button
                     type="submit"
-                    disabled={submitting || !amount}
+                    disabled={submitting}
                     style={{
                       height: '36px',
                       backgroundColor: 'var(--brand-primary)',
@@ -616,7 +665,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation })
         onClose={() => setIsDrawerOpen(false)}
         title={editingCustomer ? 'Edit Customer Profile' : 'Register New Customer'}
       >
-        <form onSubmit={handleSaveCustomer} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <form onSubmit={handleSubmitCust(onSaveCustomer)} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {drawerError && (
             <div style={{
               backgroundColor: 'var(--state-danger-bg)',
@@ -634,10 +683,8 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation })
             <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Customer Name *</label>
             <input
               type="text"
-              required
               placeholder="e.g. KSRTC Depo, John Doe"
-              value={custName}
-              onChange={(e) => setCustName(e.target.value)}
+              {...registerCust('name')}
               disabled={drawerSubmitting}
               style={{
                 height: '32px',
@@ -647,6 +694,11 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation })
                 fontSize: '13px',
               }}
             />
+            {custErrors.name && (
+              <span style={{ color: 'var(--state-danger-fg)', fontSize: '11px' }}>
+                {custErrors.name.message}
+              </span>
+            )}
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -654,8 +706,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation })
             <input
               type="text"
               placeholder="e.g. +91 9900..."
-              value={custPhone}
-              onChange={(e) => setCustPhone(e.target.value)}
+              {...registerCust('phone')}
               disabled={drawerSubmitting}
               style={{
                 height: '32px',
@@ -665,13 +716,17 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation })
                 fontSize: '13px',
               }}
             />
+            {custErrors.phone && (
+              <span style={{ color: 'var(--state-danger-fg)', fontSize: '11px' }}>
+                {custErrors.phone.message}
+              </span>
+            )}
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Account Type *</label>
             <select
-              value={custType}
-              onChange={(e) => setCustType(e.target.value as any)}
+              {...registerCust('customerType')}
               disabled={drawerSubmitting}
               style={{
                 height: '32px',
@@ -685,6 +740,11 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation })
               <option value="Credit">Credit (Standard outstanding account)</option>
               <option value="Fleet">Fleet (Requires fleet code authorization)</option>
             </select>
+            {custErrors.customerType && (
+              <span style={{ color: 'var(--state-danger-fg)', fontSize: '11px' }}>
+                {custErrors.customerType.message}
+              </span>
+            )}
           </div>
 
           {(custType === 'Credit' || custType === 'Fleet') && (
@@ -693,8 +753,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation })
               <input
                 type="number"
                 placeholder="e.g. 50000"
-                value={custCreditLimit}
-                onChange={(e) => setCustCreditLimit(e.target.value)}
+                {...registerCust('creditLimit', { valueAsNumber: true })}
                 disabled={drawerSubmitting}
                 style={{
                   height: '32px',
@@ -704,6 +763,11 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation })
                   fontSize: '13px',
                 }}
               />
+              {custErrors.creditLimit && (
+                <span style={{ color: 'var(--state-danger-fg)', fontSize: '11px' }}>
+                  {custErrors.creditLimit.message}
+                </span>
+              )}
             </div>
           )}
 
@@ -713,8 +777,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation })
               <input
                 type="text"
                 placeholder="e.g. FL-9923"
-                value={custFleetCode}
-                onChange={(e) => setCustFleetCode(e.target.value)}
+                {...registerCust('fleetCode')}
                 disabled={drawerSubmitting}
                 style={{
                   height: '32px',
@@ -724,6 +787,11 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation })
                   fontSize: '13px',
                 }}
               />
+              {custErrors.fleetCode && (
+                <span style={{ color: 'var(--state-danger-fg)', fontSize: '11px' }}>
+                  {custErrors.fleetCode.message}
+                </span>
+              )}
             </div>
           )}
 
@@ -745,8 +813,9 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation })
                 <input
                   type="text"
                   placeholder="15-digit GSTIN"
-                  value={custGstin}
-                  onChange={(e) => setCustGstin(e.target.value.toUpperCase())}
+                  {...registerCust('metadata.gstin', {
+                    onChange: (e) => setValueCust('metadata.gstin', e.target.value.toUpperCase())
+                  })}
                   disabled={drawerSubmitting}
                   style={{
                     height: '32px',
@@ -756,6 +825,11 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation })
                     fontSize: '13px',
                   }}
                 />
+                {custErrors.metadata?.gstin && (
+                  <span style={{ color: 'var(--state-danger-fg)', fontSize: '11px' }}>
+                    {custErrors.metadata.gstin.message}
+                  </span>
+                )}
               </div>
               
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -763,8 +837,9 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation })
                 <input
                   type="text"
                   placeholder="10-digit PAN"
-                  value={custPan}
-                  onChange={(e) => setCustPan(e.target.value.toUpperCase())}
+                  {...registerCust('metadata.pan', {
+                    onChange: (e) => setValueCust('metadata.pan', e.target.value.toUpperCase())
+                  })}
                   disabled={drawerSubmitting}
                   style={{
                     height: '32px',
@@ -774,6 +849,11 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation })
                     fontSize: '13px',
                   }}
                 />
+                {custErrors.metadata?.pan && (
+                  <span style={{ color: 'var(--state-danger-fg)', fontSize: '11px' }}>
+                    {custErrors.metadata.pan.message}
+                  </span>
+                )}
               </div>
             </div>
 
@@ -782,8 +862,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation })
               <input
                 type="text"
                 placeholder="Business Trade Name"
-                value={custTradeName}
-                onChange={(e) => setCustTradeName(e.target.value)}
+                {...registerCust('metadata.tradeName')}
                 disabled={drawerSubmitting}
                 style={{
                   height: '32px',
@@ -793,14 +872,18 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation })
                   fontSize: '13px',
                 }}
               />
+              {custErrors.metadata?.tradeName && (
+                <span style={{ color: 'var(--state-danger-fg)', fontSize: '11px' }}>
+                  {custErrors.metadata.tradeName.message}
+                </span>
+              )}
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
               <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)' }}>Billing Address</label>
               <textarea
                 placeholder="Full Billing Address"
-                value={custBillingAddress}
-                onChange={(e) => setCustBillingAddress(e.target.value)}
+                {...registerCust('metadata.billingAddress')}
                 disabled={drawerSubmitting}
                 rows={2}
                 style={{
@@ -812,6 +895,11 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation })
                   fontFamily: 'inherit'
                 }}
               />
+              {custErrors.metadata?.billingAddress && (
+                <span style={{ color: 'var(--state-danger-fg)', fontSize: '11px' }}>
+                  {custErrors.metadata.billingAddress.message}
+                </span>
+              )}
             </div>
           </div>
 
@@ -819,8 +907,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation })
             <input
               type="checkbox"
               id="custIsActive"
-              checked={custIsActive}
-              onChange={(e) => setCustIsActive(e.target.checked)}
+              {...registerCust('isActive')}
               disabled={drawerSubmitting}
               style={{ cursor: 'pointer' }}
             />
