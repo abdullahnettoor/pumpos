@@ -48,22 +48,22 @@ export const Login: React.FC = () => {
         gap: '20px',
         boxShadow: 'var(--shadow-1)'
       }} className="animate-fade-in">
-        
+
         {/* Brand header */}
         <div style={{ textAlign: 'center' }}>
-          <span style={{ 
-            fontSize: '18px', 
-            fontWeight: 700, 
-            color: 'var(--brand-primary)', 
-            letterSpacing: '-0.01em' 
+          <span style={{
+            fontSize: '18px',
+            fontWeight: 700,
+            color: 'var(--brand-primary)',
+            letterSpacing: '-0.01em'
           }}>
             PumpERP
           </span>
-          <h1 style={{ 
-            fontSize: '14px', 
-            fontWeight: 600, 
-            color: 'var(--text-strong)', 
-            marginTop: '8px' 
+          <h1 style={{
+            fontSize: '14px',
+            fontWeight: 600,
+            color: 'var(--text-strong)',
+            marginTop: '8px'
           }}>
             Sign in to operational console
           </h1>
@@ -161,14 +161,14 @@ export const Login: React.FC = () => {
           </button>
         </form>
 
-        <div style={{ 
-          borderTop: '1px solid var(--border-soft)', 
-          paddingTop: '12px', 
-          textAlign: 'center', 
-          fontSize: '11px', 
-          color: 'var(--text-muted)' 
+        <div style={{
+          borderTop: '1px solid var(--border-soft)',
+          paddingTop: '12px',
+          textAlign: 'center',
+          fontSize: '11px',
+          color: 'var(--text-muted)'
         }}>
-          Offline-first station management. Contact system administrator for credential changes.
+          Contact system administrator for credential changes.
         </div>
       </div>
     </div>

@@ -1,5 +1,5 @@
 {
-  "id": "7085d881-0f93-4834-94fe-229f9f43c132",
+  "id": "1452b2b2-dce3-40db-a7ed-21d3920b15bf",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -1912,7 +1912,14 @@
           "type": "jsonb",
           "primaryKey": false,
           "notNull": true,
-          "default": "'{\"shift_grace_minutes\":15,\"offline_warning_days\":3,\"offline_critical_days\":7}'::jsonb"
+          "default": "'{\"shift_grace_minutes\":15,\"shift_lock_grace_days\":3,\"offline_warning_days\":3,\"offline_critical_days\":7}'::jsonb"
+        },
+        "onboarding_status": {
+          "name": "onboarding_status",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'NOT_STARTED'"
         },
         "is_active": {
           "name": "is_active",
