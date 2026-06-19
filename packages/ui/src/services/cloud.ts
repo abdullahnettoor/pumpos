@@ -22,7 +22,7 @@ const API_BASE = 'http://localhost:8787/api';
 
 // For local testing, we attach a mock token.
 // The app can set this dynamically upon user selection.
-let activeToken = 'mock-Owner';
+let activeToken = '';
 
 export function setAuthToken(token: string) {
   activeToken = token;
