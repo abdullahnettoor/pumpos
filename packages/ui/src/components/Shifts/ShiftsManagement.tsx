@@ -42,7 +42,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   const [confirmWarningsChecked, setConfirmWarningsChecked] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
   const [stationTanks, setStationTanks] = useState<any[]>([]);
-  const [dipReadings, setDipReadings] = useState<Record<string, number>>({});
+  const [dipReadings, setDipReadings] = useState<Record<string, number | string>>({});
 
   const [shiftTotals, setShiftTotals] = useState({
     cashCollections: 0,
@@ -184,11 +184,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
             const txService = new CloudTransactionService();
             const tanksData = await txService.getInventoryStatus(selectedStation.id);
             setStationTanks(tanksData || []);
-            const initialDips: Record<string, number> = {};
-            tanksData.forEach((t: any) => {
-              initialDips[t.id] = t.currentVolume;
-            });
-            setDipReadings(initialDips);
+            setDipReadings({});
           } catch (tankErr) {
             console.error('Failed to load tanks for physical dip entry:', tankErr);
           }
@@ -291,10 +287,12 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         closingReading,
       }));
 
-      const dipReadingsArray = Object.entries(dipReadings).map(([tankId, actualQuantity]) => ({
-        tankId,
-        actualQuantity,
-      }));
+      const dipReadingsArray = Object.entries(dipReadings)
+        .filter(([_, actualQuantity]) => actualQuantity !== undefined && actualQuantity !== null && actualQuantity !== '')
+        .map(([tankId, actualQuantity]) => ({
+          tankId,
+          actualQuantity: Number(actualQuantity),
+        }));
 
       await shiftService.closeShift(data.activeShift.id, {
         closingCash,
@@ -678,9 +676,15 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
                         <input
                           type="number"
                           step="0.1"
-                          placeholder="0.0"
+                          placeholder="Optional (L)"
                           value={dipReadings[tank.id] ?? ''}
-                          onChange={(e) => setDipReadings({ ...dipReadings, [tank.id]: Number(e.target.value) })}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setDipReadings({
+                              ...dipReadings,
+                              [tank.id]: val === '' ? '' : Number(val)
+                            });
+                          }}
                           style={{
                             width: '120px',
                             height: '32px',
