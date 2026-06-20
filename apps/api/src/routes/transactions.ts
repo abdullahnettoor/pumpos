@@ -67,6 +67,7 @@ export async function compileDssrSnapshot(
         openingReading: Number(nr.openingReading),
         closingReading: Number(nr.closingReading),
         volumeSold: Number(nr.volumeSold),
+        unitPrice: nr.unitPrice ? Number(nr.unitPrice) : 0,
       };
     })
   );
@@ -89,26 +90,62 @@ export async function compileDssrSnapshot(
     .from(schema.collections)
     .where(eq(schema.collections.shiftId, shiftId));
 
+  // Retrieve attendant handovers recorded for the shift
+  const handovers = await db
+    .select()
+    .from(schema.attendantHandovers)
+    .where(eq(schema.attendantHandovers.shiftId, shiftId));
+
+  const handoversList = await Promise.all(
+    handovers.map(async (h) => {
+      const [u] = await db.select().from(schema.users).where(eq(schema.users.id, h.userId)).limit(1);
+      const [du] = await db.select().from(schema.dispenserUnits).where(eq(schema.dispenserUnits.id, h.duId)).limit(1);
+      return {
+        ...h,
+        attendantName: u?.fullName ?? 'Unknown Attendant',
+        duCode: du?.code ?? 'Unknown DU',
+        cashHandedOver: Number(h.cashHandedOver),
+        cardHandedOver: Number(h.cardHandedOver),
+        upiHandedOver: Number(h.upiHandedOver),
+        creditHandedOver: Number(h.creditHandedOver),
+        testingVolume: Number(h.testingVolume),
+        expectedSales: Number(h.expectedSales),
+        varianceAmount: Number(h.varianceAmount),
+      };
+    })
+  );
+
   // Compute cash calculations
   const openingCashNum = Number(shift.openingCash);
   const closingCashNum = Number(shift.closingCash ?? 0);
 
-  // Cash collections = sum of collections with paymentMethod = 'Cash'
-  const cashCollectionsSum = collections
-    .filter((c) => c.paymentMethod === 'Cash')
-    .reduce((sum, c) => sum + Number(c.amount), 0);
+  let cashCollectionsSum = 0;
+  let cardCollectionsSum = 0;
+  let upiCollectionsSum = 0;
+  let creditSalesSum = 0;
 
-  const cardCollectionsSum = collections
-    .filter((c) => c.paymentMethod === 'Card')
-    .reduce((sum, c) => sum + Number(c.amount), 0);
+  if (handovers.length > 0) {
+    cashCollectionsSum = handoversList.reduce((sum, h) => sum + h.cashHandedOver, 0);
+    cardCollectionsSum = handoversList.reduce((sum, h) => sum + h.cardHandedOver, 0);
+    upiCollectionsSum = handoversList.reduce((sum, h) => sum + h.upiHandedOver, 0);
+    creditSalesSum = handoversList.reduce((sum, h) => sum + h.creditHandedOver, 0);
+  } else {
+    cashCollectionsSum = collections
+      .filter((c) => c.paymentMethod === 'Cash')
+      .reduce((sum, c) => sum + Number(c.amount), 0);
 
-  const upiCollectionsSum = collections
-    .filter((c) => c.paymentMethod === 'UPI')
-    .reduce((sum, c) => sum + Number(c.amount), 0);
+    cardCollectionsSum = collections
+      .filter((c) => c.paymentMethod === 'Card')
+      .reduce((sum, c) => sum + Number(c.amount), 0);
 
-  const creditSalesSum = collections
-    .filter((c) => c.paymentMethod === 'Credit')
-    .reduce((sum, c) => sum + Number(c.amount), 0);
+    upiCollectionsSum = collections
+      .filter((c) => c.paymentMethod === 'UPI')
+      .reduce((sum, c) => sum + Number(c.amount), 0);
+
+    creditSalesSum = collections
+      .filter((c) => c.paymentMethod === 'Credit')
+      .reduce((sum, c) => sum + Number(c.amount), 0);
+  }
 
   const cashExpensesSum = expenses.reduce((sum, e) => sum + Number(e.amount), 0);
 
@@ -125,6 +162,17 @@ export async function compileDssrSnapshot(
   }
   if (Math.abs(cashVariance) > 100) {
     warnings.push(`Cash discrepancy detected! Variance is ₹${cashVariance.toLocaleString('en-IN')}`);
+  }
+
+  // Credit sales mismatch check
+  if (handovers.length > 0) {
+    const detailedCreditSum = collections
+      .filter((c) => c.paymentMethod === 'Credit')
+      .reduce((sum, c) => sum + Number(c.amount), 0);
+    
+    if (Math.abs(detailedCreditSum - creditSalesSum) > 1.00) {
+      warnings.push(`Credit Sales mismatch: Attendants declared ₹${creditSalesSum.toLocaleString('en-IN')} in chits, but only ₹${detailedCreditSum.toLocaleString('en-IN')} of detailed customer billing has been logged.`);
+    }
   }
 
   // Format list profiles for snapshot summary lists
@@ -265,6 +313,7 @@ export async function compileDssrSnapshot(
     collections: collectionsList,
     stockVariances: stockVariancesList,
     dipReadings: dipReadingsSnapshot,
+    handovers: handoversList,
     warnings,
   };
 

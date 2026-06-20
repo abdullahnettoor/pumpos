@@ -4,6 +4,7 @@ import { schema, DbClient } from '@pump/db';
 import {
   shiftOpenSchema,
   shiftCloseSchema,
+  attendantHandoverSchema,
   canOpenShift,
   canCloseShift,
   canReopenShift,
@@ -140,9 +141,16 @@ shiftsRouter.get('/status', async (c) => {
             ...sa,
             userName: staffUser?.fullName ?? 'Unknown',
             duName: du?.name ?? 'Unknown',
+            duCode: du?.code ?? 'Unknown',
           };
         })
       );
+
+      // Get recorded handovers for the active shift
+      const rawHandovers = await db
+        .select()
+        .from(schema.attendantHandovers)
+        .where(eq(schema.attendantHandovers.shiftId, dbActiveShift.id));
 
       activeShift = {
         ...dbActiveShift,
@@ -150,6 +158,7 @@ shiftsRouter.get('/status', async (c) => {
         openedByName: openedByUser?.fullName ?? 'System',
         nozzleReadings: enrichedReadings,
         staffAssignments: enrichedAssignments,
+        handovers: rawHandovers,
       };
     }
 
@@ -390,12 +399,28 @@ shiftsRouter.post('/open', validateJson(shiftOpenSchema), async (c) => {
         }
       }
 
+      // Fetch the latest configured price for this product at this station
+      const [priceRec] = await db
+        .select()
+        .from(schema.fuelPrices)
+        .where(
+          and(
+            eq(schema.fuelPrices.stationId, parsed.stationId),
+            eq(schema.fuelPrices.productId, nozzle.productId)
+          )
+        )
+        .orderBy(desc(schema.fuelPrices.effectiveFrom))
+        .limit(1);
+
+      const unitPriceVal = priceRec ? priceRec.price : '0';
+
       await db.insert(schema.nozzleReadings).values({
         shiftId: newShift.id,
         nozzleId: nozzle.id,
         openingReading: String(openingVal),
         closingReading: String(openingVal), // Initially same as opening
         volumeSold: '0',
+        unitPrice: String(unitPriceVal),
         createdAt: new Date(),
       });
     }
@@ -808,6 +833,134 @@ shiftsRouter.post('/reopen', async (c) => {
     });
 
     return c.json({ success: true, data: reopenedShift });
+  } catch (err: any) {
+    return c.json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }, 500);
+  }
+});
+
+// GET /api/shifts/handovers
+shiftsRouter.get('/handovers', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  const shiftId = c.req.query('shiftId');
+
+  if (!shiftId) {
+    return c.json({ success: false, error: { code: 'BAD_REQUEST', message: 'Missing shiftId' } }, 400);
+  }
+
+  try {
+    const records = await db
+      .select()
+      .from(schema.attendantHandovers)
+      .where(
+        and(
+          eq(schema.attendantHandovers.shiftId, shiftId),
+          eq(schema.attendantHandovers.organizationId, user.organizationId)
+        )
+      );
+
+    return c.json({ success: true, data: records });
+  } catch (err: any) {
+    return c.json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }, 500);
+  }
+});
+
+// POST /api/shifts/handovers
+shiftsRouter.post('/handovers', validateJson(attendantHandoverSchema), async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  const parsed = c.req.valid('json');
+
+  try {
+    const [activeShift] = await db
+      .select()
+      .from(schema.shifts)
+      .where(
+        and(
+          eq(schema.shifts.organizationId, user.organizationId),
+          eq(schema.shifts.status, 'OPEN')
+        )
+      )
+      .limit(1);
+
+    if (!activeShift) {
+      return c.json({ success: false, error: { code: 'BAD_REQUEST', message: 'No active shift found to record handover.' } }, 400);
+    }
+
+    // Update nozzle readings
+    for (const nr of parsed.nozzleReadings) {
+      const [dbNr] = await db
+        .select()
+        .from(schema.nozzleReadings)
+        .where(
+          and(
+            eq(schema.nozzleReadings.shiftId, activeShift.id),
+            eq(schema.nozzleReadings.nozzleId, nr.nozzleId)
+          )
+        )
+        .limit(1);
+
+      if (dbNr) {
+        const opening = Number(dbNr.openingReading);
+        const closing = nr.closingReading;
+        const volume = Math.max(0, closing - opening);
+
+        await db
+          .update(schema.nozzleReadings)
+          .set({
+            closingReading: String(closing),
+            volumeSold: String(volume),
+          })
+          .where(eq(schema.nozzleReadings.id, dbNr.id));
+      }
+    }
+
+    // Check if handover record already exists
+    const [existing] = await db
+      .select()
+      .from(schema.attendantHandovers)
+      .where(
+        and(
+          eq(schema.attendantHandovers.shiftId, activeShift.id),
+          eq(schema.attendantHandovers.userId, parsed.userId),
+          eq(schema.attendantHandovers.duId, parsed.duId)
+        )
+      )
+      .limit(1);
+
+    let record;
+    const values = {
+      organizationId: user.organizationId,
+      stationId: activeShift.stationId,
+      shiftId: activeShift.id,
+      userId: parsed.userId,
+      duId: parsed.duId,
+      cashHandedOver: String(parsed.cashHandedOver),
+      cardHandedOver: String(parsed.cardHandedOver),
+      upiHandedOver: String(parsed.upiHandedOver),
+      creditHandedOver: String(parsed.creditHandedOver),
+      testingVolume: String(parsed.testingVolume),
+      expectedSales: String(parsed.expectedSales),
+      varianceAmount: String(parsed.varianceAmount),
+    };
+
+    if (existing) {
+      [record] = await db
+        .update(schema.attendantHandovers)
+        .set({
+          ...values,
+          createdAt: existing.createdAt
+        })
+        .where(eq(schema.attendantHandovers.id, existing.id))
+        .returning();
+    } else {
+      [record] = await db
+        .insert(schema.attendantHandovers)
+        .values(values)
+        .returning();
+    }
+
+    return c.json({ success: true, data: record });
   } catch (err: any) {
     return c.json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }, 500);
   }

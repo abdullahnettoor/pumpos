@@ -153,3 +153,26 @@ export const supplierCreateSchema = z.object({
   }).optional().nullable(),
 });
 
+export const fuelPriceSchema = z.object({
+  stationId: z.string().uuid('Invalid station ID'),
+  productId: z.string().uuid('Invalid product ID'),
+  price: z.number().positive('Price must be positive'),
+  effectiveFrom: z.string().datetime().optional().nullable(),
+});
+
+export const attendantHandoverSchema = z.object({
+  userId: z.string().uuid('Invalid user ID'),
+  duId: z.string().uuid('Invalid DU ID'),
+  cashHandedOver: z.number().nonnegative('Cash must be non-negative'),
+  cardHandedOver: z.number().nonnegative('Card payments must be non-negative'),
+  upiHandedOver: z.number().nonnegative('UPI payments must be non-negative'),
+  creditHandedOver: z.number().nonnegative('Credit sales must be non-negative'),
+  testingVolume: z.number().nonnegative('Testing volume must be non-negative'),
+  expectedSales: z.number().nonnegative('Expected sales must be non-negative'),
+  varianceAmount: z.number(),
+  nozzleReadings: z.array(z.object({
+    nozzleId: z.string().uuid('Invalid nozzle ID'),
+    closingReading: z.number().nonnegative('Reading must be non-negative'),
+  })),
+});
+

@@ -8,6 +8,13 @@
       "when": 1781884159549,
       "tag": "0000_bored_zarda",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1781965120068,
+      "tag": "0001_gorgeous_rafael_vega",
+      "breakpoints": true
     }
   ]
 }

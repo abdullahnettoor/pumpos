@@ -283,6 +283,17 @@ export class CloudShiftService {
       body: JSON.stringify({ shiftId }),
     });
   }
+
+  async recordHandover(payload: any): Promise<any> {
+    return request<any>('/shifts/handovers', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async getHandovers(shiftId: string): Promise<any[]> {
+    return request<any[]>(`/shifts/handovers?shiftId=${shiftId}`);
+  }
 }
 
 export class CloudTransactionService {
@@ -385,6 +396,19 @@ export class CloudTransactionService {
 
   async getInventoryVariances(stationId: string): Promise<any[]> {
     return request<any[]>(`/transactions/inventory/variances?stationId=${stationId}`);
+  }
+}
+
+export class CloudPricingService {
+  async getPricing(stationId: string): Promise<any[]> {
+    return request<any[]>(`/setup/pricing?stationId=${stationId}`);
+  }
+
+  async recordPricing(payload: { stationId: string; productId: string; price: number; effectiveFrom?: string | null }): Promise<any> {
+    return request<any>('/setup/pricing', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
   }
 }
 

@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, desc } from 'drizzle-orm';
 import { schema, DbClient } from '@pump/db';
 import {
   canManageProduct,
@@ -8,6 +8,7 @@ import {
   isAuthorizedForStation,
   stationSchema,
   userSchema,
+  fuelPriceSchema,
   Role,
 } from '@pump/shared';
 import { validateJson } from '../utils/validator.js';
@@ -950,5 +951,93 @@ stationSetupRouter.post('/onboarding/complete', async (c) => {
     return c.json({ success: true, data: updated });
   } catch (err: any) {
     return c.json({ success: false, error: { code: 'BAD_REQUEST', message: err.message } }, 400);
+  }
+});
+
+// ----------------------------------------------------
+// Fuel Pricing Logs
+// ----------------------------------------------------
+
+// GET /api/setup/pricing
+stationSetupRouter.get('/pricing', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  const stationId = c.req.query('stationId');
+
+  if (!stationId) {
+    return c.json({ success: false, error: { code: 'BAD_REQUEST', message: 'Missing stationId' } }, 400);
+  }
+
+  if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId })) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+  }
+
+  try {
+    const fuels = await db
+      .select()
+      .from(schema.products)
+      .where(
+        and(
+          eq(schema.products.organizationId, user.organizationId),
+          eq(schema.products.productType, 'FUEL'),
+          eq(schema.products.isActive, true)
+        )
+      );
+
+    const prices = await Promise.all(
+      fuels.map(async (f) => {
+        const [latestPrice] = await db
+          .select()
+          .from(schema.fuelPrices)
+          .where(
+            and(
+              eq(schema.fuelPrices.stationId, stationId),
+              eq(schema.fuelPrices.productId, f.id)
+            )
+          )
+          .orderBy(desc(schema.fuelPrices.effectiveFrom))
+          .limit(1);
+
+        return {
+          productId: f.id,
+          productName: f.name,
+          productCode: f.code,
+          price: latestPrice ? Number(latestPrice.price) : 0,
+          effectiveFrom: latestPrice ? latestPrice.effectiveFrom : null,
+        };
+      })
+    );
+
+    return c.json({ success: true, data: prices });
+  } catch (err: any) {
+    return c.json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }, 500);
+  }
+});
+
+// POST /api/setup/pricing
+stationSetupRouter.post('/pricing', validateJson(fuelPriceSchema), async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  const parsed = c.req.valid('json');
+
+  if (!checkWriteAccess(c, parsed.stationId)) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient write permissions for this station' } }, 403);
+  }
+
+  try {
+    const [newPrice] = await db
+      .insert(schema.fuelPrices)
+      .values({
+        organizationId: user.organizationId,
+        stationId: parsed.stationId,
+        productId: parsed.productId,
+        price: String(parsed.price),
+        effectiveFrom: parsed.effectiveFrom ? new Date(parsed.effectiveFrom) : new Date(),
+      })
+      .returning();
+
+    return c.json({ success: true, data: newPrice });
+  } catch (err: any) {
+    return c.json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }, 500);
   }
 });

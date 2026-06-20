@@ -3,6 +3,7 @@ import { CloudShiftService, CloudTransactionService } from '../../services/cloud
 import { StatusBadge } from '../StatusBadge.js';
 import { DssrView } from './DssrView.js';
 import { ShiftTransactionsPanel } from './ShiftTransactionsPanel.js';
+import { HandoverDrawer } from './HandoverDrawer.js';
 import { Station } from '@pump/shared';
 import { FileText, User, Save, Lock, AlertTriangle, Check, Fuel, Info, Play } from 'lucide-react';
 import { LoadingSpinner } from '../LoadingSpinner.js';
@@ -43,6 +44,15 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   const [isClosing, setIsClosing] = useState(false);
   const [stationTanks, setStationTanks] = useState<any[]>([]);
   const [dipReadings, setDipReadings] = useState<Record<string, number | string>>({});
+
+  // Handover Drawer states
+  const [handoverDrawerOpen, setHandoverDrawerOpen] = useState(false);
+  const [selectedHandoverAssignment, setSelectedHandoverAssignment] = useState<any>(null);
+
+  const handleOpenHandoverDrawer = (assignment: any) => {
+    setSelectedHandoverAssignment(assignment);
+    setHandoverDrawerOpen(true);
+  };
 
   const [shiftTotals, setShiftTotals] = useState({
     cashCollections: 0,
@@ -99,11 +109,25 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     }
   };
 
+  const openingCashNum = data?.activeShift ? Number(data.activeShift.openingCash) : 0;
+  const handovers = data?.activeShift?.handovers || [];
+  const hasHandovers = handovers.length > 0;
+
+  const totalCashHandedOver = handovers.reduce((sum: number, h: any) => sum + Number(h.cashHandedOver || 0), 0);
+  const totalCardHandedOver = handovers.reduce((sum: number, h: any) => sum + Number(h.cardHandedOver || 0), 0);
+  const totalUpiHandedOver = handovers.reduce((sum: number, h: any) => sum + Number(h.upiHandedOver || 0), 0);
+  const totalCreditHandedOver = handovers.reduce((sum: number, h: any) => sum + Number(h.creditHandedOver || 0), 0);
+
+  const activeCashCollections = hasHandovers ? totalCashHandedOver : shiftTotals.cashCollections;
+  const activeCardCollections = hasHandovers ? totalCardHandedOver : shiftTotals.cardCollections;
+  const activeUpiCollections = hasHandovers ? totalUpiHandedOver : shiftTotals.upiCollections;
+  const activeCreditSales = hasHandovers ? totalCreditHandedOver : shiftTotals.creditSales;
+
+  const expectedCash = openingCashNum + activeCashCollections - shiftTotals.cashExpenses;
+  const cashVariance = closingCash - expectedCash;
+
   // Reactively compute close warnings when close flow is active
   const warnings: string[] = [];
-  const openingCashNum = data?.activeShift ? Number(data.activeShift.openingCash) : 0;
-  const expectedCash = openingCashNum + shiftTotals.cashCollections - shiftTotals.cashExpenses;
-  const cashVariance = closingCash - expectedCash;
 
   if (data?.activeShift && isPreparingClose) {
     let zeroVolumeCount = 0;
@@ -123,6 +147,22 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     if (zeroVolumeCount === data.activeShift.nozzleReadings.length) {
       warnings.push('Zero fuel volume was sold across all nozzles during this shift.');
     }
+
+    // Check if all assigned attendants have recorded handovers
+    const assignedStaff = data.activeShift.staffAssignments || [];
+    for (const sa of assignedStaff) {
+      const hasRecorded = handovers.some((h: any) => h.userId === sa.userId && h.duId === sa.duId);
+      if (!hasRecorded) {
+        warnings.push(`Handover not recorded for attendant ${sa.userName} on dispenser ${sa.duName || 'DU'}.`);
+      }
+    }
+
+    // Mismatch check for credit chits vs customer bills
+    const detailedCreditSum = shiftTotals.creditSales;
+    if (hasHandovers && Math.abs(detailedCreditSum - totalCreditHandedOver) > 1.00) {
+      warnings.push(`Credit Sales mismatch: Attendants declared ₹${totalCreditHandedOver.toLocaleString('en-IN')} in chits, but only ₹${detailedCreditSum.toLocaleString('en-IN')} of detailed customer billing has been logged in the transaction panel.`);
+    }
+
     if (closingCash === 0 && expectedCash > 0) {
       warnings.push('Closing cash is ₹0, indicating no collections entered.');
     }
@@ -380,31 +420,114 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
           )}
         </div>
 
-        {/* Assigned Operators list */}
-        {activeShift.staffAssignments && activeShift.staffAssignments.length > 0 && (
-          <div className="card card-compact">
-            <h3 style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>
-              Shift Staff Assignments
-            </h3>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px 24px' }}>
-              {activeShift.staffAssignments.map((sa: any, idx: number) => (
-                <div key={idx} style={{ fontSize: '13px', color: 'var(--text-default)' }}>
-                  <User size={13} style={{ marginRight: '6px', display: 'inline-block', verticalAlign: 'middle' }} /> <strong>{sa.userName}</strong> assigned to dispenser <strong>{sa.duName}</strong>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Core nozzle grid */}
+        {/* 1. Attendant Handovers Dashboard */}
         <div className="card" style={{ overflow: 'hidden' }}>
           <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-soft)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)' }}>
-              Nozzle Readings Grid
-            </h3>
-            <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-              Record closing readings to compute operational volumes sold.
-            </span>
+            <div>
+              <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)' }}>
+                Attendant Handovers Dashboard
+              </h3>
+              <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                Record dispenser nozzle closing readings, cash, card, UPI collections and credit chits per assigned attendant.
+              </p>
+            </div>
+          </div>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+            <thead>
+              <tr style={{ backgroundColor: 'var(--bg-surface-alt)', borderBottom: '1px solid var(--border-soft)', textAlign: 'left', color: 'var(--text-muted)' }}>
+                <th style={{ padding: '10px 20px', fontWeight: 600 }}>Attendant</th>
+                <th style={{ padding: '10px 20px', fontWeight: 600 }}>Dispenser</th>
+                <th style={{ padding: '10px 20px', fontWeight: 600 }}>Handover Status</th>
+                <th style={{ padding: '10px 20px', fontWeight: 600, textAlign: 'right' }}>Cash (₹)</th>
+                <th style={{ padding: '10px 20px', fontWeight: 600, textAlign: 'right' }}>Card/UPI (₹)</th>
+                <th style={{ padding: '10px 20px', fontWeight: 600, textAlign: 'right' }}>Credit Chits (₹)</th>
+                <th style={{ padding: '10px 20px', fontWeight: 600, textAlign: 'right' }}>Expected Sales (₹)</th>
+                <th style={{ padding: '10px 20px', fontWeight: 600, textAlign: 'right' }}>Variance (₹)</th>
+                <th style={{ padding: '10px 20px', fontWeight: 600, textAlign: 'center' }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {activeShift.staffAssignments && activeShift.staffAssignments.length > 0 ? (
+                activeShift.staffAssignments.map((sa: any, idx: number) => {
+                  const handoverRecord = handovers.find(
+                    (h: any) => h.userId === sa.userId && h.duId === sa.duId
+                  );
+                  const isRecorded = !!handoverRecord;
+
+                  return (
+                    <tr key={idx} style={{ borderBottom: '1px solid var(--border-soft)' }}>
+                      <td style={{ padding: '12px 20px', fontWeight: 600, color: 'var(--text-strong)' }}>
+                        {sa.userName}
+                      </td>
+                      <td style={{ padding: '12px 20px', color: 'var(--text-default)' }}>
+                        {sa.duCode || sa.duName}
+                      </td>
+                      <td style={{ padding: '12px 20px' }}>
+                        <StatusBadge
+                          status={isRecorded ? 'RECORDED' : 'PENDING'}
+                          type={isRecorded ? 'success' : 'warning'}
+                        />
+                      </td>
+                      <td style={{ padding: '12px 20px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>
+                        {isRecorded ? `₹${Number(handoverRecord.cashHandedOver).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '—'}
+                      </td>
+                      <td style={{ padding: '12px 20px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>
+                        {isRecorded ? `₹${(Number(handoverRecord.cardHandedOver) + Number(handoverRecord.upiHandedOver)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '—'}
+                      </td>
+                      <td style={{ padding: '12px 20px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>
+                        {isRecorded ? `₹${Number(handoverRecord.creditHandedOver).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '—'}
+                      </td>
+                      <td style={{ padding: '12px 20px', textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
+                        {isRecorded ? `₹${Number(handoverRecord.expectedSales).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '—'}
+                      </td>
+                      <td style={{
+                        padding: '12px 20px',
+                        textAlign: 'right',
+                        fontFamily: 'var(--font-mono)',
+                        fontWeight: 600,
+                        color: !isRecorded ? 'var(--text-default)' : Number(handoverRecord.varianceAmount) === 0 ? 'var(--state-success-fg)' : Number(handoverRecord.varianceAmount) > 0 ? 'var(--brand-warning)' : 'var(--brand-danger)'
+                      }}>
+                        {isRecorded ? (
+                          <>
+                            {Number(handoverRecord.varianceAmount) > 0 ? '+' : ''}
+                            ₹{Number(handoverRecord.varianceAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                          </>
+                        ) : '—'}
+                      </td>
+                      <td style={{ padding: '8px 20px', textAlign: 'center' }}>
+                        <button
+                          type="button"
+                          className={isRecorded ? "btn btn-secondary btn-sm" : "btn btn-primary btn-sm"}
+                          onClick={() => handleOpenHandoverDrawer(sa)}
+                        >
+                          {isRecorded ? 'Edit Handover' : 'Record Handover'}
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
+              ) : (
+                <tr>
+                  <td colSpan={9} style={{ padding: '20px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                    No staff assignments found for this active shift. Assign staff dispensers in the setup to record handovers.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* 2. Nozzle Readings Grid */}
+        <div className="card" style={{ overflow: 'hidden' }}>
+          <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-soft)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)' }}>
+                Nozzle Readings Grid
+              </h3>
+              <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                Summary of nozzle closing readings and volume sold compiled from recorded attendant handovers.
+              </p>
+            </div>
           </div>
 
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
@@ -415,9 +538,11 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
                 <th style={{ padding: '10px 20px', fontWeight: 600 }}>Staff</th>
                 <th style={{ padding: '10px 20px', fontWeight: 600 }}>Product</th>
                 <th style={{ padding: '10px 20px', fontWeight: 600 }}>Tank</th>
+                <th style={{ padding: '10px 20px', fontWeight: 600, textAlign: 'right' }}>Price</th>
                 <th style={{ padding: '10px 20px', fontWeight: 600, textAlign: 'right' }}>Opening Rd</th>
                 <th style={{ padding: '10px 20px', fontWeight: 600, textAlign: 'right' }}>Closing Rd</th>
                 <th style={{ padding: '10px 20px', fontWeight: 600, textAlign: 'right' }}>Volume Sold</th>
+                <th style={{ padding: '10px 20px', fontWeight: 600, textAlign: 'right' }}>Sales Value</th>
               </tr>
             </thead>
             <tbody>
@@ -425,6 +550,8 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
                 const opening = Number(nr.openingReading);
                 const closing = closingReadings[nr.nozzleId] ?? opening;
                 const volume = closing - opening;
+                const price = Number(nr.unitPrice || 0);
+                const value = volume * price;
 
                 const assignment = data?.activeShift?.staffAssignments?.find(
                   (sa: any) => sa.duId === nr.duId
@@ -449,26 +576,14 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
                     </td>
                     <td style={{ padding: '12px 20px', color: 'var(--text-default)' }}>{nr.productName} ({nr.productCode})</td>
                     <td style={{ padding: '12px 20px', color: 'var(--text-muted)' }}>{nr.tankName}</td>
+                    <td style={{ padding: '12px 20px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>
+                      ₹{price.toFixed(2)}
+                    </td>
                     <td style={{ padding: '12px 20px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>
                       {opening.toFixed(3)}
                     </td>
-                    <td style={{ padding: '8px 20px', textAlign: 'right' }}>
-                      <input
-                        type="number"
-                        step="0.001"
-                        value={closingReadings[nr.nozzleId] ?? ''}
-                        onChange={(e) => handleClosingReadingChange(nr.nozzleId, Number(e.target.value))}
-                        style={{
-                          width: '110px',
-                          height: '28px',
-                          textAlign: 'right',
-                          padding: '0 8px',
-                          border: '1px solid var(--border-strong)',
-                          borderRadius: 'var(--radius-input)',
-                          fontFamily: 'var(--font-mono)',
-                          fontSize: '13px'
-                        }}
-                      />
+                    <td style={{ padding: '12px 20px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--text-strong)' }}>
+                      {closing.toFixed(3)}
                     </td>
                     <td style={{
                       padding: '12px 20px',
@@ -478,6 +593,15 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
                       fontFamily: 'var(--font-mono)'
                     }}>
                       {volume.toFixed(3)} L
+                    </td>
+                    <td style={{
+                      padding: '12px 20px',
+                      textAlign: 'right',
+                      fontWeight: 600,
+                      color: 'var(--text-strong)',
+                      fontFamily: 'var(--font-mono)'
+                    }}>
+                      ₹{value.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                     </td>
                   </tr>
                 );
@@ -523,27 +647,33 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
             </div>
 
             <div style={{ padding: '12px', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', backgroundColor: 'var(--bg-canvas)' }}>
-              <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', fontWeight: 600 }}>Cash Collections</span>
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', fontWeight: 600 }}>Cash Handed Over</span>
               <strong style={{ fontSize: '15px', color: 'var(--state-success-fg)', fontFamily: 'var(--font-mono)' }}>
-                ₹{shiftTotals.cashCollections.toLocaleString('en-IN')}
-              </strong>
-            </div>
-
-            <div style={{ padding: '12px', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', backgroundColor: 'var(--bg-canvas)' }}>
-              <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', fontWeight: 600 }}>Card & UPI</span>
-              <strong style={{ fontSize: '15px', color: 'var(--text-strong)', fontFamily: 'var(--font-mono)' }}>
-                ₹{(shiftTotals.cardCollections + shiftTotals.upiCollections).toLocaleString('en-IN')}
+                ₹{activeCashCollections.toLocaleString('en-IN')}
               </strong>
               <span style={{ fontSize: '10px', color: 'var(--text-faint)', display: 'block', marginTop: '2px' }}>
-                Card: ₹{shiftTotals.cardCollections.toLocaleString('en-IN')} • UPI: ₹{shiftTotals.upiCollections.toLocaleString('en-IN')}
+                {handovers.length} handovers received
               </span>
             </div>
 
             <div style={{ padding: '12px', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', backgroundColor: 'var(--bg-canvas)' }}>
-              <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', fontWeight: 600 }}>Credit Fleet Sales</span>
-              <strong style={{ fontSize: '15px', color: 'var(--brand-warning)', fontFamily: 'var(--font-mono)' }}>
-                ₹{shiftTotals.creditSales.toLocaleString('en-IN')}
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', fontWeight: 600 }}>Card & UPI Handover</span>
+              <strong style={{ fontSize: '15px', color: 'var(--text-strong)', fontFamily: 'var(--font-mono)' }}>
+                ₹{(activeCardCollections + activeUpiCollections).toLocaleString('en-IN')}
               </strong>
+              <span style={{ fontSize: '10px', color: 'var(--text-faint)', display: 'block', marginTop: '2px' }}>
+                Card: ₹{activeCardCollections.toLocaleString('en-IN')} • UPI: ₹{activeUpiCollections.toLocaleString('en-IN')}
+              </span>
+            </div>
+
+            <div style={{ padding: '12px', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', backgroundColor: 'var(--bg-canvas)' }}>
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', fontWeight: 600 }}>Credit Fleet Chits</span>
+              <strong style={{ fontSize: '15px', color: 'var(--brand-warning)', fontFamily: 'var(--font-mono)' }}>
+                ₹{activeCreditSales.toLocaleString('en-IN')}
+              </strong>
+              <span style={{ fontSize: '10px', color: 'var(--text-faint)', display: 'block', marginTop: '2px' }}>
+                Logged Bills: ₹{shiftTotals.creditSales.toLocaleString('en-IN')}
+              </span>
             </div>
 
             <div style={{ padding: '12px', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', backgroundColor: 'var(--bg-canvas)' }}>
@@ -560,24 +690,12 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
 
         {/* Save / Close Shift Inline Cards */}
         {!isPreparingClose ? (
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <button
-              className="btn btn-secondary btn-md"
-              onClick={handleSaveProgress}
-              disabled={savingProgress}
-            >
-              {savingProgress ? 'Saving...' : (
-                <>
-                  <Save size={13} /> Save Readings Progress
-                </>
-              )}
-            </button>
-
+          <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
             <button
               className="btn btn-primary btn-md"
               onClick={handlePrepareClose}
             >
-              <Lock size={13} /> Close Shift & Compile DSSR
+              <Lock size={13} style={{ marginRight: '6px' }} /> Close Shift & Compile DSSR
             </button>
           </div>
         ) : (
@@ -586,7 +704,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
               Reconciliation Review
             </h3>
 
-            {/* Expected Cash Calculations Card */}
+            {/* Expected Safe Cash Calculations Card */}
             <div style={{
               display: 'flex',
               flexDirection: 'column',
@@ -602,22 +720,22 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
                 <span style={{ fontFamily: 'var(--font-mono)' }}>₹{openingCashNum.toLocaleString('en-IN')}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: 'var(--state-success-fg)' }}>
-                <span>(+) Cash Collections:</span>
-                <span style={{ fontFamily: 'var(--font-mono)' }}>+ ₹{shiftTotals.cashCollections.toLocaleString('en-IN')}</span>
+                <span>(+) Cash Handed Over (Attendants):</span>
+                <span style={{ fontFamily: 'var(--font-mono)' }}>+ ₹{activeCashCollections.toLocaleString('en-IN')}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: 'var(--brand-danger)' }}>
                 <span>(-) Petty Cash Expenses:</span>
                 <span style={{ fontFamily: 'var(--font-mono)' }}>- ₹{shiftTotals.cashExpenses.toLocaleString('en-IN')}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', fontWeight: 700, borderTop: '1px solid var(--border-strong)', paddingTop: '8px', marginTop: '4px', color: 'var(--text-strong)' }}>
-                <span>Expected Cash in Drawer:</span>
+                <span>Expected Safe Cash:</span>
                 <span style={{ fontFamily: 'var(--font-mono)' }}>₹{expectedCash.toLocaleString('en-IN')}</span>
               </div>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-default)' }}>
-                1. Enter Closing Cash Collected (Float + Sales Cash):
+                1. Enter Physical Counted Safe Cash (Float + Deposited Cash):
               </label>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <input
@@ -749,7 +867,6 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
                 )}
               </button>
 
-
               <button
                 className="btn btn-secondary btn-md"
                 onClick={() => setIsPreparingClose(false)}
@@ -758,6 +875,31 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
               </button>
             </div>
           </div>
+        )}
+
+        {/* Handover Drawer Overlay */}
+        {selectedHandoverAssignment && (
+          <HandoverDrawer
+            isOpen={handoverDrawerOpen}
+            onClose={() => {
+              setHandoverDrawerOpen(false);
+              setSelectedHandoverAssignment(null);
+            }}
+            shiftId={activeShift.id}
+            userId={selectedHandoverAssignment.userId}
+            userName={selectedHandoverAssignment.userName}
+            duId={selectedHandoverAssignment.duId}
+            duCode={selectedHandoverAssignment.duCode || selectedHandoverAssignment.duName}
+            nozzles={activeShift.nozzleReadings.filter(
+              (nr: any) => nr.duId === selectedHandoverAssignment.duId
+            )}
+            existingHandover={activeShift.handovers?.find(
+              (h: any) => h.userId === selectedHandoverAssignment.userId && h.duId === selectedHandoverAssignment.duId
+            )}
+            onSaveSuccess={async () => {
+              await loadShiftStatus();
+            }}
+          />
         )}
       </div>
     );

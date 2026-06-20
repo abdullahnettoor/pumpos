@@ -170,6 +170,7 @@ export const nozzleReadings = pgTable('nozzle_readings', {
   openingReading: numeric('opening_reading', { precision: 15, scale: 3 }).notNull(),
   closingReading: numeric('closing_reading', { precision: 15, scale: 3 }).notNull(),
   volumeSold: numeric('volume_sold', { precision: 12, scale: 3 }).notNull(),
+  unitPrice: numeric('unit_price', { precision: 10, scale: 2 }),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
@@ -373,4 +374,31 @@ export const syncEvents = pgTable('sync_events', {
   retryCount: integer('retry_count').default(0).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   syncedAt: timestamp('synced_at'),
+});
+
+export const fuelPrices = pgTable('fuel_prices', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  organizationId: uuid('organization_id').references(() => organizations.id).notNull(),
+  stationId: uuid('station_id').references(() => stations.id).notNull(),
+  productId: uuid('product_id').references(() => products.id).notNull(),
+  price: numeric('price', { precision: 10, scale: 2 }).notNull(),
+  effectiveFrom: timestamp('effective_from').defaultNow().notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+export const attendantHandovers = pgTable('attendant_handovers', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  organizationId: uuid('organization_id').references(() => organizations.id).notNull(),
+  stationId: uuid('station_id').references(() => stations.id).notNull(),
+  shiftId: uuid('shift_id').references(() => shifts.id).notNull(),
+  userId: uuid('user_id').references(() => users.id).notNull(),
+  duId: uuid('du_id').references(() => dispenserUnits.id).notNull(),
+  cashHandedOver: numeric('cash_handed_over', { precision: 12, scale: 2 }).default('0').notNull(),
+  cardHandedOver: numeric('card_handed_over', { precision: 12, scale: 2 }).default('0').notNull(),
+  upiHandedOver: numeric('upi_handed_over', { precision: 12, scale: 2 }).default('0').notNull(),
+  creditHandedOver: numeric('credit_handed_over', { precision: 12, scale: 2 }).default('0').notNull(),
+  testingVolume: numeric('testing_volume', { precision: 10, scale: 3 }).default('0').notNull(),
+  expectedSales: numeric('expected_sales', { precision: 12, scale: 2 }).default('0').notNull(),
+  varianceAmount: numeric('variance_amount', { precision: 12, scale: 2 }).default('0').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
 });

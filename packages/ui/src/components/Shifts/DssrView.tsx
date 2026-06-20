@@ -56,6 +56,7 @@ export const DssrView: React.FC<DssrViewProps> = ({
     collections = [],
     stockVariances = [],
     dipReadings = [],
+    handovers = [],
   } = snapshotData;
 
   const handleReopen = async () => {
@@ -208,6 +209,64 @@ export const DssrView: React.FC<DssrViewProps> = ({
           </tr>
         </tbody>
       </table>
+
+      {/* Attendant Handovers Summary */}
+      {handovers && handovers.length > 0 && (
+        <>
+          <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.02em', marginTop: '32px' }}>
+            Attendant Handovers Summary
+          </h3>
+          <table style={{
+            width: '100%',
+            borderCollapse: 'collapse',
+            marginBottom: '32px',
+            fontSize: '13px'
+          }}>
+            <thead>
+              <tr style={{ borderBottom: '2px solid var(--border-strong)', textAlign: 'left', color: 'var(--text-muted)' }}>
+                <th style={{ padding: '8px 12px', fontWeight: 600 }}>Attendant</th>
+                <th style={{ padding: '8px 12px', fontWeight: 600 }}>Dispenser</th>
+                <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Cash (₹)</th>
+                <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Card/UPI (₹)</th>
+                <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Credit Chits (₹)</th>
+                <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Expected Sales (₹)</th>
+                <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Variance (₹)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {handovers.map((h: any, idx: number) => {
+                const cash = Number(h.cashHandedOver || 0);
+                const cardUpi = Number(h.cardHandedOver || 0) + Number(h.upiHandedOver || 0);
+                const credit = Number(h.creditHandedOver || 0);
+                const expected = Number(h.expectedSales || 0);
+                const variance = Number(h.varianceAmount || 0);
+                let varColor = 'var(--text-strong)';
+                if (variance < 0) {
+                  varColor = 'var(--brand-danger)';
+                } else if (variance > 0) {
+                  varColor = 'var(--brand-warning)';
+                } else {
+                  varColor = 'var(--state-success-fg)';
+                }
+
+                return (
+                  <tr key={idx} style={{ borderBottom: '1px solid var(--border-soft)' }}>
+                    <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--text-strong)' }}>{h.attendantName}</td>
+                    <td style={{ padding: '10px 12px', color: 'var(--text-default)' }}>{h.duCode}</td>
+                    <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>₹{cash.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                    <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>₹{cardUpi.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                    <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>₹{credit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                    <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>₹{expected.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                    <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, color: varColor, fontFamily: 'var(--font-mono)' }}>
+                      {variance > 0 ? '+' : ''}₹{variance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </>
+      )}
 
       {/* Tank Physical Dip Reconciliation */}
       {dipReadings && dipReadings.length > 0 && (
