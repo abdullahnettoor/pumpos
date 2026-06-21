@@ -556,27 +556,6 @@ transactionsRouter.get('/customers', async (c) => {
         .where(eq(schema.customers.organizationId, user.organizationId));
     }
 
-    if (list.length === 0 && activeOnly) {
-      // Seed standard customers
-      const defaults = [
-        { name: 'KSRTC State Bus Depot', customerType: 'Credit' },
-        { name: 'V-Trans Logistics fleet', customerType: 'Fleet' },
-        { name: 'Local Public School Bus', customerType: 'Credit' },
-      ];
-      for (const item of defaults) {
-        await db.insert(schema.customers).values({
-          organizationId: user.organizationId,
-          name: item.name,
-          customerType: item.customerType as any,
-          isActive: true,
-        });
-      }
-      list = await db
-        .select()
-        .from(schema.customers)
-        .where(and(eq(schema.customers.organizationId, user.organizationId), eq(schema.customers.isActive, true)));
-    }
-
     return c.json({ success: true, data: list });
   } catch (err: any) {
     return c.json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }, 500);
