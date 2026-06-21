@@ -13,8 +13,8 @@ const handoverFormSchema = z.object({
   cardHandedOver: z.coerce.number().nonnegative('Card Swipe total must be non-negative'),
   upiHandedOver: z.coerce.number().nonnegative('UPI QR total must be non-negative'),
   creditHandedOver: z.coerce.number().nonnegative('Credit chits total must be non-negative'),
-  testingVolume: z.coerce.number().nonnegative('Testing/Calibration volume must be non-negative'),
   nozzleReadings: z.record(z.string().uuid(), z.coerce.number().nonnegative('Reading must be non-negative')),
+  nozzleTesting: z.record(z.string().uuid(), z.coerce.number().nonnegative('Testing liters must be non-negative')),
 });
 
 type HandoverFormValues = z.infer<typeof handoverFormSchema>;
@@ -60,8 +60,8 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
       cardHandedOver: 0,
       upiHandedOver: 0,
       creditHandedOver: 0,
-      testingVolume: 0,
       nozzleReadings: {},
+      nozzleTesting: {},
     },
   });
 
@@ -74,18 +74,17 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
         setValue('cardHandedOver', Number(existingHandover.cardHandedOver ?? 0));
         setValue('upiHandedOver', Number(existingHandover.upiHandedOver ?? 0));
         setValue('creditHandedOver', Number(existingHandover.creditHandedOver ?? 0));
-        setValue('testingVolume', Number(existingHandover.testingVolume ?? 0));
       } else {
         setValue('cashHandedOver', 0);
         setValue('cardHandedOver', 0);
         setValue('upiHandedOver', 0);
         setValue('creditHandedOver', 0);
-        setValue('testingVolume', 0);
       }
 
-      // Initialize readings map
+      // Initialize readings and testing maps
       nozzles.forEach((nz) => {
         setValue(`nozzleReadings.${nz.nozzleId}`, Number(nz.closingReading ?? nz.openingReading ?? 0));
+        setValue(`nozzleTesting.${nz.nozzleId}`, 0); // Default testing volume to 0
       });
     }
   }, [isOpen, existingHandover, nozzles, setValue]);
@@ -93,11 +92,11 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
   // Watch form values reactively for live expected sales and variance computations
   const formValues = watch();
   const formNozzleReadings = formValues.nozzleReadings || {};
+  const formNozzleTesting = formValues.nozzleTesting || {};
   const formCash = formValues.cashHandedOver || 0;
   const formCard = formValues.cardHandedOver || 0;
   const formUpi = formValues.upiHandedOver || 0;
   const formCredit = formValues.creditHandedOver || 0;
-  const formTesting = formValues.testingVolume || 0;
 
   // Derived Calculations
   const calculatedNozzles = nozzles.map((nz) => {
@@ -105,7 +104,10 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
     const closing = Number(formNozzleReadings[nz.nozzleId] ?? opening);
     const volume = Math.max(0, closing - opening);
     const price = Number(nz.unitPrice || 0);
-    const value = volume * price;
+    const testing = Number(formNozzleTesting[nz.nozzleId] || 0);
+
+    const rawValue = volume * price;
+    const testingDeduction = testing * price;
 
     return {
       ...nz,
@@ -113,18 +115,18 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
       closing,
       volume,
       price,
-      value,
+      testing,
+      rawValue,
+      testingDeduction,
     };
   });
 
   const totalVolumeSold = calculatedNozzles.reduce((sum, n) => sum + n.volume, 0);
-  const totalExpectedSalesRaw = calculatedNozzles.reduce((sum, n) => sum + n.value, 0);
+  const totalRawSales = calculatedNozzles.reduce((sum, n) => sum + n.rawValue, 0);
+  const totalTestingVolume = calculatedNozzles.reduce((sum, n) => sum + n.testing, 0);
+  const totalTestingDeduction = calculatedNozzles.reduce((sum, n) => sum + n.testingDeduction, 0);
 
-  // Deduct testing volume from expected sales
-  // Using the price of the first nozzle's product
-  const primaryNozzlePrice = calculatedNozzles[0]?.price || 0;
-  const testingDeduction = Number(formTesting) * primaryNozzlePrice;
-  const expectedSales = Math.max(0, totalExpectedSalesRaw - testingDeduction);
+  const expectedSales = Math.max(0, totalRawSales - totalTestingDeduction);
 
   const totalDeclared = Number(formCash) + Number(formCard) + Number(formUpi) + Number(formCredit);
   const variance = totalDeclared - expectedSales;
@@ -154,7 +156,7 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
         cardHandedOver: Number(values.cardHandedOver),
         upiHandedOver: Number(values.upiHandedOver),
         creditHandedOver: Number(values.creditHandedOver),
-        testingVolume: Number(values.testingVolume),
+        testingVolume: totalTestingVolume, // aggregate sum of all nozzles testing volumes
         expectedSales,
         varianceAmount: variance,
         nozzleReadings: nozzleReadingsPayload,
@@ -194,7 +196,7 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
         {/* 1. Nozzle Readings Section */}
         <div>
           <h3 style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '10px' }}>
-            1. Nozzle Readings
+            1. Nozzle Readings & Calibration Testing
           </h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {calculatedNozzles.map((nz) => (
@@ -206,20 +208,20 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
                   borderRadius: 'var(--radius-input)',
                   padding: '10px 12px',
                   display: 'grid',
-                  gridTemplateColumns: '1fr 120px 120px',
+                  gridTemplateColumns: '1fr 90px 110px 90px',
                   alignItems: 'center',
-                  gap: '12px',
+                  gap: '10px',
                 }}
               >
                 <div>
                   <div style={{ fontWeight: 600, fontSize: '13px', color: 'var(--text-strong)' }}>{nz.nozzleName}</div>
                   <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                    {nz.productName} ({nz.productCode}) • Price: <strong>₹{nz.price.toFixed(2)}/L</strong>
+                    {nz.productCode} • <strong>₹{nz.price.toFixed(2)}/L</strong>
                   </div>
                 </div>
                 <div>
-                  <label style={{ fontSize: '10px', color: 'var(--text-muted)', display: 'block', marginBottom: '2px' }}>Opening Rd</label>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '13px', color: 'var(--text-faint)' }}>{nz.opening.toFixed(3)}</span>
+                  <label style={{ fontSize: '10px', color: 'var(--text-muted)', display: 'block', marginBottom: '2px' }}>Opening</label>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--text-faint)' }}>{nz.opening.toFixed(3)}</span>
                 </div>
                 <div>
                   <label style={{ fontSize: '10px', color: 'var(--text-muted)', display: 'block', marginBottom: '2px' }}>Closing Rd</label>
@@ -231,17 +233,41 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
                     style={{
                       width: '100%',
                       height: '28px',
-                      padding: '0 8px',
+                      padding: '0 6px',
                       border: '1px solid var(--border-strong)',
                       borderRadius: 'var(--radius-input)',
                       fontFamily: 'var(--font-mono)',
-                      fontSize: '13px',
+                      fontSize: '12px',
                       textAlign: 'right',
                     }}
                   />
                   {errors.nozzleReadings?.[nz.nozzleId] && (
-                    <span style={{ color: 'var(--brand-danger)', fontSize: '10px', display: 'block', marginTop: '2px' }}>
-                      {errors.nozzleReadings[nz.nozzleId]?.message}
+                    <span style={{ color: 'var(--brand-danger)', fontSize: '9px', display: 'block', marginTop: '2px' }}>
+                      Err
+                    </span>
+                  )}
+                </div>
+                <div>
+                  <label style={{ fontSize: '10px', color: 'var(--text-muted)', display: 'block', marginBottom: '2px' }}>Testing (L)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    required
+                    {...register(`nozzleTesting.${nz.nozzleId}`)}
+                    style={{
+                      width: '100%',
+                      height: '28px',
+                      padding: '0 6px',
+                      border: '1px solid var(--border-strong)',
+                      borderRadius: 'var(--radius-input)',
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: '12px',
+                      textAlign: 'right',
+                    }}
+                  />
+                  {errors.nozzleTesting?.[nz.nozzleId] && (
+                    <span style={{ color: 'var(--brand-danger)', fontSize: '9px', display: 'block', marginTop: '2px' }}>
+                      Err
                     </span>
                   )}
                 </div>
@@ -343,29 +369,6 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
                 </span>
               )}
             </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', gridColumn: 'span 2' }}>
-              <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-default)' }}>Testing / Calibration Volume (Liters)</label>
-              <input
-                type="number"
-                step="any"
-                {...register('testingVolume')}
-                placeholder="0.0"
-                style={{
-                  height: '32px',
-                  padding: '0 8px',
-                  border: '1px solid var(--border-strong)',
-                  borderRadius: 'var(--radius-input)',
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: '13px',
-                }}
-              />
-              {errors.testingVolume && (
-                <span style={{ color: 'var(--brand-danger)', fontSize: '10px' }}>
-                  {errors.testingVolume.message}
-                </span>
-              )}
-            </div>
           </div>
         </div>
 
@@ -385,6 +388,10 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
             <span>Derived Fuel Volume:</span>
             <strong style={{ fontFamily: 'var(--font-mono)' }}>{totalVolumeSold.toFixed(3)} Liters</strong>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+            <span>Testing/Calibration Volume:</span>
+            <strong style={{ fontFamily: 'var(--font-mono)' }}>{totalTestingVolume.toFixed(1)} Liters</strong>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
             <span>Expected Fuel Sales Value:</span>
