@@ -32,46 +32,42 @@ export const ProductsCatalog: React.FC = () => {
     try {
       setLoading(true);
       const data = await productService.listProducts();
-      const hasMSOrHSD = data.some((p) => p.code === 'MS' || p.code === 'HSD');
-
-      if (data.length === 0 && !hasMSOrHSD) {
-        if (isSeedingFuels) return;
-        isSeedingFuels = true;
-        try {
-          // Auto-seed primary fuel products (exempt of GST by default)
-          const seededPetrol = await productService.createProduct({
-            name: 'Petrol (MS)',
-            code: 'MS',
-            productType: 'FUEL',
-            stockTracked: true,
-            isTaxable: false,
-            unit: 'Liters',
-            taxConfig: { gst_rate: 0, hsn_code: '2710' },
-            isActive: true,
-          });
-
-          const seededDiesel = await productService.createProduct({
-            name: 'Diesel (HSD)',
-            code: 'HSD',
-            productType: 'FUEL',
-            stockTracked: true,
-            isTaxable: false,
-            unit: 'Liters',
-            taxConfig: { gst_rate: 0, hsn_code: '2710' },
-            isActive: true,
-          });
-
-          setProducts([seededPetrol, seededDiesel]);
-        } finally {
-          isSeedingFuels = false;
-        }
-      } else {
-        setProducts(data);
-      }
+      setProducts(data);
     } catch (err) {
       console.error('Failed to load products:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleQuickAdd = async (type: 'MS' | 'HSD') => {
+    try {
+      if (type === 'MS') {
+        await productService.createProduct({
+          name: 'Petrol (MS)',
+          code: 'MS',
+          productType: 'FUEL',
+          stockTracked: true,
+          isTaxable: false,
+          unit: 'Liters',
+          taxConfig: { gst_rate: 0, hsn_code: '2710' },
+          isActive: true,
+        });
+      } else {
+        await productService.createProduct({
+          name: 'Diesel (HSD)',
+          code: 'HSD',
+          productType: 'FUEL',
+          stockTracked: true,
+          isTaxable: false,
+          unit: 'Liters',
+          taxConfig: { gst_rate: 0, hsn_code: '2710' },
+          isActive: true,
+        });
+      }
+      loadProducts();
+    } catch (err: any) {
+      alert(err.message || 'Failed to quick add standard product');
     }
   };
 
@@ -164,9 +160,73 @@ export const ProductsCatalog: React.FC = () => {
 
   if (loading) return <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>Loading catalog data...</div>;
 
+  const hasMS = products.some((p) => p.code === 'MS');
+  const hasHSD = products.some((p) => p.code === 'HSD');
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }} className="animate-fade-in">
       
+      {(!hasMS || !hasHSD) && (
+        <div style={{
+          backgroundColor: 'var(--bg-surface-alt)',
+          border: '1px solid var(--border-soft)',
+          borderRadius: 'var(--radius-card)',
+          padding: '12px 16px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          gap: '12px',
+          marginBottom: '4px'
+        }}>
+          <div>
+            <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-strong)' }}>Quick Add Standard Indian Fuels</span>
+            <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
+              Add pre-configured products for standard Indian petroleum fuels with correct units and tax-exempt defaults.
+            </p>
+          </div>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            {!hasMS && (
+              <button
+                type="button"
+                onClick={() => handleQuickAdd('MS')}
+                style={{
+                  height: '28px',
+                  padding: '0 12px',
+                  backgroundColor: 'var(--brand-primary)',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: 'var(--radius-button)',
+                  fontWeight: 600,
+                  fontSize: '12px',
+                  cursor: 'pointer',
+                }}
+              >
+                + Add Petrol (MS)
+              </button>
+            )}
+            {!hasHSD && (
+              <button
+                type="button"
+                onClick={() => handleQuickAdd('HSD')}
+                style={{
+                  height: '28px',
+                  padding: '0 12px',
+                  backgroundColor: 'var(--brand-primary)',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: 'var(--radius-button)',
+                  fontWeight: 600,
+                  fontSize: '12px',
+                  cursor: 'pointer',
+                }}
+              >
+                + Add Diesel (HSD)
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Catalog Header Info & Button */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>

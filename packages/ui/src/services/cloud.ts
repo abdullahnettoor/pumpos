@@ -404,6 +404,10 @@ export class CloudPricingService {
     return request<any[]>(`/setup/pricing?stationId=${stationId}`);
   }
 
+  async getPricingHistory(stationId: string): Promise<any[]> {
+    return request<any[]>(`/setup/pricing/history?stationId=${stationId}`);
+  }
+
   async recordPricing(payload: { stationId: string; productId: string; price: number; effectiveFrom?: string | null }): Promise<any> {
     return request<any>('/setup/pricing', {
       method: 'POST',

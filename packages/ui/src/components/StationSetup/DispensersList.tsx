@@ -33,6 +33,7 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
   const [loading, setLoading] = useState(true);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isCodeEdited, setIsCodeEdited] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   // Form states
   const [name, setName] = useState('');
@@ -142,7 +143,9 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitting) return;
     try {
+      setSubmitting(true);
       // Create Dispenser
       const createdDU = await dispenserService.createDispenser({
         stationId,
@@ -171,6 +174,8 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
       loadData();
     } catch (err: any) {
       alert(err.message || 'Failed to create dispenser unit and nozzles');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -537,19 +542,20 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
           <div style={{ display: 'flex', gap: '12px', marginTop: '12px' }}>
             <button
               type="submit"
+              disabled={submitting}
               style={{
                 flex: 1,
                 height: '32px',
-                backgroundColor: 'var(--brand-primary)',
+                backgroundColor: submitting ? 'var(--text-muted)' : 'var(--brand-primary)',
                 color: 'white',
                 border: 'none',
                 borderRadius: 'var(--radius-button)',
                 fontWeight: 600,
                 fontSize: '13px',
-                cursor: 'pointer',
+                cursor: submitting ? 'not-allowed' : 'pointer',
               }}
             >
-              Create Dispenser
+              {submitting ? 'Creating...' : 'Create Dispenser'}
             </button>
             <button
               type="button"

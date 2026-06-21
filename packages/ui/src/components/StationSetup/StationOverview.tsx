@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { CloudStationService } from '../../services/cloud.js';
 import { Station } from '@pump/shared';
 import { ProductsCatalog } from './ProductsCatalog.js';
+import { FuelPricingPanel } from './FuelPricingPanel.js';
 import { TanksGrid } from './TanksGrid.js';
 import { DispensersList } from './DispensersList.js';
 import { ShiftTemplates } from './ShiftTemplates.js';
@@ -22,7 +23,7 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
   const [stationsList, setStationsList] = useState<Station[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
-  const [activeTab, setActiveTab] = useState<'general' | 'products' | 'tanks' | 'dispensers' | 'shifts' | 'roster'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'products' | 'pricing' | 'tanks' | 'dispensers' | 'shifts' | 'roster'>('general');
 
   // General tab form states
   const [name, setName] = useState('');
@@ -161,6 +162,7 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
             {[
               { id: 'general', label: 'General Info' },
               { id: 'products', label: 'Products Catalog' },
+              { id: 'pricing', label: 'Fuel Pricing' },
               { id: 'tanks', label: 'Storage Tanks' },
               { id: 'dispensers', label: 'Dispenser Units' },
               { id: 'shifts', label: 'Shift Templates' },
@@ -320,6 +322,7 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
             )}
 
             {activeTab === 'products' && <ProductsCatalog />}
+            {activeTab === 'pricing' && <FuelPricingPanel selectedStation={selectedStation} />}
             {activeTab === 'tanks' && <TanksGrid stationId={selectedStation.id} />}
             {activeTab === 'dispensers' && <DispensersList stationId={selectedStation.id} />}
             {activeTab === 'shifts' && <ShiftTemplates />}

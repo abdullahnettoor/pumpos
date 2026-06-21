@@ -1014,6 +1014,47 @@ stationSetupRouter.get('/pricing', async (c) => {
   }
 });
 
+// GET /api/setup/pricing/history
+stationSetupRouter.get('/pricing/history', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  const stationId = c.req.query('stationId');
+
+  if (!stationId) {
+    return c.json({ success: false, error: { code: 'BAD_REQUEST', message: 'Missing stationId' } }, 400);
+  }
+
+  if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId })) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+  }
+
+  try {
+    const list = await db
+      .select({
+        id: schema.fuelPrices.id,
+        productId: schema.fuelPrices.productId,
+        productName: schema.products.name,
+        productCode: schema.products.code,
+        price: schema.fuelPrices.price,
+        effectiveFrom: schema.fuelPrices.effectiveFrom,
+        createdAt: schema.fuelPrices.createdAt,
+      })
+      .from(schema.fuelPrices)
+      .innerJoin(schema.products, eq(schema.fuelPrices.productId, schema.products.id))
+      .where(
+        and(
+          eq(schema.fuelPrices.stationId, stationId),
+          eq(schema.fuelPrices.organizationId, user.organizationId)
+        )
+      )
+      .orderBy(desc(schema.fuelPrices.effectiveFrom));
+
+    return c.json({ success: true, data: list });
+  } catch (err: any) {
+    return c.json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }, 500);
+  }
+});
+
 // POST /api/setup/pricing
 stationSetupRouter.post('/pricing', validateJson(fuelPriceSchema), async (c) => {
   const db = c.var.db;
