@@ -30,7 +30,7 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation })
   const [supplierId, setSupplierId] = useState('');
   const [productId, setProductId] = useState('');
   const [quantity, setQuantity] = useState('');
-  const [unitPrice, setUnitPrice] = useState('');
+  const [totalAmount, setTotalAmount] = useState('');
   const [invoiceNumber, setInvoiceNumber] = useState('');
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -97,23 +97,27 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation })
   const handleAddPurchase = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
-    if (!activeShift || !supplierId || !productId || !quantity || !unitPrice) return;
+    if (!activeShift || !supplierId || !productId || !quantity || !totalAmount) return;
 
     try {
       setSubmitting(true);
+      const qtyNum = Number(quantity);
+      const totalAmtNum = Number(totalAmount);
+      const computedUnitPrice = qtyNum > 0 ? parseFloat((totalAmtNum / qtyNum).toFixed(6)) : 0;
+
       await transactionService.recordPurchase({
         shiftId: activeShift.id,
         supplierId,
         productId,
-        quantity: Number(quantity),
-        unitPrice: Number(unitPrice),
+        quantity: qtyNum,
+        unitPrice: computedUnitPrice,
         invoiceNumber: invoiceNumber || undefined,
         notes: notes || undefined,
       });
 
       // Clear Form & Reload
       setQuantity('');
-      setUnitPrice('');
+      setTotalAmount('');
       setInvoiceNumber('');
       setNotes('');
 
@@ -414,12 +418,12 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation })
                       />
                     </div>
                     <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                      <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Price/Liter (₹)</label>
+                      <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Total Amount (₹)</label>
                       <input
                         type="number"
                         placeholder="0.00"
-                        value={unitPrice}
-                        onChange={(e) => setUnitPrice(e.target.value)}
+                        value={totalAmount}
+                        onChange={(e) => setTotalAmount(e.target.value)}
                         disabled={submitting}
                         required
                         style={{
@@ -432,6 +436,24 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation })
                       />
                     </div>
                   </div>
+
+                  {parseFloat(quantity) > 0 && parseFloat(totalAmount) > 0 && (
+                    <div style={{
+                      fontSize: '11px',
+                      color: 'var(--text-muted)',
+                      backgroundColor: 'var(--bg-surface-alt)',
+                      padding: '6px 10px',
+                      borderRadius: '4px',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      fontFamily: 'var(--font-mono)'
+                    }}>
+                      <span>Derived Price per Litre:</span>
+                      <span style={{ fontWeight: 600, color: 'var(--text-strong)' }}>
+                        ₹{(parseFloat(totalAmount) / parseFloat(quantity)).toFixed(4)}/L
+                      </span>
+                    </div>
+                  )}
 
                   <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                     <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Invoice Number / Reference</label>
@@ -471,7 +493,7 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation })
 
                   <button
                     type="submit"
-                    disabled={submitting || !quantity || !unitPrice || !supplierId}
+                    disabled={submitting || !quantity || !totalAmount || !supplierId}
                     style={{
                       height: '36px',
                       backgroundColor: 'var(--brand-primary)',
