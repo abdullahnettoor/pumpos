@@ -31,6 +31,27 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation })
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<any | null>(null); // null = Creating, object = Editing
   
+  // Ledger Drawer States
+  const [selectedLedgerCustomer, setSelectedLedgerCustomer] = useState<any | null>(null);
+  const [ledgerTransactions, setLedgerTransactions] = useState<any[]>([]);
+  const [loadingLedger, setLoadingLedger] = useState(false);
+  const [ledgerError, setLedgerError] = useState<string | null>(null);
+
+  const openLedgerDrawer = async (cust: any) => {
+    setSelectedLedgerCustomer(cust);
+    setLedgerTransactions([]);
+    setLoadingLedger(true);
+    setLedgerError(null);
+    try {
+      const data = await transactionService.getCustomerLedger(cust.id);
+      setLedgerTransactions(data || []);
+    } catch (err: any) {
+      setLedgerError(err.message || 'Failed to load ledger history');
+    } finally {
+      setLoadingLedger(false);
+    }
+  };
+  
   const [formError, setFormError] = useState<string | null>(null);
   const [drawerError, setDrawerError] = useState<string | null>(null);
 
@@ -622,7 +643,22 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation })
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <User size={14} style={{ color: 'var(--text-muted)' }} />
                             <div>
-                              <div>{c.name}</div>
+                              <button
+                                type="button"
+                                onClick={() => openLedgerDrawer(c)}
+                                style={{
+                                  background: 'none',
+                                  border: 'none',
+                                  padding: 0,
+                                  color: 'var(--brand-primary)',
+                                  fontWeight: 600,
+                                  textAlign: 'left',
+                                  cursor: 'pointer',
+                                  textDecoration: 'underline',
+                                }}
+                              >
+                                {c.name}
+                              </button>
                               {c.metadata?.tradeName && (
                                 <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 400 }}>{c.metadata.tradeName}</div>
                               )}
@@ -647,8 +683,21 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation })
                         <td style={{ padding: '12px 20px', color: 'var(--text-muted)' }}>
                           {c.phone || '-'}
                         </td>
-                        <td style={{ padding: '12px 20px', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>
-                          {limit > 0 ? `₹${limit.toLocaleString('en-IN')}` : 'N/A'}
+                        <td style={{ padding: '12px 20px', color: 'var(--text-default)' }}>
+                          {limit > 0 ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                              <span style={{ fontFamily: 'var(--font-mono)' }}>₹{limit.toLocaleString('en-IN')}</span>
+                              <div style={{ width: '80px', height: '4px', backgroundColor: 'var(--border-soft)', borderRadius: '2px', overflow: 'hidden' }}>
+                                <div style={{
+                                  width: `${Math.min(100, (balance / limit) * 100)}%`,
+                                  height: '100%',
+                                  backgroundColor: balance > limit ? 'var(--brand-danger)' : balance >= limit * 0.75 ? 'var(--brand-warning)' : 'var(--brand-primary)'
+                                }} />
+                              </div>
+                            </div>
+                          ) : (
+                            <span style={{ color: 'var(--text-muted)' }}>N/A</span>
+                          )}
                         </td>
                         <td style={{ padding: '12px 20px', color: 'var(--text-muted)' }}>
                           {c.fleetCode || '-'}
@@ -665,7 +714,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation })
                             {c.isActive ? 'Active' : 'Suspended'}
                           </span>
                         </td>
-                        <td style={{ padding: '12px 20px', textAlign: 'right', fontWeight: 700, color: balance > 0 ? 'var(--brand-warning)' : 'var(--state-success-fg)', fontFamily: 'var(--font-mono)' }}>
+                        <td style={{ padding: '12px 20px', textAlign: 'right', fontWeight: 700, color: limit > 0 && balance > limit ? 'var(--brand-danger)' : balance > 0 ? 'var(--brand-warning)' : 'var(--state-success-fg)', fontFamily: 'var(--font-mono)' }}>
                           ₹{balance.toLocaleString('en-IN')}
                         </td>
                         <td style={{ padding: '12px 20px', textAlign: 'center' }}>
@@ -989,6 +1038,190 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation })
           </div>
         </form>
       </Drawer>
+
+      {/* Customer Ledger Drawer */}
+      <Drawer
+        isOpen={selectedLedgerCustomer !== null}
+        onClose={() => setSelectedLedgerCustomer(null)}
+        title="Customer Account Statement"
+      >
+        {selectedLedgerCustomer && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', fontFamily: 'var(--font-sans)' }}>
+            {/* Customer Summary Card */}
+            <div style={{
+              backgroundColor: 'var(--bg-surface-alt)',
+              border: '1px solid var(--border-soft)',
+              borderRadius: 'var(--radius-card)',
+              padding: '16px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '12px'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div>
+                  <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-strong)', margin: 0 }}>
+                    {selectedLedgerCustomer.name}
+                  </h3>
+                  <span style={{
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    backgroundColor: selectedLedgerCustomer.customerType === 'Fleet' ? 'var(--state-info-bg)' : selectedLedgerCustomer.customerType === 'Credit' ? 'var(--state-warning-bg)' : 'var(--bg-surface)',
+                    color: selectedLedgerCustomer.customerType === 'Fleet' ? 'var(--state-info-fg)' : selectedLedgerCustomer.customerType === 'Credit' ? 'var(--state-warning-fg)' : 'var(--text-strong)',
+                    padding: '2px 6px',
+                    borderRadius: 'var(--radius-chip)',
+                    display: 'inline-block',
+                    marginTop: '4px'
+                  }}>
+                    {selectedLedgerCustomer.customerType}
+                  </span>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Outstanding Balance</div>
+                  <div style={{
+                    fontSize: '18px',
+                    fontWeight: 700,
+                    fontFamily: 'var(--font-mono)',
+                    color: selectedLedgerCustomer.creditLimit > 0 && selectedLedgerCustomer.currentBalance > selectedLedgerCustomer.creditLimit ? 'var(--brand-danger)' : selectedLedgerCustomer.currentBalance > 0 ? 'var(--brand-warning)' : 'var(--state-success-fg)'
+                  }}>
+                    ₹{Number(selectedLedgerCustomer.currentBalance || 0).toLocaleString('en-IN')}
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: '10px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '12px' }}>
+                <div>
+                  <span style={{ color: 'var(--text-muted)', display: 'block' }}>Credit Limit</span>
+                  <strong style={{ color: 'var(--text-strong)', fontFamily: 'var(--font-mono)' }}>
+                    {selectedLedgerCustomer.creditLimit > 0 ? `₹${Number(selectedLedgerCustomer.creditLimit).toLocaleString('en-IN')}` : 'N/A'}
+                  </strong>
+                </div>
+                {selectedLedgerCustomer.creditLimit > 0 && (
+                  <div>
+                    <span style={{ color: 'var(--text-muted)', display: 'block' }}>Available Credit</span>
+                    <strong style={{
+                      color: (selectedLedgerCustomer.creditLimit - selectedLedgerCustomer.currentBalance) < 0 ? 'var(--brand-danger)' : 'var(--text-strong)',
+                      fontFamily: 'var(--font-mono)'
+                    }}>
+                      ₹{Math.max(0, Number(selectedLedgerCustomer.creditLimit) - Number(selectedLedgerCustomer.currentBalance)).toLocaleString('en-IN')}
+                    </strong>
+                  </div>
+                )}
+              </div>
+
+              {(selectedLedgerCustomer.metadata?.gstin || selectedLedgerCustomer.metadata?.pan || selectedLedgerCustomer.metadata?.billingAddress) && (
+                <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: '10px', fontSize: '11px', display: 'flex', flexDirection: 'column', gap: '4px', color: 'var(--text-muted)' }}>
+                  {selectedLedgerCustomer.metadata?.gstin && <div><strong>GSTIN:</strong> <span style={{ fontFamily: 'var(--font-mono)' }}>{selectedLedgerCustomer.metadata.gstin}</span></div>}
+                  {selectedLedgerCustomer.metadata?.pan && <div><strong>PAN:</strong> <span style={{ fontFamily: 'var(--font-mono)' }}>{selectedLedgerCustomer.metadata.pan}</span></div>}
+                  {selectedLedgerCustomer.metadata?.billingAddress && <div><strong>Billing Address:</strong> {selectedLedgerCustomer.metadata.billingAddress}</div>}
+                </div>
+              )}
+            </div>
+
+            {/* Ledger Timeline Table */}
+            <div>
+              <h4 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-strong)', marginBottom: '8px' }}>
+                Statement of Account
+              </h4>
+
+              {loadingLedger ? (
+                <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px' }}>
+                  Loading ledger transactions...
+                </div>
+              ) : ledgerError ? (
+                <div style={{ padding: '12px', backgroundColor: 'var(--state-danger-bg)', color: 'var(--state-danger-fg)', borderRadius: 'var(--radius-input)', fontSize: '12px' }}>
+                  {ledgerError}
+                </div>
+              ) : ledgerTransactions.length === 0 ? (
+                <div style={{ padding: '24px', border: '1px dashed var(--border-soft)', borderRadius: 'var(--radius-card)', textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px' }}>
+                  No transaction history found for this account.
+                </div>
+              ) : (
+                <div style={{ border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-card)', overflow: 'hidden' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', textAlign: 'left' }}>
+                    <thead>
+                      <tr style={{ backgroundColor: 'var(--bg-surface-alt)', borderBottom: '1px solid var(--border-soft)', color: 'var(--text-muted)' }}>
+                        <th style={{ padding: '8px 12px', fontWeight: 600 }}>Date / Shift</th>
+                        <th style={{ padding: '8px 12px', fontWeight: 600 }}>Type</th>
+                        <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Amount</th>
+                        <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Balance</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(() => {
+                        let running = 0;
+                        const sorted = [...ledgerTransactions].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+                        const enriched = sorted.map(tx => {
+                          const amt = Number(tx.amount);
+                          if (tx.transactionType === 'Credit Sale' || tx.transactionType === 'Adjustment') {
+                            running += amt;
+                          } else if (tx.transactionType === 'Collection') {
+                            running -= amt;
+                          }
+                          return { ...tx, runningBalance: running };
+                        });
+                        return [...enriched].reverse().map((tx) => {
+                          const amt = Number(tx.amount);
+                          const isCreditSale = tx.transactionType === 'Credit Sale';
+                          return (
+                            <tr key={tx.id} style={{ borderBottom: '1px solid var(--border-soft)' }}>
+                              <td style={{ padding: '8px 12px' }}>
+                                <div style={{ fontWeight: 500, color: 'var(--text-strong)' }}>
+                                  {new Date(tx.shiftDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' })}
+                                </div>
+                                <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
+                                  {tx.shiftName}
+                                </div>
+                              </td>
+                              <td style={{ padding: '8px 12px' }}>
+                                <span style={{
+                                  fontWeight: 600,
+                                  color: isCreditSale ? 'var(--brand-warning)' : 'var(--state-success-fg)'
+                                }}>
+                                  {tx.transactionType}
+                                </span>
+                                {tx.notes && (
+                                  <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                                    {tx.notes}
+                                  </div>
+                                )}
+                              </td>
+                              <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 600, fontFamily: 'var(--font-mono)', color: isCreditSale ? 'var(--text-strong)' : 'var(--state-success-fg)' }}>
+                                {isCreditSale ? '' : '-' }₹{amt.toLocaleString('en-IN')}
+                              </td>
+                              <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--text-strong)' }}>
+                                ₹{tx.runningBalance.toLocaleString('en-IN')}
+                              </td>
+                            </tr>
+                          );
+                        });
+                      })()}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            <button
+              onClick={() => setSelectedLedgerCustomer(null)}
+              style={{
+                height: '32px',
+                width: '100%',
+                backgroundColor: 'var(--bg-surface-alt)',
+                color: 'var(--text-default)',
+                border: '1px solid var(--border-strong)',
+                borderRadius: 'var(--radius-button)',
+                fontWeight: 600,
+                fontSize: '13px',
+                cursor: 'pointer',
+                marginTop: '8px'
+              }}
+            >
+              Close Statement
+            </button>
+          </div>
+        )}
+      </Drawer>
     </div>
   );
 };
+

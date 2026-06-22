@@ -377,7 +377,16 @@ export class CloudTransactionService {
     });
   }
 
-  async recordPurchase(payload: { shiftId: string; supplierId: string; productId: string; quantity: number; unitPrice: number; invoiceNumber?: string; notes?: string }): Promise<any> {
+  async recordPurchase(payload: {
+    shiftId: string;
+    supplierId: string;
+    productId: string;
+    quantity: number;
+    unitPrice: number;
+    invoiceNumber?: string;
+    notes?: string;
+    tankAllocations?: { tankId: string; quantity: number }[] | null;
+  }): Promise<any> {
     return request<any>('/transactions/purchases', {
       method: 'POST',
       body: JSON.stringify(payload),
@@ -401,6 +410,21 @@ export class CloudTransactionService {
 
   async getInventoryVariances(stationId: string): Promise<any[]> {
     return request<any[]>(`/transactions/inventory/variances?stationId=${stationId}`);
+  }
+
+  async getCustomerLedger(customerId: string): Promise<any[]> {
+    return request<any[]>(`/transactions/customers/${customerId}/ledger`);
+  }
+
+  async getSupplierLedger(supplierId: string): Promise<any[]> {
+    return request<any[]>(`/transactions/suppliers/${supplierId}/ledger`);
+  }
+
+  async recordSupplierPayment(payload: { shiftId: string; supplierId: string; amount: number; notes?: string }): Promise<any> {
+    return request<any>('/transactions/supplier-payments', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
   }
 }
 

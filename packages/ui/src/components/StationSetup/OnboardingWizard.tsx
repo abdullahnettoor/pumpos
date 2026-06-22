@@ -48,11 +48,11 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
           setAddress(inProgress.address || '');
           setPhone(inProgress.phone || '');
           setGraceMinutes(inProgress.settings?.shift_grace_minutes || 15);
-          
+
           // Determine the furthest step completed
           const status = await stationService.getOnboardingStatus(inProgress.id);
           setChecklist(status.checklist);
-          
+
           if (status.checklist.hasNozzles && status.checklist.hasDispensers) {
             setCurrentStep(5);
           } else if (status.checklist.hasTanks) {
@@ -90,7 +90,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
       setLoading(true);
       setErrorMsg(null);
       let savedStation: Station;
-      
+
       if (stationId) {
         // Update
         savedStation = await stationService.updateStation(stationId, {
@@ -141,7 +141,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
 
   const handleNextStep = async () => {
     if (!stationId) return;
-    
+
     setValidating(true);
     setErrorMsg(null);
     try {
@@ -211,7 +211,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
       backgroundColor: 'var(--bg-canvas)',
       overflow: 'hidden'
     }}>
-      
+
       {/* Top Header & Progress Stepper */}
       <header style={{
         height: '64px',
@@ -239,19 +239,19 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
             const isActive = currentStep === s.num;
             return (
               <React.Fragment key={s.num}>
-                <div 
+                <div
                   onClick={() => {
                     if (stationId && s.num < currentStep) {
                       setCurrentStep(s.num);
                       setErrorMsg(null);
                     }
                   }}
-                  style={{ 
-                    display: 'flex', 
-                    alignItems: 'center', 
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
                     gap: '8px',
                     cursor: (stationId && s.num < currentStep) ? 'pointer' : 'default',
-                    opacity: (s.num <= currentStep || stationId) ? 1 : 0.4 
+                    opacity: (s.num <= currentStep || stationId) ? 1 : 0.4
                   }}
                 >
                   <div style={{
@@ -270,10 +270,10 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                   }}>
                     {isCompleted ? '✓' : s.num}
                   </div>
-                  <span style={{ 
-                    fontSize: '13px', 
-                    fontWeight: isActive ? 600 : 500, 
-                    color: isActive ? 'var(--text-strong)' : 'var(--text-muted)', 
+                  <span style={{
+                    fontSize: '13px',
+                    fontWeight: isActive ? 600 : 500,
+                    color: isActive ? 'var(--text-strong)' : 'var(--text-muted)',
                     whiteSpace: 'nowrap'
                   }}>
                     {s.title}
@@ -306,14 +306,14 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
           flexDirection: 'column',
           gap: '24px'
         }}>
-          
+
           {errorMsg && (
-            <div style={{ 
-              backgroundColor: 'var(--state-danger-bg)', 
-              border: '1px solid rgba(159, 63, 54, 0.2)', 
-              color: 'var(--state-danger-fg)', 
-              padding: '12px 16px', 
-              borderRadius: 'var(--radius-card)', 
+            <div style={{
+              backgroundColor: 'var(--state-danger-bg)',
+              border: '1px solid rgba(159, 63, 54, 0.2)',
+              color: 'var(--state-danger-fg)',
+              padding: '12px 16px',
+              borderRadius: 'var(--radius-card)',
               fontSize: '13px',
               fontWeight: 500
             }}>
@@ -321,10 +321,10 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
             </div>
           )}
 
-          <div style={{ 
-            backgroundColor: 'var(--bg-surface)', 
-            border: '1px solid var(--border-soft)', 
-            padding: '32px', 
+          <div style={{
+            backgroundColor: 'var(--bg-surface)',
+            border: '1px solid var(--border-soft)',
+            padding: '32px',
             borderRadius: 'var(--radius-card)',
             boxShadow: '0 4px 12px rgba(0, 0, 0, 0.01)',
             minHeight: '400px'
@@ -363,7 +363,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                       />
                     </div>
                   </div>
-                  
+
                   <div className="form-group">
                     <label className="form-label">Station Address</label>
                     <input
@@ -426,7 +426,6 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                     <h3 style={{ fontSize: '16px', fontWeight: 600 }}>Step 2: Configure Products Catalog</h3>
                     <p style={{ color: 'var(--text-muted)', fontSize: '12px', marginTop: '2px' }}>Define the fuels and lubricants sold at your outlet.</p>
                   </div>
-                  <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 500 }}>* Seeds Petrol & Diesel automatically if empty</span>
                 </div>
                 <ProductsCatalog />
               </div>

@@ -116,6 +116,12 @@ export const shiftPurchaseSchema = z.object({
   unitPrice: z.number().positive('Price must be positive'),
   invoiceNumber: z.string().max(100).optional().nullable(),
   notes: z.string().max(500).optional().nullable(),
+  tankAllocations: z.array(
+    z.object({
+      tankId: z.string().uuid('Invalid tank ID'),
+      quantity: z.number().nonnegative('Allocation quantity must be non-negative'),
+    })
+  ).optional().nullable(),
 });
 
 export const shiftCollectionSchema = z.object({
@@ -175,4 +181,12 @@ export const attendantHandoverSchema = z.object({
     closingReading: z.number().nonnegative('Reading must be non-negative'),
   })),
 });
+
+export const supplierPaymentSchema = z.object({
+  shiftId: z.string().uuid('Invalid shift ID'),
+  supplierId: z.string().uuid('Invalid supplier ID'),
+  amount: z.number().positive('Payment amount must be positive'),
+  notes: z.string().max(500).optional().nullable(),
+});
+
 

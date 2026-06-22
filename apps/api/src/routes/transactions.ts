@@ -7,6 +7,7 @@ import {
   shiftCollectionSchema,
   customerCreateSchema,
   supplierCreateSchema,
+  supplierPaymentSchema,
   Role,
 } from '@pump/shared';
 import { validateJson } from '../utils/validator.js';
@@ -233,12 +234,17 @@ export async function compileDssrSnapshot(
         .from(schema.products)
         .where(eq(schema.products.id, v.productId))
         .limit(1);
+      const [tank] = v.tankId
+        ? await db.select().from(schema.tanks).where(eq(schema.tanks.id, v.tankId)).limit(1)
+        : [null];
 
       return {
         id: v.id,
         productId: v.productId,
         productName: prod?.name ?? 'Unknown',
         productCode: prod?.code ?? 'Unknown',
+        tankId: v.tankId,
+        tankName: tank?.name ?? null,
         expectedQuantity: Number(v.expectedQuantity),
         actualQuantity: Number(v.actualQuantity),
         varianceQuantity: Number(v.varianceQuantity),
@@ -250,7 +256,8 @@ export async function compileDssrSnapshot(
   // Compile warnings for stock variances (flag if variance exceeds 0.5% of expected stock)
   for (const sv of stockVariancesList) {
     if (sv.expectedQuantity > 0 && Math.abs(sv.varianceQuantity) > 0.005 * sv.expectedQuantity) {
-      warnings.push(`Stock discrepancy for ${sv.productName}! Variance is ${sv.varianceQuantity.toFixed(2)} Liters`);
+      const label = sv.tankName ? `${sv.productName} (${sv.tankName})` : sv.productName;
+      warnings.push(`Stock discrepancy for ${label}! Variance is ${sv.varianceQuantity.toFixed(2)} Liters`);
     }
   }
 
@@ -454,7 +461,37 @@ transactionsRouter.get('/suppliers', async (c) => {
         .where(eq(schema.suppliers.organizationId, user.organizationId));
     }
 
-    return c.json({ success: true, data: list });
+    // Fetch supplier transactions to compute dynamic outstanding balances
+    const txs = await db
+      .select({
+        supplierId: schema.supplierTransactions.supplierId,
+        transactionType: schema.supplierTransactions.transactionType,
+        amount: schema.supplierTransactions.amount,
+      })
+      .from(schema.supplierTransactions)
+      .innerJoin(schema.shifts, eq(schema.supplierTransactions.shiftId, schema.shifts.id))
+      .where(eq(schema.shifts.organizationId, user.organizationId));
+
+    const balances: Record<string, number> = {};
+    for (const tx of txs) {
+      const amount = Number(tx.amount);
+      const type = tx.transactionType;
+      if (!balances[tx.supplierId]) balances[tx.supplierId] = 0;
+      if (type === 'Purchase') {
+        balances[tx.supplierId] += amount;
+      } else if (type === 'Payment') {
+        balances[tx.supplierId] -= amount;
+      } else if (type === 'Adjustment') {
+        balances[tx.supplierId] += amount;
+      }
+    }
+
+    const enrichedList = list.map((sup) => ({
+      ...sup,
+      currentBalance: balances[sup.id] || 0,
+    }));
+
+    return c.json({ success: true, data: enrichedList });
   } catch (err: any) {
     return c.json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }, 500);
   }
@@ -556,7 +593,37 @@ transactionsRouter.get('/customers', async (c) => {
         .where(eq(schema.customers.organizationId, user.organizationId));
     }
 
-    return c.json({ success: true, data: list });
+    // Fetch customer transactions to compute dynamic outstanding balances
+    const txs = await db
+      .select({
+        customerId: schema.customerTransactions.customerId,
+        transactionType: schema.customerTransactions.transactionType,
+        amount: schema.customerTransactions.amount,
+      })
+      .from(schema.customerTransactions)
+      .innerJoin(schema.shifts, eq(schema.customerTransactions.shiftId, schema.shifts.id))
+      .where(eq(schema.shifts.organizationId, user.organizationId));
+
+    const balances: Record<string, number> = {};
+    for (const tx of txs) {
+      const amount = Number(tx.amount);
+      const type = tx.transactionType;
+      if (!balances[tx.customerId]) balances[tx.customerId] = 0;
+      if (type === 'Credit Sale') {
+        balances[tx.customerId] += amount;
+      } else if (type === 'Collection') {
+        balances[tx.customerId] -= amount;
+      } else if (type === 'Adjustment') {
+        balances[tx.customerId] += amount;
+      }
+    }
+
+    const enrichedList = list.map((cust) => ({
+      ...cust,
+      currentBalance: balances[cust.id] || 0,
+    }));
+
+    return c.json({ success: true, data: enrichedList });
   } catch (err: any) {
     return c.json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }, 500);
   }
@@ -711,17 +778,35 @@ transactionsRouter.post('/purchases', validateJson(shiftPurchaseSchema), async (
       })
       .returning();
 
-    // Create stock movement
-    await db.insert(schema.stockMovements).values({
-      shiftId: parsed.shiftId,
-      productId: parsed.productId,
-      movementType: 'Purchase',
-      quantity: String(parsed.quantity),
-      referenceType: 'PURCHASE',
-      referenceId: newPurchase.id,
-      notes: parsed.notes,
-      createdAt: new Date(),
-    });
+    // Create stock movements: support split drops across multiple tanks
+    if (parsed.tankAllocations && parsed.tankAllocations.length > 0) {
+      for (const alloc of parsed.tankAllocations) {
+        if (Number(alloc.quantity) > 0) {
+          await db.insert(schema.stockMovements).values({
+            shiftId: parsed.shiftId,
+            productId: parsed.productId,
+            tankId: alloc.tankId,
+            movementType: 'Purchase',
+            quantity: String(alloc.quantity),
+            referenceType: 'PURCHASE',
+            referenceId: newPurchase.id,
+            notes: parsed.notes || `Split drop to tank`,
+            createdAt: new Date(),
+          });
+        }
+      }
+    } else {
+      await db.insert(schema.stockMovements).values({
+        shiftId: parsed.shiftId,
+        productId: parsed.productId,
+        movementType: 'Purchase',
+        quantity: String(parsed.quantity),
+        referenceType: 'PURCHASE',
+        referenceId: newPurchase.id,
+        notes: parsed.notes,
+        createdAt: new Date(),
+      });
+    }
 
     // If customer / supplier transaction is required, record it
     await db.insert(schema.supplierTransactions).values({
@@ -906,6 +991,132 @@ transactionsRouter.get('/collections', async (c) => {
   }
 });
 
+// GET /api/transactions/customers/:id/ledger
+transactionsRouter.get('/customers/:id/ledger', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  const customerId = c.req.param('id');
+
+  try {
+    const [customer] = await db
+      .select()
+      .from(schema.customers)
+      .where(and(eq(schema.customers.id, customerId), eq(schema.customers.organizationId, user.organizationId)))
+      .limit(1);
+
+    if (!customer) {
+      return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Customer not found' } }, 404);
+    }
+
+    const list = await db
+      .select({
+        id: schema.customerTransactions.id,
+        transactionType: schema.customerTransactions.transactionType,
+        amount: schema.customerTransactions.amount,
+        notes: schema.customerTransactions.notes,
+        createdAt: schema.customerTransactions.createdAt,
+        shiftId: schema.customerTransactions.shiftId,
+        shiftDate: schema.shifts.openedAt,
+        shiftName: schema.shiftTemplates.name,
+      })
+      .from(schema.customerTransactions)
+      .innerJoin(schema.shifts, eq(schema.customerTransactions.shiftId, schema.shifts.id))
+      .innerJoin(schema.shiftTemplates, eq(schema.shifts.shiftTemplateId, schema.shiftTemplates.id))
+      .where(eq(schema.customerTransactions.customerId, customerId))
+      .orderBy(schema.customerTransactions.createdAt);
+
+    return c.json({ success: true, data: list });
+  } catch (err: any) {
+    return c.json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }, 500);
+  }
+});
+
+// GET /api/transactions/suppliers/:id/ledger
+transactionsRouter.get('/suppliers/:id/ledger', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  const supplierId = c.req.param('id');
+
+  try {
+    const [supplier] = await db
+      .select()
+      .from(schema.suppliers)
+      .where(and(eq(schema.suppliers.id, supplierId), eq(schema.suppliers.organizationId, user.organizationId)))
+      .limit(1);
+
+    if (!supplier) {
+      return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Supplier not found' } }, 404);
+    }
+
+    const list = await db
+      .select({
+        id: schema.supplierTransactions.id,
+        transactionType: schema.supplierTransactions.transactionType,
+        amount: schema.supplierTransactions.amount,
+        notes: schema.supplierTransactions.notes,
+        createdAt: schema.supplierTransactions.createdAt,
+        shiftId: schema.supplierTransactions.shiftId,
+        shiftDate: schema.shifts.openedAt,
+        shiftName: schema.shiftTemplates.name,
+      })
+      .from(schema.supplierTransactions)
+      .innerJoin(schema.shifts, eq(schema.supplierTransactions.shiftId, schema.shifts.id))
+      .innerJoin(schema.shiftTemplates, eq(schema.shifts.shiftTemplateId, schema.shiftTemplates.id))
+      .where(eq(schema.supplierTransactions.supplierId, supplierId))
+      .orderBy(schema.supplierTransactions.createdAt);
+
+    return c.json({ success: true, data: list });
+  } catch (err: any) {
+    return c.json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }, 500);
+  }
+});
+
+// POST /api/transactions/supplier-payments
+transactionsRouter.post('/supplier-payments', validateJson(supplierPaymentSchema), async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+
+  const parsed = c.req.valid('json');
+
+  try {
+    const editable = await ensureShiftNotLocked(db, parsed.shiftId);
+    if (!editable) {
+      return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Target shift is locked' } }, 403);
+    }
+
+    const [supplier] = await db
+      .select()
+      .from(schema.suppliers)
+      .where(and(eq(schema.suppliers.id, parsed.supplierId), eq(schema.suppliers.organizationId, user.organizationId)))
+      .limit(1);
+
+    if (!supplier) {
+      return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Supplier not found' } }, 404);
+    }
+
+    const [newTx] = await db
+      .insert(schema.supplierTransactions)
+      .values({
+        shiftId: parsed.shiftId,
+        supplierId: parsed.supplierId,
+        transactionType: 'Payment',
+        amount: String(parsed.amount),
+        notes: parsed.notes,
+        createdAt: new Date(),
+      })
+      .returning();
+
+    const [shift] = await db.select().from(schema.shifts).where(eq(schema.shifts.id, parsed.shiftId)).limit(1);
+    if (shift.status === 'CLOSED') {
+      await compileDssrSnapshot(db, parsed.shiftId);
+    }
+
+    return c.json({ success: true, data: newTx });
+  } catch (err: any) {
+    return c.json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }, 500);
+  }
+});
+
 // Helper to check if user has access to station
 function hasStationAccess(user: any, stationId: string): boolean {
   if (user.role === 'Owner') return true;
@@ -949,7 +1160,7 @@ transactionsRouter.get('/inventory/status', async (c) => {
           .where(
             and(
               eq(schema.shifts.stationId, stationId),
-              eq(schema.stockMovements.productId, t.productId)
+              eq(schema.stockMovements.tankId, t.id)
             )
           );
 
@@ -992,9 +1203,13 @@ transactionsRouter.get('/inventory/movements', async (c) => {
       .select({
         movement: schema.stockMovements,
         shift: schema.shifts,
+        tank: {
+          name: schema.tanks.name,
+        },
       })
       .from(schema.stockMovements)
       .innerJoin(schema.shifts, eq(schema.stockMovements.shiftId, schema.shifts.id))
+      .leftJoin(schema.tanks, eq(schema.stockMovements.tankId, schema.tanks.id))
       .where(
         and(
           eq(schema.shifts.stationId, stationId),
@@ -1017,6 +1232,7 @@ transactionsRouter.get('/inventory/movements', async (c) => {
           quantity: Number(m.quantity),
           productName: prod?.name ?? 'Unknown',
           productCode: prod?.code ?? 'Unknown',
+          tankName: row.tank?.name ?? null,
           shiftDate: row.shift.openedAt,
           shiftStatus: row.shift.status,
         };
@@ -1048,9 +1264,13 @@ transactionsRouter.get('/inventory/variances', async (c) => {
       .select({
         variance: schema.stockVariances,
         shift: schema.shifts,
+        tank: {
+          name: schema.tanks.name,
+        },
       })
       .from(schema.stockVariances)
       .innerJoin(schema.shifts, eq(schema.stockVariances.shiftId, schema.shifts.id))
+      .leftJoin(schema.tanks, eq(schema.stockVariances.tankId, schema.tanks.id))
       .where(
         and(
           eq(schema.shifts.stationId, stationId),
@@ -1075,6 +1295,7 @@ transactionsRouter.get('/inventory/variances', async (c) => {
           varianceQuantity: Number(v.varianceQuantity),
           productName: prod?.name ?? 'Unknown',
           productCode: prod?.code ?? 'Unknown',
+          tankName: row.tank?.name ?? null,
           shiftDate: row.shift.openedAt,
           shiftStatus: row.shift.status,
         };
@@ -1086,4 +1307,5 @@ transactionsRouter.get('/inventory/variances', async (c) => {
     return c.json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }, 500);
   }
 });
+
 

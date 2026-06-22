@@ -647,6 +647,7 @@ shiftsRouter.post('/close', validateJson(shiftCloseRequestSchema), async (c) => 
         await db.insert(schema.stockMovements).values({
           shiftId,
           productId: nz.productId,
+          tankId: nz.tankId,
           movementType: 'Sale',
           quantity: String(-volume),
           referenceType: 'NOZZLE_READING',
@@ -675,20 +676,12 @@ shiftsRouter.post('/close', validateJson(shiftCloseRequestSchema), async (c) => 
         .from(schema.tanks)
         .where(and(eq(schema.tanks.stationId, activeShift.stationId), eq(schema.tanks.organizationId, user.organizationId)));
 
-      // Group actual quantities by product ID
-      const actualsByProduct: Record<string, number> = {};
+      // Reconcile and calculate variance per tank
       for (const dr of parsed.dipReadings) {
         const tank = stationTanks.find((t) => t.id === dr.tankId);
-        if (tank) {
-          actualsByProduct[tank.productId] = (actualsByProduct[tank.productId] || 0) + dr.actualQuantity;
-        }
-      }
+        if (!tank) continue;
 
-      // Reconcile and calculate variance per product
-      for (const productId of Object.keys(actualsByProduct)) {
-        const actualQuantity = actualsByProduct[productId];
-
-        // Sum of all stock movements for this product in this station (including the nozzle sales just inserted)
+        // Sum of all stock movements for this specific tank in this station (including the nozzle sales just inserted)
         const movements = await db
           .select({
             quantity: schema.stockMovements.quantity,
@@ -698,23 +691,24 @@ shiftsRouter.post('/close', validateJson(shiftCloseRequestSchema), async (c) => 
           .where(
             and(
               eq(schema.shifts.stationId, activeShift.stationId),
-              eq(schema.stockMovements.productId, productId)
+              eq(schema.stockMovements.tankId, tank.id)
             )
           );
 
         const expectedStock = movements.reduce((sum, m) => sum + Number(m.quantity), 0);
-        const variance = actualQuantity - expectedStock;
+        const variance = dr.actualQuantity - expectedStock;
 
         // Insert stock variance
         const [insertedVariance] = await db
           .insert(schema.stockVariances)
           .values({
             shiftId,
-            productId,
+            productId: tank.productId,
+            tankId: tank.id,
             expectedQuantity: String(expectedStock),
-            actualQuantity: String(actualQuantity),
+            actualQuantity: String(dr.actualQuantity),
             varianceQuantity: String(variance),
-            reason: variance !== 0 ? `Physical reconciliation variance at shift close` : 'No variance',
+            reason: variance !== 0 ? `Physical reconciliation variance at shift close for tank ${tank.name}` : 'No variance',
             createdAt: new Date(),
           })
           .returning();
@@ -723,12 +717,13 @@ shiftsRouter.post('/close', validateJson(shiftCloseRequestSchema), async (c) => 
         if (variance !== 0) {
           await db.insert(schema.stockMovements).values({
             shiftId,
-            productId,
+            productId: tank.productId,
+            tankId: tank.id,
             movementType: 'Variance',
             quantity: String(variance),
             referenceType: 'STOCK_VARIANCE',
             referenceId: insertedVariance.id,
-            notes: `Physical reconciliation adjustment (expected: ${expectedStock}, actual: ${actualQuantity})`,
+            notes: `Physical reconciliation adjustment for tank ${tank.name} (expected: ${expectedStock}, actual: ${dr.actualQuantity})`,
             createdAt: new Date(),
           });
         }

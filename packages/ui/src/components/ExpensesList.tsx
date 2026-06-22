@@ -25,6 +25,12 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({ selectedStation }) =
   const [description, setDescription] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
+  // Filter States
+  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+
   useEffect(() => {
     if (selectedStation) {
       loadData();
@@ -93,6 +99,32 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({ selectedStation }) =
       setSubmitting(false);
     }
   };
+
+  const filteredExpenses = expenses.filter((e) => {
+    if (selectedCategoryFilter && e.categoryId !== selectedCategoryFilter) {
+      return false;
+    }
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      const descMatch = e.description ? e.description.toLowerCase().includes(q) : false;
+      const catMatch = e.categoryName ? e.categoryName.toLowerCase().includes(q) : false;
+      if (!descMatch && !catMatch) return false;
+    }
+    if (startDate || endDate) {
+      const date = new Date(e.shiftDate);
+      if (startDate) {
+        const start = new Date(startDate);
+        start.setHours(0, 0, 0, 0);
+        if (date < start) return false;
+      }
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        if (date > end) return false;
+      }
+    }
+    return true;
+  });
 
   if (!selectedStation) {
     return (
@@ -293,13 +325,94 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({ selectedStation }) =
               Petty Cash Ledger
             </h3>
             <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-              Total Expenses: <strong>{expenses.length}</strong>
+              Showing: <strong>{filteredExpenses.length}</strong> of {expenses.length}
             </span>
           </div>
 
-          {expenses.length === 0 ? (
+          {/* Filter Bar */}
+          <div style={{
+            padding: '12px 20px',
+            borderBottom: '1px solid var(--border-soft)',
+            backgroundColor: 'var(--bg-surface-alt)',
+            display: 'grid',
+            gridTemplateColumns: '1.2fr 1fr 1fr 1fr',
+            gap: '12px',
+            alignItems: 'center'
+          }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+              <label style={{ fontSize: '10px', fontWeight: 600, color: 'var(--text-muted)' }}>Search description</label>
+              <input
+                type="text"
+                placeholder="Search..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                style={{
+                  height: '28px',
+                  padding: '0 8px',
+                  borderRadius: 'var(--radius-input)',
+                  border: '1px solid var(--border-strong)',
+                  fontSize: '12px',
+                }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+              <label style={{ fontSize: '10px', fontWeight: 600, color: 'var(--text-muted)' }}>Category</label>
+              <select
+                value={selectedCategoryFilter}
+                onChange={(e) => setSelectedCategoryFilter(e.target.value)}
+                style={{
+                  height: '28px',
+                  padding: '0 6px',
+                  borderRadius: 'var(--radius-input)',
+                  border: '1px solid var(--border-strong)',
+                  fontSize: '12px',
+                  backgroundColor: 'var(--bg-surface)'
+                }}
+              >
+                <option value="">All Categories</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+              <label style={{ fontSize: '10px', fontWeight: 600, color: 'var(--text-muted)' }}>Start Date</label>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                style={{
+                  height: '28px',
+                  padding: '0 6px',
+                  borderRadius: 'var(--radius-input)',
+                  border: '1px solid var(--border-strong)',
+                  fontSize: '12px',
+                }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+              <label style={{ fontSize: '10px', fontWeight: 600, color: 'var(--text-muted)' }}>End Date</label>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                style={{
+                  height: '28px',
+                  padding: '0 6px',
+                  borderRadius: 'var(--radius-input)',
+                  border: '1px solid var(--border-strong)',
+                  fontSize: '12px',
+                }}
+              />
+            </div>
+          </div>
+
+          {filteredExpenses.length === 0 ? (
             <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>
-              No expenses recorded yet.
+              No matching expenses found.
             </div>
           ) : (
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
@@ -312,7 +425,7 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({ selectedStation }) =
                 </tr>
               </thead>
               <tbody>
-                {expenses.map((e, idx) => (
+                {filteredExpenses.map((e, idx) => (
                   <tr key={idx} style={{ borderBottom: '1px solid var(--border-soft)' }}>
                     <td style={{ padding: '12px 20px', color: 'var(--text-default)' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>

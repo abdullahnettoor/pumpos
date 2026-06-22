@@ -1,12 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import { CloudTransactionService, CloudShiftService, CloudProductService } from '../services/cloud.js';
+import { CloudTransactionService, CloudShiftService, CloudProductService, CloudTankService } from '../services/cloud.js';
 import { Calendar, Plus, ShoppingCart, Info, Settings, Edit, Truck, Building } from 'lucide-react';
 import { LoadingSpinner } from './LoadingSpinner.js';
 import { Drawer } from './Drawer.js';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { supplierPaymentSchema } from '@pump/shared';
 
 const transactionService = new CloudTransactionService();
 const shiftService = new CloudShiftService();
 const productService = new CloudProductService();
+const tankService = new CloudTankService();
 
 interface PurchasesListProps {
   selectedStation: any | null;
@@ -27,6 +31,8 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation })
   const [suppliers, setSuppliers] = useState<any[]>([]); // Active only for purchases dropdown
   const [allSuppliers, setAllSuppliers] = useState<any[]>([]); // All suppliers for registry
   const [products, setProducts] = useState<any[]>([]);
+  const [tanks, setTanks] = useState<any[]>([]);
+  const [allocations, setAllocations] = useState<Record<string, string>>({});
 
   // Purchase Form States
   const [supplierId, setSupplierId] = useState('');
@@ -38,9 +44,96 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation })
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
+  const selectedProduct = products.find((p) => p.id === productId);
+  const isFuel = selectedProduct?.productType === 'FUEL';
+  const productTanks = tanks.filter((t) => t.productId === productId);
+
+  useEffect(() => {
+    if (isFuel && productTanks.length === 1 && quantity) {
+      setAllocations({ [productTanks[0].id]: quantity });
+    } else {
+      setAllocations({});
+    }
+  }, [productId, quantity, tanks]);
+
   // CRUD Drawer States
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [editingSupplier, setEditingSupplier] = useState<any | null>(null); // null = Creating, object = Editing
+
+  // Supplier Ledger Drawer States
+  const [selectedLedgerSupplier, setSelectedLedgerSupplier] = useState<any | null>(null);
+  const [ledgerTransactions, setLedgerTransactions] = useState<any[]>([]);
+  const [loadingLedger, setLoadingLedger] = useState(false);
+  const [ledgerError, setLedgerError] = useState<string | null>(null);
+  const [paymentSubmitting, setPaymentSubmitting] = useState(false);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
+
+  // Supplier Payment Form hook
+  const {
+    register: registerPay,
+    handleSubmit: handleSubmitPay,
+    reset: resetPay,
+    setValue: setValuePay,
+    formState: { errors: payErrors }
+  } = useForm({
+    resolver: zodResolver(supplierPaymentSchema),
+    defaultValues: {
+      shiftId: '',
+      supplierId: '',
+      amount: '' as any,
+      notes: '',
+    }
+  });
+
+  const openLedgerDrawer = async (sup: any) => {
+    setSelectedLedgerSupplier(sup);
+    setLedgerTransactions([]);
+    setLoadingLedger(true);
+    setLedgerError(null);
+    setPaymentError(null);
+    resetPay({
+      shiftId: activeShift?.id || (recentClosedShifts.length > 0 ? recentClosedShifts[0].id : ''),
+      supplierId: sup.id,
+      amount: '' as any,
+      notes: '',
+    });
+    try {
+      const data = await transactionService.getSupplierLedger(sup.id);
+      setLedgerTransactions(data || []);
+    } catch (err: any) {
+      setLedgerError(err.message || 'Failed to load ledger history');
+    } finally {
+      setLoadingLedger(false);
+    }
+  };
+
+  const onAddSupplierPayment = async (data: any) => {
+    setPaymentError(null);
+    try {
+      setPaymentSubmitting(true);
+      await transactionService.recordSupplierPayment({
+        shiftId: data.shiftId,
+        supplierId: data.supplierId,
+        amount: Number(data.amount),
+        notes: data.notes || undefined,
+      });
+
+      resetPay({
+        shiftId: activeShift?.id || (recentClosedShifts.length > 0 ? recentClosedShifts[0].id : ''),
+        supplierId: data.supplierId,
+        amount: '' as any,
+        notes: '',
+      });
+
+      const updatedLedger = await transactionService.getSupplierLedger(data.supplierId);
+      setLedgerTransactions(updatedLedger || []);
+      await loadData();
+    } catch (err: any) {
+      setPaymentError(err.message || 'Failed to record supplier payment');
+    } finally {
+      setPaymentSubmitting(false);
+    }
+  };
   
   // Drawer Form Fields
   const [supName, setSupName] = useState('');
@@ -64,12 +157,13 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation })
       setLoading(true);
       setError(null);
 
-      const [list, status, activeSups, allSups, prods] = await Promise.all([
+      const [list, status, activeSups, allSups, prods, stationTanks] = await Promise.all([
         transactionService.getPurchases(),
         shiftService.getShiftStatus(selectedStation.id, true),
         transactionService.getSuppliers(true),
         transactionService.getSuppliers(false),
         productService.listProducts(),
+        tankService.listTanks(selectedStation.id),
       ]);
 
       setPurchases(list || []);
@@ -80,6 +174,7 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation })
       setSuppliers(activeSups || []);
       setAllSuppliers(allSups || []);
       setProducts(prods || []);
+      setTanks(stationTanks || []);
  
       if (activeSups && activeSups.length > 0) {
         setSupplierId(activeSups[0].id);
@@ -118,6 +213,25 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation })
       const totalAmtNum = Number(totalAmount);
       const computedUnitPrice = qtyNum > 0 ? parseFloat((totalAmtNum / qtyNum).toFixed(6)) : 0;
 
+      // Fuel split drop validation
+      let tankAllocations: { tankId: string; quantity: number }[] = [];
+      if (isFuel && productTanks.length > 0) {
+        let totalAllocated = 0;
+        for (const tank of productTanks) {
+          const qty = Number(allocations[tank.id] || 0);
+          if (qty > 0) {
+            tankAllocations.push({ tankId: tank.id, quantity: qty });
+            totalAllocated += qty;
+          }
+        }
+
+        if (Math.abs(totalAllocated - qtyNum) >= 0.01) {
+          setFormError(`Total allocated volume (${totalAllocated.toFixed(2)}L) must match the total invoice quantity (${qtyNum.toFixed(2)}L)`);
+          setSubmitting(false);
+          return;
+        }
+      }
+
       await transactionService.recordPurchase({
         shiftId: targetShiftId,
         supplierId,
@@ -126,6 +240,7 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation })
         unitPrice: computedUnitPrice,
         invoiceNumber: invoiceNumber || undefined,
         notes: notes || undefined,
+        tankAllocations: tankAllocations.length > 0 ? tankAllocations : undefined,
       });
 
       // Clear Form & Reload
@@ -133,6 +248,7 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation })
       setTotalAmount('');
       setInvoiceNumber('');
       setNotes('');
+      setAllocations({});
 
       const updatedList = await transactionService.getPurchases();
       setPurchases(updatedList || []);
@@ -480,6 +596,73 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation })
                     </div>
                   </div>
 
+                  {isFuel && productTanks.length > 0 && (
+                    <div style={{
+                      backgroundColor: 'var(--bg-surface-alt)',
+                      padding: '12px',
+                      borderRadius: 'var(--radius-input)',
+                      border: '1px solid var(--border-soft)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '8px'
+                    }}>
+                      <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-strong)' }}>
+                        Tank Drop Allocation
+                      </div>
+                      <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                        Split the total invoice quantity across the destination tanks.
+                      </div>
+                      
+                      {productTanks.map((tank) => (
+                        <div key={tank.id} style={{ display: 'grid', gridTemplateColumns: '1fr 100px', alignItems: 'center', gap: '8px' }}>
+                          <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                            {tank.name} (Cap: {Number(tank.capacity).toLocaleString('en-IN')}L)
+                          </span>
+                          <input
+                            type="number"
+                            placeholder="0.00"
+                            value={allocations[tank.id] || ''}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setAllocations(prev => ({
+                                ...prev,
+                                [tank.id]: val
+                              }));
+                            }}
+                            disabled={submitting}
+                            style={{
+                              height: '28px',
+                              padding: '0 8px',
+                              borderRadius: 'var(--radius-input)',
+                              border: '1px solid var(--border-strong)',
+                              fontSize: '12px',
+                              textAlign: 'right'
+                            }}
+                          />
+                        </div>
+                      ))}
+
+                      {productTanks.length > 1 && (
+                        <div style={{
+                          fontSize: '11px',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          borderTop: '1px solid var(--border-soft)',
+                          paddingTop: '6px',
+                          marginTop: '4px',
+                          color: Math.abs(Object.values(allocations).reduce((sum, val) => sum + (Number(val) || 0), 0) - Number(quantity)) < 0.01 
+                            ? 'var(--brand-success)' 
+                            : 'var(--brand-danger)'
+                        }}>
+                          <span>Allocated: {Object.values(allocations).reduce((sum, val) => sum + (Number(val) || 0), 0).toFixed(2)} / {Number(quantity || 0).toFixed(2)} L</span>
+                          {Math.abs(Object.values(allocations).reduce((sum, val) => sum + (Number(val) || 0), 0) - Number(quantity)) >= 0.01 && (
+                            <span style={{ fontWeight: 600 }}>Sum must equal total quantity</span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {parseFloat(quantity) > 0 && parseFloat(totalAmount) > 0 && (
                     <div style={{
                       fontSize: '11px',
@@ -652,13 +835,14 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation })
                   <th style={{ padding: '12px 20px', fontWeight: 600 }}>Supplier Name</th>
                   <th style={{ padding: '12px 20px', fontWeight: 600 }}>Phone</th>
                   <th style={{ padding: '12px 20px', fontWeight: 600 }}>Status</th>
+                  <th style={{ padding: '12px 20px', fontWeight: 600, textAlign: 'right' }}>Outstanding Balance</th>
                   <th style={{ padding: '12px 20px', fontWeight: 600, textAlign: 'center' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {allSuppliers.length === 0 ? (
                   <tr>
-                    <td colSpan={4} style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                    <td colSpan={5} style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)' }}>
                       No suppliers registered.
                     </td>
                   </tr>
@@ -669,7 +853,22 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation })
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                           <Building size={14} style={{ color: 'var(--text-muted)' }} />
                           <div>
-                            <div>{sup.name}</div>
+                            <button
+                              type="button"
+                              onClick={() => openLedgerDrawer(sup)}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                padding: 0,
+                                color: 'var(--brand-primary)',
+                                fontWeight: 600,
+                                textAlign: 'left',
+                                cursor: 'pointer',
+                                textDecoration: 'underline',
+                              }}
+                            >
+                              {sup.name}
+                            </button>
                             {sup.metadata?.tradeName && (
                               <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 400 }}>{sup.metadata.tradeName}</div>
                             )}
@@ -693,6 +892,9 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation })
                         }}>
                           {sup.isActive ? 'Active' : 'Suspended'}
                         </span>
+                      </td>
+                      <td style={{ padding: '12px 20px', textAlign: 'right', fontWeight: 700, color: Number(sup.currentBalance || 0) > 0 ? 'var(--brand-warning)' : 'var(--state-success-fg)', fontFamily: 'var(--font-mono)' }}>
+                        ₹{Number(sup.currentBalance || 0).toLocaleString('en-IN')}
                       </td>
                       <td style={{ padding: '12px 20px', textAlign: 'center' }}>
                         <button
@@ -917,6 +1119,307 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation })
           </div>
         </form>
       </Drawer>
+
+      {/* Supplier Ledger Drawer */}
+      <Drawer
+        isOpen={selectedLedgerSupplier !== null}
+        onClose={() => setSelectedLedgerSupplier(null)}
+        title="Supplier Account Statement"
+      >
+        {selectedLedgerSupplier && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', fontFamily: 'var(--font-sans)', maxHeight: '90vh', overflowY: 'auto', paddingRight: '4px' }}>
+            {/* Supplier Summary Card */}
+            <div style={{
+              backgroundColor: 'var(--bg-surface-alt)',
+              border: '1px solid var(--border-soft)',
+              borderRadius: 'var(--radius-card)',
+              padding: '16px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '12px'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div>
+                  <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-strong)', margin: 0 }}>
+                    {selectedLedgerSupplier.name}
+                  </h3>
+                  <span style={{
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    backgroundColor: selectedLedgerSupplier.isActive ? 'var(--state-success-bg)' : 'var(--state-danger-bg)',
+                    color: selectedLedgerSupplier.isActive ? 'var(--state-success-fg)' : 'var(--state-danger-fg)',
+                    padding: '2px 6px',
+                    borderRadius: 'var(--radius-chip)',
+                    display: 'inline-block',
+                    marginTop: '4px'
+                  }}>
+                    {selectedLedgerSupplier.isActive ? 'Active' : 'Suspended'}
+                  </span>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Owed Balance</div>
+                  <div style={{
+                    fontSize: '18px',
+                    fontWeight: 700,
+                    fontFamily: 'var(--font-mono)',
+                    color: selectedLedgerSupplier.currentBalance > 0 ? 'var(--brand-warning)' : 'var(--state-success-fg)'
+                  }}>
+                    ₹{Number(selectedLedgerSupplier.currentBalance || 0).toLocaleString('en-IN')}
+                  </div>
+                </div>
+              </div>
+
+              {(selectedLedgerSupplier.metadata?.gstin || selectedLedgerSupplier.metadata?.pan || selectedLedgerSupplier.metadata?.billingAddress) && (
+                <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: '10px', fontSize: '11px', display: 'flex', flexDirection: 'column', gap: '4px', color: 'var(--text-muted)' }}>
+                  {selectedLedgerSupplier.metadata?.gstin && <div><strong>GSTIN:</strong> <span style={{ fontFamily: 'var(--font-mono)' }}>{selectedLedgerSupplier.metadata.gstin}</span></div>}
+                  {selectedLedgerSupplier.metadata?.pan && <div><strong>PAN:</strong> <span style={{ fontFamily: 'var(--font-mono)' }}>{selectedLedgerSupplier.metadata.pan}</span></div>}
+                  {selectedLedgerSupplier.metadata?.billingAddress && <div><strong>Billing Address:</strong> {selectedLedgerSupplier.metadata.billingAddress}</div>}
+                </div>
+              )}
+            </div>
+
+            {/* Quick Supplier Payment Form */}
+            <div style={{
+              backgroundColor: 'var(--bg-surface)',
+              border: '1px solid var(--border-soft)',
+              borderRadius: 'var(--radius-card)',
+              padding: '16px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '12px'
+            }}>
+              <h4 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-strong)', margin: 0 }}>
+                Record Supplier Payment
+              </h4>
+
+              {paymentError && (
+                <div style={{
+                  backgroundColor: 'var(--state-danger-bg)',
+                  color: 'var(--state-danger-fg)',
+                  padding: '8px 12px',
+                  borderRadius: 'var(--radius-input)',
+                  fontSize: '12px',
+                  border: '1px solid var(--border-soft)'
+                }}>
+                  {paymentError}
+                </div>
+              )}
+
+              {activeShift || recentClosedShifts.length > 0 ? (
+                <form onSubmit={handleSubmitPay(onAddSupplierPayment)} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <input type="hidden" {...registerPay('supplierId')} />
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <label style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600 }}>Target Shift</label>
+                    <select
+                      {...registerPay('shiftId')}
+                      style={{
+                        height: '28px',
+                        padding: '0 6px',
+                        borderRadius: 'var(--radius-input)',
+                        border: '1px solid var(--border-strong)',
+                        fontSize: '12px',
+                        backgroundColor: 'var(--bg-surface)'
+                      }}
+                    >
+                      {activeShift && (
+                        <option value={activeShift.id}>Active: {activeShift.templateName} (Open)</option>
+                      )}
+                      {recentClosedShifts.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          Closed: {s.templateName} ({new Date(s.closedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <label style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600 }}>Payment Amount (₹)</label>
+                    <input
+                      type="number"
+                      placeholder="0.00"
+                      {...registerPay('amount', { valueAsNumber: true })}
+                      disabled={paymentSubmitting}
+                      required
+                      style={{
+                        height: '28px',
+                        padding: '0 8px',
+                        borderRadius: 'var(--radius-input)',
+                        border: '1px solid var(--border-strong)',
+                        fontSize: '12px',
+                      }}
+                    />
+                    {payErrors.amount && (
+                      <span style={{ color: 'var(--state-danger-fg)', fontSize: '10px' }}>
+                        {payErrors.amount.message}
+                      </span>
+                    )}
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <label style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600 }}>Payment Ref / Notes</label>
+                    <input
+                      type="text"
+                      placeholder="Cheque, RTGS ref..."
+                      {...registerPay('notes')}
+                      disabled={paymentSubmitting}
+                      style={{
+                        height: '28px',
+                        padding: '0 8px',
+                        borderRadius: 'var(--radius-input)',
+                        border: '1px solid var(--border-strong)',
+                        fontSize: '12px',
+                      }}
+                    />
+                    {payErrors.notes && (
+                      <span style={{ color: 'var(--state-danger-fg)', fontSize: '10px' }}>
+                        {payErrors.notes.message}
+                      </span>
+                    )}
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={paymentSubmitting}
+                    style={{
+                      height: '30px',
+                      backgroundColor: 'var(--brand-primary)',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: 'var(--radius-button)',
+                      fontWeight: 600,
+                      fontSize: '12px',
+                      cursor: paymentSubmitting ? 'not-allowed' : 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '4px',
+                      marginTop: '4px'
+                    }}
+                  >
+                    <Plus size={12} /> {paymentSubmitting ? 'Recording...' : 'Log Supplier Payment'}
+                  </button>
+                </form>
+              ) : (
+                <div style={{
+                  backgroundColor: 'var(--state-warning-bg)',
+                  color: 'var(--state-warning-fg)',
+                  padding: '12px',
+                  borderRadius: 'var(--radius-input)',
+                  fontSize: '11px',
+                  border: '1px solid var(--border-soft)'
+                }}>
+                  Supplier payments must be recorded under a shift. Please open a shift first.
+                </div>
+              )}
+            </div>
+
+            {/* Supplier Ledger Timeline */}
+            <div>
+              <h4 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-strong)', marginBottom: '8px' }}>
+                Ledger Statements
+              </h4>
+
+              {loadingLedger ? (
+                <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px' }}>
+                  Loading ledger transactions...
+                </div>
+              ) : ledgerError ? (
+                <div style={{ padding: '12px', backgroundColor: 'var(--state-danger-bg)', color: 'var(--state-danger-fg)', borderRadius: 'var(--radius-input)', fontSize: '12px' }}>
+                  {ledgerError}
+                </div>
+              ) : ledgerTransactions.length === 0 ? (
+                <div style={{ padding: '24px', border: '1px dashed var(--border-soft)', borderRadius: 'var(--radius-card)', textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px' }}>
+                  No transaction ledger events found.
+                </div>
+              ) : (
+                <div style={{ border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-card)', overflow: 'hidden' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', textAlign: 'left' }}>
+                    <thead>
+                      <tr style={{ backgroundColor: 'var(--bg-surface-alt)', borderBottom: '1px solid var(--border-soft)', color: 'var(--text-muted)' }}>
+                        <th style={{ padding: '8px 12px', fontWeight: 600 }}>Date / Shift</th>
+                        <th style={{ padding: '8px 12px', fontWeight: 600 }}>Type</th>
+                        <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Amount</th>
+                        <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Owed Bal</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(() => {
+                        let running = 0;
+                        const sorted = [...ledgerTransactions].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+                        const enriched = sorted.map(tx => {
+                          const amt = Number(tx.amount);
+                          if (tx.transactionType === 'Purchase' || tx.transactionType === 'Adjustment') {
+                            running += amt;
+                          } else if (tx.transactionType === 'Payment') {
+                            running -= amt;
+                          }
+                          return { ...tx, runningBalance: running };
+                        });
+                        return [...enriched].reverse().map((tx) => {
+                          const amt = Number(tx.amount);
+                          const isPurchase = tx.transactionType === 'Purchase';
+                          return (
+                            <tr key={tx.id} style={{ borderBottom: '1px solid var(--border-soft)' }}>
+                              <td style={{ padding: '8px 12px' }}>
+                                <div style={{ fontWeight: 500, color: 'var(--text-strong)' }}>
+                                  {new Date(tx.shiftDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' })}
+                                </div>
+                                <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
+                                  {tx.shiftName}
+                                </div>
+                              </td>
+                              <td style={{ padding: '8px 12px' }}>
+                                <span style={{
+                                  fontWeight: 600,
+                                  color: isPurchase ? 'var(--brand-warning)' : 'var(--state-success-fg)'
+                                }}>
+                                  {tx.transactionType}
+                                </span>
+                                {tx.notes && (
+                                  <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                                    {tx.notes}
+                                  </div>
+                                )}
+                              </td>
+                              <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 600, fontFamily: 'var(--font-mono)', color: isPurchase ? 'var(--text-strong)' : 'var(--state-success-fg)' }}>
+                                {isPurchase ? '' : '-' }₹{amt.toLocaleString('en-IN')}
+                              </td>
+                              <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--text-strong)' }}>
+                                ₹{tx.runningBalance.toLocaleString('en-IN')}
+                              </td>
+                            </tr>
+                          );
+                        });
+                      })()}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            <button
+              onClick={() => setSelectedLedgerSupplier(null)}
+              style={{
+                height: '32px',
+                width: '100%',
+                backgroundColor: 'var(--bg-surface-alt)',
+                color: 'var(--text-default)',
+                border: '1px solid var(--border-strong)',
+                borderRadius: 'var(--radius-button)',
+                fontWeight: 600,
+                fontSize: '13px',
+                cursor: 'pointer',
+                marginTop: '8px',
+                marginBottom: '16px'
+              }}
+            >
+              Close Statement
+            </button>
+          </div>
+        )}
+      </Drawer>
     </div>
   );
 };
+
