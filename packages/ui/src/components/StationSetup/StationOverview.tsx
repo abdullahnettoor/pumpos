@@ -88,23 +88,7 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
     }
   };
 
-  const handleCreateStation = async () => {
-    const sName = prompt('Enter new station name:');
-    const sCode = prompt('Enter new station code (e.g. STA01):');
-    if (!sName || !sCode) return;
 
-    try {
-      const created = await stationService.createStation({
-        name: sName,
-        code: sCode.toUpperCase(),
-        isActive: true,
-      });
-      loadStations();
-      onStationSelected(created);
-    } catch (err: any) {
-      alert(err.message);
-    }
-  };
 
   if (loading) {
     return <LoadingSpinner text="Loading station overview..." />;
@@ -144,13 +128,7 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
               </option>
             ))}
           </select>
-          {/* Note: Multi-station creation is kept, but default MVP handles single station */}
-          <button
-            className="btn btn-primary btn-sm"
-            onClick={handleCreateStation}
-          >
-            + Create Station
-          </button>
+
         </div>
       </div>
 
