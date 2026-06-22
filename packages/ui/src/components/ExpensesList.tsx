@@ -15,7 +15,7 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({ selectedStation }) =
   const [error, setError] = useState<string | null>(null);
   const [expenses, setExpenses] = useState<any[]>([]);
   const [activeShift, setActiveShift] = useState<any | null>(null);
-  const [lastShift, setLastShift] = useState<any | null>(null);
+  const [recentClosedShifts, setRecentClosedShifts] = useState<any[]>([]);
   const [targetShiftId, setTargetShiftId] = useState('');
   const [categories, setCategories] = useState<any[]>([]);
 
@@ -45,9 +45,9 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({ selectedStation }) =
 
       setExpenses(list || []);
       const active = status.activeShift || null;
-      const last = status.lastShift || null;
+      const closedList = status.recentClosedShifts || [];
       setActiveShift(active);
-      setLastShift(last && last.status === 'CLOSED' ? last : null);
+      setRecentClosedShifts(closedList);
       setCategories(cats || []);
 
       if (cats && cats.length > 0) {
@@ -56,8 +56,8 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({ selectedStation }) =
 
       if (active) {
         setTargetShiftId(active.id);
-      } else if (last && last.status === 'CLOSED') {
-        setTargetShiftId(last.id);
+      } else if (closedList.length > 0) {
+        setTargetShiftId(closedList[0].id);
       } else {
         setTargetShiftId('');
       }
@@ -142,7 +142,7 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({ selectedStation }) =
 
           {targetShiftId ? (
             <form onSubmit={handleAddExpense} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              {activeShift && lastShift ? (
+              {(activeShift && recentClosedShifts.length > 0) || recentClosedShifts.length > 1 ? (
                 <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                   <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Target Shift</label>
                   <select
@@ -157,8 +157,14 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({ selectedStation }) =
                       backgroundColor: 'var(--bg-surface)'
                     }}
                   >
-                    <option value={activeShift.id}>Active: {activeShift.templateName} (Open)</option>
-                    <option value={lastShift.id}>Previous: {lastShift.templateName} (Closed)</option>
+                    {activeShift && (
+                      <option value={activeShift.id}>Active: {activeShift.templateName} (Open)</option>
+                    )}
+                    {recentClosedShifts.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        Closed: {s.templateName} ({new Date(s.closedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })})
+                      </option>
+                    ))}
                   </select>
                 </div>
               ) : (
@@ -175,7 +181,7 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({ selectedStation }) =
                   <Info size={14} />
                   <span>
                     Logging to {activeShift ? 'active' : 'previous closed'} shift:{' '}
-                    <strong>{activeShift ? activeShift.templateName : lastShift?.templateName}</strong>
+                    <strong>{activeShift ? activeShift.templateName : recentClosedShifts[0]?.templateName}</strong>
                   </span>
                 </div>
               )}

@@ -22,7 +22,7 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation })
   // Purchases Data
   const [purchases, setPurchases] = useState<any[]>([]);
   const [activeShift, setActiveShift] = useState<any | null>(null);
-  const [lastShift, setLastShift] = useState<any | null>(null);
+  const [recentClosedShifts, setRecentClosedShifts] = useState<any[]>([]);
   const [targetShiftId, setTargetShiftId] = useState('');
   const [suppliers, setSuppliers] = useState<any[]>([]); // Active only for purchases dropdown
   const [allSuppliers, setAllSuppliers] = useState<any[]>([]); // All suppliers for registry
@@ -74,29 +74,29 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation })
 
       setPurchases(list || []);
       const active = status.activeShift || null;
-      const last = status.lastShift || null;
+      const closedList = status.recentClosedShifts || [];
       setActiveShift(active);
-      setLastShift(last && last.status === 'CLOSED' ? last : null);
+      setRecentClosedShifts(closedList);
       setSuppliers(activeSups || []);
       setAllSuppliers(allSups || []);
       setProducts(prods || []);
-
+ 
       if (activeSups && activeSups.length > 0) {
         setSupplierId(activeSups[0].id);
       } else {
         setSupplierId('');
       }
-
+ 
       if (prods && prods.length > 0) {
         setProductId(prods[0].id);
       } else {
         setProductId('');
       }
-
+ 
       if (active) {
         setTargetShiftId(active.id);
-      } else if (last && last.status === 'CLOSED') {
-        setTargetShiftId(last.id);
+      } else if (closedList.length > 0) {
+        setTargetShiftId(closedList[0].id);
       } else {
         setTargetShiftId('');
       }
@@ -347,7 +347,7 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation })
 
               {targetShiftId ? (
                 <form onSubmit={handleAddPurchase} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  {activeShift && lastShift ? (
+                  {(activeShift && recentClosedShifts.length > 0) || recentClosedShifts.length > 1 ? (
                     <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                       <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Target Shift</label>
                       <select
@@ -362,8 +362,14 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation })
                           backgroundColor: 'var(--bg-surface)'
                         }}
                       >
-                        <option value={activeShift.id}>Active: {activeShift.templateName} (Open)</option>
-                        <option value={lastShift.id}>Previous: {lastShift.templateName} (Closed)</option>
+                        {activeShift && (
+                          <option value={activeShift.id}>Active: {activeShift.templateName} (Open)</option>
+                        )}
+                        {recentClosedShifts.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            Closed: {s.templateName} ({new Date(s.closedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })})
+                          </option>
+                        ))}
                       </select>
                     </div>
                   ) : (
@@ -380,7 +386,7 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation })
                       <Info size={14} />
                       <span>
                         Logging to {activeShift ? 'active' : 'previous closed'} shift:{' '}
-                        <strong>{activeShift ? activeShift.templateName : lastShift?.templateName}</strong>
+                        <strong>{activeShift ? activeShift.templateName : recentClosedShifts[0]?.templateName}</strong>
                       </span>
                     </div>
                   )}

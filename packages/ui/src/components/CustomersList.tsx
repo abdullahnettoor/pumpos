@@ -25,7 +25,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation })
   const [customers, setCustomers] = useState<any[]>([]); // Active only for transactions dropdown
   const [allCustomers, setAllCustomers] = useState<any[]>([]); // All customers for management
   const [activeShift, setActiveShift] = useState<any | null>(null);
-  const [lastShift, setLastShift] = useState<any | null>(null);
+  const [recentClosedShifts, setRecentClosedShifts] = useState<any[]>([]);
 
   // CRUD Drawer States
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -94,10 +94,10 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation })
   useEffect(() => {
     if (activeShift) {
       setValue('shiftId', activeShift.id);
-    } else if (lastShift) {
-      setValue('shiftId', lastShift.id);
+    } else if (recentClosedShifts && recentClosedShifts.length > 0) {
+      setValue('shiftId', recentClosedShifts[0].id);
     }
-  }, [activeShift, lastShift, setValue]);
+  }, [activeShift, recentClosedShifts, setValue]);
 
   const loadData = async () => {
     try {
@@ -113,9 +113,9 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation })
       setCustomers(activeList || []);
       setAllCustomers(allList || []);
       const active = status.activeShift || null;
-      const last = status.lastShift || null;
+      const closedList = status.recentClosedShifts || [];
       setActiveShift(active);
-      setLastShift(last && last.status === 'CLOSED' ? last : null);
+      setRecentClosedShifts(closedList);
 
       if (activeList && activeList.length > 0) {
         setValue('customerId', activeList[0].id);
@@ -146,7 +146,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation })
       });
 
       reset({
-        shiftId: activeShift?.id || lastShift?.id || '',
+        shiftId: activeShift?.id || (recentClosedShifts.length > 0 ? recentClosedShifts[0].id : ''),
         customerId: customers[0]?.id || '',
         amount: '' as any,
         paymentMethod: 'Cash' as const,
@@ -368,9 +368,9 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation })
                 </div>
               )}
 
-              {activeShift || lastShift ? (
+              {activeShift || recentClosedShifts.length > 0 ? (
                 <form onSubmit={handleSubmit(onAddCollection)} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                  {activeShift && lastShift ? (
+                  {(activeShift && recentClosedShifts.length > 0) || recentClosedShifts.length > 1 ? (
                     <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                       <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Target Shift</label>
                       <select
@@ -384,8 +384,14 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation })
                           backgroundColor: 'var(--bg-surface)'
                         }}
                       >
-                        <option value={activeShift.id}>Active: {activeShift.templateName} (Open)</option>
-                        <option value={lastShift.id}>Previous: {lastShift.templateName} (Closed)</option>
+                        {activeShift && (
+                          <option value={activeShift.id}>Active: {activeShift.templateName} (Open)</option>
+                        )}
+                        {recentClosedShifts.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            Closed: {s.templateName} ({new Date(s.closedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })})
+                          </option>
+                        ))}
                       </select>
                     </div>
                   ) : (
@@ -400,7 +406,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation })
                       gap: '8px'
                     }}>
                       <Info size={14} />
-                      <span>Logging to {activeShift ? 'active' : 'previous closed'} shift: <strong>{activeShift ? activeShift.templateName : lastShift?.templateName}</strong></span>
+                      <span>Logging to {activeShift ? 'active' : 'previous closed'} shift: <strong>{activeShift ? activeShift.templateName : recentClosedShifts[0]?.templateName}</strong></span>
                     </div>
                   )}
 

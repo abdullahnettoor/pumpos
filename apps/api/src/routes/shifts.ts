@@ -248,6 +248,46 @@ shiftsRouter.get('/status', async (c) => {
       lastDssr = dssr ?? null;
     }
 
+    // Query recent closed shifts that are not locked
+    const dbClosedShifts = await db
+      .select({
+        shift: schema.shifts,
+        templateName: schema.shiftTemplates.name
+      })
+      .from(schema.shifts)
+      .leftJoin(schema.shiftTemplates, eq(schema.shifts.shiftTemplateId, schema.shiftTemplates.id))
+      .where(and(eq(schema.shifts.stationId, stationId), eq(schema.shifts.status, 'CLOSED')))
+      .orderBy(desc(schema.shifts.closedAt));
+
+    const lockGraceDays = (station?.settings as any)?.shift_lock_grace_days ?? 3;
+    const now = Date.now();
+    const recentClosedShifts = [];
+
+    for (const item of dbClosedShifts) {
+      const s = item.shift;
+      if (s.closedAt) {
+        const closedTime = new Date(s.closedAt).getTime();
+        const lockExpiryTime = closedTime + lockGraceDays * 24 * 60 * 60 * 1000;
+        
+        if (now > lockExpiryTime) {
+          // Auto-lock expired shift
+          await db
+            .update(schema.shifts)
+            .set({
+              status: 'LOCKED',
+              lockedAt: new Date(lockExpiryTime),
+              updatedAt: new Date(),
+            })
+            .where(eq(schema.shifts.id, s.id));
+        } else {
+          recentClosedShifts.push({
+            ...s,
+            templateName: item.templateName ?? 'Custom',
+          });
+        }
+      }
+    }
+
     if (lite) {
       return c.json({
         success: true,
@@ -257,6 +297,7 @@ shiftsRouter.get('/status', async (c) => {
           lastDssr,
           canReopenLastShift,
           gracePeriodExpiresAt,
+          recentClosedShifts,
         },
       });
     }
@@ -303,6 +344,7 @@ shiftsRouter.get('/status', async (c) => {
         lastDssr,
         canReopenLastShift,
         gracePeriodExpiresAt,
+        recentClosedShifts,
         templates,
         nozzles,
         staff,
