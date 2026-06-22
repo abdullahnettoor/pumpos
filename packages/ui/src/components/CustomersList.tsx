@@ -25,6 +25,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation })
   const [customers, setCustomers] = useState<any[]>([]); // Active only for transactions dropdown
   const [allCustomers, setAllCustomers] = useState<any[]>([]); // All customers for management
   const [activeShift, setActiveShift] = useState<any | null>(null);
+  const [lastShift, setLastShift] = useState<any | null>(null);
 
   // CRUD Drawer States
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -54,6 +55,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation })
 
   const paymentMethod = watch('paymentMethod');
   const customerId = watch('customerId');
+  const selectedShiftId = watch('shiftId');
 
   // 2. Customer Drawer Form (Create/Edit)
   const {
@@ -92,8 +94,10 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation })
   useEffect(() => {
     if (activeShift) {
       setValue('shiftId', activeShift.id);
+    } else if (lastShift) {
+      setValue('shiftId', lastShift.id);
     }
-  }, [activeShift, setValue]);
+  }, [activeShift, lastShift, setValue]);
 
   const loadData = async () => {
     try {
@@ -108,7 +112,10 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation })
 
       setCustomers(activeList || []);
       setAllCustomers(allList || []);
-      setActiveShift(status.activeShift || null);
+      const active = status.activeShift || null;
+      const last = status.lastShift || null;
+      setActiveShift(active);
+      setLastShift(last && last.status === 'CLOSED' ? last : null);
 
       if (activeList && activeList.length > 0) {
         setValue('customerId', activeList[0].id);
@@ -139,7 +146,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation })
       });
 
       reset({
-        shiftId: activeShift?.id || '',
+        shiftId: activeShift?.id || lastShift?.id || '',
         customerId: customers[0]?.id || '',
         amount: '' as any,
         paymentMethod: 'Cash' as const,
@@ -361,21 +368,41 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation })
                 </div>
               )}
 
-              {activeShift ? (
+              {activeShift || lastShift ? (
                 <form onSubmit={handleSubmit(onAddCollection)} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                  <div style={{
-                    backgroundColor: 'var(--state-info-bg)',
-                    color: 'var(--state-info-fg)',
-                    padding: '10px 12px',
-                    borderRadius: 'var(--radius-input)',
-                    fontSize: '12px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px'
-                  }}>
-                    <Info size={14} />
-                    <span>Logging to active shift: <strong>{activeShift.templateName}</strong></span>
-                  </div>
+                  {activeShift && lastShift ? (
+                    <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Target Shift</label>
+                      <select
+                        {...register('shiftId')}
+                        style={{
+                          height: '32px',
+                          padding: '0 8px',
+                          borderRadius: 'var(--radius-input)',
+                          border: '1px solid var(--border-strong)',
+                          fontSize: '13px',
+                          backgroundColor: 'var(--bg-surface)'
+                        }}
+                      >
+                        <option value={activeShift.id}>Active: {activeShift.templateName} (Open)</option>
+                        <option value={lastShift.id}>Previous: {lastShift.templateName} (Closed)</option>
+                      </select>
+                    </div>
+                  ) : (
+                    <div style={{
+                      backgroundColor: 'var(--state-info-bg)',
+                      color: 'var(--state-info-fg)',
+                      padding: '10px 12px',
+                      borderRadius: 'var(--radius-input)',
+                      fontSize: '12px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px'
+                    }}>
+                      <Info size={14} />
+                      <span>Logging to {activeShift ? 'active' : 'previous closed'} shift: <strong>{activeShift ? activeShift.templateName : lastShift?.templateName}</strong></span>
+                    </div>
+                  )}
 
                   <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                     <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Entry Type / Payment Method</label>

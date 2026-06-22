@@ -10,6 +10,7 @@ import {
   PurchasesList,
   CustomersList,
   InventoryList,
+  ReportsOverview,
   CloudStationService, 
   setAuthToken, 
   supabase 
@@ -26,6 +27,7 @@ const App: React.FC = () => {
   const [stations, setStations] = useState<Station[]>([]);
   const [selectedStation, setSelectedStation] = useState<Station | null>(null);
   const [loading, setLoading] = useState(true);
+  const [viewDssrShiftId, setViewDssrShiftId] = useState<string | null>(null);
 
   // Supabase Auth and Backend user context states
   const [session, setSession] = useState<any>(null);
@@ -315,6 +317,8 @@ const App: React.FC = () => {
             selectedStation={selectedStation}
             userRole={userRole || 'Staff'}
             userName={userName}
+            onNavigate={setCurrentPath}
+            onViewDssr={setViewDssrShiftId}
           />
         );
       case '/expenses':
@@ -327,10 +331,12 @@ const App: React.FC = () => {
         return <CustomersList selectedStation={selectedStation} />;
       case '/reports':
         return (
-          <div className="animate-fade-in">
-            <h1 style={{ fontSize: '24px', fontWeight: 700 }}>DSSR & Reports</h1>
-            <p style={{ color: '#9ca3af', marginTop: '8px' }}>Operational reports, DSSR, and client exports.</p>
-          </div>
+          <ReportsOverview
+            selectedStation={selectedStation}
+            userRole={userRole || 'Staff'}
+            viewDssrShiftId={viewDssrShiftId}
+            onClearViewDssrShiftId={() => setViewDssrShiftId(null)}
+          />
         );
       default:
         return <div>Not found</div>;

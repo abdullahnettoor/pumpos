@@ -22,6 +22,8 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation })
   // Purchases Data
   const [purchases, setPurchases] = useState<any[]>([]);
   const [activeShift, setActiveShift] = useState<any | null>(null);
+  const [lastShift, setLastShift] = useState<any | null>(null);
+  const [targetShiftId, setTargetShiftId] = useState('');
   const [suppliers, setSuppliers] = useState<any[]>([]); // Active only for purchases dropdown
   const [allSuppliers, setAllSuppliers] = useState<any[]>([]); // All suppliers for registry
   const [products, setProducts] = useState<any[]>([]);
@@ -71,7 +73,10 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation })
       ]);
 
       setPurchases(list || []);
-      setActiveShift(status.activeShift || null);
+      const active = status.activeShift || null;
+      const last = status.lastShift || null;
+      setActiveShift(active);
+      setLastShift(last && last.status === 'CLOSED' ? last : null);
       setSuppliers(activeSups || []);
       setAllSuppliers(allSups || []);
       setProducts(prods || []);
@@ -87,6 +92,14 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation })
       } else {
         setProductId('');
       }
+
+      if (active) {
+        setTargetShiftId(active.id);
+      } else if (last && last.status === 'CLOSED') {
+        setTargetShiftId(last.id);
+      } else {
+        setTargetShiftId('');
+      }
     } catch (err: any) {
       setError(err.message || 'Failed to load purchases data');
     } finally {
@@ -97,7 +110,7 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation })
   const handleAddPurchase = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
-    if (!activeShift || !supplierId || !productId || !quantity || !totalAmount) return;
+    if (!targetShiftId || !supplierId || !productId || !quantity || !totalAmount) return;
 
     try {
       setSubmitting(true);
@@ -106,7 +119,7 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation })
       const computedUnitPrice = qtyNum > 0 ? parseFloat((totalAmtNum / qtyNum).toFixed(6)) : 0;
 
       await transactionService.recordPurchase({
-        shiftId: activeShift.id,
+        shiftId: targetShiftId,
         supplierId,
         productId,
         quantity: qtyNum,
@@ -332,21 +345,45 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation })
                 </div>
               )}
 
-              {activeShift ? (
+              {targetShiftId ? (
                 <form onSubmit={handleAddPurchase} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  <div style={{
-                    backgroundColor: 'var(--state-info-bg)',
-                    color: 'var(--state-info-fg)',
-                    padding: '10px 12px',
-                    borderRadius: 'var(--radius-input)',
-                    fontSize: '12px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px'
-                  }}>
-                    <Info size={14} />
-                    <span>Logging to active shift: <strong>{activeShift.templateName}</strong></span>
-                  </div>
+                  {activeShift && lastShift ? (
+                    <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Target Shift</label>
+                      <select
+                        value={targetShiftId}
+                        onChange={(e) => setTargetShiftId(e.target.value)}
+                        style={{
+                          height: '32px',
+                          padding: '0 8px',
+                          borderRadius: 'var(--radius-input)',
+                          border: '1px solid var(--border-strong)',
+                          fontSize: '13px',
+                          backgroundColor: 'var(--bg-surface)'
+                        }}
+                      >
+                        <option value={activeShift.id}>Active: {activeShift.templateName} (Open)</option>
+                        <option value={lastShift.id}>Previous: {lastShift.templateName} (Closed)</option>
+                      </select>
+                    </div>
+                  ) : (
+                    <div style={{
+                      backgroundColor: 'var(--state-info-bg)',
+                      color: 'var(--state-info-fg)',
+                      padding: '10px 12px',
+                      borderRadius: 'var(--radius-input)',
+                      fontSize: '12px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px'
+                    }}>
+                      <Info size={14} />
+                      <span>
+                        Logging to {activeShift ? 'active' : 'previous closed'} shift:{' '}
+                        <strong>{activeShift ? activeShift.templateName : lastShift?.templateName}</strong>
+                      </span>
+                    </div>
+                  )}
 
                   <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                     <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Supplier</label>

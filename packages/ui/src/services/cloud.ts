@@ -294,6 +294,11 @@ export class CloudShiftService {
   async getHandovers(shiftId: string): Promise<any[]> {
     return request<any[]>(`/shifts/handovers?shiftId=${shiftId}`);
   }
+
+  async getDssrs(stationId: string): Promise<any[]> {
+    const data = await request<any[]>(`/shifts/dssrs?stationId=${stationId}`);
+    return data || [];
+  }
 }
 
 export class CloudTransactionService {

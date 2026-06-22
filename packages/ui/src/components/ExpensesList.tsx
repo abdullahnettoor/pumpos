@@ -15,6 +15,8 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({ selectedStation }) =
   const [error, setError] = useState<string | null>(null);
   const [expenses, setExpenses] = useState<any[]>([]);
   const [activeShift, setActiveShift] = useState<any | null>(null);
+  const [lastShift, setLastShift] = useState<any | null>(null);
+  const [targetShiftId, setTargetShiftId] = useState('');
   const [categories, setCategories] = useState<any[]>([]);
 
   // Form States
@@ -42,11 +44,22 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({ selectedStation }) =
       ]);
 
       setExpenses(list || []);
-      setActiveShift(status.activeShift || null);
+      const active = status.activeShift || null;
+      const last = status.lastShift || null;
+      setActiveShift(active);
+      setLastShift(last && last.status === 'CLOSED' ? last : null);
       setCategories(cats || []);
 
       if (cats && cats.length > 0) {
         setCategoryId(cats[0].id);
+      }
+
+      if (active) {
+        setTargetShiftId(active.id);
+      } else if (last && last.status === 'CLOSED') {
+        setTargetShiftId(last.id);
+      } else {
+        setTargetShiftId('');
       }
     } catch (err: any) {
       setError(err.message || 'Failed to load expenses data');
@@ -57,12 +70,12 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({ selectedStation }) =
 
   const handleAddExpense = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!activeShift || !categoryId || !amount) return;
+    if (!targetShiftId || !categoryId || !amount) return;
 
     try {
       setSubmitting(true);
       await transactionService.recordExpense({
-        shiftId: activeShift.id,
+        shiftId: targetShiftId,
         categoryId,
         amount: Number(amount),
         description: description || undefined,
@@ -127,21 +140,45 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({ selectedStation }) =
             Log New Expense
           </h3>
 
-          {activeShift ? (
+          {targetShiftId ? (
             <form onSubmit={handleAddExpense} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div style={{
-                backgroundColor: 'var(--state-info-bg)',
-                color: 'var(--state-info-fg)',
-                padding: '10px 12px',
-                borderRadius: 'var(--radius-input)',
-                fontSize: '12px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px'
-              }}>
-                <Info size={14} />
-                <span>Logging to active shift: <strong>{activeShift.templateName}</strong></span>
-              </div>
+              {activeShift && lastShift ? (
+                <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Target Shift</label>
+                  <select
+                    value={targetShiftId}
+                    onChange={(e) => setTargetShiftId(e.target.value)}
+                    style={{
+                      height: '32px',
+                      padding: '0 8px',
+                      borderRadius: 'var(--radius-input)',
+                      border: '1px solid var(--border-strong)',
+                      fontSize: '13px',
+                      backgroundColor: 'var(--bg-surface)'
+                    }}
+                  >
+                    <option value={activeShift.id}>Active: {activeShift.templateName} (Open)</option>
+                    <option value={lastShift.id}>Previous: {lastShift.templateName} (Closed)</option>
+                  </select>
+                </div>
+              ) : (
+                <div style={{
+                  backgroundColor: 'var(--state-info-bg)',
+                  color: 'var(--state-info-fg)',
+                  padding: '10px 12px',
+                  borderRadius: 'var(--radius-input)',
+                  fontSize: '12px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}>
+                  <Info size={14} />
+                  <span>
+                    Logging to {activeShift ? 'active' : 'previous closed'} shift:{' '}
+                    <strong>{activeShift ? activeShift.templateName : lastShift?.templateName}</strong>
+                  </span>
+                </div>
+              )}
 
               <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Category</label>

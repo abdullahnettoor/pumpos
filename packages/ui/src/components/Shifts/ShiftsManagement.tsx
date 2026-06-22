@@ -14,12 +14,16 @@ interface ShiftsManagementProps {
   selectedStation: Station | null;
   userRole: 'Owner' | 'Manager' | 'Accountant' | 'Staff';
   userName: string;
+  onNavigate?: (path: string) => void;
+  onViewDssr?: (shiftId: string) => void;
 }
 
 export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   selectedStation,
   userRole,
   userName,
+  onNavigate,
+  onViewDssr,
 }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -44,6 +48,13 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   const [isClosing, setIsClosing] = useState(false);
   const [stationTanks, setStationTanks] = useState<any[]>([]);
   const [dipReadings, setDipReadings] = useState<Record<string, number | string>>({});
+  const [closedShiftSuccess, setClosedShiftSuccess] = useState<{
+    expectedCash: number;
+    closingCash: number;
+    variance: number;
+    lastClosedShiftId: string;
+    nextTemplateId: string;
+  } | null>(null);
 
   // Handover Drawer states
   const [handoverDrawerOpen, setHandoverDrawerOpen] = useState(false);
@@ -318,7 +329,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   };
 
 
-  const handleCloseShift = async () => {
+  const handleCloseShift = async (startNextShiftImmediately = false) => {
     if (!data.activeShift) return;
     try {
       setIsClosing(true);
@@ -334,6 +345,22 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
           actualQuantity: Number(actualQuantity),
         }));
 
+      // Calculate expected, actual, variance and nextTemplateId before closing
+      const expected = expectedCash;
+      const actual = closingCash;
+      const variance = cashVariance;
+      const closedId = data.activeShift.id;
+
+      let nextTemplateId = '';
+      if (data?.templates && data.templates.length > 0 && data?.activeShift) {
+        const currentIdx = data.templates.findIndex((t: any) => t.id === data.activeShift.shiftTemplateId);
+        if (currentIdx !== -1) {
+          nextTemplateId = data.templates[(currentIdx + 1) % data.templates.length].id;
+        } else {
+          nextTemplateId = data.templates[0].id;
+        }
+      }
+
       await shiftService.closeShift(data.activeShift.id, {
         closingCash,
         nozzleReadings: readingsArray,
@@ -342,7 +369,23 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
 
       setIsPreparingClose(false);
       await loadShiftStatus();
-      setViewingDssr(true);
+
+      if (startNextShiftImmediately) {
+        setOpeningCash(actual);
+        if (nextTemplateId) {
+          setSelectedTemplateId(nextTemplateId);
+        }
+        setViewingDssr(false);
+        setClosedShiftSuccess(null);
+      } else {
+        setClosedShiftSuccess({
+          expectedCash: expected,
+          closingCash: actual,
+          variance,
+          lastClosedShiftId: closedId,
+          nextTemplateId
+        });
+      }
     } catch (err: any) {
       alert(err.message || 'Failed to close shift');
     } finally {
@@ -373,6 +416,103 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   }
 
   const { activeShift, lastShift, lastDssr, canReopenLastShift, gracePeriodExpiresAt, templates, nozzles, staff, dispensers } = data;
+
+  // Render Success Screen if set
+  if (closedShiftSuccess) {
+    return (
+      <div className="animate-fade-in card card-comfortable" style={{ maxWidth: '600px', margin: '40px auto', display: 'flex', flexDirection: 'column', gap: '24px', textAlign: 'center', fontFamily: 'var(--font-sans)' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+          <div style={{
+            width: '64px',
+            height: '64px',
+            borderRadius: '50%',
+            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+            color: 'var(--state-success-fg)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}>
+            <Check size={36} />
+          </div>
+          <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--text-strong)' }}>Shift Closed Successfully</h2>
+          <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>The Daily Sales Summary Record (DSSR) snapshot has been compiled and saved permanently.</p>
+        </div>
+
+        <div style={{
+          border: '1px solid var(--border-soft)',
+          borderRadius: 'var(--radius-input)',
+          display: 'flex',
+          flexDirection: 'column',
+          fontSize: '13px',
+          overflow: 'hidden',
+          backgroundColor: 'var(--bg-surface-alt)',
+          textAlign: 'left'
+        }}>
+          <div style={{ display: 'flex', alignSelf: 'stretch', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid var(--border-soft)' }}>
+            <span>Expected Safe Cash</span>
+            <span style={{ fontWeight: 600, fontFamily: 'var(--font-mono)' }}>₹{closedShiftSuccess.expectedCash.toLocaleString('en-IN')}</span>
+          </div>
+          <div style={{ display: 'flex', alignSelf: 'stretch', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid var(--border-soft)' }}>
+            <span>Actual Closing Cash Entered</span>
+            <span style={{ fontWeight: 600, fontFamily: 'var(--font-mono)' }}>₹{closedShiftSuccess.closingCash.toLocaleString('en-IN')}</span>
+          </div>
+          <div style={{
+            display: 'flex',
+            alignSelf: 'stretch',
+            justifyContent: 'space-between',
+            padding: '12px 16px',
+            fontWeight: 700,
+            color: closedShiftSuccess.variance === 0 ? 'var(--state-success-fg)' : 'var(--brand-danger)'
+          }}>
+            <span>Cash Variance</span>
+            <span style={{ fontFamily: 'var(--font-mono)' }}>
+              {closedShiftSuccess.variance > 0 ? '+' : ''}₹{closedShiftSuccess.variance.toLocaleString('en-IN')}
+              {closedShiftSuccess.variance === 0 ? ' (Perfect Match)' : ''}
+            </span>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+          <button
+            className="btn btn-primary btn-md"
+            onClick={() => {
+              setOpeningCash(closedShiftSuccess.closingCash);
+              setSelectedTemplateId(closedShiftSuccess.nextTemplateId);
+              setClosedShiftSuccess(null);
+              setViewingDssr(false);
+            }}
+          >
+            <Play size={13} style={{ fill: 'currentColor', marginRight: '6px' }} /> Start Next Shift
+          </button>
+          
+          <button
+            className="btn btn-secondary btn-md"
+            onClick={() => {
+              if (onNavigate && onViewDssr) {
+                onViewDssr(closedShiftSuccess.lastClosedShiftId);
+                onNavigate('/reports');
+              } else {
+                setViewingDssr(true);
+              }
+              setClosedShiftSuccess(null);
+            }}
+          >
+            <FileText size={13} style={{ marginRight: '6px' }} /> View Compiled DSSR
+          </button>
+
+          <button
+            className="btn btn-secondary btn-md"
+            onClick={() => {
+              setClosedShiftSuccess(null);
+              setViewingDssr(false);
+            }}
+          >
+            Back to Workspace
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   // Render DSSR View if toggled
   if (viewingDssr && lastDssr) {
@@ -413,7 +553,14 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
           {lastDssr && (
             <button
               className="btn btn-secondary btn-sm"
-              onClick={() => setViewingDssr(true)}
+              onClick={() => {
+                if (onNavigate && onViewDssr) {
+                  onViewDssr(lastDssr.shiftId);
+                  onNavigate('/reports');
+                } else {
+                  setViewingDssr(true);
+                }
+              }}
             >
               <FileText size={13} /> View Last DSSR
             </button>
@@ -857,7 +1004,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
             <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
               <button
                 className={`btn ${(warnings.length === 0 || confirmWarningsChecked) ? 'btn-primary' : 'btn-secondary'} btn-md`}
-                onClick={handleCloseShift}
+                onClick={() => handleCloseShift(false)}
                 disabled={(warnings.length > 0 && !confirmWarningsChecked) || isClosing}
               >
                 {isClosing ? 'Compiling DSSR...' : (
@@ -865,6 +1012,14 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
                     <Check size={13} style={{ marginRight: '6px' }} /> Confirm Close Shift
                   </>
                 )}
+              </button>
+
+              <button
+                className="btn btn-secondary btn-md"
+                onClick={() => handleCloseShift(true)}
+                disabled={(warnings.length > 0 && !confirmWarningsChecked) || isClosing}
+              >
+                Close & Start Next Shift
               </button>
 
               <button
@@ -921,7 +1076,14 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         {lastDssr && (
           <button
             className="btn btn-secondary btn-sm"
-            onClick={() => setViewingDssr(true)}
+            onClick={() => {
+              if (onNavigate && onViewDssr) {
+                onViewDssr(lastDssr.shiftId);
+                onNavigate('/reports');
+              } else {
+                setViewingDssr(true);
+              }
+            }}
           >
             <FileText size={13} /> View Last DSSR
           </button>

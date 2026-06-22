@@ -838,6 +838,40 @@ shiftsRouter.post('/reopen', async (c) => {
   }
 });
 
+// GET /api/shifts/dssrs
+shiftsRouter.get('/dssrs', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  const stationId = c.req.query('stationId');
+
+  if (!stationId) {
+    return c.json({ success: false, error: { code: 'BAD_REQUEST', message: 'Missing stationId' } }, 400);
+  }
+
+  if (!hasStationAccess(user, stationId)) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+  }
+
+  try {
+    const list = await db
+      .select({
+        id: schema.dssrSnapshots.id,
+        shiftId: schema.dssrSnapshots.shiftId,
+        generatedAt: schema.dssrSnapshots.generatedAt,
+        snapshotData: schema.dssrSnapshots.snapshotData,
+        shiftStatus: schema.shifts.status,
+      })
+      .from(schema.dssrSnapshots)
+      .innerJoin(schema.shifts, eq(schema.dssrSnapshots.shiftId, schema.shifts.id))
+      .where(eq(schema.shifts.stationId, stationId))
+      .orderBy(desc(schema.dssrSnapshots.generatedAt));
+
+    return c.json({ success: true, data: list });
+  } catch (err: any) {
+    return c.json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }, 500);
+  }
+});
+
 // GET /api/shifts/handovers
 shiftsRouter.get('/handovers', async (c) => {
   const db = c.var.db;

@@ -14,6 +14,7 @@ export { PurchasesList } from './components/PurchasesList.js';
 export { CustomersList } from './components/CustomersList.js';
 export { InventoryList } from './components/InventoryList.js';
 export { LoadingSpinner } from './components/LoadingSpinner.js';
+export { ReportsOverview } from './components/ReportsOverview.js';
 export { supabase } from './services/supabase.js';
 export * from './services/cloud.js';
 
