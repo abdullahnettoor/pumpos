@@ -84,67 +84,51 @@ shiftsRouter.get('/status', async (c) => {
         .where(eq(schema.users.id, dbActiveShift.openedBy))
         .limit(1);
 
-      // Get active nozzle readings
-      const rawNozzleReadings = await db
-        .select()
+      // Get active nozzle readings (single JOIN)
+      const nozzleReadingRows = await db
+        .select({
+          nr: schema.nozzleReadings,
+          nz: schema.nozzles,
+          prod: schema.products,
+          tnk: schema.tanks,
+          du: schema.dispenserUnits,
+        })
         .from(schema.nozzleReadings)
+        .leftJoin(schema.nozzles, eq(schema.nozzles.id, schema.nozzleReadings.nozzleId))
+        .leftJoin(schema.products, eq(schema.products.id, schema.nozzles.productId))
+        .leftJoin(schema.tanks, eq(schema.tanks.id, schema.nozzles.tankId))
+        .leftJoin(schema.dispenserUnits, eq(schema.dispenserUnits.id, schema.nozzles.duId))
         .where(eq(schema.nozzleReadings.shiftId, dbActiveShift.id));
 
-      const enrichedReadings = await Promise.all(
-        rawNozzleReadings.map(async (nr) => {
-          const [nz] = await db
-            .select()
-            .from(schema.nozzles)
-            .where(eq(schema.nozzles.id, nr.nozzleId))
-            .limit(1);
-          const [prod] = nz 
-            ? await db.select().from(schema.products).where(eq(schema.products.id, nz.productId)).limit(1)
-            : [null];
-          const [tnk] = nz 
-            ? await db.select().from(schema.tanks).where(eq(schema.tanks.id, nz.tankId)).limit(1)
-            : [null];
-          const [du] = nz
-            ? await db.select().from(schema.dispenserUnits).where(eq(schema.dispenserUnits.id, nz.duId)).limit(1)
-            : [null];
-          return {
-            ...nr,
-            nozzleName: nz?.name ?? 'Unknown',
-            productName: prod?.name ?? 'Unknown',
-            productCode: prod?.code ?? 'Unknown',
-            tankName: tnk?.name ?? 'Unknown',
-            duId: nz?.duId ?? null,
-            duName: du?.name ?? 'Unknown',
-            duCode: du?.code ?? 'Unknown',
-          };
-        })
-      );
+      const enrichedReadings = nozzleReadingRows.map(({ nr, nz, prod, tnk, du }) => ({
+        ...nr,
+        nozzleName: nz?.name ?? 'Unknown',
+        productName: prod?.name ?? 'Unknown',
+        productCode: prod?.code ?? 'Unknown',
+        tankName: tnk?.name ?? 'Unknown',
+        duId: nz?.duId ?? null,
+        duName: du?.name ?? 'Unknown',
+        duCode: du?.code ?? 'Unknown',
+      }));
 
-      // Get staff assignments
-      const rawAssignments = await db
-        .select()
+      // Get staff assignments (single JOIN)
+      const assignmentRows = await db
+        .select({
+          sa: schema.shiftStaffAssignments,
+          staffUser: schema.users,
+          du: schema.dispenserUnits,
+        })
         .from(schema.shiftStaffAssignments)
+        .leftJoin(schema.users, eq(schema.users.id, schema.shiftStaffAssignments.userId))
+        .leftJoin(schema.dispenserUnits, eq(schema.dispenserUnits.id, schema.shiftStaffAssignments.duId))
         .where(eq(schema.shiftStaffAssignments.shiftId, dbActiveShift.id));
 
-      const enrichedAssignments = await Promise.all(
-        rawAssignments.map(async (sa) => {
-          const [staffUser] = await db
-            .select()
-            .from(schema.users)
-            .where(eq(schema.users.id, sa.userId))
-            .limit(1);
-          const [du] = await db
-            .select()
-            .from(schema.dispenserUnits)
-            .where(eq(schema.dispenserUnits.id, sa.duId))
-            .limit(1);
-          return {
-            ...sa,
-            userName: staffUser?.fullName ?? 'Unknown',
-            duName: du?.name ?? 'Unknown',
-            duCode: du?.code ?? 'Unknown',
-          };
-        })
-      );
+      const enrichedAssignments = assignmentRows.map(({ sa, staffUser, du }) => ({
+        ...sa,
+        userName: staffUser?.fullName ?? 'Unknown',
+        duName: du?.name ?? 'Unknown',
+        duCode: du?.code ?? 'Unknown',
+      }));
 
       // Get recorded handovers for the active shift
       const rawHandovers = await db
@@ -179,7 +163,7 @@ shiftsRouter.get('/status', async (c) => {
       let currentStatus = dbLastShift.status;
       let lockedAt = dbLastShift.lockedAt;
 
-      // Self-Healing Lock Transition Check
+      // Self-Healing Lock Transition Check (read-only; actual write happens in POST /auto-lock)
       if (currentStatus === 'CLOSED' && dbLastShift.closedAt) {
         const closedTime = new Date(dbLastShift.closedAt).getTime();
         const lockGraceDays = (station?.settings as any)?.shift_lock_grace_days ?? 3;
@@ -187,18 +171,8 @@ shiftsRouter.get('/status', async (c) => {
         const now = Date.now();
 
         if (now > lockExpiryTime) {
-          // Grace period expired, automatically lock the shift
           lockedAt = new Date(lockExpiryTime);
           currentStatus = 'LOCKED';
-
-          await db
-            .update(schema.shifts)
-            .set({
-              status: 'LOCKED',
-              lockedAt,
-              updatedAt: new Date(),
-            })
-            .where(eq(schema.shifts.id, dbLastShift.id));
         } else {
           // Reopen grace minutes check
           const reopenExpiryTime = closedTime + graceMinutes * 60 * 1000;
@@ -268,18 +242,9 @@ shiftsRouter.get('/status', async (c) => {
       if (s.closedAt) {
         const closedTime = new Date(s.closedAt).getTime();
         const lockExpiryTime = closedTime + lockGraceDays * 24 * 60 * 60 * 1000;
-        
-        if (now > lockExpiryTime) {
-          // Auto-lock expired shift
-          await db
-            .update(schema.shifts)
-            .set({
-              status: 'LOCKED',
-              lockedAt: new Date(lockExpiryTime),
-              updatedAt: new Date(),
-            })
-            .where(eq(schema.shifts.id, s.id));
-        } else {
+
+        // Filter out shifts whose grace expired; write happens in POST /auto-lock
+        if (now <= lockExpiryTime) {
           recentClosedShifts.push({
             ...s,
             templateName: item.templateName ?? 'Custom',
@@ -308,23 +273,23 @@ shiftsRouter.get('/status', async (c) => {
       .from(schema.shiftTemplates)
       .where(and(eq(schema.shiftTemplates.organizationId, user.organizationId), eq(schema.shiftTemplates.isActive, true)));
 
-    const rawNozzles = await db
-      .select()
+    const nozzleRows = await db
+      .select({
+        nz: schema.nozzles,
+        prod: schema.products,
+        tnk: schema.tanks,
+      })
       .from(schema.nozzles)
+      .leftJoin(schema.products, eq(schema.products.id, schema.nozzles.productId))
+      .leftJoin(schema.tanks, eq(schema.tanks.id, schema.nozzles.tankId))
       .where(and(eq(schema.nozzles.stationId, stationId), eq(schema.nozzles.organizationId, user.organizationId)));
 
-    const nozzles = await Promise.all(
-      rawNozzles.map(async (nz) => {
-        const [prod] = await db.select().from(schema.products).where(eq(schema.products.id, nz.productId)).limit(1);
-        const [tnk] = await db.select().from(schema.tanks).where(eq(schema.tanks.id, nz.tankId)).limit(1);
-        return {
-          ...nz,
-          productName: prod?.name ?? 'Unknown',
-          productCode: prod?.code ?? 'Unknown',
-          tankName: tnk?.name ?? 'Unknown',
-        };
-      })
-    );
+    const nozzles = nozzleRows.map(({ nz, prod, tnk }) => ({
+      ...nz,
+      productName: prod?.name ?? 'Unknown',
+      productCode: prod?.code ?? 'Unknown',
+      tankName: tnk?.name ?? 'Unknown',
+    }));
 
     const staff = await db
       .select()
@@ -354,6 +319,55 @@ shiftsRouter.get('/status', async (c) => {
   } catch (err: any) {
     return c.json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }, 500);
   }
+});
+
+// POST /api/shifts/auto-lock
+// Locks any CLOSED shift whose lock-grace period has expired.
+// Optional body: { stationId } to scope; otherwise scans all stations the caller can access.
+shiftsRouter.post('/auto-lock', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+
+  let body: { stationId?: string } = {};
+  try { body = await c.req.json(); } catch { /* no body */ }
+
+  const stationIds = body.stationId
+    ? [body.stationId]
+    : (user.role === 'Owner' ? null : user.assignedStationIds);
+
+  if (stationIds && stationIds.length === 0) {
+    return c.json({ success: true, data: { locked: 0 } });
+  }
+
+  const stationFilter = stationIds
+    ? and(eq(schema.shifts.organizationId, user.organizationId), eq(schema.shifts.status, 'CLOSED'), inArray(schema.shifts.stationId, stationIds))
+    : and(eq(schema.shifts.organizationId, user.organizationId), eq(schema.shifts.status, 'CLOSED'));
+
+  const closed = await db
+    .select({ shift: schema.shifts, settings: schema.stations.settings })
+    .from(schema.shifts)
+    .innerJoin(schema.stations, eq(schema.stations.id, schema.shifts.stationId))
+    .where(stationFilter);
+
+  const now = Date.now();
+  const toLock: { id: string; lockedAt: Date }[] = [];
+  for (const { shift, settings } of closed) {
+    if (!shift.closedAt) continue;
+    const lockGraceDays = (settings as any)?.shift_lock_grace_days ?? 3;
+    const expiry = new Date(shift.closedAt).getTime() + lockGraceDays * 24 * 60 * 60 * 1000;
+    if (now > expiry) {
+      toLock.push({ id: shift.id, lockedAt: new Date(expiry) });
+    }
+  }
+
+  for (const { id, lockedAt } of toLock) {
+    await db
+      .update(schema.shifts)
+      .set({ status: 'LOCKED', lockedAt, updatedAt: new Date() })
+      .where(eq(schema.shifts.id, id));
+  }
+
+  return c.json({ success: true, data: { locked: toLock.length } });
 });
 
 // POST /api/shifts/open
@@ -399,16 +413,16 @@ shiftsRouter.post('/open', validateJson(shiftOpenSchema), async (c) => {
       })
       .returning();
 
-    // Insert staff assignments if any
+    // Insert staff assignments if any (batched)
     if (parsed.staffAssignments && parsed.staffAssignments.length > 0) {
-      for (const assign of parsed.staffAssignments) {
-        await db.insert(schema.shiftStaffAssignments).values({
+      await db.insert(schema.shiftStaffAssignments).values(
+        parsed.staffAssignments.map((assign: any) => ({
           shiftId: newShift.id,
           userId: assign.userId,
           duId: assign.duId,
           assignedAt: new Date(),
-        });
-      }
+        }))
+      );
     }
 
     // Fetch all nozzles for this station
@@ -417,54 +431,64 @@ shiftsRouter.post('/open', validateJson(shiftOpenSchema), async (c) => {
       .from(schema.nozzles)
       .where(eq(schema.nozzles.stationId, parsed.stationId));
 
-    // Populate nozzle readings
-    for (const nozzle of nozzles) {
-      // Find latest closing reading recorded for this nozzle from any past shift
-      const [lastReading] = await db
-        .select()
-        .from(schema.nozzleReadings)
-        .where(eq(schema.nozzleReadings.nozzleId, nozzle.id))
-        .orderBy(desc(schema.nozzleReadings.createdAt))
-        .limit(1);
+    // Pre-fetch latest readings + latest prices for all nozzles in two queries
+    const nozzleIds = nozzles.map((n) => n.id);
+    const productIds = Array.from(new Set(nozzles.map((n) => n.productId)));
 
+    const allPastReadings = nozzleIds.length > 0
+      ? await db
+          .select()
+          .from(schema.nozzleReadings)
+          .where(inArray(schema.nozzleReadings.nozzleId, nozzleIds))
+          .orderBy(desc(schema.nozzleReadings.createdAt))
+      : [];
+    const lastReadingByNozzle = new Map<string, typeof allPastReadings[number]>();
+    for (const r of allPastReadings) {
+      if (!lastReadingByNozzle.has(r.nozzleId)) lastReadingByNozzle.set(r.nozzleId, r);
+    }
+
+    const allPrices = productIds.length > 0
+      ? await db
+          .select()
+          .from(schema.fuelPrices)
+          .where(
+            and(
+              eq(schema.fuelPrices.stationId, parsed.stationId),
+              inArray(schema.fuelPrices.productId, productIds)
+            )
+          )
+          .orderBy(desc(schema.fuelPrices.effectiveFrom))
+      : [];
+    const latestPriceByProduct = new Map<string, typeof allPrices[number]>();
+    for (const p of allPrices) {
+      if (!latestPriceByProduct.has(p.productId)) latestPriceByProduct.set(p.productId, p);
+    }
+
+    // Build and batch-insert nozzle readings
+    const nozzleReadingInserts = nozzles.map((nozzle) => {
+      const lastReading = lastReadingByNozzle.get(nozzle.id);
       let openingVal = 0;
       if (lastReading) {
         openingVal = Number(lastReading.closingReading);
       } else {
-        // Fall back to initialReadings from body
         const initial = parsed.initialReadings?.find((ir: any) => ir.nozzleId === nozzle.id);
-        if (initial) {
-          openingVal = initial.openingReading;
-        } else {
-          // Fall back to nozzle table's currentReading
-          openingVal = Number(nozzle.currentReading);
-        }
+        openingVal = initial ? initial.openingReading : Number(nozzle.currentReading);
       }
-
-      // Fetch the latest configured price for this product at this station
-      const [priceRec] = await db
-        .select()
-        .from(schema.fuelPrices)
-        .where(
-          and(
-            eq(schema.fuelPrices.stationId, parsed.stationId),
-            eq(schema.fuelPrices.productId, nozzle.productId)
-          )
-        )
-        .orderBy(desc(schema.fuelPrices.effectiveFrom))
-        .limit(1);
-
+      const priceRec = latestPriceByProduct.get(nozzle.productId);
       const unitPriceVal = priceRec ? priceRec.price : '0';
-
-      await db.insert(schema.nozzleReadings).values({
+      return {
         shiftId: newShift.id,
         nozzleId: nozzle.id,
         openingReading: String(openingVal),
-        closingReading: String(openingVal), // Initially same as opening
+        closingReading: String(openingVal),
         volumeSold: '0',
         unitPrice: String(unitPriceVal),
         createdAt: new Date(),
-      });
+      };
+    });
+
+    if (nozzleReadingInserts.length > 0) {
+      await db.insert(schema.nozzleReadings).values(nozzleReadingInserts);
     }
 
     // Log Business Event
@@ -614,8 +638,20 @@ shiftsRouter.post('/close', validateJson(shiftCloseRequestSchema), async (c) => 
       }
     }
 
+    // Pre-fetch nozzles + products for all readings in one query
+    const readingNozzleIds = parsed.nozzleReadings.map((rd: any) => rd.nozzleId);
+    const nzProdRows = readingNozzleIds.length > 0
+      ? await db
+          .select({ nz: schema.nozzles, prod: schema.products })
+          .from(schema.nozzles)
+          .leftJoin(schema.products, eq(schema.products.id, schema.nozzles.productId))
+          .where(inArray(schema.nozzles.id, readingNozzleIds))
+      : [];
+    const nzMap = new Map(nzProdRows.map((r) => [r.nz.id, r]));
+
     // Process and update nozzle readings, calculating final volumeSold
     const enrichedReadingsSnapshot: any[] = [];
+    const stockMovementInserts: typeof schema.stockMovements.$inferInsert[] = [];
     for (const rd of parsed.nozzleReadings) {
       const dbNr = rawNozzleReadings.find((r) => r.nozzleId === rd.nozzleId);
       const opening = dbNr ? Number(dbNr.openingReading) : 0;
@@ -639,12 +675,13 @@ shiftsRouter.post('/close', validateJson(shiftCloseRequestSchema), async (c) => 
         })
         .where(eq(schema.nozzles.id, rd.nozzleId));
 
-      const [nz] = await db.select().from(schema.nozzles).where(eq(schema.nozzles.id, rd.nozzleId)).limit(1);
-      const [prod] = nz ? await db.select().from(schema.products).where(eq(schema.products.id, nz.productId)).limit(1) : [null];
+      const entry = nzMap.get(rd.nozzleId);
+      const nz = entry?.nz ?? null;
+      const prod = entry?.prod ?? null;
 
-      // Record inventory consumption (Sale)
+      // Record inventory consumption (Sale) — batched insert below
       if (nz && nz.productId && volume > 0) {
-        await db.insert(schema.stockMovements).values({
+        stockMovementInserts.push({
           shiftId,
           productId: nz.productId,
           tankId: nz.tankId,
@@ -666,6 +703,10 @@ shiftsRouter.post('/close', validateJson(shiftCloseRequestSchema), async (c) => 
         closingReading: closing,
         volumeSold: volume,
       });
+    }
+
+    if (stockMovementInserts.length > 0) {
+      await db.insert(schema.stockMovements).values(stockMovementInserts);
     }
 
     // Process actual physical dip readings

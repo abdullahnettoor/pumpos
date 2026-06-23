@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, inArray } from 'drizzle-orm';
 import { schema, DbClient } from '@pump/db';
 import {
   canManageProduct,
@@ -437,21 +437,26 @@ stationSetupRouter.get('/users', async (c) => {
     .from(schema.users)
     .where(eq(schema.users.organizationId, user.organizationId));
 
-  // Map roles and assignments
-  const mapped = await Promise.all(
-    userList.map(async (u) => {
-      const assigns = await db
+  const userIds = userList.map((u) => u.id);
+  const allAssigns = userIds.length > 0
+    ? await db
         .select()
         .from(schema.userStationAssignments)
-        .where(eq(schema.userStationAssignments.userId, u.id));
+        .where(inArray(schema.userStationAssignments.userId, userIds))
+    : [];
 
-      return {
-        ...u,
-        role: u.role || 'Staff',
-        stationIds: assigns.map((a) => a.stationId),
-      };
-    })
-  );
+  const assignsByUser = new Map<string, string[]>();
+  for (const a of allAssigns) {
+    const arr = assignsByUser.get(a.userId) ?? [];
+    arr.push(a.stationId);
+    assignsByUser.set(a.userId, arr);
+  }
+
+  const mapped = userList.map((u) => ({
+    ...u,
+    role: u.role || 'Staff',
+    stationIds: assignsByUser.get(u.id) ?? [],
+  }));
 
   return c.json({ success: true, data: mapped });
 });
@@ -479,14 +484,11 @@ stationSetupRouter.post('/users', validateJson(userSchema, 'BAD_REQUEST'), async
     })
     .returning();
 
-  // Insert station assignments
-  if (body.stationIds && Array.isArray(body.stationIds)) {
-    for (const sid of body.stationIds) {
-      await db.insert(schema.userStationAssignments).values({
-        userId: newUser.id,
-        stationId: sid,
-      });
-    }
+  // Insert station assignments (batched)
+  if (body.stationIds && Array.isArray(body.stationIds) && body.stationIds.length > 0) {
+    await db.insert(schema.userStationAssignments).values(
+      body.stationIds.map((sid: string) => ({ userId: newUser.id, stationId: sid }))
+    );
   }
 
   return c.json({ success: true, data: newUser });
@@ -538,17 +540,16 @@ stationSetupRouter.put('/users/:id', validateJson(userSchema.partial(), 'BAD_REQ
       );
   }
 
-  // Update station assignments if provided
+  // Update station assignments if provided (batched)
   if (body.stationIds && Array.isArray(body.stationIds)) {
     await db
       .delete(schema.userStationAssignments)
       .where(eq(schema.userStationAssignments.userId, id));
 
-    for (const sid of body.stationIds) {
-      await db.insert(schema.userStationAssignments).values({
-        userId: id,
-        stationId: sid,
-      });
+    if (body.stationIds.length > 0) {
+      await db.insert(schema.userStationAssignments).values(
+        body.stationIds.map((sid: string) => ({ userId: id, stationId: sid }))
+      );
     }
   }
 
@@ -977,29 +978,35 @@ stationSetupRouter.get('/pricing', async (c) => {
         )
       );
 
-    const prices = await Promise.all(
-      fuels.map(async (f) => {
-        const [latestPrice] = await db
+    const fuelIds = fuels.map((f) => f.id);
+    const allPrices = fuelIds.length > 0
+      ? await db
           .select()
           .from(schema.fuelPrices)
           .where(
             and(
               eq(schema.fuelPrices.stationId, stationId),
-              eq(schema.fuelPrices.productId, f.id)
+              inArray(schema.fuelPrices.productId, fuelIds)
             )
           )
           .orderBy(desc(schema.fuelPrices.effectiveFrom))
-          .limit(1);
+      : [];
 
-        return {
-          productId: f.id,
-          productName: f.name,
-          productCode: f.code,
-          price: latestPrice ? Number(latestPrice.price) : 0,
-          effectiveFrom: latestPrice ? latestPrice.effectiveFrom : null,
-        };
-      })
-    );
+    const latestByProduct = new Map<string, typeof allPrices[number]>();
+    for (const p of allPrices) {
+      if (!latestByProduct.has(p.productId)) latestByProduct.set(p.productId, p);
+    }
+
+    const prices = fuels.map((f) => {
+      const latestPrice = latestByProduct.get(f.id);
+      return {
+        productId: f.id,
+        productName: f.name,
+        productCode: f.code,
+        price: latestPrice ? Number(latestPrice.price) : 0,
+        effectiveFrom: latestPrice ? latestPrice.effectiveFrom : null,
+      };
+    });
 
     return c.json({ success: true, data: prices });
   } catch (err: any) {

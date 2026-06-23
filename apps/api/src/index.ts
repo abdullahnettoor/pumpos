@@ -48,7 +48,6 @@ app.use('*', async (c, next) => {
   if (!dbUrl.includes('@')) {
     dbUrl = dbUrl.replace('postgresql://', 'postgresql://abdullahnettoor@');
   }
-  console.log(`[API DB CONNECTION] env keys: ${Object.keys(c.env || {})}, resolved dbUrl: ${dbUrl.replace(/:[^:@]+@/, ':***@')}`);
   const db = createDb(dbUrl);
   c.set('db', db);
   await next();
