@@ -12,11 +12,12 @@ const shiftService = new CloudShiftService();
 
 interface CustomersListProps {
   selectedStation: any | null;
+  defaultShiftId?: string;
 }
 
 type TabType = 'transactions' | 'registry';
 
-export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation }) => {
+export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, defaultShiftId }) => {
   const [activeTab, setActiveTab] = useState<TabType>('transactions');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -29,6 +30,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation })
 
   // CRUD Drawer States
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [isCollectionDrawerOpen, setIsCollectionDrawerOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<any | null>(null); // null = Creating, object = Editing
   
   // Ledger Drawer States
@@ -75,8 +77,49 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation })
   });
 
   const paymentMethod = watch('paymentMethod');
-  const customerId = watch('customerId');
-  const selectedShiftId = watch('shiftId');
+
+  const resolvePreferredShiftId = (active: any | null, closedList: any[]) => {
+    if (defaultShiftId) {
+      const matchesActive = active?.id === defaultShiftId;
+      const matchesClosed = closedList.some((shift) => shift.id === defaultShiftId);
+
+      if (matchesActive || matchesClosed) {
+        return defaultShiftId;
+      }
+    }
+
+    if (active) {
+      return active.id;
+    }
+
+    if (closedList.length > 0) {
+      return closedList[0].id;
+    }
+
+    return '';
+  };
+
+  const resetCollectionForm = () => {
+    const preferredShiftId = resolvePreferredShiftId(activeShift, recentClosedShifts);
+    reset({
+      shiftId: preferredShiftId,
+      customerId: customers[0]?.id || '',
+      amount: '' as any,
+      paymentMethod: 'Cash' as const,
+      notes: '',
+    });
+    setFormError(null);
+  };
+
+  const openCollectionDrawer = () => {
+    resetCollectionForm();
+    setIsCollectionDrawerOpen(true);
+  };
+
+  const closeCollectionDrawer = () => {
+    setIsCollectionDrawerOpen(false);
+    resetCollectionForm();
+  };
 
   // 2. Customer Drawer Form (Create/Edit)
   const {
@@ -113,12 +156,8 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation })
   }, [selectedStation]);
 
   useEffect(() => {
-    if (activeShift) {
-      setValue('shiftId', activeShift.id);
-    } else if (recentClosedShifts && recentClosedShifts.length > 0) {
-      setValue('shiftId', recentClosedShifts[0].id);
-    }
-  }, [activeShift, recentClosedShifts, setValue]);
+    setValue('shiftId', resolvePreferredShiftId(activeShift, recentClosedShifts));
+  }, [activeShift, recentClosedShifts, defaultShiftId, setValue]);
 
   const loadData = async () => {
     try {
@@ -166,13 +205,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation })
         notes: data.notes || undefined,
       });
 
-      reset({
-        shiftId: activeShift?.id || (recentClosedShifts.length > 0 ? recentClosedShifts[0].id : ''),
-        customerId: customers[0]?.id || '',
-        amount: '' as any,
-        paymentMethod: 'Cash' as const,
-        notes: '',
-      });
+      closeCollectionDrawer();
       await loadData();
     } catch (err: any) {
       setFormError(err.message || 'Failed to record entry');
@@ -284,6 +317,29 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation })
           </p>
         </div>
         
+        {activeTab === 'transactions' && (
+          <button
+            onClick={openCollectionDrawer}
+            disabled={!(activeShift || recentClosedShifts.length > 0)}
+            style={{
+              height: '32px',
+              padding: '0 12px',
+              borderRadius: 'var(--radius-input)',
+              backgroundColor: activeShift || recentClosedShifts.length > 0 ? 'var(--brand-primary)' : 'var(--border-strong)',
+              color: 'white',
+              fontSize: '13px',
+              fontWeight: 500,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              border: 'none',
+              cursor: activeShift || recentClosedShifts.length > 0 ? 'pointer' : 'not-allowed',
+            }}
+          >
+            <Plus size={14} /> Add Collection
+          </button>
+        )}
+
         {activeTab === 'registry' && (
           <button
             onClick={openCreateDrawer}
@@ -361,213 +417,45 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation })
       {/* Tab Contents */}
       <div>
         {activeTab === 'transactions' && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '24px', alignItems: 'start' }}>
-            {/* Left Column: Form Gated by Shift */}
-            <div style={{
-              backgroundColor: 'var(--bg-surface)',
-              border: '1px solid var(--border-soft)',
-              borderRadius: 'var(--radius-card)',
-              padding: '24px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '16px'
-            }}>
-              <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)' }}>
-                Log Credit Transaction / Collection
-              </h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {activeShift || recentClosedShifts.length > 0 ? (
+              <div style={{
+                backgroundColor: 'var(--state-info-bg)',
+                color: 'var(--state-info-fg)',
+                padding: '12px 14px',
+                borderRadius: 'var(--radius-card)',
+                fontSize: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                border: '1px solid var(--border-soft)'
+              }}>
+                <Info size={14} />
+                <span>
+                  Collections will post to{' '}
+                  <strong>
+                    {resolvePreferredShiftId(activeShift, recentClosedShifts) === activeShift?.id
+                      ? `${activeShift?.templateName} (Active)`
+                      : recentClosedShifts.find((shift) => shift.id === resolvePreferredShiftId(activeShift, recentClosedShifts))?.templateName ?? 'selected shift'}
+                  </strong>
+                  {defaultShiftId === resolvePreferredShiftId(activeShift, recentClosedShifts) ? ' from the current context.' : '.'}
+                </span>
+              </div>
+            ) : (
+              <div style={{
+                backgroundColor: 'var(--state-warning-bg)',
+                color: 'var(--state-warning-fg)',
+                padding: '16px',
+                borderRadius: 'var(--radius-card)',
+                fontSize: '13px',
+                border: '1px solid var(--border-soft)',
+                lineHeight: '1.5'
+              }}>
+                <span style={{ fontWeight: 700, display: 'block', marginBottom: '4px' }}>Shift Gated Action</span>
+                Collections and credit fleet sales must be logged during an active shift. Please open a shift first.
+              </div>
+            )}
 
-              {formError && (
-                <div style={{
-                  backgroundColor: 'var(--state-danger-bg)',
-                  color: 'var(--state-danger-fg)',
-                  padding: '8px 12px',
-                  borderRadius: 'var(--radius-input)',
-                  fontSize: '12px',
-                  border: '1px solid var(--border-soft)'
-                }}>
-                  {formError}
-                </div>
-              )}
-
-              {activeShift || recentClosedShifts.length > 0 ? (
-                <form onSubmit={handleSubmit(onAddCollection)} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                  {(activeShift && recentClosedShifts.length > 0) || recentClosedShifts.length > 1 ? (
-                    <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                      <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Target Shift</label>
-                      <select
-                        {...register('shiftId')}
-                        style={{
-                          height: '32px',
-                          padding: '0 8px',
-                          borderRadius: 'var(--radius-input)',
-                          border: '1px solid var(--border-strong)',
-                          fontSize: '13px',
-                          backgroundColor: 'var(--bg-surface)'
-                        }}
-                      >
-                        {activeShift && (
-                          <option value={activeShift.id}>Active: {activeShift.templateName} (Open)</option>
-                        )}
-                        {recentClosedShifts.map((s) => (
-                          <option key={s.id} value={s.id}>
-                            Closed: {s.templateName} ({new Date(s.closedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })})
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  ) : (
-                    <div style={{
-                      backgroundColor: 'var(--state-info-bg)',
-                      color: 'var(--state-info-fg)',
-                      padding: '10px 12px',
-                      borderRadius: 'var(--radius-input)',
-                      fontSize: '12px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px'
-                    }}>
-                      <Info size={14} />
-                      <span>Logging to {activeShift ? 'active' : 'previous closed'} shift: <strong>{activeShift ? activeShift.templateName : recentClosedShifts[0]?.templateName}</strong></span>
-                    </div>
-                  )}
-
-                  <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Entry Type / Payment Method</label>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '8px' }}>
-                      {(['Cash', 'Card', 'UPI', 'Credit'] as const).map((method) => (
-                        <button
-                          key={method}
-                          type="button"
-                          onClick={() => setValue('paymentMethod', method)}
-                          disabled={submitting}
-                          style={{
-                            height: '32px',
-                            fontSize: '12px',
-                            fontWeight: 600,
-                            backgroundColor: paymentMethod === method ? 'var(--brand-primary)' : 'var(--bg-surface-alt)',
-                            color: paymentMethod === method ? 'white' : 'var(--text-default)',
-                            border: paymentMethod === method ? 'none' : '1px solid var(--border-strong)',
-                            borderRadius: 'var(--radius-input)',
-                            cursor: 'pointer',
-                          }}
-                        >
-                          {method}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>
-                      Customer Account {paymentMethod === 'Credit' ? '(Required)' : '(Optional for Walk-in)'}
-                    </label>
-                    <select
-                      {...register('customerId')}
-                      disabled={submitting}
-                      style={{
-                        height: '32px',
-                        padding: '0 8px',
-                        borderRadius: 'var(--radius-input)',
-                        border: '1px solid var(--border-strong)',
-                        fontSize: '13px',
-                      }}
-                    >
-                      <option value="">-- Walk-in / Cash Customer --</option>
-                      {customers.map((cust) => (
-                        <option key={cust.id} value={cust.id}>{cust.name} ({cust.customerType})</option>
-                      ))}
-                    </select>
-                    {formErrors.customerId && (
-                      <span style={{ color: 'var(--state-danger-fg)', fontSize: '11px' }}>
-                        {formErrors.customerId.message}
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Amount (₹)</label>
-                    <input
-                      type="number"
-                      placeholder="0.00"
-                      {...register('amount', { valueAsNumber: true })}
-                      disabled={submitting}
-                      required
-                      style={{
-                        height: '32px',
-                        padding: '0 8px',
-                        borderRadius: 'var(--radius-input)',
-                        border: '1px solid var(--border-strong)',
-                        fontSize: '13px',
-                      }}
-                    />
-                    {formErrors.amount && (
-                      <span style={{ color: 'var(--state-danger-fg)', fontSize: '11px' }}>
-                        {formErrors.amount.message}
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Notes / Fleet Slip ID</label>
-                    <input
-                      type="text"
-                      placeholder="Slip code, transaction ref..."
-                      {...register('notes')}
-                      disabled={submitting}
-                      style={{
-                        height: '32px',
-                        padding: '0 8px',
-                        borderRadius: 'var(--radius-input)',
-                        border: '1px solid var(--border-strong)',
-                        fontSize: '13px',
-                      }}
-                    />
-                    {formErrors.notes && (
-                      <span style={{ color: 'var(--state-danger-fg)', fontSize: '11px' }}>
-                        {formErrors.notes.message}
-                      </span>
-                    )}
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={submitting}
-                    style={{
-                      height: '36px',
-                      backgroundColor: 'var(--brand-primary)',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: 'var(--radius-button)',
-                      fontWeight: 600,
-                      fontSize: '13px',
-                      cursor: submitting ? 'not-allowed' : 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '6px',
-                      marginTop: '8px'
-                    }}
-                  >
-                    <Plus size={14} /> {submitting ? 'Recording...' : paymentMethod === 'Credit' ? 'Log Credit Sale' : 'Log Collection'}
-                  </button>
-                </form>
-              ) : (
-                <div style={{
-                  backgroundColor: 'var(--state-warning-bg)',
-                  color: 'var(--state-warning-fg)',
-                  padding: '16px',
-                  borderRadius: 'var(--radius-input)',
-                  fontSize: '13px',
-                  border: '1px solid var(--border-soft)',
-                  lineHeight: '1.5'
-                }}>
-                  <span style={{ fontWeight: 700, display: 'block', marginBottom: '4px' }}>Shift Gated Action</span>
-                  Collections and credit fleet sales must be logged during an active shift. Please open a shift first.
-                </div>
-              )}
-            </div>
-
-            {/* Right Column: Mini Table */}
             <div style={{
               backgroundColor: 'var(--bg-surface)',
               border: '1px solid var(--border-soft)',
@@ -1037,6 +925,225 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation })
             </button>
           </div>
         </form>
+      </Drawer>
+
+      {/* Collections Drawer */}
+      <Drawer
+        isOpen={isCollectionDrawerOpen}
+        onClose={closeCollectionDrawer}
+        title="Log Credit Transaction / Collection"
+      >
+        {formError && (
+          <div style={{
+            backgroundColor: 'var(--state-danger-bg)',
+            color: 'var(--state-danger-fg)',
+            padding: '8px 12px',
+            borderRadius: 'var(--radius-input)',
+            fontSize: '12px',
+            border: '1px solid var(--border-soft)',
+            marginBottom: '12px'
+          }}>
+            {formError}
+          </div>
+        )}
+
+        {activeShift || recentClosedShifts.length > 0 ? (
+          <form onSubmit={handleSubmit(onAddCollection)} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            {(activeShift && recentClosedShifts.length > 0) || recentClosedShifts.length > 1 ? (
+              <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Target Shift</label>
+                <select
+                  {...register('shiftId')}
+                  disabled={submitting}
+                  style={{
+                    height: '32px',
+                    padding: '0 8px',
+                    borderRadius: 'var(--radius-input)',
+                    border: '1px solid var(--border-strong)',
+                    fontSize: '13px',
+                    backgroundColor: 'var(--bg-surface)'
+                  }}
+                >
+                  {activeShift && (
+                    <option value={activeShift.id}>Active: {activeShift.templateName} (Open)</option>
+                  )}
+                  {recentClosedShifts.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      Closed: {s.templateName} ({new Date(s.closedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <div style={{
+                backgroundColor: 'var(--state-info-bg)',
+                color: 'var(--state-info-fg)',
+                padding: '10px 12px',
+                borderRadius: 'var(--radius-input)',
+                fontSize: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}>
+                <Info size={14} />
+                <span>Logging to {activeShift ? 'active' : 'previous closed'} shift: <strong>{activeShift ? activeShift.templateName : recentClosedShifts[0]?.templateName}</strong></span>
+              </div>
+            )}
+
+            <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Entry Type / Payment Method</label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '8px' }}>
+                {(['Cash', 'Card', 'UPI', 'Credit'] as const).map((method) => (
+                  <button
+                    key={method}
+                    type="button"
+                    onClick={() => setValue('paymentMethod', method)}
+                    disabled={submitting}
+                    style={{
+                      height: '32px',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      backgroundColor: paymentMethod === method ? 'var(--brand-primary)' : 'var(--bg-surface-alt)',
+                      color: paymentMethod === method ? 'white' : 'var(--text-default)',
+                      border: paymentMethod === method ? 'none' : '1px solid var(--border-strong)',
+                      borderRadius: 'var(--radius-input)',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {method}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>
+                Customer Account {paymentMethod === 'Credit' ? '(Required)' : '(Optional for Walk-in)'}
+              </label>
+              <select
+                {...register('customerId')}
+                disabled={submitting}
+                style={{
+                  height: '32px',
+                  padding: '0 8px',
+                  borderRadius: 'var(--radius-input)',
+                  border: '1px solid var(--border-strong)',
+                  fontSize: '13px',
+                }}
+              >
+                <option value="">-- Walk-in / Cash Customer --</option>
+                {customers.map((cust) => (
+                  <option key={cust.id} value={cust.id}>{cust.name} ({cust.customerType})</option>
+                ))}
+              </select>
+              {formErrors.customerId && (
+                <span style={{ color: 'var(--state-danger-fg)', fontSize: '11px' }}>
+                  {formErrors.customerId.message}
+                </span>
+              )}
+            </div>
+
+            <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Amount (₹)</label>
+              <input
+                type="number"
+                placeholder="0.00"
+                {...register('amount', { valueAsNumber: true })}
+                disabled={submitting}
+                required
+                style={{
+                  height: '32px',
+                  padding: '0 8px',
+                  borderRadius: 'var(--radius-input)',
+                  border: '1px solid var(--border-strong)',
+                  fontSize: '13px',
+                }}
+              />
+              {formErrors.amount && (
+                <span style={{ color: 'var(--state-danger-fg)', fontSize: '11px' }}>
+                  {formErrors.amount.message}
+                </span>
+              )}
+            </div>
+
+            <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Notes / Fleet Slip ID</label>
+              <input
+                type="text"
+                placeholder="Slip code, transaction ref..."
+                {...register('notes')}
+                disabled={submitting}
+                style={{
+                  height: '32px',
+                  padding: '0 8px',
+                  borderRadius: 'var(--radius-input)',
+                  border: '1px solid var(--border-strong)',
+                  fontSize: '13px',
+                }}
+              />
+              {formErrors.notes && (
+                <span style={{ color: 'var(--state-danger-fg)', fontSize: '11px' }}>
+                  {formErrors.notes.message}
+                </span>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
+              <button
+                type="button"
+                onClick={closeCollectionDrawer}
+                disabled={submitting}
+                style={{
+                  flex: 1,
+                  height: '36px',
+                  backgroundColor: 'var(--bg-surface-alt)',
+                  color: 'var(--text-default)',
+                  border: '1px solid var(--border-soft)',
+                  borderRadius: 'var(--radius-button)',
+                  fontWeight: 600,
+                  fontSize: '13px',
+                  cursor: submitting ? 'not-allowed' : 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={submitting}
+                style={{
+                  flex: 1,
+                  height: '36px',
+                  backgroundColor: 'var(--brand-primary)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: 'var(--radius-button)',
+                  fontWeight: 600,
+                  fontSize: '13px',
+                  cursor: submitting ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px'
+                }}
+              >
+                <Plus size={14} /> {submitting ? 'Recording...' : paymentMethod === 'Credit' ? 'Log Credit Sale' : 'Log Collection'}
+              </button>
+            </div>
+          </form>
+        ) : (
+          <div style={{
+            backgroundColor: 'var(--state-warning-bg)',
+            color: 'var(--state-warning-fg)',
+            padding: '16px',
+            borderRadius: 'var(--radius-input)',
+            fontSize: '13px',
+            border: '1px solid var(--border-soft)',
+            lineHeight: '1.5'
+          }}>
+            <span style={{ fontWeight: 700, display: 'block', marginBottom: '4px' }}>Shift Gated Action</span>
+            Collections and credit fleet sales must be logged during an active shift. Please open a shift first.
+          </div>
+        )}
       </Drawer>
 
       {/* Customer Ledger Drawer */}
