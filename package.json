@@ -1,8 +1,8 @@
 {
-  "name": "pump-erp-monorepo",
+  "name": "pumpos-monorepo",
   "private": true,
   "version": "1.0.0",
-  "description": "Fuel Pump ERP Platform",
+  "description": "PumpOS Platform",
   "workspaces": [
     "apps/*",
     "packages/*"

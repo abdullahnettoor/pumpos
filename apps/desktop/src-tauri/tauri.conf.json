@@ -1,8 +1,8 @@
 {
   "$schema": "./gen/schemas/desktop-schema.json",
-  "productName": "PumpERP",
+  "productName": "PumpOS",
   "version": "1.0.0",
-  "identifier": "com.pumperp.desktop",
+  "identifier": "com.pumpos.desktop",
   "build": {
     "beforeDevCommand": "npm run dev",
     "beforeBuildCommand": "npm run build",
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "PumpERP - Fuel Station Operations",
+        "title": "PumpOS - The operating system for fuel retail",
         "width": 1024,
         "height": 768
       }

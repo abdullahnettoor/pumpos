@@ -1,4 +1,4 @@
-# Fuel Pump ERP
+# PumpOS
 
 This document defines the architectural, business, and engineering rules that all AI agents and contributors must follow when working on this repository.
 
@@ -6,7 +6,9 @@ This document defines the architectural, business, and engineering rules that al
 
 # Project Overview
 
-Fuel Pump ERP is a multi-tenant fuel station management platform designed primarily for Indian fuel stations.
+PumpOS is a multi-tenant fuel station management platform designed primarily for Indian fuel stations.
+
+**Tagline**: The operating system for fuel retail.
 
 Primary goals:
 
@@ -21,7 +23,7 @@ This is NOT a POS system.
 
 This is NOT a traditional accounting package.
 
-This is an operational ERP focused on fuel station management.
+This is an operational operating system focused on fuel station management.
 
 ---
 

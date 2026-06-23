@@ -2295,7 +2295,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "pumperp"
+name = "pumpos"
 version = "1.0.0"
 dependencies = [
  "serde",

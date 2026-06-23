@@ -225,7 +225,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
       }}>
         <div style={{ display: 'flex', flexDirection: 'column' }}>
           <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-strong)' }}>
-            Fuel Pump ERP Setup
+            PumpOS Setup
           </span>
           <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
             {station ? `${station.name} (${station.code})` : 'New Station Onboarding'}
@@ -334,7 +334,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                 <div style={{ borderBottom: '1px solid var(--border-soft)', paddingBottom: '16px' }}>
                   <h2 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-strong)' }}>Setup Your Station Basics</h2>
                   <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '4px' }}>
-                    Welcome to Fuel Pump ERP. Enter the basic parameters of your retail outlet to begin.
+                    Welcome to PumpOS. The operating system for fuel retail.
                   </p>
                 </div>
 

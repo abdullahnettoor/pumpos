@@ -59,7 +59,7 @@ app.get('/health', (c) => {
   return c.json({
     status: 'healthy',
     timestamp: new Date().toISOString(),
-    service: 'Fuel Pump ERP API Layer',
+    service: 'PumpOS API Layer',
   });
 });
 
