@@ -79,7 +79,7 @@ const App: React.FC = () => {
         const list = await stationService.getStations();
         setStations(list);
         if (list.length > 0) {
-          const active = list[0];
+          const active = list.find((station) => station.onboardingStatus === 'READY_FOR_OPERATIONS') || list[0];
           setSelectedStation(active);
           if (active.onboardingStatus !== 'READY_FOR_OPERATIONS') {
             setCurrentPath('/onboarding');
@@ -125,10 +125,10 @@ const App: React.FC = () => {
     try {
       const list = await stationService.getStations();
       setStations(list);
+      setSelectedStation(list.find((station) => station.id === completedStation.id) || completedStation);
     } catch (err) {
       console.error(err);
     }
-    setSelectedStation(completedStation);
     setCurrentPath('/dashboard');
   };
 
@@ -162,6 +162,12 @@ const App: React.FC = () => {
 
     // 2. If login was successful but user is not mapped in database yet
     if (profileError) {
+      const isNetworkError =
+        profileError.toLowerCase().includes('failed to fetch') ||
+        profileError.toLowerCase().includes('load failed') ||
+        profileError.toLowerCase().includes('networkerror') ||
+        profileError.toLowerCase().includes('connection refused');
+
       return (
         <div style={{
           display: 'flex',
@@ -186,7 +192,9 @@ const App: React.FC = () => {
             boxShadow: 'var(--shadow-1)',
             textAlign: 'center'
           }}>
-            <h2 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-strong)' }}>User Profile Connection Error</h2>
+            <h2 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-strong)' }}>
+              {isNetworkError ? 'API Server Connection Failed' : 'User Profile Connection Error'}
+            </h2>
             <div style={{ 
               backgroundColor: 'var(--state-danger-bg)', 
               color: 'var(--state-danger-fg)', 
@@ -199,21 +207,29 @@ const App: React.FC = () => {
             }}>
               {profileError}
             </div>
-            <p style={{ color: 'var(--text-muted)', fontSize: '13px', lineHeight: '1.5' }}>
-              Your Supabase Auth account is active, but your profile has not been linked to the public schema database yet. Please provide your administrator with the UID below to map your roles:
-            </p>
-            <div style={{
-              padding: '10px',
-              backgroundColor: 'var(--bg-surface-alt)',
-              border: '1px solid var(--border-strong)',
-              borderRadius: 'var(--radius-input)',
-              fontFamily: 'var(--font-mono)',
-              fontSize: '12px',
-              color: 'var(--text-strong)',
-              wordBreak: 'break-all'
-            }}>
-              {session?.user?.id}
-            </div>
+            {isNetworkError ? (
+              <p style={{ color: 'var(--text-muted)', fontSize: '13px', lineHeight: '1.5' }}>
+                The frontend app is unable to connect to the backend server at <strong>http://localhost:8787</strong>. Please verify that your API server is running (try running <code>npm run dev:api</code>).
+              </p>
+            ) : (
+              <>
+                <p style={{ color: 'var(--text-muted)', fontSize: '13px', lineHeight: '1.5' }}>
+                  Your Supabase Auth account is active, but your profile has not been linked to the public schema database yet. Please provide your administrator with the UID below to map your roles:
+                </p>
+                <div style={{
+                  padding: '10px',
+                  backgroundColor: 'var(--bg-surface-alt)',
+                  border: '1px solid var(--border-strong)',
+                  borderRadius: 'var(--radius-input)',
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '12px',
+                  color: 'var(--text-strong)',
+                  wordBreak: 'break-all'
+                }}>
+                  {session?.user?.id}
+                </div>
+              </>
+            )}
             <button
               onClick={handleLogout}
               style={{

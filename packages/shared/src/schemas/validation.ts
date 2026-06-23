@@ -1,5 +1,17 @@
 import { z } from 'zod';
 
+const timeStringSchema = z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/, 'Time must be in HH:MM format');
+
+const weekdaySchema = z.enum([
+  'MONDAY',
+  'TUESDAY',
+  'WEDNESDAY',
+  'THURSDAY',
+  'FRIDAY',
+  'SATURDAY',
+  'SUNDAY',
+]);
+
 export const organizationSchema = z.object({
   name: z.string().min(2, 'Organization name must be at least 2 characters'),
   subscriptionPlan: z.string().default('Core'),
@@ -16,6 +28,22 @@ export const stationSchema = z.object({
     shift_lock_grace_days: z.number().int().min(0).default(3),
     offline_warning_days: z.number().int().min(1).default(3),
     offline_critical_days: z.number().int().min(1).default(7),
+    business_day_starts_at: timeStringSchema.optional(),
+    timezone: z.string().min(1).optional(),
+    operating_schedule: z.object({
+      isTwentyFourSeven: z.boolean(),
+      days: z.array(z.object({
+        day: weekdaySchema,
+        isOpen: z.boolean(),
+        openTime: timeStringSchema,
+        closeTime: timeStringSchema,
+      })).optional(),
+    }).optional(),
+    pending_opening_stock_seed: z.array(z.object({
+      tankId: z.string().uuid('Invalid tank ID'),
+      productId: z.string().uuid('Invalid product ID'),
+      quantity: z.number().nonnegative('Opening quantity must be non-negative'),
+    })).optional().nullable(),
   }).default({
     shift_grace_minutes: 15,
     shift_lock_grace_days: 3,
@@ -166,6 +194,107 @@ export const fuelPriceSchema = z.object({
   effectiveFrom: z.string().datetime().optional().nullable(),
 });
 
+export const operatingDayScheduleSchema = z.object({
+  day: weekdaySchema,
+  isOpen: z.boolean(),
+  openTime: timeStringSchema,
+  closeTime: timeStringSchema,
+});
+
+export const weeklyOperatingScheduleSchema = z.object({
+  isTwentyFourSeven: z.boolean(),
+  days: z.array(operatingDayScheduleSchema).length(7, 'Operating schedule must include all 7 days'),
+}).superRefine((data, ctx) => {
+  const uniqueDays = new Set(data.days.map((day) => day.day));
+  if (uniqueDays.size !== data.days.length) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Operating schedule contains duplicate weekdays',
+      path: ['days'],
+    });
+  }
+
+  if (!data.isTwentyFourSeven && !data.days.some((day) => day.isOpen)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'At least one business day must be open',
+      path: ['days'],
+    });
+  }
+});
+
+export const onboardingProductDraftSchema = z.object({
+  draftId: z.string().min(1, 'Missing product draft ID'),
+  name: z.string().min(1, 'Product name is required').max(255),
+  code: z.string().min(1, 'Product code is required').max(100),
+  productType: z.literal('FUEL'),
+  stockTracked: z.boolean().default(true),
+  isTaxable: z.boolean().default(false),
+  unit: z.string().min(1, 'Unit is required').max(50),
+  taxConfig: z.object({
+    gst_rate: z.number().min(0).max(100).optional().nullable(),
+    hsn_code: z.string().max(50).optional().nullable(),
+  }),
+  isActive: z.boolean().default(true),
+  currentPrice: z.number().positive('Fuel rate must be positive'),
+});
+
+export const onboardingTankDraftSchema = z.object({
+  draftId: z.string().min(1, 'Missing tank draft ID'),
+  name: z.string().min(1, 'Tank name is required').max(100),
+  productDraftId: z.string().min(1, 'Fuel product is required'),
+  capacity: z.number().positive('Tank capacity must be positive'),
+  openingQuantity: z.number().nonnegative('Opening quantity must be non-negative'),
+});
+
+export const onboardingDispenserDraftSchema = z.object({
+  draftId: z.string().min(1, 'Missing dispenser draft ID'),
+  name: z.string().min(1, 'Dispenser name is required').max(100),
+  code: z.string().min(1, 'Dispenser code is required').max(50),
+  status: z.enum(['ACTIVE', 'MAINTENANCE', 'INACTIVE']).default('ACTIVE'),
+});
+
+export const onboardingNozzleDraftSchema = z.object({
+  draftId: z.string().min(1, 'Missing nozzle draft ID'),
+  dispenserDraftId: z.string().min(1, 'Dispenser mapping is required'),
+  tankDraftId: z.string().min(1, 'Tank mapping is required'),
+  productDraftId: z.string().min(1, 'Fuel mapping is required'),
+  name: z.string().min(1, 'Nozzle name is required').max(100),
+  openingReading: z.number().nonnegative('Opening reading must be non-negative'),
+});
+
+export const onboardingShiftTemplateDraftSchema = z.object({
+  draftId: z.string().min(1, 'Missing shift template draft ID'),
+  name: z.string().min(1, 'Shift template name is required').max(100),
+  startTime: timeStringSchema,
+  endTime: timeStringSchema,
+  isActive: z.boolean().default(true),
+});
+
+export const onboardingDraftSchema = z.object({
+  station: z.object({
+    name: z.string().min(2, 'Station name must be at least 2 characters'),
+    code: z.string().min(2, 'Station code must be at least 2 characters').max(50).toUpperCase(),
+    address: z.string().max(500).optional().nullable(),
+    phone: z.string().max(50).optional().nullable(),
+    shiftGraceMinutes: z.number().int().min(0).max(180),
+    timezone: z.string().min(1, 'Timezone is required'),
+  }),
+  businessRules: z.object({
+    businessDayStartsAt: timeStringSchema,
+    operatingSchedule: weeklyOperatingScheduleSchema,
+  }),
+  products: z.array(onboardingProductDraftSchema),
+  tanks: z.array(onboardingTankDraftSchema),
+  dispensers: z.array(onboardingDispenserDraftSchema),
+  nozzles: z.array(onboardingNozzleDraftSchema),
+  shiftTemplates: z.array(onboardingShiftTemplateDraftSchema),
+});
+
+export const finalizeOnboardingSchema = z.object({
+  draft: onboardingDraftSchema,
+});
+
 export const attendantHandoverSchema = z.object({
   userId: z.string().uuid('Invalid user ID'),
   duId: z.string().uuid('Invalid DU ID'),
@@ -188,5 +317,4 @@ export const supplierPaymentSchema = z.object({
   amount: z.number().positive('Payment amount must be positive'),
   notes: z.string().max(500).optional().nullable(),
 });
-
 

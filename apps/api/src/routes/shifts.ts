@@ -386,6 +386,16 @@ shiftsRouter.post('/open', validateJson(shiftOpenSchema), async (c) => {
       return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
     }
 
+    const [station] = await db
+      .select()
+      .from(schema.stations)
+      .where(and(eq(schema.stations.id, parsed.stationId), eq(schema.stations.organizationId, user.organizationId)))
+      .limit(1);
+
+    if (!station) {
+      return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Station not found' } }, 404);
+    }
+
     // Check if there is an active shift
     const [existing] = await db
       .select()
@@ -489,6 +499,36 @@ shiftsRouter.post('/open', validateJson(shiftOpenSchema), async (c) => {
 
     if (nozzleReadingInserts.length > 0) {
       await db.insert(schema.nozzleReadings).values(nozzleReadingInserts);
+    }
+
+    const pendingOpeningStockSeed = Array.isArray((station.settings as any)?.pending_opening_stock_seed)
+      ? (station.settings as any).pending_opening_stock_seed
+      : [];
+
+    if (pendingOpeningStockSeed.length > 0) {
+      await db.insert(schema.stockMovements).values(
+        pendingOpeningStockSeed.map((seed: any) => ({
+          shiftId: newShift.id,
+          productId: seed.productId,
+          tankId: seed.tankId,
+          movementType: 'OpeningBalance',
+          quantity: String(seed.quantity),
+          referenceType: 'ONBOARDING',
+          notes: 'Opening stock seeded from onboarding go-live setup',
+          createdAt: new Date(),
+        }))
+      );
+
+      await db
+        .update(schema.stations)
+        .set({
+          settings: {
+            ...(station.settings as Record<string, unknown>),
+            pending_opening_stock_seed: [],
+          },
+          updatedAt: new Date(),
+        })
+        .where(eq(schema.stations.id, station.id));
     }
 
     // Log Business Event

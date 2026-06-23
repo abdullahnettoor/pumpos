@@ -8,6 +8,7 @@ import {
   TransactionType,
   MovementType,
   ExpenseStatus,
+  Weekday,
 } from './core.js';
 
 export interface BaseMetadata {
@@ -30,6 +31,35 @@ export interface Organization {
   updatedAt: string;
 }
 
+export interface OperatingDaySchedule {
+  day: Weekday;
+  isOpen: boolean;
+  openTime: string;
+  closeTime: string;
+}
+
+export interface WeeklyOperatingSchedule {
+  isTwentyFourSeven: boolean;
+  days: OperatingDaySchedule[];
+}
+
+export interface PendingOpeningStockSeed {
+  tankId: string;
+  productId: string;
+  quantity: number;
+}
+
+export interface StationSettings {
+  shift_grace_minutes: number;
+  shift_lock_grace_days: number;
+  offline_warning_days: number;
+  offline_critical_days: number;
+  business_day_starts_at?: string;
+  timezone?: string;
+  operating_schedule?: WeeklyOperatingSchedule | null;
+  pending_opening_stock_seed?: PendingOpeningStockSeed[] | null;
+}
+
 export interface Station {
   id: string;
   organizationId: string;
@@ -37,16 +67,98 @@ export interface Station {
   code: string;
   address?: string | null;
   phone?: string | null;
-  settings: {
-    shift_grace_minutes: number;
-    shift_lock_grace_days: number;
-    offline_warning_days: number;
-    offline_critical_days: number;
-  };
+  settings: StationSettings;
   onboardingStatus: 'NOT_STARTED' | 'IN_PROGRESS' | 'READY_FOR_OPERATIONS';
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface OnboardingStationDraft {
+  name: string;
+  code: string;
+  address?: string | null;
+  phone?: string | null;
+  shiftGraceMinutes: number;
+  timezone: string;
+}
+
+export interface OnboardingBusinessRulesDraft {
+  businessDayStartsAt: string;
+  operatingSchedule: WeeklyOperatingSchedule;
+}
+
+export interface OnboardingProductDraft {
+  draftId: string;
+  name: string;
+  code: string;
+  productType: 'FUEL';
+  stockTracked: boolean;
+  isTaxable: boolean;
+  unit: string;
+  taxConfig: {
+    gst_rate?: number;
+    hsn_code?: string;
+  };
+  isActive: boolean;
+  currentPrice: number;
+}
+
+export interface OnboardingTankDraft {
+  draftId: string;
+  name: string;
+  productDraftId: string;
+  capacity: number;
+  openingQuantity: number;
+}
+
+export interface OnboardingDispenserDraft {
+  draftId: string;
+  name: string;
+  code: string;
+  status: 'ACTIVE' | 'MAINTENANCE' | 'INACTIVE';
+}
+
+export interface OnboardingNozzleDraft {
+  draftId: string;
+  dispenserDraftId: string;
+  tankDraftId: string;
+  productDraftId: string;
+  name: string;
+  openingReading: number;
+}
+
+export interface OnboardingShiftTemplateDraft {
+  draftId: string;
+  name: string;
+  startTime: string;
+  endTime: string;
+  isActive: boolean;
+}
+
+export interface OnboardingDraft {
+  station: OnboardingStationDraft;
+  businessRules: OnboardingBusinessRulesDraft;
+  products: OnboardingProductDraft[];
+  tanks: OnboardingTankDraft[];
+  dispensers: OnboardingDispenserDraft[];
+  nozzles: OnboardingNozzleDraft[];
+  shiftTemplates: OnboardingShiftTemplateDraft[];
+}
+
+export interface FinalizeOnboardingPayload {
+  draft: OnboardingDraft;
+}
+
+export interface FinalizeOnboardingResult {
+  station: Station;
+  summary: {
+    productCount: number;
+    tankCount: number;
+    dispenserCount: number;
+    nozzleCount: number;
+    shiftTemplateCount: number;
+  };
 }
 
 export interface DocumentSequence {
@@ -417,4 +529,3 @@ export interface CollectionPayload {
   paymentMethod: 'Cash' | 'Card' | 'UPI' | 'Credit';
   notes?: string;
 }
-

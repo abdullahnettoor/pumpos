@@ -1,10 +1,42 @@
-import React, { useState, useEffect } from 'react';
-import { Station } from '@pump/shared';
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  FinalizeOnboardingResult,
+  OnboardingDispenserDraft,
+  OnboardingDraft,
+  OnboardingNozzleDraft,
+  OnboardingProductDraft,
+  OnboardingShiftTemplateDraft,
+  OnboardingTankDraft,
+  Station,
+} from '@pump/shared';
 import { CloudStationService } from '../../services/cloud.js';
-import { ProductsCatalog } from './ProductsCatalog.js';
-import { TanksGrid } from './TanksGrid.js';
-import { DispensersList } from './DispensersList.js';
-import { ShiftTemplates } from './ShiftTemplates.js';
+import { Drawer } from '../Drawer.js';
+import { StatusBadge } from '../StatusBadge.js';
+import {
+  clearStoredOnboardingDraft,
+  createDefaultOperatingSchedule,
+  createDispenserDraft,
+  createDraftId,
+  createEmptyOnboardingDraft,
+  createFuelDraft,
+  createNozzleDraft,
+  createShiftTemplateDraft,
+  createTankDraft,
+  loadStoredOnboardingDraft,
+  saveStoredOnboardingDraft,
+  validateOnboardingDraft,
+  WEEKDAY_ORDER,
+} from './onboardingDraft.js';
+
+// Import sub-step components
+import { Step1StationBasics } from './OnboardingSteps/Step1StationBasics.js';
+import { Step2BusinessRules } from './OnboardingSteps/Step2BusinessRules.js';
+import { Step3FuelsCatalog } from './OnboardingSteps/Step3FuelsCatalog.js';
+import { Step4Tanks } from './OnboardingSteps/Step4Tanks.js';
+import { Step5Dispensers } from './OnboardingSteps/Step5Dispensers.js';
+import { Step6OpeningValues } from './OnboardingSteps/Step6OpeningValues.js';
+import { Step7ShiftTemplates } from './OnboardingSteps/Step7ShiftTemplates.js';
+import { Step8Review } from './OnboardingSteps/Step8Review.js';
 
 const stationService = new CloudStationService();
 
@@ -13,533 +45,1608 @@ interface OnboardingWizardProps {
   userName: string;
 }
 
+const steps = [
+  { num: 1, title: 'Station Basics' },
+  { num: 2, title: 'Business Rules' },
+  { num: 3, title: 'Fuels & Rates' },
+  { num: 4, title: 'Tanks' },
+  { num: 5, title: 'Dispensers & Nozzles' },
+  { num: 6, title: 'Opening / Current Values' },
+  { num: 7, title: 'Shift Templates' },
+  { num: 8, title: 'Review & Provision' },
+] as const;
+
+const provisioningStages = [
+  'Validating draft',
+  'Creating station',
+  'Linking infrastructure',
+  'Applying opening values',
+  'Finalizing setup',
+];
+
+const panelStyle: React.CSSProperties = {
+  backgroundColor: 'var(--bg-surface)',
+  border: '1px solid var(--border-soft)',
+  borderRadius: 'var(--radius-card)',
+  padding: '20px',
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '16px',
+};
+
+const fieldLabelStyle: React.CSSProperties = {
+  fontSize: '12px',
+  fontWeight: 600,
+  color: 'var(--text-muted)',
+};
+
+const inputStyle: React.CSSProperties = {
+  height: '34px',
+  padding: '0 10px',
+  borderRadius: 'var(--radius-input)',
+  border: '1px solid var(--border-strong)',
+  fontSize: '13px',
+  backgroundColor: 'var(--bg-surface)',
+  color: 'var(--text-strong)',
+};
+
+const textAreaStyle: React.CSSProperties = {
+  minHeight: '72px',
+  padding: '10px',
+  borderRadius: 'var(--radius-input)',
+  border: '1px solid var(--border-strong)',
+  fontSize: '13px',
+  backgroundColor: 'var(--bg-surface)',
+  color: 'var(--text-strong)',
+  resize: 'vertical',
+};
+
+function cloneFuelDraft(product?: OnboardingProductDraft | null): OnboardingProductDraft {
+  return product ? { ...product, taxConfig: { ...product.taxConfig } } : createFuelDraft();
+}
+
+function cloneTankDraft(tank?: OnboardingTankDraft | null, productDraftId = ''): OnboardingTankDraft {
+  return tank ? { ...tank } : createTankDraft(productDraftId);
+}
+
+function cloneShiftTemplateDraft(template?: OnboardingShiftTemplateDraft | null): OnboardingShiftTemplateDraft {
+  return template ? { ...template } : createShiftTemplateDraft();
+}
+
+function parseTimeToMinutes(t: string): number {
+  const [h, m] = t.split(':').map(Number);
+  return h * 60 + m;
+}
+
+function formatMinutesToTime(min: number): string {
+  const norm = (min % 1440 + 1440) % 1440;
+  const h = Math.floor(norm / 60);
+  const m = norm % 60;
+  return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+}
+
+function cloneDispenserDraft(dispenser?: OnboardingDispenserDraft | null): OnboardingDispenserDraft {
+  return dispenser ? { ...dispenser } : createDispenserDraft();
+}
+
+function cloneNozzleDraft(nozzle?: OnboardingNozzleDraft | null, defaults?: Partial<OnboardingNozzleDraft>): OnboardingNozzleDraft {
+  if (nozzle) return { ...nozzle };
+  return {
+    ...createNozzleDraft(defaults?.dispenserDraftId || '', defaults?.tankDraftId || '', defaults?.productDraftId || ''),
+    ...defaults,
+  };
+}
+
+function wait(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
   onOnboardingComplete,
   userName,
 }) => {
+  const [draft, setDraft] = useState<OnboardingDraft>(createEmptyOnboardingDraft());
   const [currentStep, setCurrentStep] = useState(1);
-  const [stationId, setStationId] = useState<string | null>(null);
-  const [station, setStation] = useState<Station | null>(null);
-  const [checklist, setChecklist] = useState<any>(null);
-  const [loading, setLoading] = useState(false);
-  const [validating, setValidating] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [isHydrated, setIsHydrated] = useState(false);
 
-  // Step 1 Form States
-  const [name, setName] = useState('');
-  const [code, setCode] = useState('');
-  const [address, setAddress] = useState('');
-  const [phone, setPhone] = useState('');
-  const [graceMinutes, setGraceMinutes] = useState(15);
+  // Modal Drawers
+  const [fuelDrawer, setFuelDrawer] = useState<OnboardingProductDraft | null>(null);
+  const [tankDrawer, setTankDrawer] = useState<OnboardingTankDraft | null>(null);
+  const [shiftTemplateDrawer, setShiftTemplateDrawer] = useState<OnboardingShiftTemplateDraft | null>(null);
+  const [dispenserDrawer, setDispenserDrawer] = useState<{
+    dispenser: OnboardingDispenserDraft;
+    nozzles: OnboardingNozzleDraft[];
+  } | null>(null);
 
-  // Load existing stations on mount to check if we have one in progress
+  const [provisioning, setProvisioning] = useState<{
+    isOpen: boolean;
+    stageIndex: number;
+    failedMessage?: string | null;
+    failedStage?: string | null;
+    completed: boolean;
+  }>({
+    isOpen: false,
+    stageIndex: 0,
+    failedMessage: null,
+    failedStage: null,
+    completed: false,
+  });
+
   useEffect(() => {
-    const fetchInProgressStation = async () => {
-      try {
-        setLoading(true);
-        const list = await stationService.getStations();
-        // If there's an in-progress station, load it
-        const inProgress = list.find(s => s.onboardingStatus !== 'READY_FOR_OPERATIONS');
-        if (inProgress) {
-          setStation(inProgress);
-          setStationId(inProgress.id);
-          setName(inProgress.name);
-          setCode(inProgress.code);
-          setAddress(inProgress.address || '');
-          setPhone(inProgress.phone || '');
-          setGraceMinutes(inProgress.settings?.shift_grace_minutes || 15);
-
-          // Determine the furthest step completed
-          const status = await stationService.getOnboardingStatus(inProgress.id);
-          setChecklist(status.checklist);
-
-          if (status.checklist.hasNozzles && status.checklist.hasDispensers) {
-            setCurrentStep(5);
-          } else if (status.checklist.hasTanks) {
-            setCurrentStep(4);
-          } else if (status.checklist.hasFuel) {
-            setCurrentStep(3);
-          } else {
-            setCurrentStep(2);
-          }
-        }
-      } catch (err) {
-        console.error('Failed to load initial station setup state:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchInProgressStation();
+    const stored = loadStoredOnboardingDraft();
+    if (stored?.draft) {
+      setDraft(stored.draft);
+      setCurrentStep(Math.min(Math.max(stored.currentStep || 1, 1), steps.length));
+    }
+    setIsHydrated(true);
   }, []);
 
-  const refreshChecklist = async (id: string) => {
-    try {
-      const status = await stationService.getOnboardingStatus(id);
-      setChecklist(status.checklist);
-      return status.checklist;
-    } catch (err) {
-      console.error(err);
-      return null;
-    }
+  useEffect(() => {
+    if (!isHydrated) return;
+    saveStoredOnboardingDraft({ draft, currentStep });
+  }, [draft, currentStep, isHydrated]);
+
+  const validationIssues = useMemo(() => validateOnboardingDraft(draft), [draft]);
+  const hasQuickMs = draft.products.some((product) => product.code.toUpperCase() === 'MS');
+  const hasQuickHsd = draft.products.some((product) => product.code.toUpperCase() === 'HSD');
+
+  const updateDraft = (updater: (prev: OnboardingDraft) => OnboardingDraft) => {
+    setDraft((prev) => updater(prev));
   };
 
-  const handleCreateStation = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!name || !code) return;
-    try {
-      setLoading(true);
-      setErrorMsg(null);
-      let savedStation: Station;
+  const syncTwentyFourSeven = (enabled: boolean) => {
+    updateDraft((prev) => ({
+      ...prev,
+      businessRules: {
+        ...prev.businessRules,
+        operatingSchedule: enabled
+          ? {
+              isTwentyFourSeven: true,
+              days: WEEKDAY_ORDER.map((day) => ({
+                day,
+                isOpen: true,
+                openTime: '00:00',
+                closeTime: '23:59',
+              })),
+            }
+          : {
+              ...createDefaultOperatingSchedule(),
+              isTwentyFourSeven: false,
+            },
+      },
+    }));
+  };
 
-      if (stationId) {
-        // Update
-        savedStation = await stationService.updateStation(stationId, {
+  const openDispenserDrawer = (dispenser?: OnboardingDispenserDraft) => {
+    const target = cloneDispenserDraft(dispenser ?? null);
+    if (!dispenser) {
+      const nextIndex = draft.dispensers.length + 1;
+      target.name = `Dispenser ${nextIndex}`;
+      target.code = `DU-${nextIndex}`;
+    }
+    setDispenserDrawer({
+      dispenser: target,
+      nozzles: draft.nozzles
+        .filter((nozzle) => nozzle.dispenserDraftId === target.draftId)
+        .map((nozzle) => ({ ...nozzle })),
+    });
+  };
+
+  const handleAddDualDispenser = () => {
+    const nextIndex = draft.dispensers.length + 1;
+    const dispenserId = createDraftId();
+    const newDispenser: OnboardingDispenserDraft = {
+      draftId: dispenserId,
+      name: `Dispenser ${nextIndex}`,
+      code: `DU-${nextIndex}`,
+      status: 'ACTIVE',
+    };
+
+    const msProducts = draft.products.filter(p => p.code.toUpperCase() === 'MS');
+    const hsdProducts = draft.products.filter(p => p.code.toUpperCase() === 'HSD');
+
+    const msProduct = msProducts[0] || draft.products[0];
+    const hsdProduct = hsdProducts[0] || draft.products[1] || draft.products[0];
+
+    const msTanks = msProduct ? draft.tanks.filter(t => t.productDraftId === msProduct.draftId) : [];
+    const hsdTanks = hsdProduct ? draft.tanks.filter(t => t.productDraftId === hsdProduct.draftId) : [];
+
+    const msTank = msTanks[0] || draft.tanks[0];
+    const hsdTank = hsdTanks[0] || draft.tanks[1] || draft.tanks[0];
+
+    const nozzle1: OnboardingNozzleDraft = {
+      draftId: createDraftId(),
+      dispenserDraftId: dispenserId,
+      tankDraftId: msTank?.draftId || '',
+      productDraftId: msProduct?.draftId || '',
+      name: 'N1',
+      openingReading: 0,
+    };
+
+    const nozzle2: OnboardingNozzleDraft = {
+      draftId: createDraftId(),
+      dispenserDraftId: dispenserId,
+      tankDraftId: hsdTank?.draftId || '',
+      productDraftId: hsdProduct?.draftId || '',
+      name: 'N2',
+      openingReading: 0,
+    };
+
+    updateDraft((prev) => ({
+      ...prev,
+      dispensers: [...prev.dispensers, newDispenser],
+      nozzles: [...prev.nozzles, nozzle1, nozzle2],
+    }));
+  };
+
+  const handleAddQuadDispenser = () => {
+    const nextIndex = draft.dispensers.length + 1;
+    const dispenserId = createDraftId();
+    const newDispenser: OnboardingDispenserDraft = {
+      draftId: dispenserId,
+      name: `Dispenser ${nextIndex}`,
+      code: `DU-${nextIndex}`,
+      status: 'ACTIVE',
+    };
+
+    const msProducts = draft.products.filter(p => p.code.toUpperCase() === 'MS');
+    const hsdProducts = draft.products.filter(p => p.code.toUpperCase() === 'HSD');
+
+    const msProduct = msProducts[0] || draft.products[0];
+    const hsdProduct = hsdProducts[0] || draft.products[1] || draft.products[0];
+
+    const msTanks = msProduct ? draft.tanks.filter(t => t.productDraftId === msProduct.draftId) : [];
+    const hsdTanks = hsdProduct ? draft.tanks.filter(t => t.productDraftId === hsdProduct.draftId) : [];
+
+    const msTank1 = msTanks[0] || draft.tanks[0];
+    const msTank2 = msTanks[1] || msTanks[0] || draft.tanks[0];
+    const hsdTank1 = hsdTanks[0] || draft.tanks[1] || draft.tanks[0];
+    const hsdTank2 = hsdTanks[1] || hsdTanks[0] || draft.tanks[1] || draft.tanks[0];
+
+    const nozzles: OnboardingNozzleDraft[] = [
+      {
+        draftId: createDraftId(),
+        dispenserDraftId: dispenserId,
+        tankDraftId: msTank1?.draftId || '',
+        productDraftId: msProduct?.draftId || '',
+        name: 'N1',
+        openingReading: 0,
+      },
+      {
+        draftId: createDraftId(),
+        dispenserDraftId: dispenserId,
+        tankDraftId: msTank2?.draftId || '',
+        productDraftId: msProduct?.draftId || '',
+        name: 'N2',
+        openingReading: 0,
+      },
+      {
+        draftId: createDraftId(),
+        dispenserDraftId: dispenserId,
+        tankDraftId: hsdTank1?.draftId || '',
+        productDraftId: hsdProduct?.draftId || '',
+        name: 'N3',
+        openingReading: 0,
+      },
+      {
+        draftId: createDraftId(),
+        dispenserDraftId: dispenserId,
+        tankDraftId: hsdTank2?.draftId || '',
+        productDraftId: hsdProduct?.draftId || '',
+        name: 'N4',
+        openingReading: 0,
+      },
+    ];
+
+    updateDraft((prev) => ({
+      ...prev,
+      dispensers: [...prev.dispensers, newDispenser],
+      nozzles: [...prev.nozzles, ...nozzles],
+    }));
+  };
+
+  const saveFuel = () => {
+    if (!fuelDrawer) return;
+    updateDraft((prev) => {
+      const exists = prev.products.some((product) => product.draftId === fuelDrawer.draftId);
+      return {
+        ...prev,
+        products: exists
+          ? prev.products.map((product) => (product.draftId === fuelDrawer.draftId ? fuelDrawer : product))
+          : [...prev.products, fuelDrawer],
+      };
+    });
+    setFuelDrawer(null);
+  };
+
+  const saveTank = () => {
+    if (!tankDrawer) return;
+    updateDraft((prev) => {
+      const exists = prev.tanks.some((tank) => tank.draftId === tankDrawer.draftId);
+      return {
+        ...prev,
+        tanks: exists
+          ? prev.tanks.map((tank) => (tank.draftId === tankDrawer.draftId ? tankDrawer : tank))
+          : [...prev.tanks, tankDrawer],
+      };
+    });
+    setTankDrawer(null);
+  };
+
+  const saveShiftTemplate = () => {
+    if (!shiftTemplateDrawer) return;
+    updateDraft((prev) => {
+      const exists = prev.shiftTemplates.some((template) => template.draftId === shiftTemplateDrawer.draftId);
+      return {
+        ...prev,
+        shiftTemplates: exists
+          ? prev.shiftTemplates.map((template) => (template.draftId === shiftTemplateDrawer.draftId ? shiftTemplateDrawer : template))
+          : [...prev.shiftTemplates, shiftTemplateDrawer],
+      };
+    });
+    setShiftTemplateDrawer(null);
+  };
+
+  const saveDispenser = () => {
+    if (!dispenserDrawer) return;
+    updateDraft((prev) => {
+      const otherNozzles = prev.nozzles.filter((nozzle) => nozzle.dispenserDraftId !== dispenserDrawer.dispenser.draftId);
+      const dispenserExists = prev.dispensers.some((item) => item.draftId === dispenserDrawer.dispenser.draftId);
+
+      return {
+        ...prev,
+        dispensers: dispenserExists
+          ? prev.dispensers.map((item) => (item.draftId === dispenserDrawer.dispenser.draftId ? dispenserDrawer.dispenser : item))
+          : [...prev.dispensers, dispenserDrawer.dispenser],
+        nozzles: [...otherNozzles, ...dispenserDrawer.nozzles],
+      };
+    });
+    setDispenserDrawer(null);
+  };
+
+  const removeProduct = (draftId: string) => {
+    updateDraft((prev) => ({
+      ...prev,
+      products: prev.products.filter((product) => product.draftId !== draftId),
+      tanks: prev.tanks.filter((tank) => tank.productDraftId !== draftId),
+      nozzles: prev.nozzles.filter((nozzle) => nozzle.productDraftId !== draftId),
+    }));
+  };
+
+  const removeTank = (draftId: string) => {
+    updateDraft((prev) => ({
+      ...prev,
+      tanks: prev.tanks.filter((tank) => tank.draftId !== draftId),
+      nozzles: prev.nozzles.filter((nozzle) => nozzle.tankDraftId !== draftId),
+    }));
+  };
+
+  const removeDispenser = (draftId: string) => {
+    updateDraft((prev) => ({
+      ...prev,
+      dispensers: prev.dispensers.filter((dispenser) => dispenser.draftId !== draftId),
+      nozzles: prev.nozzles.filter((nozzle) => nozzle.dispenserDraftId !== draftId),
+    }));
+  };
+
+  const removeShiftTemplate = (draftId: string) => {
+    updateDraft((prev) => ({
+      ...prev,
+      shiftTemplates: prev.shiftTemplates.filter((template) => template.draftId !== draftId),
+    }));
+  };
+
+  const handleQuickFuel = (type: 'MS' | 'HSD') => {
+    if ((type === 'MS' && hasQuickMs) || (type === 'HSD' && hasQuickHsd)) return;
+
+    const product: OnboardingProductDraft = {
+      ...createFuelDraft(),
+      name: type === 'MS' ? 'Petrol' : 'Diesel',
+      code: type,
+      taxConfig: { gst_rate: 0, hsn_code: '2710' },
+      currentPrice: 0,
+    };
+
+    updateDraft((prev) => ({
+      ...prev,
+      products: [...prev.products, product],
+    }));
+  };
+
+  const handleQuickAddTank = (productDraftId: string, productName: string, capacity: number) => {
+    const existingOfProduct = draft.tanks.filter((t) => t.productDraftId === productDraftId);
+    const name = `${productName} Tank ${existingOfProduct.length + 1}`;
+    updateDraft((prev) => ({
+      ...prev,
+      tanks: [
+        ...prev.tanks,
+        {
+          draftId: createDraftId(),
           name,
-          code: code.toUpperCase(),
-          address,
-          phone,
-          settings: {
-            shift_grace_minutes: graceMinutes,
-            offline_warning_days: 3,
-            offline_critical_days: 7,
+          productDraftId,
+          capacity,
+          openingQuantity: 0,
+        },
+      ],
+    }));
+  };
+
+  const handleAutofillShifts = (count: 2 | 3) => {
+    const is247 = draft.businessRules.operatingSchedule.isTwentyFourSeven;
+    const bizStart = draft.businessRules.businessDayStartsAt || '06:00';
+    
+    let templates: OnboardingShiftTemplateDraft[] = [];
+
+    if (is247) {
+      const startMin = parseTimeToMinutes(bizStart);
+      if (count === 2) {
+        templates = [
+          {
+            draftId: createDraftId(),
+            name: 'Day Shift',
+            startTime: formatMinutesToTime(startMin),
+            endTime: formatMinutesToTime(startMin + 12 * 60),
+            isActive: true,
           },
-          onboardingStatus: 'IN_PROGRESS'
-        });
+          {
+            draftId: createDraftId(),
+            name: 'Night Shift',
+            startTime: formatMinutesToTime(startMin + 12 * 60),
+            endTime: formatMinutesToTime(startMin),
+            isActive: true,
+          },
+        ];
       } else {
-        // Create
-        savedStation = await stationService.createStation({
-          name,
-          code: code.toUpperCase(),
-          address,
-          phone,
-          settings: {
-            shift_grace_minutes: graceMinutes,
-            offline_warning_days: 3,
-            offline_critical_days: 7,
+        templates = [
+          {
+            draftId: createDraftId(),
+            name: 'Morning Shift',
+            startTime: formatMinutesToTime(startMin),
+            endTime: formatMinutesToTime(startMin + 8 * 60),
+            isActive: true,
           },
-          isActive: true,
-        });
-        // Transition newly created station to IN_PROGRESS
-        savedStation = await stationService.updateStation(savedStation.id, {
-          ...savedStation,
-          onboardingStatus: 'IN_PROGRESS'
-        });
+          {
+            draftId: createDraftId(),
+            name: 'Evening Shift',
+            startTime: formatMinutesToTime(startMin + 8 * 60),
+            endTime: formatMinutesToTime(startMin + 16 * 60),
+            isActive: true,
+          },
+          {
+            draftId: createDraftId(),
+            name: 'Night Shift',
+            startTime: formatMinutesToTime(startMin + 16 * 60),
+            endTime: formatMinutesToTime(startMin),
+            isActive: true,
+          },
+        ];
+      }
+    } else {
+      const openDay = draft.businessRules.operatingSchedule.days.find(d => d.isOpen);
+      const openTime = openDay?.openTime || '06:00';
+      const closeTime = openDay?.closeTime || '22:00';
+
+      const openMin = parseTimeToMinutes(openTime);
+      let closeMin = parseTimeToMinutes(closeTime);
+      if (closeMin <= openMin) {
+        closeMin += 1440;
       }
 
-      setStation(savedStation);
-      setStationId(savedStation.id);
-      await refreshChecklist(savedStation.id);
-      setCurrentStep(2);
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Failed to save station details');
-    } finally {
-      setLoading(false);
+      const duration = closeMin - openMin;
+      const step = duration / count;
+
+      if (count === 2) {
+        templates = [
+          {
+            draftId: createDraftId(),
+            name: 'First Shift',
+            startTime: formatMinutesToTime(openMin),
+            endTime: formatMinutesToTime(openMin + step),
+            isActive: true,
+          },
+          {
+            draftId: createDraftId(),
+            name: 'Second Shift',
+            startTime: formatMinutesToTime(openMin + step),
+            endTime: formatMinutesToTime(closeMin),
+            isActive: true,
+          },
+        ];
+      } else {
+        templates = [
+          {
+            draftId: createDraftId(),
+            name: 'Morning Shift',
+            startTime: formatMinutesToTime(openMin),
+            endTime: formatMinutesToTime(openMin + step),
+            isActive: true,
+          },
+          {
+            draftId: createDraftId(),
+            name: 'Afternoon Shift',
+            startTime: formatMinutesToTime(openMin + step),
+            endTime: formatMinutesToTime(openMin + 2 * step),
+            isActive: true,
+          },
+          {
+            draftId: createDraftId(),
+            name: 'Evening Shift',
+            startTime: formatMinutesToTime(openMin + 2 * step),
+            endTime: formatMinutesToTime(closeMin),
+            isActive: true,
+          },
+        ];
+      }
     }
+
+    updateDraft((prev) => ({
+      ...prev,
+      shiftTemplates: templates,
+    }));
   };
 
-
-
-  const handleNextStep = async () => {
-    if (!stationId) return;
-
-    setValidating(true);
+  const discardDraft = () => {
+    if (!window.confirm('Discard the current onboarding draft? This will clear the locally stored setup.')) return;
+    clearStoredOnboardingDraft();
+    setDraft(createEmptyOnboardingDraft());
+    setCurrentStep(1);
     setErrorMsg(null);
+  };
+
+  const moveToStep = (step: number) => {
+    setCurrentStep(step);
+    setErrorMsg(null);
+  };
+
+  const handleNext = () => {
+    setCurrentStep((prev) => Math.min(prev + 1, steps.length));
+    setErrorMsg(null);
+  };
+
+  const handleProvision = async () => {
+    const issues = validateOnboardingDraft(draft);
+    if (issues.length > 0) {
+      const firstIssue = issues[0];
+      setErrorMsg(firstIssue.message);
+      setCurrentStep(firstIssue.step);
+      return;
+    }
+
+    setErrorMsg(null);
+    setProvisioning({
+      isOpen: true,
+      stageIndex: 0,
+      failedMessage: null,
+      failedStage: null,
+      completed: false,
+    });
+
     try {
-      const list = await refreshChecklist(stationId);
-      if (!list) throw new Error('Could not verify step completion');
+      await wait(150);
+      setProvisioning((prev) => ({ ...prev, stageIndex: 1 }));
+      const result = await stationService.finalizeOnboarding({ draft }) as FinalizeOnboardingResult;
 
-      if (currentStep === 2 && !list.hasFuel) {
-        throw new Error('Please configure at least one active Fuel product before proceeding.');
-      }
-      if (currentStep === 3 && !list.hasTanks) {
-        throw new Error('Please add at least one storage tank before proceeding.');
-      }
-      if (currentStep === 4 && (!list.hasDispensers || !list.hasNozzles)) {
-        throw new Error('Please configure at least one dispenser unit and map at least one nozzle before proceeding.');
-      }
-
-      setCurrentStep(prev => prev + 1);
+      setProvisioning((prev) => ({ ...prev, stageIndex: 2 }));
+      await wait(150);
+      setProvisioning((prev) => ({ ...prev, stageIndex: 3 }));
+      await wait(150);
+      setProvisioning((prev) => ({ ...prev, stageIndex: 4 }));
+      await wait(150);
+      setProvisioning((prev) => ({ ...prev, completed: true }));
+      clearStoredOnboardingDraft();
+      await wait(300);
+      onOnboardingComplete(result.station);
     } catch (err: any) {
-      setErrorMsg(err.message);
-    } finally {
-      setValidating(false);
+      const stageName = err?.details?.stage || provisioningStages[1];
+      setProvisioning((prev) => ({
+        ...prev,
+        failedMessage: err.message || 'Provisioning failed',
+        failedStage: stageName,
+        completed: false,
+      }));
     }
   };
 
-  const handleCompleteSetup = async () => {
-    if (!stationId) return;
-    setLoading(true);
-    try {
-      const finalCheck = await refreshChecklist(stationId);
-      if (!finalCheck || !finalCheck.hasFuel || !finalCheck.hasTanks || !finalCheck.hasDispensers || !finalCheck.hasNozzles) {
-        throw new Error('Onboarding requirements not met. Please complete products, tanks, dispensers, and nozzles.');
-      }
-
-      const completed = await stationService.completeOnboarding(stationId);
-      onOnboardingComplete(completed);
-    } catch (err: any) {
-      setErrorMsg(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const steps = [
-    { num: 1, title: 'Station Basics' },
-    { num: 2, title: 'Products Catalog' },
-    { num: 3, title: 'Storage Tanks' },
-    { num: 4, title: 'Dispenser Units & Nozzles' },
-    { num: 5, title: 'Shift Setup (Optional)' }
-  ];
-
-  if (loading && currentStep === 1) {
+  if (!isHydrated) {
     return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', backgroundColor: 'var(--bg-canvas)' }}>
-        Loading station onboarding wizard...
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', color: 'var(--text-muted)' }}>
+        Preparing onboarding workspace...
       </div>
     );
   }
 
-
-
   return (
-    <div style={{
-      display: 'flex',
-      flexDirection: 'column',
-      height: '100vh',
-      width: '100vw',
-      backgroundColor: 'var(--bg-canvas)',
-      overflow: 'hidden'
-    }}>
-
-      {/* Top Header & Progress Stepper */}
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', backgroundColor: 'var(--bg-canvas)', overflow: 'hidden' }}>
       <header style={{
-        height: '64px',
+        height: '68px',
         backgroundColor: 'var(--bg-surface)',
         borderBottom: '1px solid var(--border-soft)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        padding: '0 var(--space-8)',
-        flexShrink: 0
+        padding: '0 24px',
+        gap: '16px',
+        flexShrink: 0,
+        position: 'relative',
       }}>
         <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-strong)' }}>
-            PumpOS Setup
-          </span>
+          <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-strong)' }}>PumpOS Setup</span>
           <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-            {station ? `${station.name} (${station.code})` : 'New Station Onboarding'}
+            Smooth station provisioning for {userName}
           </span>
         </div>
 
-        {/* Modern Stepper */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '32px' }}>
-          {steps.map((s, idx) => {
-            const isCompleted = currentStep > s.num;
-            const isActive = currentStep === s.num;
-            return (
-              <React.Fragment key={s.num}>
-                <div
-                  onClick={() => {
-                    if (stationId && s.num < currentStep) {
-                      setCurrentStep(s.num);
-                      setErrorMsg(null);
-                    }
-                  }}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    cursor: (stationId && s.num < currentStep) ? 'pointer' : 'default',
-                    opacity: (s.num <= currentStep || stationId) ? 1 : 0.4
-                  }}
-                >
-                  <div style={{
-                    width: '24px',
-                    height: '24px',
-                    borderRadius: '50%',
-                    backgroundColor: isActive ? 'var(--brand-primary)' : (isCompleted ? 'var(--state-success-bg)' : 'var(--bg-surface-alt)'),
-                    border: `1px solid ${isActive ? 'var(--brand-primary)' : 'var(--border-strong)'}`,
-                    color: isActive ? '#ffffff' : (isCompleted ? 'var(--state-success-fg)' : 'var(--text-muted)'),
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontWeight: 600,
-                    fontSize: '11px',
-                    fontFamily: 'var(--font-mono)'
-                  }}>
-                    {isCompleted ? '✓' : s.num}
-                  </div>
-                  <span style={{
-                    fontSize: '13px',
-                    fontWeight: isActive ? 600 : 500,
-                    color: isActive ? 'var(--text-strong)' : 'var(--text-muted)',
-                    whiteSpace: 'nowrap'
-                  }}>
-                    {s.title}
-                  </span>
-                </div>
-                {idx < steps.length - 1 && (
-                  <svg width="8" height="12" viewBox="0 0 8 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--border-strong)' }}>
-                    <path d="M2 2l4 4-4 4" />
-                  </svg>
-                )}
-              </React.Fragment>
-            );
-          })}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+          <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-strong)' }}>
+            {steps[currentStep - 1].title}
+          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            {steps.map((s) => (
+              <span
+                key={s.num}
+                onClick={() => {
+                  if (s.num <= currentStep) moveToStep(s.num);
+                }}
+                style={{
+                  width: '8px',
+                  height: '8px',
+                  borderRadius: '50%',
+                  backgroundColor: currentStep === s.num
+                    ? 'var(--brand-primary)'
+                    : currentStep > s.num
+                      ? 'var(--state-success-fg)'
+                      : 'var(--border-strong)',
+                  cursor: s.num <= currentStep ? 'pointer' : 'default',
+                  transition: 'background-color 200ms ease',
+                }}
+                title={s.title}
+              />
+            ))}
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={discardDraft}
+          className="btn btn-secondary btn-sm"
+        >
+          Discard Draft
+        </button>
+
+        {/* Global Progress Bar */}
+        <div style={{
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          height: '2.5px',
+          backgroundColor: 'var(--border-soft)',
+        }}>
+          <div style={{
+            height: '100%',
+            width: `${(currentStep / steps.length) * 100}%`,
+            backgroundColor: 'var(--brand-primary)',
+            transition: 'width 250ms ease-out',
+          }} />
         </div>
       </header>
 
-      {/* Main Form Center Area */}
-      <main style={{
-        flex: 1,
-        overflowY: 'auto',
-        padding: '40px 24px',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center'
-      }}>
-        <div style={{
-          width: '100%',
-          maxWidth: '840px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '24px'
-        }}>
-
+      <main style={{ flex: 1, overflowY: 'auto', padding: '24px', display: 'flex', justifyContent: 'center' }}>
+        <div style={{ width: '100%', maxWidth: '1120px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
           {errorMsg && (
             <div style={{
               backgroundColor: 'var(--state-danger-bg)',
-              border: '1px solid rgba(159, 63, 54, 0.2)',
               color: 'var(--state-danger-fg)',
-              padding: '12px 16px',
+              border: '1px solid rgba(159, 63, 54, 0.15)',
               borderRadius: 'var(--radius-card)',
+              padding: '12px 16px',
               fontSize: '13px',
-              fontWeight: 500
+              fontWeight: 500,
             }}>
-              ⚠️ {errorMsg}
+              {errorMsg}
             </div>
           )}
 
+          {currentStep === 1 && (
+            <Step1StationBasics
+              draft={draft}
+              updateDraft={updateDraft}
+              panelStyle={panelStyle}
+              fieldLabelStyle={fieldLabelStyle}
+              inputStyle={inputStyle}
+              textAreaStyle={textAreaStyle}
+            />
+          )}
+
+          {currentStep === 2 && (
+            <Step2BusinessRules
+              draft={draft}
+              updateDraft={updateDraft}
+              syncTwentyFourSeven={syncTwentyFourSeven}
+              panelStyle={panelStyle}
+              fieldLabelStyle={fieldLabelStyle}
+              inputStyle={inputStyle}
+            />
+          )}
+
+          {currentStep === 3 && (
+            <Step3FuelsCatalog
+              draft={draft}
+              hasQuickMs={hasQuickMs}
+              hasQuickHsd={hasQuickHsd}
+              handleQuickFuel={handleQuickFuel}
+              onAddProduct={() => setFuelDrawer(cloneFuelDraft())}
+              onEditProduct={(p) => setFuelDrawer(cloneFuelDraft(p))}
+              onRemoveProduct={removeProduct}
+              panelStyle={panelStyle}
+            />
+          )}
+
+          {currentStep === 4 && (
+            <Step4Tanks
+              draft={draft}
+              handleQuickAddTank={handleQuickAddTank}
+              onAddTank={() => setTankDrawer(cloneTankDraft(null, draft.products[0]?.draftId || ''))}
+              onEditTank={(t) => setTankDrawer(cloneTankDraft(t))}
+              onRemoveTank={removeTank}
+              panelStyle={panelStyle}
+              inputStyle={inputStyle}
+            />
+          )}
+
+          {currentStep === 5 && (
+            <Step5Dispensers
+              draft={draft}
+              onAddDualDispenser={handleAddDualDispenser}
+              onAddQuadDispenser={handleAddQuadDispenser}
+              onAddCustomDispenser={() => openDispenserDrawer()}
+              onManageDispenser={(du) => openDispenserDrawer(du)}
+              onRemoveDispenser={removeDispenser}
+              panelStyle={panelStyle}
+            />
+          )}
+
+          {currentStep === 6 && (
+            <Step6OpeningValues
+              draft={draft}
+              updateDraft={updateDraft}
+              panelStyle={panelStyle}
+              fieldLabelStyle={fieldLabelStyle}
+              inputStyle={inputStyle}
+            />
+          )}
+
+          {currentStep === 7 && (
+            <Step7ShiftTemplates
+              draft={draft}
+              onAutofillShifts={handleAutofillShifts}
+              onAddShiftTemplate={() => setShiftTemplateDrawer(cloneShiftTemplateDraft())}
+              onEditShiftTemplate={(st) => setShiftTemplateDrawer(cloneShiftTemplateDraft(st))}
+              onRemoveShiftTemplate={removeShiftTemplate}
+              panelStyle={panelStyle}
+            />
+          )}
+
+          {currentStep === 8 && (
+            <Step8Review
+              draft={draft}
+              validationIssues={validationIssues}
+              moveToStep={moveToStep}
+              panelStyle={panelStyle}
+              fieldLabelStyle={fieldLabelStyle}
+            />
+          )}
+        </div>
+      </main>
+
+      <footer style={{
+        height: '72px',
+        backgroundColor: 'var(--bg-surface)',
+        borderTop: '1px solid var(--border-soft)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '0 24px',
+        flexShrink: 0,
+      }}>
+        <button
+          type="button"
+          className="btn btn-secondary btn-sm"
+          onClick={() => setCurrentStep((prev) => Math.max(prev - 1, 1))}
+          disabled={currentStep === 1}
+        >
+          Previous Step
+        </button>
+
+        <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+          Step {currentStep} of {steps.length}
+        </div>
+
+        {currentStep === steps.length ? (
+          <button type="button" className="btn btn-primary btn-md" onClick={handleProvision}>
+            Provision Station
+          </button>
+        ) : (
+          <button type="button" className="btn btn-primary btn-md" onClick={handleNext}>
+            Next Step
+          </button>
+        )}
+      </footer>
+
+      {/* Creation/Edit Drawer Modals (Shared context modals for clean view step layouts) */}
+      <Drawer
+        isOpen={!!fuelDrawer}
+        onClose={() => setFuelDrawer(null)}
+        title={fuelDrawer?.draftId ? 'Fuel Configuration' : 'Add Fuel'}
+      >
+        {fuelDrawer && (
+          <form
+            onSubmit={(e) => { e.preventDefault(); saveFuel(); }}
+            style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
+          >
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Fuel Name *</label>
+              <input
+                type="text"
+                value={fuelDrawer.name}
+                onChange={(e) => setFuelDrawer({ ...fuelDrawer, name: e.target.value })}
+                placeholder="e.g. Petrol (MS)"
+                style={{
+                  height: '32px',
+                  padding: '0 8px',
+                  borderRadius: 'var(--radius-input)',
+                  border: '1px solid var(--border-strong)',
+                  fontSize: '13px',
+                  backgroundColor: 'var(--bg-surface)',
+                  color: 'var(--text-strong)'
+                }}
+                required
+              />
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Fuel Code *</label>
+              <input
+                type="text"
+                value={fuelDrawer.code}
+                onChange={(e) => setFuelDrawer({ ...fuelDrawer, code: e.target.value.toUpperCase() })}
+                placeholder="e.g. MS"
+                style={{
+                  height: '32px',
+                  padding: '0 8px',
+                  borderRadius: 'var(--radius-input)',
+                  border: '1px solid var(--border-strong)',
+                  fontSize: '13px',
+                  backgroundColor: 'var(--bg-surface)',
+                  color: 'var(--text-strong)'
+                }}
+                required
+              />
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Sales Unit *</label>
+              <input
+                type="text"
+                value={fuelDrawer.unit}
+                onChange={(e) => setFuelDrawer({ ...fuelDrawer, unit: e.target.value })}
+                placeholder="e.g. Liters"
+                style={{
+                  height: '32px',
+                  padding: '0 8px',
+                  borderRadius: 'var(--radius-input)',
+                  border: '1px solid var(--border-strong)',
+                  fontSize: '13px',
+                  backgroundColor: 'var(--bg-surface)',
+                  color: 'var(--text-strong)'
+                }}
+                required
+              />
+            </div>
+
+
+
+            <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
+              <button
+                type="submit"
+                style={{
+                  flex: 1,
+                  height: '32px',
+                  backgroundColor: 'var(--brand-primary)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: 'var(--radius-button)',
+                  fontWeight: 600,
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                }}
+              >
+                Save Fuel
+              </button>
+              <button
+                type="button"
+                onClick={() => setFuelDrawer(null)}
+                style={{
+                  flex: 1,
+                  height: '32px',
+                  backgroundColor: 'var(--bg-surface-alt)',
+                  color: 'var(--text-default)',
+                  border: '1px solid var(--border-strong)',
+                  borderRadius: 'var(--radius-button)',
+                  fontWeight: 600,
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        )}
+      </Drawer>
+
+      <Drawer
+        isOpen={!!tankDrawer}
+        onClose={() => setTankDrawer(null)}
+        title="Tank Configuration"
+      >
+        {tankDrawer && (
+          <form
+            onSubmit={(e) => { e.preventDefault(); saveTank(); }}
+            style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
+          >
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Tank Identifier *</label>
+              <input
+                type="text"
+                value={tankDrawer.name}
+                onChange={(e) => setTankDrawer({ ...tankDrawer, name: e.target.value })}
+                placeholder="e.g. Tank 1"
+                style={{
+                  height: '32px',
+                  padding: '0 8px',
+                  borderRadius: 'var(--radius-input)',
+                  border: '1px solid var(--border-strong)',
+                  fontSize: '13px',
+                  backgroundColor: 'var(--bg-surface)',
+                  color: 'var(--text-strong)'
+                }}
+                required
+              />
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Linked Fuel Product *</label>
+              <select
+                value={tankDrawer.productDraftId}
+                onChange={(e) => setTankDrawer({ ...tankDrawer, productDraftId: e.target.value })}
+                style={{
+                  height: '32px',
+                  padding: '0 8px',
+                  borderRadius: 'var(--radius-input)',
+                  border: '1px solid var(--border-strong)',
+                  fontSize: '13px',
+                  backgroundColor: 'var(--bg-surface)',
+                  color: 'var(--text-strong)'
+                }}
+                required
+              >
+                <option value="">Select fuel</option>
+                {draft.products.map((product) => (
+                  <option key={product.draftId} value={product.draftId}>
+                    {product.name || product.code}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Capacity (Liters) *</label>
+              <input
+                type="number"
+                min={0}
+                step="0.1"
+                value={tankDrawer.capacity || ''}
+                onChange={(e) => setTankDrawer({ ...tankDrawer, capacity: Number(e.target.value) || 0 })}
+                placeholder="e.g. 20000"
+                style={{
+                  height: '32px',
+                  padding: '0 8px',
+                  borderRadius: 'var(--radius-input)',
+                  border: '1px solid var(--border-strong)',
+                  fontSize: '13px',
+                  backgroundColor: 'var(--bg-surface)',
+                  color: 'var(--text-strong)'
+                }}
+                required
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
+              <button
+                type="submit"
+                style={{
+                  flex: 1,
+                  height: '32px',
+                  backgroundColor: 'var(--brand-primary)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: 'var(--radius-button)',
+                  fontWeight: 600,
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                }}
+              >
+                Save Tank
+              </button>
+              <button
+                type="button"
+                onClick={() => setTankDrawer(null)}
+                style={{
+                  flex: 1,
+                  height: '32px',
+                  backgroundColor: 'var(--bg-surface-alt)',
+                  color: 'var(--text-default)',
+                  border: '1px solid var(--border-strong)',
+                  borderRadius: 'var(--radius-button)',
+                  fontWeight: 600,
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        )}
+      </Drawer>
+
+      <Drawer
+        isOpen={!!shiftTemplateDrawer}
+        onClose={() => setShiftTemplateDrawer(null)}
+        title="Shift Template"
+      >
+        {shiftTemplateDrawer && (
+          <form
+            onSubmit={(e) => { e.preventDefault(); saveShiftTemplate(); }}
+            style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
+          >
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Template Name *</label>
+              <input
+                type="text"
+                value={shiftTemplateDrawer.name}
+                onChange={(e) => setShiftTemplateDrawer({ ...shiftTemplateDrawer, name: e.target.value })}
+                placeholder="e.g. Morning Shift"
+                style={{
+                  height: '32px',
+                  padding: '0 8px',
+                  borderRadius: 'var(--radius-input)',
+                  border: '1px solid var(--border-strong)',
+                  fontSize: '13px',
+                  backgroundColor: 'var(--bg-surface)',
+                  color: 'var(--text-strong)'
+                }}
+                required
+              />
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Start Time *</label>
+                <input
+                  type="time"
+                  value={shiftTemplateDrawer.startTime}
+                  onChange={(e) => setShiftTemplateDrawer({ ...shiftTemplateDrawer, startTime: e.target.value })}
+                  style={{
+                    height: '32px',
+                    padding: '0 8px',
+                    borderRadius: 'var(--radius-input)',
+                    border: '1px solid var(--border-strong)',
+                    fontSize: '13px',
+                    backgroundColor: 'var(--bg-surface)',
+                    color: 'var(--text-strong)'
+                  }}
+                  required
+                />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>End Time *</label>
+                <input
+                  type="time"
+                  value={shiftTemplateDrawer.endTime}
+                  onChange={(e) => setShiftTemplateDrawer({ ...shiftTemplateDrawer, endTime: e.target.value })}
+                  style={{
+                    height: '32px',
+                    padding: '0 8px',
+                    borderRadius: 'var(--radius-input)',
+                    border: '1px solid var(--border-strong)',
+                    fontSize: '13px',
+                    backgroundColor: 'var(--bg-surface)',
+                    color: 'var(--text-strong)'
+                  }}
+                  required
+                />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
+              <button
+                type="submit"
+                style={{
+                  flex: 1,
+                  height: '32px',
+                  backgroundColor: 'var(--brand-primary)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: 'var(--radius-button)',
+                  fontWeight: 600,
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                }}
+              >
+                Save Template
+              </button>
+              <button
+                type="button"
+                onClick={() => setShiftTemplateDrawer(null)}
+                style={{
+                  flex: 1,
+                  height: '32px',
+                  backgroundColor: 'var(--bg-surface-alt)',
+                  color: 'var(--text-default)',
+                  border: '1px solid var(--border-strong)',
+                  borderRadius: 'var(--radius-button)',
+                  fontWeight: 600,
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        )}
+      </Drawer>
+
+      <Drawer
+        isOpen={!!dispenserDrawer}
+        onClose={() => setDispenserDrawer(null)}
+        title="Dispenser & Nozzles"
+      >
+        {dispenserDrawer && (
+          <form
+            onSubmit={(e) => { e.preventDefault(); saveDispenser(); }}
+            style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
+          >
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Dispenser Name *</label>
+              <input
+                type="text"
+                value={dispenserDrawer.dispenser.name}
+                onChange={(e) => setDispenserDrawer({ ...dispenserDrawer, dispenser: { ...dispenserDrawer.dispenser, name: e.target.value } })}
+                placeholder="e.g. Dispenser 1"
+                style={{
+                  height: '32px',
+                  padding: '0 8px',
+                  borderRadius: 'var(--radius-input)',
+                  border: '1px solid var(--border-strong)',
+                  fontSize: '13px',
+                  backgroundColor: 'var(--bg-surface)',
+                  color: 'var(--text-strong)'
+                }}
+                required
+              />
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Code / Reference ID *</label>
+              <input
+                type="text"
+                value={dispenserDrawer.dispenser.code}
+                onChange={(e) => setDispenserDrawer({ ...dispenserDrawer, dispenser: { ...dispenserDrawer.dispenser, code: e.target.value.toUpperCase() } })}
+                placeholder="e.g. DU-01"
+                style={{
+                  height: '32px',
+                  padding: '0 8px',
+                  borderRadius: 'var(--radius-input)',
+                  border: '1px solid var(--border-strong)',
+                  fontSize: '13px',
+                  backgroundColor: 'var(--bg-surface)',
+                  color: 'var(--text-strong)'
+                }}
+                required
+              />
+            </div>
+
+            <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <h4 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-strong)' }}>Nozzle Mappings</h4>
+                  <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>Map each nozzle to a storage tank and fuel type.</p>
+                </div>
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  <button
+                    type="button"
+                    style={{
+                      height: '26px',
+                      padding: '0 8px',
+                      backgroundColor: 'var(--bg-surface)',
+                      border: '1px solid var(--border-strong)',
+                      color: 'var(--text-strong)',
+                      borderRadius: 'var(--radius-button)',
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      cursor: 'pointer'
+                    }}
+                    onClick={() => {
+                      const otherNozzlesCount = draft.nozzles.filter((n) => n.dispenserDraftId !== dispenserDrawer.dispenser.draftId).length;
+                      const nextNum = otherNozzlesCount + dispenserDrawer.nozzles.length + 1;
+                      const firstTank = draft.tanks[0];
+                      const defaultFuelId = firstTank?.productDraftId || draft.products[0]?.draftId || '';
+                      const defaultTankId = firstTank?.draftId || '';
+                      setDispenserDrawer({
+                        ...dispenserDrawer,
+                        nozzles: [
+                          ...dispenserDrawer.nozzles,
+                          cloneNozzleDraft(null, {
+                            dispenserDraftId: dispenserDrawer.dispenser.draftId,
+                            tankDraftId: defaultTankId,
+                            productDraftId: defaultFuelId,
+                            name: `N${nextNum}`,
+                          }),
+                        ],
+                      });
+                    }}
+                  >
+                    + Nozzle
+                  </button>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {dispenserDrawer.nozzles.length === 0 ? (
+                  <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px', border: '1px dashed var(--border-soft)', borderRadius: 'var(--radius-card)' }}>
+                    No nozzles configured for this dispenser yet.
+                  </div>
+                ) : (
+                  dispenserDrawer.nozzles.map((nozzle, index) => {
+                    const filteredTanks = draft.tanks.filter(t => t.productDraftId === nozzle.productDraftId);
+                    return (
+                      <div
+                        key={nozzle.draftId}
+                        style={{
+                          padding: '12px',
+                          border: '1px solid var(--border-soft)',
+                          borderRadius: '6px',
+                          backgroundColor: 'var(--bg-surface-alt)',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '8px'
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)' }}>Nozzle #{index + 1}</span>
+                          <button
+                            type="button"
+                            onClick={() => setDispenserDrawer({
+                              ...dispenserDrawer,
+                              nozzles: dispenserDrawer.nozzles.filter((item) => item.draftId !== nozzle.draftId),
+                            })}
+                            style={{
+                              border: 'none',
+                              background: 'none',
+                              color: 'var(--state-danger-fg)',
+                              cursor: 'pointer',
+                              fontSize: '11px',
+                              fontWeight: 600
+                            }}
+                          >
+                            Remove
+                          </button>
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            <label style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Name</label>
+                            <input
+                              type="text"
+                              value={nozzle.name}
+                              onChange={(e) => setDispenserDrawer({
+                                ...dispenserDrawer,
+                                nozzles: dispenserDrawer.nozzles.map((item) => item.draftId === nozzle.draftId ? { ...item, name: e.target.value } : item),
+                              })}
+                              style={{
+                                height: '28px',
+                                padding: '0 8px',
+                                borderRadius: 'var(--radius-input)',
+                                border: '1px solid var(--border-strong)',
+                                fontSize: '12px',
+                                backgroundColor: 'var(--bg-surface)',
+                                color: 'var(--text-strong)'
+                              }}
+                              required
+                            />
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            <label style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Opening Reading</label>
+                            <input
+                              type="number"
+                              min={0}
+                              step="0.001"
+                              value={nozzle.openingReading ?? 0}
+                              onChange={(e) => setDispenserDrawer({
+                                ...dispenserDrawer,
+                                nozzles: dispenserDrawer.nozzles.map((item) => item.draftId === nozzle.draftId ? { ...item, openingReading: Number(e.target.value) || 0 } : item),
+                              })}
+                              style={{
+                                height: '28px',
+                                padding: '0 8px',
+                                borderRadius: 'var(--radius-input)',
+                                border: '1px solid var(--border-strong)',
+                                fontSize: '12px',
+                                backgroundColor: 'var(--bg-surface)',
+                                color: 'var(--text-strong)'
+                              }}
+                            />
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            <label style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Fuel</label>
+                            <select
+                              value={nozzle.productDraftId}
+                              onChange={(e) => {
+                                const nextFuelId = e.target.value;
+                                const firstMatchedTank = draft.tanks.find(t => t.productDraftId === nextFuelId);
+                                setDispenserDrawer({
+                                  ...dispenserDrawer,
+                                  nozzles: dispenserDrawer.nozzles.map((item) =>
+                                    item.draftId === nozzle.draftId
+                                      ? { ...item, productDraftId: nextFuelId, tankDraftId: firstMatchedTank?.draftId || '' }
+                                      : item
+                                  ),
+                                });
+                              }}
+                              style={{
+                                height: '28px',
+                                padding: '0 4px',
+                                borderRadius: 'var(--radius-input)',
+                                border: '1px solid var(--border-strong)',
+                                fontSize: '12px',
+                                backgroundColor: 'var(--bg-surface)',
+                                color: 'var(--text-strong)'
+                              }}
+                              required
+                            >
+                              <option value="">Select fuel</option>
+                              {draft.products.map(p => (
+                                <option key={p.draftId} value={p.draftId}>{p.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            <label style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Tank</label>
+                            <select
+                              value={nozzle.tankDraftId}
+                              onChange={(e) => setDispenserDrawer({
+                                ...dispenserDrawer,
+                                nozzles: dispenserDrawer.nozzles.map((item) => item.draftId === nozzle.draftId ? { ...item, tankDraftId: e.target.value } : item),
+                              })}
+                              style={{
+                                height: '28px',
+                                padding: '0 4px',
+                                borderRadius: 'var(--radius-input)',
+                                border: '1px solid var(--border-strong)',
+                                fontSize: '12px',
+                                backgroundColor: 'var(--bg-surface)',
+                                color: 'var(--text-strong)'
+                              }}
+                              required
+                            >
+                              <option value="">Select tank</option>
+                              {filteredTanks.map(t => (
+                                <option key={t.draftId} value={t.draftId}>{t.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
+              <button
+                type="submit"
+                style={{
+                  flex: 1,
+                  height: '32px',
+                  backgroundColor: 'var(--brand-primary)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: 'var(--radius-button)',
+                  fontWeight: 600,
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                }}
+              >
+                Save Dispenser
+              </button>
+              <button
+                type="button"
+                onClick={() => setDispenserDrawer(null)}
+                style={{
+                  flex: 1,
+                  height: '32px',
+                  backgroundColor: 'var(--bg-surface-alt)',
+                  color: 'var(--text-default)',
+                  border: '1px solid var(--border-strong)',
+                  borderRadius: 'var(--radius-button)',
+                  fontWeight: 600,
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        )}
+      </Drawer>
+
+      {/* Provisioning overlay modal */}
+      {provisioning.isOpen && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          backgroundColor: 'rgba(15, 23, 42, 0.25)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999,
+          padding: '24px',
+        }}>
           <div style={{
+            width: '100%',
+            maxWidth: '520px',
             backgroundColor: 'var(--bg-surface)',
-            border: '1px solid var(--border-soft)',
-            padding: '32px',
             borderRadius: 'var(--radius-card)',
-            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.01)',
-            minHeight: '400px'
+            border: '1px solid var(--border-soft)',
+            boxShadow: '0 20px 48px rgba(15, 23, 42, 0.15)',
+            padding: '24px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '18px',
           }}>
-            {currentStep === 1 && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-                <div style={{ borderBottom: '1px solid var(--border-soft)', paddingBottom: '16px' }}>
-                  <h2 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-strong)' }}>Setup Your Station Basics</h2>
-                  <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '4px' }}>
-                    Welcome to PumpOS. The operating system for fuel retail.
-                  </p>
-                </div>
+            <div>
+              <h3 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-strong)' }}>
+                {provisioning.completed ? 'Station Provisioned' : 'Provisioning Station'}
+              </h3>
+              <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                {provisioning.failedMessage
+                  ? 'The draft is still safe locally. Fix the issue and try again.'
+                  : 'Applying the full onboarding draft in one backend workflow.'}
+              </p>
+            </div>
 
-                <form onSubmit={handleCreateStation} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                    <div className="form-group">
-                      <label className="form-label">Station Name *</label>
-                      <input
-                        type="text"
-                        className="form-input"
-                        placeholder="e.g. Shell Gachibowli"
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                        required
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label className="form-label">Station Code * (Unique Identifier)</label>
-                      <input
-                        type="text"
-                        className="form-input"
-                        placeholder="e.g. SH-HYD-01"
-                        value={code}
-                        onChange={(e) => setCode(e.target.value)}
-                        required
-                      />
-                    </div>
-                  </div>
+            <div style={{ height: '8px', backgroundColor: 'var(--bg-surface-alt)', borderRadius: '999px', overflow: 'hidden' }}>
+              <div
+                style={{
+                  height: '100%',
+                  width: provisioning.failedMessage
+                    ? '100%'
+                    : `${((provisioning.stageIndex + (provisioning.completed ? 1 : 0)) / provisioningStages.length) * 100}%`,
+                  backgroundColor: provisioning.failedMessage ? 'var(--brand-danger)' : 'var(--brand-primary)',
+                  transition: 'width 200ms ease',
+                }}
+              />
+            </div>
 
-                  <div className="form-group">
-                    <label className="form-label">Station Address</label>
-                    <input
-                      type="text"
-                      className="form-input"
-                      placeholder="e.g. Outer Ring Road, Gachibowli, Hyderabad"
-                      value={address}
-                      onChange={(e) => setAddress(e.target.value)}
-                    />
-                  </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {provisioningStages.map((stage, index) => {
+                const isActive = provisioning.stageIndex === index && !provisioning.failedMessage && !provisioning.completed;
+                const isCompleted = provisioning.completed || (!provisioning.failedMessage && provisioning.stageIndex > index);
+                const isFailed = provisioning.failedStage === stage;
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                    <div className="form-group">
-                      <label className="form-label">Contact Phone</label>
-                      <input
-                        type="text"
-                        className="form-input"
-                        placeholder="e.g. +91 9876543210"
-                        value={phone}
-                        onChange={(e) => setPhone(e.target.value)}
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label className="form-label">Shift Grace Period (Minutes)</label>
-                      <input
-                        type="number"
-                        className="form-input mono-num"
-                        value={graceMinutes}
-                        onChange={(e) => setGraceMinutes(parseInt(e.target.value))}
-                      />
-                    </div>
+                return (
+                  <div key={stage} style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    padding: '10px 12px',
+                    borderRadius: 'var(--radius-card)',
+                    backgroundColor: isActive ? 'var(--bg-surface-alt)' : 'transparent',
+                    border: `1px solid ${isActive ? 'var(--border-strong)' : 'transparent'}`,
+                  }}>
+                    <span style={{ fontSize: '13px', color: 'var(--text-default)', fontWeight: isActive ? 600 : 500 }}>{stage}</span>
+                    {isFailed ? (
+                      <StatusBadge status="Failed" type="danger" />
+                    ) : isCompleted ? (
+                      <StatusBadge status="Done" type="success" />
+                    ) : isActive ? (
+                      <StatusBadge status="Running" type="info" />
+                    ) : (
+                      <StatusBadge status="Queued" type="default" />
+                    )}
                   </div>
+                );
+              })}
+            </div>
 
-                  <div style={{ display: 'flex', gap: '12px', marginTop: '16px', borderTop: '1px solid var(--border-soft)', paddingTop: '20px' }}>
-                    <button
-                      type="submit"
-                      disabled={loading}
-                      style={{
-                        height: '38px',
-                        padding: '0 20px',
-                        backgroundColor: 'var(--brand-primary)',
-                        color: '#ffffff',
-                        border: 'none',
-                        borderRadius: 'var(--radius-button)',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                      }}
-                    >
-                      {loading ? 'Saving...' : (stationId ? 'Save & Continue' : 'Initialize Station')}
-                    </button>
-                  </div>
-                </form>
+            {provisioning.failedMessage && (
+              <div style={{
+                backgroundColor: 'var(--state-danger-bg)',
+                color: 'var(--state-danger-fg)',
+                borderRadius: 'var(--radius-card)',
+                border: '1px solid rgba(159, 63, 54, 0.15)',
+                padding: '12px 14px',
+                fontSize: '12px',
+              }}>
+                {provisioning.failedMessage}
               </div>
             )}
 
-            {currentStep === 2 && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-soft)', paddingBottom: '12px' }}>
-                  <div>
-                    <h3 style={{ fontSize: '16px', fontWeight: 600 }}>Step 2: Configure Products Catalog</h3>
-                    <p style={{ color: 'var(--text-muted)', fontSize: '12px', marginTop: '2px' }}>Define the fuels and lubricants sold at your outlet.</p>
-                  </div>
-                </div>
-                <ProductsCatalog />
-              </div>
-            )}
+            {(provisioning.failedMessage || provisioning.completed) && (
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                {provisioning.failedMessage && (
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    onClick={() => {
+                      const msg = provisioning.failedMessage || '';
+                      const stage = provisioning.failedStage || '';
+                      let targetStep = 8;
+                      const lower = msg.toLowerCase();
+                      if (lower.includes('station name') || lower.includes('station code')) targetStep = 1;
+                      else if (lower.includes('business day') || lower.includes('operating hour') || lower.includes('operating schedule') || lower.includes('timezone')) targetStep = 2;
+                      else if (lower.includes('price') || lower.includes('selling rate') || lower.includes('fuel rate') || lower.includes('selling price')) targetStep = 6;
+                      else if (lower.includes('fuel') || lower.includes('product')) targetStep = 3;
+                      else if (lower.includes('opening stock') || lower.includes('capacity')) targetStep = 6;
+                      else if (lower.includes('tank')) targetStep = 4;
+                      else if (lower.includes('opening reading')) targetStep = 6;
+                      else if (lower.includes('nozzle') || lower.includes('dispenser') || lower.includes('du')) targetStep = 5;
+                      else if (lower.includes('shift template')) targetStep = 7;
+                      else if (stage === 'Validating draft') targetStep = 8;
+                      else if (stage === 'Creating station') targetStep = 1;
+                      else if (stage === 'Linking infrastructure') targetStep = 4;
+                      else if (stage === 'Applying opening values' || stage === 'Applying go-live values') targetStep = 6;
 
-            {currentStep === 3 && stationId && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-soft)', paddingBottom: '12px' }}>
-                  <div>
-                    <h3 style={{ fontSize: '16px', fontWeight: 600 }}>Step 3: Define Storage Tanks</h3>
-                    <p style={{ color: 'var(--text-muted)', fontSize: '12px', marginTop: '2px' }}>Configure underground tanks linked to fuel products.</p>
-                  </div>
-                </div>
-                <TanksGrid stationId={stationId} />
-              </div>
-            )}
-
-            {currentStep === 4 && stationId && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-soft)', paddingBottom: '12px' }}>
-                  <div>
-                    <h3 style={{ fontSize: '16px', fontWeight: 600 }}>Step 4: Dispenser Units & Nozzles Mapping</h3>
-                    <p style={{ color: 'var(--text-muted)', fontSize: '12px', marginTop: '2px' }}>Add fuel pump islands and map nozzles directly inside each unit form.</p>
-                  </div>
-                </div>
-                <DispensersList stationId={stationId} />
-              </div>
-            )}
-
-            {currentStep === 5 && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-soft)', paddingBottom: '12px' }}>
-                  <div>
-                    <h3 style={{ fontSize: '16px', fontWeight: 600 }}>Step 5: Shift Templates Setup (Optional)</h3>
-                    <p style={{ color: 'var(--text-muted)', fontSize: '12px', marginTop: '2px' }}>Define regular operational shifts for operator allocation.</p>
-                  </div>
-                  <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                    {checklist ? `Configured: ${checklist.fuelCount} fuels, ${checklist.tankCount} tanks, ${checklist.duCount} DUs, ${checklist.nozzleCount} nozzles` : ''}
-                  </span>
-                </div>
-                <ShiftTemplates />
+                      setCurrentStep(targetStep);
+                      setProvisioning({
+                        isOpen: false,
+                        stageIndex: 0,
+                        failedMessage: null,
+                        failedStage: null,
+                        completed: false,
+                      });
+                      setErrorMsg(msg);
+                    }}
+                  >
+                    Go to Section
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => setProvisioning({
+                    isOpen: false,
+                    stageIndex: 0,
+                    failedMessage: null,
+                    failedStage: null,
+                    completed: false,
+                  })}
+                >
+                  Close
+                </button>
               </div>
             )}
           </div>
         </div>
-      </main>
-
-      {/* Sticky Bottom Footer */}
-      {currentStep > 1 && (
-        <footer style={{
-          height: '72px',
-          backgroundColor: 'var(--bg-surface)',
-          borderTop: '1px solid var(--border-soft)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '0 var(--space-10)',
-          flexShrink: 0
-        }}>
-          <button
-            onClick={() => setCurrentStep(prev => prev - 1)}
-            style={{
-              height: '36px',
-              padding: '0 16px',
-              backgroundColor: 'transparent',
-              border: '1px solid var(--border-strong)',
-              color: 'var(--text-default)',
-              borderRadius: 'var(--radius-button)',
-              cursor: 'pointer',
-              fontWeight: 500,
-              fontSize: '13px'
-            }}
-          >
-            ← Previous Step
-          </button>
-
-          {currentStep === 5 ? (
-            <button
-              onClick={handleCompleteSetup}
-              disabled={loading}
-              style={{
-                height: '38px',
-                padding: '0 20px',
-                backgroundColor: 'var(--brand-primary)',
-                color: '#ffffff',
-                border: 'none',
-                borderRadius: 'var(--radius-button)',
-                cursor: 'pointer',
-                fontWeight: 600,
-                fontSize: '13px'
-              }}
-            >
-              {loading ? 'Completing Setup...' : 'Complete Onboarding & Start Operations ✓'}
-            </button>
-          ) : (
-            <button
-              onClick={handleNextStep}
-              disabled={validating}
-              style={{
-                height: '38px',
-                padding: '0 20px',
-                backgroundColor: 'var(--brand-primary)',
-                color: '#ffffff',
-                border: 'none',
-                borderRadius: 'var(--radius-button)',
-                cursor: 'pointer',
-                fontWeight: 600,
-                fontSize: '13px'
-              }}
-            >
-              {validating ? 'Validating...' : 'Next Step ➜'}
-            </button>
-          )}
-        </footer>
       )}
     </div>
   );

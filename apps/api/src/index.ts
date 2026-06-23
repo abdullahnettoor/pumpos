@@ -154,11 +154,12 @@ api.use('*', async (c, next) => {
     await next();
   } catch (err: any) {
     const dbUrl = c.env.DATABASE_URL || c.env.DB_URL || 'postgresql://postgres:postgres@localhost:5432/pump_erp';
+    const causeMessage = err.cause ? ` | Cause: ${err.cause.message || err.cause}` : '';
     return c.json({
       success: false,
       error: {
         code: 'UNAUTHORIZED',
-        message: `Token validation failed: ${err.message} | DB URL: ${dbUrl.replace(/:[^:@]+@/, ':***@')} | Keys: ${Object.keys(c.env || {})}`,
+        message: `Token validation failed: ${err.message}${causeMessage} | DB URL: ${dbUrl.replace(/:[^:@]+@/, ':***@')} | Keys: ${Object.keys(c.env || {})}`,
         stack: err.stack
       }
     }, 401);

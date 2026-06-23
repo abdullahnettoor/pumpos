@@ -6,6 +6,8 @@ import {
   Nozzle,
   ShiftTemplate,
   User,
+  FinalizeOnboardingPayload,
+  FinalizeOnboardingResult,
 } from '../types/entities.js';
 
 export interface IStationService {
@@ -13,6 +15,7 @@ export interface IStationService {
   updateStation(id: string, data: { name: string; address?: string | null; phone?: string | null; settings?: Record<string, any>; onboardingStatus?: string }): Promise<Station>;
   getOnboardingStatus(stationId: string): Promise<any>;
   completeOnboarding(stationId: string): Promise<any>;
+  finalizeOnboarding(payload: FinalizeOnboardingPayload): Promise<FinalizeOnboardingResult>;
   getCurrentSession(): Promise<any>;
 }
 

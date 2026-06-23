@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { stationSchema, nozzleReadingSchema, supplierPaymentSchema, shiftPurchaseSchema } from './validation.js';
+import { stationSchema, nozzleReadingSchema, supplierPaymentSchema, shiftPurchaseSchema, onboardingDraftSchema, finalizeOnboardingSchema } from './validation.js';
 
 describe('Validation Schemas Tests', () => {
   describe('stationSchema', () => {
@@ -128,6 +128,108 @@ describe('Validation Schemas Tests', () => {
 
       const result = shiftPurchaseSchema.safeParse(invalid);
       expect(result.success).toBe(false);
+    });
+  });
+
+  describe('onboardingDraftSchema', () => {
+    const validDraft = {
+      station: {
+        name: 'Gachibowli Station',
+        code: 'GB-01',
+        address: '123 Gachibowli Road',
+        phone: '+919999999999',
+        shiftGraceMinutes: 15,
+        timezone: 'Asia/Kolkata',
+      },
+      businessRules: {
+        businessDayStartsAt: '06:00',
+        operatingSchedule: {
+          isTwentyFourSeven: true,
+          days: [
+            { day: 'MONDAY', isOpen: true, openTime: '00:00', closeTime: '23:59' },
+            { day: 'TUESDAY', isOpen: true, openTime: '00:00', closeTime: '23:59' },
+            { day: 'WEDNESDAY', isOpen: true, openTime: '00:00', closeTime: '23:59' },
+            { day: 'THURSDAY', isOpen: true, openTime: '00:00', closeTime: '23:59' },
+            { day: 'FRIDAY', isOpen: true, openTime: '00:00', closeTime: '23:59' },
+            { day: 'SATURDAY', isOpen: true, openTime: '00:00', closeTime: '23:59' },
+            { day: 'SUNDAY', isOpen: true, openTime: '00:00', closeTime: '23:59' },
+          ],
+        },
+      },
+      products: [
+        {
+          draftId: 'prod-ms',
+          name: 'Petrol (MS)',
+          code: 'MS',
+          productType: 'FUEL',
+          stockTracked: true,
+          isTaxable: false,
+          unit: 'Liters',
+          taxConfig: { gst_rate: 0, hsn_code: '2710' },
+          isActive: true,
+          currentPrice: 104.5,
+        },
+      ],
+      tanks: [
+        {
+          draftId: 'tank-1',
+          name: 'Tank 1',
+          productDraftId: 'prod-ms',
+          capacity: 20000,
+          openingQuantity: 10000,
+        },
+      ],
+      dispensers: [
+        {
+          draftId: 'du-1',
+          name: 'Dispenser 1',
+          code: 'DU-1',
+          status: 'ACTIVE',
+        },
+      ],
+      nozzles: [
+        {
+          draftId: 'noz-1',
+          dispenserDraftId: 'du-1',
+          tankDraftId: 'tank-1',
+          productDraftId: 'prod-ms',
+          name: 'N1',
+          openingReading: 12000.5,
+        },
+      ],
+      shiftTemplates: [
+        {
+          draftId: 'shift-t1',
+          name: 'Morning Shift',
+          startTime: '06:00',
+          endTime: '14:00',
+          isActive: true,
+        },
+      ],
+    };
+
+    it('should validate a complete, correct onboarding draft', () => {
+      const result = onboardingDraftSchema.safeParse(validDraft);
+      expect(result.success).toBe(true);
+    });
+
+    it('should reject a draft with invalid times or missing fields', () => {
+      const invalidDraft = {
+        ...validDraft,
+        station: {
+          ...validDraft.station,
+          name: '', // invalid: short name
+        },
+      };
+
+      const result = onboardingDraftSchema.safeParse(invalidDraft);
+      expect(result.success).toBe(false);
+    });
+
+    it('should validate finalize onboarding payload', () => {
+      const payload = { draft: validDraft };
+      const result = finalizeOnboardingSchema.safeParse(payload);
+      expect(result.success).toBe(true);
     });
   });
 });

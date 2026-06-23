@@ -74,7 +74,9 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
         address,
         phone,
         settings: {
+          ...(selectedStation.settings || {}),
           shift_grace_minutes: graceMinutes,
+          shift_lock_grace_days: selectedStation.settings?.shift_lock_grace_days || 3,
           offline_warning_days: selectedStation.settings?.offline_warning_days || 3,
           offline_critical_days: selectedStation.settings?.offline_critical_days || 7,
         },

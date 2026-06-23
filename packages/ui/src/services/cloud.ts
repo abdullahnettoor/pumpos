@@ -15,6 +15,8 @@ import {
   User,
   ShiftOpenPayload,
   ShiftClosePayload,
+  FinalizeOnboardingPayload,
+  FinalizeOnboardingResult,
 } from '@pump/shared';
 
 // Base API configuration
@@ -47,7 +49,15 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
   const res = await response.json() as any;
   if (!res.success) {
-    throw new Error(res.error?.message || 'API request failed');
+    const error = new Error(res.error?.message || 'API request failed') as Error & {
+      code?: string;
+      details?: Record<string, any>;
+      status?: number;
+    };
+    error.code = res.error?.code;
+    error.details = res.error?.details;
+    error.status = response.status;
+    throw error;
   }
   return res.data;
 }
@@ -84,6 +94,13 @@ export class CloudStationService implements IStationService {
     return request<any>('/setup/onboarding/complete', {
       method: 'POST',
       body: JSON.stringify({ stationId }),
+    });
+  }
+
+  async finalizeOnboarding(payload: FinalizeOnboardingPayload): Promise<FinalizeOnboardingResult> {
+    return request<FinalizeOnboardingResult>('/setup/onboarding/finalize', {
+      method: 'POST',
+      body: JSON.stringify(payload),
     });
   }
 
@@ -444,5 +461,3 @@ export class CloudPricingService {
     });
   }
 }
-
-

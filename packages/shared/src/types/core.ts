@@ -12,9 +12,18 @@ export type CustomerType = 'Regular' | 'Credit' | 'Fleet';
 
 export type TransactionType = 'Credit Sale' | 'Collection' | 'Adjustment' | 'Purchase' | 'Payment';
 
-export type MovementType = 'Purchase' | 'Sale' | 'Adjustment' | 'Decantation' | 'Variance';
+export type MovementType = 'Purchase' | 'Sale' | 'Adjustment' | 'Decantation' | 'Variance' | 'OpeningBalance';
 
 export type ExpenseStatus = 'ACTIVE' | 'ADJUSTMENT' | 'VOIDED';
+
+export type Weekday =
+  | 'MONDAY'
+  | 'TUESDAY'
+  | 'WEDNESDAY'
+  | 'THURSDAY'
+  | 'FRIDAY'
+  | 'SATURDAY'
+  | 'SUNDAY';
 
 export type EventType =
   | 'SHIFT_OPENED'
