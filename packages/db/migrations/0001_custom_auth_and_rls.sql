@@ -52,6 +52,7 @@ BEGIN
       auth_user_id = NEW.id,
       status = 'ACTIVE',
       full_name = COALESCE(NEW.raw_user_meta_data->>'full_name', full_name),
+      role = COALESCE(role, NEW.raw_user_meta_data->>'role', 'Staff'),
       updated_at = now()
     WHERE id = v_existing_user_id;
   ELSE
@@ -67,17 +68,13 @@ BEGIN
     -- Resolve full name
     v_full_name := COALESCE(NEW.raw_user_meta_data->>'full_name', SPLIT_PART(NEW.email, '@', 1));
 
-    -- Create new user
-    v_new_user_id := gen_random_uuid();
-    INSERT INTO public.users (id, organization_id, auth_user_id, full_name, email, status, created_at, updated_at)
-    VALUES (v_new_user_id, v_new_org_id, NEW.id, v_full_name, NEW.email, 'ACTIVE', now(), now());
-
     -- Resolve default role (Owner for self-signup)
     v_default_role := COALESCE(NEW.raw_user_meta_data->>'role', 'Owner');
 
-    -- Insert role assignment
-    INSERT INTO public.user_roles (id, user_id, role, created_at)
-    VALUES (gen_random_uuid(), v_new_user_id, v_default_role, now());
+    -- Create new user with role
+    v_new_user_id := gen_random_uuid();
+    INSERT INTO public.users (id, organization_id, auth_user_id, full_name, email, role, status, created_at, updated_at)
+    VALUES (v_new_user_id, v_new_org_id, NEW.id, v_full_name, NEW.email, v_default_role, 'ACTIVE', now(), now());
   END IF;
 
   RETURN NEW;
@@ -98,8 +95,6 @@ ALTER TABLE "organizations" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "stations" ENABLE ROW LEVEL SECURITY;
 --> statement-breakpoint
 ALTER TABLE "users" ENABLE ROW LEVEL SECURITY;
---> statement-breakpoint
-ALTER TABLE "user_roles" ENABLE ROW LEVEL SECURITY;
 --> statement-breakpoint
 ALTER TABLE "user_station_assignments" ENABLE ROW LEVEL SECURITY;
 --> statement-breakpoint
@@ -249,15 +244,6 @@ CREATE POLICY attendant_handovers_tenant_policy ON "attendant_handovers"
   FOR ALL TO authenticated
   USING (organization_id = (auth.jwt() -> 'user_metadata' ->> 'organization_id')::uuid)
   WITH CHECK (organization_id = (auth.jwt() -> 'user_metadata' ->> 'organization_id')::uuid);
-
---> statement-breakpoint
-CREATE POLICY user_roles_tenant_policy ON "user_roles"
-  FOR ALL TO authenticated
-  USING (EXISTS (
-    SELECT 1 FROM "users" 
-    WHERE "users".id = "user_roles".user_id 
-    AND "users".organization_id = (auth.jwt() -> 'user_metadata' ->> 'organization_id')::uuid
-  ));
 
 --> statement-breakpoint
 CREATE POLICY user_station_assignments_tenant_policy ON "user_station_assignments"

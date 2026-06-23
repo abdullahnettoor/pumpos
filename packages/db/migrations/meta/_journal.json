@@ -5,8 +5,8 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1782013076444,
-      "tag": "0000_military_firestar",
+      "when": 1782228598168,
+      "tag": "0000_fine_white_queen",
       "breakpoints": true
     },
     {
@@ -20,7 +20,7 @@
       "idx": 2,
       "version": "7",
       "when": 1782139721466,
-      "tag": "0002_broken_ricochet",
+      "tag": "0002_performance_indexes",
       "breakpoints": true
     }
   ]

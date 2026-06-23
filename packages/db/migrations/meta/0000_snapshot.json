@@ -1,5 +1,5 @@
 {
-  "id": "00c4a015-061c-41f6-a9a4-d331858a9a78",
+  "id": "1a4e8f41-c1ae-422a-9cdd-01a690a9adb3",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -2451,12 +2451,12 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "stock_variances_approved_by_users_id_fk": {
-          "name": "stock_variances_approved_by_users_id_fk",
+        "stock_variances_tank_id_tanks_id_fk": {
+          "name": "stock_variances_tank_id_tanks_id_fk",
           "tableFrom": "stock_variances",
-          "tableTo": "users",
+          "tableTo": "tanks",
           "columnsFrom": [
-            "approved_by"
+            "tank_id"
           ],
           "columnsTo": [
             "id"
@@ -2464,12 +2464,12 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "stock_variances_tank_id_tanks_id_fk": {
-          "name": "stock_variances_tank_id_tanks_id_fk",
+        "stock_variances_approved_by_users_id_fk": {
+          "name": "stock_variances_approved_by_users_id_fk",
           "tableFrom": "stock_variances",
-          "tableTo": "tanks",
+          "tableTo": "users",
           "columnsFrom": [
-            "tank_id"
+            "approved_by"
           ],
           "columnsTo": [
             "id"
@@ -2839,59 +2839,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.user_roles": {
-      "name": "user_roles",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "user_id": {
-          "name": "user_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "role": {
-          "name": "role",
-          "type": "varchar(50)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "user_roles_user_id_users_id_fk": {
-          "name": "user_roles_user_id_users_id_fk",
-          "tableFrom": "user_roles",
-          "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
     "public.user_station_assignments": {
       "name": "user_station_assignments",
       "schema": "",
@@ -2998,6 +2945,13 @@
           "type": "varchar(50)",
           "primaryKey": false,
           "notNull": false
+        },
+        "role": {
+          "name": "role",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'Staff'"
         },
         "status": {
           "name": "status",
