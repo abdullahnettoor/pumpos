@@ -48,16 +48,10 @@ export const users = pgTable('users', {
   fullName: varchar('full_name', { length: 255 }).notNull(),
   email: varchar('email', { length: 255 }),
   phone: varchar('phone', { length: 50 }),
+  role: varchar('role', { length: 50 }).default('Staff').notNull(), // 'Owner', 'Manager', 'Accountant', 'Staff'
   status: varchar('status', { length: 20 }).default('ACTIVE').notNull(), // 'ACTIVE', 'INACTIVE'
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
-});
-
-export const userRoles = pgTable('user_roles', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  userId: uuid('user_id').references(() => users.id).notNull(),
-  role: varchar('role', { length: 50 }).notNull(), // 'Owner', 'Manager', 'Accountant', 'Staff'
-  createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
 export const userStationAssignments = pgTable('user_station_assignments', {

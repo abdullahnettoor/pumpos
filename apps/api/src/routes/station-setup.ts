@@ -440,9 +440,6 @@ stationSetupRouter.get('/users', async (c) => {
   // Map roles and assignments
   const mapped = await Promise.all(
     userList.map(async (u) => {
-      const roleRec = await db.query.userRoles.findFirst({
-        where: eq(schema.userRoles.userId, u.id),
-      });
       const assigns = await db
         .select()
         .from(schema.userStationAssignments)
@@ -450,7 +447,7 @@ stationSetupRouter.get('/users', async (c) => {
 
       return {
         ...u,
-        role: roleRec?.role || 'Staff',
+        role: u.role || 'Staff',
         stationIds: assigns.map((a) => a.stationId),
       };
     })
@@ -477,15 +474,10 @@ stationSetupRouter.post('/users', validateJson(userSchema, 'BAD_REQUEST'), async
       fullName: parsed.fullName,
       email: (parsed.email && parsed.email.trim() !== '') ? parsed.email : null,
       phone: parsed.phone,
+      role: body.role || 'Staff',
       status: parsed.status,
     })
     .returning();
-
-  // Insert user role
-  await db.insert(schema.userRoles).values({
-    userId: newUser.id,
-    role: body.role || 'Staff',
-  });
 
   // Insert station assignments
   if (body.stationIds && Array.isArray(body.stationIds)) {
@@ -536,13 +528,14 @@ stationSetupRouter.put('/users/:id', validateJson(userSchema.partial(), 'BAD_REQ
   // Update role if provided
   if (body.role) {
     await db
-      .delete(schema.userRoles)
-      .where(eq(schema.userRoles.userId, id));
-
-    await db.insert(schema.userRoles).values({
-      userId: id,
-      role: body.role,
-    });
+      .update(schema.users)
+      .set({ role: body.role, updatedAt: new Date() })
+      .where(
+        and(
+          eq(schema.users.id, id),
+          eq(schema.users.organizationId, user.organizationId)
+        )
+      );
   }
 
   // Update station assignments if provided

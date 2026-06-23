@@ -141,12 +141,6 @@ api.use('*', async (c, next) => {
       return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'User profile inactive or not found' } }, 403);
     }
 
-    // Resolve Role
-    const roleRec = await db.query.userRoles.findFirst({
-      where: eq(schema.userRoles.userId, dbUser.id),
-    });
-    const userRole = roleRec ? roleRec.role : 'Staff';
-
     // Resolve assignments
     const assigns = await db.select().from(schema.userStationAssignments).where(eq(schema.userStationAssignments.userId, dbUser.id));
 
@@ -154,7 +148,7 @@ api.use('*', async (c, next) => {
       id: dbUser.id,
       email: dbUser.email,
       organizationId: dbUser.organizationId,
-      role: userRole as Role,
+      role: dbUser.role as Role,
       assignedStationIds: assigns.map(a => a.stationId),
     });
 

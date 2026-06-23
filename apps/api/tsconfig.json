@@ -16,5 +16,9 @@
     "rootDir": "./src",
     "types": ["@cloudflare/workers-types"]
   },
+  "references": [
+    { "path": "../../packages/db" },
+    { "path": "../../packages/shared" }
+  ],
   "include": ["src/**/*"]
 }
