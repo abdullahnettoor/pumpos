@@ -57,7 +57,7 @@ export const Login: React.FC = () => {
             color: 'var(--brand-primary)',
             letterSpacing: '-0.01em'
           }}>
-            PumpERP
+            PumpOS
           </span>
           <h1 style={{
             fontSize: '14px',

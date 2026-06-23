@@ -210,7 +210,7 @@ export const AppShell: React.FC<AppShellProps> = ({
         >
           {!collapsed && (
             <span style={{ fontSize: '15px', fontWeight: 700, color: 'var(--brand-primary)', fontFamily: 'var(--font-sans)', letterSpacing: '-0.01em' }}>
-              PumpERP
+              PumpOS
             </span>
           )}
           <button
