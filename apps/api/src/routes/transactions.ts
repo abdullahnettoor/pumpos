@@ -631,7 +631,7 @@ transactionsRouter.get('/customers', async (c) => {
         .where(eq(schema.customers.organizationId, user.organizationId));
     }
 
-    // Fetch customer transactions to compute dynamic outstanding balances
+    // Fetch customer transactions to compute dynamic outstanding and prepaid balances
     const txs = await db
       .select({
         customerId: schema.customerTransactions.customerId,
@@ -643,22 +643,30 @@ transactionsRouter.get('/customers', async (c) => {
       .where(eq(schema.shifts.organizationId, user.organizationId));
 
     const balances: Record<string, number> = {};
+    const prepaidBalances: Record<string, number> = {};
     for (const tx of txs) {
       const amount = Number(tx.amount);
       const type = tx.transactionType;
       if (!balances[tx.customerId]) balances[tx.customerId] = 0;
+      if (!prepaidBalances[tx.customerId]) prepaidBalances[tx.customerId] = 0;
+      
       if (type === 'Credit Sale') {
         balances[tx.customerId] += amount;
       } else if (type === 'Collection') {
         balances[tx.customerId] -= amount;
       } else if (type === 'Adjustment') {
         balances[tx.customerId] += amount;
+      } else if (type === 'Prepaid Top-up') {
+        prepaidBalances[tx.customerId] += amount;
+      } else if (type === 'Prepaid Charge') {
+        prepaidBalances[tx.customerId] -= amount;
       }
     }
 
     const enrichedList = list.map((cust) => ({
       ...cust,
       currentBalance: balances[cust.id] || 0,
+      prepaidBalance: prepaidBalances[cust.id] || 0,
     }));
 
     return c.json({ success: true, data: enrichedList });
@@ -778,33 +786,21 @@ transactionsRouter.post('/customers/:id/topup', validateJson(customerTopupSchema
       return c.json({ success: false, error: { code: 'BAD_REQUEST', message: 'No operational shift found for recording top-up' } }, 400);
     }
 
-    const result = await db.transaction(async (tx) => {
-      const [topupTx] = await tx
-        .insert(schema.customerTransactions)
-        .values({
-          shiftId,
-          customerId,
-          transactionType: 'Prepaid Top-up',
-          amount: String(parsed.amount),
-          referenceType: 'PREPAID_TOPUP',
-          notes: parsed.notes ? `${parsed.notes} [${parsed.paymentMethod}]` : `Top-up via ${parsed.paymentMethod}`,
-          createdAt: new Date(),
-        })
-        .returning();
+    // Insert top-up ledger row (balance computed on-read from ledger)
+    const [topupTx] = await db
+      .insert(schema.customerTransactions)
+      .values({
+        shiftId,
+        customerId,
+        transactionType: 'Prepaid Top-up',
+        amount: String(parsed.amount),
+        referenceType: 'PREPAID_TOPUP',
+        notes: parsed.notes ? `${parsed.notes} [${parsed.paymentMethod}]` : `Top-up via ${parsed.paymentMethod}`,
+        createdAt: new Date(),
+      })
+      .returning();
 
-      const [updatedCustomer] = await tx
-        .update(schema.customers)
-        .set({
-          prepaidBalance: sql`${schema.customers.prepaidBalance} + ${String(parsed.amount)}`,
-          updatedAt: new Date(),
-        })
-        .where(and(eq(schema.customers.id, customerId), eq(schema.customers.organizationId, user.organizationId)))
-        .returning();
-
-      return { topupTx, updatedCustomer };
-    });
-
-    return c.json({ success: true, data: result });
+    return c.json({ success: true, data: topupTx });
   } catch (err: any) {
     return c.json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }, 500);
   }
@@ -1153,8 +1149,30 @@ transactionsRouter.post('/collections', validateJson(shiftCollectionSchema), asy
       targetCustomer = cust;
     }
 
+    // For prepaid customers paying via prepaid method, validate balance from ledger
     if (parsed.paymentMethod === 'Credit' && targetCustomer?.isPrepaid) {
-      const prepaidBalance = Number(targetCustomer.prepaidBalance || 0);
+      // Compute current prepaid balance from ledger
+      const prepaidTxs = await db
+        .select({
+          transactionType: schema.customerTransactions.transactionType,
+          amount: schema.customerTransactions.amount,
+        })
+        .from(schema.customerTransactions)
+        .where(and(
+          eq(schema.customerTransactions.customerId, targetCustomerId),
+          inArray(schema.customerTransactions.transactionType, ['Prepaid Top-up', 'Prepaid Charge'])
+        ));
+
+      let prepaidBalance = 0;
+      for (const tx of prepaidTxs) {
+        const amount = Number(tx.amount);
+        if (tx.transactionType === 'Prepaid Top-up') {
+          prepaidBalance += amount;
+        } else if (tx.transactionType === 'Prepaid Charge') {
+          prepaidBalance -= amount;
+        }
+      }
+
       if (prepaidBalance < parsed.amount) {
         return c.json({ success: false, error: { code: 'BAD_REQUEST', message: 'Insufficient prepaid balance' } }, 400);
       }
@@ -1176,6 +1194,7 @@ transactionsRouter.post('/collections', validateJson(shiftCollectionSchema), asy
 
       if (targetCustomerId) {
         if (parsed.paymentMethod === 'Credit' && targetCustomer?.isPrepaid) {
+          // Insert prepaid charge ledger row (no cache update needed)
           await tx.insert(schema.customerTransactions).values({
             shiftId: parsed.shiftId,
             customerId: targetCustomerId,
@@ -1186,14 +1205,6 @@ transactionsRouter.post('/collections', validateJson(shiftCollectionSchema), asy
             notes: parsed.notes,
             createdAt: new Date(),
           });
-
-          await tx
-            .update(schema.customers)
-            .set({
-              prepaidBalance: sql`${schema.customers.prepaidBalance} - ${String(parsed.amount)}`,
-              updatedAt: new Date(),
-            })
-            .where(and(eq(schema.customers.id, targetCustomerId), eq(schema.customers.organizationId, user.organizationId)));
         } else {
           await tx.insert(schema.customerTransactions).values({
             shiftId: parsed.shiftId,
@@ -1217,79 +1228,6 @@ transactionsRouter.post('/collections', validateJson(shiftCollectionSchema), asy
     }
 
     return c.json({ success: true, data: newCollection });
-  } catch (err: any) {
-    return c.json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }, 500);
-  }
-});
-
-// POST /api/transactions/internal/reconcile-prepaid
-transactionsRouter.post('/internal/reconcile-prepaid', async (c) => {
-  const db = c.var.db;
-  const user = c.var.user;
-
-  if (user.role !== 'Owner' && user.role !== 'Manager') {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permission' } }, 403);
-  }
-
-  try {
-    const prepaidCustomers = await db
-      .select()
-      .from(schema.customers)
-      .where(and(eq(schema.customers.organizationId, user.organizationId), eq(schema.customers.isPrepaid, true)));
-
-    const report: Array<{ customerId: string; customerName: string; currentBalance: number; recomputedBalance: number; drift: number; corrected: boolean }> = [];
-
-    for (const customer of prepaidCustomers) {
-      const txs = await db
-        .select({
-          transactionType: schema.customerTransactions.transactionType,
-          amount: schema.customerTransactions.amount,
-        })
-        .from(schema.customerTransactions)
-        .innerJoin(schema.shifts, eq(schema.customerTransactions.shiftId, schema.shifts.id))
-        .where(
-          and(
-            eq(schema.customerTransactions.customerId, customer.id),
-            eq(schema.shifts.organizationId, user.organizationId),
-            inArray(schema.customerTransactions.transactionType, ['Prepaid Top-up', 'Prepaid Charge'])
-          )
-        );
-
-      let recomputed = 0;
-      for (const tx of txs) {
-        const amount = Number(tx.amount);
-        if (tx.transactionType === 'Prepaid Top-up') {
-          recomputed += amount;
-        } else if (tx.transactionType === 'Prepaid Charge') {
-          recomputed -= amount;
-        }
-      }
-
-      const current = Number(customer.prepaidBalance || 0);
-      const drift = recomputed - current;
-      const needsCorrection = Math.abs(drift) > 0.009;
-
-      if (needsCorrection) {
-        await db
-          .update(schema.customers)
-          .set({
-            prepaidBalance: String(recomputed),
-            updatedAt: new Date(),
-          })
-          .where(and(eq(schema.customers.id, customer.id), eq(schema.customers.organizationId, user.organizationId)));
-      }
-
-      report.push({
-        customerId: customer.id,
-        customerName: customer.name,
-        currentBalance: current,
-        recomputedBalance: recomputed,
-        drift,
-        corrected: needsCorrection,
-      });
-    }
-
-    return c.json({ success: true, data: { reconciledAt: new Date().toISOString(), report } });
   } catch (err: any) {
     return c.json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }, 500);
   }

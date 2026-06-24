@@ -401,13 +401,6 @@ export class CloudTransactionService {
     });
   }
 
-  async reconcilePrepaid(): Promise<any> {
-    return request<any>('/transactions/internal/reconcile-prepaid', {
-      method: 'POST',
-      body: JSON.stringify({}),
-    });
-  }
-
   async deleteCustomer(id: string): Promise<any> {
     return request<any>(`/transactions/customers/${id}`, {
       method: 'DELETE',
