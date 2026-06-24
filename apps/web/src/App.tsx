@@ -22,7 +22,7 @@ const resolveApiUrl = (): string | undefined => {
   if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL as string;
   if (typeof window !== 'undefined') {
     const { hostname } = window.location;
-    if (hostname === 'dev-pumpos.abdullahnettoor.workers.dev') {
+    if (hostname === 'dev-pumpos.abdullahnettoor.workers.dev' || hostname === 'pumpos.abdullahnettoor.com') {
       return 'https://pumpos-api.abdullahnettoor.workers.dev';
     }
   }
