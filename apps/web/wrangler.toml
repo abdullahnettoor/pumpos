@@ -6,6 +6,7 @@ directory = "./dist"
 not_found_handling = "single-page-application"
 
 [env.preview]
+name = "dev-pumpos"
 workers_dev = true
 
 [env.preview.assets]

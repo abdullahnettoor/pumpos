@@ -18,7 +18,18 @@ import {
 } from '@pump/ui';
 import { Station } from '@pump/shared';
 
-setApiBaseUrl(import.meta.env.VITE_API_URL);
+const resolveApiUrl = (): string | undefined => {
+  if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL as string;
+  if (typeof window !== 'undefined') {
+    const { hostname } = window.location;
+    if (hostname === 'dev-pumpos.abdullahnettoor.workers.dev') {
+      return 'https://pumpos-api.abdullahnettoor.workers.dev';
+    }
+  }
+  return undefined;
+};
+
+setApiBaseUrl(resolveApiUrl());
 
 const stationService = new CloudStationService();
 
