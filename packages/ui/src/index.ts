@@ -7,7 +7,7 @@ export { OnboardingWizard } from './components/StationSetup/OnboardingWizard.js'
 export { StationOverview } from './components/StationSetup/StationOverview.js';
 export { DashboardOverview } from './components/Dashboard/DashboardOverview.js';
 export { ShiftsManagement } from './components/Shifts/ShiftsManagement.js';
-export { DssrView } from './components/Shifts/DssrView.js';
+export { ShiftSummaryView } from './components/Shifts/ShiftSummaryView.js';
 export { ShiftTransactionsPanel } from './components/Shifts/ShiftTransactionsPanel.js';
 export { ExpensesList } from './components/ExpensesList.js';
 export { PurchasesList } from './components/PurchasesList.js';

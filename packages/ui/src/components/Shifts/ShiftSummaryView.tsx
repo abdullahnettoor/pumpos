@@ -6,8 +6,8 @@ import { ShiftTransactionsPanel } from './ShiftTransactionsPanel.js';
 
 const shiftService = new CloudShiftService();
 
-interface DssrViewProps {
-  dssr: any; // dssrSnapshots record
+interface ShiftSummaryViewProps {
+  shiftSummary: any; // shiftSummaries record
   userRole: 'Owner' | 'Manager' | 'Accountant' | 'Staff';
   canReopen: boolean;
   gracePeriodExpiresAt?: string | null;
@@ -17,8 +17,8 @@ interface DssrViewProps {
   onTransactionAdded?: () => void;
 }
 
-export const DssrView: React.FC<DssrViewProps> = ({
-  dssr,
+export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
+  shiftSummary,
   userRole,
   canReopen,
   gracePeriodExpiresAt,
@@ -29,7 +29,7 @@ export const DssrView: React.FC<DssrViewProps> = ({
 }) => {
   const [reopening, setReopening] = useState(false);
 
-  const { snapshotData, generatedAt } = dssr;
+  const { snapshotData, generatedAt } = shiftSummary;
   const {
     shiftId,
     templateName,
@@ -60,7 +60,7 @@ export const DssrView: React.FC<DssrViewProps> = ({
   } = snapshotData;
 
   const handleReopen = async () => {
-    if (!window.confirm('Reopening this shift will delete this compiled DSSR snapshot and set the shift state back to OPEN. Proceed?')) {
+    if (!window.confirm('Reopening this shift will delete this compiled Shift Summary and set the shift state back to OPEN. Proceed?')) {
       return;
     }
     try {
@@ -90,7 +90,7 @@ export const DssrView: React.FC<DssrViewProps> = ({
             className="btn btn-secondary btn-sm"
             onClick={() => window.print()}
           >
-            <Printer size={13} /> Print DSSR
+            <Printer size={13} /> Print Shift Summary
           </button>
 
           {canReopen && (
@@ -112,7 +112,7 @@ export const DssrView: React.FC<DssrViewProps> = ({
       {/* Audit Header Banner */}
       <div style={{ textAlign: 'center', marginBottom: '32px' }}>
         <h2 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text-strong)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-          Daily Sales Summary Record (DSSR)
+          Shift Summary Record
         </h2>
         <p style={{ color: 'var(--text-muted)', fontSize: '12px', marginTop: '4px' }}>
           Authoritative Operational Snapshot • Compiled {new Date(generatedAt).toLocaleString()}

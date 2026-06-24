@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { CloudProductService, CloudShiftService, CloudTankService, CloudTransactionService } from '../../services/cloud.js';
 import { StatusBadge } from '../StatusBadge.js';
-import { DssrView } from './DssrView.js';
+import { ShiftSummaryView } from './ShiftSummaryView.js';
 import { ShiftTransactionsPanel } from './ShiftTransactionsPanel.js';
 import { HandoverDrawer } from './HandoverDrawer.js';
 import { Drawer } from '../Drawer.js';
@@ -37,7 +37,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<any>(null);
-  const [viewingDssr, setViewingDssr] = useState(false);
+  const [viewingShiftSummary, setViewingShiftSummary] = useState(false);
 
   // Open Shift Form States
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
@@ -660,7 +660,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         if (nextTemplateId) {
           setSelectedTemplateId(nextTemplateId);
         }
-        setViewingDssr(false);
+        setViewingShiftSummary(false);
         setClosedShiftSuccess(null);
       } else {
         setClosedShiftSuccess({
@@ -700,7 +700,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     );
   }
 
-  const { activeShift, lastShift, lastDssr, canReopenLastShift, gracePeriodExpiresAt, templates, nozzles, staff, dispensers } = data;
+  const { activeShift, lastShift, lastDssr: lastShiftSummary, canReopenLastShift, gracePeriodExpiresAt, templates, nozzles, staff, dispensers } = data;
 
   // Render Success Screen if set
   if (closedShiftSuccess) {
@@ -764,7 +764,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
               setOpeningCash(closedShiftSuccess.closingCash);
               setSelectedTemplateId(closedShiftSuccess.nextTemplateId);
               setClosedShiftSuccess(null);
-              setViewingDssr(false);
+              setViewingShiftSummary(false);
             }}
           >
             <Play size={13} style={{ fill: 'currentColor', marginRight: '6px' }} /> Start Next Shift
@@ -777,19 +777,19 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
                 onViewDssr(closedShiftSuccess.lastClosedShiftId);
                 onNavigate('/reports');
               } else {
-                setViewingDssr(true);
+                setViewingShiftSummary(true);
               }
               setClosedShiftSuccess(null);
             }}
           >
-            <FileText size={13} style={{ marginRight: '6px' }} /> View Compiled DSSR
+            <FileText size={13} style={{ marginRight: '6px' }} /> View Compiled Shift Summary
           </button>
 
           <button
             className="btn btn-secondary btn-md"
             onClick={() => {
               setClosedShiftSuccess(null);
-              setViewingDssr(false);
+              setViewingShiftSummary(false);
             }}
           >
             Back to Workspace
@@ -799,21 +799,21 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     );
   }
 
-  // Render DSSR View if toggled
-  if (viewingDssr && lastDssr) {
+  // Render Shift Summary View if toggled
+  if (viewingShiftSummary && lastShiftSummary) {
     return (
-      <DssrView
-        dssr={lastDssr}
+      <ShiftSummaryView
+        shiftSummary={lastShiftSummary}
         userRole={userRole}
         canReopen={canReopenLastShift}
         gracePeriodExpiresAt={gracePeriodExpiresAt}
         shiftStatus={lastShift?.status}
         onTransactionAdded={loadShiftStatus}
         onReopenSuccess={() => {
-          setViewingDssr(false);
+          setViewingShiftSummary(false);
           loadShiftStatus();
         }}
-        onBack={() => setViewingDssr(false)}
+        onBack={() => setViewingShiftSummary(false)}
       />
     );
   }
@@ -835,19 +835,19 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
               Template: <strong>{activeShift.templateName}</strong> • Opened by {activeShift.openedByName} at {new Date(activeShift.openedAt).toLocaleString()}
             </p>
           </div>
-          {lastDssr && (
+          {lastShiftSummary && (
             <button
               className="btn btn-secondary btn-sm"
               onClick={() => {
                 if (onNavigate && onViewDssr) {
-                  onViewDssr(lastDssr.shiftId);
+                  onViewDssr(lastShiftSummary.shiftId);
                   onNavigate('/reports');
                 } else {
-                  setViewingDssr(true);
+                  setViewingShiftSummary(true);
                 }
               }}
             >
-              <FileText size={13} /> View Last DSSR
+              <FileText size={13} /> View Last Shift Summary
             </button>
           )}
         </div>
@@ -1320,7 +1320,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
                 onClick={() => handleCloseShift(false)}
                 disabled={(warnings.length > 0 && !confirmWarningsChecked) || isClosing}
               >
-                {isClosing ? 'Compiling DSSR...' : (
+                {isClosing ? 'Saving Shift Summary...' : (
                   <>
                     <Check size={13} style={{ marginRight: '6px' }} /> Confirm Close Shift
                   </>
@@ -1492,19 +1492,19 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
             Open a shift template to enable nozzle readings entry and daily cash reconciliation.
           </p>
         </div>
-        {lastDssr && (
+        {lastShiftSummary && (
           <button
             className="btn btn-secondary btn-sm"
             onClick={() => {
               if (onNavigate && onViewDssr) {
-                onViewDssr(lastDssr.shiftId);
+                onViewDssr(lastShiftSummary.shiftId);
                 onNavigate('/reports');
               } else {
-                setViewingDssr(true);
+                setViewingShiftSummary(true);
               }
             }}
           >
-            <FileText size={13} /> View Last DSSR
+            <FileText size={13} /> View Last Shift Summary
           </button>
         )}
       </div>

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { CloudShiftService } from '../services/cloud.js';
-import { DssrView } from './Shifts/DssrView.js';
+import { ShiftSummaryView } from './Shifts/ShiftSummaryView.js';
 import { StatusBadge } from './StatusBadge.js';
 import { LoadingSpinner } from './LoadingSpinner.js';
 import { FileText, Calendar, Eye, RefreshCw } from 'lucide-react';
@@ -27,7 +27,7 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
 
   useEffect(() => {
     if (selectedStation) {
-      loadDssrs();
+      loadShiftSummaries();
     }
   }, [selectedStation]);
 
@@ -41,12 +41,12 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
     }
   }, [viewDssrShiftId, dssrs]);
 
-  const loadDssrs = async () => {
+  const loadShiftSummaries = async () => {
     if (!selectedStation) return;
     try {
       setLoading(true);
       setError(null);
-      const list = await shiftService.getDssrs(selectedStation.id);
+      const list = await shiftService.getShiftSummaries(selectedStation.id);
       setDssrs(list);
     } catch (err: any) {
       setError(err.message || 'Failed to load historical reports');
@@ -83,13 +83,13 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
 
     return (
       <div className="animate-fade-in">
-        <DssrView
-          dssr={activeDssr}
+        <ShiftSummaryView
+          shiftSummary={activeDssr}
           userRole={userRole}
           canReopen={canReopen}
           shiftStatus={activeDssr.shiftStatus}
           onReopenSuccess={() => {
-            loadDssrs();
+            loadShiftSummaries();
             handleBack();
           }}
           onBack={handleBack}
@@ -112,7 +112,7 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
         </div>
         <button
           className="btn btn-secondary btn-sm"
-          onClick={loadDssrs}
+          onClick={loadShiftSummaries}
           disabled={loading}
           style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
         >

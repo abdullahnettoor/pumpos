@@ -25,8 +25,8 @@ type Variables = {
 
 export const transactionsRouter = new Hono<{ Variables: Variables }>();
 
-// Helper to compile DSSR Snapshot reactively
-export async function compileDssrSnapshot(
+// Helper to compile Shift Summary reactively
+export async function compileShiftSummary(
   db: DbClient,
   shiftId: string,
   closingDipReadings?: { tankId: string; actualQuantity: number }[]
@@ -286,13 +286,13 @@ export async function compileDssrSnapshot(
     );
   } else {
     // Try to get from existing snapshot
-    const [existingDssr] = await db
+    const [existingShiftSummary] = await db
       .select()
-      .from(schema.dssrSnapshots)
-      .where(eq(schema.dssrSnapshots.shiftId, shiftId))
+      .from(schema.shiftSummaries)
+      .where(eq(schema.shiftSummaries.shiftId, shiftId))
       .limit(1);
-    if (existingDssr && (existingDssr.snapshotData as any)?.dipReadings) {
-      dipReadingsSnapshot = (existingDssr.snapshotData as any).dipReadings;
+    if (existingShiftSummary && (existingShiftSummary.snapshotData as any)?.dipReadings) {
+      dipReadingsSnapshot = (existingShiftSummary.snapshotData as any).dipReadings;
     }
   }
 
@@ -324,9 +324,9 @@ export async function compileDssrSnapshot(
     warnings,
   };
 
-  // Upsert DSSR Snapshot: Delete existing one first and insert fresh compilation
-  await db.delete(schema.dssrSnapshots).where(eq(schema.dssrSnapshots.shiftId, shiftId));
-  await db.insert(schema.dssrSnapshots).values({
+  // Upsert Shift Summary: Delete existing one first and insert fresh compilation
+  await db.delete(schema.shiftSummaries).where(eq(schema.shiftSummaries.shiftId, shiftId));
+  await db.insert(schema.shiftSummaries).values({
     shiftId,
     snapshotData,
     generatedAt: new Date(),
@@ -737,10 +737,10 @@ transactionsRouter.post('/expenses', validateJson(shiftExpenseSchema), async (c)
       })
       .returning();
 
-    // Check if shift is closed: recompile DSSR
+    // Check if shift is closed: recompile Shift Summary
     const [shift] = await db.select().from(schema.shifts).where(eq(schema.shifts.id, parsed.shiftId)).limit(1);
     if (shift.status === 'CLOSED') {
-      await compileDssrSnapshot(db, parsed.shiftId);
+      await compileShiftSummary(db, parsed.shiftId);
     }
 
     return c.json({ success: true, data: newExpense });
@@ -822,7 +822,7 @@ transactionsRouter.post('/purchases', validateJson(shiftPurchaseSchema), async (
 
     const [shift] = await db.select().from(schema.shifts).where(eq(schema.shifts.id, parsed.shiftId)).limit(1);
     if (shift.status === 'CLOSED') {
-      await compileDssrSnapshot(db, parsed.shiftId);
+      await compileShiftSummary(db, parsed.shiftId);
     }
 
     return c.json({ success: true, data: newPurchase });
@@ -896,7 +896,7 @@ transactionsRouter.post('/collections', validateJson(shiftCollectionSchema), asy
 
     const [shift] = await db.select().from(schema.shifts).where(eq(schema.shifts.id, parsed.shiftId)).limit(1);
     if (shift.status === 'CLOSED') {
-      await compileDssrSnapshot(db, parsed.shiftId);
+      await compileShiftSummary(db, parsed.shiftId);
     }
 
     return c.json({ success: true, data: newCollection });
@@ -1108,7 +1108,7 @@ transactionsRouter.post('/supplier-payments', validateJson(supplierPaymentSchema
 
     const [shift] = await db.select().from(schema.shifts).where(eq(schema.shifts.id, parsed.shiftId)).limit(1);
     if (shift.status === 'CLOSED') {
-      await compileDssrSnapshot(db, parsed.shiftId);
+      await compileShiftSummary(db, parsed.shiftId);
     }
 
     return c.json({ success: true, data: newTx });

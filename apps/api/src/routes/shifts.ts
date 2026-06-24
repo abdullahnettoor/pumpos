@@ -10,7 +10,7 @@ import {
   canReopenShift,
   Role,
 } from '@pump/shared';
-import { compileDssrSnapshot } from './transactions.js';
+import { compileShiftSummary } from './transactions.js';
 import { z } from 'zod';
 import { validateJson } from '../utils/validator.js';
 
@@ -213,13 +213,13 @@ shiftsRouter.get('/status', async (c) => {
         closedByName,
       };
 
-      // Fetch DSSR snapshot
-      const [dssr] = await db
+      // Fetch Shift Summary
+      const [shiftSummary] = await db
         .select()
-        .from(schema.dssrSnapshots)
-        .where(eq(schema.dssrSnapshots.shiftId, dbLastShift.id))
+        .from(schema.shiftSummaries)
+        .where(eq(schema.shiftSummaries.shiftId, dbLastShift.id))
         .limit(1);
-      lastDssr = dssr ?? null;
+      lastDssr = shiftSummary ?? null;
     }
 
     // Query recent closed shifts that are not locked
@@ -826,14 +826,14 @@ shiftsRouter.post('/close', validateJson(shiftCloseRequestSchema), async (c) => 
       .where(eq(schema.shifts.id, shiftId))
       .returning();
 
-    // Compile DSSR Snapshot reactively with closing dip readings
-    await compileDssrSnapshot(db, shiftId, parsed.dipReadings);
+    // Compile Shift Summary reactively with closing dip readings
+    await compileShiftSummary(db, shiftId, parsed.dipReadings);
 
     // Retrieve the compiled snapshot data
     const [dssr] = await db
       .select()
-      .from(schema.dssrSnapshots)
-      .where(eq(schema.dssrSnapshots.shiftId, shiftId))
+      .from(schema.shiftSummaries)
+      .where(eq(schema.shiftSummaries.shiftId, shiftId))
       .limit(1);
 
     const snapshotData = dssr?.snapshotData || {};
@@ -929,10 +929,10 @@ shiftsRouter.post('/reopen', async (c) => {
       .where(eq(schema.shifts.id, shiftId))
       .returning();
 
-    // Delete DSSR Snapshot (invalidating prior finality)
+    // Delete Shift Summary (invalidating prior finality)
     await db
-      .delete(schema.dssrSnapshots)
-      .where(eq(schema.dssrSnapshots.shiftId, shiftId));
+      .delete(schema.shiftSummaries)
+      .where(eq(schema.shiftSummaries.shiftId, shiftId));
 
     // Log Business Event
     await db.insert(schema.businessEvents).values({
@@ -956,8 +956,8 @@ shiftsRouter.post('/reopen', async (c) => {
   }
 });
 
-// GET /api/shifts/dssrs
-shiftsRouter.get('/dssrs', async (c) => {
+// GET /api/shifts/shift-summaries
+shiftsRouter.get('/shift-summaries', async (c) => {
   const db = c.var.db;
   const user = c.var.user;
   const stationId = c.req.query('stationId');
@@ -973,16 +973,16 @@ shiftsRouter.get('/dssrs', async (c) => {
   try {
     const list = await db
       .select({
-        id: schema.dssrSnapshots.id,
-        shiftId: schema.dssrSnapshots.shiftId,
-        generatedAt: schema.dssrSnapshots.generatedAt,
-        snapshotData: schema.dssrSnapshots.snapshotData,
+        id: schema.shiftSummaries.id,
+        shiftId: schema.shiftSummaries.shiftId,
+        generatedAt: schema.shiftSummaries.generatedAt,
+        snapshotData: schema.shiftSummaries.snapshotData,
         shiftStatus: schema.shifts.status,
       })
-      .from(schema.dssrSnapshots)
-      .innerJoin(schema.shifts, eq(schema.dssrSnapshots.shiftId, schema.shifts.id))
+      .from(schema.shiftSummaries)
+      .innerJoin(schema.shifts, eq(schema.shiftSummaries.shiftId, schema.shifts.id))
       .where(eq(schema.shifts.stationId, stationId))
-      .orderBy(desc(schema.dssrSnapshots.generatedAt));
+      .orderBy(desc(schema.shiftSummaries.generatedAt));
 
     return c.json({ success: true, data: list });
   } catch (err: any) {

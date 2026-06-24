@@ -312,8 +312,8 @@ export class CloudShiftService {
     return request<any[]>(`/shifts/handovers?shiftId=${shiftId}`);
   }
 
-  async getDssrs(stationId: string): Promise<any[]> {
-    const data = await request<any[]>(`/shifts/dssrs?stationId=${stationId}`);
+  async getShiftSummaries(stationId: string): Promise<any[]> {
+    const data = await request<any[]>(`/shifts/shift-summaries?stationId=${stationId}`);
     return data || [];
   }
 }
