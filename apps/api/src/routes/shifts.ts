@@ -103,6 +103,7 @@ shiftsRouter.get('/status', async (c) => {
       const enrichedReadings = nozzleReadingRows.map(({ nr, nz, prod, tnk, du }) => ({
         ...nr,
         nozzleName: nz?.name ?? 'Unknown',
+        productId: nz?.productId ?? null,
         productName: prod?.name ?? 'Unknown',
         productCode: prod?.code ?? 'Unknown',
         tankName: tnk?.name ?? 'Unknown',

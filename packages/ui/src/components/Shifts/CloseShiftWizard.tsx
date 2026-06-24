@@ -31,7 +31,6 @@ export interface CloseShiftWizardProps {
   // Submission
   isClosing: boolean;
   onConfirmClose: () => void;
-  onConfirmCloseAndStartNext: () => void;
 }
 
 type Step = 1 | 2 | 3 | 4;
@@ -69,7 +68,6 @@ export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
   onConfirmWarningsChange,
   isClosing,
   onConfirmClose,
-  onConfirmCloseAndStartNext,
 }) => {
   const [step, setStep] = useState<Step>(1);
   const [recordDip, setRecordDip] = useState(false);
@@ -124,24 +122,14 @@ export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
           Next <ChevronRight size={13} />
         </button>
       ) : (
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
-            onClick={onConfirmCloseAndStartNext}
-            disabled={!canSubmit || isClosing}
-          >
-            Close &amp; Start Next
-          </button>
-          <button
-            type="button"
-            className={canSubmit ? 'btn btn-primary btn-sm' : 'btn btn-secondary btn-sm'}
-            onClick={onConfirmClose}
-            disabled={!canSubmit || isClosing}
-          >
-            <Lock size={13} /> {isClosing ? 'Closing Shift…' : 'Close Shift'}
-          </button>
-        </div>
+        <button
+          type="button"
+          className={canSubmit ? 'btn btn-primary btn-sm' : 'btn btn-secondary btn-sm'}
+          onClick={onConfirmClose}
+          disabled={!canSubmit || isClosing}
+        >
+          <Lock size={13} /> {isClosing ? 'Closing Shift…' : 'Close Shift'}
+        </button>
       )}
     </div>
   );
@@ -338,8 +326,8 @@ export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
               </div>
             </div>
             <p className="close-wizard-helper" style={{ marginTop: '8px' }}>
-              On confirm, the shift status moves to <strong>CLOSED</strong> and a DSSR snapshot
-              is compiled and stored permanently.
+              On confirm, the shift status moves to <strong>CLOSED</strong> and a Shift Summary (DSSR) snapshot
+              is generated and stored permanently.
             </p>
           </section>
         )}

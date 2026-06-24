@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { eq, and, desc, sql, inArray } from 'drizzle-orm';
+import { eq, and, desc, sql, inArray, ilike } from 'drizzle-orm';
 import { schema, DbClient } from '@pump/db';
 import {
   shiftExpenseSchema,
@@ -979,6 +979,56 @@ transactionsRouter.delete('/vehicles/:id', async (c) => {
   }
 });
 
+// GET /api/transactions/vehicles/search?q=KA01 (cross-customer registration search)
+transactionsRouter.get('/vehicles/search', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  const q = (c.req.query('q') || '').trim();
+  const limit = Math.min(Number(c.req.query('limit') || 20), 50);
+
+  if (q.length < 1) {
+    return c.json({ success: true, data: [] });
+  }
+
+  try {
+    const rows = await db
+      .select({
+        id: schema.customerVehicles.id,
+        registrationNumber: schema.customerVehicles.registrationNumber,
+        vehicleType: schema.customerVehicles.vehicleType,
+        defaultProductId: schema.customerVehicles.defaultProductId,
+        customerId: schema.customerVehicles.customerId,
+        customerName: schema.customers.name,
+        customerType: schema.customers.customerType,
+        isPrepaid: schema.customers.isPrepaid,
+        creditLimit: schema.customers.creditLimit,
+        defaultProductName: schema.products.name,
+        defaultProductCode: schema.products.code,
+        defaultProductUnit: schema.products.unit,
+      })
+      .from(schema.customerVehicles)
+      .innerJoin(schema.customers, eq(schema.customerVehicles.customerId, schema.customers.id))
+      .leftJoin(schema.products, eq(schema.customerVehicles.defaultProductId, schema.products.id))
+      .where(
+        and(
+          eq(schema.customerVehicles.organizationId, user.organizationId),
+          eq(schema.customerVehicles.isActive, true),
+          eq(schema.customers.isActive, true),
+          ilike(schema.customerVehicles.registrationNumber, `%${q}%`)
+        )
+      )
+      .orderBy(
+        sql`CASE WHEN ${schema.customerVehicles.registrationNumber} ILIKE ${q + '%'} THEN 0 ELSE 1 END`,
+        desc(schema.customerVehicles.updatedAt)
+      )
+      .limit(limit);
+
+    return c.json({ success: true, data: rows });
+  } catch (err: any) {
+    return c.json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }, 500);
+  }
+});
+
 // POST /api/expenses
 transactionsRouter.post('/expenses', validateJson(shiftExpenseSchema), async (c) => {
   const db = c.var.db;
@@ -1185,6 +1235,7 @@ transactionsRouter.post('/collections', validateJson(shiftCollectionSchema), asy
           documentNumber: docNum,
           shiftId: parsed.shiftId,
           customerId: targetCustomerId,
+          vehicleId: parsed.vehicleId ?? null,
           amount: String(parsed.amount),
           paymentMethod: parsed.paymentMethod,
           notes: parsed.notes,
@@ -1193,13 +1244,20 @@ transactionsRouter.post('/collections', validateJson(shiftCollectionSchema), asy
         .returning();
 
       if (targetCustomerId) {
+        const quantityValue = parsed.quantity != null ? String(parsed.quantity) : null;
+        const unitPriceValue = parsed.unitPrice != null ? String(parsed.unitPrice) : null;
+
         if (parsed.paymentMethod === 'Credit' && targetCustomer?.isPrepaid) {
           // Insert prepaid charge ledger row (no cache update needed)
           await tx.insert(schema.customerTransactions).values({
             shiftId: parsed.shiftId,
             customerId: targetCustomerId,
+            vehicleId: parsed.vehicleId ?? null,
+            productId: parsed.productId ?? null,
             transactionType: 'Prepaid Charge',
             amount: String(parsed.amount),
+            quantity: quantityValue,
+            unitPrice: unitPriceValue,
             referenceType: 'COLLECTION',
             referenceId: createdCollection.id,
             notes: parsed.notes,
@@ -1209,8 +1267,12 @@ transactionsRouter.post('/collections', validateJson(shiftCollectionSchema), asy
           await tx.insert(schema.customerTransactions).values({
             shiftId: parsed.shiftId,
             customerId: targetCustomerId,
+            vehicleId: parsed.vehicleId ?? null,
+            productId: parsed.productId ?? null,
             transactionType: parsed.paymentMethod === 'Credit' ? 'Credit Sale' : 'Collection',
             amount: String(parsed.amount),
+            quantity: quantityValue,
+            unitPrice: unitPriceValue,
             referenceType: 'COLLECTION',
             referenceId: createdCollection.id,
             notes: parsed.notes,

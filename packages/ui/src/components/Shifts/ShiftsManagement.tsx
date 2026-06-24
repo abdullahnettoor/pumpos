@@ -10,6 +10,7 @@ import { CloseShiftWizard } from './CloseShiftWizard.js';
 import { Drawer } from '../Drawer.js';
 import { ExpenseEntryForm } from '../transactions/ExpenseEntryForm.js';
 import { CollectionEntryForm } from '../transactions/CollectionEntryForm.js';
+import { CreditSaleEntryForm, VehicleSearchResult } from '../transactions/CreditSaleEntryForm.js';
 import { PurchaseEntryForm } from '../transactions/PurchaseEntryForm.js';
 import { Station } from '@pump/shared';
 import { FileText, User, Lock, AlertTriangle, Check, Fuel, Info, Play, CalendarRange, History, Clock3 } from 'lucide-react';
@@ -20,7 +21,7 @@ const transactionService = new CloudTransactionService();
 const productService = new CloudProductService();
 const tankService = new CloudTankService();
 
-type QuickEntryType = 'expense' | 'collection' | 'purchase';
+type QuickEntryType = 'expense' | 'collection' | 'credit-sale' | 'purchase';
 
 interface ShiftsManagementProps {
   selectedStation: Station | null;
@@ -114,6 +115,12 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   const [collectionPaymentMethod, setCollectionPaymentMethod] = useState<'Cash' | 'Card' | 'UPI' | 'Credit'>('Cash');
   const [collectionNotes, setCollectionNotes] = useState('');
 
+  const [creditSaleVehicle, setCreditSaleVehicle] = useState<VehicleSearchResult | null>(null);
+  const [creditSaleQuantity, setCreditSaleQuantity] = useState('');
+  const [creditSaleUnitPrice, setCreditSaleUnitPrice] = useState('');
+  const [creditSaleAmount, setCreditSaleAmount] = useState('');
+  const [creditSaleNotes, setCreditSaleNotes] = useState('');
+
   const [purchaseSupplierId, setPurchaseSupplierId] = useState('');
   const [purchaseProductId, setPurchaseProductId] = useState('');
   const [purchaseQuantity, setPurchaseQuantity] = useState('');
@@ -185,6 +192,12 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     setCollectionPaymentMethod('Cash');
     setCollectionNotes('');
 
+    setCreditSaleVehicle(null);
+    setCreditSaleQuantity('');
+    setCreditSaleUnitPrice('');
+    setCreditSaleAmount('');
+    setCreditSaleNotes('');
+
     setPurchaseSupplierId(suppliers[0]?.id ?? '');
     setPurchaseProductId(products[0]?.id ?? '');
     setPurchaseQuantity('');
@@ -231,6 +244,14 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         setCollectionAmount('');
         setCollectionPaymentMethod('Cash');
         setCollectionNotes('');
+      }
+
+      if (type === 'credit-sale') {
+        setCreditSaleVehicle(null);
+        setCreditSaleQuantity('');
+        setCreditSaleUnitPrice('');
+        setCreditSaleAmount('');
+        setCreditSaleNotes('');
       }
 
       if (type === 'purchase') {
@@ -343,6 +364,10 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     void openQuickEntryDrawer('collection');
   };
 
+  const triggerCreditSaleDrawer = () => {
+    void openQuickEntryDrawer('credit-sale');
+  };
+
   const triggerPurchaseDrawer = () => {
     void openQuickEntryDrawer('purchase');
   };
@@ -350,7 +375,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   const quickEntryActions = [
     { key: 'expense', label: 'Add Expense', onClick: triggerExpenseDrawer },
     { key: 'collection', label: 'Log Collection', onClick: triggerCollectionDrawer },
-    { key: 'credit-sale', label: 'Credit Sale (Vehicle)', onClick: () => undefined, disabled: true },
+    { key: 'credit-sale', label: 'Credit Sale (Vehicle)', onClick: triggerCreditSaleDrawer },
     { key: 'purchase', label: 'Add Purchase', onClick: triggerPurchaseDrawer },
   ];
 
@@ -422,6 +447,44 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
       await loadShiftStatus();
     } catch (err: any) {
       setQuickEntryError(err.message || 'Failed to record collection');
+    } finally {
+      setQuickEntrySubmitting(false);
+    }
+  };
+
+  const handleCreditSaleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!targetShiftId || !creditSaleVehicle || !creditSaleAmount) {
+      return;
+    }
+
+    const amountNum = Number(creditSaleAmount);
+    if (!Number.isFinite(amountNum) || amountNum <= 0) {
+      setQuickEntryError('Amount must be greater than zero.');
+      return;
+    }
+
+    const qtyNum = creditSaleQuantity ? Number(creditSaleQuantity) : null;
+    const priceNum = creditSaleUnitPrice ? Number(creditSaleUnitPrice) : null;
+
+    try {
+      setQuickEntrySubmitting(true);
+      setQuickEntryError(null);
+      await transactionService.recordCollection({
+        shiftId: targetShiftId,
+        customerId: creditSaleVehicle.customerId,
+        vehicleId: creditSaleVehicle.id,
+        productId: creditSaleVehicle.defaultProductId ?? null,
+        quantity: qtyNum && qtyNum > 0 ? qtyNum : null,
+        unitPrice: priceNum != null && priceNum >= 0 ? priceNum : null,
+        amount: amountNum,
+        paymentMethod: 'Credit',
+        notes: creditSaleNotes || undefined,
+      });
+      closeQuickEntryDrawer();
+      await loadShiftStatus();
+    } catch (err: any) {
+      setQuickEntryError(err.message || 'Failed to record credit sale');
     } finally {
       setQuickEntrySubmitting(false);
     }
@@ -609,7 +672,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   };
 
 
-  const handleCloseShift = async (startNextShiftImmediately = false) => {
+  const handleCloseShift = async () => {
     if (!data.activeShift) return;
     try {
       setIsClosing(true);
@@ -651,22 +714,13 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
       setCloseWizardOpen(false);
       await loadShiftStatus();
 
-      if (startNextShiftImmediately) {
-        setOpeningCash(actual);
-        if (nextTemplateId) {
-          setSelectedTemplateId(nextTemplateId);
-        }
-        setViewingShiftSummary(false);
-        setClosedShiftSuccess(null);
-      } else {
-        setClosedShiftSuccess({
-          expectedCash: expected,
-          closingCash: actual,
-          variance,
-          lastClosedShiftId: closedId,
-          nextTemplateId
-        });
-      }
+      setClosedShiftSuccess({
+        expectedCash: expected,
+        closingCash: actual,
+        variance,
+        lastClosedShiftId: closedId,
+        nextTemplateId
+      });
     } catch (err: any) {
       alert(err.message || 'Failed to close shift');
     } finally {
@@ -814,7 +868,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
             <Check size={36} />
           </div>
           <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--text-strong)' }}>Shift Closed Successfully</h2>
-          <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>The Daily Sales Summary Record (DSSR) snapshot has been compiled and saved permanently.</p>
+          <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>The Shift Summary is saved permanently.</p>
         </div>
 
         <div style={{
@@ -1233,15 +1287,22 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
           confirmWarningsChecked={confirmWarningsChecked}
           onConfirmWarningsChange={setConfirmWarningsChecked}
           isClosing={isClosing}
-          onConfirmClose={() => handleCloseShift(false)}
-          onConfirmCloseAndStartNext={() => handleCloseShift(true)}
+          onConfirmClose={() => handleCloseShift()}
         />
 
         {/* Handover Drawer Overlay */}
         <Drawer
           isOpen={quickEntryOpen}
           onClose={closeQuickEntryDrawer}
-          title={quickEntryType === 'expense' ? 'Quick Add Expense' : quickEntryType === 'collection' ? 'Quick Log Collection' : 'Quick Add Purchase'}
+          title={
+            quickEntryType === 'expense'
+              ? 'Quick Add Expense'
+              : quickEntryType === 'collection'
+              ? 'Quick Log Collection'
+              : quickEntryType === 'credit-sale'
+              ? 'Quick Credit Sale'
+              : 'Quick Add Purchase'
+          }
         >
           {quickEntryLoading ? (
             <div style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Loading quick-entry form...</div>
@@ -1307,6 +1368,36 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
                   usePaymentMethodButtons={true}
                   walkInOptionLabel="-- Walk-in / Cash Customer --"
                   customerOptionLabel={(cust) => `${cust.name} (${cust.customerType})`}
+                />
+              )}
+
+              {quickEntryType === 'credit-sale' && (
+                <CreditSaleEntryForm
+                  shiftOptions={shiftOptions}
+                  targetShiftId={targetShiftId}
+                  onTargetShiftIdChange={setTargetShiftId}
+                  searchVehicles={(q) => transactionService.searchVehicles(q)}
+                  getPriceForProduct={(productId) => {
+                    if (!productId) return null;
+                    const nr = data?.activeShift?.nozzleReadings?.find(
+                      (r: any) => r.productId === productId && r.unitPrice != null
+                    );
+                    return nr ? Number(nr.unitPrice) : null;
+                  }}
+                  selectedVehicle={creditSaleVehicle}
+                  onSelectedVehicleChange={setCreditSaleVehicle}
+                  quantity={creditSaleQuantity}
+                  onQuantityChange={setCreditSaleQuantity}
+                  unitPrice={creditSaleUnitPrice}
+                  onUnitPriceChange={setCreditSaleUnitPrice}
+                  amount={creditSaleAmount}
+                  onAmountChange={setCreditSaleAmount}
+                  notes={creditSaleNotes}
+                  onNotesChange={setCreditSaleNotes}
+                  submitting={quickEntrySubmitting}
+                  error={quickEntryError}
+                  onCancel={closeQuickEntryDrawer}
+                  onSubmit={handleCreditSaleSubmit}
                 />
               )}
 

@@ -437,6 +437,12 @@ export class CloudTransactionService {
     });
   }
 
+  async searchVehicles(q: string, limit: number = 20): Promise<any[]> {
+    if (!q || !q.trim()) return [];
+    const params = new URLSearchParams({ q: q.trim(), limit: String(limit) });
+    return request<any[]>(`/transactions/vehicles/search?${params.toString()}`);
+  }
+
   async getExpenses(): Promise<any[]> {
     return request<any[]>('/transactions/expenses');
   }
@@ -472,7 +478,17 @@ export class CloudTransactionService {
     });
   }
 
-  async recordCollection(payload: { shiftId: string; customerId?: string; amount: number; paymentMethod: 'Cash' | 'Card' | 'UPI' | 'Credit'; notes?: string }): Promise<any> {
+  async recordCollection(payload: {
+    shiftId: string;
+    customerId?: string;
+    vehicleId?: string | null;
+    productId?: string | null;
+    quantity?: number | null;
+    unitPrice?: number | null;
+    amount: number;
+    paymentMethod: 'Cash' | 'Card' | 'UPI' | 'Credit';
+    notes?: string;
+  }): Promise<any> {
     return request<any>('/transactions/collections', {
       method: 'POST',
       body: JSON.stringify(payload),
