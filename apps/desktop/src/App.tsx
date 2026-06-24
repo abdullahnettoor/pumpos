@@ -22,6 +22,23 @@ setApiBaseUrl(import.meta.env.VITE_API_URL);
 
 const stationService = new CloudStationService();
 
+const environmentTag = (() => {
+  const explicitEnv = (import.meta.env.VITE_APP_ENV as string | undefined)?.toLowerCase();
+  if (explicitEnv === 'preview') return 'Preview';
+  if (explicitEnv === 'dev' || explicitEnv === 'development') return 'Dev';
+  if (import.meta.env.DEV) return 'Dev';
+  
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    // Dev domain or localhost
+    if (hostname === 'localhost') return 'Local';
+    if (hostname === 'dev-pumpos.abdullahnettoor.workers.dev') return 'Dev';
+    // Cloudflare preview env deploys as <worker-name>-preview.<subdomain>.workers.dev
+    if (hostname.includes('-preview.')) return 'Preview';
+  }
+  return null;
+})();
+
 const App: React.FC = () => {
   const [currentPath, setCurrentPath] = useState('/dashboard');
   const [syncStatus] = useState<'online' | 'offline' | 'synced' | 'pending' | 'failed'>('synced');
@@ -397,6 +414,7 @@ const App: React.FC = () => {
       stations={stations}
       selectedStation={selectedStation}
       onStationChange={handleStationChange}
+      environmentTag={environmentTag}
     >
       {renderContent()}
     </AppShell>

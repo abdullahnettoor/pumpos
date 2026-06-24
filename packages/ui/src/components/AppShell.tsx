@@ -22,6 +22,7 @@ export interface AppShellProps {
   stations?: Station[];
   selectedStation?: Station | null;
   onStationChange?: (station: Station) => void;
+  environmentTag?: string | null;
 }
 
 // Inline SVGs for Navigation
@@ -166,6 +167,7 @@ export const AppShell: React.FC<AppShellProps> = ({
   stations = [],
   selectedStation = null,
   onStationChange,
+  environmentTag = null,
 }) => {
   const [collapsed, setCollapsed] = useState(false);
 
@@ -325,7 +327,32 @@ export const AppShell: React.FC<AppShellProps> = ({
       </aside>
 
       {/* Main canvas area */}
-      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0, position: 'relative' }}>
+        {environmentTag ? (
+          <div
+            style={{
+              position: 'absolute',
+              top: '12px',
+              right: '16px',
+              zIndex: 20,
+              height: '22px',
+              display: 'inline-flex',
+              alignItems: 'center',
+              padding: '0 8px',
+              borderRadius: '999px',
+              border: '1px solid rgba(250, 204, 21, 0.45)',
+              backgroundColor: 'rgba(250, 204, 21, 0.14)',
+              color: '#854d0e',
+              fontSize: '10px',
+              fontWeight: 700,
+              letterSpacing: '0.08em',
+              textTransform: 'uppercase',
+              pointerEvents: 'none',
+            }}
+          >
+            {environmentTag}
+          </div>
+        ) : null}
         {/* Top Header details */}
         <header
           style={{
