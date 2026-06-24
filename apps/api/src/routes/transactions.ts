@@ -6,6 +6,7 @@ import {
   shiftPurchaseSchema,
   shiftCollectionSchema,
   customerCreateSchema,
+  customerVehicleCreateSchema,
   supplierCreateSchema,
   supplierPaymentSchema,
   Role,
@@ -706,6 +707,179 @@ transactionsRouter.delete('/customers/:id', async (c) => {
     }
 
     return c.json({ success: true, data: deletedCust });
+  } catch (err: any) {
+    return c.json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }, 500);
+  }
+});
+
+// GET /api/transactions/customers/:id/vehicles
+transactionsRouter.get('/customers/:id/vehicles', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  const customerId = c.req.param('id');
+  const activeOnly = c.req.query('activeOnly') !== 'false';
+
+  try {
+    const [customer] = await db
+      .select({ id: schema.customers.id })
+      .from(schema.customers)
+      .where(and(eq(schema.customers.id, customerId), eq(schema.customers.organizationId, user.organizationId)))
+      .limit(1);
+
+    if (!customer) {
+      return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Customer not found' } }, 404);
+    }
+
+    const vehicleRows = await db
+      .select({
+        id: schema.customerVehicles.id,
+        organizationId: schema.customerVehicles.organizationId,
+        customerId: schema.customerVehicles.customerId,
+        registrationNumber: schema.customerVehicles.registrationNumber,
+        vehicleType: schema.customerVehicles.vehicleType,
+        defaultProductId: schema.customerVehicles.defaultProductId,
+        isActive: schema.customerVehicles.isActive,
+        createdAt: schema.customerVehicles.createdAt,
+        updatedAt: schema.customerVehicles.updatedAt,
+        defaultProductName: schema.products.name,
+        defaultProductCode: schema.products.code,
+      })
+      .from(schema.customerVehicles)
+      .leftJoin(schema.products, eq(schema.customerVehicles.defaultProductId, schema.products.id))
+      .where(
+        and(
+          eq(schema.customerVehicles.customerId, customerId),
+          eq(schema.customerVehicles.organizationId, user.organizationId),
+          ...(activeOnly ? [eq(schema.customerVehicles.isActive, true)] : [])
+        )
+      )
+      .orderBy(desc(schema.customerVehicles.updatedAt));
+
+    return c.json({ success: true, data: vehicleRows });
+  } catch (err: any) {
+    return c.json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }, 500);
+  }
+});
+
+// POST /api/transactions/customers/:id/vehicles
+transactionsRouter.post('/customers/:id/vehicles', validateJson(customerVehicleCreateSchema), async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  const customerId = c.req.param('id');
+  const parsed = c.req.valid('json');
+
+  try {
+    const [customer] = await db
+      .select({ id: schema.customers.id })
+      .from(schema.customers)
+      .where(and(eq(schema.customers.id, customerId), eq(schema.customers.organizationId, user.organizationId)))
+      .limit(1);
+
+    if (!customer) {
+      return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Customer not found' } }, 404);
+    }
+
+    if (parsed.defaultProductId) {
+      const [product] = await db
+        .select({ id: schema.products.id })
+        .from(schema.products)
+        .where(and(eq(schema.products.id, parsed.defaultProductId), eq(schema.products.organizationId, user.organizationId)))
+        .limit(1);
+
+      if (!product) {
+        return c.json({ success: false, error: { code: 'BAD_REQUEST', message: 'Default product not found' } }, 400);
+      }
+    }
+
+    const [newVehicle] = await db
+      .insert(schema.customerVehicles)
+      .values({
+        organizationId: user.organizationId,
+        customerId,
+        registrationNumber: parsed.registrationNumber.toUpperCase(),
+        vehicleType: parsed.vehicleType,
+        defaultProductId: parsed.defaultProductId || null,
+        isActive: parsed.isActive,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .returning();
+
+    return c.json({ success: true, data: newVehicle });
+  } catch (err: any) {
+    if (String(err.message || '').toLowerCase().includes('duplicate')) {
+      return c.json({ success: false, error: { code: 'CONFLICT', message: 'Vehicle registration already exists for this organization' } }, 409);
+    }
+    return c.json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }, 500);
+  }
+});
+
+// PUT /api/transactions/vehicles/:id
+transactionsRouter.put('/vehicles/:id', validateJson(customerVehicleCreateSchema), async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  const vehicleId = c.req.param('id');
+  const parsed = c.req.valid('json');
+
+  try {
+    if (parsed.defaultProductId) {
+      const [product] = await db
+        .select({ id: schema.products.id })
+        .from(schema.products)
+        .where(and(eq(schema.products.id, parsed.defaultProductId), eq(schema.products.organizationId, user.organizationId)))
+        .limit(1);
+
+      if (!product) {
+        return c.json({ success: false, error: { code: 'BAD_REQUEST', message: 'Default product not found' } }, 400);
+      }
+    }
+
+    const [updatedVehicle] = await db
+      .update(schema.customerVehicles)
+      .set({
+        registrationNumber: parsed.registrationNumber.toUpperCase(),
+        vehicleType: parsed.vehicleType,
+        defaultProductId: parsed.defaultProductId || null,
+        isActive: parsed.isActive,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(schema.customerVehicles.id, vehicleId), eq(schema.customerVehicles.organizationId, user.organizationId)))
+      .returning();
+
+    if (!updatedVehicle) {
+      return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Vehicle not found' } }, 404);
+    }
+
+    return c.json({ success: true, data: updatedVehicle });
+  } catch (err: any) {
+    if (String(err.message || '').toLowerCase().includes('duplicate')) {
+      return c.json({ success: false, error: { code: 'CONFLICT', message: 'Vehicle registration already exists for this organization' } }, 409);
+    }
+    return c.json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }, 500);
+  }
+});
+
+// DELETE /api/transactions/vehicles/:id (soft delete)
+transactionsRouter.delete('/vehicles/:id', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  const vehicleId = c.req.param('id');
+
+  try {
+    const [deletedVehicle] = await db
+      .update(schema.customerVehicles)
+      .set({
+        isActive: false,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(schema.customerVehicles.id, vehicleId), eq(schema.customerVehicles.organizationId, user.organizationId)))
+      .returning();
+
+    if (!deletedVehicle) {
+      return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Vehicle not found' } }, 404);
+    }
+
+    return c.json({ success: true, data: deletedVehicle });
   } catch (err: any) {
     return c.json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }, 500);
   }

@@ -175,6 +175,13 @@ export const customerCreateSchema = z.object({
   }).optional().nullable(),
 });
 
+export const customerVehicleCreateSchema = z.object({
+  registrationNumber: z.string().min(3, 'Registration number is required').max(50),
+  vehicleType: z.string().min(2, 'Vehicle type is required').max(50),
+  defaultProductId: z.string().uuid('Invalid product ID').optional().nullable(),
+  isActive: z.boolean().default(true),
+});
+
 export const supplierCreateSchema = z.object({
   name: z.string().min(1, 'Name is required').max(255),
   phone: z.string().max(50).optional().nullable(),

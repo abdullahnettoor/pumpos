@@ -391,6 +391,36 @@ export class CloudTransactionService {
     });
   }
 
+  async getCustomerVehicles(customerId: string, activeOnly: boolean = false): Promise<any[]> {
+    return request<any[]>(`/transactions/customers/${customerId}/vehicles?activeOnly=${activeOnly}`);
+  }
+
+  async createCustomerVehicle(
+    customerId: string,
+    payload: { registrationNumber: string; vehicleType: string; defaultProductId?: string | null; isActive?: boolean }
+  ): Promise<any> {
+    return request<any>(`/transactions/customers/${customerId}/vehicles`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async updateCustomerVehicle(
+    vehicleId: string,
+    payload: { registrationNumber: string; vehicleType: string; defaultProductId?: string | null; isActive?: boolean }
+  ): Promise<any> {
+    return request<any>(`/transactions/vehicles/${vehicleId}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async deleteCustomerVehicle(vehicleId: string): Promise<any> {
+    return request<any>(`/transactions/vehicles/${vehicleId}`, {
+      method: 'DELETE',
+    });
+  }
+
   async getExpenses(): Promise<any[]> {
     return request<any[]>('/transactions/expenses');
   }

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { CloudTransactionService, CloudShiftService } from '../services/cloud.js';
-import { User, ShieldAlert, CreditCard, DollarSign, Plus, Info, Edit, Check, Settings, Scale } from 'lucide-react';
+import { CloudTransactionService, CloudShiftService, CloudProductService } from '../services/cloud.js';
+import { User, ShieldAlert, CreditCard, DollarSign, Plus, Info, Edit, Check, Settings, Scale, Truck, Trash2 } from 'lucide-react';
 import { LoadingSpinner } from './LoadingSpinner.js';
 import { Drawer } from './Drawer.js';
 import { CollectionEntryForm } from './transactions/CollectionEntryForm.js';
@@ -10,13 +10,14 @@ import { customerCreateSchema } from '@pump/shared';
 
 const transactionService = new CloudTransactionService();
 const shiftService = new CloudShiftService();
+const productService = new CloudProductService();
 
 interface CustomersListProps {
   selectedStation: any | null;
   defaultShiftId?: string;
 }
 
-type TabType = 'transactions' | 'registry';
+type TabType = 'transactions' | 'registry' | 'vehicles';
 
 export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, defaultShiftId }) => {
   const [activeTab, setActiveTab] = useState<TabType>('transactions');
@@ -63,6 +64,23 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
   const [collectionPaymentMethod, setCollectionPaymentMethod] = useState<'Cash' | 'Card' | 'UPI' | 'Credit'>('Cash');
   const [collectionNotes, setCollectionNotes] = useState('');
   const [collectionSubmitting, setCollectionSubmitting] = useState(false);
+
+  // Vehicles tab state
+  const [fuelProducts, setFuelProducts] = useState<any[]>([]);
+  const [vehicleCustomerId, setVehicleCustomerId] = useState('');
+  const [vehicles, setVehicles] = useState<any[]>([]);
+  const [loadingVehicles, setLoadingVehicles] = useState(false);
+  const [vehicleError, setVehicleError] = useState<string | null>(null);
+  const [isVehicleDrawerOpen, setIsVehicleDrawerOpen] = useState(false);
+  const [editingVehicle, setEditingVehicle] = useState<any | null>(null);
+  const [vehicleForm, setVehicleForm] = useState({
+    customerId: '',
+    registrationNumber: '',
+    vehicleType: '',
+    defaultProductId: '',
+    isActive: true,
+  });
+  const [vehicleSubmitting, setVehicleSubmitting] = useState(false);
 
   const resolvePreferredShiftId = (active: any | null, closedList: any[]) => {
     if (defaultShiftId) {
@@ -141,6 +159,12 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
   }, [selectedStation]);
 
   useEffect(() => {
+    if (activeTab === 'vehicles' && vehicleCustomerId) {
+      loadVehicles(vehicleCustomerId);
+    }
+  }, [activeTab, vehicleCustomerId]);
+
+  useEffect(() => {
     setCollectionShiftId(resolvePreferredShiftId(activeShift, recentClosedShifts));
   }, [activeShift, recentClosedShifts, defaultShiftId]);
 
@@ -149,10 +173,11 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
       setLoading(true);
       setError(null);
 
-      const [activeList, allList, status] = await Promise.all([
+      const [activeList, allList, status, products] = await Promise.all([
         transactionService.getCustomers(true),
         transactionService.getCustomers(false),
         shiftService.getShiftStatus(selectedStation.id, true),
+        productService.listProducts(),
       ]);
 
       setCustomers(activeList || []);
@@ -161,6 +186,14 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
       const closedList = status.recentClosedShifts || [];
       setActiveShift(active);
       setRecentClosedShifts(closedList);
+      setFuelProducts((products || []).filter((p: any) => p.productType === 'FUEL' && p.isActive));
+
+      const eligibleCustomers = (allList || []).filter((c: any) => c.customerType === 'Credit' || c.customerType === 'Fleet');
+      if (eligibleCustomers.length > 0) {
+        setVehicleCustomerId((prev) => prev || eligibleCustomers[0].id);
+      } else {
+        setVehicleCustomerId('');
+      }
 
       if (activeList && activeList.length > 0) {
         setCollectionCustomerId(activeList[0].id);
@@ -171,6 +204,96 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
       setError(err.message || 'Failed to load customers data');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadVehicles = async (customerId: string) => {
+    if (!customerId) {
+      setVehicles([]);
+      return;
+    }
+
+    try {
+      setLoadingVehicles(true);
+      setVehicleError(null);
+      const list = await transactionService.getCustomerVehicles(customerId, false);
+      setVehicles(list || []);
+    } catch (err: any) {
+      setVehicleError(err.message || 'Failed to load vehicles');
+    } finally {
+      setLoadingVehicles(false);
+    }
+  };
+
+  const openCreateVehicleDrawer = () => {
+    setEditingVehicle(null);
+    setVehicleForm({
+      customerId: vehicleCustomerId,
+      registrationNumber: '',
+      vehicleType: '',
+      defaultProductId: '',
+      isActive: true,
+    });
+    setVehicleError(null);
+    setIsVehicleDrawerOpen(true);
+  };
+
+  const openEditVehicleDrawer = (vehicle: any) => {
+    setEditingVehicle(vehicle);
+    setVehicleForm({
+      customerId: vehicle.customerId,
+      registrationNumber: vehicle.registrationNumber || '',
+      vehicleType: vehicle.vehicleType || '',
+      defaultProductId: vehicle.defaultProductId || '',
+      isActive: vehicle.isActive,
+    });
+    setVehicleError(null);
+    setIsVehicleDrawerOpen(true);
+  };
+
+  const onSaveVehicle = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setVehicleError(null);
+
+    if (!vehicleForm.customerId || !vehicleForm.registrationNumber || !vehicleForm.vehicleType) {
+      setVehicleError('Customer, registration number and vehicle type are required.');
+      return;
+    }
+
+    try {
+      setVehicleSubmitting(true);
+      const payload = {
+        registrationNumber: vehicleForm.registrationNumber.trim().toUpperCase(),
+        vehicleType: vehicleForm.vehicleType.trim(),
+        defaultProductId: vehicleForm.defaultProductId || null,
+        isActive: vehicleForm.isActive,
+      };
+
+      if (editingVehicle) {
+        await transactionService.updateCustomerVehicle(editingVehicle.id, payload);
+      } else {
+        await transactionService.createCustomerVehicle(vehicleForm.customerId, payload);
+      }
+
+      setIsVehicleDrawerOpen(false);
+      await loadVehicles(vehicleForm.customerId);
+    } catch (err: any) {
+      setVehicleError(err.message || 'Failed to save vehicle');
+    } finally {
+      setVehicleSubmitting(false);
+    }
+  };
+
+  const onDeleteVehicle = async (vehicle: any) => {
+    if (!window.confirm(`Delete vehicle ${vehicle.registrationNumber}?`)) {
+      return;
+    }
+
+    try {
+      await transactionService.deleteCustomerVehicle(vehicle.id);
+      await loadVehicles(vehicle.customerId);
+    } catch (err: any) {
+      setVehicleError(err.message || 'Failed to delete vehicle');
     }
   };
 
@@ -353,6 +476,28 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
             <Plus size={14} /> Add Customer
           </button>
         )}
+        {activeTab === 'vehicles' && (
+          <button
+            onClick={openCreateVehicleDrawer}
+            disabled={!vehicleCustomerId}
+            style={{
+              height: '32px',
+              padding: '0 12px',
+              borderRadius: 'var(--radius-input)',
+              backgroundColor: vehicleCustomerId ? 'var(--brand-primary)' : 'var(--border-strong)',
+              color: 'white',
+              fontSize: '13px',
+              fontWeight: 500,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              border: 'none',
+              cursor: vehicleCustomerId ? 'pointer' : 'not-allowed',
+            }}
+          >
+            <Plus size={14} /> Add Vehicle
+          </button>
+        )}
       </div>
 
       {/* Tabs Menu */}
@@ -403,6 +548,28 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
         >
           <Settings size={16} />
           Customer Registry
+        </button>
+
+        <button
+          onClick={() => setActiveTab('vehicles')}
+          style={{
+            padding: '12px 4px',
+            fontSize: '14px',
+            fontWeight: activeTab === 'vehicles' ? 600 : 500,
+            color: activeTab === 'vehicles' ? 'var(--primary)' : 'var(--text-muted)',
+            borderBottom: activeTab === 'vehicles' ? '2px solid var(--primary)' : '2px solid transparent',
+            background: 'none',
+            borderTop: 'none',
+            borderLeft: 'none',
+            borderRight: 'none',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+          }}
+        >
+          <Truck size={16} />
+          Vehicles
         </button>
       </div>
 
@@ -617,6 +784,121 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
                 )}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {activeTab === 'vehicles' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end' }}>
+              <div style={{ flex: 1 }}>
+                <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>
+                  Credit/Fleet Customer
+                </label>
+                <select
+                  value={vehicleCustomerId}
+                  onChange={(e) => setVehicleCustomerId(e.target.value)}
+                  style={{
+                    width: '100%',
+                    height: '32px',
+                    padding: '0 8px',
+                    borderRadius: 'var(--radius-input)',
+                    border: '1px solid var(--border-strong)',
+                    fontSize: '13px',
+                  }}
+                >
+                  {allCustomers
+                    .filter((c) => c.customerType === 'Credit' || c.customerType === 'Fleet')
+                    .map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name} ({c.customerType})
+                      </option>
+                    ))}
+                </select>
+              </div>
+            </div>
+
+            {vehicleError && (
+              <div style={{ padding: '12px', backgroundColor: 'var(--state-danger-bg)', color: 'var(--state-danger-fg)', borderRadius: 'var(--radius-card)', fontSize: '12px' }}>
+                {vehicleError}
+              </div>
+            )}
+
+            {!vehicleCustomerId ? (
+              <div style={{ padding: '16px', backgroundColor: 'var(--state-warning-bg)', color: 'var(--state-warning-fg)', borderRadius: 'var(--radius-card)', fontSize: '13px' }}>
+                No Credit/Fleet customer found. Create a Credit or Fleet customer first.
+              </div>
+            ) : loadingVehicles ? (
+              <LoadingSpinner text="Loading vehicles..." />
+            ) : (
+              <div style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-card)', overflow: 'hidden' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left' }}>
+                  <thead>
+                    <tr style={{ backgroundColor: 'var(--bg-surface-alt)', borderBottom: '1px solid var(--border-soft)', color: 'var(--text-muted)' }}>
+                      <th style={{ padding: '12px 20px', fontWeight: 600 }}>Registration No.</th>
+                      <th style={{ padding: '12px 20px', fontWeight: 600 }}>Vehicle Type</th>
+                      <th style={{ padding: '12px 20px', fontWeight: 600 }}>Default Product</th>
+                      <th style={{ padding: '12px 20px', fontWeight: 600 }}>Status</th>
+                      <th style={{ padding: '12px 20px', fontWeight: 600 }}>Updated</th>
+                      <th style={{ padding: '12px 20px', fontWeight: 600, textAlign: 'center' }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {vehicles.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                          No vehicles registered for this customer.
+                        </td>
+                      </tr>
+                    ) : (
+                      vehicles.map((v) => (
+                        <tr key={v.id} style={{ borderBottom: '1px solid var(--border-soft)' }}>
+                          <td style={{ padding: '12px 20px', fontWeight: 600, color: 'var(--text-strong)', fontFamily: 'var(--font-mono)' }}>
+                            {v.registrationNumber}
+                          </td>
+                          <td style={{ padding: '12px 20px', color: 'var(--text-default)' }}>{v.vehicleType}</td>
+                          <td style={{ padding: '12px 20px', color: 'var(--text-default)' }}>
+                            {v.defaultProductName ? `${v.defaultProductName} (${v.defaultProductCode || ''})` : '-'}
+                          </td>
+                          <td style={{ padding: '12px 20px' }}>
+                            <span
+                              style={{
+                                fontSize: '11px',
+                                fontWeight: 600,
+                                backgroundColor: v.isActive ? 'var(--state-success-bg)' : 'var(--state-danger-bg)',
+                                color: v.isActive ? 'var(--state-success-fg)' : 'var(--state-danger-fg)',
+                                padding: '2px 8px',
+                                borderRadius: 'var(--radius-chip)',
+                              }}
+                            >
+                              {v.isActive ? 'Active' : 'Inactive'}
+                            </span>
+                          </td>
+                          <td style={{ padding: '12px 20px', color: 'var(--text-muted)' }}>
+                            {new Date(v.updatedAt).toLocaleDateString('en-IN')}
+                          </td>
+                          <td style={{ padding: '12px 20px', textAlign: 'center' }}>
+                            <button
+                              onClick={() => openEditVehicleDrawer(v)}
+                              style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '4px' }}
+                              title="Edit Vehicle"
+                            >
+                              <Edit size={14} />
+                            </button>
+                            <button
+                              onClick={() => onDeleteVehicle(v)}
+                              style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--brand-danger)', padding: '4px' }}
+                              title="Delete Vehicle"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -1158,6 +1440,133 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
             </button>
           </div>
         )}
+      </Drawer>
+
+      <Drawer
+        isOpen={isVehicleDrawerOpen}
+        onClose={() => setIsVehicleDrawerOpen(false)}
+        title={editingVehicle ? 'Edit Vehicle' : 'Add Vehicle'}
+      >
+        <form onSubmit={onSaveVehicle} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          {vehicleError && (
+            <div style={{ backgroundColor: 'var(--state-danger-bg)', color: 'var(--state-danger-fg)', padding: '8px 12px', borderRadius: 'var(--radius-input)', fontSize: '12px' }}>
+              {vehicleError}
+            </div>
+          )}
+
+          {!editingVehicle && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Customer *</label>
+              <select
+                value={vehicleForm.customerId}
+                onChange={(e) => setVehicleForm((prev) => ({ ...prev, customerId: e.target.value }))}
+                disabled={vehicleSubmitting}
+                style={{ height: '32px', padding: '0 8px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', fontSize: '13px' }}
+              >
+                {allCustomers
+                  .filter((c) => c.customerType === 'Credit' || c.customerType === 'Fleet')
+                  .map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} ({c.customerType})
+                    </option>
+                  ))}
+              </select>
+            </div>
+          )}
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Registration Number *</label>
+            <input
+              type="text"
+              value={vehicleForm.registrationNumber}
+              onChange={(e) => setVehicleForm((prev) => ({ ...prev, registrationNumber: e.target.value.toUpperCase() }))}
+              disabled={vehicleSubmitting}
+              placeholder="e.g. KL07AB1234"
+              style={{ height: '32px', padding: '0 8px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', fontSize: '13px' }}
+            />
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Vehicle Type *</label>
+            <input
+              type="text"
+              value={vehicleForm.vehicleType}
+              onChange={(e) => setVehicleForm((prev) => ({ ...prev, vehicleType: e.target.value }))}
+              disabled={vehicleSubmitting}
+              placeholder="e.g. Truck, Bus"
+              style={{ height: '32px', padding: '0 8px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', fontSize: '13px' }}
+            />
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Default Fuel Product</label>
+            <select
+              value={vehicleForm.defaultProductId}
+              onChange={(e) => setVehicleForm((prev) => ({ ...prev, defaultProductId: e.target.value }))}
+              disabled={vehicleSubmitting}
+              style={{ height: '32px', padding: '0 8px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', fontSize: '13px' }}
+            >
+              <option value="">-- Select Product --</option>
+              {fuelProducts.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name} ({p.code})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <input
+              type="checkbox"
+              id="vehicleIsActive"
+              checked={vehicleForm.isActive}
+              onChange={(e) => setVehicleForm((prev) => ({ ...prev, isActive: e.target.checked }))}
+              disabled={vehicleSubmitting}
+            />
+            <label htmlFor="vehicleIsActive" style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-strong)' }}>
+              Vehicle Active
+            </label>
+          </div>
+
+          <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
+            <button
+              type="submit"
+              disabled={vehicleSubmitting}
+              style={{
+                flex: 1,
+                height: '32px',
+                backgroundColor: 'var(--brand-primary)',
+                color: 'white',
+                border: 'none',
+                borderRadius: 'var(--radius-button)',
+                fontWeight: 600,
+                fontSize: '13px',
+                cursor: 'pointer',
+              }}
+            >
+              {vehicleSubmitting ? 'Saving...' : 'Save Vehicle'}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsVehicleDrawerOpen(false)}
+              disabled={vehicleSubmitting}
+              style={{
+                flex: 1,
+                height: '32px',
+                backgroundColor: 'var(--bg-surface-alt)',
+                color: 'var(--text-default)',
+                border: '1px solid var(--border-strong)',
+                borderRadius: 'var(--radius-button)',
+                fontWeight: 600,
+                fontSize: '13px',
+                cursor: 'pointer',
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
       </Drawer>
     </div>
   );
