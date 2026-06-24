@@ -181,7 +181,36 @@ export const customers = pgTable('customers', {
   phone: varchar('phone', { length: 50 }),
   creditLimit: numeric('credit_limit', { precision: 12, scale: 2 }),
   fleetCode: varchar('fleet_code', { length: 100 }),
+  isPrepaid: boolean('is_prepaid').default(false).notNull(),
+  prepaidBalance: numeric('prepaid_balance', { precision: 14, scale: 2 }).default('0').notNull(),
   metadata: jsonb('metadata'),
+  isActive: boolean('is_active').default(true).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+export const customerVehicles = pgTable('customer_vehicles', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  organizationId: uuid('organization_id').references(() => organizations.id).notNull(),
+  customerId: uuid('customer_id').references(() => customers.id).notNull(),
+  registrationNumber: varchar('registration_number', { length: 50 }).notNull(),
+  vehicleType: varchar('vehicle_type', { length: 50 }).notNull(), // 'Car', 'Truck', 'Bus', 'Two-wheeler', etc.
+  defaultProductId: uuid('default_product_id').references(() => products.id),
+  isActive: boolean('is_active').default(true).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+export const customerDiscountRules = pgTable('customer_discount_rules', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  organizationId: uuid('organization_id').references(() => organizations.id).notNull(),
+  customerId: uuid('customer_id').references(() => customers.id).notNull(),
+  productId: uuid('product_id').references(() => products.id),
+  ruleType: varchar('rule_type', { length: 50 }).notNull(), // 'FLAT_PER_LITRE', 'PERCENT', 'TIERED_THRESHOLD'
+  value: numeric('value', { precision: 10, scale: 4 }).notNull(),
+  thresholdLitres: numeric('threshold_litres', { precision: 12, scale: 2 }),
+  validFrom: timestamp('valid_from').notNull(),
+  validUntil: timestamp('valid_until'),
   isActive: boolean('is_active').default(true).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
@@ -191,6 +220,7 @@ export const customerTransactions = pgTable('customer_transactions', {
   id: uuid('id').defaultRandom().primaryKey(),
   shiftId: uuid('shift_id').references(() => shifts.id).notNull(),
   customerId: uuid('customer_id').references(() => customers.id).notNull(),
+  vehicleId: uuid('vehicle_id').references(() => customerVehicles.id),
   transactionType: varchar('transaction_type', { length: 50 }).notNull(), // 'Credit Sale', 'Collection', 'Adjustment'
   amount: numeric('amount', { precision: 12, scale: 2 }).notNull(),
   referenceType: varchar('reference_type', { length: 50 }),
@@ -233,6 +263,7 @@ export const sales = pgTable('sales', {
   shiftId: uuid('shift_id').references(() => shifts.id).notNull(),
   saleType: varchar('sale_type', { length: 50 }).notNull(), // 'Fuel', 'Product', 'Mixed', 'Credit'
   customerId: uuid('customer_id').references(() => customers.id),
+  vehicleId: uuid('vehicle_id').references(() => customerVehicles.id),
   subtotalAmount: numeric('subtotal_amount', { precision: 12, scale: 2 }).notNull(),
   taxAmount: numeric('tax_amount', { precision: 12, scale: 2 }).notNull(),
   totalAmount: numeric('total_amount', { precision: 12, scale: 2 }).notNull(),
@@ -247,6 +278,7 @@ export const saleItems = pgTable('sale_items', {
   productId: uuid('product_id').references(() => products.id).notNull(),
   quantity: numeric('quantity', { precision: 12, scale: 3 }).notNull(),
   unitPrice: numeric('unit_price', { precision: 12, scale: 2 }).notNull(),
+  discountAmount: numeric('discount_amount', { precision: 12, scale: 2 }).default('0').notNull(),
   taxAmount: numeric('tax_amount', { precision: 12, scale: 2 }).notNull(),
   lineTotal: numeric('line_total', { precision: 12, scale: 2 }).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
@@ -328,9 +360,18 @@ export const purchases = pgTable('purchases', {
 // REPORTING, AUDIT & SYNC DOMAINS
 // ----------------------------------------------------
 
-export const dssrSnapshots = pgTable('dssr_snapshots', {
+export const shiftSummaries = pgTable('shift_summaries', {
   id: uuid('id').defaultRandom().primaryKey(),
   shiftId: uuid('shift_id').references(() => shifts.id).notNull(),
+  snapshotData: jsonb('snapshot_data').notNull(),
+  generatedAt: timestamp('generated_at').defaultNow().notNull(),
+});
+
+export const dssrSnapshots = pgTable('dssr_snapshots', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  organizationId: uuid('organization_id').references(() => organizations.id).notNull(),
+  stationId: uuid('station_id').references(() => stations.id).notNull(),
+  businessDate: varchar('business_date', { length: 10 }).notNull(), // YYYY-MM-DD
   snapshotData: jsonb('snapshot_data').notNull(),
   generatedAt: timestamp('generated_at').defaultNow().notNull(),
 });
