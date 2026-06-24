@@ -116,22 +116,46 @@ export const CreditSaleEntryForm: React.FC<CreditSaleEntryFormProps> = ({
     };
   }, [query, selectedVehicle, searchVehicles]);
 
-  // Auto-compute amount from qty * unitPrice (only when user hasn't manually overridden amount this render)
-  const lastDerivedRef = useRef<string>('');
-  useEffect(() => {
-    const qty = Number(quantity);
+  // Bidirectional binding: editing quantity derives amount; editing amount derives quantity.
+  // Editing unit price recomputes whichever side wasn't the last user-edited field.
+  const lastEditedRef = useRef<'qty' | 'amount'>('qty');
+
+  const handleQuantityChange = (v: string) => {
+    lastEditedRef.current = 'qty';
+    onQuantityChange(v);
+    const qty = Number(v);
     const price = Number(unitPrice);
-    if (qty > 0 && price > 0) {
-      const derived = (qty * price).toFixed(2);
-      // Update amount only if it matches the previously derived value OR is empty (user has not manually overridden)
-      if (amount === '' || amount === lastDerivedRef.current) {
-        lastDerivedRef.current = derived;
-        onAmountChange(derived);
-      } else {
-        lastDerivedRef.current = derived;
-      }
+    if (!v) {
+      onAmountChange('');
+    } else if (qty > 0 && price > 0) {
+      onAmountChange((qty * price).toFixed(2));
     }
-  }, [quantity, unitPrice]); // eslint-disable-line react-hooks/exhaustive-deps
+  };
+
+  const handleAmountChange = (v: string) => {
+    lastEditedRef.current = 'amount';
+    onAmountChange(v);
+    const amt = Number(v);
+    const price = Number(unitPrice);
+    if (!v) {
+      onQuantityChange('');
+    } else if (amt > 0 && price > 0) {
+      onQuantityChange((amt / price).toFixed(3));
+    }
+  };
+
+  const handleUnitPriceChange = (v: string) => {
+    onUnitPriceChange(v);
+    const price = Number(v);
+    if (!(price > 0)) return;
+    if (lastEditedRef.current === 'qty') {
+      const qty = Number(quantity);
+      if (qty > 0) onAmountChange((qty * price).toFixed(2));
+    } else {
+      const amt = Number(amount);
+      if (amt > 0) onQuantityChange((amt / price).toFixed(3));
+    }
+  };
 
   const handleSelect = (vehicle: VehicleSearchResult) => {
     onSelectedVehicleChange(vehicle);
@@ -340,7 +364,7 @@ export const CreditSaleEntryForm: React.FC<CreditSaleEntryFormProps> = ({
             step="0.001"
             min="0"
             value={quantity}
-            onChange={(e) => onQuantityChange(e.target.value)}
+            onChange={(e) => handleQuantityChange(e.target.value)}
             disabled={submitting || !selectedVehicle}
             placeholder="0.000"
             style={inputStyle}
@@ -354,7 +378,7 @@ export const CreditSaleEntryForm: React.FC<CreditSaleEntryFormProps> = ({
             step="0.01"
             min="0"
             value={unitPrice}
-            onChange={(e) => onUnitPriceChange(e.target.value)}
+            onChange={(e) => handleUnitPriceChange(e.target.value)}
             disabled={submitting || !selectedVehicle}
             placeholder="0.00"
             style={inputStyle}
@@ -365,7 +389,7 @@ export const CreditSaleEntryForm: React.FC<CreditSaleEntryFormProps> = ({
       {/* Amount */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
         <label style={labelStyle}>
-          Amount (₹) <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>— auto from qty × price, editable</span>
+          Amount (₹) <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>— edit either qty or amount; the other recalculates</span>
         </label>
         <input
           type="number"
@@ -373,7 +397,7 @@ export const CreditSaleEntryForm: React.FC<CreditSaleEntryFormProps> = ({
           step="0.01"
           min="0"
           value={amount}
-          onChange={(e) => onAmountChange(e.target.value)}
+          onChange={(e) => handleAmountChange(e.target.value)}
           disabled={submitting || !selectedVehicle}
           placeholder="0.00"
           style={{ ...inputStyle, fontWeight: 600 }}
