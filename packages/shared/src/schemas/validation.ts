@@ -166,6 +166,7 @@ export const customerCreateSchema = z.object({
   customerType: z.enum(['Regular', 'Credit', 'Fleet']).default('Regular'),
   creditLimit: z.number().nonnegative().optional().nullable(),
   fleetCode: z.string().max(100).optional().nullable(),
+  isPrepaid: z.boolean().default(false),
   isActive: z.boolean().default(true),
   metadata: z.object({
     gstin: z.string().max(15).optional().nullable(),
@@ -173,6 +174,12 @@ export const customerCreateSchema = z.object({
     tradeName: z.string().max(255).optional().nullable(),
     billingAddress: z.string().max(500).optional().nullable(),
   }).optional().nullable(),
+});
+
+export const customerTopupSchema = z.object({
+  amount: z.number().positive('Top-up amount must be positive'),
+  paymentMethod: z.enum(['Cash', 'Card', 'UPI', 'BankTransfer']),
+  notes: z.string().max(500).optional().nullable(),
 });
 
 export const customerVehicleCreateSchema = z.object({

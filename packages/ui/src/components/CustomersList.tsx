@@ -65,6 +65,14 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
   const [collectionNotes, setCollectionNotes] = useState('');
   const [collectionSubmitting, setCollectionSubmitting] = useState(false);
 
+  // Prepaid top-up state
+  const [isTopupDrawerOpen, setIsTopupDrawerOpen] = useState(false);
+  const [topupAmount, setTopupAmount] = useState('');
+  const [topupPaymentMethod, setTopupPaymentMethod] = useState<'Cash' | 'Card' | 'UPI' | 'BankTransfer'>('Cash');
+  const [topupNotes, setTopupNotes] = useState('');
+  const [topupSubmitting, setTopupSubmitting] = useState(false);
+  const [topupError, setTopupError] = useState<string | null>(null);
+
   // Vehicles tab state
   const [fuelProducts, setFuelProducts] = useState<any[]>([]);
   const [vehicleCustomerId, setVehicleCustomerId] = useState('');
@@ -140,6 +148,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
       customerType: 'Regular' as const,
       creditLimit: 50000 as any,
       fleetCode: '',
+      isPrepaid: false,
       isActive: true,
       metadata: {
         gstin: '',
@@ -336,6 +345,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
       customerType: 'Regular',
       creditLimit: 50000 as any,
       fleetCode: '',
+      isPrepaid: false,
       isActive: true,
       metadata: {
         gstin: '',
@@ -357,6 +367,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
       customerType: cust.customerType,
       creditLimit: cust.creditLimit ? Number(cust.creditLimit) : (cust.customerType === 'Regular' ? null : 50000) as any,
       fleetCode: cust.fleetCode || '',
+      isPrepaid: Boolean(cust.isPrepaid),
       isActive: cust.isActive,
       metadata: {
         gstin: meta.gstin || '',
@@ -378,6 +389,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
         customerType: data.customerType,
         creditLimit: (data.customerType === 'Credit' || data.customerType === 'Fleet') && data.creditLimit ? Number(data.creditLimit) : null,
         fleetCode: data.customerType === 'Fleet' ? data.fleetCode : null,
+        isPrepaid: Boolean(data.isPrepaid),
         isActive: data.isActive,
         metadata: {
           gstin: data.metadata?.gstin || null,
@@ -386,7 +398,6 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
           billingAddress: data.metadata?.billingAddress || null,
         },
       };
-
       if (editingCustomer) {
         await transactionService.updateCustomer(editingCustomer.id, payload);
       } else {
@@ -397,6 +408,39 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
       await loadData();
     } catch (err: any) {
       setDrawerError(err.message || 'Failed to save customer');
+    }
+  };
+
+  const openTopupDrawer = () => {
+    setTopupAmount('');
+    setTopupPaymentMethod('Cash');
+    setTopupNotes('');
+    setTopupError(null);
+    setIsTopupDrawerOpen(true);
+  };
+
+  const handleTopupSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedLedgerCustomer?.id || !topupAmount) {
+      return;
+    }
+
+    try {
+      setTopupSubmitting(true);
+      setTopupError(null);
+      await transactionService.topupCustomer(selectedLedgerCustomer.id, {
+        amount: Number(topupAmount),
+        paymentMethod: topupPaymentMethod,
+        notes: topupNotes || undefined,
+      });
+
+      setIsTopupDrawerOpen(false);
+      await loadData();
+      await openLedgerDrawer(selectedLedgerCustomer);
+    } catch (err: any) {
+      setTopupError(err.message || 'Failed to record top-up');
+    } finally {
+      setTopupSubmitting(false);
     }
   };
 
@@ -667,6 +711,8 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
                   <th style={{ padding: '12px 20px', fontWeight: 600 }}>Account Type</th>
                   <th style={{ padding: '12px 20px', fontWeight: 600 }}>Phone</th>
                   <th style={{ padding: '12px 20px', fontWeight: 600 }}>Credit Limit</th>
+                  <th style={{ padding: '12px 20px', fontWeight: 600 }}>Prepaid Mode</th>
+                  <th style={{ padding: '12px 20px', fontWeight: 600, textAlign: 'right' }}>Prepaid Balance</th>
                   <th style={{ padding: '12px 20px', fontWeight: 600 }}>Fleet Code</th>
                   <th style={{ padding: '12px 20px', fontWeight: 600 }}>Status</th>
                   <th style={{ padding: '12px 20px', fontWeight: 600, textAlign: 'right' }}>Outstanding Balance</th>
@@ -676,7 +722,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
               <tbody>
                 {allCustomers.length === 0 ? (
                   <tr>
-                    <td colSpan={8} style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                    <td colSpan={10} style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)' }}>
                       No customers registered.
                     </td>
                   </tr>
@@ -684,6 +730,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
                   allCustomers.map((c) => {
                     const balance = Number(c.currentBalance || 0);
                     const limit = Number(c.creditLimit || 0);
+                    const prepaidBalance = Number(c.prepaidBalance || 0);
                     return (
                       <tr key={c.id} style={{ borderBottom: '1px solid var(--border-soft)' }}>
                         <td style={{ padding: '12px 20px', fontWeight: 600, color: 'var(--text-strong)' }}>
@@ -745,6 +792,21 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
                           ) : (
                             <span style={{ color: 'var(--text-muted)' }}>N/A</span>
                           )}
+                        </td>
+                        <td style={{ padding: '12px 20px' }}>
+                          <span style={{
+                            fontSize: '11px',
+                            fontWeight: 600,
+                            backgroundColor: c.isPrepaid ? 'var(--state-info-bg)' : 'var(--bg-surface-alt)',
+                            color: c.isPrepaid ? 'var(--state-info-fg)' : 'var(--text-muted)',
+                            padding: '2px 8px',
+                            borderRadius: 'var(--radius-chip)'
+                          }}>
+                            {c.isPrepaid ? 'Enabled' : 'Disabled'}
+                          </span>
+                        </td>
+                        <td style={{ padding: '12px 20px', textAlign: 'right', fontWeight: 700, color: c.isPrepaid ? 'var(--state-success-fg)' : 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+                          ₹{prepaidBalance.toLocaleString('en-IN')}
                         </td>
                         <td style={{ padding: '12px 20px', color: 'var(--text-muted)' }}>
                           {c.fleetCode || '-'}
@@ -1150,6 +1212,19 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
             <input
               type="checkbox"
+              id="custIsPrepaid"
+              {...registerCust('isPrepaid')}
+              disabled={drawerSubmitting}
+              style={{ cursor: 'pointer' }}
+            />
+            <label htmlFor="custIsPrepaid" style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-strong)', cursor: 'pointer' }}>
+              Enable Prepaid Wallet Mode
+            </label>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
+            <input
+              type="checkbox"
               id="custIsActive"
               {...registerCust('isActive')}
               disabled={drawerSubmitting}
@@ -1296,19 +1371,27 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
                   </span>
                 </div>
                 <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Outstanding Balance</div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                    {selectedLedgerCustomer.isPrepaid ? 'Prepaid Wallet Balance' : 'Outstanding Balance'}
+                  </div>
                   <div style={{
                     fontSize: '18px',
                     fontWeight: 700,
                     fontFamily: 'var(--font-mono)',
-                    color: selectedLedgerCustomer.creditLimit > 0 && selectedLedgerCustomer.currentBalance > selectedLedgerCustomer.creditLimit ? 'var(--brand-danger)' : selectedLedgerCustomer.currentBalance > 0 ? 'var(--brand-warning)' : 'var(--state-success-fg)'
+                    color: selectedLedgerCustomer.isPrepaid
+                      ? 'var(--state-success-fg)'
+                      : selectedLedgerCustomer.creditLimit > 0 && selectedLedgerCustomer.currentBalance > selectedLedgerCustomer.creditLimit
+                        ? 'var(--brand-danger)'
+                        : selectedLedgerCustomer.currentBalance > 0
+                          ? 'var(--brand-warning)'
+                          : 'var(--state-success-fg)'
                   }}>
-                    ₹{Number(selectedLedgerCustomer.currentBalance || 0).toLocaleString('en-IN')}
+                    ₹{Number(selectedLedgerCustomer.isPrepaid ? selectedLedgerCustomer.prepaidBalance : selectedLedgerCustomer.currentBalance || 0).toLocaleString('en-IN')}
                   </div>
                 </div>
               </div>
 
-              <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: '10px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '12px' }}>
+                <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: '10px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '12px' }}>
                 <div>
                   <span style={{ color: 'var(--text-muted)', display: 'block' }}>Credit Limit</span>
                   <strong style={{ color: 'var(--text-strong)', fontFamily: 'var(--font-mono)' }}>
@@ -1327,6 +1410,20 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
                   </div>
                 )}
               </div>
+
+              {selectedLedgerCustomer.isPrepaid && (
+                <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                    Top-up prepaid wallet for this customer.
+                  </div>
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    onClick={openTopupDrawer}
+                  >
+                    <Plus size={12} /> Top Up
+                  </button>
+                </div>
+              )}
 
               {(selectedLedgerCustomer.metadata?.gstin || selectedLedgerCustomer.metadata?.pan || selectedLedgerCustomer.metadata?.billingAddress) && (
                 <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: '10px', fontSize: '11px', display: 'flex', flexDirection: 'column', gap: '4px', color: 'var(--text-muted)' }}>
@@ -1376,12 +1473,21 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
                             running += amt;
                           } else if (tx.transactionType === 'Collection') {
                             running -= amt;
+                          } else if (tx.transactionType === 'Prepaid Top-up') {
+                            running += amt;
+                          } else if (tx.transactionType === 'Prepaid Charge') {
+                            running -= amt;
                           }
                           return { ...tx, runningBalance: running };
                         });
                         return [...enriched].reverse().map((tx) => {
                           const amt = Number(tx.amount);
-                          const isCreditSale = tx.transactionType === 'Credit Sale';
+                          const isDebit = tx.transactionType === 'Credit Sale' || tx.transactionType === 'Adjustment' || tx.transactionType === 'Prepaid Top-up';
+                          const txColor = tx.transactionType === 'Credit Sale'
+                            ? 'var(--brand-warning)'
+                            : tx.transactionType === 'Prepaid Top-up'
+                              ? 'var(--state-success-fg)'
+                              : 'var(--text-default)';
                           return (
                             <tr key={tx.id} style={{ borderBottom: '1px solid var(--border-soft)' }}>
                               <td style={{ padding: '8px 12px' }}>
@@ -1395,7 +1501,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
                               <td style={{ padding: '8px 12px' }}>
                                 <span style={{
                                   fontWeight: 600,
-                                  color: isCreditSale ? 'var(--brand-warning)' : 'var(--state-success-fg)'
+                                  color: txColor
                                 }}>
                                   {tx.transactionType}
                                 </span>
@@ -1405,8 +1511,8 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
                                   </div>
                                 )}
                               </td>
-                              <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 600, fontFamily: 'var(--font-mono)', color: isCreditSale ? 'var(--text-strong)' : 'var(--state-success-fg)' }}>
-                                {isCreditSale ? '' : '-' }₹{amt.toLocaleString('en-IN')}
+                              <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 600, fontFamily: 'var(--font-mono)', color: isDebit ? 'var(--text-strong)' : 'var(--state-success-fg)' }}>
+                                {isDebit ? '' : '-'}₹{amt.toLocaleString('en-IN')}
                               </td>
                               <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--text-strong)' }}>
                                 ₹{tx.runningBalance.toLocaleString('en-IN')}
@@ -1440,6 +1546,100 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
             </button>
           </div>
         )}
+      </Drawer>
+
+      <Drawer
+        isOpen={isTopupDrawerOpen}
+        onClose={() => setIsTopupDrawerOpen(false)}
+        title="Prepaid Wallet Top-Up"
+      >
+        <form onSubmit={handleTopupSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          {topupError && (
+            <div style={{ backgroundColor: 'var(--state-danger-bg)', color: 'var(--state-danger-fg)', padding: '8px 12px', borderRadius: 'var(--radius-input)', fontSize: '12px' }}>
+              {topupError}
+            </div>
+          )}
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Amount (₹) *</label>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={topupAmount}
+              onChange={(e) => setTopupAmount(e.target.value)}
+              disabled={topupSubmitting}
+              placeholder="0.00"
+              style={{ height: '32px', padding: '0 8px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', fontSize: '13px' }}
+            />
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Payment Method *</label>
+            <select
+              value={topupPaymentMethod}
+              onChange={(e) => setTopupPaymentMethod(e.target.value as any)}
+              disabled={topupSubmitting}
+              style={{ height: '32px', padding: '0 8px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', fontSize: '13px' }}
+            >
+              <option value="Cash">Cash</option>
+              <option value="Card">Card</option>
+              <option value="UPI">UPI</option>
+              <option value="BankTransfer">Bank Transfer</option>
+            </select>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Notes</label>
+            <textarea
+              rows={2}
+              value={topupNotes}
+              onChange={(e) => setTopupNotes(e.target.value)}
+              disabled={topupSubmitting}
+              placeholder="Optional reference or remark"
+              style={{ padding: '6px 8px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', fontSize: '13px', fontFamily: 'inherit', resize: 'vertical' }}
+            />
+          </div>
+
+          <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
+            <button
+              type="submit"
+              disabled={topupSubmitting || !topupAmount}
+              style={{
+                flex: 1,
+                height: '32px',
+                backgroundColor: 'var(--brand-primary)',
+                color: 'white',
+                border: 'none',
+                borderRadius: 'var(--radius-button)',
+                fontWeight: 600,
+                fontSize: '13px',
+                cursor: 'pointer',
+              }}
+            >
+              {topupSubmitting ? 'Recording...' : 'Record Top-Up'}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsTopupDrawerOpen(false)}
+              disabled={topupSubmitting}
+              style={{
+                flex: 1,
+                height: '32px',
+                backgroundColor: 'var(--bg-surface-alt)',
+                color: 'var(--text-default)',
+                border: '1px solid var(--border-strong)',
+                borderRadius: 'var(--radius-button)',
+                fontWeight: 600,
+                fontSize: '13px',
+                cursor: 'pointer',
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
       </Drawer>
 
       <Drawer

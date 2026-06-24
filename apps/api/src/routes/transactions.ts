@@ -1,11 +1,12 @@
 import { Hono } from 'hono';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, sql, inArray } from 'drizzle-orm';
 import { schema, DbClient } from '@pump/db';
 import {
   shiftExpenseSchema,
   shiftPurchaseSchema,
   shiftCollectionSchema,
   customerCreateSchema,
+  customerTopupSchema,
   customerVehicleCreateSchema,
   supplierCreateSchema,
   supplierPaymentSchema,
@@ -25,6 +26,42 @@ type Variables = {
 };
 
 export const transactionsRouter = new Hono<{ Variables: Variables }>();
+
+async function resolveOperationalShiftId(db: DbClient, organizationId: string, stationId?: string | null): Promise<string | null> {
+  const stationFilter = stationId ? eq(schema.shifts.stationId, stationId) : undefined;
+
+  const [openShift] = await db
+    .select({ id: schema.shifts.id })
+    .from(schema.shifts)
+    .where(
+      and(
+        eq(schema.shifts.organizationId, organizationId),
+        eq(schema.shifts.status, 'OPEN'),
+        ...(stationFilter ? [stationFilter] : [])
+      )
+    )
+    .orderBy(desc(schema.shifts.openedAt))
+    .limit(1);
+
+  if (openShift) {
+    return openShift.id;
+  }
+
+  const [latestClosed] = await db
+    .select({ id: schema.shifts.id })
+    .from(schema.shifts)
+    .where(
+      and(
+        eq(schema.shifts.organizationId, organizationId),
+        eq(schema.shifts.status, 'CLOSED'),
+        ...(stationFilter ? [stationFilter] : [])
+      )
+    )
+    .orderBy(desc(schema.shifts.closedAt))
+    .limit(1);
+
+  return latestClosed?.id ?? null;
+}
 
 // Helper to compile Shift Summary reactively
 export async function compileShiftSummary(
@@ -646,6 +683,7 @@ transactionsRouter.post('/customers', validateJson(customerCreateSchema), async 
       customerType: parsed.customerType,
       creditLimit: parsed.creditLimit ? String(parsed.creditLimit) : null,
       fleetCode: parsed.fleetCode,
+      isPrepaid: parsed.isPrepaid,
       isActive: parsed.isActive,
       metadata: parsed.metadata,
       createdAt: new Date(),
@@ -672,6 +710,7 @@ transactionsRouter.put('/customers/:id', validateJson(customerCreateSchema), asy
       customerType: parsed.customerType,
       creditLimit: parsed.creditLimit ? String(parsed.creditLimit) : null,
       fleetCode: parsed.fleetCode,
+      isPrepaid: parsed.isPrepaid,
       isActive: parsed.isActive,
       metadata: parsed.metadata,
       updatedAt: new Date(),
@@ -707,6 +746,65 @@ transactionsRouter.delete('/customers/:id', async (c) => {
     }
 
     return c.json({ success: true, data: deletedCust });
+  } catch (err: any) {
+    return c.json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }, 500);
+  }
+});
+
+// POST /api/transactions/customers/:id/topup
+transactionsRouter.post('/customers/:id/topup', validateJson(customerTopupSchema), async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  const customerId = c.req.param('id');
+  const parsed = c.req.valid('json');
+
+  try {
+    const [customer] = await db
+      .select()
+      .from(schema.customers)
+      .where(and(eq(schema.customers.id, customerId), eq(schema.customers.organizationId, user.organizationId)))
+      .limit(1);
+
+    if (!customer) {
+      return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Customer not found' } }, 404);
+    }
+
+    if (!customer.isPrepaid) {
+      return c.json({ success: false, error: { code: 'BAD_REQUEST', message: 'Customer is not prepaid-enabled' } }, 400);
+    }
+
+    const shiftId = await resolveOperationalShiftId(db, user.organizationId, customer.stationId);
+    if (!shiftId) {
+      return c.json({ success: false, error: { code: 'BAD_REQUEST', message: 'No operational shift found for recording top-up' } }, 400);
+    }
+
+    const result = await db.transaction(async (tx) => {
+      const [topupTx] = await tx
+        .insert(schema.customerTransactions)
+        .values({
+          shiftId,
+          customerId,
+          transactionType: 'Prepaid Top-up',
+          amount: String(parsed.amount),
+          referenceType: 'PREPAID_TOPUP',
+          notes: parsed.notes ? `${parsed.notes} [${parsed.paymentMethod}]` : `Top-up via ${parsed.paymentMethod}`,
+          createdAt: new Date(),
+        })
+        .returning();
+
+      const [updatedCustomer] = await tx
+        .update(schema.customers)
+        .set({
+          prepaidBalance: sql`${schema.customers.prepaidBalance} + ${String(parsed.amount)}`,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(schema.customers.id, customerId), eq(schema.customers.organizationId, user.organizationId)))
+        .returning();
+
+      return { topupTx, updatedCustomer };
+    });
+
+    return c.json({ success: true, data: result });
   } catch (err: any) {
     return c.json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }, 500);
   }
@@ -1021,6 +1119,7 @@ transactionsRouter.post('/collections', validateJson(shiftCollectionSchema), asy
     const docNum = `COLL-${Date.now().toString().slice(-6)}`;
 
     let targetCustomerId = parsed.customerId;
+    let targetCustomer: any = null;
     if (!targetCustomerId) {
       const [defaultCust] = await db
         .select()
@@ -1036,37 +1135,81 @@ transactionsRouter.post('/collections', validateJson(shiftCollectionSchema), asy
           isActive: true,
         }).returning();
         targetCustomerId = seeded.id;
+        targetCustomer = seeded;
       } else {
         targetCustomerId = defaultCust.id;
+        targetCustomer = defaultCust;
+      }
+    } else {
+      const [cust] = await db
+        .select()
+        .from(schema.customers)
+        .where(and(eq(schema.customers.id, targetCustomerId), eq(schema.customers.organizationId, user.organizationId)))
+        .limit(1);
+
+      if (!cust) {
+        return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Customer not found' } }, 404);
+      }
+      targetCustomer = cust;
+    }
+
+    if (parsed.paymentMethod === 'Credit' && targetCustomer?.isPrepaid) {
+      const prepaidBalance = Number(targetCustomer.prepaidBalance || 0);
+      if (prepaidBalance < parsed.amount) {
+        return c.json({ success: false, error: { code: 'BAD_REQUEST', message: 'Insufficient prepaid balance' } }, 400);
       }
     }
 
-    const [newCollection] = await db
-      .insert(schema.collections)
-      .values({
-        documentNumber: docNum,
-        shiftId: parsed.shiftId,
-        customerId: targetCustomerId,
-        amount: String(parsed.amount),
-        paymentMethod: parsed.paymentMethod,
-        notes: parsed.notes,
-        createdAt: new Date(),
-      })
-      .returning();
+    const [newCollection] = await db.transaction(async (tx) => {
+      const [createdCollection] = await tx
+        .insert(schema.collections)
+        .values({
+          documentNumber: docNum,
+          shiftId: parsed.shiftId,
+          customerId: targetCustomerId,
+          amount: String(parsed.amount),
+          paymentMethod: parsed.paymentMethod,
+          notes: parsed.notes,
+          createdAt: new Date(),
+        })
+        .returning();
 
-    // If customer was explicitly selected or we used seeded, create ledger entry
-    if (targetCustomerId) {
-      await db.insert(schema.customerTransactions).values({
-        shiftId: parsed.shiftId,
-        customerId: targetCustomerId,
-        transactionType: parsed.paymentMethod === 'Credit' ? 'Credit Sale' : 'Collection',
-        amount: String(parsed.amount),
-        referenceType: 'COLLECTION',
-        referenceId: newCollection.id,
-        notes: parsed.notes,
-        createdAt: new Date(),
-      });
-    }
+      if (targetCustomerId) {
+        if (parsed.paymentMethod === 'Credit' && targetCustomer?.isPrepaid) {
+          await tx.insert(schema.customerTransactions).values({
+            shiftId: parsed.shiftId,
+            customerId: targetCustomerId,
+            transactionType: 'Prepaid Charge',
+            amount: String(parsed.amount),
+            referenceType: 'COLLECTION',
+            referenceId: createdCollection.id,
+            notes: parsed.notes,
+            createdAt: new Date(),
+          });
+
+          await tx
+            .update(schema.customers)
+            .set({
+              prepaidBalance: sql`${schema.customers.prepaidBalance} - ${String(parsed.amount)}`,
+              updatedAt: new Date(),
+            })
+            .where(and(eq(schema.customers.id, targetCustomerId), eq(schema.customers.organizationId, user.organizationId)));
+        } else {
+          await tx.insert(schema.customerTransactions).values({
+            shiftId: parsed.shiftId,
+            customerId: targetCustomerId,
+            transactionType: parsed.paymentMethod === 'Credit' ? 'Credit Sale' : 'Collection',
+            amount: String(parsed.amount),
+            referenceType: 'COLLECTION',
+            referenceId: createdCollection.id,
+            notes: parsed.notes,
+            createdAt: new Date(),
+          });
+        }
+      }
+
+      return [createdCollection] as any;
+    });
 
     const [shift] = await db.select().from(schema.shifts).where(eq(schema.shifts.id, parsed.shiftId)).limit(1);
     if (shift.status === 'CLOSED') {
@@ -1074,6 +1217,79 @@ transactionsRouter.post('/collections', validateJson(shiftCollectionSchema), asy
     }
 
     return c.json({ success: true, data: newCollection });
+  } catch (err: any) {
+    return c.json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }, 500);
+  }
+});
+
+// POST /api/transactions/internal/reconcile-prepaid
+transactionsRouter.post('/internal/reconcile-prepaid', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+
+  if (user.role !== 'Owner' && user.role !== 'Manager') {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permission' } }, 403);
+  }
+
+  try {
+    const prepaidCustomers = await db
+      .select()
+      .from(schema.customers)
+      .where(and(eq(schema.customers.organizationId, user.organizationId), eq(schema.customers.isPrepaid, true)));
+
+    const report: Array<{ customerId: string; customerName: string; currentBalance: number; recomputedBalance: number; drift: number; corrected: boolean }> = [];
+
+    for (const customer of prepaidCustomers) {
+      const txs = await db
+        .select({
+          transactionType: schema.customerTransactions.transactionType,
+          amount: schema.customerTransactions.amount,
+        })
+        .from(schema.customerTransactions)
+        .innerJoin(schema.shifts, eq(schema.customerTransactions.shiftId, schema.shifts.id))
+        .where(
+          and(
+            eq(schema.customerTransactions.customerId, customer.id),
+            eq(schema.shifts.organizationId, user.organizationId),
+            inArray(schema.customerTransactions.transactionType, ['Prepaid Top-up', 'Prepaid Charge'])
+          )
+        );
+
+      let recomputed = 0;
+      for (const tx of txs) {
+        const amount = Number(tx.amount);
+        if (tx.transactionType === 'Prepaid Top-up') {
+          recomputed += amount;
+        } else if (tx.transactionType === 'Prepaid Charge') {
+          recomputed -= amount;
+        }
+      }
+
+      const current = Number(customer.prepaidBalance || 0);
+      const drift = recomputed - current;
+      const needsCorrection = Math.abs(drift) > 0.009;
+
+      if (needsCorrection) {
+        await db
+          .update(schema.customers)
+          .set({
+            prepaidBalance: String(recomputed),
+            updatedAt: new Date(),
+          })
+          .where(and(eq(schema.customers.id, customer.id), eq(schema.customers.organizationId, user.organizationId)));
+      }
+
+      report.push({
+        customerId: customer.id,
+        customerName: customer.name,
+        currentBalance: current,
+        recomputedBalance: recomputed,
+        drift,
+        corrected: needsCorrection,
+      });
+    }
+
+    return c.json({ success: true, data: { reconciledAt: new Date().toISOString(), report } });
   } catch (err: any) {
     return c.json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }, 500);
   }
