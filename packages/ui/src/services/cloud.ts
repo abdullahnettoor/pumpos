@@ -316,6 +316,22 @@ export class CloudShiftService {
     const data = await request<any[]>(`/shifts/shift-summaries?stationId=${stationId}`);
     return data || [];
   }
+
+  async generateDailyDssr(stationId: string, businessDate: string): Promise<any> {
+    return request<any>('/dssr/daily/generate', {
+      method: 'POST',
+      body: JSON.stringify({ stationId, businessDate }),
+    });
+  }
+
+  async getDailyDssr(stationId: string, date: string): Promise<any> {
+    return request<any>(`/dssr/daily?stationId=${stationId}&date=${date}`);
+  }
+
+  async getDailyDssrRange(stationId: string, from: string, to: string): Promise<any[]> {
+    const data = await request<any[]>(`/dssr/daily/range?stationId=${stationId}&from=${from}&to=${to}`);
+    return data || [];
+  }
 }
 
 export class CloudTransactionService {

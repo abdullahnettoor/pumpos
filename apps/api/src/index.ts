@@ -7,6 +7,7 @@ import { Role } from '@pump/shared';
 import { stationSetupRouter } from './routes/station-setup.js';
 import { shiftsRouter } from './routes/shifts.js';
 import { transactionsRouter } from './routes/transactions.js';
+import { dssrRouter } from './routes/dssr.js';
 
 
 const keyCache = new Map<string, CryptoKey>();
@@ -181,6 +182,7 @@ api.get('/session', (c) => {
 api.route('/setup', stationSetupRouter);
 api.route('/shifts', shiftsRouter);
 api.route('/transactions', transactionsRouter);
+api.route('/dssr', dssrRouter);
 
 
 // Mount authenticated group
