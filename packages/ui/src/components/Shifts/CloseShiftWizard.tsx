@@ -71,6 +71,7 @@ export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
 }) => {
   const [step, setStep] = useState<Step>(1);
   const [recordDip, setRecordDip] = useState(false);
+  const [showVarianceWhy, setShowVarianceWhy] = useState(false);
 
   const cashVariance = closingCash - expectedCash;
   const hasWarnings = warnings.length > 0;
@@ -194,6 +195,37 @@ export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
                   ? ' (Cash Surplus)'
                   : ' (Cash Shortage)'}
             </div>
+
+            {cashVariance !== 0 && (
+              <div className="close-wizard-why">
+                <button
+                  type="button"
+                  className="close-wizard-why__toggle"
+                  onClick={() => setShowVarianceWhy((v) => !v)}
+                  aria-expanded={showVarianceWhy}
+                >
+                  {showVarianceWhy ? 'Hide' : 'Why might this happen?'}
+                </button>
+                {showVarianceWhy && (
+                  <ul className="close-wizard-why__list">
+                    {cashVariance < 0 ? (
+                      <>
+                        <li>Cash-paid petty expense not yet logged — close this drawer and use <strong>+ Expense</strong> (shortcut <kbd>E</kbd>) on the shift bar.</li>
+                        <li>Attendant handed over less cash than declared on the chit. Re-check the handover row in the attendants panel.</li>
+                        <li>Cash was used to settle a supplier purchase — record it via <strong>+ Purchase</strong> (shortcut <kbd>P</kbd>).</li>
+                      </>
+                    ) : (
+                      <>
+                        <li>Customer collection received in cash but not yet logged — use <strong>+ Collection</strong> (shortcut <kbd>C</kbd>) on the shift bar.</li>
+                        <li>Counted safe cash includes the next-shift float that hasn't been removed yet.</li>
+                        <li>Cash receipt against a credit chit recorded as Credit instead of Cash — verify the latest collections.</li>
+                      </>
+                    )}
+                    <li>An attendant handover is still pending — check the Handovers panel for missing rows.</li>
+                  </ul>
+                )}
+              </div>
+            )}
           </section>
         )}
 

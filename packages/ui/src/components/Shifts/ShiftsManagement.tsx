@@ -373,11 +373,35 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   };
 
   const quickEntryActions = [
-    { key: 'expense', label: 'Add Expense', onClick: triggerExpenseDrawer },
-    { key: 'collection', label: 'Log Collection', onClick: triggerCollectionDrawer },
-    { key: 'credit-sale', label: 'Credit Sale (Vehicle)', onClick: triggerCreditSaleDrawer },
-    { key: 'purchase', label: 'Add Purchase', onClick: triggerPurchaseDrawer },
+    { key: 'expense', label: 'Add Expense', onClick: triggerExpenseDrawer, hotkey: 'E' },
+    { key: 'collection', label: 'Log Collection', onClick: triggerCollectionDrawer, hotkey: 'C' },
+    { key: 'credit-sale', label: 'Credit Sale (Vehicle)', onClick: triggerCreditSaleDrawer, hotkey: 'V' },
+    { key: 'purchase', label: 'Add Purchase', onClick: triggerPurchaseDrawer, hotkey: 'P' },
   ];
+
+  // Keyboard shortcuts (E/C/V/P) — active only on Today tab with an open shift and no other overlay focused.
+  useEffect(() => {
+    if (!data?.activeShift?.id) return;
+    if (shiftSubTab !== 'today') return;
+    if (viewingShiftSummary || viewHistoryShiftId) return;
+    if (closeWizardOpen || quickEntryOpen || handoverDrawerOpen) return;
+
+    const handler = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const t = e.target as HTMLElement | null;
+      if (t) {
+        const tag = t.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || t.isContentEditable) return;
+      }
+      const k = e.key.toLowerCase();
+      if (k === 'e') { e.preventDefault(); triggerExpenseDrawer(); }
+      else if (k === 'c') { e.preventDefault(); triggerCollectionDrawer(); }
+      else if (k === 'v') { e.preventDefault(); triggerCreditSaleDrawer(); }
+      else if (k === 'p') { e.preventDefault(); triggerPurchaseDrawer(); }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [data?.activeShift?.id, shiftSubTab, viewingShiftSummary, viewHistoryShiftId, closeWizardOpen, quickEntryOpen, handoverDrawerOpen]);
 
   const shiftOptions = [
     ...(data?.activeShift ? [{ id: data.activeShift.id, label: `Active: ${data.activeShift.templateName} (Open)` }] : []),
@@ -1294,15 +1318,20 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         <Drawer
           isOpen={quickEntryOpen}
           onClose={closeQuickEntryDrawer}
-          title={
-            quickEntryType === 'expense'
-              ? 'Quick Add Expense'
-              : quickEntryType === 'collection'
-              ? 'Quick Log Collection'
-              : quickEntryType === 'credit-sale'
-              ? 'Quick Credit Sale'
-              : 'Quick Add Purchase'
-          }
+          title={(() => {
+            const action =
+              quickEntryType === 'expense'
+                ? 'Add Expense'
+                : quickEntryType === 'collection'
+                ? 'Log Collection'
+                : quickEntryType === 'credit-sale'
+                ? 'Credit Sale'
+                : 'Add Purchase';
+            const shiftLabel =
+              shiftOptions.find((o) => o.id === targetShiftId)?.label ||
+              data?.activeShift?.templateName;
+            return shiftLabel ? `${shiftLabel} · ${action}` : action;
+          })()}
         >
           {quickEntryLoading ? (
             <div style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Loading quick-entry form...</div>

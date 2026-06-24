@@ -7,6 +7,7 @@ type QuickAction = {
   label: string;
   onClick: () => void;
   disabled?: boolean;
+  hotkey?: string;
 };
 
 interface ShiftControlBarProps {
@@ -109,10 +110,13 @@ export const ShiftControlBar: React.FC<ShiftControlBarProps> = ({
               className="btn btn-secondary btn-sm shift-control-bar__action-btn"
               onClick={action.onClick}
               disabled={action.disabled}
-              title={action.label}
+              title={action.hotkey ? `${action.label} (press ${action.hotkey})` : action.label}
             >
               {iconForKey(action.key)}
               <span>{action.label}</span>
+              {action.hotkey && (
+                <kbd className="shift-control-bar__hotkey">{action.hotkey}</kbd>
+              )}
             </button>
           ))}
         </div>
