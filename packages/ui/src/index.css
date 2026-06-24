@@ -302,6 +302,148 @@ a:focus-visible {
   background-color: var(--bg-surface-alt);
 }
 
+/* ==================== Shift Workspace ==================== */
+.shift-control-bar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-color: var(--border-strong);
+  box-shadow: 0 4px 14px rgba(24, 32, 26, 0.04);
+}
+
+.shift-control-bar__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.shift-control-bar__inline {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.shift-control-bar__cluster {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.shift-control-bar__identity {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.shift-control-bar__meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.shift-control-bar__action-btn {
+  height: 26px;
+  padding: 0 9px !important;
+  font-size: 12px !important;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.shift-control-bar__kpis {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.shift-control-bar__close {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ==================== Shift Sub-Tabs ==================== */
+.shift-subtabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-bottom: 1px solid var(--border-soft);
+  margin-bottom: 12px;
+}
+
+.shift-subtab {
+  padding: 8px 14px;
+  font-size: 13px;
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.shift-subtab:hover {
+  color: var(--text-default);
+}
+
+.shift-subtab--active {
+  color: var(--brand-primary);
+  border-bottom-color: var(--brand-primary);
+  font-weight: 600;
+}
+
+.shift-table-scroll-container {
+  position: relative;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+.shift-table-scroll-container::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 28px;
+  height: 100%;
+  pointer-events: none;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0), var(--bg-surface));
+}
+
+.shift-table th,
+.shift-table td {
+  white-space: nowrap;
+}
+
+@media (max-width: 960px) {
+  .shift-control-bar {
+    top: 8px;
+  }
+
+  .shift-control-bar__kpis {
+    width: 100%;
+    justify-content: space-between;
+  }
+}
+
 .mono-num {
   font-family: var(--font-mono);
   font-size: 13px;

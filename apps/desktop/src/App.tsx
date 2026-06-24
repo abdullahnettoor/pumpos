@@ -47,7 +47,6 @@ const App: React.FC = () => {
   const [stations, setStations] = useState<Station[]>([]);
   const [selectedStation, setSelectedStation] = useState<Station | null>(null);
   const [loading, setLoading] = useState(true);
-  const [viewDssrShiftId, setViewDssrShiftId] = useState<string | null>(null);
 
   // Supabase Auth and Backend user context states
   const [session, setSession] = useState<any>(null);
@@ -354,7 +353,6 @@ const App: React.FC = () => {
             userRole={userRole || 'Staff'}
             userName={userName}
             onNavigate={setCurrentPath}
-            onViewDssr={setViewDssrShiftId}
           />
         );
       case '/expenses':
@@ -370,8 +368,6 @@ const App: React.FC = () => {
           <ReportsOverview
             selectedStation={selectedStation}
             userRole={userRole || 'Staff'}
-            viewDssrShiftId={viewDssrShiftId}
-            onClearViewDssrShiftId={() => setViewDssrShiftId(null)}
           />
         );
       default:
