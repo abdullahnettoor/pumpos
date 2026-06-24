@@ -6,6 +6,7 @@ import { ShiftTransactionsPanel } from './ShiftTransactionsPanel.js';
 import { HandoverDrawer } from './HandoverDrawer.js';
 import { ShiftControlBar } from './ShiftControlBar.js';
 import { ShiftHistoryTab } from './ShiftHistoryTab.js';
+import { CloseShiftWizard } from './CloseShiftWizard.js';
 import { Drawer } from '../Drawer.js';
 import { ExpenseEntryForm } from '../transactions/ExpenseEntryForm.js';
 import { CollectionEntryForm } from '../transactions/CollectionEntryForm.js';
@@ -55,6 +56,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
 
   // Close Flow Inline States
   const [isPreparingClose, setIsPreparingClose] = useState(false);
+  const [closeWizardOpen, setCloseWizardOpen] = useState(false);
   const [closingCash, setClosingCash] = useState(0);
   const [confirmWarningsChecked, setConfirmWarningsChecked] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
@@ -259,6 +261,11 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   const openQuickEntryDrawer = async (type: QuickEntryType) => {
     if (!data?.activeShift?.id) {
       return;
+    }
+
+    // Minimize close wizard if open — preserves draft state, user can resume via "Continue Close"
+    if (closeWizardOpen) {
+      setCloseWizardOpen(false);
     }
 
     setQuickEntryType(type);
@@ -598,6 +605,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
 
     setConfirmWarningsChecked(false);
     setIsPreparingClose(true);
+    setCloseWizardOpen(true);
   };
 
 
@@ -640,6 +648,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
       });
 
       setIsPreparingClose(false);
+      setCloseWizardOpen(false);
       await loadShiftStatus();
 
       if (startNextShiftImmediately) {
@@ -910,7 +919,13 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
           handoversCompleted={handovers.length}
           handoversAssigned={activeShift.staffAssignments?.length || 0}
           quickActions={quickEntryActions}
-          onCloseShiftClick={handlePrepareClose}
+          onCloseShiftClick={() => {
+            if (isPreparingClose) {
+              setCloseWizardOpen(true);
+            } else {
+              handlePrepareClose();
+            }
+          }}
           isPreparingClose={shiftScreenState === 'closing'}
           onViewLastShiftSummary={lastShiftSummary ? () => {
             setViewHistoryShiftId(lastShiftSummary.shiftId);
@@ -931,11 +946,11 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
             </div>
           </div>
           <div className="shift-table-scroll-container">
-          <table className="shift-table" style={{ width: '100%', minWidth: '1120px', borderCollapse: 'collapse', fontSize: '13px' }}>
+          <table className="shift-table" style={{ width: '100%', minWidth: '1020px', borderCollapse: 'collapse', fontSize: '13px' }}>
             <thead>
               <tr style={{ backgroundColor: 'var(--bg-surface-alt)', borderBottom: '1px solid var(--border-soft)', textAlign: 'left', color: 'var(--text-muted)' }}>
                 <th style={{ padding: '10px 20px', fontWeight: 600, position: 'sticky', left: 0, zIndex: 2, backgroundColor: 'var(--bg-surface-alt)', minWidth: '170px' }}>Attendant</th>
-                <th style={{ padding: '10px 20px', fontWeight: 600, position: 'sticky', left: 170, zIndex: 2, backgroundColor: 'var(--bg-surface-alt)', minWidth: '140px' }}>Dispenser</th>
+                <th style={{ padding: '10px 12px', fontWeight: 600, position: 'sticky', left: 170, zIndex: 2, backgroundColor: 'var(--bg-surface-alt)', minWidth: '90px' }}>Dispenser</th>
                 <th style={{ padding: '10px 20px', fontWeight: 600 }}>Handover Status</th>
                 <th style={{ padding: '10px 20px', fontWeight: 600, textAlign: 'right' }}>Cash (₹)</th>
                 <th style={{ padding: '10px 20px', fontWeight: 600, textAlign: 'right' }}>Card/UPI (₹)</th>
@@ -958,7 +973,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
                       <td style={{ padding: '12px 20px', fontWeight: 600, color: 'var(--text-strong)', position: 'sticky', left: 0, zIndex: 1, backgroundColor: 'var(--bg-surface)', minWidth: '170px' }}>
                         {sa.userName}
                       </td>
-                      <td style={{ padding: '12px 20px', color: 'var(--text-default)', position: 'sticky', left: 170, zIndex: 1, backgroundColor: 'var(--bg-surface)', minWidth: '140px' }}>
+                      <td style={{ padding: '12px 12px', color: 'var(--text-default)', position: 'sticky', left: 170, zIndex: 1, backgroundColor: 'var(--bg-surface)', minWidth: '90px' }}>
                         {sa.duCode || sa.duName}
                       </td>
                       <td style={{ padding: '12px 20px' }}>
@@ -1031,11 +1046,11 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
           </div>
 
           <div className="shift-table-scroll-container">
-          <table className="shift-table" style={{ width: '100%', minWidth: '1260px', borderCollapse: 'collapse', fontSize: '13px' }}>
+          <table className="shift-table" style={{ width: '100%', minWidth: '1140px', borderCollapse: 'collapse', fontSize: '13px' }}>
             <thead>
               <tr style={{ backgroundColor: 'var(--bg-surface-alt)', borderBottom: '1px solid var(--border-soft)', textAlign: 'left', color: 'var(--text-muted)' }}>
-                <th style={{ padding: '10px 20px', fontWeight: 600, position: 'sticky', left: 0, zIndex: 2, backgroundColor: 'var(--bg-surface-alt)', minWidth: '130px' }}>Nozzle</th>
-                <th style={{ padding: '10px 20px', fontWeight: 600, position: 'sticky', left: 130, zIndex: 2, backgroundColor: 'var(--bg-surface-alt)', minWidth: '140px' }}>Dispenser</th>
+                <th style={{ padding: '10px 12px', fontWeight: 600, position: 'sticky', left: 0, zIndex: 2, backgroundColor: 'var(--bg-surface-alt)', minWidth: '80px' }}>Nozzle</th>
+                <th style={{ padding: '10px 12px', fontWeight: 600, position: 'sticky', left: 80, zIndex: 2, backgroundColor: 'var(--bg-surface-alt)', minWidth: '90px' }}>Dispenser</th>
                 <th style={{ padding: '10px 20px', fontWeight: 600 }}>Staff</th>
                 <th style={{ padding: '10px 20px', fontWeight: 600 }}>Product</th>
                 <th style={{ padding: '10px 20px', fontWeight: 600 }}>Tank</th>
@@ -1061,8 +1076,8 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
 
                 return (
                   <tr key={idx} style={{ borderBottom: '1px solid var(--border-soft)' }}>
-                    <td style={{ padding: '12px 20px', fontWeight: 600, color: 'var(--text-strong)', position: 'sticky', left: 0, zIndex: 1, backgroundColor: 'var(--bg-surface)', minWidth: '130px' }}>{nr.nozzleName}</td>
-                    <td style={{ padding: '12px 20px', color: 'var(--text-default)', position: 'sticky', left: 130, zIndex: 1, backgroundColor: 'var(--bg-surface)', minWidth: '140px' }}>{nr.duCode || nr.duName || 'N/A'}</td>
+                    <td style={{ padding: '12px 12px', fontWeight: 600, color: 'var(--text-strong)', position: 'sticky', left: 0, zIndex: 1, backgroundColor: 'var(--bg-surface)', minWidth: '80px' }}>{nr.nozzleName}</td>
+                    <td style={{ padding: '12px 12px', color: 'var(--text-default)', position: 'sticky', left: 80, zIndex: 1, backgroundColor: 'var(--bg-surface)', minWidth: '90px' }}>{nr.duCode || nr.duName || 'N/A'}</td>
                     <td style={{ padding: '12px 20px', color: 'var(--text-default)' }}>
                       <span style={{ 
                         fontSize: '11px',
@@ -1190,212 +1205,37 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
           </div>
         </div>
 
-        {/* Save / Close Shift Inline Cards */}
-        {!isPreparingClose ? (
-          <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
-            <button
-              className="btn btn-primary btn-md"
-              onClick={handlePrepareClose}
-            >
-              <Lock size={13} style={{ marginRight: '6px' }} /> Close Shift & Compile DSSR
-            </button>
-          </div>
-        ) : (
-          <div className="card card-default animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '16px', borderColor: 'var(--border-strong)' }}>
-            <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-strong)' }}>
-              Reconciliation Review
-            </h3>
-            <div style={{
-              fontSize: '12px',
-              color: 'var(--state-info-fg)',
-              backgroundColor: 'var(--state-info-bg)',
-              border: '1px solid var(--border-soft)',
-              borderRadius: 'var(--radius-input)',
-              padding: '10px 12px'
-            }}>
-              Quick actions stay available in the top control bar while you complete close reconciliation.
-            </div>
-
-            {/* Expected Safe Cash Calculations Card */}
-            <div style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '12px',
-              padding: '16px',
-              backgroundColor: 'var(--bg-surface-alt)',
-              borderRadius: 'var(--radius-input)',
-              border: '1px solid var(--border-soft)'
-            }}>
-              <h4 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-strong)' }}>Financial Reconciliation Checklist</h4>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
-                <span>Opening Cash Float:</span>
-                <span style={{ fontFamily: 'var(--font-mono)' }}>₹{openingCashNum.toLocaleString('en-IN')}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: 'var(--state-success-fg)' }}>
-                <span>(+) Cash Handed Over (Attendants):</span>
-                <span style={{ fontFamily: 'var(--font-mono)' }}>+ ₹{activeCashCollections.toLocaleString('en-IN')}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: 'var(--brand-danger)' }}>
-                <span>(-) Petty Cash Expenses:</span>
-                <span style={{ fontFamily: 'var(--font-mono)' }}>- ₹{shiftTotals.cashExpenses.toLocaleString('en-IN')}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', fontWeight: 700, borderTop: '1px solid var(--border-strong)', paddingTop: '8px', marginTop: '4px', color: 'var(--text-strong)' }}>
-                <span>Expected Safe Cash:</span>
-                <span style={{ fontFamily: 'var(--font-mono)' }}>₹{expectedCash.toLocaleString('en-IN')}</span>
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-default)' }}>
-                1. Enter Physical Counted Safe Cash (Float + Deposited Cash):
-              </label>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <input
-                  type="number"
-                  value={closingCash}
-                  onChange={(e) => setClosingCash(Number(e.target.value))}
-                  style={{
-                    width: '200px',
-                    height: '32px',
-                    padding: '0 12px',
-                    border: '1px solid var(--border-strong)',
-                    borderRadius: 'var(--radius-input)',
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: '13px'
-                  }}
-                />
-                <span style={{
-                  fontSize: '13px',
-                  fontWeight: 700,
-                  color: cashVariance === 0 ? 'var(--state-success-fg)' : 'var(--brand-danger)'
-                }}>
-                  Variance: {cashVariance > 0 ? '+' : ''}₹{cashVariance.toLocaleString('en-IN')}
-                  {cashVariance === 0 ? ' (Perfect Match)' : cashVariance > 0 ? ' (Cash Surplus)' : ' (Cash Shortage)'}
-                </span>
-              </div>
-            </div>
-
-            {stationTanks.length > 0 && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', borderTop: '1px solid var(--border-soft)', paddingTop: '16px', marginTop: '8px' }}>
-                <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-default)' }}>
-                  2. Enter Physical Dip Readings (Actual Stock level in Liters):
-                </label>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  {stationTanks.map((tank) => (
-                    <div
-                      key={tank.id}
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        backgroundColor: 'var(--bg-canvas)',
-                        padding: '10px 14px',
-                        borderRadius: 'var(--radius-input)',
-                        border: '1px solid var(--border-soft)',
-                      }}
-                    >
-                      <div>
-                        <div style={{ fontWeight: 600, fontSize: '13px', color: 'var(--text-strong)' }}>
-                          {tank.name}
-                        </div>
-                        <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                          Product: {tank.productName} • Expected Stock: <strong>{tank.currentVolume.toFixed(1)} L</strong>
-                        </div>
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <input
-                          type="number"
-                          step="0.1"
-                          placeholder="Optional (L)"
-                          value={dipReadings[tank.id] ?? ''}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setDipReadings({
-                              ...dipReadings,
-                              [tank.id]: val === '' ? '' : Number(val)
-                            });
-                          }}
-                          style={{
-                            width: '120px',
-                            height: '32px',
-                            padding: '0 8px',
-                            border: '1px solid var(--border-strong)',
-                            borderRadius: 'var(--radius-input)',
-                            fontFamily: 'var(--font-mono)',
-                            fontSize: '13px',
-                            textAlign: 'right',
-                          }}
-                        />
-                        <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Liters</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {warnings.length > 0 && (
-              <div style={{
-                backgroundColor: 'var(--state-warning-bg)',
-                color: 'var(--state-warning-fg)',
-                padding: '12px 16px',
-                borderRadius: 'var(--radius-input)',
-                fontSize: '12px',
-                border: '1px solid var(--border-soft)'
-              }}>
-                <span style={{ fontWeight: 700 }}>
-                  <AlertTriangle size={14} style={{ marginRight: '6px', verticalAlign: 'middle', display: 'inline' }} /> Shift Warning Indicators Raised:
-                </span>
-                <ul style={{ margin: '6px 0 0 0', paddingLeft: '20px' }}>
-                  {warnings.map((w, idx) => (
-                    <li key={idx} style={{ marginTop: '3px' }}>{w}</li>
-                  ))}
-                </ul>
-                <div style={{ marginTop: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <input
-                    type="checkbox"
-                    id="confirm_warn"
-                    checked={confirmWarningsChecked}
-                    onChange={(e) => setConfirmWarningsChecked(e.target.checked)}
-                    style={{ cursor: 'pointer' }}
-                  />
-                  <label htmlFor="confirm_warn" style={{ fontWeight: 600, cursor: 'pointer' }}>
-                    I explicitly confirm that these readings are correct and wish to proceed anyway.
-                  </label>
-                </div>
-              </div>
-            )}
-
-            <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
-              <button
-                className={`btn ${(warnings.length === 0 || confirmWarningsChecked) ? 'btn-primary' : 'btn-secondary'} btn-md`}
-                onClick={() => handleCloseShift(false)}
-                disabled={(warnings.length > 0 && !confirmWarningsChecked) || isClosing}
-              >
-                {isClosing ? 'Saving Shift Summary...' : (
-                  <>
-                    <Check size={13} style={{ marginRight: '6px' }} /> Confirm Close Shift
-                  </>
-                )}
-              </button>
-
-              <button
-                className="btn btn-secondary btn-md"
-                onClick={() => handleCloseShift(true)}
-                disabled={(warnings.length > 0 && !confirmWarningsChecked) || isClosing}
-              >
-                Close & Start Next Shift
-              </button>
-
-              <button
-                className="btn btn-secondary btn-md"
-                onClick={() => setIsPreparingClose(false)}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        )}
+        {/* Close Shift Wizard (Drawer) */}
+        <CloseShiftWizard
+          isOpen={closeWizardOpen}
+          onClose={() => {
+            setCloseWizardOpen(false);
+            // Keep isPreparingClose=true so the control bar shows "Continue Close"
+            // User cancels explicitly via the wizard's Cancel button only on step 1
+            // and we only fully exit close mode if they haven't made progress.
+            if (closingCash === 0 && Object.keys(dipReadings).length === 0) {
+              setIsPreparingClose(false);
+              setConfirmWarningsChecked(false);
+            }
+          }}
+          shiftTemplateName={activeShift.templateName}
+          openedAt={activeShift.openedAt}
+          openingCash={openingCashNum}
+          cashCollections={activeCashCollections}
+          cashExpenses={shiftTotals.cashExpenses}
+          expectedCash={expectedCash}
+          closingCash={closingCash}
+          onClosingCashChange={setClosingCash}
+          stationTanks={stationTanks}
+          dipReadings={dipReadings}
+          onDipReadingsChange={setDipReadings}
+          warnings={warnings}
+          confirmWarningsChecked={confirmWarningsChecked}
+          onConfirmWarningsChange={setConfirmWarningsChecked}
+          isClosing={isClosing}
+          onConfirmClose={() => handleCloseShift(false)}
+          onConfirmCloseAndStartNext={() => handleCloseShift(true)}
+        />
 
         {/* Handover Drawer Overlay */}
         <Drawer
