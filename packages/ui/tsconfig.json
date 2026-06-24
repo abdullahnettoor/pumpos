@@ -13,8 +13,15 @@
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
+    "paths": {
+      "@pump/shared": ["../shared/src/index.ts"],
+      "@pump/shared/*": ["../shared/src/*"]
+    },
     "outDir": "./dist",
     "rootDir": "./src"
   },
+  "references": [
+    { "path": "../shared" }
+  ],
   "include": ["src/**/*"]
 }
