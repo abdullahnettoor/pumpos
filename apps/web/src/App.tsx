@@ -19,7 +19,7 @@ import { Station } from '@pump/shared';
 
 const stationService = new CloudStationService();
 
-const App: React.FC = () => {
+export const App: React.FC = () => {
   const [currentPath, setCurrentPath] = useState('/dashboard');
   const [syncStatus] = useState<'online' | 'offline' | 'synced' | 'pending' | 'failed'>('synced');
   
@@ -401,3 +401,5 @@ const App: React.FC = () => {
 };
 
 export default App;
+
+

@@ -3,6 +3,7 @@ import { CloudTransactionService, CloudShiftService } from '../services/cloud.js
 import { Calendar, Plus, Coins, Info } from 'lucide-react';
 import { LoadingSpinner } from './LoadingSpinner.js';
 import { Drawer } from './Drawer.js';
+import { ExpenseEntryForm } from './transactions/ExpenseEntryForm.js';
 
 const transactionService = new CloudTransactionService();
 const shiftService = new CloudShiftService();
@@ -27,6 +28,7 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({ selectedStation, def
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   // Filter States
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState('');
@@ -62,14 +64,15 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({ selectedStation, def
   };
 
   const resetForm = (nextTargetShiftId?: string) => {
+    setFormError(null);
     setCategoryId(categories[0]?.id ?? '');
     setAmount('');
     setDescription('');
     setTargetShiftId(nextTargetShiftId ?? resolvePreferredShiftId(activeShift, recentClosedShifts));
   };
 
-  const openDrawer = () => {
-    resetForm();
+  const openDrawer = (shiftIdOverride?: string) => {
+    resetForm(shiftIdOverride);
     setIsDrawerOpen(true);
   };
 
@@ -112,6 +115,7 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({ selectedStation, def
 
     try {
       setSubmitting(true);
+      setFormError(null);
       await transactionService.recordExpense({
         shiftId: targetShiftId,
         categoryId,
@@ -123,7 +127,7 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({ selectedStation, def
       const updatedList = await transactionService.getExpenses();
       setExpenses(updatedList || []);
     } catch (err: any) {
-      alert(err.message || 'Failed to record expense');
+      setFormError(err.message || 'Failed to record expense');
     } finally {
       setSubmitting(false);
     }
@@ -189,7 +193,7 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({ selectedStation, def
 
         <button
           type="button"
-          onClick={openDrawer}
+          onClick={() => openDrawer()}
           disabled={!targetShiftId}
           style={{
             height: '36px',
@@ -390,151 +394,33 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({ selectedStation, def
         title="Log New Expense"
       >
         {targetShiftId ? (
-          <form onSubmit={handleAddExpense} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-            {(activeShift && recentClosedShifts.length > 0) || recentClosedShifts.length > 1 ? (
-              <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Target Shift</label>
-                <select
-                  value={targetShiftId}
-                  onChange={(e) => setTargetShiftId(e.target.value)}
-                  disabled={submitting}
-                  style={{
-                    height: '32px',
-                    padding: '0 8px',
-                    borderRadius: 'var(--radius-input)',
-                    border: '1px solid var(--border-strong)',
-                    fontSize: '13px',
-                    backgroundColor: 'var(--bg-surface)'
-                  }}
-                >
-                  {activeShift && (
-                    <option value={activeShift.id}>Active: {activeShift.templateName} (Open)</option>
-                  )}
-                  {recentClosedShifts.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      Closed: {s.templateName} ({new Date(s.closedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            ) : (
-              <div style={{
-                backgroundColor: 'var(--state-info-bg)',
-                color: 'var(--state-info-fg)',
-                padding: '10px 12px',
-                borderRadius: 'var(--radius-input)',
-                fontSize: '12px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px'
-              }}>
-                <Info size={14} />
-                <span>
-                  Logging to {activeShift ? 'active' : 'previous closed'} shift:{' '}
-                  <strong>{targetShiftId === activeShift?.id ? activeShift?.templateName : recentClosedShifts[0]?.templateName}</strong>
-                </span>
-              </div>
-            )}
-
-            <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Category</label>
-              <select
-                value={categoryId}
-                onChange={(e) => setCategoryId(e.target.value)}
-                disabled={submitting}
-                style={{
-                  height: '32px',
-                  padding: '0 8px',
-                  borderRadius: 'var(--radius-input)',
-                  border: '1px solid var(--border-strong)',
-                  fontSize: '13px',
-                }}
-              >
-                {categories.map((cat) => (
-                  <option key={cat.id} value={cat.id}>{cat.name}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Amount (₹)</label>
-              <input
-                type="number"
-                placeholder="0.00"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                disabled={submitting}
-                required
-                style={{
-                  height: '32px',
-                  padding: '0 8px',
-                  borderRadius: 'var(--radius-input)',
-                  border: '1px solid var(--border-strong)',
-                  fontSize: '13px',
-                }}
-              />
-            </div>
-
-            <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Description</label>
-              <input
-                type="text"
-                placeholder="snacks, stationery, printer ink..."
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                disabled={submitting}
-                style={{
-                  height: '32px',
-                  padding: '0 8px',
-                  borderRadius: 'var(--radius-input)',
-                  border: '1px solid var(--border-strong)',
-                  fontSize: '13px',
-                }}
-              />
-            </div>
-
-            <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
-              <button
-                type="button"
-                onClick={closeDrawer}
-                disabled={submitting}
-                style={{
-                  flex: 1,
-                  height: '36px',
-                  backgroundColor: 'var(--bg-surface-alt)',
-                  color: 'var(--text-default)',
-                  border: '1px solid var(--border-soft)',
-                  borderRadius: 'var(--radius-button)',
-                  fontWeight: 600,
-                  fontSize: '13px',
-                  cursor: submitting ? 'not-allowed' : 'pointer'
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={submitting || !amount}
-                style={{
-                  flex: 1,
-                  height: '36px',
-                  backgroundColor: 'var(--brand-primary)',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: 'var(--radius-button)',
-                  fontWeight: 600,
-                  fontSize: '13px',
-                  cursor: submitting ? 'not-allowed' : 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '6px'
-                }}
-              >
-                <Plus size={14} /> {submitting ? 'Recording...' : 'Add Expense'}
-              </button>
-            </div>
-          </form>
+          <ExpenseEntryForm
+            shiftOptions={[
+              ...(activeShift ? [{ id: activeShift.id, label: `Active: ${activeShift.templateName} (Open)` }] : []),
+              ...recentClosedShifts.map((shift) => ({
+                id: shift.id,
+                label: `Closed: ${shift.templateName} (${new Date(shift.closedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })})`,
+              })),
+            ]}
+            targetShiftId={targetShiftId}
+            onTargetShiftIdChange={setTargetShiftId}
+            categoryId={categoryId}
+            onCategoryIdChange={setCategoryId}
+            categories={categories}
+            amount={amount}
+            onAmountChange={setAmount}
+            description={description}
+            onDescriptionChange={setDescription}
+            submitting={submitting}
+            error={formError}
+            submittingLabel="Recording..."
+            submitDisabled={submitting || !amount || !categoryId}
+            amountLabel="Amount (₹)"
+            descriptionPlaceholder="e.g. Staff tea and refreshments"
+            onCancel={closeDrawer}
+            onSubmit={handleAddExpense}
+            submitLabel="Add Expense"
+          />
         ) : (
           <div style={{
             backgroundColor: 'var(--state-warning-bg)',

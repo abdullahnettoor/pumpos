@@ -3,9 +3,10 @@ import { CloudTransactionService, CloudShiftService } from '../services/cloud.js
 import { User, ShieldAlert, CreditCard, DollarSign, Plus, Info, Edit, Check, Settings, Scale } from 'lucide-react';
 import { LoadingSpinner } from './LoadingSpinner.js';
 import { Drawer } from './Drawer.js';
+import { CollectionEntryForm } from './transactions/CollectionEntryForm.js';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { customerCreateSchema, shiftCollectionSchema } from '@pump/shared';
+import { customerCreateSchema } from '@pump/shared';
 
 const transactionService = new CloudTransactionService();
 const shiftService = new CloudShiftService();
@@ -53,30 +54,15 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
       setLoadingLedger(false);
     }
   };
-  
+
   const [formError, setFormError] = useState<string | null>(null);
   const [drawerError, setDrawerError] = useState<string | null>(null);
-
-  // 1. Log Credit Transaction / Collection Form
-  const {
-    register,
-    handleSubmit,
-    setValue,
-    watch,
-    reset,
-    formState: { errors: formErrors, isSubmitting: submitting }
-  } = useForm({
-    resolver: zodResolver(shiftCollectionSchema),
-    defaultValues: {
-      shiftId: '',
-      customerId: '',
-      amount: '' as any,
-      paymentMethod: 'Cash' as const,
-      notes: '',
-    }
-  });
-
-  const paymentMethod = watch('paymentMethod');
+  const [collectionShiftId, setCollectionShiftId] = useState('');
+  const [collectionCustomerId, setCollectionCustomerId] = useState('');
+  const [collectionAmount, setCollectionAmount] = useState('');
+  const [collectionPaymentMethod, setCollectionPaymentMethod] = useState<'Cash' | 'Card' | 'UPI' | 'Credit'>('Cash');
+  const [collectionNotes, setCollectionNotes] = useState('');
+  const [collectionSubmitting, setCollectionSubmitting] = useState(false);
 
   const resolvePreferredShiftId = (active: any | null, closedList: any[]) => {
     if (defaultShiftId) {
@@ -101,13 +87,12 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
 
   const resetCollectionForm = () => {
     const preferredShiftId = resolvePreferredShiftId(activeShift, recentClosedShifts);
-    reset({
-      shiftId: preferredShiftId,
-      customerId: customers[0]?.id || '',
-      amount: '' as any,
-      paymentMethod: 'Cash' as const,
-      notes: '',
-    });
+    setCollectionShiftId(preferredShiftId);
+    setCollectionCustomerId(customers[0]?.id || '');
+    setCollectionAmount('');
+    setCollectionPaymentMethod('Cash');
+    setCollectionNotes('');
+    setCollectionSubmitting(false);
     setFormError(null);
   };
 
@@ -156,8 +141,8 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
   }, [selectedStation]);
 
   useEffect(() => {
-    setValue('shiftId', resolvePreferredShiftId(activeShift, recentClosedShifts));
-  }, [activeShift, recentClosedShifts, defaultShiftId, setValue]);
+    setCollectionShiftId(resolvePreferredShiftId(activeShift, recentClosedShifts));
+  }, [activeShift, recentClosedShifts, defaultShiftId]);
 
   const loadData = async () => {
     try {
@@ -178,9 +163,9 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
       setRecentClosedShifts(closedList);
 
       if (activeList && activeList.length > 0) {
-        setValue('customerId', activeList[0].id);
+        setCollectionCustomerId(activeList[0].id);
       } else {
-        setValue('customerId', '');
+        setCollectionCustomerId('');
       }
     } catch (err: any) {
       setError(err.message || 'Failed to load customers data');
@@ -189,26 +174,34 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
     }
   };
 
-  const onAddCollection = async (data: any) => {
+  const onAddCollection = async (e: React.FormEvent) => {
+    e.preventDefault();
     setFormError(null);
-    if (data.paymentMethod === 'Credit' && !data.customerId) {
+    if (!collectionShiftId || !collectionAmount) {
+      return;
+    }
+
+    if (collectionPaymentMethod === 'Credit' && !collectionCustomerId) {
       setFormError('A customer account must be selected for Credit Fleet Sales.');
       return;
     }
 
     try {
+      setCollectionSubmitting(true);
       await transactionService.recordCollection({
-        shiftId: data.shiftId,
-        customerId: data.customerId || undefined,
-        amount: Number(data.amount),
-        paymentMethod: data.paymentMethod,
-        notes: data.notes || undefined,
+        shiftId: collectionShiftId,
+        customerId: collectionCustomerId || undefined,
+        amount: Number(collectionAmount),
+        paymentMethod: collectionPaymentMethod,
+        notes: collectionNotes || undefined,
       });
 
       closeCollectionDrawer();
       await loadData();
     } catch (err: any) {
       setFormError(err.message || 'Failed to record entry');
+    } finally {
+      setCollectionSubmitting(false);
     }
   };
 
@@ -319,7 +312,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
         
         {activeTab === 'transactions' && (
           <button
-            onClick={openCollectionDrawer}
+            onClick={() => openCollectionDrawer()}
             disabled={!(activeShift || recentClosedShifts.length > 0)}
             style={{
               height: '32px',
@@ -339,7 +332,6 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
             <Plus size={14} /> Add Collection
           </button>
         )}
-
         {activeTab === 'registry' && (
           <button
             onClick={openCreateDrawer}
@@ -933,203 +925,42 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
         onClose={closeCollectionDrawer}
         title="Log Credit Transaction / Collection"
       >
-        {formError && (
-          <div style={{
-            backgroundColor: 'var(--state-danger-bg)',
-            color: 'var(--state-danger-fg)',
-            padding: '8px 12px',
-            borderRadius: 'var(--radius-input)',
-            fontSize: '12px',
-            border: '1px solid var(--border-soft)',
-            marginBottom: '12px'
-          }}>
-            {formError}
-          </div>
-        )}
-
         {activeShift || recentClosedShifts.length > 0 ? (
-          <form onSubmit={handleSubmit(onAddCollection)} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-            {(activeShift && recentClosedShifts.length > 0) || recentClosedShifts.length > 1 ? (
-              <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Target Shift</label>
-                <select
-                  {...register('shiftId')}
-                  disabled={submitting}
-                  style={{
-                    height: '32px',
-                    padding: '0 8px',
-                    borderRadius: 'var(--radius-input)',
-                    border: '1px solid var(--border-strong)',
-                    fontSize: '13px',
-                    backgroundColor: 'var(--bg-surface)'
-                  }}
-                >
-                  {activeShift && (
-                    <option value={activeShift.id}>Active: {activeShift.templateName} (Open)</option>
-                  )}
-                  {recentClosedShifts.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      Closed: {s.templateName} ({new Date(s.closedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            ) : (
-              <div style={{
-                backgroundColor: 'var(--state-info-bg)',
-                color: 'var(--state-info-fg)',
-                padding: '10px 12px',
-                borderRadius: 'var(--radius-input)',
-                fontSize: '12px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px'
-              }}>
-                <Info size={14} />
-                <span>Logging to {activeShift ? 'active' : 'previous closed'} shift: <strong>{activeShift ? activeShift.templateName : recentClosedShifts[0]?.templateName}</strong></span>
-              </div>
-            )}
-
-            <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Entry Type / Payment Method</label>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '8px' }}>
-                {(['Cash', 'Card', 'UPI', 'Credit'] as const).map((method) => (
-                  <button
-                    key={method}
-                    type="button"
-                    onClick={() => setValue('paymentMethod', method)}
-                    disabled={submitting}
-                    style={{
-                      height: '32px',
-                      fontSize: '12px',
-                      fontWeight: 600,
-                      backgroundColor: paymentMethod === method ? 'var(--brand-primary)' : 'var(--bg-surface-alt)',
-                      color: paymentMethod === method ? 'white' : 'var(--text-default)',
-                      border: paymentMethod === method ? 'none' : '1px solid var(--border-strong)',
-                      borderRadius: 'var(--radius-input)',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    {method}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>
-                Customer Account {paymentMethod === 'Credit' ? '(Required)' : '(Optional for Walk-in)'}
-              </label>
-              <select
-                {...register('customerId')}
-                disabled={submitting}
-                style={{
-                  height: '32px',
-                  padding: '0 8px',
-                  borderRadius: 'var(--radius-input)',
-                  border: '1px solid var(--border-strong)',
-                  fontSize: '13px',
-                }}
-              >
-                <option value="">-- Walk-in / Cash Customer --</option>
-                {customers.map((cust) => (
-                  <option key={cust.id} value={cust.id}>{cust.name} ({cust.customerType})</option>
-                ))}
-              </select>
-              {formErrors.customerId && (
-                <span style={{ color: 'var(--state-danger-fg)', fontSize: '11px' }}>
-                  {formErrors.customerId.message}
-                </span>
-              )}
-            </div>
-
-            <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Amount (₹)</label>
-              <input
-                type="number"
-                placeholder="0.00"
-                {...register('amount', { valueAsNumber: true })}
-                disabled={submitting}
-                required
-                style={{
-                  height: '32px',
-                  padding: '0 8px',
-                  borderRadius: 'var(--radius-input)',
-                  border: '1px solid var(--border-strong)',
-                  fontSize: '13px',
-                }}
-              />
-              {formErrors.amount && (
-                <span style={{ color: 'var(--state-danger-fg)', fontSize: '11px' }}>
-                  {formErrors.amount.message}
-                </span>
-              )}
-            </div>
-
-            <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Notes / Fleet Slip ID</label>
-              <input
-                type="text"
-                placeholder="Slip code, transaction ref..."
-                {...register('notes')}
-                disabled={submitting}
-                style={{
-                  height: '32px',
-                  padding: '0 8px',
-                  borderRadius: 'var(--radius-input)',
-                  border: '1px solid var(--border-strong)',
-                  fontSize: '13px',
-                }}
-              />
-              {formErrors.notes && (
-                <span style={{ color: 'var(--state-danger-fg)', fontSize: '11px' }}>
-                  {formErrors.notes.message}
-                </span>
-              )}
-            </div>
-
-            <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
-              <button
-                type="button"
-                onClick={closeCollectionDrawer}
-                disabled={submitting}
-                style={{
-                  flex: 1,
-                  height: '36px',
-                  backgroundColor: 'var(--bg-surface-alt)',
-                  color: 'var(--text-default)',
-                  border: '1px solid var(--border-soft)',
-                  borderRadius: 'var(--radius-button)',
-                  fontWeight: 600,
-                  fontSize: '13px',
-                  cursor: submitting ? 'not-allowed' : 'pointer'
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={submitting}
-                style={{
-                  flex: 1,
-                  height: '36px',
-                  backgroundColor: 'var(--brand-primary)',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: 'var(--radius-button)',
-                  fontWeight: 600,
-                  fontSize: '13px',
-                  cursor: submitting ? 'not-allowed' : 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '6px'
-                }}
-              >
-                <Plus size={14} /> {submitting ? 'Recording...' : paymentMethod === 'Credit' ? 'Log Credit Sale' : 'Log Collection'}
-              </button>
-            </div>
-          </form>
+          <CollectionEntryForm
+            shiftOptions={[
+              ...(activeShift ? [{ id: activeShift.id, label: `Active: ${activeShift.templateName} (Open)` }] : []),
+              ...recentClosedShifts.map((s) => ({
+                id: s.id,
+                label: `Closed: ${s.templateName} (${new Date(s.closedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })})`,
+              })),
+            ]}
+            targetShiftId={collectionShiftId}
+            onTargetShiftIdChange={setCollectionShiftId}
+            customerId={collectionCustomerId}
+            onCustomerIdChange={setCollectionCustomerId}
+            customers={customers}
+            amount={collectionAmount}
+            onAmountChange={setCollectionAmount}
+            paymentMethod={collectionPaymentMethod}
+            onPaymentMethodChange={setCollectionPaymentMethod}
+            notes={collectionNotes}
+            onNotesChange={setCollectionNotes}
+            submitting={collectionSubmitting}
+            error={formError}
+            onCancel={closeCollectionDrawer}
+            onSubmit={onAddCollection}
+            submitLabel={collectionPaymentMethod === 'Credit' ? 'Log Credit Sale' : 'Log Collection'}
+            submittingLabel="Recording..."
+            submitDisabled={collectionSubmitting || !collectionAmount}
+            amountLabel="Amount (₹)"
+            amountPlaceholder="0.00"
+            notesLabel="Notes / Fleet Slip ID"
+            notesPlaceholder="Slip code, transaction ref..."
+            paymentMethodLabel="Entry Type / Payment Method"
+            usePaymentMethodButtons={true}
+            walkInOptionLabel="-- Walk-in / Cash Customer --"
+            customerOptionLabel={(cust) => `${cust.name} (${cust.customerType})`}
+          />
         ) : (
           <div style={{
             backgroundColor: 'var(--state-warning-bg)',

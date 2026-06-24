@@ -1,14 +1,23 @@
-import React, { useEffect, useState } from 'react';
-import { CloudShiftService, CloudTransactionService } from '../../services/cloud.js';
+import React, { useEffect, useMemo, useState } from 'react';
+import { CloudProductService, CloudShiftService, CloudTankService, CloudTransactionService } from '../../services/cloud.js';
 import { StatusBadge } from '../StatusBadge.js';
 import { DssrView } from './DssrView.js';
 import { ShiftTransactionsPanel } from './ShiftTransactionsPanel.js';
 import { HandoverDrawer } from './HandoverDrawer.js';
+import { Drawer } from '../Drawer.js';
+import { ExpenseEntryForm } from '../transactions/ExpenseEntryForm.js';
+import { CollectionEntryForm } from '../transactions/CollectionEntryForm.js';
+import { PurchaseEntryForm } from '../transactions/PurchaseEntryForm.js';
 import { Station } from '@pump/shared';
 import { FileText, User, Save, Lock, AlertTriangle, Check, Fuel, Info, Play } from 'lucide-react';
 import { LoadingSpinner } from '../LoadingSpinner.js';
 
 const shiftService = new CloudShiftService();
+const transactionService = new CloudTransactionService();
+const productService = new CloudProductService();
+const tankService = new CloudTankService();
+
+type QuickEntryType = 'expense' | 'collection' | 'purchase';
 
 interface ShiftsManagementProps {
   selectedStation: Station | null;
@@ -76,10 +85,51 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     purchaseTotal: 0,
   });
 
+  // Quick Entry Drawer states (local to Shift Management)
+  const [quickEntryOpen, setQuickEntryOpen] = useState(false);
+  const [quickEntryType, setQuickEntryType] = useState<QuickEntryType | null>(null);
+  const [quickEntryLoading, setQuickEntryLoading] = useState(false);
+  const [quickEntrySubmitting, setQuickEntrySubmitting] = useState(false);
+  const [quickEntryError, setQuickEntryError] = useState<string | null>(null);
+  const [targetShiftId, setTargetShiftId] = useState('');
+  const [recentClosedShifts, setRecentClosedShifts] = useState<any[]>([]);
+
+  const [categories, setCategories] = useState<any[]>([]);
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [suppliers, setSuppliers] = useState<any[]>([]);
+  const [products, setProducts] = useState<any[]>([]);
+  const [tanks, setTanks] = useState<any[]>([]);
+
+  const [expenseCategoryId, setExpenseCategoryId] = useState('');
+  const [expenseAmount, setExpenseAmount] = useState('');
+  const [expenseDescription, setExpenseDescription] = useState('');
+
+  const [collectionCustomerId, setCollectionCustomerId] = useState('');
+  const [collectionAmount, setCollectionAmount] = useState('');
+  const [collectionPaymentMethod, setCollectionPaymentMethod] = useState<'Cash' | 'Card' | 'UPI' | 'Credit'>('Cash');
+  const [collectionNotes, setCollectionNotes] = useState('');
+
+  const [purchaseSupplierId, setPurchaseSupplierId] = useState('');
+  const [purchaseProductId, setPurchaseProductId] = useState('');
+  const [purchaseQuantity, setPurchaseQuantity] = useState('');
+  const [purchaseTotalAmount, setPurchaseTotalAmount] = useState('');
+  const [purchaseInvoiceNumber, setPurchaseInvoiceNumber] = useState('');
+  const [purchaseNotes, setPurchaseNotes] = useState('');
+  const [purchaseAllocations, setPurchaseAllocations] = useState<Record<string, string>>({});
+
+  const selectedProduct = useMemo(
+    () => products.find((product) => product.id === purchaseProductId),
+    [products, purchaseProductId]
+  );
+  const isFuelPurchase = selectedProduct?.productType === 'FUEL';
+  const purchaseProductTanks = useMemo(
+    () => tanks.filter((tank) => tank.productId === purchaseProductId),
+    [tanks, purchaseProductId]
+  );
+
   const loadShiftTotals = async (shiftId: string) => {
     try {
-      const txService = new CloudTransactionService();
-      const txs = await txService.getShiftTransactions(shiftId);
+      const txs = await transactionService.getShiftTransactions(shiftId);
       
       const cashCollections = txs.collections
         .filter((c: any) => c.paymentMethod === 'Cash')
@@ -118,6 +168,99 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     } catch (err) {
       console.error('Failed to load shift totals', err);
     }
+  };
+
+  const resetQuickEntryForms = () => {
+    setExpenseCategoryId(categories[0]?.id ?? '');
+    setExpenseAmount('');
+    setExpenseDescription('');
+
+    setCollectionCustomerId(customers[0]?.id ?? '');
+    setCollectionAmount('');
+    setCollectionPaymentMethod('Cash');
+    setCollectionNotes('');
+
+    setPurchaseSupplierId(suppliers[0]?.id ?? '');
+    setPurchaseProductId(products[0]?.id ?? '');
+    setPurchaseQuantity('');
+    setPurchaseTotalAmount('');
+    setPurchaseInvoiceNumber('');
+    setPurchaseNotes('');
+    setPurchaseAllocations({});
+  };
+
+  const closeQuickEntryDrawer = () => {
+    setQuickEntryOpen(false);
+    setQuickEntryType(null);
+    setQuickEntryError(null);
+    setQuickEntrySubmitting(false);
+    resetQuickEntryForms();
+  };
+
+  const loadQuickEntryLookups = async (type: QuickEntryType) => {
+    if (!selectedStation || !data?.activeShift?.id) {
+      return;
+    }
+
+    try {
+      setQuickEntryLoading(true);
+      setQuickEntryError(null);
+
+      const shiftStatus = await shiftService.getShiftStatus(selectedStation.id, true);
+      const closedList = shiftStatus.recentClosedShifts || [];
+      setRecentClosedShifts(closedList);
+      setTargetShiftId(data.activeShift.id);
+
+      if (type === 'expense') {
+        const expenseCategories = await transactionService.getExpenseCategories();
+        setCategories(expenseCategories || []);
+        setExpenseCategoryId(expenseCategories?.[0]?.id ?? '');
+        setExpenseAmount('');
+        setExpenseDescription('');
+      }
+
+      if (type === 'collection') {
+        const activeCustomers = await transactionService.getCustomers(true);
+        setCustomers(activeCustomers || []);
+        setCollectionCustomerId(activeCustomers?.[0]?.id ?? '');
+        setCollectionAmount('');
+        setCollectionPaymentMethod('Cash');
+        setCollectionNotes('');
+      }
+
+      if (type === 'purchase') {
+        const [activeSuppliers, productList, tankList] = await Promise.all([
+          transactionService.getSuppliers(true),
+          productService.listProducts(),
+          tankService.listTanks(selectedStation.id),
+        ]);
+
+        setSuppliers(activeSuppliers || []);
+        setProducts(productList || []);
+        setTanks(tankList || []);
+        setPurchaseSupplierId(activeSuppliers?.[0]?.id ?? '');
+        setPurchaseProductId(productList?.[0]?.id ?? '');
+        setPurchaseQuantity('');
+        setPurchaseTotalAmount('');
+        setPurchaseInvoiceNumber('');
+        setPurchaseNotes('');
+        setPurchaseAllocations({});
+      }
+    } catch (err: any) {
+      setQuickEntryError(err.message || 'Failed to load quick-entry data');
+    } finally {
+      setQuickEntryLoading(false);
+    }
+  };
+
+  const openQuickEntryDrawer = async (type: QuickEntryType) => {
+    if (!data?.activeShift?.id) {
+      return;
+    }
+
+    setQuickEntryType(type);
+    setQuickEntryOpen(true);
+    await loadQuickEntryLookups(type);
   };
 
   const openingCashNum = data?.activeShift ? Number(data.activeShift.openingCash) : 0;
@@ -181,6 +324,148 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
       warnings.push(`Cash discrepancy detected! Variance is ₹${cashVariance.toLocaleString('en-IN')} (Expected: ₹${expectedCash.toLocaleString('en-IN')}, Entered: ₹${closingCash.toLocaleString('en-IN')})`);
     }
   }
+
+  const triggerExpenseDrawer = () => {
+    void openQuickEntryDrawer('expense');
+  };
+
+  const triggerCollectionDrawer = () => {
+    void openQuickEntryDrawer('collection');
+  };
+
+  const triggerPurchaseDrawer = () => {
+    void openQuickEntryDrawer('purchase');
+  };
+
+  const quickEntryActions = [
+    { key: 'expense', label: 'Add Expense', onClick: triggerExpenseDrawer },
+    { key: 'collection', label: 'Log Collection', onClick: triggerCollectionDrawer },
+    { key: 'purchase', label: 'Add Purchase', onClick: triggerPurchaseDrawer },
+  ];
+
+  const shiftOptions = [
+    ...(data?.activeShift ? [{ id: data.activeShift.id, label: `Active: ${data.activeShift.templateName} (Open)` }] : []),
+    ...recentClosedShifts.map((shift) => ({
+      id: shift.id,
+      label: `Closed: ${shift.templateName} (${new Date(shift.closedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })})`,
+    })),
+  ];
+
+  useEffect(() => {
+    if (isFuelPurchase && purchaseProductTanks.length === 1 && purchaseQuantity) {
+      setPurchaseAllocations({ [purchaseProductTanks[0].id]: purchaseQuantity });
+      return;
+    }
+
+    if (!isFuelPurchase) {
+      setPurchaseAllocations({});
+    }
+  }, [isFuelPurchase, purchaseProductId, purchaseQuantity, purchaseProductTanks.length]);
+
+  const handleExpenseSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!targetShiftId || !expenseCategoryId || !expenseAmount) {
+      return;
+    }
+
+    try {
+      setQuickEntrySubmitting(true);
+      setQuickEntryError(null);
+      await transactionService.recordExpense({
+        shiftId: targetShiftId,
+        categoryId: expenseCategoryId,
+        amount: Number(expenseAmount),
+        description: expenseDescription || undefined,
+      });
+      closeQuickEntryDrawer();
+      await loadShiftStatus();
+    } catch (err: any) {
+      setQuickEntryError(err.message || 'Failed to record expense');
+    } finally {
+      setQuickEntrySubmitting(false);
+    }
+  };
+
+  const handleCollectionSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!targetShiftId || !collectionAmount) {
+      return;
+    }
+
+    if (collectionPaymentMethod === 'Credit' && !collectionCustomerId) {
+      setQuickEntryError('A customer account is required for Credit transactions.');
+      return;
+    }
+
+    try {
+      setQuickEntrySubmitting(true);
+      setQuickEntryError(null);
+      await transactionService.recordCollection({
+        shiftId: targetShiftId,
+        customerId: collectionCustomerId || undefined,
+        amount: Number(collectionAmount),
+        paymentMethod: collectionPaymentMethod,
+        notes: collectionNotes || undefined,
+      });
+      closeQuickEntryDrawer();
+      await loadShiftStatus();
+    } catch (err: any) {
+      setQuickEntryError(err.message || 'Failed to record collection');
+    } finally {
+      setQuickEntrySubmitting(false);
+    }
+  };
+
+  const handlePurchaseSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!targetShiftId || !purchaseSupplierId || !purchaseProductId || !purchaseQuantity || !purchaseTotalAmount) {
+      return;
+    }
+
+    try {
+      setQuickEntrySubmitting(true);
+      setQuickEntryError(null);
+
+      const qtyNum = Number(purchaseQuantity);
+      const totalAmtNum = Number(purchaseTotalAmount);
+      const computedUnitPrice = qtyNum > 0 ? parseFloat((totalAmtNum / qtyNum).toFixed(6)) : 0;
+
+      let tankAllocations: { tankId: string; quantity: number }[] = [];
+      if (isFuelPurchase && purchaseProductTanks.length > 0) {
+        let totalAllocated = 0;
+        for (const tank of purchaseProductTanks) {
+          const qty = Number(purchaseAllocations[tank.id] || 0);
+          if (qty > 0) {
+            tankAllocations.push({ tankId: tank.id, quantity: qty });
+            totalAllocated += qty;
+          }
+        }
+
+        if (Math.abs(totalAllocated - qtyNum) >= 0.01) {
+          setQuickEntryError(`Total allocated volume (${totalAllocated.toFixed(2)}L) must match invoice quantity (${qtyNum.toFixed(2)}L).`);
+          setQuickEntrySubmitting(false);
+          return;
+        }
+      }
+
+      await transactionService.recordPurchase({
+        shiftId: targetShiftId,
+        supplierId: purchaseSupplierId,
+        productId: purchaseProductId,
+        quantity: qtyNum,
+        unitPrice: computedUnitPrice,
+        invoiceNumber: purchaseInvoiceNumber || undefined,
+        notes: purchaseNotes || undefined,
+        tankAllocations: tankAllocations.length > 0 ? tankAllocations : undefined,
+      });
+      closeQuickEntryDrawer();
+      await loadShiftStatus();
+    } catch (err: any) {
+      setQuickEntryError(err.message || 'Failed to record purchase');
+    } finally {
+      setQuickEntrySubmitting(false);
+    }
+  };
 
 
   useEffect(() => {
@@ -851,6 +1136,34 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
               Reconciliation Review
             </h3>
 
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '8px',
+              padding: '14px 16px',
+              backgroundColor: 'var(--state-info-bg)',
+              borderRadius: 'var(--radius-input)',
+              border: '1px solid var(--border-soft)'
+            }}>
+              <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--state-info-fg)' }}>
+                Quick Reconciliation Actions
+              </span>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                {quickEntryActions.map((action) => (
+                  <button
+                    key={action.key}
+                    className="btn btn-secondary btn-sm"
+                    onClick={action.onClick}
+                  >
+                    {action.label}
+                  </button>
+                ))}
+              </div>
+              <span style={{ fontSize: '11px', color: 'var(--state-info-fg)' }}>
+                Actions open as global quick-entry drawers while you stay on this shift screen.
+              </span>
+            </div>
+
             {/* Expected Safe Cash Calculations Card */}
             <div style={{
               display: 'flex',
@@ -1033,6 +1346,112 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         )}
 
         {/* Handover Drawer Overlay */}
+        <Drawer
+          isOpen={quickEntryOpen}
+          onClose={closeQuickEntryDrawer}
+          title={quickEntryType === 'expense' ? 'Quick Add Expense' : quickEntryType === 'collection' ? 'Quick Log Collection' : 'Quick Add Purchase'}
+        >
+          {quickEntryLoading ? (
+            <div style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Loading quick-entry form...</div>
+          ) : !targetShiftId ? (
+            <div style={{
+              backgroundColor: 'var(--state-warning-bg)',
+              color: 'var(--state-warning-fg)',
+              padding: '14px',
+              borderRadius: 'var(--radius-input)',
+              border: '1px solid var(--border-soft)',
+              fontSize: '13px'
+            }}>
+              A shift is required to record transactions. Open a shift first and try again.
+            </div>
+          ) : (
+            <>
+              {quickEntryType === 'expense' && (
+                <ExpenseEntryForm
+                  shiftOptions={shiftOptions}
+                  targetShiftId={targetShiftId}
+                  onTargetShiftIdChange={setTargetShiftId}
+                  categoryId={expenseCategoryId}
+                  onCategoryIdChange={setExpenseCategoryId}
+                  categories={categories}
+                  amount={expenseAmount}
+                  onAmountChange={setExpenseAmount}
+                  description={expenseDescription}
+                  onDescriptionChange={setExpenseDescription}
+                  submitting={quickEntrySubmitting}
+                  error={quickEntryError}
+                  onCancel={closeQuickEntryDrawer}
+                  onSubmit={handleExpenseSubmit}
+                  submitLabel="Add Expense"
+                />
+              )}
+
+              {quickEntryType === 'collection' && (
+                <CollectionEntryForm
+                  shiftOptions={shiftOptions}
+                  targetShiftId={targetShiftId}
+                  onTargetShiftIdChange={setTargetShiftId}
+                  customerId={collectionCustomerId}
+                  onCustomerIdChange={setCollectionCustomerId}
+                  customers={customers}
+                  amount={collectionAmount}
+                  onAmountChange={setCollectionAmount}
+                  paymentMethod={collectionPaymentMethod}
+                  onPaymentMethodChange={setCollectionPaymentMethod}
+                  notes={collectionNotes}
+                  onNotesChange={setCollectionNotes}
+                  submitting={quickEntrySubmitting}
+                  error={quickEntryError}
+                  onCancel={closeQuickEntryDrawer}
+                  onSubmit={handleCollectionSubmit}
+                  submitLabel={collectionPaymentMethod === 'Credit' ? 'Log Credit Sale' : 'Log Collection'}
+                  submittingLabel="Recording..."
+                  submitDisabled={quickEntrySubmitting || !collectionAmount}
+                  amountLabel="Amount (₹)"
+                  amountPlaceholder="0.00"
+                  notesLabel="Notes / Fleet Slip ID"
+                  notesPlaceholder="Slip code, transaction ref..."
+                  paymentMethodLabel="Entry Type / Payment Method"
+                  usePaymentMethodButtons={true}
+                  walkInOptionLabel="-- Walk-in / Cash Customer --"
+                  customerOptionLabel={(cust) => `${cust.name} (${cust.customerType})`}
+                />
+              )}
+
+              {quickEntryType === 'purchase' && (
+                <PurchaseEntryForm
+                  shiftOptions={shiftOptions}
+                  targetShiftId={targetShiftId}
+                  onTargetShiftIdChange={setTargetShiftId}
+                  supplierId={purchaseSupplierId}
+                  onSupplierIdChange={setPurchaseSupplierId}
+                  suppliers={suppliers}
+                  productId={purchaseProductId}
+                  onProductIdChange={setPurchaseProductId}
+                  products={products}
+                  quantity={purchaseQuantity}
+                  onQuantityChange={setPurchaseQuantity}
+                  totalAmount={purchaseTotalAmount}
+                  onTotalAmountChange={setPurchaseTotalAmount}
+                  invoiceNumber={purchaseInvoiceNumber}
+                  onInvoiceNumberChange={setPurchaseInvoiceNumber}
+                  notes={purchaseNotes}
+                  onNotesChange={setPurchaseNotes}
+                  isFuel={isFuelPurchase}
+                  productTanks={purchaseProductTanks}
+                  allocations={purchaseAllocations}
+                  onAllocationsChange={setPurchaseAllocations}
+                  submitting={quickEntrySubmitting}
+                  error={quickEntryError}
+                  onCancel={closeQuickEntryDrawer}
+                  onSubmit={handlePurchaseSubmit}
+                  submitLabel="Add Purchase"
+                />
+              )}
+            </>
+          )}
+        </Drawer>
+
         {selectedHandoverAssignment && (
           <HandoverDrawer
             isOpen={handoverDrawerOpen}

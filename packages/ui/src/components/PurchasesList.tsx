@@ -3,6 +3,7 @@ import { CloudTransactionService, CloudShiftService, CloudProductService, CloudT
 import { Calendar, Plus, ShoppingCart, Info, Settings, Edit, Truck, Building } from 'lucide-react';
 import { LoadingSpinner } from './LoadingSpinner.js';
 import { Drawer } from './Drawer.js';
+import { PurchaseEntryForm } from './transactions/PurchaseEntryForm.js';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { supplierPaymentSchema } from '@pump/shared';
@@ -179,7 +180,7 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, d
       setPaymentSubmitting(false);
     }
   };
-  
+
   // Drawer Form Fields
   const [supName, setSupName] = useState('');
   const [supPhone, setSupPhone] = useState('');
@@ -376,6 +377,14 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, d
     );
   }
 
+  const shiftOptions = [
+    ...(activeShift ? [{ id: activeShift.id, label: `Active: ${activeShift.templateName} (Open)` }] : []),
+    ...recentClosedShifts.map((s) => ({
+      id: s.id,
+      label: `Closed: ${s.templateName} (${new Date(s.closedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })})`,
+    })),
+  ];
+
   return (
     <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '24px', fontFamily: 'var(--font-sans)' }}>
       {/* Page Header */}
@@ -391,7 +400,7 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, d
 
         {activeTab === 'transactions' && (
           <button
-            onClick={openPurchaseDrawer}
+            onClick={() => openPurchaseDrawer()}
             disabled={!targetShiftId}
             style={{
               height: '32px',
@@ -411,7 +420,6 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, d
             <Plus size={14} /> Add Purchase
           </button>
         )}
-
         {activeTab === 'registry' && (
           <button
             onClick={openCreateDrawer}
@@ -697,319 +705,43 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, d
         onClose={closePurchaseDrawer}
         title="Log Supplier Fuel Intake"
       >
-        {formError && (
-          <div style={{
-            backgroundColor: 'var(--state-danger-bg)',
-            color: 'var(--state-danger-fg)',
-            padding: '8px 12px',
-            borderRadius: 'var(--radius-input)',
-            fontSize: '12px',
-            border: '1px solid var(--border-soft)',
-            marginBottom: '12px'
-          }}>
-            {formError}
-          </div>
-        )}
-
         {targetShiftId ? (
-          <form onSubmit={handleAddPurchase} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            {(activeShift && recentClosedShifts.length > 0) || recentClosedShifts.length > 1 ? (
-              <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Target Shift</label>
-                <select
-                  value={targetShiftId}
-                  onChange={(e) => setTargetShiftId(e.target.value)}
-                  disabled={submitting}
-                  style={{
-                    height: '32px',
-                    padding: '0 8px',
-                    borderRadius: 'var(--radius-input)',
-                    border: '1px solid var(--border-strong)',
-                    fontSize: '13px',
-                    backgroundColor: 'var(--bg-surface)'
-                  }}
-                >
-                  {activeShift && (
-                    <option value={activeShift.id}>Active: {activeShift.templateName} (Open)</option>
-                  )}
-                  {recentClosedShifts.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      Closed: {s.templateName} ({new Date(s.closedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            ) : (
-              <div style={{
-                backgroundColor: 'var(--state-info-bg)',
-                color: 'var(--state-info-fg)',
-                padding: '10px 12px',
-                borderRadius: 'var(--radius-input)',
-                fontSize: '12px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px'
-              }}>
-                <Info size={14} />
-                <span>
-                  Logging to {activeShift ? 'active' : 'previous closed'} shift:{' '}
-                  <strong>{targetShiftId === activeShift?.id ? activeShift?.templateName : recentClosedShifts[0]?.templateName}</strong>
-                </span>
-              </div>
-            )}
-
-            <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Supplier</label>
-              {suppliers.length === 0 ? (
-                <div style={{ fontSize: '12px', color: 'var(--brand-warning)', padding: '6px 0' }}>
-                  No active suppliers found. Please add or enable suppliers in the Supplier Registry tab.
-                </div>
-              ) : (
-                <select
-                  value={supplierId}
-                  onChange={(e) => setSupplierId(e.target.value)}
-                  disabled={submitting}
-                  style={{
-                    height: '32px',
-                    padding: '0 8px',
-                    borderRadius: 'var(--radius-input)',
-                    border: '1px solid var(--border-strong)',
-                    fontSize: '13px',
-                    backgroundColor: 'var(--bg-surface)'
-                  }}
-                >
-                  {suppliers.map((sup) => (
-                    <option key={sup.id} value={sup.id}>
-                      {sup.name} {sup.metadata?.gstin ? `(${sup.metadata.gstin})` : ''}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </div>
-
-            <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Product / Fuel Type</label>
-              <select
-                value={productId}
-                onChange={(e) => setProductId(e.target.value)}
-                disabled={submitting}
-                style={{
-                  height: '32px',
-                  padding: '0 8px',
-                  borderRadius: 'var(--radius-input)',
-                  border: '1px solid var(--border-strong)',
-                  fontSize: '13px',
-                  backgroundColor: 'var(--bg-surface)'
-                }}
-              >
-                {products.map((prod) => (
-                  <option key={prod.id} value={prod.id}>{prod.name} ({prod.code})</option>
-                ))}
-              </select>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Volume (Liters)</label>
-                <input
-                  type="number"
-                  placeholder="0.00"
-                  value={quantity}
-                  onChange={(e) => setQuantity(e.target.value)}
-                  disabled={submitting}
-                  required
-                  style={{
-                    height: '32px',
-                    padding: '0 8px',
-                    borderRadius: 'var(--radius-input)',
-                    border: '1px solid var(--border-strong)',
-                    fontSize: '13px',
-                  }}
-                />
-              </div>
-              <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Total Amount (₹)</label>
-                <input
-                  type="number"
-                  placeholder="0.00"
-                  value={totalAmount}
-                  onChange={(e) => setTotalAmount(e.target.value)}
-                  disabled={submitting}
-                  required
-                  style={{
-                    height: '32px',
-                    padding: '0 8px',
-                    borderRadius: 'var(--radius-input)',
-                    border: '1px solid var(--border-strong)',
-                    fontSize: '13px',
-                  }}
-                />
-              </div>
-            </div>
-
-            {isFuel && productTanks.length > 0 && (
-              <div style={{
-                backgroundColor: 'var(--bg-surface-alt)',
-                padding: '12px',
-                borderRadius: 'var(--radius-input)',
-                border: '1px solid var(--border-soft)',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '8px'
-              }}>
-                <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-strong)' }}>
-                  Tank Drop Allocation
-                </div>
-                <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                  Split the total invoice quantity across the destination tanks.
-                </div>
-
-                {productTanks.map((tank) => (
-                  <div key={tank.id} style={{ display: 'grid', gridTemplateColumns: '1fr 100px', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                      {tank.name} (Cap: {Number(tank.capacity).toLocaleString('en-IN')}L)
-                    </span>
-                    <input
-                      type="number"
-                      placeholder="0.00"
-                      value={allocations[tank.id] || ''}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setAllocations((prev) => ({
-                          ...prev,
-                          [tank.id]: val
-                        }));
-                      }}
-                      disabled={submitting}
-                      style={{
-                        height: '28px',
-                        padding: '0 8px',
-                        borderRadius: 'var(--radius-input)',
-                        border: '1px solid var(--border-strong)',
-                        fontSize: '12px',
-                        textAlign: 'right'
-                      }}
-                    />
-                  </div>
-                ))}
-
-                {productTanks.length > 1 && (
-                  <div style={{
-                    fontSize: '11px',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    borderTop: '1px solid var(--border-soft)',
-                    paddingTop: '6px',
-                    marginTop: '4px',
-                    color: Math.abs(Object.values(allocations).reduce((sum, val) => sum + (Number(val) || 0), 0) - Number(quantity)) < 0.01
-                      ? 'var(--brand-success)'
-                      : 'var(--brand-danger)'
-                  }}>
-                    <span>Allocated: {Object.values(allocations).reduce((sum, val) => sum + (Number(val) || 0), 0).toFixed(2)} / {Number(quantity || 0).toFixed(2)} L</span>
-                    {Math.abs(Object.values(allocations).reduce((sum, val) => sum + (Number(val) || 0), 0) - Number(quantity)) >= 0.01 && (
-                      <span style={{ fontWeight: 600 }}>Sum must equal total quantity</span>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {parseFloat(quantity) > 0 && parseFloat(totalAmount) > 0 && (
-              <div style={{
-                fontSize: '11px',
-                color: 'var(--text-muted)',
-                backgroundColor: 'var(--bg-surface-alt)',
-                padding: '6px 10px',
-                borderRadius: '4px',
-                display: 'flex',
-                justifyContent: 'space-between',
-                fontFamily: 'var(--font-mono)'
-              }}>
-                <span>Derived Price per Litre:</span>
-                <span style={{ fontWeight: 600, color: 'var(--text-strong)' }}>
-                  ₹{(parseFloat(totalAmount) / parseFloat(quantity)).toFixed(4)}/L
-                </span>
-              </div>
-            )}
-
-            <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Invoice Number / Reference</label>
-              <input
-                type="text"
-                placeholder="e.g. INV-10022"
-                value={invoiceNumber}
-                onChange={(e) => setInvoiceNumber(e.target.value)}
-                disabled={submitting}
-                style={{
-                  height: '32px',
-                  padding: '0 8px',
-                  borderRadius: 'var(--radius-input)',
-                  border: '1px solid var(--border-strong)',
-                  fontSize: '13px',
-                }}
-              />
-            </div>
-
-            <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Notes</label>
-              <input
-                type="text"
-                placeholder="e.g. Tanker drop into Tank A"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                disabled={submitting}
-                style={{
-                  height: '32px',
-                  padding: '0 8px',
-                  borderRadius: 'var(--radius-input)',
-                  border: '1px solid var(--border-strong)',
-                  fontSize: '13px',
-                }}
-              />
-            </div>
-
-            <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
-              <button
-                type="button"
-                onClick={closePurchaseDrawer}
-                disabled={submitting}
-                style={{
-                  flex: 1,
-                  height: '36px',
-                  backgroundColor: 'var(--bg-surface-alt)',
-                  color: 'var(--text-default)',
-                  border: '1px solid var(--border-soft)',
-                  borderRadius: 'var(--radius-button)',
-                  fontWeight: 600,
-                  fontSize: '13px',
-                  cursor: submitting ? 'not-allowed' : 'pointer'
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={submitting || !quantity || !totalAmount || !supplierId}
-                style={{
-                  flex: 1,
-                  height: '36px',
-                  backgroundColor: 'var(--brand-primary)',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: 'var(--radius-button)',
-                  fontWeight: 600,
-                  fontSize: '13px',
-                  cursor: (submitting || !supplierId) ? 'not-allowed' : 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '6px'
-                }}
-              >
-                <Plus size={14} /> {submitting ? 'Recording...' : 'Record Intake'}
-              </button>
-            </div>
-          </form>
+          <PurchaseEntryForm
+            shiftOptions={shiftOptions}
+            targetShiftId={targetShiftId}
+            onTargetShiftIdChange={setTargetShiftId}
+            supplierId={supplierId}
+            onSupplierIdChange={setSupplierId}
+            suppliers={suppliers}
+            productId={productId}
+            onProductIdChange={setProductId}
+            products={products}
+            quantity={quantity}
+            onQuantityChange={setQuantity}
+            totalAmount={totalAmount}
+            onTotalAmountChange={setTotalAmount}
+            invoiceNumber={invoiceNumber}
+            onInvoiceNumberChange={setInvoiceNumber}
+            notes={notes}
+            onNotesChange={setNotes}
+            isFuel={isFuel}
+            productTanks={productTanks}
+            allocations={allocations}
+            onAllocationsChange={setAllocations}
+            submitting={submitting}
+            error={formError}
+            onCancel={closePurchaseDrawer}
+            onSubmit={handleAddPurchase}
+            submitLabel="Record Intake"
+            submittingLabel="Recording..."
+            submitDisabled={submitting || !quantity || !totalAmount || !supplierId}
+            quantityLabel="Volume (Liters)"
+            totalAmountLabel="Total Amount (₹)"
+            productLabel="Product / Fuel Type"
+            invoiceLabel="Invoice Number / Reference"
+            invoicePlaceholder="e.g. INV-10022"
+            notesPlaceholder="e.g. Tanker drop into Tank A"
+          />
         ) : (
           <div style={{
             backgroundColor: 'var(--state-warning-bg)',
