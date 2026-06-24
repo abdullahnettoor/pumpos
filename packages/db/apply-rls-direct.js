@@ -2,7 +2,11 @@ import postgres from 'postgres';
 import fs from 'fs';
 import path from 'path';
 
-const dbUrl = 'postgresql://postgres:CsljzYX66FXm2xDC@db.sniubtppskopxkpznfkh.supabase.co:5432/postgres';
+const dbUrl = process.env.DIRECT_DATABASE_URL || process.env.DATABASE_URL;
+
+if (!dbUrl) {
+  throw new Error('Missing DIRECT_DATABASE_URL (or DATABASE_URL) for RLS script');
+}
 
 console.log('Connecting to remote Supabase to apply RLS policies directly...');
 

@@ -12,10 +12,13 @@ import {
   InventoryList,
   ReportsOverview,
   CloudStationService, 
+  setApiBaseUrl,
   setAuthToken, 
   supabase 
 } from '@pump/ui';
 import { Station } from '@pump/shared';
+
+setApiBaseUrl(import.meta.env.VITE_API_URL);
 
 const stationService = new CloudStationService();
 

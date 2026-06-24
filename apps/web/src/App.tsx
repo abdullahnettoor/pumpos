@@ -12,10 +12,13 @@ import {
   InventoryList,
   ReportsOverview,
   CloudStationService, 
+  setApiBaseUrl,
   setAuthToken, 
   supabase 
 } from '@pump/ui';
 import { Station } from '@pump/shared';
+
+setApiBaseUrl(import.meta.env.VITE_API_URL);
 
 const stationService = new CloudStationService();
 
@@ -166,7 +169,9 @@ export const App: React.FC = () => {
         profileError.toLowerCase().includes('failed to fetch') ||
         profileError.toLowerCase().includes('load failed') ||
         profileError.toLowerCase().includes('networkerror') ||
-        profileError.toLowerCase().includes('connection refused');
+        profileError.toLowerCase().includes('connection refused') ||
+        profileError.toLowerCase().includes('econnrefused') ||
+        profileError.toLowerCase().includes('err_connection_refused');
 
       return (
         <div style={{
@@ -209,7 +214,7 @@ export const App: React.FC = () => {
             </div>
             {isNetworkError ? (
               <p style={{ color: 'var(--text-muted)', fontSize: '13px', lineHeight: '1.5' }}>
-                The frontend app is unable to connect to the backend server at <strong>http://localhost:8787</strong>. Please verify that your API server is running (try running <code>npm run dev:api</code>).
+                The frontend app is unable to connect to the backend API at <strong>{import.meta.env.VITE_API_URL ?? 'http://localhost:8787'}</strong>. Please verify the API server is reachable.
               </p>
             ) : (
               <>

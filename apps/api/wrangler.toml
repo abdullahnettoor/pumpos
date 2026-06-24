@@ -1,8 +1,19 @@
 name = "pumpos-api"
 main = "src/index.ts"
-compatibility_date = "2024-05-29"
-compatibility_flags = [ "nodejs_compat" ]
+compatibility_date = "2026-06-24"
+compatibility_flags = [ "nodejs_compat_v2" ]
 
-[vars]
-# DATABASE_URL and SUPABASE_JWT_SECRET should be defined in Cloudflare settings or locally in .dev.vars
-SUPABASE_JWT_SECRET = "placeholder-jwt-secret-replace-in-prod"
+[[hyperdrive]]
+binding = "HYPERDRIVE"
+id = "44db8c2a98344989a2a2c572638deb63"
+# Local default for Docker-based Supabase.
+# Remote Supabase users should override with:
+# CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE=<DIRECT_DATABASE_URL>
+localConnectionString = "postgresql://postgres:postgres@127.0.0.1:54322/postgres"
+
+[observability]
+enabled = true
+head_sampling_rate = 0.1
+
+[secrets]
+required = [ "SUPABASE_JWT_SECRET" ]

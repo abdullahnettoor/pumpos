@@ -19,8 +19,17 @@ import {
   FinalizeOnboardingResult,
 } from '@pump/shared';
 
-// Base API configuration
-const API_BASE = 'http://localhost:8787/api';
+// Base API configuration. App shells should call setApiBaseUrl() at startup.
+let apiBase = 'http://localhost:8787/api';
+
+export function setApiBaseUrl(url?: string) {
+  if (!url) {
+    return;
+  }
+
+  const normalized = url.endsWith('/') ? url.slice(0, -1) : url;
+  apiBase = `${normalized}/api`;
+}
 
 // For local testing, we attach a mock token.
 // The app can set this dynamically upon user selection.
@@ -38,7 +47,7 @@ function getHeaders() {
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const url = `${API_BASE}${path}`;
+  const url = `${apiBase}${path}`;
   const response = await fetch(url, {
     ...options,
     headers: {

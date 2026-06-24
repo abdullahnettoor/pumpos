@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "deploy": "npm run build --workspace=@pump/ui && VITE_API_URL=https://pumpos-api.abdullahnettoor.workers.dev vite build && wrangler deploy"
   },
   "dependencies": {
     "@pump/shared": "*",

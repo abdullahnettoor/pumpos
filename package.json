@@ -11,11 +11,16 @@
     "dev:desktop": "npm run dev --workspace=apps/desktop",
     "dev:web": "npm run dev --workspace=apps/web",
     "dev:api": "npm run dev --workspace=apps/api",
+    "dev:api:local": "npm run dev:local --workspace=apps/api",
+    "dev:api:remote": "npm run dev:remote --workspace=apps/api",
+    "deploy:api": "npm run deploy --workspace=apps/api",
+    "deploy:web": "npm run deploy --workspace=apps/web",
     "build": "tsc -b && npm run build --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present"
   },
   "devDependencies": {
+    "@types/node": "^26.0.0",
     "drizzle-kit": "^0.31.10",
     "drizzle-orm": "^0.45.2",
     "typescript": "^5.4.5"

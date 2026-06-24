@@ -85,6 +85,18 @@ You can start the separate workspaces using the following scripts from the root 
   ```bash
   npm run dev:api
   ```
+  This uses the linked remote Supabase config by default.
+
+- **Run Hono API against local Docker Supabase**:
+  ```bash
+  npm run dev:api:local
+  ```
+
+### API + Hyperdrive Guide
+
+For local API setup (Hyperdrive local connection + required secrets) and production deployment steps for both Worker API and Hyperdrive, see:
+
+- `docs/API-HYPERDRIVE-DEPLOYMENT.md`
 
 ---
 

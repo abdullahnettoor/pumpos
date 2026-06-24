@@ -13,8 +13,7 @@ import { dssrRouter } from './routes/dssr.js';
 const keyCache = new Map<string, CryptoKey>();
 
 type Bindings = {
-  DATABASE_URL: string;
-  DB_URL?: string;
+  HYPERDRIVE: Hyperdrive;
   SUPABASE_JWT_SECRET: string;
 };
 
@@ -31,6 +30,14 @@ type Variables = {
 
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
+function getDbFromHyperdrive(env: Bindings): DbClient {
+  if (!env.HYPERDRIVE?.connectionString) {
+    throw new Error('Hyperdrive binding is missing or misconfigured');
+  }
+
+  return createDb(env.HYPERDRIVE.connectionString);
+}
+
 // Enable CORS
 app.use('*', cors({
   origin: '*',
@@ -42,16 +49,18 @@ app.use('*', cors({
 
 // Setup Database instance middleware
 app.use('*', async (c, next) => {
-  let dbUrl = c.env.DATABASE_URL || c.env.DB_URL || 'postgresql://abdullahnettoor@127.0.0.1:5432/pump_erp';
-  if (dbUrl.includes('localhost')) {
-    dbUrl = dbUrl.replace('localhost', '127.0.0.1');
+  try {
+    c.set('db', getDbFromHyperdrive(c.env));
+    await next();
+  } catch (err: any) {
+    return c.json({
+      success: false,
+      error: {
+        code: 'CONFIGURATION_ERROR',
+        message: err?.message || 'Database runtime configuration is invalid',
+      },
+    }, 500);
   }
-  if (!dbUrl.includes('@')) {
-    dbUrl = dbUrl.replace('postgresql://', 'postgresql://abdullahnettoor@');
-  }
-  const db = createDb(dbUrl);
-  c.set('db', db);
-  await next();
 });
 
 // Public Health Check Endpoint
@@ -154,13 +163,12 @@ api.use('*', async (c, next) => {
 
     await next();
   } catch (err: any) {
-    const dbUrl = c.env.DATABASE_URL || c.env.DB_URL || 'postgresql://postgres:postgres@localhost:5432/pump_erp';
     const causeMessage = err.cause ? ` | Cause: ${err.cause.message || err.cause}` : '';
     return c.json({
       success: false,
       error: {
         code: 'UNAUTHORIZED',
-        message: `Token validation failed: ${err.message}${causeMessage} | DB URL: ${dbUrl.replace(/:[^:@]+@/, ':***@')} | Keys: ${Object.keys(c.env || {})}`,
+        message: `Token validation failed: ${err.message}${causeMessage}`,
         stack: err.stack
       }
     }, 401);

@@ -13,12 +13,11 @@
     "declarationMap": true,
     "sourceMap": true,
     "outDir": "./dist",
-    "rootDir": "./src",
-    "types": ["@cloudflare/workers-types"]
+    "rootDir": "./src"
   },
   "references": [
     { "path": "../../packages/db" },
     { "path": "../../packages/shared" }
   ],
-  "include": ["src/**/*"]
+  "include": ["src/**/*", "worker-configuration.d.ts"]
 }

@@ -2,7 +2,11 @@ import { drizzle } from 'drizzle-orm/postgres-js';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import postgres from 'postgres';
 
-const dbUrl = 'postgresql://postgres:CsljzYX66FXm2xDC@db.sniubtppskopxkpznfkh.supabase.co:5432/postgres';
+const dbUrl = process.env.DIRECT_DATABASE_URL || process.env.DATABASE_URL;
+
+if (!dbUrl) {
+  throw new Error('Missing DIRECT_DATABASE_URL (or DATABASE_URL) for migration script');
+}
 
 console.log('Connecting to:', dbUrl.replace(/:[^:@]+@/, ':***@'));
 

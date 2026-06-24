@@ -4,8 +4,21 @@ import * as schema from './schema.js';
 
 export function createDb(connectionString: string) {
   const queryClient = postgres(connectionString, {
-    prepare: false,
-    max: 1,
+    // Keep prepared statements enabled for Hyperdrive query caching.
+    max: 5,
+    idle_timeout: 20,
+    connect_timeout: 10,
+  });
+  return drizzle(queryClient, { schema });
+}
+
+export function createDbWithOptions(
+  connectionString: string,
+  options?: { prepare?: boolean; max?: number }
+) {
+  const queryClient = postgres(connectionString, {
+    prepare: options?.prepare,
+    max: options?.max ?? 5,
     idle_timeout: 20,
     connect_timeout: 10,
   });
