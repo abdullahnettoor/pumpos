@@ -27,7 +27,10 @@ export function setApiBaseUrl(url?: string) {
     return;
   }
 
-  const normalized = url.endsWith('/') ? url.slice(0, -1) : url;
+  let normalized = url.endsWith('/') ? url.slice(0, -1) : url;
+  if (!normalized.startsWith('http://') && !normalized.startsWith('https://')) {
+    normalized = `https://${normalized}`;
+  }
   apiBase = `${normalized}/api`;
 }
 
