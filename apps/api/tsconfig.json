@@ -22,7 +22,6 @@
   ],
   "include": ["src/**/*", "worker-configuration.d.ts"],
   "exclude": [
-    "dist",
-    "src/routes/dssr.ts"
+    "dist"
   ]
 }

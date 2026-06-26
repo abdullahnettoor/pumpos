@@ -9,9 +9,7 @@ import { paymentTerminalsRouter } from './routes/payment-terminals.js';
 import { productsRouter } from './routes/products.js';
 import { shiftsRouter } from './routes/shifts.js';
 import { transactionsRouter } from './routes/transactions.js';
-// NOTE: dssr route is temporarily disabled during the v2 rewrite — rebuilt as a
-// core capability slice in Phase 7.
-// import { dssrRouter } from './routes/dssr.js';
+import { dssrRouter } from './routes/dssr.js';
 
 
 const keyCache = new Map<string, CryptoKey>();
@@ -218,8 +216,7 @@ api.route('/setup', paymentTerminalsRouter);
 api.route('/setup', productsRouter);
 api.route('/shifts', shiftsRouter);
 api.route('/transactions', transactionsRouter);
-// Disabled during v2 rewrite (rebuilt in later phases):
-// api.route('/dssr', dssrRouter);
+api.route('/dssr', dssrRouter);
 
 
 // Mount authenticated group

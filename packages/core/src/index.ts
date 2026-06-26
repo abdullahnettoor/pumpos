@@ -16,3 +16,4 @@ export * from './capabilities/crm/index.js';
 export * from './capabilities/inventory/index.js';
 export * from './capabilities/retail/index.js';
 export * from './capabilities/purchasing/index.js';
+export * from './capabilities/reporting/index.js';
