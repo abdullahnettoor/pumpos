@@ -14,6 +14,29 @@ import {
   Role,
 } from '@pump/shared';
 import { validateJson } from '../utils/validator.js';
+import {
+  CreateStation, UpdateStation,
+  CreateUser, UpdateUser,
+  RecordFuelPrice,
+  CreateTank, UpdateTank, DeleteTank,
+  CreateDispenser, UpdateDispenser, DeleteDispenser,
+  CreateNozzle, UpdateNozzle, DeleteNozzle,
+  CreateShiftTemplate, UpdateShiftTemplate, DeleteShiftTemplate,
+  BusinessEvents,
+  eventFromContext,
+  type Result,
+} from '@pump/core';
+import { buildContext } from '../infra/context.js';
+import { createDispatcher } from '../infra/events.js';
+import {
+  DrizzleStationRepository,
+  DrizzleUserRepository,
+  DrizzleFuelPriceRepository,
+  DrizzleTankRepository,
+  DrizzleDispenserRepository,
+  DrizzleNozzleRepository,
+  DrizzleShiftTemplateRepository,
+} from '../infra/repositories/setup-repositories.js';
 
 type Variables = {
   db: DbClient;
@@ -27,6 +50,20 @@ type Variables = {
 };
 
 export const stationSetupRouter = new Hono<{ Variables: Variables }>();
+
+const STATUS_BY_CODE: Record<string, number> = {
+  VALIDATION_ERROR: 400,
+  NOT_FOUND: 404,
+  CONFLICT: 409,
+  FORBIDDEN: 403,
+  UNAUTHORIZED: 401,
+};
+
+function sendResult<T>(c: any, result: Result<T>) {
+  if (result.success) return c.json({ success: true, data: result.data });
+  const status = STATUS_BY_CODE[result.error.code] ?? 400;
+  return c.json({ success: false, error: result.error }, status);
+}
 
 // ----------------------------------------------------
 // Helper Checkers
@@ -125,87 +162,40 @@ function validateFinalizeDraft(payload: OnboardingDraft) {
 
 // GET /api/setup/stations
 stationSetupRouter.get('/stations', async (c) => {
-  const db = c.var.db;
   const user = c.var.user;
-
-  const results = await db
-    .select()
-    .from(schema.stations)
-    .where(eq(schema.stations.organizationId, user.organizationId));
-
-  // If not Owner, filter by assigned stations
-  const visible = results.filter((s) =>
+  const repo = new DrizzleStationRepository(c.var.db);
+  const all = await repo.listByOrganization(user.organizationId);
+  const visible = all.filter((s) =>
     isAuthorizedForStation(user, { organizationId: user.organizationId, stationId: s.id })
   );
-
   return c.json({ success: true, data: visible });
 });
 
 // POST /api/setup/stations
 stationSetupRouter.post('/stations', validateJson(stationSchema), async (c) => {
-  const db = c.var.db;
   const user = c.var.user;
-
   if (user.role !== 'Owner') {
     return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Only Owners can create stations' } }, 403);
   }
-
-  const parsed = c.req.valid('json');
-
-  const [newStation] = await db
-    .insert(schema.stations)
-    .values({
-      organizationId: user.organizationId,
-      name: parsed.name,
-      code: parsed.code,
-      address: parsed.address,
-      phone: parsed.phone,
-      settings: parsed.settings,
-      onboardingStatus: parsed.onboardingStatus,
-      isActive: parsed.isActive,
-    })
-    .returning();
-
-  return c.json({ success: true, data: newStation });
+  const body = c.req.valid('json');
+  const db = c.var.db;
+  const useCase = new CreateStation({ repository: new DrizzleStationRepository(db), events: createDispatcher(db) });
+  const result = await useCase.execute(body as any, buildContext(user));
+  return sendResult(c, result);
 });
 
 // PUT /api/setup/stations/:id
 stationSetupRouter.put('/stations/:id', validateJson(stationSchema.partial()), async (c) => {
-  const db = c.var.db;
   const user = c.var.user;
   const stationId = c.req.param('id');
-
   if (!checkWriteAccess(c, stationId)) {
     return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient write permissions for this station' } }, 403);
   }
-
-  const parsed = c.req.valid('json');
-
-  const [updated] = await db
-    .update(schema.stations)
-    .set({
-      name: parsed.name,
-      code: parsed.code,
-      address: parsed.address,
-      phone: parsed.phone,
-      settings: parsed.settings,
-      onboardingStatus: parsed.onboardingStatus,
-      isActive: parsed.isActive,
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
-        eq(schema.stations.id, stationId),
-        eq(schema.stations.organizationId, user.organizationId)
-      )
-    )
-    .returning();
-
-  if (!updated) {
-    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Station not found' } }, 404);
-  }
-
-  return c.json({ success: true, data: updated });
+  const body = c.req.valid('json');
+  const db = c.var.db;
+  const useCase = new UpdateStation({ repository: new DrizzleStationRepository(db), events: createDispatcher(db) });
+  const result = await useCase.execute({ ...body, id: stationId } as any, buildContext(user));
+  return sendResult(c, result);
 });
 
 // ----------------------------------------------------
@@ -243,30 +233,15 @@ stationSetupRouter.get('/tanks', async (c) => {
 });
 
 stationSetupRouter.post('/tanks', async (c) => {
-  const db = c.var.db;
   const user = c.var.user;
-
-  try {
-    const body = await c.req.json();
-    if (!checkWriteAccess(c, body.stationId) || !canManageInfrastructure(user.role)) {
-      return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient write permissions' } }, 403);
-    }
-
-    const [newTank] = await db
-      .insert(schema.tanks)
-      .values({
-        organizationId: user.organizationId,
-        stationId: body.stationId,
-        name: body.name,
-        productId: body.productId,
-        capacity: body.capacity,
-      })
-      .returning();
-
-    return c.json({ success: true, data: newTank });
-  } catch (err: any) {
-    return c.json({ success: false, error: { code: 'BAD_REQUEST', message: err.message } }, 400);
+  const body = await c.req.json().catch(() => ({}));
+  if (!checkWriteAccess(c, body.stationId) || !canManageInfrastructure(user.role)) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient write permissions' } }, 403);
   }
+  const db = c.var.db;
+  const useCase = new CreateTank({ repository: new DrizzleTankRepository(db), events: createDispatcher(db) });
+  const result = await useCase.execute(body, buildContext(user, { stationId: body.stationId }));
+  return sendResult(c, result);
 });
 
 // ----------------------------------------------------
@@ -296,30 +271,15 @@ stationSetupRouter.get('/dispensers', async (c) => {
 });
 
 stationSetupRouter.post('/dispensers', async (c) => {
-  const db = c.var.db;
   const user = c.var.user;
-
-  try {
-    const body = await c.req.json();
-    if (!checkWriteAccess(c, body.stationId) || !canManageInfrastructure(user.role)) {
-      return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient write permissions' } }, 403);
-    }
-
-    const [du] = await db
-      .insert(schema.dispenserUnits)
-      .values({
-        organizationId: user.organizationId,
-        stationId: body.stationId,
-        name: body.name,
-        code: body.code,
-        status: body.status || 'ACTIVE',
-      })
-      .returning();
-
-    return c.json({ success: true, data: du });
-  } catch (err: any) {
-    return c.json({ success: false, error: { code: 'BAD_REQUEST', message: err.message } }, 400);
+  const body = await c.req.json().catch(() => ({}));
+  if (!checkWriteAccess(c, body.stationId) || !canManageInfrastructure(user.role)) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient write permissions' } }, 403);
   }
+  const db = c.var.db;
+  const useCase = new CreateDispenser({ repository: new DrizzleDispenserRepository(db), events: createDispatcher(db) });
+  const result = await useCase.execute(body, buildContext(user, { stationId: body.stationId }));
+  return sendResult(c, result);
 });
 
 // ----------------------------------------------------
@@ -349,32 +309,15 @@ stationSetupRouter.get('/nozzles', async (c) => {
 });
 
 stationSetupRouter.post('/nozzles', async (c) => {
-  const db = c.var.db;
   const user = c.var.user;
-
-  try {
-    const body = await c.req.json();
-    if (!checkWriteAccess(c, body.stationId) || !canManageInfrastructure(user.role)) {
-      return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient write permissions' } }, 403);
-    }
-
-    const [nozzle] = await db
-      .insert(schema.nozzles)
-      .values({
-        organizationId: user.organizationId,
-        stationId: body.stationId,
-        duId: body.duId,
-        tankId: body.tankId,
-        productId: body.productId,
-        name: body.name,
-        currentReading: body.currentReading || '0',
-      })
-      .returning();
-
-    return c.json({ success: true, data: nozzle });
-  } catch (err: any) {
-    return c.json({ success: false, error: { code: 'BAD_REQUEST', message: err.message } }, 400);
+  const body = await c.req.json().catch(() => ({}));
+  if (!checkWriteAccess(c, body.stationId) || !canManageInfrastructure(user.role)) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient write permissions' } }, 403);
   }
+  const db = c.var.db;
+  const useCase = new CreateNozzle({ repository: new DrizzleNozzleRepository(db), events: createDispatcher(db) });
+  const result = await useCase.execute(body, buildContext(user, { stationId: body.stationId }));
+  return sendResult(c, result);
 });
 
 // ----------------------------------------------------
@@ -394,30 +337,15 @@ stationSetupRouter.get('/shift-templates', async (c) => {
 });
 
 stationSetupRouter.post('/shift-templates', async (c) => {
-  const db = c.var.db;
   const user = c.var.user;
-
   if (user.role !== 'Owner' && user.role !== 'Manager') {
     return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Only Owners/Managers can manage templates' } }, 403);
   }
-
-  try {
-    const body = await c.req.json();
-    const [tpl] = await db
-      .insert(schema.shiftTemplates)
-      .values({
-        organizationId: user.organizationId,
-        name: body.name,
-        startTime: body.startTime,
-        endTime: body.endTime,
-        isActive: body.isActive ?? true,
-      })
-      .returning();
-
-    return c.json({ success: true, data: tpl });
-  } catch (err: any) {
-    return c.json({ success: false, error: { code: 'BAD_REQUEST', message: err.message } }, 400);
-  }
+  const body = await c.req.json().catch(() => ({}));
+  const db = c.var.db;
+  const useCase = new CreateShiftTemplate({ repository: new DrizzleShiftTemplateRepository(db), events: createDispatcher(db) });
+  const result = await useCase.execute(body, buildContext(user));
+  return sendResult(c, result);
 });
 
 // ----------------------------------------------------
@@ -425,131 +353,35 @@ stationSetupRouter.post('/shift-templates', async (c) => {
 // ----------------------------------------------------
 
 stationSetupRouter.get('/users', async (c) => {
-  const db = c.var.db;
   const user = c.var.user;
-
-  const userList = await db
-    .select()
-    .from(schema.users)
-    .where(eq(schema.users.organizationId, user.organizationId));
-
-  const userIds = userList.map((u) => u.id);
-  const allAssigns = userIds.length > 0
-    ? await db
-        .select()
-        .from(schema.userStationAssignments)
-        .where(inArray(schema.userStationAssignments.userId, userIds))
-    : [];
-
-  const assignsByUser = new Map<string, string[]>();
-  for (const a of allAssigns) {
-    const arr = assignsByUser.get(a.userId) ?? [];
-    arr.push(a.stationId);
-    assignsByUser.set(a.userId, arr);
-  }
-
-  const mapped = userList.map((u) => ({
-    ...u,
-    role: u.role || 'Staff',
-    stationIds: assignsByUser.get(u.id) ?? [],
-  }));
-
-  return c.json({ success: true, data: mapped });
+  const repo = new DrizzleUserRepository(c.var.db);
+  const data = await repo.listWithAssignments(user.organizationId);
+  return c.json({ success: true, data });
 });
 
 stationSetupRouter.post('/users', validateJson(userSchema, 'BAD_REQUEST'), async (c) => {
-  const db = c.var.db;
   const user = c.var.user;
-
   if (!canManageUsers(user.role)) {
     return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Only Owners can manage users' } }, 403);
   }
-
-  const parsed = c.req.valid('json');
-  const body = await c.req.json(); // we still need raw body for stationIds and role
-
-  const [newUser] = await db
-    .insert(schema.users)
-    .values({
-      organizationId: user.organizationId,
-      fullName: parsed.fullName,
-      email: (parsed.email && parsed.email.trim() !== '') ? parsed.email : null,
-      phone: parsed.phone,
-      role: body.role || 'Staff',
-      status: parsed.status,
-    })
-    .returning();
-
-  // Insert station assignments (batched)
-  if (body.stationIds && Array.isArray(body.stationIds) && body.stationIds.length > 0) {
-    await db.insert(schema.userStationAssignments).values(
-      body.stationIds.map((sid: string) => ({ userId: newUser.id, stationId: sid }))
-    );
-  }
-
-  return c.json({ success: true, data: newUser });
+  const body = await c.req.json();
+  const db = c.var.db;
+  const useCase = new CreateUser({ repository: new DrizzleUserRepository(db), events: createDispatcher(db) });
+  const result = await useCase.execute(body, buildContext(user));
+  return sendResult(c, result);
 });
 
 stationSetupRouter.put('/users/:id', validateJson(userSchema.partial(), 'BAD_REQUEST'), async (c) => {
-  const db = c.var.db;
   const user = c.var.user;
   const id = c.req.param('id');
-
   if (!canManageUsers(user.role)) {
     return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Only Owners can manage users' } }, 403);
   }
-
-  const parsed = c.req.valid('json');
   const body = await c.req.json();
-
-  const [updatedUser] = await db
-    .update(schema.users)
-    .set({
-      fullName: parsed.fullName,
-      email: (parsed.email !== undefined) ? ((parsed.email && parsed.email.trim() !== '') ? parsed.email : null) : undefined,
-      phone: parsed.phone,
-      status: parsed.status,
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
-        eq(schema.users.id, id),
-        eq(schema.users.organizationId, user.organizationId)
-      )
-    )
-    .returning();
-
-  if (!updatedUser) {
-    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'User not found' } }, 404);
-  }
-
-  // Update role if provided
-  if (body.role) {
-    await db
-      .update(schema.users)
-      .set({ role: body.role, updatedAt: new Date() })
-      .where(
-        and(
-          eq(schema.users.id, id),
-          eq(schema.users.organizationId, user.organizationId)
-        )
-      );
-  }
-
-  // Update station assignments if provided (batched)
-  if (body.stationIds && Array.isArray(body.stationIds)) {
-    await db
-      .delete(schema.userStationAssignments)
-      .where(eq(schema.userStationAssignments.userId, id));
-
-    if (body.stationIds.length > 0) {
-      await db.insert(schema.userStationAssignments).values(
-        body.stationIds.map((sid: string) => ({ userId: id, stationId: sid }))
-      );
-    }
-  }
-
-  return c.json({ success: true, data: updatedUser });
+  const db = c.var.db;
+  const useCase = new UpdateUser({ repository: new DrizzleUserRepository(db), events: createDispatcher(db) });
+  const result = await useCase.execute({ ...body, id }, buildContext(user));
+  return sendResult(c, result);
 });
 
 // ----------------------------------------------------
@@ -557,241 +389,103 @@ stationSetupRouter.put('/users/:id', validateJson(userSchema.partial(), 'BAD_REQ
 // ----------------------------------------------------
 
 stationSetupRouter.put('/tanks/:id', async (c) => {
-  const db = c.var.db;
   const user = c.var.user;
   const id = c.req.param('id');
-  try {
-    const body = await c.req.json();
-    if (!checkWriteAccess(c, body.stationId) || !canManageInfrastructure(user.role)) {
-      return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient write permissions' } }, 403);
-    }
-    const [updated] = await db
-      .update(schema.tanks)
-      .set({
-        name: body.name,
-        productId: body.productId,
-        capacity: body.capacity,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(schema.tanks.id, id),
-          eq(schema.tanks.organizationId, user.organizationId)
-        )
-      )
-      .returning();
-    if (!updated) {
-      return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Tank not found' } }, 404);
-    }
-    return c.json({ success: true, data: updated });
-  } catch (err: any) {
-    return c.json({ success: false, error: { code: 'BAD_REQUEST', message: err.message } }, 400);
+  const body = await c.req.json().catch(() => ({}));
+  if (!checkWriteAccess(c, body.stationId) || !canManageInfrastructure(user.role)) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient write permissions' } }, 403);
   }
+  const db = c.var.db;
+  const useCase = new UpdateTank({ repository: new DrizzleTankRepository(db), events: createDispatcher(db) });
+  const result = await useCase.execute({ ...body, id }, buildContext(user, { stationId: body.stationId }));
+  return sendResult(c, result);
 });
 
 stationSetupRouter.delete('/tanks/:id', async (c) => {
-  const db = c.var.db;
   const user = c.var.user;
   const id = c.req.param('id');
-  try {
-    if (!canManageInfrastructure(user.role)) {
-      return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient write permissions' } }, 403);
-    }
-    const [deleted] = await db
-      .delete(schema.tanks)
-      .where(
-        and(
-          eq(schema.tanks.id, id),
-          eq(schema.tanks.organizationId, user.organizationId)
-        )
-      )
-      .returning();
-    if (!deleted) {
-      return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Tank not found' } }, 404);
-    }
-    return c.json({ success: true, data: deleted });
-  } catch (err: any) {
-    return c.json({ success: false, error: { code: 'BAD_REQUEST', message: err.message } }, 400);
+  if (!canManageInfrastructure(user.role)) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient write permissions' } }, 403);
   }
+  const db = c.var.db;
+  const useCase = new DeleteTank({ repository: new DrizzleTankRepository(db), events: createDispatcher(db) });
+  const result = await useCase.execute({ id }, buildContext(user));
+  return sendResult(c, result);
 });
 
 stationSetupRouter.put('/dispensers/:id', async (c) => {
-  const db = c.var.db;
   const user = c.var.user;
   const id = c.req.param('id');
-  try {
-    const body = await c.req.json();
-    if (!checkWriteAccess(c, body.stationId) || !canManageInfrastructure(user.role)) {
-      return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient write permissions' } }, 403);
-    }
-    const [updated] = await db
-      .update(schema.dispenserUnits)
-      .set({
-        name: body.name,
-        code: body.code,
-        status: body.status,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(schema.dispenserUnits.id, id),
-          eq(schema.dispenserUnits.organizationId, user.organizationId)
-        )
-      )
-      .returning();
-    if (!updated) {
-      return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Dispenser not found' } }, 404);
-    }
-    return c.json({ success: true, data: updated });
-  } catch (err: any) {
-    return c.json({ success: false, error: { code: 'BAD_REQUEST', message: err.message } }, 400);
+  const body = await c.req.json().catch(() => ({}));
+  if (!checkWriteAccess(c, body.stationId) || !canManageInfrastructure(user.role)) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient write permissions' } }, 403);
   }
+  const db = c.var.db;
+  const useCase = new UpdateDispenser({ repository: new DrizzleDispenserRepository(db), events: createDispatcher(db) });
+  const result = await useCase.execute({ ...body, id }, buildContext(user, { stationId: body.stationId }));
+  return sendResult(c, result);
 });
 
 stationSetupRouter.delete('/dispensers/:id', async (c) => {
-  const db = c.var.db;
   const user = c.var.user;
   const id = c.req.param('id');
-  try {
-    if (!canManageInfrastructure(user.role)) {
-      return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient write permissions' } }, 403);
-    }
-    const [deleted] = await db
-      .delete(schema.dispenserUnits)
-      .where(
-        and(
-          eq(schema.dispenserUnits.id, id),
-          eq(schema.dispenserUnits.organizationId, user.organizationId)
-        )
-      )
-      .returning();
-    if (!deleted) {
-      return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Dispenser not found' } }, 404);
-    }
-    return c.json({ success: true, data: deleted });
-  } catch (err: any) {
-    return c.json({ success: false, error: { code: 'BAD_REQUEST', message: err.message } }, 400);
+  if (!canManageInfrastructure(user.role)) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient write permissions' } }, 403);
   }
+  const db = c.var.db;
+  const useCase = new DeleteDispenser({ repository: new DrizzleDispenserRepository(db), events: createDispatcher(db) });
+  const result = await useCase.execute({ id }, buildContext(user));
+  return sendResult(c, result);
 });
 
 stationSetupRouter.put('/nozzles/:id', async (c) => {
-  const db = c.var.db;
   const user = c.var.user;
   const id = c.req.param('id');
-  try {
-    const body = await c.req.json();
-    if (!checkWriteAccess(c, body.stationId) || !canManageInfrastructure(user.role)) {
-      return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient write permissions' } }, 403);
-    }
-    const [updated] = await db
-      .update(schema.nozzles)
-      .set({
-        duId: body.duId,
-        tankId: body.tankId,
-        productId: body.productId,
-        name: body.name,
-        currentReading: body.currentReading,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(schema.nozzles.id, id),
-          eq(schema.nozzles.organizationId, user.organizationId)
-        )
-      )
-      .returning();
-    if (!updated) {
-      return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Nozzle not found' } }, 404);
-    }
-    return c.json({ success: true, data: updated });
-  } catch (err: any) {
-    return c.json({ success: false, error: { code: 'BAD_REQUEST', message: err.message } }, 400);
+  const body = await c.req.json().catch(() => ({}));
+  if (!checkWriteAccess(c, body.stationId) || !canManageInfrastructure(user.role)) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient write permissions' } }, 403);
   }
+  const db = c.var.db;
+  const useCase = new UpdateNozzle({ repository: new DrizzleNozzleRepository(db), events: createDispatcher(db) });
+  const result = await useCase.execute({ ...body, id }, buildContext(user, { stationId: body.stationId }));
+  return sendResult(c, result);
 });
 
 stationSetupRouter.delete('/nozzles/:id', async (c) => {
-  const db = c.var.db;
   const user = c.var.user;
   const id = c.req.param('id');
-  try {
-    if (!canManageInfrastructure(user.role)) {
-      return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient write permissions' } }, 403);
-    }
-    const [deleted] = await db
-      .delete(schema.nozzles)
-      .where(
-        and(
-          eq(schema.nozzles.id, id),
-          eq(schema.nozzles.organizationId, user.organizationId)
-        )
-      )
-      .returning();
-    if (!deleted) {
-      return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Nozzle not found' } }, 404);
-    }
-    return c.json({ success: true, data: deleted });
-  } catch (err: any) {
-    return c.json({ success: false, error: { code: 'BAD_REQUEST', message: err.message } }, 400);
+  if (!canManageInfrastructure(user.role)) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient write permissions' } }, 403);
   }
+  const db = c.var.db;
+  const useCase = new DeleteNozzle({ repository: new DrizzleNozzleRepository(db), events: createDispatcher(db) });
+  const result = await useCase.execute({ id }, buildContext(user));
+  return sendResult(c, result);
 });
 
 stationSetupRouter.put('/shift-templates/:id', async (c) => {
-  const db = c.var.db;
   const user = c.var.user;
   const id = c.req.param('id');
   if (user.role !== 'Owner' && user.role !== 'Manager') {
     return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Only Owners/Managers can manage templates' } }, 403);
   }
-  try {
-    const body = await c.req.json();
-    const [updated] = await db
-      .update(schema.shiftTemplates)
-      .set({
-        name: body.name,
-        startTime: body.startTime,
-        endTime: body.endTime,
-        isActive: body.isActive,
-      })
-      .where(
-        and(
-          eq(schema.shiftTemplates.id, id),
-          eq(schema.shiftTemplates.organizationId, user.organizationId)
-        )
-      )
-      .returning();
-    if (!updated) {
-      return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Template not found' } }, 404);
-    }
-    return c.json({ success: true, data: updated });
-  } catch (err: any) {
-    return c.json({ success: false, error: { code: 'BAD_REQUEST', message: err.message } }, 400);
-  }
+  const body = await c.req.json().catch(() => ({}));
+  const db = c.var.db;
+  const useCase = new UpdateShiftTemplate({ repository: new DrizzleShiftTemplateRepository(db), events: createDispatcher(db) });
+  const result = await useCase.execute({ ...body, id }, buildContext(user));
+  return sendResult(c, result);
 });
 
 stationSetupRouter.delete('/shift-templates/:id', async (c) => {
-  const db = c.var.db;
   const user = c.var.user;
   const id = c.req.param('id');
   if (user.role !== 'Owner' && user.role !== 'Manager') {
     return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Only Owners/Managers can manage templates' } }, 403);
   }
-  try {
-    const [deleted] = await db
-      .delete(schema.shiftTemplates)
-      .where(
-        and(
-          eq(schema.shiftTemplates.id, id),
-          eq(schema.shiftTemplates.organizationId, user.organizationId)
-        )
-      )
-      .returning();
-    if (!deleted) {
-      return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Template not found' } }, 404);
-    }
-    return c.json({ success: true, data: deleted });
-  } catch (err: any) {
-    return c.json({ success: false, error: { code: 'BAD_REQUEST', message: err.message } }, 400);
-  }
+  const db = c.var.db;
+  const useCase = new DeleteShiftTemplate({ repository: new DrizzleShiftTemplateRepository(db), events: createDispatcher(db) });
+  const result = await useCase.execute({ id }, buildContext(user));
+  return sendResult(c, result);
 });
 
 // ----------------------------------------------------
@@ -1139,6 +833,27 @@ stationSetupRouter.post('/onboarding/finalize', validateJson(finalizeOnboardingS
       };
     });
 
+    // Interim: emit ONBOARDING_COMPLETED after the provisioning transaction
+    // commits. The full FinalizeStationOnboarding orchestration use-case lands
+    // with the UnitOfWork in Phase 3.
+    if (result.station?.id) {
+      try {
+        const dispatcher = createDispatcher(db);
+        const ctx = buildContext(user, { stationId: result.station.id });
+        await dispatcher.publish([
+          eventFromContext(ctx, {
+            eventType: BusinessEvents.ONBOARDING_COMPLETED,
+            aggregateType: 'Station',
+            aggregateId: result.station.id,
+            stationId: result.station.id,
+            payload: { stationId: result.station.id, ...result.summary },
+          }),
+        ]);
+      } catch (e) {
+        console.error('Failed to emit ONBOARDING_COMPLETED', e);
+      }
+    }
+
     return c.json({ success: true, data: result });
   } catch (err: any) {
     if (err instanceof FinalizeOnboardingError) {
@@ -1267,28 +982,13 @@ stationSetupRouter.get('/pricing/history', async (c) => {
 
 // POST /api/setup/pricing
 stationSetupRouter.post('/pricing', validateJson(fuelPriceSchema), async (c) => {
-  const db = c.var.db;
   const user = c.var.user;
   const parsed = c.req.valid('json');
-
   if (!checkWriteAccess(c, parsed.stationId)) {
     return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient write permissions for this station' } }, 403);
   }
-
-  try {
-    const [newPrice] = await db
-      .insert(schema.fuelPrices)
-      .values({
-        organizationId: user.organizationId,
-        stationId: parsed.stationId,
-        productId: parsed.productId,
-        price: String(parsed.price),
-        effectiveFrom: parsed.effectiveFrom ? new Date(parsed.effectiveFrom) : new Date(),
-      })
-      .returning();
-
-    return c.json({ success: true, data: newPrice });
-  } catch (err: any) {
-    return c.json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }, 500);
-  }
+  const db = c.var.db;
+  const useCase = new RecordFuelPrice({ repository: new DrizzleFuelPriceRepository(db), events: createDispatcher(db) });
+  const result = await useCase.execute(parsed as any, buildContext(user, { stationId: parsed.stationId }));
+  return sendResult(c, result);
 });
