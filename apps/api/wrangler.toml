@@ -15,5 +15,14 @@ localConnectionString = "postgresql://postgres:postgres@127.0.0.1:54322/postgres
 enabled = true
 head_sampling_rate = 0.1
 
+[observability.logs]
+enabled = true
+head_sampling_rate = 0.1
+invocation_logs = true
+
+[observability.traces]
+enabled = false
+head_sampling_rate = 0.1
+
 [secrets]
 required = [ "SUPABASE_JWT_SECRET" ]

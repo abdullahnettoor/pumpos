@@ -404,13 +404,6 @@ export class CloudTransactionService {
     });
   }
 
-  async reconcilePrepaid(): Promise<any> {
-    return request<any>('/transactions/internal/reconcile-prepaid', {
-      method: 'POST',
-      body: JSON.stringify({}),
-    });
-  }
-
   async deleteCustomer(id: string): Promise<any> {
     return request<any>(`/transactions/customers/${id}`, {
       method: 'DELETE',
@@ -445,6 +438,12 @@ export class CloudTransactionService {
     return request<any>(`/transactions/vehicles/${vehicleId}`, {
       method: 'DELETE',
     });
+  }
+
+  async searchVehicles(q: string, limit: number = 20): Promise<any[]> {
+    if (!q || !q.trim()) return [];
+    const params = new URLSearchParams({ q: q.trim(), limit: String(limit) });
+    return request<any[]>(`/transactions/vehicles/search?${params.toString()}`);
   }
 
   async getExpenses(): Promise<any[]> {
@@ -482,7 +481,17 @@ export class CloudTransactionService {
     });
   }
 
-  async recordCollection(payload: { shiftId: string; customerId?: string; amount: number; paymentMethod: 'Cash' | 'Card' | 'UPI' | 'Credit'; notes?: string }): Promise<any> {
+  async recordCollection(payload: {
+    shiftId: string;
+    customerId?: string;
+    vehicleId?: string | null;
+    productId?: string | null;
+    quantity?: number | null;
+    unitPrice?: number | null;
+    amount: number;
+    paymentMethod: 'Cash' | 'Card' | 'UPI' | 'Credit';
+    notes?: string;
+  }): Promise<any> {
     return request<any>('/transactions/collections', {
       method: 'POST',
       body: JSON.stringify(payload),

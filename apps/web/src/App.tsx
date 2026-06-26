@@ -18,9 +18,37 @@ import {
 } from '@pump/ui';
 import { Station } from '@pump/shared';
 
-setApiBaseUrl(import.meta.env.VITE_API_URL);
+const resolveApiUrl = (): string | undefined => {
+  if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL as string;
+  if (typeof window !== 'undefined') {
+    const { hostname } = window.location;
+    if (hostname === 'dev-pumpos.abdullahnettoor.workers.dev' || hostname === 'pumpos.abdullahnettoor.com') {
+      return 'https://pumpos-api.abdullahnettoor.workers.dev';
+    }
+  }
+  return undefined;
+};
+
+setApiBaseUrl(resolveApiUrl());
 
 const stationService = new CloudStationService();
+
+const environmentTag = (() => {
+  const explicitEnv = (import.meta.env.VITE_APP_ENV as string | undefined)?.toLowerCase();
+  if (explicitEnv === 'preview') return 'Preview';
+  if (explicitEnv === 'dev' || explicitEnv === 'development') return 'Dev';
+  if (import.meta.env.DEV) return 'Dev';
+  
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    // Dev domain or localhost
+    if (hostname === 'localhost') return 'Local';
+    if (hostname === 'dev-pumpos.abdullahnettoor.workers.dev') return 'Dev';
+    // Cloudflare preview env deploys as <worker-name>-preview.<subdomain>.workers.dev
+    if (hostname.includes('-preview.')) return 'Preview';
+  }
+  return null;
+})();
 
 export const App: React.FC = () => {
   const [currentPath, setCurrentPath] = useState('/dashboard');
@@ -30,7 +58,6 @@ export const App: React.FC = () => {
   const [stations, setStations] = useState<Station[]>([]);
   const [selectedStation, setSelectedStation] = useState<Station | null>(null);
   const [loading, setLoading] = useState(true);
-  const [viewDssrShiftId, setViewDssrShiftId] = useState<string | null>(null);
 
   // Supabase Auth and Backend user context states
   const [session, setSession] = useState<any>(null);
@@ -339,7 +366,6 @@ export const App: React.FC = () => {
             userRole={userRole || 'Staff'}
             userName={userName}
             onNavigate={setCurrentPath}
-            onViewDssr={setViewDssrShiftId}
           />
         );
       case '/expenses':
@@ -355,8 +381,6 @@ export const App: React.FC = () => {
           <ReportsOverview
             selectedStation={selectedStation}
             userRole={userRole || 'Staff'}
-            viewDssrShiftId={viewDssrShiftId}
-            onClearViewDssrShiftId={() => setViewDssrShiftId(null)}
           />
         );
       default:
@@ -399,6 +423,7 @@ export const App: React.FC = () => {
       stations={stations}
       selectedStation={selectedStation}
       onStationChange={handleStationChange}
+      environmentTag={environmentTag}
     >
       {renderContent()}
     </AppShell>

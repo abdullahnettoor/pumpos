@@ -7,6 +7,7 @@ export interface DrawerProps {
   title: string;
   children: React.ReactNode;
   footer?: React.ReactNode;
+  widthVariant?: 'default' | 'wide';
 }
 
 export const Drawer: React.FC<DrawerProps> = ({
@@ -14,7 +15,8 @@ export const Drawer: React.FC<DrawerProps> = ({
   onClose,
   title,
   children,
-  footer
+  footer,
+  widthVariant = 'default',
 }) => {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -34,7 +36,7 @@ export const Drawer: React.FC<DrawerProps> = ({
       <div className="drawer-backdrop" onClick={onClose} />
 
       {/* Drawer Canvas */}
-      <div className="drawer-container">
+      <div className={`drawer-container${widthVariant === 'wide' ? ' drawer-container--wide' : ''}`}>
         {/* Header */}
         <div className="drawer-header">
           <span className="drawer-title">{title}</span>

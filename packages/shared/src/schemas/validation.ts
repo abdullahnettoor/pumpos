@@ -155,6 +155,10 @@ export const shiftPurchaseSchema = z.object({
 export const shiftCollectionSchema = z.object({
   shiftId: z.string().uuid('Invalid shift ID'),
   customerId: z.string().uuid('Invalid customer ID').optional().nullable(),
+  vehicleId: z.string().uuid('Invalid vehicle ID').optional().nullable(),
+  productId: z.string().uuid('Invalid product ID').optional().nullable(),
+  quantity: z.number().positive('Quantity must be positive').optional().nullable(),
+  unitPrice: z.number().nonnegative('Unit price must be non-negative').optional().nullable(),
   amount: z.number().positive('Amount must be positive'),
   paymentMethod: z.enum(['Cash', 'Card', 'UPI', 'Credit']),
   notes: z.string().max(500).optional().nullable(),

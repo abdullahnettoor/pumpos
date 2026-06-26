@@ -4,12 +4,16 @@ import { StatusBadge } from '../StatusBadge.js';
 import { ShiftSummaryView } from './ShiftSummaryView.js';
 import { ShiftTransactionsPanel } from './ShiftTransactionsPanel.js';
 import { HandoverDrawer } from './HandoverDrawer.js';
+import { ShiftControlBar } from './ShiftControlBar.js';
+import { ShiftHistoryTab } from './ShiftHistoryTab.js';
+import { CloseShiftWizard } from './CloseShiftWizard.js';
 import { Drawer } from '../Drawer.js';
 import { ExpenseEntryForm } from '../transactions/ExpenseEntryForm.js';
 import { CollectionEntryForm } from '../transactions/CollectionEntryForm.js';
+import { CreditSaleEntryForm, VehicleSearchResult } from '../transactions/CreditSaleEntryForm.js';
 import { PurchaseEntryForm } from '../transactions/PurchaseEntryForm.js';
 import { Station } from '@pump/shared';
-import { FileText, User, Save, Lock, AlertTriangle, Check, Fuel, Info, Play } from 'lucide-react';
+import { FileText, User, Lock, AlertTriangle, Check, Fuel, Info, Play, CalendarRange, History, Clock3 } from 'lucide-react';
 import { LoadingSpinner } from '../LoadingSpinner.js';
 
 const shiftService = new CloudShiftService();
@@ -17,14 +21,13 @@ const transactionService = new CloudTransactionService();
 const productService = new CloudProductService();
 const tankService = new CloudTankService();
 
-type QuickEntryType = 'expense' | 'collection' | 'purchase';
+type QuickEntryType = 'expense' | 'collection' | 'credit-sale' | 'purchase';
 
 interface ShiftsManagementProps {
   selectedStation: Station | null;
   userRole: 'Owner' | 'Manager' | 'Accountant' | 'Staff';
   userName: string;
   onNavigate?: (path: string) => void;
-  onViewDssr?: (shiftId: string) => void;
 }
 
 export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
@@ -32,12 +35,15 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   userRole,
   userName,
   onNavigate,
-  onViewDssr,
 }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<any>(null);
   const [viewingShiftSummary, setViewingShiftSummary] = useState(false);
+
+  // Shift Tab Sub-Navigation
+  const [shiftSubTab, setShiftSubTab] = useState<'today' | 'planning' | 'history'>('today');
+  const [viewHistoryShiftId, setViewHistoryShiftId] = useState<string | null>(null);
 
   // Open Shift Form States
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
@@ -48,10 +54,10 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
 
   // Active Shift Workspace States
   const [closingReadings, setClosingReadings] = useState<Record<string, number>>({});
-  const [savingProgress, setSavingProgress] = useState(false);
 
   // Close Flow Inline States
   const [isPreparingClose, setIsPreparingClose] = useState(false);
+  const [closeWizardOpen, setCloseWizardOpen] = useState(false);
   const [closingCash, setClosingCash] = useState(0);
   const [confirmWarningsChecked, setConfirmWarningsChecked] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
@@ -108,6 +114,12 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   const [collectionAmount, setCollectionAmount] = useState('');
   const [collectionPaymentMethod, setCollectionPaymentMethod] = useState<'Cash' | 'Card' | 'UPI' | 'Credit'>('Cash');
   const [collectionNotes, setCollectionNotes] = useState('');
+
+  const [creditSaleVehicle, setCreditSaleVehicle] = useState<VehicleSearchResult | null>(null);
+  const [creditSaleQuantity, setCreditSaleQuantity] = useState('');
+  const [creditSaleUnitPrice, setCreditSaleUnitPrice] = useState('');
+  const [creditSaleAmount, setCreditSaleAmount] = useState('');
+  const [creditSaleNotes, setCreditSaleNotes] = useState('');
 
   const [purchaseSupplierId, setPurchaseSupplierId] = useState('');
   const [purchaseProductId, setPurchaseProductId] = useState('');
@@ -180,6 +192,12 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     setCollectionPaymentMethod('Cash');
     setCollectionNotes('');
 
+    setCreditSaleVehicle(null);
+    setCreditSaleQuantity('');
+    setCreditSaleUnitPrice('');
+    setCreditSaleAmount('');
+    setCreditSaleNotes('');
+
     setPurchaseSupplierId(suppliers[0]?.id ?? '');
     setPurchaseProductId(products[0]?.id ?? '');
     setPurchaseQuantity('');
@@ -228,6 +246,14 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         setCollectionNotes('');
       }
 
+      if (type === 'credit-sale') {
+        setCreditSaleVehicle(null);
+        setCreditSaleQuantity('');
+        setCreditSaleUnitPrice('');
+        setCreditSaleAmount('');
+        setCreditSaleNotes('');
+      }
+
       if (type === 'purchase') {
         const [activeSuppliers, productList, tankList] = await Promise.all([
           transactionService.getSuppliers(true),
@@ -256,6 +282,11 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   const openQuickEntryDrawer = async (type: QuickEntryType) => {
     if (!data?.activeShift?.id) {
       return;
+    }
+
+    // Minimize close wizard if open — preserves draft state, user can resume via "Continue Close"
+    if (closeWizardOpen) {
+      setCloseWizardOpen(false);
     }
 
     setQuickEntryType(type);
@@ -333,15 +364,44 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     void openQuickEntryDrawer('collection');
   };
 
+  const triggerCreditSaleDrawer = () => {
+    void openQuickEntryDrawer('credit-sale');
+  };
+
   const triggerPurchaseDrawer = () => {
     void openQuickEntryDrawer('purchase');
   };
 
   const quickEntryActions = [
-    { key: 'expense', label: 'Add Expense', onClick: triggerExpenseDrawer },
-    { key: 'collection', label: 'Log Collection', onClick: triggerCollectionDrawer },
-    { key: 'purchase', label: 'Add Purchase', onClick: triggerPurchaseDrawer },
+    { key: 'expense', label: 'Add Expense', onClick: triggerExpenseDrawer, hotkey: 'E' },
+    { key: 'collection', label: 'Log Collection', onClick: triggerCollectionDrawer, hotkey: 'C' },
+    { key: 'credit-sale', label: 'Credit Sale (Vehicle)', onClick: triggerCreditSaleDrawer, hotkey: 'V' },
+    { key: 'purchase', label: 'Add Purchase', onClick: triggerPurchaseDrawer, hotkey: 'P' },
   ];
+
+  // Keyboard shortcuts (E/C/V/P) — active only on Today tab with an open shift and no other overlay focused.
+  useEffect(() => {
+    if (!data?.activeShift?.id) return;
+    if (shiftSubTab !== 'today') return;
+    if (viewingShiftSummary || viewHistoryShiftId) return;
+    if (closeWizardOpen || quickEntryOpen || handoverDrawerOpen) return;
+
+    const handler = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const t = e.target as HTMLElement | null;
+      if (t) {
+        const tag = t.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || t.isContentEditable) return;
+      }
+      const k = e.key.toLowerCase();
+      if (k === 'e') { e.preventDefault(); triggerExpenseDrawer(); }
+      else if (k === 'c') { e.preventDefault(); triggerCollectionDrawer(); }
+      else if (k === 'v') { e.preventDefault(); triggerCreditSaleDrawer(); }
+      else if (k === 'p') { e.preventDefault(); triggerPurchaseDrawer(); }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [data?.activeShift?.id, shiftSubTab, viewingShiftSummary, viewHistoryShiftId, closeWizardOpen, quickEntryOpen, handoverDrawerOpen]);
 
   const shiftOptions = [
     ...(data?.activeShift ? [{ id: data.activeShift.id, label: `Active: ${data.activeShift.templateName} (Open)` }] : []),
@@ -411,6 +471,44 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
       await loadShiftStatus();
     } catch (err: any) {
       setQuickEntryError(err.message || 'Failed to record collection');
+    } finally {
+      setQuickEntrySubmitting(false);
+    }
+  };
+
+  const handleCreditSaleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!targetShiftId || !creditSaleVehicle || !creditSaleAmount) {
+      return;
+    }
+
+    const amountNum = Number(creditSaleAmount);
+    if (!Number.isFinite(amountNum) || amountNum <= 0) {
+      setQuickEntryError('Amount must be greater than zero.');
+      return;
+    }
+
+    const qtyNum = creditSaleQuantity ? Number(creditSaleQuantity) : null;
+    const priceNum = creditSaleUnitPrice ? Number(creditSaleUnitPrice) : null;
+
+    try {
+      setQuickEntrySubmitting(true);
+      setQuickEntryError(null);
+      await transactionService.recordCollection({
+        shiftId: targetShiftId,
+        customerId: creditSaleVehicle.customerId,
+        vehicleId: creditSaleVehicle.id,
+        productId: creditSaleVehicle.defaultProductId ?? null,
+        quantity: qtyNum && qtyNum > 0 ? qtyNum : null,
+        unitPrice: priceNum != null && priceNum >= 0 ? priceNum : null,
+        amount: amountNum,
+        paymentMethod: 'Credit',
+        notes: creditSaleNotes || undefined,
+      });
+      closeQuickEntryDrawer();
+      await loadShiftStatus();
+    } catch (err: any) {
+      setQuickEntryError(err.message || 'Failed to record credit sale');
     } finally {
       setQuickEntrySubmitting(false);
     }
@@ -578,23 +676,6 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     }));
   };
 
-  const handleSaveProgress = async () => {
-    if (!data.activeShift) return;
-    try {
-      setSavingProgress(true);
-      const readingsArray = Object.entries(closingReadings).map(([nozzleId, closingReading]) => ({
-        nozzleId,
-        closingReading,
-      }));
-      await shiftService.updateNozzleReadings(data.activeShift.id, readingsArray);
-      alert('Readings progress saved successfully.');
-    } catch (err: any) {
-      alert(err.message || 'Failed to save progress');
-    } finally {
-      setSavingProgress(false);
-    }
-  };
-
   const handlePrepareClose = () => {
     if (!data.activeShift) return;
 
@@ -611,10 +692,11 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
 
     setConfirmWarningsChecked(false);
     setIsPreparingClose(true);
+    setCloseWizardOpen(true);
   };
 
 
-  const handleCloseShift = async (startNextShiftImmediately = false) => {
+  const handleCloseShift = async () => {
     if (!data.activeShift) return;
     try {
       setIsClosing(true);
@@ -653,24 +735,16 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
       });
 
       setIsPreparingClose(false);
+      setCloseWizardOpen(false);
       await loadShiftStatus();
 
-      if (startNextShiftImmediately) {
-        setOpeningCash(actual);
-        if (nextTemplateId) {
-          setSelectedTemplateId(nextTemplateId);
-        }
-        setViewingShiftSummary(false);
-        setClosedShiftSuccess(null);
-      } else {
-        setClosedShiftSuccess({
-          expectedCash: expected,
-          closingCash: actual,
-          variance,
-          lastClosedShiftId: closedId,
-          nextTemplateId
-        });
-      }
+      setClosedShiftSuccess({
+        expectedCash: expected,
+        closingCash: actual,
+        variance,
+        lastClosedShiftId: closedId,
+        nextTemplateId
+      });
     } catch (err: any) {
       alert(err.message || 'Failed to close shift');
     } finally {
@@ -701,6 +775,104 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   }
 
   const { activeShift, lastShift, lastDssr: lastShiftSummary, canReopenLastShift, gracePeriodExpiresAt, templates, nozzles, staff, dispensers } = data;
+  const shiftScreenState: 'idle' | 'active' | 'closing' = activeShift
+    ? (isPreparingClose ? 'closing' : 'active')
+    : 'idle';
+
+  const renderShiftSubTabs = () => (
+    <div className="shift-subtabs">
+      <button
+        type="button"
+        className={`shift-subtab${shiftSubTab === 'today' ? ' shift-subtab--active' : ''}`}
+        onClick={() => setShiftSubTab('today')}
+      >
+        <Clock3 size={13} /> Today
+        {activeShift && (
+          <span
+            style={{
+              marginLeft: '4px',
+              fontSize: '10px',
+              padding: '1px 6px',
+              borderRadius: '8px',
+              background: 'var(--state-success-bg)',
+              color: 'var(--state-success-fg)',
+              fontWeight: 600,
+              letterSpacing: '0.04em',
+              textTransform: 'uppercase',
+            }}
+          >
+            Open
+          </span>
+        )}
+      </button>
+      <button
+        type="button"
+        className={`shift-subtab${shiftSubTab === 'planning' ? ' shift-subtab--active' : ''}`}
+        onClick={() => setShiftSubTab('planning')}
+      >
+        <CalendarRange size={13} /> Planning
+      </button>
+      <button
+        type="button"
+        className={`shift-subtab${shiftSubTab === 'history' ? ' shift-subtab--active' : ''}`}
+        onClick={() => setShiftSubTab('history')}
+      >
+        <History size={13} /> History
+      </button>
+    </div>
+  );
+
+  // Sub-tab: History
+  if (shiftSubTab === 'history') {
+    return (
+      <div
+        className="animate-fade-in"
+        style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontFamily: 'var(--font-sans)' }}
+      >
+        {renderShiftSubTabs()}
+        <ShiftHistoryTab
+          selectedStation={selectedStation}
+          userRole={userRole}
+          viewShiftId={viewHistoryShiftId}
+          onClearViewShiftId={() => setViewHistoryShiftId(null)}
+        />
+      </div>
+    );
+  }
+
+  // Sub-tab: Planning (placeholder)
+  if (shiftSubTab === 'planning') {
+    return (
+      <div
+        className="animate-fade-in"
+        style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontFamily: 'var(--font-sans)' }}
+      >
+        {renderShiftSubTabs()}
+        <div
+          className="card"
+          style={{
+            padding: '40px 24px',
+            textAlign: 'center',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '12px',
+          }}
+        >
+          <CalendarRange size={32} style={{ color: 'var(--text-faint)' }} />
+          <div>
+            <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-strong)' }}>
+              Shift Planning Coming Soon
+            </h3>
+            <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px', maxWidth: '420px' }}>
+              Schedule upcoming shifts, assign attendant rosters and dispenser allocations, and pre-fill templates for the week ahead.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
 
   // Render Success Screen if set
   if (closedShiftSuccess) {
@@ -720,7 +892,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
             <Check size={36} />
           </div>
           <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--text-strong)' }}>Shift Closed Successfully</h2>
-          <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>The Daily Sales Summary Record (DSSR) snapshot has been compiled and saved permanently.</p>
+          <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>The Shift Summary is saved permanently.</p>
         </div>
 
         <div style={{
@@ -773,12 +945,8 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
           <button
             className="btn btn-secondary btn-md"
             onClick={() => {
-              if (onNavigate && onViewDssr) {
-                onViewDssr(closedShiftSuccess.lastClosedShiftId);
-                onNavigate('/reports');
-              } else {
-                setViewingShiftSummary(true);
-              }
+              setViewHistoryShiftId(closedShiftSuccess.lastClosedShiftId);
+              setShiftSubTab('history');
               setClosedShiftSuccess(null);
             }}
           >
@@ -819,38 +987,29 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   }
 
   // Render Active Shift Workspace
-  if (activeShift) {
+  if (shiftScreenState === 'active' || shiftScreenState === 'closing') {
     return (
-      <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '24px', fontFamily: 'var(--font-sans)' }}>
-        {/* Workspace Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <h1 style={{ fontSize: '20px', fontWeight: 600, color: 'var(--text-strong)' }}>
-                Active Shift Workspace
-              </h1>
-              <StatusBadge status="OPEN" type="success" />
-            </div>
-            <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '2px' }}>
-              Template: <strong>{activeShift.templateName}</strong> • Opened by {activeShift.openedByName} at {new Date(activeShift.openedAt).toLocaleString()}
-            </p>
-          </div>
-          {lastShiftSummary && (
-            <button
-              className="btn btn-secondary btn-sm"
-              onClick={() => {
-                if (onNavigate && onViewDssr) {
-                  onViewDssr(lastShiftSummary.shiftId);
-                  onNavigate('/reports');
-                } else {
-                  setViewingShiftSummary(true);
-                }
-              }}
-            >
-              <FileText size={13} /> View Last Shift Summary
-            </button>
-          )}
-        </div>
+      <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '16px', fontFamily: 'var(--font-sans)' }}>
+        {renderShiftSubTabs()}
+        <ShiftControlBar
+          activeShift={activeShift}
+          shiftTotals={shiftTotals}
+          handoversCompleted={handovers.length}
+          handoversAssigned={activeShift.staffAssignments?.length || 0}
+          quickActions={quickEntryActions}
+          onCloseShiftClick={() => {
+            if (isPreparingClose) {
+              setCloseWizardOpen(true);
+            } else {
+              handlePrepareClose();
+            }
+          }}
+          isPreparingClose={shiftScreenState === 'closing'}
+          onViewLastShiftSummary={lastShiftSummary ? () => {
+            setViewHistoryShiftId(lastShiftSummary.shiftId);
+            setShiftSubTab('history');
+          } : undefined}
+        />
 
         {/* 1. Attendant Handovers Dashboard */}
         <div className="card" style={{ overflow: 'hidden' }}>
@@ -864,11 +1023,12 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
               </p>
             </div>
           </div>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+          <div className="shift-table-scroll-container">
+          <table className="shift-table" style={{ width: '100%', minWidth: '1020px', borderCollapse: 'collapse', fontSize: '13px' }}>
             <thead>
               <tr style={{ backgroundColor: 'var(--bg-surface-alt)', borderBottom: '1px solid var(--border-soft)', textAlign: 'left', color: 'var(--text-muted)' }}>
-                <th style={{ padding: '10px 20px', fontWeight: 600 }}>Attendant</th>
-                <th style={{ padding: '10px 20px', fontWeight: 600 }}>Dispenser</th>
+                <th style={{ padding: '10px 20px', fontWeight: 600, position: 'sticky', left: 0, zIndex: 2, backgroundColor: 'var(--bg-surface-alt)', minWidth: '170px' }}>Attendant</th>
+                <th style={{ padding: '10px 12px', fontWeight: 600, position: 'sticky', left: 170, zIndex: 2, backgroundColor: 'var(--bg-surface-alt)', minWidth: '90px' }}>Dispenser</th>
                 <th style={{ padding: '10px 20px', fontWeight: 600 }}>Handover Status</th>
                 <th style={{ padding: '10px 20px', fontWeight: 600, textAlign: 'right' }}>Cash (₹)</th>
                 <th style={{ padding: '10px 20px', fontWeight: 600, textAlign: 'right' }}>Card/UPI (₹)</th>
@@ -888,10 +1048,10 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
 
                   return (
                     <tr key={idx} style={{ borderBottom: '1px solid var(--border-soft)' }}>
-                      <td style={{ padding: '12px 20px', fontWeight: 600, color: 'var(--text-strong)' }}>
+                      <td style={{ padding: '12px 20px', fontWeight: 600, color: 'var(--text-strong)', position: 'sticky', left: 0, zIndex: 1, backgroundColor: 'var(--bg-surface)', minWidth: '170px' }}>
                         {sa.userName}
                       </td>
-                      <td style={{ padding: '12px 20px', color: 'var(--text-default)' }}>
+                      <td style={{ padding: '12px 12px', color: 'var(--text-default)', position: 'sticky', left: 170, zIndex: 1, backgroundColor: 'var(--bg-surface)', minWidth: '90px' }}>
                         {sa.duCode || sa.duName}
                       </td>
                       <td style={{ padding: '12px 20px' }}>
@@ -947,6 +1107,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
               )}
             </tbody>
           </table>
+          </div>
         </div>
 
         {/* 2. Nozzle Readings Grid */}
@@ -962,11 +1123,12 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
             </div>
           </div>
 
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+          <div className="shift-table-scroll-container">
+          <table className="shift-table" style={{ width: '100%', minWidth: '1140px', borderCollapse: 'collapse', fontSize: '13px' }}>
             <thead>
               <tr style={{ backgroundColor: 'var(--bg-surface-alt)', borderBottom: '1px solid var(--border-soft)', textAlign: 'left', color: 'var(--text-muted)' }}>
-                <th style={{ padding: '10px 20px', fontWeight: 600 }}>Nozzle</th>
-                <th style={{ padding: '10px 20px', fontWeight: 600 }}>Dispenser</th>
+                <th style={{ padding: '10px 12px', fontWeight: 600, position: 'sticky', left: 0, zIndex: 2, backgroundColor: 'var(--bg-surface-alt)', minWidth: '80px' }}>Nozzle</th>
+                <th style={{ padding: '10px 12px', fontWeight: 600, position: 'sticky', left: 80, zIndex: 2, backgroundColor: 'var(--bg-surface-alt)', minWidth: '90px' }}>Dispenser</th>
                 <th style={{ padding: '10px 20px', fontWeight: 600 }}>Staff</th>
                 <th style={{ padding: '10px 20px', fontWeight: 600 }}>Product</th>
                 <th style={{ padding: '10px 20px', fontWeight: 600 }}>Tank</th>
@@ -992,8 +1154,8 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
 
                 return (
                   <tr key={idx} style={{ borderBottom: '1px solid var(--border-soft)' }}>
-                    <td style={{ padding: '12px 20px', fontWeight: 600, color: 'var(--text-strong)' }}>{nr.nozzleName}</td>
-                    <td style={{ padding: '12px 20px', color: 'var(--text-default)' }}>{nr.duCode || nr.duName || 'N/A'}</td>
+                    <td style={{ padding: '12px 12px', fontWeight: 600, color: 'var(--text-strong)', position: 'sticky', left: 0, zIndex: 1, backgroundColor: 'var(--bg-surface)', minWidth: '80px' }}>{nr.nozzleName}</td>
+                    <td style={{ padding: '12px 12px', color: 'var(--text-default)', position: 'sticky', left: 80, zIndex: 1, backgroundColor: 'var(--bg-surface)', minWidth: '90px' }}>{nr.duCode || nr.duName || 'N/A'}</td>
                     <td style={{ padding: '12px 20px', color: 'var(--text-default)' }}>
                       <span style={{ 
                         fontSize: '11px',
@@ -1040,6 +1202,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
               })}
             </tbody>
           </table>
+          </div>
         </div>
 
         {/* Shift Totals Summary Card */}
@@ -1120,236 +1283,55 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
           </div>
         </div>
 
-        {/* Save / Close Shift Inline Cards */}
-        {!isPreparingClose ? (
-          <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
-            <button
-              className="btn btn-primary btn-md"
-              onClick={handlePrepareClose}
-            >
-              <Lock size={13} style={{ marginRight: '6px' }} /> Close Shift & Compile DSSR
-            </button>
-          </div>
-        ) : (
-          <div className="card card-default animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '16px', borderColor: 'var(--border-strong)' }}>
-            <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-strong)' }}>
-              Reconciliation Review
-            </h3>
-
-            <div style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '8px',
-              padding: '14px 16px',
-              backgroundColor: 'var(--state-info-bg)',
-              borderRadius: 'var(--radius-input)',
-              border: '1px solid var(--border-soft)'
-            }}>
-              <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--state-info-fg)' }}>
-                Quick Reconciliation Actions
-              </span>
-              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                {quickEntryActions.map((action) => (
-                  <button
-                    key={action.key}
-                    className="btn btn-secondary btn-sm"
-                    onClick={action.onClick}
-                  >
-                    {action.label}
-                  </button>
-                ))}
-              </div>
-              <span style={{ fontSize: '11px', color: 'var(--state-info-fg)' }}>
-                Actions open as global quick-entry drawers while you stay on this shift screen.
-              </span>
-            </div>
-
-            {/* Expected Safe Cash Calculations Card */}
-            <div style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '12px',
-              padding: '16px',
-              backgroundColor: 'var(--bg-surface-alt)',
-              borderRadius: 'var(--radius-input)',
-              border: '1px solid var(--border-soft)'
-            }}>
-              <h4 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-strong)' }}>Financial Reconciliation Checklist</h4>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
-                <span>Opening Cash Float:</span>
-                <span style={{ fontFamily: 'var(--font-mono)' }}>₹{openingCashNum.toLocaleString('en-IN')}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: 'var(--state-success-fg)' }}>
-                <span>(+) Cash Handed Over (Attendants):</span>
-                <span style={{ fontFamily: 'var(--font-mono)' }}>+ ₹{activeCashCollections.toLocaleString('en-IN')}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: 'var(--brand-danger)' }}>
-                <span>(-) Petty Cash Expenses:</span>
-                <span style={{ fontFamily: 'var(--font-mono)' }}>- ₹{shiftTotals.cashExpenses.toLocaleString('en-IN')}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', fontWeight: 700, borderTop: '1px solid var(--border-strong)', paddingTop: '8px', marginTop: '4px', color: 'var(--text-strong)' }}>
-                <span>Expected Safe Cash:</span>
-                <span style={{ fontFamily: 'var(--font-mono)' }}>₹{expectedCash.toLocaleString('en-IN')}</span>
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-default)' }}>
-                1. Enter Physical Counted Safe Cash (Float + Deposited Cash):
-              </label>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <input
-                  type="number"
-                  value={closingCash}
-                  onChange={(e) => setClosingCash(Number(e.target.value))}
-                  style={{
-                    width: '200px',
-                    height: '32px',
-                    padding: '0 12px',
-                    border: '1px solid var(--border-strong)',
-                    borderRadius: 'var(--radius-input)',
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: '13px'
-                  }}
-                />
-                <span style={{
-                  fontSize: '13px',
-                  fontWeight: 700,
-                  color: cashVariance === 0 ? 'var(--state-success-fg)' : 'var(--brand-danger)'
-                }}>
-                  Variance: {cashVariance > 0 ? '+' : ''}₹{cashVariance.toLocaleString('en-IN')}
-                  {cashVariance === 0 ? ' (Perfect Match)' : cashVariance > 0 ? ' (Cash Surplus)' : ' (Cash Shortage)'}
-                </span>
-              </div>
-            </div>
-
-            {stationTanks.length > 0 && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', borderTop: '1px solid var(--border-soft)', paddingTop: '16px', marginTop: '8px' }}>
-                <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-default)' }}>
-                  2. Enter Physical Dip Readings (Actual Stock level in Liters):
-                </label>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  {stationTanks.map((tank) => (
-                    <div
-                      key={tank.id}
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        backgroundColor: 'var(--bg-canvas)',
-                        padding: '10px 14px',
-                        borderRadius: 'var(--radius-input)',
-                        border: '1px solid var(--border-soft)',
-                      }}
-                    >
-                      <div>
-                        <div style={{ fontWeight: 600, fontSize: '13px', color: 'var(--text-strong)' }}>
-                          {tank.name}
-                        </div>
-                        <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                          Product: {tank.productName} • Expected Stock: <strong>{tank.currentVolume.toFixed(1)} L</strong>
-                        </div>
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <input
-                          type="number"
-                          step="0.1"
-                          placeholder="Optional (L)"
-                          value={dipReadings[tank.id] ?? ''}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setDipReadings({
-                              ...dipReadings,
-                              [tank.id]: val === '' ? '' : Number(val)
-                            });
-                          }}
-                          style={{
-                            width: '120px',
-                            height: '32px',
-                            padding: '0 8px',
-                            border: '1px solid var(--border-strong)',
-                            borderRadius: 'var(--radius-input)',
-                            fontFamily: 'var(--font-mono)',
-                            fontSize: '13px',
-                            textAlign: 'right',
-                          }}
-                        />
-                        <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Liters</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {warnings.length > 0 && (
-              <div style={{
-                backgroundColor: 'var(--state-warning-bg)',
-                color: 'var(--state-warning-fg)',
-                padding: '12px 16px',
-                borderRadius: 'var(--radius-input)',
-                fontSize: '12px',
-                border: '1px solid var(--border-soft)'
-              }}>
-                <span style={{ fontWeight: 700 }}>
-                  <AlertTriangle size={14} style={{ marginRight: '6px', verticalAlign: 'middle', display: 'inline' }} /> Shift Warning Indicators Raised:
-                </span>
-                <ul style={{ margin: '6px 0 0 0', paddingLeft: '20px' }}>
-                  {warnings.map((w, idx) => (
-                    <li key={idx} style={{ marginTop: '3px' }}>{w}</li>
-                  ))}
-                </ul>
-                <div style={{ marginTop: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <input
-                    type="checkbox"
-                    id="confirm_warn"
-                    checked={confirmWarningsChecked}
-                    onChange={(e) => setConfirmWarningsChecked(e.target.checked)}
-                    style={{ cursor: 'pointer' }}
-                  />
-                  <label htmlFor="confirm_warn" style={{ fontWeight: 600, cursor: 'pointer' }}>
-                    I explicitly confirm that these readings are correct and wish to proceed anyway.
-                  </label>
-                </div>
-              </div>
-            )}
-
-            <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
-              <button
-                className={`btn ${(warnings.length === 0 || confirmWarningsChecked) ? 'btn-primary' : 'btn-secondary'} btn-md`}
-                onClick={() => handleCloseShift(false)}
-                disabled={(warnings.length > 0 && !confirmWarningsChecked) || isClosing}
-              >
-                {isClosing ? 'Saving Shift Summary...' : (
-                  <>
-                    <Check size={13} style={{ marginRight: '6px' }} /> Confirm Close Shift
-                  </>
-                )}
-              </button>
-
-              <button
-                className="btn btn-secondary btn-md"
-                onClick={() => handleCloseShift(true)}
-                disabled={(warnings.length > 0 && !confirmWarningsChecked) || isClosing}
-              >
-                Close & Start Next Shift
-              </button>
-
-              <button
-                className="btn btn-secondary btn-md"
-                onClick={() => setIsPreparingClose(false)}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        )}
+        {/* Close Shift Wizard (Drawer) */}
+        <CloseShiftWizard
+          isOpen={closeWizardOpen}
+          onClose={() => {
+            setCloseWizardOpen(false);
+            // Keep isPreparingClose=true so the control bar shows "Continue Close"
+            // User cancels explicitly via the wizard's Cancel button only on step 1
+            // and we only fully exit close mode if they haven't made progress.
+            if (closingCash === 0 && Object.keys(dipReadings).length === 0) {
+              setIsPreparingClose(false);
+              setConfirmWarningsChecked(false);
+            }
+          }}
+          shiftTemplateName={activeShift.templateName}
+          openedAt={activeShift.openedAt}
+          openingCash={openingCashNum}
+          cashCollections={activeCashCollections}
+          cashExpenses={shiftTotals.cashExpenses}
+          expectedCash={expectedCash}
+          closingCash={closingCash}
+          onClosingCashChange={setClosingCash}
+          stationTanks={stationTanks}
+          dipReadings={dipReadings}
+          onDipReadingsChange={setDipReadings}
+          warnings={warnings}
+          confirmWarningsChecked={confirmWarningsChecked}
+          onConfirmWarningsChange={setConfirmWarningsChecked}
+          isClosing={isClosing}
+          onConfirmClose={() => handleCloseShift()}
+        />
 
         {/* Handover Drawer Overlay */}
         <Drawer
           isOpen={quickEntryOpen}
           onClose={closeQuickEntryDrawer}
-          title={quickEntryType === 'expense' ? 'Quick Add Expense' : quickEntryType === 'collection' ? 'Quick Log Collection' : 'Quick Add Purchase'}
+          title={(() => {
+            const action =
+              quickEntryType === 'expense'
+                ? 'Add Expense'
+                : quickEntryType === 'collection'
+                ? 'Log Collection'
+                : quickEntryType === 'credit-sale'
+                ? 'Credit Sale'
+                : 'Add Purchase';
+            const shiftLabel =
+              shiftOptions.find((o) => o.id === targetShiftId)?.label ||
+              data?.activeShift?.templateName;
+            return shiftLabel ? `${shiftLabel} · ${action}` : action;
+          })()}
         >
           {quickEntryLoading ? (
             <div style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Loading quick-entry form...</div>
@@ -1418,6 +1400,36 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
                 />
               )}
 
+              {quickEntryType === 'credit-sale' && (
+                <CreditSaleEntryForm
+                  shiftOptions={shiftOptions}
+                  targetShiftId={targetShiftId}
+                  onTargetShiftIdChange={setTargetShiftId}
+                  searchVehicles={(q) => transactionService.searchVehicles(q)}
+                  getPriceForProduct={(productId) => {
+                    if (!productId) return null;
+                    const nr = data?.activeShift?.nozzleReadings?.find(
+                      (r: any) => r.productId === productId && r.unitPrice != null
+                    );
+                    return nr ? Number(nr.unitPrice) : null;
+                  }}
+                  selectedVehicle={creditSaleVehicle}
+                  onSelectedVehicleChange={setCreditSaleVehicle}
+                  quantity={creditSaleQuantity}
+                  onQuantityChange={setCreditSaleQuantity}
+                  unitPrice={creditSaleUnitPrice}
+                  onUnitPriceChange={setCreditSaleUnitPrice}
+                  amount={creditSaleAmount}
+                  onAmountChange={setCreditSaleAmount}
+                  notes={creditSaleNotes}
+                  onNotesChange={setCreditSaleNotes}
+                  submitting={quickEntrySubmitting}
+                  error={quickEntryError}
+                  onCancel={closeQuickEntryDrawer}
+                  onSubmit={handleCreditSaleSubmit}
+                />
+              )}
+
               {quickEntryType === 'purchase' && (
                 <PurchaseEntryForm
                   shiftOptions={shiftOptions}
@@ -1481,7 +1493,8 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
 
   // Render Open Shift Form
   return (
-    <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '24px', fontFamily: 'var(--font-sans)' }}>
+    <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '16px', fontFamily: 'var(--font-sans)' }}>
+      {renderShiftSubTabs()}
       {/* Workspace Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
@@ -1496,18 +1509,27 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
           <button
             className="btn btn-secondary btn-sm"
             onClick={() => {
-              if (onNavigate && onViewDssr) {
-                onViewDssr(lastShiftSummary.shiftId);
-                onNavigate('/reports');
-              } else {
-                setViewingShiftSummary(true);
-              }
+              setViewHistoryShiftId(lastShiftSummary.shiftId);
+              setShiftSubTab('history');
             }}
           >
             <FileText size={13} /> View Last Shift Summary
           </button>
         )}
       </div>
+
+      {lastShiftSummary && (
+        <div className="card" style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-strong)' }}>
+            Most Recent Closed Shift Snapshot
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '10px', fontSize: '12px', color: 'var(--text-muted)' }}>
+            <span>Shift ID: <strong style={{ color: 'var(--text-default)', fontFamily: 'var(--font-mono)' }}>{lastShiftSummary.shiftId?.slice(0, 8) || '—'}</strong></span>
+            <span>Template: <strong style={{ color: 'var(--text-default)' }}>{lastShiftSummary.templateName || '—'}</strong></span>
+            <span>Closed At: <strong style={{ color: 'var(--text-default)' }}>{lastShiftSummary.closedAt ? new Date(lastShiftSummary.closedAt).toLocaleString('en-IN') : '—'}</strong></span>
+          </div>
+        </div>
+      )}
 
       {/* Main Open Shift Form */}
       <form onSubmit={handleOpenShift} className="card card-default" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
