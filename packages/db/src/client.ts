@@ -4,7 +4,12 @@ import * as schema from './schema.js';
 
 export function createDb(connectionString: string) {
   const queryClient = postgres(connectionString, {
-    // Keep prepared statements enabled for Hyperdrive query caching.
+    // Disable prepared statements: the API connects through Hyperdrive in front
+    // of Supabase's transaction-mode pooler (supavisor :6543). In transaction
+    // mode each transaction may land on a different backend, so reused prepared
+    // statement names fail ("internal error; reference=..."). Disabling them
+    // makes queries safe across pooled/multiplexed connections.
+    prepare: false,
     max: 5,
     idle_timeout: 20,
     connect_timeout: 10,
