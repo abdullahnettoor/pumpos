@@ -8,6 +8,7 @@ import { DispensersList } from './DispensersList.js';
 import { ShiftTemplates } from './ShiftTemplates.js';
 import { LoadingSpinner } from '../LoadingSpinner.js';
 import { UserRolesAssignment } from './UserRolesAssignment.js';
+import { PaymentTerminalsPanel } from './PaymentTerminalsPanel.js';
 
 const stationService = new CloudStationService();
 
@@ -23,7 +24,7 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
   const [stationsList, setStationsList] = useState<Station[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
-  const [activeTab, setActiveTab] = useState<'general' | 'products' | 'pricing' | 'tanks' | 'dispensers' | 'shifts' | 'roster'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'products' | 'pricing' | 'tanks' | 'dispensers' | 'terminals' | 'shifts' | 'roster'>('general');
 
   // General tab form states
   const [name, setName] = useState('');
@@ -145,6 +146,7 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
               { id: 'pricing', label: 'Fuel Pricing' },
               { id: 'tanks', label: 'Storage Tanks' },
               { id: 'dispensers', label: 'Dispenser Units' },
+              { id: 'terminals', label: 'Payment Terminals' },
               { id: 'shifts', label: 'Shift Templates' },
               { id: 'roster', label: 'Team Roster' }
             ].map((tab) => {
@@ -305,6 +307,7 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
             {activeTab === 'pricing' && <FuelPricingPanel selectedStation={selectedStation} />}
             {activeTab === 'tanks' && <TanksGrid stationId={selectedStation.id} />}
             {activeTab === 'dispensers' && <DispensersList stationId={selectedStation.id} />}
+            {activeTab === 'terminals' && <PaymentTerminalsPanel stationId={selectedStation.id} />}
             {activeTab === 'shifts' && <ShiftTemplates />}
             {activeTab === 'roster' && <UserRolesAssignment />}
           </div>

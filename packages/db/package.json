@@ -9,7 +9,8 @@
     "build": "tsc -b",
     "clean": "rm -rf dist tsconfig.tsbuildinfo",
     "db:generate": "drizzle-kit generate && mkdir -p ../../supabase/migrations && cp migrations/*.sql ../../supabase/migrations/ 2>/dev/null || true",
-    "db:migrate": "drizzle-kit migrate"
+    "db:migrate": "drizzle-kit migrate",
+    "db:seed": "node seed.mjs"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.2",

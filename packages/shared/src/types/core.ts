@@ -8,6 +8,8 @@ export type DocumentType = 'SALE' | 'PURCHASE' | 'COLLECTION';
 
 export type ProductType = 'FUEL' | 'LUBRICANT' | 'ACCESSORY' | 'SERVICE';
 
+export type InventoryType = 'BULK' | 'ITEM' | 'NONE';
+
 export type CustomerType = 'Regular' | 'Credit' | 'Fleet';
 
 export type TransactionType = 'Credit Sale' | 'Collection' | 'Adjustment' | 'Purchase' | 'Payment';

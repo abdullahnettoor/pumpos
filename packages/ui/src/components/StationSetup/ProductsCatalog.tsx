@@ -18,6 +18,7 @@ export const ProductsCatalog: React.FC = () => {
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
   const [productType, setProductType] = useState<'FUEL' | 'LUBRICANT' | 'ACCESSORY' | 'SERVICE'>('FUEL');
+  const [inventoryType, setInventoryType] = useState<'BULK' | 'ITEM' | 'NONE'>('BULK');
   const [stockTracked, setStockTracked] = useState(true);
   const [isTaxable, setIsTaxable] = useState(true);
   const [unit, setUnit] = useState('Liters');
@@ -97,6 +98,7 @@ export const ProductsCatalog: React.FC = () => {
         name,
         code: code.toUpperCase(),
         productType,
+        inventoryType,
         stockTracked,
         isTaxable,
         unit,
@@ -126,6 +128,7 @@ export const ProductsCatalog: React.FC = () => {
     setName(p.name);
     setCode(p.code);
     setProductType(p.productType);
+    setInventoryType(p.inventoryType);
     setStockTracked(p.stockTracked);
     setIsTaxable(p.isTaxable);
     setUnit(p.unit);
@@ -150,6 +153,7 @@ export const ProductsCatalog: React.FC = () => {
     setName('');
     setCode('');
     setProductType('FUEL');
+    setInventoryType('BULK');
     setStockTracked(true);
     setIsTaxable(true);
     setUnit('Liters');
@@ -305,7 +309,11 @@ export const ProductsCatalog: React.FC = () => {
             <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Product Type *</label>
             <select
               value={productType}
-              onChange={(e) => setProductType(e.target.value as any)}
+              onChange={(e) => {
+                const val = e.target.value as 'FUEL' | 'LUBRICANT' | 'ACCESSORY' | 'SERVICE';
+                setProductType(val);
+                setInventoryType(val === 'FUEL' ? 'BULK' : val === 'SERVICE' ? 'NONE' : 'ITEM');
+              }}
               style={{
                 height: '32px',
                 padding: '0 8px',
@@ -319,6 +327,26 @@ export const ProductsCatalog: React.FC = () => {
               <option value="LUBRICANT">LUBRICANT</option>
               <option value="ACCESSORY">ACCESSORY</option>
               <option value="SERVICE">SERVICE</option>
+            </select>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Inventory Engine *</label>
+            <select
+              value={inventoryType}
+              onChange={(e) => setInventoryType(e.target.value as 'BULK' | 'ITEM' | 'NONE')}
+              style={{
+                height: '32px',
+                padding: '0 8px',
+                borderRadius: 'var(--radius-input)',
+                border: '1px solid var(--border-strong)',
+                fontSize: '13px',
+                backgroundColor: 'var(--bg-surface)'
+              }}
+            >
+              <option value="BULK">Bulk (fuel tanks)</option>
+              <option value="ITEM">Item (packaged stock)</option>
+              <option value="NONE">None (service / non-stocked)</option>
             </select>
           </div>
 

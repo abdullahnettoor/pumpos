@@ -17,7 +17,14 @@
   },
   "references": [
     { "path": "../../packages/db" },
-    { "path": "../../packages/shared" }
+    { "path": "../../packages/shared" },
+    { "path": "../../packages/core" }
   ],
-  "include": ["src/**/*", "worker-configuration.d.ts"]
+  "include": ["src/**/*", "worker-configuration.d.ts"],
+  "exclude": [
+    "dist",
+    "src/routes/transactions.ts",
+    "src/routes/shifts.ts",
+    "src/routes/dssr.ts"
+  ]
 }

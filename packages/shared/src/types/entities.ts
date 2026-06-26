@@ -4,6 +4,7 @@ import {
   SyncStatus,
   DocumentType,
   ProductType,
+  InventoryType,
   CustomerType,
   TransactionType,
   MovementType,
@@ -231,12 +232,27 @@ export interface Nozzle {
   updatedAt: string;
 }
 
+export interface PaymentTerminal {
+  id: string;
+  organizationId: string;
+  stationId: string;
+  label: string;
+  provider: string | null;
+  terminalCode: string | null;
+  supportsCard: boolean;
+  supportsUpi: boolean;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Product {
   id: string;
   organizationId: string;
   name: string;
   code: string;
   productType: ProductType;
+  inventoryType: InventoryType;
   stockTracked: boolean;
   isTaxable: boolean;
   unit: string;

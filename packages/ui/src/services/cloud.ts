@@ -6,11 +6,13 @@ import {
   INozzleService,
   IShiftTemplateService,
   IUserAssignmentService,
+  IPaymentTerminalService,
   Station,
   Product,
   Tank,
   DispenserUnit,
   Nozzle,
+  PaymentTerminal,
   ShiftTemplate,
   User,
   ShiftOpenPayload,
@@ -144,6 +146,42 @@ export class CloudProductService implements IProductService {
     await request<void>(`/setup/products/${id}`, {
       method: 'PUT',
       body: JSON.stringify({ isActive: false }),
+    });
+  }
+}
+
+export class CloudPaymentTerminalService implements IPaymentTerminalService {
+  async listTerminals(stationId: string): Promise<PaymentTerminal[]> {
+    return request<PaymentTerminal[]>(`/setup/payment-terminals?stationId=${stationId}`);
+  }
+
+  async createTerminal(data: {
+    stationId: string;
+    label: string;
+    provider?: string | null;
+    terminalCode?: string | null;
+    supportsCard?: boolean;
+    supportsUpi?: boolean;
+  }): Promise<PaymentTerminal> {
+    return request<PaymentTerminal>('/setup/payment-terminals', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateTerminal(
+    id: string,
+    data: Partial<{ label: string; provider: string | null; terminalCode: string | null; supportsCard: boolean; supportsUpi: boolean; isActive: boolean }>
+  ): Promise<PaymentTerminal> {
+    return request<PaymentTerminal>(`/setup/payment-terminals/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteTerminal(id: string): Promise<void> {
+    await request<void>(`/setup/payment-terminals/${id}`, {
+      method: 'DELETE',
     });
   }
 }

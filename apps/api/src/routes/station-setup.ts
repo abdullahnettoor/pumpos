@@ -209,92 +209,8 @@ stationSetupRouter.put('/stations/:id', validateJson(stationSchema.partial()), a
 });
 
 // ----------------------------------------------------
-// Products CRUD
+// Products are managed by the core-backed products router (routes/products.ts).
 // ----------------------------------------------------
-
-stationSetupRouter.get('/products', async (c) => {
-  const db = c.var.db;
-  const user = c.var.user;
-
-  const list = await db
-    .select()
-    .from(schema.products)
-    .where(eq(schema.products.organizationId, user.organizationId));
-
-  return c.json({ success: true, data: list });
-});
-
-stationSetupRouter.post('/products', async (c) => {
-  const db = c.var.db;
-  const user = c.var.user;
-
-  if (!canManageProduct(user.role)) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions to create products' } }, 403);
-  }
-
-  try {
-    const body = await c.req.json();
-    const [newProduct] = await db
-      .insert(schema.products)
-      .values({
-        organizationId: user.organizationId,
-        name: body.name,
-        code: body.code,
-        productType: body.productType,
-        stockTracked: body.stockTracked ?? true,
-        isTaxable: body.isTaxable ?? true,
-        unit: body.unit,
-        taxConfig: body.taxConfig ?? { gst_rate: 18 },
-        isActive: body.isActive ?? true,
-      })
-      .returning();
-
-    return c.json({ success: true, data: newProduct });
-  } catch (err: any) {
-    return c.json({ success: false, error: { code: 'BAD_REQUEST', message: err.message } }, 400);
-  }
-});
-
-stationSetupRouter.put('/products/:id', async (c) => {
-  const db = c.var.db;
-  const user = c.var.user;
-  const prodId = c.req.param('id');
-
-  if (!canManageProduct(user.role)) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions to modify products' } }, 403);
-  }
-
-  try {
-    const body = await c.req.json();
-    const [updated] = await db
-      .update(schema.products)
-      .set({
-        name: body.name,
-        code: body.code,
-        productType: body.productType,
-        stockTracked: body.stockTracked,
-        isTaxable: body.isTaxable,
-        unit: body.unit,
-        taxConfig: body.taxConfig,
-        isActive: body.isActive,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(schema.products.id, prodId),
-          eq(schema.products.organizationId, user.organizationId)
-        )
-      )
-      .returning();
-
-    if (!updated) {
-      return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Product not found' } }, 404);
-    }
-    return c.json({ success: true, data: updated });
-  } catch (err: any) {
-    return c.json({ success: false, error: { code: 'BAD_REQUEST', message: err.message } }, 400);
-  }
-});
 
 // ----------------------------------------------------
 // Tanks CRUD
@@ -1085,6 +1001,12 @@ stationSetupRouter.post('/onboarding/finalize', validateJson(finalizeOnboardingS
             name: product.name,
             code: product.code.toUpperCase(),
             productType: product.productType,
+            inventoryType:
+              product.productType === 'FUEL'
+                ? 'BULK'
+                : product.productType === 'SERVICE'
+                  ? 'NONE'
+                  : 'ITEM',
             stockTracked: product.stockTracked,
             isTaxable: product.isTaxable,
             unit: product.unit,

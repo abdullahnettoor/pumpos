@@ -100,6 +100,22 @@ export const nozzles = pgTable('nozzles', {
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
 
+// Payment terminal (card/UPI) machines. Captured at onboarding and linked to
+// dispenser units at shift open so card/UPI takings reconcile per terminal.
+export const paymentTerminals = pgTable('payment_terminals', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  organizationId: uuid('organization_id').references(() => organizations.id).notNull(),
+  stationId: uuid('station_id').references(() => stations.id).notNull(),
+  label: varchar('label', { length: 100 }).notNull(),
+  provider: varchar('provider', { length: 100 }), // bank / aggregator
+  terminalCode: varchar('terminal_code', { length: 100 }), // device TID
+  supportsCard: boolean('supports_card').default(true).notNull(),
+  supportsUpi: boolean('supports_upi').default(true).notNull(),
+  isActive: boolean('is_active').default(true).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
 // ----------------------------------------------------
 // PRODUCT DOMAIN
 // ----------------------------------------------------
@@ -110,6 +126,9 @@ export const products = pgTable('products', {
   name: varchar('name', { length: 255 }).notNull(),
   code: varchar('code', { length: 100 }).notNull(),
   productType: varchar('product_type', { length: 50 }).notNull(), // 'FUEL', 'LUBRICANT', 'ACCESSORY', 'SERVICE'
+  // Which inventory engine governs this product: 'BULK' (fuel tanks), 'ITEM'
+  // (packaged merchandise), or 'NONE' (services / non-stocked).
+  inventoryType: varchar('inventory_type', { length: 20 }).default('ITEM').notNull(),
   stockTracked: boolean('stock_tracked').default(true).notNull(),
   isTaxable: boolean('is_taxable').default(true).notNull(),
   unit: varchar('unit', { length: 50 }).notNull(),
@@ -120,8 +139,24 @@ export const products = pgTable('products', {
 });
 
 // ----------------------------------------------------
-// SHIFT DOMAIN
+// STATION OPERATIONS DOMAIN (Business Day + Shift)
 // ----------------------------------------------------
+
+// The accounting / reporting period anchor. Financial events attach to a
+// business day; operational (drawer) events additionally attach to a shift.
+export const businessDays = pgTable('business_days', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  organizationId: uuid('organization_id').references(() => organizations.id).notNull(),
+  stationId: uuid('station_id').references(() => stations.id).notNull(),
+  businessDate: varchar('business_date', { length: 10 }).notNull(), // YYYY-MM-DD
+  status: varchar('status', { length: 20 }).default('OPEN').notNull(), // 'OPEN' | 'CLOSED'
+  openedBy: uuid('opened_by').references(() => users.id).notNull(),
+  openedAt: timestamp('opened_at').defaultNow().notNull(),
+  closedBy: uuid('closed_by').references(() => users.id),
+  closedAt: timestamp('closed_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
 
 export const shiftTemplates = pgTable('shift_templates', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -136,6 +171,7 @@ export const shifts = pgTable('shifts', {
   id: uuid('id').defaultRandom().primaryKey(),
   organizationId: uuid('organization_id').references(() => organizations.id).notNull(),
   stationId: uuid('station_id').references(() => stations.id).notNull(),
+  businessDayId: uuid('business_day_id').references(() => businessDays.id).notNull(),
   shiftTemplateId: uuid('shift_template_id').references(() => shiftTemplates.id).notNull(),
   status: varchar('status', { length: 20 }).default('OPEN').notNull(), // 'OPEN', 'CLOSED', 'LOCKED'
   openedBy: uuid('opened_by').references(() => users.id).notNull(),
@@ -154,6 +190,15 @@ export const shiftStaffAssignments = pgTable('shift_staff_assignments', {
   shiftId: uuid('shift_id').references(() => shifts.id).notNull(),
   userId: uuid('user_id').references(() => users.id).notNull(),
   duId: uuid('du_id').references(() => dispenserUnits.id).notNull(),
+  assignedAt: timestamp('assigned_at').defaultNow().notNull(),
+});
+
+// Links payment terminals to a shift (optionally to a specific DU) at open.
+export const shiftTerminalLinks = pgTable('shift_terminal_links', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  shiftId: uuid('shift_id').references(() => shifts.id).notNull(),
+  terminalId: uuid('terminal_id').references(() => paymentTerminals.id).notNull(),
+  duId: uuid('du_id').references(() => dispenserUnits.id),
   assignedAt: timestamp('assigned_at').defaultNow().notNull(),
 });
 
@@ -219,6 +264,7 @@ export const customerDiscountRules = pgTable('customer_discount_rules', {
 export const customerTransactions = pgTable('customer_transactions', {
   id: uuid('id').defaultRandom().primaryKey(),
   shiftId: uuid('shift_id').references(() => shifts.id).notNull(),
+  businessDayId: uuid('business_day_id').references(() => businessDays.id).notNull(),
   customerId: uuid('customer_id').references(() => customers.id).notNull(),
   vehicleId: uuid('vehicle_id').references(() => customerVehicles.id),
   productId: uuid('product_id').references(() => products.id),
@@ -246,10 +292,15 @@ export const suppliers = pgTable('suppliers', {
 
 export const supplierTransactions = pgTable('supplier_transactions', {
   id: uuid('id').defaultRandom().primaryKey(),
-  shiftId: uuid('shift_id').references(() => shifts.id).notNull(),
+  // Nullable: a supplier payment from the drawer links to a shift; bank/office
+  // payments do not. Always anchored to a business day.
+  shiftId: uuid('shift_id').references(() => shifts.id),
+  businessDayId: uuid('business_day_id').references(() => businessDays.id).notNull(),
   supplierId: uuid('supplier_id').references(() => suppliers.id).notNull(),
   transactionType: varchar('transaction_type', { length: 50 }).notNull(), // 'Purchase', 'Payment', 'Adjustment'
   amount: numeric('amount', { precision: 12, scale: 2 }).notNull(),
+  paidFrom: varchar('paid_from', { length: 20 }).default('BANK').notNull(), // 'SHIFT_CASH' | 'BANK' | 'OWNER'
+  affectsDrawer: boolean('affects_drawer').default(false).notNull(),
   referenceType: varchar('reference_type', { length: 50 }),
   referenceId: uuid('reference_id'),
   notes: varchar('notes', { length: 500 }),
@@ -264,7 +315,11 @@ export const sales = pgTable('sales', {
   id: uuid('id').defaultRandom().primaryKey(),
   documentNumber: varchar('document_number', { length: 100 }).notNull(),
   shiftId: uuid('shift_id').references(() => shifts.id).notNull(),
+  businessDayId: uuid('business_day_id').references(() => businessDays.id).notNull(),
   saleType: varchar('sale_type', { length: 50 }).notNull(), // 'Fuel', 'Product', 'Mixed', 'Credit'
+  // How the sale was captured: 'READING' (fuel, derived from nozzle readings)
+  // or 'POS' (merchandise, entered transactionally).
+  captureMechanism: varchar('capture_mechanism', { length: 20 }).default('POS').notNull(),
   customerId: uuid('customer_id').references(() => customers.id),
   vehicleId: uuid('vehicle_id').references(() => customerVehicles.id),
   subtotalAmount: numeric('subtotal_amount', { precision: 12, scale: 2 }).notNull(),
@@ -289,7 +344,10 @@ export const saleItems = pgTable('sale_items', {
 
 export const stockMovements = pgTable('stock_movements', {
   id: uuid('id').defaultRandom().primaryKey(),
-  shiftId: uuid('shift_id').references(() => shifts.id).notNull(),
+  // Nullable: sale movements occur within a shift; purchase/receipt movements
+  // happen against a business day with no shift.
+  shiftId: uuid('shift_id').references(() => shifts.id),
+  businessDayId: uuid('business_day_id').references(() => businessDays.id).notNull(),
   productId: uuid('product_id').references(() => products.id).notNull(),
   tankId: uuid('tank_id').references(() => tanks.id),
   movementType: varchar('movement_type', { length: 50 }).notNull(), // 'Purchase', 'Sale', 'Adjustment', 'Decantation', 'Variance'
@@ -303,6 +361,7 @@ export const stockMovements = pgTable('stock_movements', {
 export const stockVariances = pgTable('stock_variances', {
   id: uuid('id').defaultRandom().primaryKey(),
   shiftId: uuid('shift_id').references(() => shifts.id).notNull(),
+  businessDayId: uuid('business_day_id').references(() => businessDays.id).notNull(),
   productId: uuid('product_id').references(() => products.id).notNull(),
   tankId: uuid('tank_id').references(() => tanks.id),
   expectedQuantity: numeric('expected_quantity', { precision: 12, scale: 3 }).notNull(),
@@ -326,9 +385,14 @@ export const expenseCategories = pgTable('expense_categories', {
 
 export const expenses = pgTable('expenses', {
   id: uuid('id').defaultRandom().primaryKey(),
-  shiftId: uuid('shift_id').references(() => shifts.id).notNull(),
+  // Nullable: only drawer-paid expenses link to a shift; rent/salary/bill
+  // expenses paid from bank/office attach only to the business day.
+  shiftId: uuid('shift_id').references(() => shifts.id),
+  businessDayId: uuid('business_day_id').references(() => businessDays.id).notNull(),
   categoryId: uuid('category_id').references(() => expenseCategories.id).notNull(),
   amount: numeric('amount', { precision: 12, scale: 2 }).notNull(),
+  paidFrom: varchar('paid_from', { length: 20 }).default('SHIFT_CASH').notNull(), // 'SHIFT_CASH' | 'BANK' | 'OWNER'
+  affectsDrawer: boolean('affects_drawer').default(true).notNull(),
   description: varchar('description', { length: 255 }),
   parentExpenseId: uuid('parent_expense_id'),
   adjustmentReason: varchar('adjustment_reason', { length: 255 }),
@@ -341,6 +405,7 @@ export const collections = pgTable('collections', {
   id: uuid('id').defaultRandom().primaryKey(),
   documentNumber: varchar('document_number', { length: 100 }).notNull(),
   shiftId: uuid('shift_id').references(() => shifts.id).notNull(),
+  businessDayId: uuid('business_day_id').references(() => businessDays.id).notNull(),
   customerId: uuid('customer_id').references(() => customers.id).notNull(),
   vehicleId: uuid('vehicle_id').references(() => customerVehicles.id),
   amount: numeric('amount', { precision: 12, scale: 2 }).notNull(),
@@ -352,7 +417,10 @@ export const collections = pgTable('collections', {
 export const purchases = pgTable('purchases', {
   id: uuid('id').defaultRandom().primaryKey(),
   documentNumber: varchar('document_number', { length: 100 }).notNull(),
-  shiftId: uuid('shift_id').references(() => shifts.id).notNull(),
+  // Purchases are inventory + payable events anchored to a business day, NOT a
+  // shift. shiftId is kept only for an optional drawer-paid linkage.
+  shiftId: uuid('shift_id').references(() => shifts.id),
+  businessDayId: uuid('business_day_id').references(() => businessDays.id).notNull(),
   supplierId: uuid('supplier_id').references(() => suppliers.id).notNull(),
   invoiceNumber: varchar('invoice_number', { length: 100 }),
   amount: numeric('amount', { precision: 12, scale: 2 }).notNull(),
@@ -403,6 +471,28 @@ export const businessEvents = pgTable('business_events', {
   entityId: uuid('entity_id').notNull(),
   payload: jsonb('payload').notNull(),
   occurredAt: timestamp('occurred_at').defaultNow().notNull(),
+});
+
+// Canonical append-only business-event log (Handbook Vol. 4). Mirrors the
+// DomainEvent envelope in @pump/core. Audit log + sync/replay source; business
+// tables remain the query-optimized projections.
+export const events = pgTable('events', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  eventId: uuid('event_id').notNull().unique(),
+  eventType: varchar('event_type', { length: 100 }).notNull(),
+  organizationId: uuid('organization_id').references(() => organizations.id).notNull(),
+  stationId: uuid('station_id').references(() => stations.id),
+  businessDayId: uuid('business_day_id').references(() => businessDays.id),
+  aggregateType: varchar('aggregate_type', { length: 100 }).notNull(),
+  aggregateId: uuid('aggregate_id').notNull(),
+  version: integer('version').default(1).notNull(),
+  occurredAt: timestamp('occurred_at').notNull(),
+  recordedAt: timestamp('recorded_at').defaultNow().notNull(),
+  actorId: uuid('actor_id').references(() => users.id),
+  correlationId: uuid('correlation_id'),
+  causationId: uuid('causation_id'),
+  payload: jsonb('payload').notNull(),
+  metadata: jsonb('metadata').default({}).notNull(),
 });
 
 export const syncEvents = pgTable('sync_events', {

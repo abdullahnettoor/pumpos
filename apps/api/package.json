@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@hono/zod-validator": "^0.8.0",
+    "@pump/core": "*",
     "@pump/db": "*",
     "@pump/shared": "*",
     "hono": "^4.4.2"

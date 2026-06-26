@@ -5,9 +5,13 @@ import { createDb, DbClient, schema } from '@pump/db';
 import { eq } from 'drizzle-orm';
 import { Role } from '@pump/shared';
 import { stationSetupRouter } from './routes/station-setup.js';
-import { shiftsRouter } from './routes/shifts.js';
-import { transactionsRouter } from './routes/transactions.js';
-import { dssrRouter } from './routes/dssr.js';
+import { paymentTerminalsRouter } from './routes/payment-terminals.js';
+import { productsRouter } from './routes/products.js';
+// NOTE: shifts/transactions/dssr routes are temporarily disabled during the v2
+// rewrite — they are rebuilt as core capability slices in Phases 3/6/7.
+// import { shiftsRouter } from './routes/shifts.js';
+// import { transactionsRouter } from './routes/transactions.js';
+// import { dssrRouter } from './routes/dssr.js';
 
 
 const keyCache = new Map<string, CryptoKey>();
@@ -188,9 +192,12 @@ api.get('/session', (c) => {
 
 // Mount routes
 api.route('/setup', stationSetupRouter);
-api.route('/shifts', shiftsRouter);
-api.route('/transactions', transactionsRouter);
-api.route('/dssr', dssrRouter);
+api.route('/setup', paymentTerminalsRouter);
+api.route('/setup', productsRouter);
+// Disabled during v2 rewrite (rebuilt in later phases):
+// api.route('/shifts', shiftsRouter);
+// api.route('/transactions', transactionsRouter);
+// api.route('/dssr', dssrRouter);
 
 
 // Mount authenticated group
