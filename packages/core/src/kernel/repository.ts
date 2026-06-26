@@ -17,3 +17,11 @@ export interface Repository<TAggregate, TId = string> {
 export interface UnitOfWork {
   run<T>(work: () => Promise<T>): Promise<T>;
 }
+
+/**
+ * Generates human-readable document numbers (e.g. COLL-000123, PURCH-000045).
+ * Implemented by an adapter (e.g. backed by the document_sequences table).
+ */
+export interface DocumentNumberGenerator {
+  next(documentType: string): Promise<string>;
+}

@@ -263,7 +263,9 @@ export const customerDiscountRules = pgTable('customer_discount_rules', {
 
 export const customerTransactions = pgTable('customer_transactions', {
   id: uuid('id').defaultRandom().primaryKey(),
-  shiftId: uuid('shift_id').references(() => shifts.id).notNull(),
+  // Nullable: customer-ledger entries (credit sales, collections) are anchored
+  // to the business day; a shift link exists only for drawer-affecting cash.
+  shiftId: uuid('shift_id').references(() => shifts.id),
   businessDayId: uuid('business_day_id').references(() => businessDays.id).notNull(),
   customerId: uuid('customer_id').references(() => customers.id).notNull(),
   vehicleId: uuid('vehicle_id').references(() => customerVehicles.id),
@@ -404,7 +406,9 @@ export const expenses = pgTable('expenses', {
 export const collections = pgTable('collections', {
   id: uuid('id').defaultRandom().primaryKey(),
   documentNumber: varchar('document_number', { length: 100 }).notNull(),
-  shiftId: uuid('shift_id').references(() => shifts.id).notNull(),
+  // Nullable: only cash collected at the counter touches the drawer/shift.
+  // Bank/UPI/online collections are anchored to the business day only.
+  shiftId: uuid('shift_id').references(() => shifts.id),
   businessDayId: uuid('business_day_id').references(() => businessDays.id).notNull(),
   customerId: uuid('customer_id').references(() => customers.id).notNull(),
   vehicleId: uuid('vehicle_id').references(() => customerVehicles.id),
