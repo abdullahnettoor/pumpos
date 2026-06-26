@@ -562,6 +562,20 @@ export class CloudTransactionService {
       body: JSON.stringify(payload),
     });
   }
+
+  async recordSale(payload: {
+    shiftId: string;
+    paymentMethod: 'Cash' | 'Card' | 'UPI' | 'Credit';
+    lines: { productId: string; quantity: number; unitPrice: number; discountAmount?: number; taxAmount?: number; tankId?: string | null }[];
+    customerId?: string | null;
+    vehicleId?: string | null;
+    notes?: string;
+  }): Promise<any> {
+    return request<any>('/transactions/sales', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
 }
 
 export class CloudPricingService {

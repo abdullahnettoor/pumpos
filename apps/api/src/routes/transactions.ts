@@ -15,6 +15,7 @@ import {
   UpdateVehicle,
   RecordExpense,
   RecordCollection,
+  RecordCreditSale,
   RecordPurchase,
   RecordSupplierPayment,
   CreateSale,
@@ -409,6 +410,20 @@ transactionsRouter.post('/expenses', async (c) => {
 transactionsRouter.post('/collections', async (c) => {
   const user = c.var.user;
   const body = await c.req.json().catch(() => ({}));
+  // A "Credit" collection is a credit SALE (a receivable), not a payment. It is
+  // recorded on the customer ledger with no drawer/stock impact.
+  if (body?.paymentMethod === 'Credit') {
+    const result = await runInTransaction(c.var.db, (tx, events) =>
+      new RecordCreditSale({
+        ledger: new DrizzleCustomerLedgerRepository(tx),
+        customers: new DrizzleCustomerRepository(tx),
+        shifts: new DrizzleShiftRepository(tx),
+        businessDays: new DrizzleBusinessDayRepository(tx),
+        events,
+      }).execute(body, buildContext(user, { stationId: body?.stationId })),
+    );
+    return sendResult(c, result);
+  }
   const result = await runInTransaction(c.var.db, (tx, events) =>
     new RecordCollection({
       collections: new DrizzleCollectionRepository(tx),
