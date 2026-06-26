@@ -8,9 +8,9 @@ import { stationSetupRouter } from './routes/station-setup.js';
 import { paymentTerminalsRouter } from './routes/payment-terminals.js';
 import { productsRouter } from './routes/products.js';
 import { shiftsRouter } from './routes/shifts.js';
-// NOTE: transactions/dssr routes are temporarily disabled during the v2
-// rewrite — they are rebuilt as core capability slices in Phases 6/7.
-// import { transactionsRouter } from './routes/transactions.js';
+import { transactionsRouter } from './routes/transactions.js';
+// NOTE: dssr route is temporarily disabled during the v2 rewrite — rebuilt as a
+// core capability slice in Phase 7.
 // import { dssrRouter } from './routes/dssr.js';
 
 
@@ -217,8 +217,8 @@ api.route('/setup', stationSetupRouter);
 api.route('/setup', paymentTerminalsRouter);
 api.route('/setup', productsRouter);
 api.route('/shifts', shiftsRouter);
+api.route('/transactions', transactionsRouter);
 // Disabled during v2 rewrite (rebuilt in later phases):
-// api.route('/transactions', transactionsRouter);
 // api.route('/dssr', dssrRouter);
 
 
