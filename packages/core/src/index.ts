@@ -10,3 +10,4 @@
  */
 export * from './kernel/index.js';
 export * from './capabilities/station-setup/index.js';
+export * from './capabilities/station-ops/index.js';

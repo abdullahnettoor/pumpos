@@ -24,7 +24,6 @@
   "exclude": [
     "dist",
     "src/routes/transactions.ts",
-    "src/routes/shifts.ts",
     "src/routes/dssr.ts"
   ]
 }
