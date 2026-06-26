@@ -57,6 +57,7 @@ export interface NozzleReadingRepository {
 
 /** Drawer-relevant money totals for a shift (drawer reconciliation model). */
 export interface ShiftReconciliationTotals {
+  cashSales: number;
   cashCollections: number;
   cardCollections: number;
   upiCollections: number;

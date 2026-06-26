@@ -322,6 +322,8 @@ export const sales = pgTable('sales', {
   // How the sale was captured: 'READING' (fuel, derived from nozzle readings)
   // or 'POS' (merchandise, entered transactionally).
   captureMechanism: varchar('capture_mechanism', { length: 20 }).default('POS').notNull(),
+  // Settlement method for the sale; drives the cash portion of drawer reconciliation.
+  paymentMethod: varchar('payment_method', { length: 20 }).default('Cash').notNull(), // 'Cash' | 'Card' | 'UPI' | 'Credit'
   customerId: uuid('customer_id').references(() => customers.id),
   vehicleId: uuid('vehicle_id').references(() => customerVehicles.id),
   subtotalAmount: numeric('subtotal_amount', { precision: 12, scale: 2 }).notNull(),
@@ -362,7 +364,9 @@ export const stockMovements = pgTable('stock_movements', {
 
 export const stockVariances = pgTable('stock_variances', {
   id: uuid('id').defaultRandom().primaryKey(),
-  shiftId: uuid('shift_id').references(() => shifts.id).notNull(),
+  // Nullable: a dip/physical count is a business-day reconciliation, not a
+  // shift-bound event. shift_id is set only for shift-scoped variance capture.
+  shiftId: uuid('shift_id').references(() => shifts.id),
   businessDayId: uuid('business_day_id').references(() => businessDays.id).notNull(),
   productId: uuid('product_id').references(() => products.id).notNull(),
   tankId: uuid('tank_id').references(() => tanks.id),

@@ -83,7 +83,7 @@ describe('CloseShift', () => {
     const shifts = new ShiftRepo([openShiftRow()]);
     const nozzles = new NozzleRepo([nozzle()]);
     const readings = new ReadingRepo([reading()]);
-    const recon = new ReconReader({ cashCollections: 2000, cardCollections: 0, upiCollections: 0, creditCollections: 0, drawerExpenses: 300, drawerSupplierPayments: 0 });
+    const recon = new ReconReader({ cashSales: 0, cashCollections: 2000, cardCollections: 0, upiCollections: 0, creditCollections: 0, drawerExpenses: 300, drawerSupplierPayments: 0 });
     const stock = new StockWriter();
     const summaries = new SummaryWriter();
     const store = new InMemoryEventStore();
@@ -113,7 +113,7 @@ describe('CloseShift', () => {
     const closed = { ...openShiftRow(), status: 'CLOSED' as const };
     const result = await new CloseShift({
       shifts: new ShiftRepo([closed]), nozzles: new NozzleRepo([]), nozzleReadings: new ReadingRepo([]),
-      reconciliation: new ReconReader({ cashCollections: 0, cardCollections: 0, upiCollections: 0, creditCollections: 0, drawerExpenses: 0, drawerSupplierPayments: 0 }),
+      reconciliation: new ReconReader({ cashSales: 0, cashCollections: 0, cardCollections: 0, upiCollections: 0, creditCollections: 0, drawerExpenses: 0, drawerSupplierPayments: 0 }),
       stockMovements: new StockWriter(), summaries: new SummaryWriter(), events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
     }).execute({ shiftId: 'sh-1', closingCash: 0 }, makeContext());
     expect(result.success).toBe(false);

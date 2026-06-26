@@ -130,7 +130,7 @@ export class CloseShift implements UseCase<CloseShiftCommand, CloseShiftResult> 
     const closingCash = cmd.closingCash;
     const cashDrops = Number(cmd.cashDrops ?? 0);
     const expectedDrawerCash =
-      openingCash + totals.cashCollections - totals.drawerExpenses - totals.drawerSupplierPayments - cashDrops;
+      openingCash + totals.cashSales + totals.cashCollections - totals.drawerExpenses - totals.drawerSupplierPayments - cashDrops;
     const cashVariance = closingCash - expectedDrawerCash;
 
     const nowIso = ctx.clock.now().toISOString();
