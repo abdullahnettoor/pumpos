@@ -8,11 +8,12 @@ import { ShiftControlBar } from './ShiftControlBar.js';
 import { ShiftHistoryTab } from './ShiftHistoryTab.js';
 import { CloseShiftWizard } from './CloseShiftWizard.js';
 import { ShiftCloseSuccess } from './ShiftCloseSuccess.js';
-import { Drawer } from '../Drawer.js';
-import { ExpenseEntryForm } from '../transactions/ExpenseEntryForm.js';
-import { CollectionEntryForm } from '../transactions/CollectionEntryForm.js';
-import { CreditSaleEntryForm, VehicleSearchResult } from '../transactions/CreditSaleEntryForm.js';
-import { PurchaseEntryForm } from '../transactions/PurchaseEntryForm.js';
+import { AttendantHandoversDashboard } from './AttendantHandoversDashboard.js';
+import { NozzleReadingsGrid } from './NozzleReadingsGrid.js';
+import { ShiftTotalsSummary } from './ShiftTotalsSummary.js';
+import { OpenShiftForm } from './OpenShiftForm.js';
+import { QuickEntryDrawer } from './QuickEntryDrawer.js';
+import type { VehicleSearchResult } from '../transactions/CreditSaleEntryForm.js';
 import { useShiftStatus, useInvalidateOperational } from '../../query/hooks.js';
 import { Station } from '@pump/shared';
 import { FileText, User, Lock, AlertTriangle, Check, Fuel, Info, Play, CalendarRange, History, Clock3 } from 'lucide-react';
@@ -929,276 +930,28 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         />
 
         {/* 1. Attendant Handovers Dashboard */}
-        <div className="card" style={{ overflow: 'hidden' }}>
-          <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-soft)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div>
-              <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)' }}>
-                Attendant Handovers Dashboard
-              </h3>
-              <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                Record dispenser nozzle closing readings, cash, card, UPI collections and credit chits per assigned attendant.
-              </p>
-            </div>
-          </div>
-          <div className="shift-table-scroll-container">
-          <table className="shift-table" style={{ width: '100%', minWidth: '1020px', borderCollapse: 'collapse', fontSize: '13px' }}>
-            <thead>
-              <tr style={{ backgroundColor: 'var(--bg-surface-alt)', borderBottom: '1px solid var(--border-soft)', textAlign: 'left', color: 'var(--text-muted)' }}>
-                <th style={{ padding: '10px 20px', fontWeight: 600, position: 'sticky', left: 0, zIndex: 2, backgroundColor: 'var(--bg-surface-alt)', minWidth: '170px' }}>Attendant</th>
-                <th style={{ padding: '10px 12px', fontWeight: 600, position: 'sticky', left: 170, zIndex: 2, backgroundColor: 'var(--bg-surface-alt)', minWidth: '90px' }}>Dispenser</th>
-                <th style={{ padding: '10px 20px', fontWeight: 600 }}>Handover Status</th>
-                <th style={{ padding: '10px 20px', fontWeight: 600, textAlign: 'right' }}>Cash (₹)</th>
-                <th style={{ padding: '10px 20px', fontWeight: 600, textAlign: 'right' }}>Card/UPI (₹)</th>
-                <th style={{ padding: '10px 20px', fontWeight: 600, textAlign: 'right' }}>Credit Chits (₹)</th>
-                <th style={{ padding: '10px 20px', fontWeight: 600, textAlign: 'right' }}>Expected Sales (₹)</th>
-                <th style={{ padding: '10px 20px', fontWeight: 600, textAlign: 'right' }}>Variance (₹)</th>
-                <th style={{ padding: '10px 20px', fontWeight: 600, textAlign: 'center' }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {activeShift.staffAssignments && activeShift.staffAssignments.length > 0 ? (
-                activeShift.staffAssignments.map((sa: any, idx: number) => {
-                  const handoverRecord = handovers.find(
-                    (h: any) => h.userId === sa.userId && h.duId === sa.duId
-                  );
-                  const isRecorded = !!handoverRecord;
-
-                  return (
-                    <tr key={idx} style={{ borderBottom: '1px solid var(--border-soft)' }}>
-                      <td style={{ padding: '12px 20px', fontWeight: 600, color: 'var(--text-strong)', position: 'sticky', left: 0, zIndex: 1, backgroundColor: 'var(--bg-surface)', minWidth: '170px' }}>
-                        {sa.userName}
-                      </td>
-                      <td style={{ padding: '12px 12px', color: 'var(--text-default)', position: 'sticky', left: 170, zIndex: 1, backgroundColor: 'var(--bg-surface)', minWidth: '90px' }}>
-                        {sa.duCode || sa.duName}
-                      </td>
-                      <td style={{ padding: '12px 20px' }}>
-                        <StatusBadge
-                          status={isRecorded ? 'RECORDED' : 'PENDING'}
-                          type={isRecorded ? 'success' : 'warning'}
-                        />
-                      </td>
-                      <td style={{ padding: '12px 20px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>
-                        {isRecorded ? `₹${Number(handoverRecord.cashHandedOver).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '—'}
-                      </td>
-                      <td style={{ padding: '12px 20px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>
-                        {isRecorded ? `₹${(Number(handoverRecord.cardHandedOver) + Number(handoverRecord.upiHandedOver)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '—'}
-                      </td>
-                      <td style={{ padding: '12px 20px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>
-                        {isRecorded ? `₹${Number(handoverRecord.creditHandedOver).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '—'}
-                      </td>
-                      <td style={{ padding: '12px 20px', textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
-                        {isRecorded ? `₹${Number(handoverRecord.expectedSales).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '—'}
-                      </td>
-                      <td style={{
-                        padding: '12px 20px',
-                        textAlign: 'right',
-                        fontFamily: 'var(--font-mono)',
-                        fontWeight: 600,
-                        color: !isRecorded ? 'var(--text-default)' : Number(handoverRecord.varianceAmount) === 0 ? 'var(--state-success-fg)' : Number(handoverRecord.varianceAmount) > 0 ? 'var(--brand-warning)' : 'var(--brand-danger)'
-                      }}>
-                        {isRecorded ? (
-                          <>
-                            {Number(handoverRecord.varianceAmount) > 0 ? '+' : ''}
-                            ₹{Number(handoverRecord.varianceAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                          </>
-                        ) : '—'}
-                      </td>
-                      <td style={{ padding: '8px 20px', textAlign: 'center' }}>
-                        <button
-                          type="button"
-                          className={isRecorded ? "btn btn-secondary btn-sm" : "btn btn-primary btn-sm"}
-                          onClick={() => handleOpenHandoverDrawer(sa)}
-                        >
-                          {isRecorded ? 'Edit Handover' : 'Record Handover'}
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })
-              ) : (
-                <tr>
-                  <td colSpan={9} style={{ padding: '20px', textAlign: 'center', color: 'var(--text-muted)' }}>
-                    No staff assignments found for this active shift. Assign staff dispensers in the setup to record handovers.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-          </div>
-        </div>
+        <AttendantHandoversDashboard
+          staffAssignments={activeShift.staffAssignments}
+          handovers={handovers}
+          onRecordHandover={handleOpenHandoverDrawer}
+        />
 
         {/* 2. Nozzle Readings Grid */}
-        <div className="card" style={{ overflow: 'hidden' }}>
-          <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-soft)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div>
-              <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)' }}>
-                Nozzle Readings Grid
-              </h3>
-              <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                Summary of nozzle closing readings and volume sold compiled from recorded attendant handovers.
-              </p>
-            </div>
-          </div>
-
-          <div className="shift-table-scroll-container">
-          <table className="shift-table" style={{ width: '100%', minWidth: '1140px', borderCollapse: 'collapse', fontSize: '13px' }}>
-            <thead>
-              <tr style={{ backgroundColor: 'var(--bg-surface-alt)', borderBottom: '1px solid var(--border-soft)', textAlign: 'left', color: 'var(--text-muted)' }}>
-                <th style={{ padding: '10px 12px', fontWeight: 600, position: 'sticky', left: 0, zIndex: 2, backgroundColor: 'var(--bg-surface-alt)', minWidth: '80px' }}>Nozzle</th>
-                <th style={{ padding: '10px 12px', fontWeight: 600, position: 'sticky', left: 80, zIndex: 2, backgroundColor: 'var(--bg-surface-alt)', minWidth: '90px' }}>Dispenser</th>
-                <th style={{ padding: '10px 20px', fontWeight: 600 }}>Staff</th>
-                <th style={{ padding: '10px 20px', fontWeight: 600 }}>Product</th>
-                <th style={{ padding: '10px 20px', fontWeight: 600 }}>Tank</th>
-                <th style={{ padding: '10px 20px', fontWeight: 600, textAlign: 'right' }}>Price</th>
-                <th style={{ padding: '10px 20px', fontWeight: 600, textAlign: 'right' }}>Opening Rd</th>
-                <th style={{ padding: '10px 20px', fontWeight: 600, textAlign: 'right' }}>Closing Rd</th>
-                <th style={{ padding: '10px 20px', fontWeight: 600, textAlign: 'right' }}>Volume Sold</th>
-                <th style={{ padding: '10px 20px', fontWeight: 600, textAlign: 'right' }}>Sales Value</th>
-              </tr>
-            </thead>
-            <tbody>
-              {activeShift.nozzleReadings.map((nr: any, idx: number) => {
-                const opening = Number(nr.openingReading);
-                const closing = closingReadings[nr.nozzleId] ?? opening;
-                const volume = closing - opening;
-                const price = Number(nr.unitPrice || 0);
-                const value = volume * price;
-
-                const assignment = data?.activeShift?.staffAssignments?.find(
-                  (sa: any) => sa.duId === nr.duId
-                );
-                const assignedStaffName = assignment ? assignment.userName : 'Unassigned';
-
-                return (
-                  <tr key={idx} style={{ borderBottom: '1px solid var(--border-soft)' }}>
-                    <td style={{ padding: '12px 12px', fontWeight: 600, color: 'var(--text-strong)', position: 'sticky', left: 0, zIndex: 1, backgroundColor: 'var(--bg-surface)', minWidth: '80px' }}>{nr.nozzleName}</td>
-                    <td style={{ padding: '12px 12px', color: 'var(--text-default)', position: 'sticky', left: 80, zIndex: 1, backgroundColor: 'var(--bg-surface)', minWidth: '90px' }}>{nr.duCode || nr.duName || 'N/A'}</td>
-                    <td style={{ padding: '12px 20px', color: 'var(--text-default)' }}>
-                      <span style={{ 
-                        fontSize: '11px',
-                        padding: '2px 6px',
-                        borderRadius: '4px',
-                        backgroundColor: assignedStaffName === 'Unassigned' ? 'var(--bg-surface-alt)' : 'rgba(16, 185, 129, 0.08)',
-                        color: assignedStaffName === 'Unassigned' ? 'var(--text-muted)' : '#059669',
-                        fontWeight: 600
-                      }}>
-                        {assignedStaffName}
-                      </span>
-                    </td>
-                    <td style={{ padding: '12px 20px', color: 'var(--text-default)' }}>{nr.productName} ({nr.productCode})</td>
-                    <td style={{ padding: '12px 20px', color: 'var(--text-muted)' }}>{nr.tankName}</td>
-                    <td style={{ padding: '12px 20px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>
-                      ₹{price.toFixed(2)}
-                    </td>
-                    <td style={{ padding: '12px 20px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>
-                      {opening.toFixed(3)}
-                    </td>
-                    <td style={{ padding: '12px 20px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--text-strong)' }}>
-                      {closing.toFixed(3)}
-                    </td>
-                    <td style={{
-                      padding: '12px 20px',
-                      textAlign: 'right',
-                      fontWeight: 600,
-                      color: volume < 0 ? 'var(--state-danger-fg)' : 'var(--text-strong)',
-                      fontFamily: 'var(--font-mono)'
-                    }}>
-                      {volume.toFixed(3)} L
-                    </td>
-                    <td style={{
-                      padding: '12px 20px',
-                      textAlign: 'right',
-                      fontWeight: 600,
-                      color: 'var(--text-strong)',
-                      fontFamily: 'var(--font-mono)'
-                    }}>
-                      ₹{value.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          </div>
-        </div>
+        <NozzleReadingsGrid
+          nozzleReadings={activeShift.nozzleReadings}
+          closingReadings={closingReadings}
+          staffAssignments={data?.activeShift?.staffAssignments || []}
+        />
 
         {/* Shift Totals Summary Card */}
-        <div style={{
-          backgroundColor: 'var(--bg-surface)',
-          border: '1px solid var(--border-soft)',
-          borderRadius: 'var(--radius-card)',
-          padding: '20px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '16px',
-          marginTop: '8px',
-          marginBottom: '8px'
-        }}>
-          <div>
-            <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)' }}>
-              Operational Summary (Current Shift)
-            </h3>
-            <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
-              Real-time summary of transactions logged via sidebar modules for this active shift.
-            </p>
-          </div>
-
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
-            gap: '16px'
-          }}>
-            <div style={{ padding: '12px', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', backgroundColor: 'var(--bg-canvas)' }}>
-              <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', fontWeight: 600 }}>Petty Expenses</span>
-              <strong style={{ fontSize: '15px', color: 'var(--brand-danger)', fontFamily: 'var(--font-mono)' }}>
-                ₹{shiftTotals.cashExpenses.toLocaleString('en-IN')}
-              </strong>
-              <span style={{ fontSize: '10px', color: 'var(--text-faint)', display: 'block', marginTop: '2px' }}>
-                {shiftTotals.expenseCount} items recorded
-              </span>
-            </div>
-
-            <div style={{ padding: '12px', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', backgroundColor: 'var(--bg-canvas)' }}>
-              <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', fontWeight: 600 }}>Cash Handed Over</span>
-              <strong style={{ fontSize: '15px', color: 'var(--state-success-fg)', fontFamily: 'var(--font-mono)' }}>
-                ₹{activeCashCollections.toLocaleString('en-IN')}
-              </strong>
-              <span style={{ fontSize: '10px', color: 'var(--text-faint)', display: 'block', marginTop: '2px' }}>
-                {handovers.length} handovers received
-              </span>
-            </div>
-
-            <div style={{ padding: '12px', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', backgroundColor: 'var(--bg-canvas)' }}>
-              <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', fontWeight: 600 }}>Card & UPI Handover</span>
-              <strong style={{ fontSize: '15px', color: 'var(--text-strong)', fontFamily: 'var(--font-mono)' }}>
-                ₹{(activeCardCollections + activeUpiCollections).toLocaleString('en-IN')}
-              </strong>
-              <span style={{ fontSize: '10px', color: 'var(--text-faint)', display: 'block', marginTop: '2px' }}>
-                Card: ₹{activeCardCollections.toLocaleString('en-IN')} • UPI: ₹{activeUpiCollections.toLocaleString('en-IN')}
-              </span>
-            </div>
-
-            <div style={{ padding: '12px', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', backgroundColor: 'var(--bg-canvas)' }}>
-              <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', fontWeight: 600 }}>Credit Fleet Chits</span>
-              <strong style={{ fontSize: '15px', color: 'var(--brand-warning)', fontFamily: 'var(--font-mono)' }}>
-                ₹{activeCreditSales.toLocaleString('en-IN')}
-              </strong>
-              <span style={{ fontSize: '10px', color: 'var(--text-faint)', display: 'block', marginTop: '2px' }}>
-                Logged Bills: ₹{shiftTotals.creditSales.toLocaleString('en-IN')}
-              </span>
-            </div>
-
-            <div style={{ padding: '12px', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', backgroundColor: 'var(--bg-canvas)' }}>
-              <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', fontWeight: 600 }}>Supplier Purchases</span>
-              <strong style={{ fontSize: '15px', color: 'var(--brand-secondary)', fontFamily: 'var(--font-mono)' }}>
-                ₹{shiftTotals.purchaseTotal.toLocaleString('en-IN')}
-              </strong>
-              <span style={{ fontSize: '10px', color: 'var(--text-faint)', display: 'block', marginTop: '2px' }}>
-                {shiftTotals.purchaseCount} drops recorded
-              </span>
-            </div>
-          </div>
-        </div>
+        <ShiftTotalsSummary
+          shiftTotals={shiftTotals}
+          cashCollections={activeCashCollections}
+          cardCollections={activeCardCollections}
+          upiCollections={activeUpiCollections}
+          creditSales={activeCreditSales}
+          handoverCount={handovers.length}
+        />
 
         {/* Close Shift Wizard (Drawer) */}
         <CloseShiftWizard
@@ -1231,155 +984,75 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
           onConfirmClose={() => handleCloseShift()}
         />
 
-        {/* Handover Drawer Overlay */}
-        <Drawer
+        {/* Quick Entry Drawer */}
+        <QuickEntryDrawer
           isOpen={quickEntryOpen}
           onClose={closeQuickEntryDrawer}
-          title={(() => {
-            const action =
-              quickEntryType === 'expense'
-                ? 'Add Expense'
-                : quickEntryType === 'collection'
-                ? 'Log Collection'
-                : quickEntryType === 'credit-sale'
-                ? 'Credit Sale'
-                : 'Add Purchase';
-            const shiftLabel =
-              shiftOptions.find((o) => o.id === targetShiftId)?.label ||
-              data?.activeShift?.templateName;
-            return shiftLabel ? `${shiftLabel} · ${action}` : action;
-          })()}
-        >
-          {quickEntryLoading ? (
-            <div style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Loading quick-entry form...</div>
-          ) : !targetShiftId ? (
-            <div style={{
-              backgroundColor: 'var(--state-warning-bg)',
-              color: 'var(--state-warning-fg)',
-              padding: '14px',
-              borderRadius: 'var(--radius-input)',
-              border: '1px solid var(--border-soft)',
-              fontSize: '13px'
-            }}>
-              A shift is required to record transactions. Open a shift first and try again.
-            </div>
-          ) : (
-            <>
-              {quickEntryType === 'expense' && (
-                <ExpenseEntryForm
-                  shiftOptions={shiftOptions}
-                  targetShiftId={targetShiftId}
-                  onTargetShiftIdChange={setTargetShiftId}
-                  categoryId={expenseCategoryId}
-                  onCategoryIdChange={setExpenseCategoryId}
-                  categories={categories}
-                  amount={expenseAmount}
-                  onAmountChange={setExpenseAmount}
-                  description={expenseDescription}
-                  onDescriptionChange={setExpenseDescription}
-                  submitting={quickEntrySubmitting}
-                  error={quickEntryError}
-                  onCancel={closeQuickEntryDrawer}
-                  onSubmit={handleExpenseSubmit}
-                  submitLabel="Add Expense"
-                />
-              )}
-
-              {quickEntryType === 'collection' && (
-                <CollectionEntryForm
-                  shiftOptions={shiftOptions}
-                  targetShiftId={targetShiftId}
-                  onTargetShiftIdChange={setTargetShiftId}
-                  customerId={collectionCustomerId}
-                  onCustomerIdChange={setCollectionCustomerId}
-                  customers={customers}
-                  amount={collectionAmount}
-                  onAmountChange={setCollectionAmount}
-                  paymentMethod={collectionPaymentMethod}
-                  onPaymentMethodChange={setCollectionPaymentMethod}
-                  notes={collectionNotes}
-                  onNotesChange={setCollectionNotes}
-                  submitting={quickEntrySubmitting}
-                  error={quickEntryError}
-                  onCancel={closeQuickEntryDrawer}
-                  onSubmit={handleCollectionSubmit}
-                  submitLabel={collectionPaymentMethod === 'Credit' ? 'Log Credit Sale' : 'Log Collection'}
-                  submittingLabel="Recording..."
-                  submitDisabled={quickEntrySubmitting || !collectionAmount}
-                  amountLabel="Amount (₹)"
-                  amountPlaceholder="0.00"
-                  notesLabel="Notes / Fleet Slip ID"
-                  notesPlaceholder="Slip code, transaction ref..."
-                  paymentMethodLabel="Entry Type / Payment Method"
-                  usePaymentMethodButtons={true}
-                  walkInOptionLabel="-- Walk-in / Cash Customer --"
-                  customerOptionLabel={(cust) => `${cust.name} (${cust.customerType})`}
-                />
-              )}
-
-              {quickEntryType === 'credit-sale' && (
-                <CreditSaleEntryForm
-                  shiftOptions={shiftOptions}
-                  targetShiftId={targetShiftId}
-                  onTargetShiftIdChange={setTargetShiftId}
-                  searchVehicles={(q) => transactionService.searchVehicles(q)}
-                  getPriceForProduct={(productId) => {
-                    if (!productId) return null;
-                    const nr = data?.activeShift?.nozzleReadings?.find(
-                      (r: any) => r.productId === productId && r.unitPrice != null
-                    );
-                    return nr ? Number(nr.unitPrice) : null;
-                  }}
-                  selectedVehicle={creditSaleVehicle}
-                  onSelectedVehicleChange={setCreditSaleVehicle}
-                  quantity={creditSaleQuantity}
-                  onQuantityChange={setCreditSaleQuantity}
-                  unitPrice={creditSaleUnitPrice}
-                  onUnitPriceChange={setCreditSaleUnitPrice}
-                  amount={creditSaleAmount}
-                  onAmountChange={setCreditSaleAmount}
-                  notes={creditSaleNotes}
-                  onNotesChange={setCreditSaleNotes}
-                  submitting={quickEntrySubmitting}
-                  error={quickEntryError}
-                  onCancel={closeQuickEntryDrawer}
-                  onSubmit={handleCreditSaleSubmit}
-                />
-              )}
-
-              {quickEntryType === 'purchase' && (
-                <PurchaseEntryForm
-                  shiftOptions={shiftOptions}
-                  targetShiftId={targetShiftId}
-                  onTargetShiftIdChange={setTargetShiftId}
-                  supplierId={purchaseSupplierId}
-                  onSupplierIdChange={setPurchaseSupplierId}
-                  suppliers={suppliers}
-                  productId={purchaseProductId}
-                  onProductIdChange={setPurchaseProductId}
-                  products={products}
-                  quantity={purchaseQuantity}
-                  onQuantityChange={setPurchaseQuantity}
-                  totalAmount={purchaseTotalAmount}
-                  onTotalAmountChange={setPurchaseTotalAmount}
-                  invoiceNumber={purchaseInvoiceNumber}
-                  onInvoiceNumberChange={setPurchaseInvoiceNumber}
-                  notes={purchaseNotes}
-                  onNotesChange={setPurchaseNotes}
-                  isFuel={isFuelPurchase}
-                  productTanks={purchaseProductTanks}
-                  allocations={purchaseAllocations}
-                  onAllocationsChange={setPurchaseAllocations}
-                  submitting={quickEntrySubmitting}
-                  error={quickEntryError}
-                  onCancel={closeQuickEntryDrawer}
-                  onSubmit={handlePurchaseSubmit}
-                  submitLabel="Add Purchase"
-                />
-              )}
-            </>
-          )}
-        </Drawer>
+          quickEntryType={quickEntryType}
+          loading={quickEntryLoading}
+          submitting={quickEntrySubmitting}
+          error={quickEntryError}
+          shiftOptions={shiftOptions}
+          targetShiftId={targetShiftId}
+          onTargetShiftIdChange={setTargetShiftId}
+          activeShiftTemplateName={data?.activeShift?.templateName}
+          categories={categories}
+          expenseCategoryId={expenseCategoryId}
+          onExpenseCategoryIdChange={setExpenseCategoryId}
+          expenseAmount={expenseAmount}
+          onExpenseAmountChange={setExpenseAmount}
+          expenseDescription={expenseDescription}
+          onExpenseDescriptionChange={setExpenseDescription}
+          onExpenseSubmit={handleExpenseSubmit}
+          customers={customers}
+          collectionCustomerId={collectionCustomerId}
+          onCollectionCustomerIdChange={setCollectionCustomerId}
+          collectionAmount={collectionAmount}
+          onCollectionAmountChange={setCollectionAmount}
+          collectionPaymentMethod={collectionPaymentMethod}
+          onCollectionPaymentMethodChange={setCollectionPaymentMethod}
+          collectionNotes={collectionNotes}
+          onCollectionNotesChange={setCollectionNotes}
+          onCollectionSubmit={handleCollectionSubmit}
+          searchVehicles={(q) => transactionService.searchVehicles(q)}
+          getPriceForProduct={(productId) => {
+            if (!productId) return null;
+            const nr = data?.activeShift?.nozzleReadings?.find(
+              (r: any) => r.productId === productId && r.unitPrice != null
+            );
+            return nr ? Number(nr.unitPrice) : null;
+          }}
+          creditSaleVehicle={creditSaleVehicle}
+          onCreditSaleVehicleChange={setCreditSaleVehicle}
+          creditSaleQuantity={creditSaleQuantity}
+          onCreditSaleQuantityChange={setCreditSaleQuantity}
+          creditSaleUnitPrice={creditSaleUnitPrice}
+          onCreditSaleUnitPriceChange={setCreditSaleUnitPrice}
+          creditSaleAmount={creditSaleAmount}
+          onCreditSaleAmountChange={setCreditSaleAmount}
+          creditSaleNotes={creditSaleNotes}
+          onCreditSaleNotesChange={setCreditSaleNotes}
+          onCreditSaleSubmit={handleCreditSaleSubmit}
+          suppliers={suppliers}
+          products={products}
+          purchaseSupplierId={purchaseSupplierId}
+          onPurchaseSupplierIdChange={setPurchaseSupplierId}
+          purchaseProductId={purchaseProductId}
+          onPurchaseProductIdChange={setPurchaseProductId}
+          purchaseQuantity={purchaseQuantity}
+          onPurchaseQuantityChange={setPurchaseQuantity}
+          purchaseTotalAmount={purchaseTotalAmount}
+          onPurchaseTotalAmountChange={setPurchaseTotalAmount}
+          purchaseInvoiceNumber={purchaseInvoiceNumber}
+          onPurchaseInvoiceNumberChange={setPurchaseInvoiceNumber}
+          purchaseNotes={purchaseNotes}
+          onPurchaseNotesChange={setPurchaseNotes}
+          isFuelPurchase={isFuelPurchase}
+          purchaseProductTanks={purchaseProductTanks}
+          purchaseAllocations={purchaseAllocations}
+          onPurchaseAllocationsChange={setPurchaseAllocations}
+          onPurchaseSubmit={handlePurchaseSubmit}
+        />
 
         {selectedHandoverAssignment && (
           <HandoverDrawer
@@ -1412,202 +1085,28 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   return (
     <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '16px', fontFamily: 'var(--font-sans)' }}>
       {renderShiftSubTabs()}
-      {/* Workspace Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <h1 style={{ fontSize: '20px', fontWeight: 600, color: 'var(--text-strong)' }}>
-            No Active Operational Shift
-          </h1>
-          <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '2px' }}>
-            Open a shift template to enable nozzle readings entry and daily cash reconciliation.
-          </p>
-        </div>
-        {lastShiftSummary && (
-          <button
-            className="btn btn-secondary btn-sm"
-            onClick={() => {
-              setViewHistoryShiftId(lastShiftSummary.shiftId);
-              setShiftSubTab('history');
-            }}
-          >
-            <FileText size={13} /> View Last Shift Summary
-          </button>
-        )}
-      </div>
-
-      {lastShiftSummary && (
-        <div className="card" style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-strong)' }}>
-            Most Recent Closed Shift Snapshot
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '10px', fontSize: '12px', color: 'var(--text-muted)' }}>
-            <span>Shift ID: <strong style={{ color: 'var(--text-default)', fontFamily: 'var(--font-mono)' }}>{lastShiftSummary.shiftId?.slice(0, 8) || '—'}</strong></span>
-            <span>Template: <strong style={{ color: 'var(--text-default)' }}>{lastShiftSummary.templateName || '—'}</strong></span>
-            <span>Closed At: <strong style={{ color: 'var(--text-default)' }}>{lastShiftSummary.closedAt ? new Date(lastShiftSummary.closedAt).toLocaleString('en-IN') : '—'}</strong></span>
-          </div>
-        </div>
-      )}
-
-      {/* Main Open Shift Form */}
-      <form onSubmit={handleOpenShift} className="card card-default" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-        {/* Shift details row */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '20px' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-default)' }}>
-              Select Shift Template:
-            </label>
-            <select
-              value={selectedTemplateId}
-              onChange={(e) => setSelectedTemplateId(e.target.value)}
-              required
-              style={{
-                height: '32px',
-                padding: '0 10px',
-                border: '1px solid var(--border-strong)',
-                borderRadius: 'var(--radius-input)',
-                fontSize: '13px',
-                color: 'var(--text-strong)',
-                backgroundColor: 'var(--bg-surface)'
-              }}
-            >
-              {templates && templates.map((t: any) => (
-                <option key={t.id} value={t.id}>
-                  {t.name} ({t.startTime} - {t.endTime})
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-default)' }}>
-              Opening Cash Float Amount (₹):
-            </label>
-            <input
-              type="number"
-              value={openingCash}
-              onChange={(e) => setOpeningCash(Number(e.target.value))}
-              required
-              style={{
-                height: '30px',
-                padding: '0 10px',
-                border: '1px solid var(--border-strong)',
-                borderRadius: 'var(--radius-input)',
-                fontFamily: 'var(--font-mono)',
-                fontSize: '13px'
-              }}
-            />
-          </div>
-        </div>
-
-        {/* Optional Staff Assignment sub-form */}
-        {dispensers && dispensers.length > 0 && (
-          <div style={{
-            borderTop: '1px solid var(--border-soft)',
-            paddingTop: '16px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '12px'
-          }}>
-            <h3 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-strong)' }}>
-              Staff Assignment to Dispenser Units (Optional)
-            </h3>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '16px' }}>
-              {dispensers.map((du: any) => {
-                const assigned = staffAssignments.find((a) => a.duId === du.id);
-                return (
-                  <div key={du.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
-                    <span style={{ fontSize: '13px', color: 'var(--text-default)' }}>
-                      <Fuel size={13} style={{ marginRight: '6px', verticalAlign: 'middle', display: 'inline' }} /> Dispenser <strong>{du.name}</strong>
-                    </span>
-                    <select
-                      value={assigned?.userId ?? ''}
-                      onChange={(e) => handleStaffAssignmentChange(du.id, e.target.value)}
-                      style={{
-                        height: '28px',
-                        padding: '0 8px',
-                        border: '1px solid var(--border-strong)',
-                        borderRadius: 'var(--radius-input)',
-                        fontSize: '12px',
-                        color: 'var(--text-strong)'
-                      }}
-                    >
-                      <option value="">-- Unassigned --</option>
-                      {staff && staff.map((u: any) => (
-                        <option key={u.id} value={u.id}>
-                          {u.fullName} {!u.email ? ' (Attendant)' : ''}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* Manual Nozzle Readings override only for first-time / no-history runs */}
-        {!lastShift && nozzles && nozzles.length > 0 && (
-          <div style={{
-            borderTop: '1px solid var(--border-soft)',
-            paddingTop: '16px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '12px'
-          }}>
-            <div style={{
-              backgroundColor: 'var(--bg-surface-alt)',
-              padding: '12px',
-              borderRadius: 'var(--radius-input)',
-              fontSize: '12px',
-              color: 'var(--text-muted)',
-              border: '1px solid var(--border-soft)'
-            }}>
-              <Info size={14} style={{ color: 'var(--brand-primary)', marginRight: '6px', verticalAlign: 'middle', display: 'inline' }} /> <strong>First Operational Shift:</strong> Since there is no previous shift history for this station, please specify the initial opening readings for all nozzles.
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px' }}>
-              {nozzles.map((nz: any) => {
-                const initial = initialReadings.find((r) => r.nozzleId === nz.id);
-                return (
-                  <div key={nz.id} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <label style={{ fontSize: '12px', color: 'var(--text-default)' }}>
-                      Nozzle {nz.name} ({nz.productCode})
-                    </label>
-                    <input
-                      type="number"
-                      step="0.001"
-                      value={initial?.openingReading ?? 0}
-                      onChange={(e) => handleInitialReadingChange(nz.id, Number(e.target.value))}
-                      style={{
-                        height: '26px',
-                        padding: '0 8px',
-                        border: '1px solid var(--border-strong)',
-                        borderRadius: 'var(--radius-input)',
-                        fontFamily: 'var(--font-mono)',
-                        fontSize: '12px'
-                      }}
-                    />
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* Submit */}
-        <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: '16px', display: 'flex', justifyContent: 'flex-end' }}>
-          <button
-            type="submit"
-            className="btn btn-primary btn-md"
-            disabled={isOpening}
-          >
-            {isOpening ? 'Opening Shift...' : (
-              <>
-                <Play size={13} style={{ fill: 'currentColor', marginRight: '6px' }} /> Start Shift Operations
-              </>
-            )}
-          </button>
-        </div>
-      </form>
+      <OpenShiftForm
+        lastShiftSummary={lastShiftSummary}
+        lastShift={lastShift}
+        templates={templates}
+        dispensers={dispensers}
+        staff={staff}
+        nozzles={nozzles}
+        selectedTemplateId={selectedTemplateId}
+        onTemplateChange={setSelectedTemplateId}
+        openingCash={openingCash}
+        onOpeningCashChange={setOpeningCash}
+        staffAssignments={staffAssignments}
+        onStaffAssignmentChange={handleStaffAssignmentChange}
+        initialReadings={initialReadings}
+        onInitialReadingChange={handleInitialReadingChange}
+        isOpening={isOpening}
+        onSubmit={handleOpenShift}
+        onViewLastShiftSummary={() => {
+          setViewHistoryShiftId(lastShiftSummary.shiftId);
+          setShiftSubTab('history');
+        }}
+      />
     </div>
   );
 };
