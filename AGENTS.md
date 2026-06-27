@@ -29,35 +29,72 @@ This is an operational operating system focused on fuel station management.
 
 # Core Architecture Principles
 
-## Shift-Centric System
+## Business-Day & Shift Anchoring
 
-The entire platform revolves around shifts.
+The platform has two anchors, and using the right one is the single most
+important domain rule:
+
+* **`business_day_id`** is the **universal anchor**. Every operational and
+  financial record belongs to a business day.
+* **`shift_id`** is present **if and only if the money touches the physical cash
+  drawer.** A shift is an operator-accountability window for drawer cash.
 
 Operational flow:
 
 ```text
-Shift
+Business Day
+ ↓
+Shift(s)            ← drawer-cash accountability
  ↓
 Operations
  ↓
-DSSR
+Shift Summary       ← immutable snapshot, created on SHIFT close
+ ↓
+DSSR                ← immutable snapshot, created on BUSINESS-DAY close
  ↓
 Reports
 ```
 
-All operational transactions MUST belong to a shift.
+Anchoring rules (DO NOT couple everything to a shift):
 
-Examples:
+* Fuel/merchandise **sales** occur within a shift (operator accountability) →
+  `shift_id` set.
+* **Cash** collections / cash supplier payments / drawer (`SHIFT_CASH`) expenses
+  touch the drawer → `shift_id` set.
+* **Card / UPI / bank / online** collections, **bank/owner** expenses,
+  **purchases**, and **credit sales** do NOT touch the drawer → `shift_id` is
+  NULL, anchored to the business day only.
+* **Credit sales are receivables**, not drawer cash. A fleet fuel-on-credit sale
+  records only a customer-ledger debit (receivable); it never moves stock again
+  (the fuel is already metered via nozzle readings). Customer balance =
+  Σ credit sales − Σ collections.
 
-* Expenses
-* Purchases
-* Collections
-* Credit Sales
-* Manual Sales
-* Nozzle Readings
-* Variance Records
+Drawer reconciliation at shift close:
 
-Never create operational transactions that exist outside a shift.
+```text
+expectedDrawerCash =
+  openingCash + cashSales + cashCollections
+  − drawerExpenses − drawerSupplierPayments − cashDrops
+```
+
+Never force card/UPI/bank/credit movements into the drawer reconciliation.
+
+---
+
+## Code Organization (ports & adapters)
+
+* **`packages/core`** (`@pump/core`) — framework-agnostic domain. Capability
+  folders (`station-setup`, `station-ops`, `inventory`, `retail`, `purchasing`,
+  `crm`, `finance`, `reporting`) composed of **use-cases**. Repository **ports**
+  (interfaces) live here. Core never imports Hono, Drizzle, React or SQL.
+* **`apps/api`** — thin Hono routes that wire Drizzle repository **adapters** +
+  the event dispatcher into core use-cases. Mutations run inside
+  `runInTransaction(db, (tx, events) => useCase.execute(...))`, a transactional
+  outbox: state changes AND the `events` append commit atomically.
+* Response envelope is always `{ success: true, data }` or
+  `{ success: false, error: { code, message } }`.
+* Mutating routes honor an optional `Idempotency-Key` header (dedupes retries /
+  offline replays via the `idempotency_keys` store).
 
 ---
 
@@ -149,16 +186,22 @@ Manual sales are separate from fuel sales.
 
 ---
 
-## DSSR
+## Shift Summary & DSSR
 
-DSSR is a snapshot.
+There are **two** immutable report snapshots:
 
-Rules:
+* **Shift Summary** — created when a **shift is closed** (`shift_summaries`).
+  Holds that shift's nozzle reconciliation, drawer reconciliation, and totals.
+* **DSSR** (Daily Station Sales Report) — created when a **business day is
+  closed** / generated on demand (`dssr_snapshots`). Composes all of the day's
+  closed-shift summaries plus business-day-anchored financials (collections,
+  expenses, purchases, supplier payments, credit sales).
 
-* Generated during shift close.
+Rules for both:
+
 * Stored permanently.
 * Never recalculated historically.
-* Never modified after generation.
+* Never modified after generation (regeneration is explicit + idempotent).
 
 ---
 

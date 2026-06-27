@@ -1,0 +1,225 @@
+import { and, eq } from 'drizzle-orm';
+import { schema, type DbClient } from '@pump/db';
+import { conflictError, err, invariantViolation, ok } from '@pump/core';
+import type { OnboardingProvisioner, Result } from '@pump/core';
+import type { FinalizeOnboardingResult, OnboardingDraft } from '@pump/shared';
+
+/** Signals a provisioning failure to roll back the transaction with a typed reason. */
+class ProvisionFailure extends Error {
+  constructor(public readonly kind: 'conflict' | 'invariant', message: string) {
+    super(message);
+  }
+}
+
+/**
+ * Drizzle adapter for the onboarding provisioning port. Performs all station
+ * setup inserts atomically in one transaction and maps draft-local ids to real
+ * ids. Mirrors the proven finalize SQL; failures roll the whole thing back.
+ */
+export class DrizzleOnboardingProvisioner implements OnboardingProvisioner {
+  constructor(private readonly db: DbClient) {}
+
+  async provision(input: {
+    organizationId: string;
+    actorId: string | null;
+    draft: OnboardingDraft;
+  }): Promise<Result<FinalizeOnboardingResult>> {
+    const { organizationId, draft } = input;
+    try {
+      const result = await this.db.transaction(async (tx) => {
+        const existingStation = await tx
+          .select()
+          .from(schema.stations)
+          .where(and(eq(schema.stations.organizationId, organizationId), eq(schema.stations.code, draft.station.code.toUpperCase())))
+          .limit(1);
+        if (existingStation.length > 0) {
+          throw new ProvisionFailure('conflict', `Station code "${draft.station.code}" already exists`);
+        }
+
+        const [newStation] = await tx
+          .insert(schema.stations)
+          .values({
+            organizationId,
+            name: draft.station.name,
+            code: draft.station.code.toUpperCase(),
+            address: draft.station.address,
+            phone: draft.station.phone,
+            settings: {
+              shift_grace_minutes: draft.station.shiftGraceMinutes,
+              shift_lock_grace_days: 3,
+              offline_warning_days: 3,
+              offline_critical_days: 7,
+              business_day_starts_at: draft.businessRules.businessDayStartsAt,
+              timezone: draft.station.timezone,
+              operating_schedule: draft.businessRules.operatingSchedule,
+              pending_opening_stock_seed: [],
+            },
+            onboardingStatus: 'IN_PROGRESS',
+            isActive: true,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .returning();
+
+        const productIdMap = new Map<string, string>();
+        for (const product of draft.products) {
+          const [createdProduct] = await tx
+            .insert(schema.products)
+            .values({
+              organizationId,
+              name: product.name,
+              code: product.code.toUpperCase(),
+              productType: product.productType,
+              inventoryType:
+                product.productType === 'FUEL' ? 'BULK' : (product.productType as string) === 'SERVICE' ? 'NONE' : 'ITEM',
+              stockTracked: product.stockTracked,
+              isTaxable: product.isTaxable,
+              unit: product.unit,
+              taxConfig: product.taxConfig,
+              isActive: product.isActive,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            })
+            .returning();
+          productIdMap.set(product.draftId, createdProduct.id);
+        }
+
+        const tankIdMap = new Map<string, string>();
+        const pendingOpeningStockSeed: Array<{ tankId: string; productId: string; quantity: number }> = [];
+        for (const tank of draft.tanks) {
+          const mappedProductId = productIdMap.get(tank.productDraftId);
+          if (!mappedProductId) throw new ProvisionFailure('invariant', `Tank "${tank.name}" references an unknown fuel product`);
+          const [createdTank] = await tx
+            .insert(schema.tanks)
+            .values({
+              organizationId,
+              stationId: newStation.id,
+              name: tank.name,
+              productId: mappedProductId,
+              capacity: String(tank.capacity),
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            })
+            .returning();
+          tankIdMap.set(tank.draftId, createdTank.id);
+          if (tank.openingQuantity > 0) {
+            pendingOpeningStockSeed.push({ tankId: createdTank.id, productId: mappedProductId, quantity: tank.openingQuantity });
+          }
+        }
+
+        const dispenserIdMap = new Map<string, string>();
+        for (const dispenser of draft.dispensers) {
+          const [createdDispenser] = await tx
+            .insert(schema.dispenserUnits)
+            .values({
+              organizationId,
+              stationId: newStation.id,
+              name: dispenser.name,
+              code: dispenser.code.toUpperCase(),
+              status: dispenser.status,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            })
+            .returning();
+          dispenserIdMap.set(dispenser.draftId, createdDispenser.id);
+        }
+
+        for (const nozzle of draft.nozzles) {
+          const mappedDispenserId = dispenserIdMap.get(nozzle.dispenserDraftId);
+          const mappedTankId = tankIdMap.get(nozzle.tankDraftId);
+          const mappedProductId = productIdMap.get(nozzle.productDraftId);
+          if (!mappedDispenserId) throw new ProvisionFailure('invariant', `Nozzle "${nozzle.name}" references an unknown dispenser`);
+          if (!mappedTankId) throw new ProvisionFailure('invariant', `Nozzle "${nozzle.name}" references an unknown tank`);
+          if (!mappedProductId) throw new ProvisionFailure('invariant', `Nozzle "${nozzle.name}" references an unknown fuel product`);
+          await tx.insert(schema.nozzles).values({
+            organizationId,
+            stationId: newStation.id,
+            duId: mappedDispenserId,
+            tankId: mappedTankId,
+            productId: mappedProductId,
+            name: nozzle.name,
+            currentReading: String(nozzle.openingReading),
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          });
+        }
+
+        const activeFuelProducts = draft.products.filter((p) => p.isActive);
+        if (activeFuelProducts.length > 0) {
+          await tx.insert(schema.fuelPrices).values(
+            activeFuelProducts.map((product) => ({
+              organizationId,
+              stationId: newStation.id,
+              productId: productIdMap.get(product.draftId)!,
+              price: String(product.currentPrice),
+              effectiveFrom: new Date(),
+              createdAt: new Date(),
+            })),
+          );
+        }
+
+        if (draft.shiftTemplates.length > 0) {
+          await tx.insert(schema.shiftTemplates).values(
+            draft.shiftTemplates.map((template) => ({
+              organizationId,
+              name: template.name,
+              startTime: template.startTime,
+              endTime: template.endTime,
+              isActive: template.isActive,
+            })),
+          );
+        }
+
+        const paymentTerminals = draft.paymentTerminals ?? [];
+        if (paymentTerminals.length > 0) {
+          await tx.insert(schema.paymentTerminals).values(
+            paymentTerminals.map((terminal) => ({
+              organizationId,
+              stationId: newStation.id,
+              label: terminal.label,
+              provider: terminal.provider?.trim() ? terminal.provider.trim() : null,
+              terminalCode: terminal.terminalCode?.trim() ? terminal.terminalCode.trim() : null,
+              supportsCard: terminal.supportsCard,
+              supportsUpi: terminal.supportsUpi,
+              isActive: true,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            })),
+          );
+        }
+
+        const [readyStation] = await tx
+          .update(schema.stations)
+          .set({
+            onboardingStatus: 'READY_FOR_OPERATIONS',
+            settings: {
+              ...(newStation.settings as Record<string, unknown>),
+              pending_opening_stock_seed: pendingOpeningStockSeed,
+            },
+            updatedAt: new Date(),
+          })
+          .where(eq(schema.stations.id, newStation.id))
+          .returning();
+
+        return {
+          station: readyStation,
+          summary: {
+            productCount: draft.products.length,
+            tankCount: draft.tanks.length,
+            dispenserCount: draft.dispensers.length,
+            nozzleCount: draft.nozzles.length,
+            shiftTemplateCount: draft.shiftTemplates.length,
+            paymentTerminalCount: paymentTerminals.length,
+          },
+        } as unknown as FinalizeOnboardingResult;
+      });
+
+      return ok(result);
+    } catch (e) {
+      if (e instanceof ProvisionFailure) {
+        return e.kind === 'conflict' ? err(conflictError(e.message)) : err(invariantViolation(e.message));
+      }
+      throw e;
+    }
+  }
+}

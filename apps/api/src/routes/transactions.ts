@@ -3,7 +3,10 @@ import { and, desc, eq, ilike, sql } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
 import {
   isAuthorizedForStation,
-  canManageInfrastructure,
+  canManageCustomers,
+  canManageSuppliers,
+  canArchiveParty,
+  canRecordPurchase,
   type Role,
 } from '@pump/shared';
 import {
@@ -113,7 +116,7 @@ transactionsRouter.get('/suppliers', async (c) => {
 
 transactionsRouter.post('/suppliers', async (c) => {
   const user = c.var.user;
-  if (!canManageInfrastructure(user.role)) {
+  if (!canManageSuppliers(user.role)) {
     return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } }, 403);
   }
   const body = await c.req.json().catch(() => ({}));
@@ -125,7 +128,7 @@ transactionsRouter.post('/suppliers', async (c) => {
 
 transactionsRouter.put('/suppliers/:id', async (c) => {
   const user = c.var.user;
-  if (!canManageInfrastructure(user.role)) {
+  if (!canManageSuppliers(user.role)) {
     return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } }, 403);
   }
   const body = await c.req.json().catch(() => ({}));
@@ -137,7 +140,7 @@ transactionsRouter.put('/suppliers/:id', async (c) => {
 
 transactionsRouter.delete('/suppliers/:id', async (c) => {
   const user = c.var.user;
-  if (!canManageInfrastructure(user.role)) {
+  if (!canArchiveParty(user.role)) {
     return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } }, 403);
   }
   const result = await runInTransaction(c.var.db, (tx, events) =>
@@ -204,6 +207,9 @@ transactionsRouter.get('/customers', async (c) => {
 
 transactionsRouter.post('/customers', async (c) => {
   const user = c.var.user;
+  if (!canManageCustomers(user.role)) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } }, 403);
+  }
   const body = await c.req.json().catch(() => ({}));
   const result = await runInTransaction(c.var.db, (tx, events) =>
     new CreateCustomer({ repository: new DrizzleCustomerRepository(tx), events }).execute(body, buildContext(user)),
@@ -213,6 +219,9 @@ transactionsRouter.post('/customers', async (c) => {
 
 transactionsRouter.put('/customers/:id', async (c) => {
   const user = c.var.user;
+  if (!canManageCustomers(user.role)) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } }, 403);
+  }
   const body = await c.req.json().catch(() => ({}));
   const result = await runInTransaction(c.var.db, (tx, events) =>
     new UpdateCustomer({ repository: new DrizzleCustomerRepository(tx), events }).execute({ ...body, id: c.req.param('id') }, buildContext(user)),
@@ -222,6 +231,9 @@ transactionsRouter.put('/customers/:id', async (c) => {
 
 transactionsRouter.delete('/customers/:id', async (c) => {
   const user = c.var.user;
+  if (!canArchiveParty(user.role)) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } }, 403);
+  }
   const result = await runInTransaction(c.var.db, (tx, events) =>
     new UpdateCustomer({ repository: new DrizzleCustomerRepository(tx), events }).execute({ id: c.req.param('id'), isActive: false }, buildContext(user)),
   );
@@ -295,6 +307,9 @@ transactionsRouter.get('/customers/:id/vehicles', async (c) => {
 
 transactionsRouter.post('/customers/:id/vehicles', async (c) => {
   const user = c.var.user;
+  if (!canManageCustomers(user.role)) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } }, 403);
+  }
   const body = await c.req.json().catch(() => ({}));
   const result = await runInTransaction(c.var.db, (tx, events) =>
     new AddVehicle({
@@ -308,6 +323,9 @@ transactionsRouter.post('/customers/:id/vehicles', async (c) => {
 
 transactionsRouter.put('/vehicles/:id', async (c) => {
   const user = c.var.user;
+  if (!canManageCustomers(user.role)) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } }, 403);
+  }
   const body = await c.req.json().catch(() => ({}));
   const result = await runInTransaction(c.var.db, (tx, events) =>
     new UpdateVehicle({
@@ -321,6 +339,9 @@ transactionsRouter.put('/vehicles/:id', async (c) => {
 
 transactionsRouter.delete('/vehicles/:id', async (c) => {
   const user = c.var.user;
+  if (!canArchiveParty(user.role)) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } }, 403);
+  }
   const result = await runInTransaction(c.var.db, (tx, events) =>
     new UpdateVehicle({
       repository: new DrizzleVehicleRepository(tx),
@@ -440,6 +461,9 @@ transactionsRouter.post('/collections', async (c) => {
 
 transactionsRouter.post('/purchases', async (c) => {
   const user = c.var.user;
+  if (!canRecordPurchase(user.role)) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions to record purchases' } }, 403);
+  }
   const body = await c.req.json().catch(() => ({}));
   const result = await runInTransaction(c.var.db, (tx, events) =>
     new RecordPurchase({
@@ -458,6 +482,9 @@ transactionsRouter.post('/purchases', async (c) => {
 
 transactionsRouter.post('/supplier-payments', async (c) => {
   const user = c.var.user;
+  if (!canRecordPurchase(user.role)) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions to record supplier payments' } }, 403);
+  }
   const body = await c.req.json().catch(() => ({}));
   const result = await runInTransaction(c.var.db, (tx, events) =>
     new RecordSupplierPayment({

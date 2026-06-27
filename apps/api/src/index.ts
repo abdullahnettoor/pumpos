@@ -10,6 +10,7 @@ import { productsRouter } from './routes/products.js';
 import { shiftsRouter } from './routes/shifts.js';
 import { transactionsRouter } from './routes/transactions.js';
 import { dssrRouter } from './routes/dssr.js';
+import { idempotency } from './infra/idempotency.js';
 
 
 const keyCache = new Map<string, CryptoKey>();
@@ -209,6 +210,10 @@ api.get('/session', (c) => {
     },
   });
 });
+
+// Idempotency: dedupe mutating requests that carry an Idempotency-Key header.
+// Runs after auth (needs c.var.user) and skips GET/HEAD internally.
+api.use('*', idempotency);
 
 // Mount routes
 api.route('/setup', stationSetupRouter);

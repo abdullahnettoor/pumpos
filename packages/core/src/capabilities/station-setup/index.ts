@@ -7,3 +7,4 @@ export * from './shift-templates/index.js';
 export * from './stations/index.js';
 export * from './users/index.js';
 export * from './pricing/index.js';
+export * from './onboarding/index.js';

@@ -22,12 +22,14 @@ import {
   CreateDispenser, UpdateDispenser, DeleteDispenser,
   CreateNozzle, UpdateNozzle, DeleteNozzle,
   CreateShiftTemplate, UpdateShiftTemplate, DeleteShiftTemplate,
+  FinalizeStationOnboarding,
   BusinessEvents,
   eventFromContext,
   type Result,
 } from '@pump/core';
 import { buildContext } from '../infra/context.js';
 import { createDispatcher } from '../infra/events.js';
+import { DrizzleOnboardingProvisioner } from '../infra/onboarding-provisioner.js';
 import {
   DrizzleStationRepository,
   DrizzleUserRepository,
@@ -78,93 +80,8 @@ function checkWriteAccess(c: any, stationId?: string | null): boolean {
   return false; // Accountant & Staff are read-only
 }
 
-class FinalizeOnboardingError extends Error {
-  stage: string;
-  status: number;
-
-  constructor(stage: string, message: string, status = 400) {
-    super(message);
-    this.stage = stage;
-    this.status = status;
-  }
-}
-
-function assertFinalize(condition: unknown, stage: string, message: string, status = 400): asserts condition {
-  if (!condition) {
-    throw new FinalizeOnboardingError(stage, message, status);
-  }
-}
-
-function validateFinalizeDraft(payload: OnboardingDraft) {
-  const { station, businessRules, products, tanks, dispensers, nozzles } = payload;
-
-  assertFinalize(station.name.trim().length >= 2, 'Validating draft', 'Station name is required');
-  assertFinalize(station.code.trim().length >= 2, 'Validating draft', 'Station code is required');
-  assertFinalize(products.length > 0, 'Validating draft', 'Add at least one active fuel product before provisioning');
-  assertFinalize(tanks.length > 0, 'Validating draft', 'Add at least one storage tank before provisioning');
-  assertFinalize(dispensers.length > 0, 'Validating draft', 'Add at least one dispenser before provisioning');
-  assertFinalize(nozzles.length > 0, 'Validating draft', 'Add at least one nozzle before provisioning');
-
-  const normalizedProductCodes = new Set<string>();
-  const normalizedProductNames = new Set<string>();
-  for (const product of products) {
-    const productCode = product.code.trim().toUpperCase();
-    const productName = product.name.trim().toLowerCase();
-    assertFinalize(!normalizedProductCodes.has(productCode), 'Validating draft', `Duplicate fuel code "${product.code}" found in draft`);
-    assertFinalize(!normalizedProductNames.has(productName), 'Validating draft', `Duplicate fuel name "${product.name}" found in draft`);
-    normalizedProductCodes.add(productCode);
-    normalizedProductNames.add(productName);
-  }
-
-  const normalizedDispenserCodes = new Set<string>();
-  const normalizedDispenserNames = new Set<string>();
-  for (const dispenser of dispensers) {
-    const dispenserCode = dispenser.code.trim().toUpperCase();
-    const dispenserName = dispenser.name.trim().toLowerCase();
-    assertFinalize(!normalizedDispenserCodes.has(dispenserCode), 'Validating draft', `Duplicate dispenser code "${dispenser.code}" found in draft`);
-    assertFinalize(!normalizedDispenserNames.has(dispenserName), 'Validating draft', `Duplicate dispenser name "${dispenser.name}" found in draft`);
-    normalizedDispenserCodes.add(dispenserCode);
-    normalizedDispenserNames.add(dispenserName);
-  }
-
-  const productMap = new Map<string, OnboardingDraft['products'][number]>(products.map((product) => [product.draftId, product]));
-  const tankMap = new Map<string, OnboardingDraft['tanks'][number]>(tanks.map((tank) => [tank.draftId, tank]));
-  const dispenserMap = new Map<string, OnboardingDraft['dispensers'][number]>(dispensers.map((dispenser) => [dispenser.draftId, dispenser]));
-
-  for (const day of businessRules.operatingSchedule.days) {
-    if (day.isOpen) {
-      assertFinalize(day.openTime < day.closeTime || businessRules.operatingSchedule.isTwentyFourSeven, 'Validating draft', `Operating hours for ${day.day} must have opening time before closing time`);
-    }
-  }
-
-  for (const tank of tanks) {
-    assertFinalize(productMap.has(tank.productDraftId), 'Validating draft', `Tank "${tank.name}" is linked to a missing fuel product`);
-    assertFinalize(tank.openingQuantity <= tank.capacity, 'Validating draft', `Opening stock for tank "${tank.name}" cannot exceed its capacity`);
-  }
-
-  for (const nozzle of nozzles) {
-    assertFinalize(dispenserMap.has(nozzle.dispenserDraftId), 'Validating draft', `Nozzle "${nozzle.name}" is linked to a missing dispenser`);
-    assertFinalize(tankMap.has(nozzle.tankDraftId), 'Validating draft', `Nozzle "${nozzle.name}" is linked to a missing tank`);
-    assertFinalize(productMap.has(nozzle.productDraftId), 'Validating draft', `Nozzle "${nozzle.name}" is linked to a missing fuel product`);
-
-    const tank = tankMap.get(nozzle.tankDraftId)!;
-    assertFinalize(
-      tank.productDraftId === nozzle.productDraftId,
-      'Validating draft',
-      `Nozzle "${nozzle.name}" fuel must match the selected tank fuel`
-    );
-  }
-
-  // Payment terminals are optional; validate any that were added.
-  const normalizedTerminalLabels = new Set<string>();
-  for (const terminal of payload.paymentTerminals ?? []) {
-    assertFinalize(terminal.label.trim().length >= 1, 'Validating draft', 'Every payment terminal needs a label');
-    const terminalLabel = terminal.label.trim().toLowerCase();
-    assertFinalize(!normalizedTerminalLabels.has(terminalLabel), 'Validating draft', `Duplicate payment terminal label "${terminal.label}" found in draft`);
-    assertFinalize(terminal.supportsCard || terminal.supportsUpi, 'Validating draft', `Terminal "${terminal.label}" must support card and/or UPI`);
-    normalizedTerminalLabels.add(terminalLabel);
-  }
-}
+// Onboarding draft validation + multi-aggregate provisioning now live in the
+// core FinalizeStationOnboarding use-case (+ DrizzleOnboardingProvisioner adapter).
 
 // ----------------------------------------------------
 // Stations CRUD
@@ -658,246 +575,14 @@ stationSetupRouter.post('/onboarding/finalize', validateJson(finalizeOnboardingS
 
   try {
     const parsed = c.req.valid('json') as { draft: OnboardingDraft };
-    const { draft } = parsed;
 
-    validateFinalizeDraft(draft);
-
-    const result = await db.transaction(async (tx) => {
-      const existingStation = await tx
-        .select()
-        .from(schema.stations)
-        .where(and(eq(schema.stations.organizationId, user.organizationId), eq(schema.stations.code, draft.station.code.toUpperCase())))
-        .limit(1);
-
-      assertFinalize(existingStation.length === 0, 'Creating station', `Station code "${draft.station.code}" already exists`, 409);
-
-      const [newStation] = await tx
-        .insert(schema.stations)
-        .values({
-          organizationId: user.organizationId,
-          name: draft.station.name,
-          code: draft.station.code.toUpperCase(),
-          address: draft.station.address,
-          phone: draft.station.phone,
-          settings: {
-            shift_grace_minutes: draft.station.shiftGraceMinutes,
-            shift_lock_grace_days: 3,
-            offline_warning_days: 3,
-            offline_critical_days: 7,
-            business_day_starts_at: draft.businessRules.businessDayStartsAt,
-            timezone: draft.station.timezone,
-            operating_schedule: draft.businessRules.operatingSchedule,
-            pending_opening_stock_seed: [],
-          },
-          onboardingStatus: 'IN_PROGRESS',
-          isActive: true,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        })
-        .returning();
-
-      const productIdMap = new Map<string, string>();
-      for (const product of draft.products) {
-        const [createdProduct] = await tx
-          .insert(schema.products)
-          .values({
-            organizationId: user.organizationId,
-            name: product.name,
-            code: product.code.toUpperCase(),
-            productType: product.productType,
-            inventoryType:
-              product.productType === 'FUEL'
-                ? 'BULK'
-                : product.productType === 'SERVICE'
-                  ? 'NONE'
-                  : 'ITEM',
-            stockTracked: product.stockTracked,
-            isTaxable: product.isTaxable,
-            unit: product.unit,
-            taxConfig: product.taxConfig,
-            isActive: product.isActive,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          })
-          .returning();
-
-        productIdMap.set(product.draftId, createdProduct.id);
-      }
-
-      const tankIdMap = new Map<string, string>();
-      const pendingOpeningStockSeed: Array<{ tankId: string; productId: string; quantity: number }> = [];
-      for (const tank of draft.tanks) {
-        const mappedProductId = productIdMap.get(tank.productDraftId);
-        assertFinalize(mappedProductId, 'Linking infrastructure', `Tank "${tank.name}" references an unknown fuel product`);
-
-        const [createdTank] = await tx
-          .insert(schema.tanks)
-          .values({
-            organizationId: user.organizationId,
-            stationId: newStation.id,
-            name: tank.name,
-            productId: mappedProductId,
-            capacity: String(tank.capacity),
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          })
-          .returning();
-
-        tankIdMap.set(tank.draftId, createdTank.id);
-        if (tank.openingQuantity > 0) {
-          pendingOpeningStockSeed.push({
-            tankId: createdTank.id,
-            productId: mappedProductId,
-            quantity: tank.openingQuantity,
-          });
-        }
-      }
-
-      const dispenserIdMap = new Map<string, string>();
-      for (const dispenser of draft.dispensers) {
-        const [createdDispenser] = await tx
-          .insert(schema.dispenserUnits)
-          .values({
-            organizationId: user.organizationId,
-            stationId: newStation.id,
-            name: dispenser.name,
-            code: dispenser.code.toUpperCase(),
-            status: dispenser.status,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          })
-          .returning();
-
-        dispenserIdMap.set(dispenser.draftId, createdDispenser.id);
-      }
-
-      for (const nozzle of draft.nozzles) {
-        const mappedDispenserId = dispenserIdMap.get(nozzle.dispenserDraftId);
-        const mappedTankId = tankIdMap.get(nozzle.tankDraftId);
-        const mappedProductId = productIdMap.get(nozzle.productDraftId);
-        assertFinalize(mappedDispenserId, 'Linking infrastructure', `Nozzle "${nozzle.name}" references an unknown dispenser`);
-        assertFinalize(mappedTankId, 'Linking infrastructure', `Nozzle "${nozzle.name}" references an unknown tank`);
-        assertFinalize(mappedProductId, 'Linking infrastructure', `Nozzle "${nozzle.name}" references an unknown fuel product`);
-
-        await tx.insert(schema.nozzles).values({
-          organizationId: user.organizationId,
-          stationId: newStation.id,
-          duId: mappedDispenserId,
-          tankId: mappedTankId,
-          productId: mappedProductId,
-          name: nozzle.name,
-          currentReading: String(nozzle.openingReading),
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        });
-      }
-
-      const activeFuelProducts = draft.products.filter((product) => product.isActive);
-      if (activeFuelProducts.length > 0) {
-        await tx.insert(schema.fuelPrices).values(
-          activeFuelProducts.map((product) => ({
-            organizationId: user.organizationId,
-            stationId: newStation.id,
-            productId: productIdMap.get(product.draftId)!,
-            price: String(product.currentPrice),
-            effectiveFrom: new Date(),
-            createdAt: new Date(),
-          }))
-        );
-      }
-
-      if (draft.shiftTemplates.length > 0) {
-        await tx.insert(schema.shiftTemplates).values(
-          draft.shiftTemplates.map((template) => ({
-            organizationId: user.organizationId,
-            name: template.name,
-            startTime: template.startTime,
-            endTime: template.endTime,
-            isActive: template.isActive,
-          }))
-        );
-      }
-
-      const paymentTerminals = draft.paymentTerminals ?? [];
-      if (paymentTerminals.length > 0) {
-        await tx.insert(schema.paymentTerminals).values(
-          paymentTerminals.map((terminal) => ({
-            organizationId: user.organizationId,
-            stationId: newStation.id,
-            label: terminal.label,
-            provider: terminal.provider?.trim() ? terminal.provider.trim() : null,
-            terminalCode: terminal.terminalCode?.trim() ? terminal.terminalCode.trim() : null,
-            supportsCard: terminal.supportsCard,
-            supportsUpi: terminal.supportsUpi,
-            isActive: true,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          }))
-        );
-      }
-
-      const [readyStation] = await tx
-        .update(schema.stations)
-        .set({
-          onboardingStatus: 'READY_FOR_OPERATIONS',
-          settings: {
-            ...(newStation.settings as Record<string, unknown>),
-            pending_opening_stock_seed: pendingOpeningStockSeed,
-          },
-          updatedAt: new Date(),
-        })
-        .where(eq(schema.stations.id, newStation.id))
-        .returning();
-
-      return {
-        station: readyStation,
-        summary: {
-          productCount: draft.products.length,
-          tankCount: draft.tanks.length,
-          dispenserCount: draft.dispensers.length,
-          nozzleCount: draft.nozzles.length,
-          shiftTemplateCount: draft.shiftTemplates.length,
-          paymentTerminalCount: paymentTerminals.length,
-        },
-      };
+    const useCase = new FinalizeStationOnboarding({
+      provisioner: new DrizzleOnboardingProvisioner(db),
+      events: createDispatcher(db),
     });
-
-    // Interim: emit ONBOARDING_COMPLETED after the provisioning transaction
-    // commits. The full FinalizeStationOnboarding orchestration use-case lands
-    // with the UnitOfWork in Phase 3.
-    if (result.station?.id) {
-      try {
-        const dispatcher = createDispatcher(db);
-        const ctx = buildContext(user, { stationId: result.station.id });
-        await dispatcher.publish([
-          eventFromContext(ctx, {
-            eventType: BusinessEvents.ONBOARDING_COMPLETED,
-            aggregateType: 'Station',
-            aggregateId: result.station.id,
-            stationId: result.station.id,
-            payload: { stationId: result.station.id, ...result.summary },
-          }),
-        ]);
-      } catch (e) {
-        console.error('Failed to emit ONBOARDING_COMPLETED', e);
-      }
-    }
-
-    return c.json({ success: true, data: result });
+    const result = await useCase.execute(parsed.draft, buildContext(user));
+    return sendResult(c, result);
   } catch (err: any) {
-    if (err instanceof FinalizeOnboardingError) {
-      return c.json({
-        success: false,
-        error: {
-          code: 'VALIDATION_ERROR',
-          message: err.message,
-          details: {
-            stage: err.stage,
-          },
-        },
-      }, err.status as any);
-    }
-
     return c.json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }, 500);
   }
 });

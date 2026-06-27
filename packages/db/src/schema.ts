@@ -515,6 +515,19 @@ export const syncEvents = pgTable('sync_events', {
   syncedAt: timestamp('synced_at'),
 });
 
+// Caches the result of a mutating request keyed by a client-supplied
+// Idempotency-Key header, so retries (after a timeout or offline replay) return
+// the original response instead of duplicating the write.
+export const idempotencyKeys = pgTable('idempotency_keys', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  organizationId: uuid('organization_id').references(() => organizations.id).notNull(),
+  idempotencyKey: varchar('idempotency_key', { length: 255 }).notNull().unique(),
+  requestPath: varchar('request_path', { length: 255 }),
+  responseStatus: integer('response_status'),
+  responseBody: jsonb('response_body'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
 export const fuelPrices = pgTable('fuel_prices', {
   id: uuid('id').defaultRandom().primaryKey(),
   organizationId: uuid('organization_id').references(() => organizations.id).notNull(),

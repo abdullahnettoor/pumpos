@@ -158,6 +158,29 @@ export function canManageInfrastructure(role: Role): boolean {
 }
 
 // ----------------------------------------------------
+// Party (Customer / Supplier) & Purchase Permissions
+// ----------------------------------------------------
+
+/** Create/edit customers or suppliers (back-office). Owner, Manager, Accountant. */
+export function canManageCustomers(role: Role): boolean {
+  return role === 'Owner' || role === 'Manager' || role === 'Accountant';
+}
+
+export function canManageSuppliers(role: Role): boolean {
+  return role === 'Owner' || role === 'Manager' || role === 'Accountant';
+}
+
+/** Archive (soft-delete) a customer or supplier. Owner, Manager only. */
+export function canArchiveParty(role: Role): boolean {
+  return role === 'Owner' || role === 'Manager';
+}
+
+/** Record purchases / supplier payments. Owner, Manager, Accountant (not Staff). */
+export function canRecordPurchase(role: Role): boolean {
+  return role === 'Owner' || role === 'Manager' || role === 'Accountant';
+}
+
+// ----------------------------------------------------
 // User Management
 // ----------------------------------------------------
 
