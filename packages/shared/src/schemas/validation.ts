@@ -289,6 +289,15 @@ export const onboardingShiftTemplateDraftSchema = z.object({
   isActive: z.boolean().default(true),
 });
 
+export const onboardingPaymentTerminalDraftSchema = z.object({
+  draftId: z.string().min(1, 'Missing payment terminal draft ID'),
+  label: z.string().min(1, 'Terminal label is required').max(100),
+  provider: z.string().max(100).optional().default(''),
+  terminalCode: z.string().max(100).optional().default(''),
+  supportsCard: z.boolean().default(true),
+  supportsUpi: z.boolean().default(true),
+});
+
 export const onboardingDraftSchema = z.object({
   station: z.object({
     name: z.string().min(2, 'Station name must be at least 2 characters'),
@@ -307,6 +316,8 @@ export const onboardingDraftSchema = z.object({
   dispensers: z.array(onboardingDispenserDraftSchema),
   nozzles: z.array(onboardingNozzleDraftSchema),
   shiftTemplates: z.array(onboardingShiftTemplateDraftSchema),
+  // Payment terminals are optional; a station may operate cash-only at launch.
+  paymentTerminals: z.array(onboardingPaymentTerminalDraftSchema).optional().default([]),
 });
 
 export const finalizeOnboardingSchema = z.object({

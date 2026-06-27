@@ -127,6 +127,10 @@ export const Step8Review: React.FC<Step8ReviewProps> = ({
               <div style={fieldLabelStyle}>Nozzles</div>
               <div style={{ marginTop: '4px', fontSize: '18px', fontWeight: 700, color: 'var(--text-strong)' }}>{draft.nozzles.length}</div>
             </div>
+            <div style={{ backgroundColor: 'var(--bg-surface-alt)', borderRadius: 'var(--radius-card)', padding: '12px' }}>
+              <div style={fieldLabelStyle}>Payment Terminals</div>
+              <div style={{ marginTop: '4px', fontSize: '18px', fontWeight: 700, color: 'var(--text-strong)' }}>{(draft.paymentTerminals ?? []).length}</div>
+            </div>
           </div>
         </div>
       </div>

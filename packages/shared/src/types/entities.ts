@@ -137,6 +137,15 @@ export interface OnboardingShiftTemplateDraft {
   isActive: boolean;
 }
 
+export interface OnboardingPaymentTerminalDraft {
+  draftId: string;
+  label: string;
+  provider: string;
+  terminalCode: string;
+  supportsCard: boolean;
+  supportsUpi: boolean;
+}
+
 export interface OnboardingDraft {
   station: OnboardingStationDraft;
   businessRules: OnboardingBusinessRulesDraft;
@@ -145,6 +154,7 @@ export interface OnboardingDraft {
   dispensers: OnboardingDispenserDraft[];
   nozzles: OnboardingNozzleDraft[];
   shiftTemplates: OnboardingShiftTemplateDraft[];
+  paymentTerminals: OnboardingPaymentTerminalDraft[];
 }
 
 export interface FinalizeOnboardingPayload {
@@ -159,6 +169,7 @@ export interface FinalizeOnboardingResult {
     dispenserCount: number;
     nozzleCount: number;
     shiftTemplateCount: number;
+    paymentTerminalCount: number;
   };
 }
 

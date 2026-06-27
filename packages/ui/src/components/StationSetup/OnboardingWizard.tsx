@@ -36,6 +36,7 @@ import { Step4Tanks } from './OnboardingSteps/Step4Tanks.js';
 import { Step5Dispensers } from './OnboardingSteps/Step5Dispensers.js';
 import { Step6OpeningValues } from './OnboardingSteps/Step6OpeningValues.js';
 import { Step7ShiftTemplates } from './OnboardingSteps/Step7ShiftTemplates.js';
+import { Step8PaymentTerminals } from './OnboardingSteps/Step8PaymentTerminals.js';
 import { Step8Review } from './OnboardingSteps/Step8Review.js';
 
 const stationService = new CloudStationService();
@@ -53,7 +54,8 @@ const steps = [
   { num: 5, title: 'Dispensers & Nozzles' },
   { num: 6, title: 'Opening / Current Values' },
   { num: 7, title: 'Shift Templates' },
-  { num: 8, title: 'Review & Provision' },
+  { num: 8, title: 'Payment Terminals' },
+  { num: 9, title: 'Review & Provision' },
 ] as const;
 
 const provisioningStages = [
@@ -829,6 +831,16 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
           )}
 
           {currentStep === 8 && (
+            <Step8PaymentTerminals
+              draft={draft}
+              updateDraft={updateDraft}
+              panelStyle={panelStyle}
+              fieldLabelStyle={fieldLabelStyle}
+              inputStyle={inputStyle}
+            />
+          )}
+
+          {currentStep === 9 && (
             <Step8Review
               draft={draft}
               validationIssues={validationIssues}

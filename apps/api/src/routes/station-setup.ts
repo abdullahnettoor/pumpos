@@ -154,6 +154,16 @@ function validateFinalizeDraft(payload: OnboardingDraft) {
       `Nozzle "${nozzle.name}" fuel must match the selected tank fuel`
     );
   }
+
+  // Payment terminals are optional; validate any that were added.
+  const normalizedTerminalLabels = new Set<string>();
+  for (const terminal of payload.paymentTerminals ?? []) {
+    assertFinalize(terminal.label.trim().length >= 1, 'Validating draft', 'Every payment terminal needs a label');
+    const terminalLabel = terminal.label.trim().toLowerCase();
+    assertFinalize(!normalizedTerminalLabels.has(terminalLabel), 'Validating draft', `Duplicate payment terminal label "${terminal.label}" found in draft`);
+    assertFinalize(terminal.supportsCard || terminal.supportsUpi, 'Validating draft', `Terminal "${terminal.label}" must support card and/or UPI`);
+    normalizedTerminalLabels.add(terminalLabel);
+  }
 }
 
 // ----------------------------------------------------
@@ -808,6 +818,24 @@ stationSetupRouter.post('/onboarding/finalize', validateJson(finalizeOnboardingS
         );
       }
 
+      const paymentTerminals = draft.paymentTerminals ?? [];
+      if (paymentTerminals.length > 0) {
+        await tx.insert(schema.paymentTerminals).values(
+          paymentTerminals.map((terminal) => ({
+            organizationId: user.organizationId,
+            stationId: newStation.id,
+            label: terminal.label,
+            provider: terminal.provider?.trim() ? terminal.provider.trim() : null,
+            terminalCode: terminal.terminalCode?.trim() ? terminal.terminalCode.trim() : null,
+            supportsCard: terminal.supportsCard,
+            supportsUpi: terminal.supportsUpi,
+            isActive: true,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          }))
+        );
+      }
+
       const [readyStation] = await tx
         .update(schema.stations)
         .set({
@@ -829,6 +857,7 @@ stationSetupRouter.post('/onboarding/finalize', validateJson(finalizeOnboardingS
           dispenserCount: draft.dispensers.length,
           nozzleCount: draft.nozzles.length,
           shiftTemplateCount: draft.shiftTemplates.length,
+          paymentTerminalCount: paymentTerminals.length,
         },
       };
     });
