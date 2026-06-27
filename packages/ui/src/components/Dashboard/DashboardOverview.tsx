@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { CloudShiftService } from '../../services/cloud.js';
+import { useShiftStatus, useInvalidateOperational } from '../../query/hooks.js';
 import { StatusBadge } from '../StatusBadge.js';
 import { SyncIndicator } from '../SyncIndicator.js';
 import { LoadingSpinner } from '../LoadingSpinner.js';
@@ -21,31 +22,9 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   userName,
   onNavigate,
 }) => {
-  const [summary, setSummary] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { data: summary, isLoading: loading, error, refetch } = useShiftStatus(selectedStation?.id);
+  const invalidateOperational = useInvalidateOperational();
   const [isReopening, setIsReopening] = useState(false);
-
-  useEffect(() => {
-    if (selectedStation) {
-      loadDashboardData();
-    }
-  }, [selectedStation]);
-
-  const loadDashboardData = async () => {
-    if (!selectedStation) return;
-    try {
-      setLoading(true);
-      setError(null);
-      const data = await shiftService.getShiftStatus(selectedStation.id);
-      setSummary(data);
-    } catch (err: any) {
-      console.error('Failed to load dashboard shifts status:', err);
-      setError(err.message || 'Failed to retrieve active shifts status');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleReopen = async (shiftId: string) => {
     if (!window.confirm('Are you sure you want to reopen this shift? This will delete the generated DSSR snapshot and set the shift state back to OPEN.')) {
@@ -54,6 +33,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
     try {
       setIsReopening(true);
       await shiftService.reopenShift(shiftId);
+      invalidateOperational(selectedStation?.id);
       onNavigate('/shifts');
     } catch (err: any) {
       alert(err.message || 'Failed to reopen shift');
@@ -86,9 +66,9 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
         fontFamily: 'var(--font-sans)',
         fontSize: '13px'
       }}>
-        <strong>Error:</strong> {error}
+        <strong>Error:</strong> {error.message || 'Failed to retrieve active shifts status'}
         <button
-          onClick={loadDashboardData}
+          onClick={() => refetch()}
           style={{
             display: 'block',
             marginTop: '12px',

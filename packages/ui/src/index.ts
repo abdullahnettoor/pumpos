@@ -18,3 +18,13 @@ export { ReportsOverview } from './components/ReportsOverview.js';
 export { supabase } from './services/supabase.js';
 export * from './services/cloud.js';
 
+// Data layer (TanStack Query) + shared primitives
+export * from './query/queryClient.js';
+export * from './query/hooks.js';
+export { PageLayout } from './components/primitives/PageLayout.js';
+export type { PageLayoutProps } from './components/primitives/PageLayout.js';
+export { KpiCard } from './components/primitives/KpiCard.js';
+export type { KpiCardProps, KpiTone } from './components/primitives/KpiCard.js';
+export { DataTable } from './components/primitives/DataTable.js';
+export type { DataTableProps } from './components/primitives/DataTable.js';
+

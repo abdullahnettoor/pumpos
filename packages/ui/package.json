@@ -13,14 +13,17 @@
     "@hookform/resolvers": "^5.4.0",
     "@pump/shared": "*",
     "@supabase/supabase-js": "^2.108.2",
+    "@tanstack/react-table": "^8.21.3",
     "lucide-react": "^1.18.0",
     "react-hook-form": "^7.79.0"
   },
   "peerDependencies": {
+    "@tanstack/react-query": "^5",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@tanstack/react-query": "^5.101.1",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
     "react": "^18.3.1",
