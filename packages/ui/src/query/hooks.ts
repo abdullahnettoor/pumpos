@@ -2,6 +2,8 @@ import { useQueryClient, useQuery, type UseQueryOptions } from '@tanstack/react-
 import {
   CloudShiftService,
   CloudTransactionService,
+  CloudProductService,
+  CloudTankService,
 } from '../services/cloud.js';
 
 /**
@@ -14,6 +16,8 @@ import {
 
 const shiftService = new CloudShiftService();
 const txService = new CloudTransactionService();
+const productSvc = new CloudProductService();
+const tankSvc = new CloudTankService();
 
 export const queryKeys = {
   shiftStatus: (stationId: string, lite = false) => ['shift-status', stationId, lite] as const,
@@ -31,9 +35,25 @@ export const queryKeys = {
   dssr: (stationId: string, date: string) => ['dssr', stationId, date] as const,
   dssrRange: (stationId: string, from: string, to: string) => ['dssr-range', stationId, from, to] as const,
   expenseCategories: () => ['expense-categories'] as const,
+  products: () => ['products'] as const,
+  tanks: (stationId: string) => ['tanks', stationId] as const,
 } as const;
 
 type Options<T> = Omit<UseQueryOptions<T, Error, T, readonly unknown[]>, 'queryKey' | 'queryFn'>;
+
+export function useProducts(options?: Options<any[]>) {
+  return useQuery({ queryKey: queryKeys.products(), queryFn: () => productSvc.listProducts(), ...options });
+}
+
+export function useTanks(stationId: string | null | undefined, options?: Options<any[]>) {
+  return useQuery({
+    queryKey: queryKeys.tanks(stationId ?? ''),
+    queryFn: () => tankSvc.listTanks(stationId!),
+    enabled: !!stationId,
+    ...options,
+  });
+}
+
 
 export function useShiftStatus(stationId: string | null | undefined, lite = false, options?: Options<any>) {
   return useQuery({

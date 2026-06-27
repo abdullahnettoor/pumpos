@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { CloudTransactionService, CloudShiftService, CloudProductService } from '../services/cloud.js';
+import { CloudTransactionService } from '../services/cloud.js';
+import { useCustomers, useShiftStatus, useProducts, useInvalidateOperational } from '../query/hooks.js';
 import { User, ShieldAlert, CreditCard, DollarSign, Plus, Info, Edit, Check, Settings, Scale, Truck, Trash2 } from 'lucide-react';
 import { LoadingSpinner } from './LoadingSpinner.js';
 import { Drawer } from './Drawer.js';
@@ -9,8 +10,6 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { customerCreateSchema } from '@pump/shared';
 
 const transactionService = new CloudTransactionService();
-const shiftService = new CloudShiftService();
-const productService = new CloudProductService();
 
 interface CustomersListProps {
   selectedStation: any | null;
@@ -21,14 +20,22 @@ type TabType = 'transactions' | 'registry' | 'vehicles';
 
 export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, defaultShiftId }) => {
   const [activeTab, setActiveTab] = useState<TabType>('transactions');
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  
-  // Customers Data
-  const [customers, setCustomers] = useState<any[]>([]); // Active only for transactions dropdown
-  const [allCustomers, setAllCustomers] = useState<any[]>([]); // All customers for management
-  const [activeShift, setActiveShift] = useState<any | null>(null);
-  const [recentClosedShifts, setRecentClosedShifts] = useState<any[]>([]);
+
+  const stationId = selectedStation?.id ?? null;
+  const customersActiveQ = useCustomers(true);
+  const customersAllQ = useCustomers(false);
+  const statusQ = useShiftStatus(stationId, true);
+  const productsQ = useProducts();
+  const invalidateOperational = useInvalidateOperational();
+
+  const customers = customersActiveQ.data ?? [];
+  const allCustomers = customersAllQ.data ?? [];
+  const activeShift = statusQ.data?.activeShift ?? null;
+  const recentClosedShifts: any[] = statusQ.data?.recentClosedShifts ?? [];
+  const fuelProducts = (productsQ.data ?? []).filter((p: any) => p.productType === 'FUEL' && p.isActive);
+
+  const loading = customersActiveQ.isLoading || statusQ.isLoading;
+  const error = (customersActiveQ.error || statusQ.error) as Error | null;
 
   // CRUD Drawer States
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -74,7 +81,6 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
   const [topupError, setTopupError] = useState<string | null>(null);
 
   // Vehicles tab state
-  const [fuelProducts, setFuelProducts] = useState<any[]>([]);
   const [vehicleCustomerId, setVehicleCustomerId] = useState('');
   const [vehicles, setVehicles] = useState<any[]>([]);
   const [loadingVehicles, setLoadingVehicles] = useState(false);
@@ -162,12 +168,6 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
   const custType = watchCust('customerType');
 
   useEffect(() => {
-    if (selectedStation) {
-      loadData();
-    }
-  }, [selectedStation]);
-
-  useEffect(() => {
     if (activeTab === 'vehicles' && vehicleCustomerId) {
       loadVehicles(vehicleCustomerId);
     }
@@ -175,46 +175,19 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
 
   useEffect(() => {
     setCollectionShiftId(resolvePreferredShiftId(activeShift, recentClosedShifts));
-  }, [activeShift, recentClosedShifts, defaultShiftId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusQ.data, defaultShiftId]);
 
-  const loadData = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      const [activeList, allList, status, products] = await Promise.all([
-        transactionService.getCustomers(true),
-        transactionService.getCustomers(false),
-        shiftService.getShiftStatus(selectedStation.id, true),
-        productService.listProducts(),
-      ]);
-
-      setCustomers(activeList || []);
-      setAllCustomers(allList || []);
-      const active = status.activeShift || null;
-      const closedList = status.recentClosedShifts || [];
-      setActiveShift(active);
-      setRecentClosedShifts(closedList);
-      setFuelProducts((products || []).filter((p: any) => p.productType === 'FUEL' && p.isActive));
-
-      const eligibleCustomers = (allList || []).filter((c: any) => c.customerType === 'Credit' || c.customerType === 'Fleet');
-      if (eligibleCustomers.length > 0) {
-        setVehicleCustomerId((prev) => prev || eligibleCustomers[0].id);
-      } else {
-        setVehicleCustomerId('');
-      }
-
-      if (activeList && activeList.length > 0) {
-        setCollectionCustomerId(activeList[0].id);
-      } else {
-        setCollectionCustomerId('');
-      }
-    } catch (err: any) {
-      setError(err.message || 'Failed to load customers data');
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Initialise default selections from query data once it loads.
+  useEffect(() => {
+    const eligible = allCustomers.filter((c: any) => c.customerType === 'Credit' || c.customerType === 'Fleet');
+    setVehicleCustomerId((prev) => prev || eligible[0]?.id || '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customersAllQ.data]);
+  useEffect(() => {
+    setCollectionCustomerId((prev) => prev || customers[0]?.id || '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customersActiveQ.data]);
 
   const loadVehicles = async (customerId: string) => {
     if (!customerId) {
@@ -329,7 +302,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
       });
 
       closeCollectionDrawer();
-      await loadData();
+      invalidateOperational(stationId);
     } catch (err: any) {
       setFormError(err.message || 'Failed to record entry');
     } finally {
@@ -405,7 +378,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
       }
 
       setIsDrawerOpen(false);
-      await loadData();
+      invalidateOperational(stationId);
     } catch (err: any) {
       setDrawerError(err.message || 'Failed to save customer');
     }
@@ -435,7 +408,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
       });
 
       setIsTopupDrawerOpen(false);
-      await loadData();
+      invalidateOperational(stationId);
       await openLedgerDrawer(selectedLedgerCustomer);
     } catch (err: any) {
       setTopupError(err.message || 'Failed to record top-up');
@@ -459,7 +432,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
   if (error) {
     return (
       <div style={{ padding: '24px', backgroundColor: 'var(--state-danger-bg)', color: 'var(--state-danger-fg)', borderRadius: 'var(--radius-card)', fontFamily: 'var(--font-sans)' }}>
-        <strong>Error:</strong> {error}
+        <strong>Error:</strong> {error.message || 'Failed to load customers data'}
       </div>
     );
   }

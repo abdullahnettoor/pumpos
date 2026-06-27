@@ -7,11 +7,13 @@ import { HandoverDrawer } from './HandoverDrawer.js';
 import { ShiftControlBar } from './ShiftControlBar.js';
 import { ShiftHistoryTab } from './ShiftHistoryTab.js';
 import { CloseShiftWizard } from './CloseShiftWizard.js';
+import { ShiftCloseSuccess } from './ShiftCloseSuccess.js';
 import { Drawer } from '../Drawer.js';
 import { ExpenseEntryForm } from '../transactions/ExpenseEntryForm.js';
 import { CollectionEntryForm } from '../transactions/CollectionEntryForm.js';
 import { CreditSaleEntryForm, VehicleSearchResult } from '../transactions/CreditSaleEntryForm.js';
 import { PurchaseEntryForm } from '../transactions/PurchaseEntryForm.js';
+import { useShiftStatus, useInvalidateOperational } from '../../query/hooks.js';
 import { Station } from '@pump/shared';
 import { FileText, User, Lock, AlertTriangle, Check, Fuel, Info, Play, CalendarRange, History, Clock3 } from 'lucide-react';
 import { LoadingSpinner } from '../LoadingSpinner.js';
@@ -36,9 +38,12 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   userName,
   onNavigate,
 }) => {
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [data, setData] = useState<any>(null);
+  const stationId = selectedStation?.id ?? null;
+  const statusQ = useShiftStatus(stationId, false, { refetchOnWindowFocus: false });
+  const invalidateOperational = useInvalidateOperational();
+  const data = statusQ.data ?? null;
+  const loading = statusQ.isLoading;
+  const error = statusQ.error as Error | null;
   const [viewingShiftSummary, setViewingShiftSummary] = useState(false);
 
   // Shift Tab Sub-Navigation
@@ -566,70 +571,47 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   };
 
 
+  // Initialise the open/close-form state whenever the cached shift status
+  // changes (mount + after a mutation invalidates the cache).
   useEffect(() => {
-    if (selectedStation) {
-      loadShiftStatus();
+    const statusData = statusQ.data;
+    if (!statusData || !selectedStation) return;
+
+    if (statusData.templates && statusData.templates.length > 0) {
+      setSelectedTemplateId((prev: string) => prev || statusData.templates[0].id);
     }
-  }, [selectedStation]);
-
-  const loadShiftStatus = async () => {
-    if (!selectedStation) return;
-    try {
-      setLoading(true);
-      setError(null);
-      const statusData = await shiftService.getShiftStatus(selectedStation.id);
-      setData(statusData);
-
-      // Pre-select first template
-      if (statusData.templates && statusData.templates.length > 0) {
-        setSelectedTemplateId(statusData.templates[0].id);
-      }
-
-      // Initialize assignments list based on dispensers
-      if (statusData.dispensers) {
-        setStaffAssignments(
-          statusData.dispensers.map((du: any) => ({
-            duId: du.id,
-            userId: statusData.staff[0]?.id ?? '',
-          }))
-        );
-      }
-
-      // Initialize manual readings fallbacks
-      if (statusData.nozzles) {
-        setInitialReadings(
-          statusData.nozzles.map((nz: any) => ({
-            nozzleId: nz.id,
-            openingReading: Number(nz.currentReading),
-          }))
-        );
-
-        // Populate active closing readings state if shift is open
-        if (statusData.activeShift && statusData.activeShift.nozzleReadings) {
-          const readingsMap: Record<string, number> = {};
-          statusData.activeShift.nozzleReadings.forEach((nr: any) => {
-            readingsMap[nr.nozzleId] = Number(nr.closingReading);
-          });
-          setClosingReadings(readingsMap);
-          loadShiftTotals(statusData.activeShift.id);
-
-          // Fetch tank status for physical dip entry at close time
-          try {
-            const txService = new CloudTransactionService();
-            const tanksData = await txService.getInventoryStatus(selectedStation.id);
+    if (statusData.dispensers) {
+      setStaffAssignments(
+        statusData.dispensers.map((du: any) => ({ duId: du.id, userId: statusData.staff?.[0]?.id ?? '' })),
+      );
+    }
+    if (statusData.nozzles) {
+      setInitialReadings(
+        statusData.nozzles.map((nz: any) => ({ nozzleId: nz.id, openingReading: Number(nz.currentReading) })),
+      );
+      if (statusData.activeShift && statusData.activeShift.nozzleReadings) {
+        const readingsMap: Record<string, number> = {};
+        statusData.activeShift.nozzleReadings.forEach((nr: any) => {
+          readingsMap[nr.nozzleId] = Number(nr.closingReading);
+        });
+        setClosingReadings(readingsMap);
+        loadShiftTotals(statusData.activeShift.id);
+        // Tank status for physical dip entry at close time.
+        transactionService
+          .getInventoryStatus(selectedStation.id)
+          .then((tanksData) => {
             setStationTanks(tanksData || []);
             setDipReadings({});
-          } catch (tankErr) {
-            console.error('Failed to load tanks for physical dip entry:', tankErr);
-          }
-        }
+          })
+          .catch((tankErr) => console.error('Failed to load tanks for physical dip entry:', tankErr));
       }
-    } catch (err: any) {
-      setError(err.message || 'Failed to load shifts configuration');
-    } finally {
-      setLoading(false);
     }
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusQ.data]);
+
+  // Refreshing the shift workspace = invalidating the shared shift-status cache;
+  // the query refetches and the init effect above re-runs.
+  const loadShiftStatus = () => invalidateOperational(stationId);
 
   const handleOpenShift = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -769,9 +751,13 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   if (error) {
     return (
       <div style={{ padding: '24px', backgroundColor: 'var(--state-danger-bg)', color: 'var(--state-danger-fg)', borderRadius: 'var(--radius-card)' }}>
-        <strong>Error:</strong> {error}
+        <strong>Error:</strong> {error.message || 'Failed to load shifts configuration'}
       </div>
     );
+  }
+
+  if (!data) {
+    return <LoadingSpinner text="Resolving shift workspace states..." />;
   }
 
   const { activeShift, lastShift, lastDssr: lastShiftSummary, canReopenLastShift, gracePeriodExpiresAt, templates, nozzles, staff, dispensers } = data;
@@ -877,93 +863,24 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   // Render Success Screen if set
   if (closedShiftSuccess) {
     return (
-      <div className="animate-fade-in card card-comfortable" style={{ maxWidth: '600px', margin: '40px auto', display: 'flex', flexDirection: 'column', gap: '24px', textAlign: 'center', fontFamily: 'var(--font-sans)' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
-          <div style={{
-            width: '64px',
-            height: '64px',
-            borderRadius: '50%',
-            backgroundColor: 'rgba(16, 185, 129, 0.1)',
-            color: 'var(--state-success-fg)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}>
-            <Check size={36} />
-          </div>
-          <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--text-strong)' }}>Shift Closed Successfully</h2>
-          <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>The Shift Summary is saved permanently.</p>
-        </div>
-
-        <div style={{
-          border: '1px solid var(--border-soft)',
-          borderRadius: 'var(--radius-input)',
-          display: 'flex',
-          flexDirection: 'column',
-          fontSize: '13px',
-          overflow: 'hidden',
-          backgroundColor: 'var(--bg-surface-alt)',
-          textAlign: 'left'
-        }}>
-          <div style={{ display: 'flex', alignSelf: 'stretch', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid var(--border-soft)' }}>
-            <span>Expected Safe Cash</span>
-            <span style={{ fontWeight: 600, fontFamily: 'var(--font-mono)' }}>₹{closedShiftSuccess.expectedCash.toLocaleString('en-IN')}</span>
-          </div>
-          <div style={{ display: 'flex', alignSelf: 'stretch', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid var(--border-soft)' }}>
-            <span>Actual Closing Cash Entered</span>
-            <span style={{ fontWeight: 600, fontFamily: 'var(--font-mono)' }}>₹{closedShiftSuccess.closingCash.toLocaleString('en-IN')}</span>
-          </div>
-          <div style={{
-            display: 'flex',
-            alignSelf: 'stretch',
-            justifyContent: 'space-between',
-            padding: '12px 16px',
-            fontWeight: 700,
-            color: closedShiftSuccess.variance === 0 ? 'var(--state-success-fg)' : 'var(--brand-danger)'
-          }}>
-            <span>Cash Variance</span>
-            <span style={{ fontFamily: 'var(--font-mono)' }}>
-              {closedShiftSuccess.variance > 0 ? '+' : ''}₹{closedShiftSuccess.variance.toLocaleString('en-IN')}
-              {closedShiftSuccess.variance === 0 ? ' (Perfect Match)' : ''}
-            </span>
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
-          <button
-            className="btn btn-primary btn-md"
-            onClick={() => {
-              setOpeningCash(closedShiftSuccess.closingCash);
-              setSelectedTemplateId(closedShiftSuccess.nextTemplateId);
-              setClosedShiftSuccess(null);
-              setViewingShiftSummary(false);
-            }}
-          >
-            <Play size={13} style={{ fill: 'currentColor', marginRight: '6px' }} /> Start Next Shift
-          </button>
-          
-          <button
-            className="btn btn-secondary btn-md"
-            onClick={() => {
-              setViewHistoryShiftId(closedShiftSuccess.lastClosedShiftId);
-              setShiftSubTab('history');
-              setClosedShiftSuccess(null);
-            }}
-          >
-            <FileText size={13} style={{ marginRight: '6px' }} /> View Compiled Shift Summary
-          </button>
-
-          <button
-            className="btn btn-secondary btn-md"
-            onClick={() => {
-              setClosedShiftSuccess(null);
-              setViewingShiftSummary(false);
-            }}
-          >
-            Back to Workspace
-          </button>
-        </div>
-      </div>
+      <ShiftCloseSuccess
+        result={closedShiftSuccess}
+        onStartNext={() => {
+          setOpeningCash(closedShiftSuccess.closingCash);
+          setSelectedTemplateId(closedShiftSuccess.nextTemplateId);
+          setClosedShiftSuccess(null);
+          setViewingShiftSummary(false);
+        }}
+        onViewSummary={() => {
+          setViewHistoryShiftId(closedShiftSuccess.lastClosedShiftId);
+          setShiftSubTab('history');
+          setClosedShiftSuccess(null);
+        }}
+        onBack={() => {
+          setClosedShiftSuccess(null);
+          setViewingShiftSummary(false);
+        }}
+      />
     );
   }
 

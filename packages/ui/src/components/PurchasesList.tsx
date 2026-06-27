@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { CloudTransactionService, CloudShiftService, CloudProductService, CloudTankService } from '../services/cloud.js';
+import { CloudTransactionService } from '../services/cloud.js';
+import { usePurchases, useShiftStatus, useSuppliers, useProducts, useTanks, useInvalidateOperational } from '../query/hooks.js';
 import { Calendar, Plus, ShoppingCart, Info, Settings, Edit, Truck, Building } from 'lucide-react';
 import { LoadingSpinner } from './LoadingSpinner.js';
 import { Drawer } from './Drawer.js';
@@ -9,9 +10,6 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { supplierPaymentSchema } from '@pump/shared';
 
 const transactionService = new CloudTransactionService();
-const shiftService = new CloudShiftService();
-const productService = new CloudProductService();
-const tankService = new CloudTankService();
 
 interface PurchasesListProps {
   selectedStation: any | null;
@@ -22,18 +20,28 @@ type TabType = 'transactions' | 'registry';
 
 export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, defaultShiftId }) => {
   const [activeTab, setActiveTab] = useState<TabType>('transactions');
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  
-  // Purchases Data
-  const [purchases, setPurchases] = useState<any[]>([]);
-  const [activeShift, setActiveShift] = useState<any | null>(null);
-  const [recentClosedShifts, setRecentClosedShifts] = useState<any[]>([]);
+
+  const stationId = selectedStation?.id ?? null;
+  const purchasesQ = usePurchases();
+  const statusQ = useShiftStatus(stationId, true);
+  const suppliersActiveQ = useSuppliers(true);
+  const suppliersAllQ = useSuppliers(false);
+  const productsQ = useProducts();
+  const tanksQ = useTanks(stationId);
+  const invalidateOperational = useInvalidateOperational();
+
+  const purchases = purchasesQ.data ?? [];
+  const activeShift = statusQ.data?.activeShift ?? null;
+  const recentClosedShifts: any[] = statusQ.data?.recentClosedShifts ?? [];
+  const suppliers = suppliersActiveQ.data ?? [];
+  const allSuppliers = suppliersAllQ.data ?? [];
+  const products = productsQ.data ?? [];
+  const tanks = tanksQ.data ?? [];
+
+  const loading = purchasesQ.isLoading || statusQ.isLoading || suppliersActiveQ.isLoading || productsQ.isLoading;
+  const error = (purchasesQ.error || statusQ.error || suppliersActiveQ.error) as Error | null;
+
   const [targetShiftId, setTargetShiftId] = useState('');
-  const [suppliers, setSuppliers] = useState<any[]>([]); // Active only for purchases dropdown
-  const [allSuppliers, setAllSuppliers] = useState<any[]>([]); // All suppliers for registry
-  const [products, setProducts] = useState<any[]>([]);
-  const [tanks, setTanks] = useState<any[]>([]);
   const [allocations, setAllocations] = useState<Record<string, string>>({});
 
   // Purchase Form States
@@ -173,7 +181,7 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, d
 
       const updatedLedger = await transactionService.getSupplierLedger(data.supplierId);
       setLedgerTransactions(updatedLedger || []);
-      await loadData();
+      invalidateOperational(stationId);
     } catch (err: any) {
       setPaymentError(err.message || 'Failed to record supplier payment');
     } finally {
@@ -192,55 +200,20 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, d
   const [drawerSubmitting, setDrawerSubmitting] = useState(false);
   const [drawerError, setDrawerError] = useState<string | null>(null);
 
+  // Initialise form defaults from query data once it loads (preserves prior
+  // load-time behaviour now that data comes from the query cache).
   useEffect(() => {
-    if (selectedStation) {
-      loadData();
-    }
-  }, [selectedStation]);
-
-  const loadData = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      const [list, status, activeSups, allSups, prods, stationTanks] = await Promise.all([
-        transactionService.getPurchases(),
-        shiftService.getShiftStatus(selectedStation.id, true),
-        transactionService.getSuppliers(true),
-        transactionService.getSuppliers(false),
-        productService.listProducts(),
-        tankService.listTanks(selectedStation.id),
-      ]);
-
-      setPurchases(list || []);
-      const active = status.activeShift || null;
-      const closedList = status.recentClosedShifts || [];
-      setActiveShift(active);
-      setRecentClosedShifts(closedList);
-      setSuppliers(activeSups || []);
-      setAllSuppliers(allSups || []);
-      setProducts(prods || []);
-      setTanks(stationTanks || []);
- 
-      if (activeSups && activeSups.length > 0) {
-        setSupplierId(activeSups[0].id);
-      } else {
-        setSupplierId('');
-      }
- 
-      if (prods && prods.length > 0) {
-        setProductId(prods[0].id);
-      } else {
-        setProductId('');
-      }
- 
-      setTargetShiftId(resolvePreferredShiftId(active, closedList));
-    } catch (err: any) {
-      setError(err.message || 'Failed to load purchases data');
-    } finally {
-      setLoading(false);
-    }
-  };
+    setTargetShiftId((prev) => prev || resolvePreferredShiftId(activeShift, recentClosedShifts));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusQ.data]);
+  useEffect(() => {
+    setSupplierId((prev) => prev || suppliers[0]?.id || '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [suppliersActiveQ.data]);
+  useEffect(() => {
+    setProductId((prev) => prev || products[0]?.id || '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [productsQ.data]);
 
   const handleAddPurchase = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -284,8 +257,7 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, d
       });
 
       closePurchaseDrawer();
-      const updatedList = await transactionService.getPurchases();
-      setPurchases(updatedList || []);
+      invalidateOperational(stationId);
     } catch (err: any) {
       setFormError(err.message || 'Failed to record supplier purchase');
     } finally {
@@ -349,7 +321,7 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, d
       }
 
       setIsDrawerOpen(false);
-      await loadData();
+      invalidateOperational(stationId);
     } catch (err: any) {
       setDrawerError(err.message || 'Failed to save supplier');
     } finally {
@@ -372,7 +344,7 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, d
   if (error) {
     return (
       <div style={{ padding: '24px', backgroundColor: 'var(--state-danger-bg)', color: 'var(--state-danger-fg)', borderRadius: 'var(--radius-card)', fontFamily: 'var(--font-sans)' }}>
-        <strong>Error:</strong> {error}
+        <strong>Error:</strong> {error.message || 'Failed to load purchases data'}
       </div>
     );
   }
