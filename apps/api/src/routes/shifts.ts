@@ -59,6 +59,106 @@ function canManageDay(role: Role): boolean {
   return role === 'Owner' || role === 'Manager';
 }
 
+/**
+ * Project an immutable v2 shift-summary snapshot into the shape the Shift Summary
+ * view consumes (legacy-compatible field names + enriched nozzle/handover/txn
+ * data). The stored snapshot remains the canonical financial record; this is a
+ * read-time presentation projection.
+ */
+async function projectShiftSummary(
+  db: DbClient,
+  shift: typeof schema.shifts.$inferSelect,
+  rawSnapshot: any,
+): Promise<Record<string, unknown>> {
+  const snap = rawSnapshot ?? {};
+  const recon = snap.reconciliation ?? {};
+
+  const [template] = await db
+    .select()
+    .from(schema.shiftTemplates)
+    .where(eq(schema.shiftTemplates.id, shift.shiftTemplateId))
+    .limit(1);
+
+  let closedByName = 'System';
+  if (shift.closedBy) {
+    const [u] = await db.select().from(schema.users).where(eq(schema.users.id, shift.closedBy)).limit(1);
+    closedByName = u?.fullName ?? 'System';
+  }
+  let openedByName = 'System';
+  if (shift.openedBy) {
+    const [u] = await db.select().from(schema.users).where(eq(schema.users.id, shift.openedBy)).limit(1);
+    openedByName = u?.fullName ?? 'System';
+  }
+
+  const nrRows = await db
+    .select({ nr: schema.nozzleReadings, nz: schema.nozzles, prod: schema.products })
+    .from(schema.nozzleReadings)
+    .leftJoin(schema.nozzles, eq(schema.nozzles.id, schema.nozzleReadings.nozzleId))
+    .leftJoin(schema.products, eq(schema.products.id, schema.nozzles.productId))
+    .where(eq(schema.nozzleReadings.shiftId, shift.id));
+  const nozzleReadings = nrRows.map(({ nr, nz, prod }) => ({
+    nozzleId: nr.nozzleId,
+    nozzleName: nz?.name ?? 'Unknown',
+    productName: prod?.name ?? 'Unknown',
+    productCode: prod?.code ?? '',
+    openingReading: Number(nr.openingReading),
+    closingReading: Number(nr.closingReading ?? nr.openingReading),
+    volumeSold: Number(nr.volumeSold ?? 0),
+    unitPrice: Number(nr.unitPrice ?? 0),
+  }));
+  const totalVolumeSold = nozzleReadings.reduce((a, r) => a + r.volumeSold, 0) || Number(snap.totalVolume ?? 0);
+
+  const hoRows = await db
+    .select({ h: schema.attendantHandovers, userName: schema.users.fullName, duName: schema.dispenserUnits.name })
+    .from(schema.attendantHandovers)
+    .leftJoin(schema.users, eq(schema.users.id, schema.attendantHandovers.userId))
+    .leftJoin(schema.dispenserUnits, eq(schema.dispenserUnits.id, schema.attendantHandovers.duId))
+    .where(eq(schema.attendantHandovers.shiftId, shift.id));
+  const handovers = hoRows.map(({ h, userName, duName }) => ({
+    ...h,
+    attendantName: userName ?? 'Unknown',
+    duCode: duName ?? '',
+  }));
+
+  const [expenses, purchases, collections] = await Promise.all([
+    db.select().from(schema.expenses).where(eq(schema.expenses.shiftId, shift.id)),
+    db.select().from(schema.purchases).where(eq(schema.purchases.shiftId, shift.id)),
+    db.select().from(schema.collections).where(eq(schema.collections.shiftId, shift.id)),
+  ]);
+
+  const openingCash = Number(snap.openingCash ?? shift.openingCash ?? 0);
+  const closingCash = Number(snap.closingCash ?? shift.closingCash ?? 0);
+
+  return {
+    ...snap,
+    shiftId: shift.id,
+    templateName: template?.name ?? 'Custom',
+    openedAt: shift.openedAt,
+    closedAt: shift.closedAt,
+    openedBy: shift.openedBy,
+    closedBy: shift.closedBy,
+    openedByName,
+    closedByName,
+    openingCash,
+    closingCash,
+    cashNetChange: closingCash - openingCash,
+    nozzleReadings,
+    totalVolumeSold,
+    handovers,
+    expenses,
+    purchases,
+    collections,
+    expectedCash: Number(snap.expectedDrawerCash ?? openingCash),
+    cashVariance: Number(snap.cashVariance ?? 0),
+    cashSalesSum: Number(recon.cashSales ?? 0),
+    cashCollectionsSum: Number(recon.cashCollections ?? 0),
+    cardCollectionsSum: Number(recon.cardCollections ?? 0),
+    upiCollectionsSum: Number(recon.upiCollections ?? 0),
+    creditSalesSum: Number(recon.creditCollections ?? 0),
+    cashExpensesSum: Number(recon.drawerExpenses ?? 0),
+  };
+}
+
 // GET /api/shifts/status?stationId=...
 shiftsRouter.get('/status', async (c) => {
   const user = c.var.user;
@@ -185,7 +285,7 @@ shiftsRouter.get('/status', async (c) => {
     if (currentStatus === 'CLOSED' && gracePeriodExpiresAt && canReopenShift(user.role)) canReopenLastShift = true;
     lastShift = { ...dbLastShift, status: currentStatus, lockedAt, templateName: template?.name ?? 'Custom', closedByName };
     const [summary] = await db.select().from(schema.shiftSummaries).where(eq(schema.shiftSummaries.shiftId, dbLastShift.id)).limit(1);
-    lastDssr = summary ?? null;
+    lastDssr = summary ? { ...summary, snapshotData: await projectShiftSummary(db, dbLastShift, summary.snapshotData) } : null;
   }
 
   // --- Recent closed (not lock-expired) shifts ---
@@ -295,6 +395,27 @@ shiftsRouter.post('/handovers', async (c) => {
     .delete(schema.attendantHandovers)
     .where(and(eq(schema.attendantHandovers.shiftId, shiftId), eq(schema.attendantHandovers.userId, userId), eq(schema.attendantHandovers.duId, duId)));
   const [row] = await db.insert(schema.attendantHandovers).values(values).returning();
+
+  // Persist the closing nozzle readings declared in the handover so the shift
+  // close picks up the volumes (volume = closing - opening).
+  const readings: { nozzleId: string; closingReading: number }[] = Array.isArray(body.nozzleReadings) ? body.nozzleReadings : [];
+  for (const r of readings) {
+    if (!r?.nozzleId || r.closingReading == null) continue;
+    const [existing] = await db
+      .select()
+      .from(schema.nozzleReadings)
+      .where(and(eq(schema.nozzleReadings.shiftId, shiftId), eq(schema.nozzleReadings.nozzleId, r.nozzleId)))
+      .limit(1);
+    if (!existing) continue;
+    const opening = Number(existing.openingReading);
+    const closing = Number(r.closingReading);
+    if (closing < opening) continue;
+    await db
+      .update(schema.nozzleReadings)
+      .set({ closingReading: String(closing), volumeSold: String(closing - opening) })
+      .where(eq(schema.nozzleReadings.id, existing.id));
+  }
+
   return c.json({ success: true, data: row });
 });
 
@@ -430,17 +551,25 @@ shiftsRouter.get('/shift-summaries', async (c) => {
   const db = c.var.db;
   const rows = await db
     .select({
-      shiftId: schema.shiftSummaries.shiftId,
+      shift: schema.shifts,
       snapshotData: schema.shiftSummaries.snapshotData,
       generatedAt: schema.shiftSummaries.generatedAt,
-      status: schema.shifts.status,
-      openedAt: schema.shifts.openedAt,
-      closedAt: schema.shifts.closedAt,
-      businessDayId: schema.shifts.businessDayId,
     })
     .from(schema.shiftSummaries)
     .innerJoin(schema.shifts, eq(schema.shifts.id, schema.shiftSummaries.shiftId))
     .where(and(eq(schema.shifts.stationId, stationId), eq(schema.shifts.organizationId, user.organizationId)))
     .orderBy(desc(schema.shiftSummaries.generatedAt));
-  return c.json({ success: true, data: rows });
+
+  const data = await Promise.all(
+    rows.map(async (r) => ({
+      shiftId: r.shift.id,
+      status: r.shift.status,
+      openedAt: r.shift.openedAt,
+      closedAt: r.shift.closedAt,
+      businessDayId: r.shift.businessDayId,
+      generatedAt: r.generatedAt,
+      snapshotData: await projectShiftSummary(db, r.shift, r.snapshotData),
+    })),
+  );
+  return c.json({ success: true, data });
 });

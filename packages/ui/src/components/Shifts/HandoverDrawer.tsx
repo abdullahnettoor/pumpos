@@ -150,6 +150,7 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
       }));
 
       const payload = {
+        shiftId,
         userId,
         duId,
         cashHandedOver: Number(values.cashHandedOver),
