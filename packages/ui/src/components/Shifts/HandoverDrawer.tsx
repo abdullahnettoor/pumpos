@@ -15,6 +15,8 @@ const handoverFormSchema = z.object({
   creditHandedOver: z.coerce.number().nonnegative('Credit chits total must be non-negative'),
   nozzleReadings: z.record(z.string().uuid(), z.coerce.number().nonnegative('Reading must be non-negative')),
   nozzleTesting: z.record(z.string().uuid(), z.coerce.number().nonnegative('Testing liters must be non-negative')),
+  terminalCard: z.record(z.string(), z.coerce.number().nonnegative()).optional(),
+  terminalUpi: z.record(z.string(), z.coerce.number().nonnegative()).optional(),
 });
 
 type HandoverFormValues = z.infer<typeof handoverFormSchema>;
@@ -28,6 +30,7 @@ interface HandoverDrawerProps {
   duId: string;
   duCode: string;
   nozzles: any[];
+  terminals?: any[];
   existingHandover: any;
   onSaveSuccess: () => void;
 }
@@ -41,6 +44,7 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
   duId,
   duCode,
   nozzles,
+  terminals = [],
   existingHandover,
   onSaveSuccess,
 }) => {
@@ -62,6 +66,8 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
       creditHandedOver: 0,
       nozzleReadings: {},
       nozzleTesting: {},
+      terminalCard: {},
+      terminalUpi: {},
     },
   });
 
@@ -86,8 +92,16 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
         setValue(`nozzleReadings.${nz.nozzleId}`, Number(nz.closingReading ?? nz.openingReading ?? 0));
         setValue(`nozzleTesting.${nz.nozzleId}`, 0); // Default testing volume to 0
       });
+
+      // Initialize per-terminal POS batch maps (pre-fill from existing entries).
+      const existingEntries: any[] = existingHandover?.terminalEntries ?? [];
+      terminals.forEach((t: any) => {
+        const prior = existingEntries.find((e) => e.terminalId === t.terminalId);
+        setValue(`terminalCard.${t.terminalId}`, Number(prior?.cardAmount ?? 0));
+        setValue(`terminalUpi.${t.terminalId}`, Number(prior?.upiAmount ?? 0));
+      });
     }
-  }, [isOpen, existingHandover, nozzles, setValue]);
+  }, [isOpen, existingHandover, nozzles, terminals, setValue]);
 
   // Watch form values reactively for live expected sales and variance computations
   const formValues = watch();
@@ -97,6 +111,16 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
   const formCard = formValues.cardHandedOver || 0;
   const formUpi = formValues.upiHandedOver || 0;
   const formCredit = formValues.creditHandedOver || 0;
+
+  // Per-terminal POS capture: when terminals are linked to this DU, the card/UPI
+  // aggregates are derived from the per-terminal batches (single source of truth).
+  const hasTerminals = terminals && terminals.length > 0;
+  const formTerminalCard = formValues.terminalCard || {};
+  const formTerminalUpi = formValues.terminalUpi || {};
+  const terminalCardTotal = terminals.reduce((sum: number, t: any) => sum + Number(formTerminalCard[t.terminalId] || 0), 0);
+  const terminalUpiTotal = terminals.reduce((sum: number, t: any) => sum + Number(formTerminalUpi[t.terminalId] || 0), 0);
+  const effectiveCard = hasTerminals ? terminalCardTotal : Number(formCard);
+  const effectiveUpi = hasTerminals ? terminalUpiTotal : Number(formUpi);
 
   // Derived Calculations
   const calculatedNozzles = nozzles.map((nz) => {
@@ -128,7 +152,7 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
 
   const expectedSales = Math.max(0, totalRawSales - totalTestingDeduction);
 
-  const totalDeclared = Number(formCash) + Number(formCard) + Number(formUpi) + Number(formCredit);
+  const totalDeclared = Number(formCash) + Number(effectiveCard) + Number(effectiveUpi) + Number(formCredit);
   const variance = totalDeclared - expectedSales;
 
   const onSubmit = async (values: HandoverFormValues) => {
@@ -154,13 +178,21 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
         userId,
         duId,
         cashHandedOver: Number(values.cashHandedOver),
-        cardHandedOver: Number(values.cardHandedOver),
-        upiHandedOver: Number(values.upiHandedOver),
+        cardHandedOver: effectiveCard,
+        upiHandedOver: effectiveUpi,
         creditHandedOver: Number(values.creditHandedOver),
         testingVolume: totalTestingVolume, // aggregate sum of all nozzles testing volumes
         expectedSales,
         varianceAmount: variance,
         nozzleReadings: nozzleReadingsPayload,
+        terminalEntries: hasTerminals
+          ? terminals.map((t: any) => ({
+              terminalId: t.terminalId,
+              duId: t.duId ?? null,
+              cardAmount: Number(values.terminalCard?.[t.terminalId] ?? 0),
+              upiAmount: Number(values.terminalUpi?.[t.terminalId] ?? 0),
+            }))
+          : undefined,
       };
 
       await shiftService.recordHandover(payload);
@@ -306,50 +338,6 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-default)' }}>Card Swipe Total (₹)</label>
-              <input
-                type="number"
-                step="any"
-                {...register('cardHandedOver')}
-                style={{
-                  height: '32px',
-                  padding: '0 8px',
-                  border: '1px solid var(--border-strong)',
-                  borderRadius: 'var(--radius-input)',
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: '13px',
-                }}
-              />
-              {errors.cardHandedOver && (
-                <span style={{ color: 'var(--brand-danger)', fontSize: '10px' }}>
-                  {errors.cardHandedOver.message}
-                </span>
-              )}
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-default)' }}>UPI QR Total (₹)</label>
-              <input
-                type="number"
-                step="any"
-                {...register('upiHandedOver')}
-                style={{
-                  height: '32px',
-                  padding: '0 8px',
-                  border: '1px solid var(--border-strong)',
-                  borderRadius: 'var(--radius-input)',
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: '13px',
-                }}
-              />
-              {errors.upiHandedOver && (
-                <span style={{ color: 'var(--brand-danger)', fontSize: '10px' }}>
-                  {errors.upiHandedOver.message}
-                </span>
-              )}
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
               <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-default)' }}>Credit Chits Total (₹)</label>
               <input
                 type="number"
@@ -370,7 +358,116 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
                 </span>
               )}
             </div>
+
+            {!hasTerminals && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-default)' }}>Card Swipe Total (₹)</label>
+                <input
+                  type="number"
+                  step="any"
+                  {...register('cardHandedOver')}
+                  style={{
+                    height: '32px',
+                    padding: '0 8px',
+                    border: '1px solid var(--border-strong)',
+                    borderRadius: 'var(--radius-input)',
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '13px',
+                  }}
+                />
+                {errors.cardHandedOver && (
+                  <span style={{ color: 'var(--brand-danger)', fontSize: '10px' }}>
+                    {errors.cardHandedOver.message}
+                  </span>
+                )}
+              </div>
+            )}
+
+            {!hasTerminals && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-default)' }}>UPI QR Total (₹)</label>
+                <input
+                  type="number"
+                  step="any"
+                  {...register('upiHandedOver')}
+                  style={{
+                    height: '32px',
+                    padding: '0 8px',
+                    border: '1px solid var(--border-strong)',
+                    borderRadius: 'var(--radius-input)',
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '13px',
+                  }}
+                />
+                {errors.upiHandedOver && (
+                  <span style={{ color: 'var(--brand-danger)', fontSize: '10px' }}>
+                    {errors.upiHandedOver.message}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
+
+          {hasTerminals && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '12px' }}>
+              <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                POS Terminal Batches (Card / UPI per machine)
+              </label>
+              {terminals.map((t: any) => {
+                const both = t.supportsCard && t.supportsUpi;
+                return (
+                  <div
+                    key={t.terminalId}
+                    style={{
+                      backgroundColor: 'var(--bg-surface-alt)',
+                      border: '1px solid var(--border-soft)',
+                      borderRadius: 'var(--radius-input)',
+                      padding: '10px 12px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '8px',
+                    }}
+                  >
+                    <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-strong)' }}>
+                      {t.label}
+                      {!t.duId && <span style={{ color: 'var(--text-faint)', fontWeight: 500 }}> · shift-wide</span>}
+                      {t.provider && <span style={{ color: 'var(--text-faint)', fontWeight: 500 }}> · {t.provider}</span>}
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: both ? '1fr 1fr' : '1fr', gap: '8px' }}>
+                      {t.supportsCard && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                          <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Card (₹)</label>
+                          <input
+                            type="number"
+                            step="any"
+                            {...register(`terminalCard.${t.terminalId}`)}
+                            style={{ height: '30px', padding: '0 8px', border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-input)', fontFamily: 'var(--font-mono)', fontSize: '12px', textAlign: 'right' }}
+                          />
+                        </div>
+                      )}
+                      {t.supportsUpi && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                          <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>UPI (₹)</label>
+                          <input
+                            type="number"
+                            step="any"
+                            {...register(`terminalUpi.${t.terminalId}`)}
+                            style={{ height: '30px', padding: '0 8px', border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-input)', fontFamily: 'var(--font-mono)', fontSize: '12px', textAlign: 'right' }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-muted)', paddingTop: '2px' }}>
+                <span>POS totals (derived)</span>
+                <strong style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-default)' }}>
+                  Card ₹{terminalCardTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })} · UPI ₹{terminalUpiTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                </strong>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* 3. Live Reconciliation Summary Card */}

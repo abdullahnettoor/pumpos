@@ -114,11 +114,47 @@ async function projectShiftSummary(
     .leftJoin(schema.users, eq(schema.users.id, schema.attendantHandovers.userId))
     .leftJoin(schema.dispenserUnits, eq(schema.dispenserUnits.id, schema.attendantHandovers.duId))
     .where(eq(schema.attendantHandovers.shiftId, shift.id));
+  const teRows = await db
+    .select({ e: schema.handoverTerminalEntries, label: schema.paymentTerminals.label, provider: schema.paymentTerminals.provider })
+    .from(schema.handoverTerminalEntries)
+    .leftJoin(schema.paymentTerminals, eq(schema.paymentTerminals.id, schema.handoverTerminalEntries.terminalId))
+    .where(eq(schema.handoverTerminalEntries.shiftId, shift.id));
   const handovers = hoRows.map(({ h, userName, duName }) => ({
     ...h,
     attendantName: userName ?? 'Unknown',
     duCode: duName ?? '',
+    terminalEntries: teRows
+      .filter(({ e }) => e.handoverId === h.id)
+      .map(({ e, label, provider }) => ({ ...e, terminalLabel: label ?? 'Unknown', provider: provider ?? null })),
   }));
+
+  // Per-terminal rollup across the shift — aggregates card/UPI per machine AND
+  // traces which attendant(s) declared each batch (who handled which POS).
+  const terminalBreakdownMap = new Map<string, any>();
+  for (const { e, label, provider } of teRows) {
+    const ho = handovers.find((h) => h.id === e.handoverId);
+    if (!terminalBreakdownMap.has(e.terminalId)) {
+      terminalBreakdownMap.set(e.terminalId, {
+        terminalId: e.terminalId,
+        terminalLabel: label ?? 'Unknown',
+        provider: provider ?? null,
+        card: 0,
+        upi: 0,
+        entries: [] as any[],
+      });
+    }
+    const agg = terminalBreakdownMap.get(e.terminalId);
+    agg.card += Number(e.cardAmount);
+    agg.upi += Number(e.upiAmount);
+    agg.entries.push({
+      attendantName: ho?.attendantName ?? 'Unknown',
+      duCode: ho?.duCode ?? '',
+      card: Number(e.cardAmount),
+      upi: Number(e.upiAmount),
+      batchRef: e.batchRef ?? null,
+    });
+  }
+  const terminalBreakdown = Array.from(terminalBreakdownMap.values());
 
   const [expenses, purchases, collections] = await Promise.all([
     db.select().from(schema.expenses).where(eq(schema.expenses.shiftId, shift.id)),
@@ -145,6 +181,7 @@ async function projectShiftSummary(
     nozzleReadings,
     totalVolumeSold,
     handovers,
+    terminalBreakdown,
     expenses,
     purchases,
     collections,
@@ -237,7 +274,34 @@ shiftsRouter.get('/status', async (c) => {
       duCode: du?.code ?? 'Unknown',
     }));
 
-    const handovers = await db.select().from(schema.attendantHandovers).where(eq(schema.attendantHandovers.shiftId, dbActiveShift.id));
+    const handoverRows = await db.select().from(schema.attendantHandovers).where(eq(schema.attendantHandovers.shiftId, dbActiveShift.id));
+    const handoverEntryRows = await db
+      .select()
+      .from(schema.handoverTerminalEntries)
+      .where(eq(schema.handoverTerminalEntries.shiftId, dbActiveShift.id));
+    const handovers = handoverRows.map((h) => ({
+      ...h,
+      terminalEntries: handoverEntryRows.filter((e) => e.handoverId === h.id),
+    }));
+
+    const terminalLinkRows = await db
+      .select({ link: schema.shiftTerminalLinks, term: schema.paymentTerminals, du: schema.dispenserUnits })
+      .from(schema.shiftTerminalLinks)
+      .leftJoin(schema.paymentTerminals, eq(schema.paymentTerminals.id, schema.shiftTerminalLinks.terminalId))
+      .leftJoin(schema.dispenserUnits, eq(schema.dispenserUnits.id, schema.shiftTerminalLinks.duId))
+      .where(eq(schema.shiftTerminalLinks.shiftId, dbActiveShift.id));
+    const terminalLinks = terminalLinkRows.map(({ link, term, du }) => ({
+      id: link.id,
+      terminalId: link.terminalId,
+      duId: link.duId,
+      label: term?.label ?? 'Unknown',
+      provider: term?.provider ?? null,
+      terminalCode: term?.terminalCode ?? null,
+      supportsCard: term?.supportsCard ?? true,
+      supportsUpi: term?.supportsUpi ?? true,
+      duName: du?.name ?? null,
+      duCode: du?.code ?? null,
+    }));
 
     activeShift = {
       ...dbActiveShift,
@@ -246,6 +310,7 @@ shiftsRouter.get('/status', async (c) => {
       nozzleReadings,
       staffAssignments,
       handovers,
+      terminalLinks,
     };
   }
 
@@ -341,7 +406,12 @@ shiftsRouter.get('/status', async (c) => {
     .from(schema.dispenserUnits)
     .where(and(eq(schema.dispenserUnits.stationId, stationId), eq(schema.dispenserUnits.status, 'ACTIVE')));
 
-  return c.json({ success: true, data: { ...base, templates, nozzles, staff, dispensers } });
+  const terminals = await db
+    .select()
+    .from(schema.paymentTerminals)
+    .where(and(eq(schema.paymentTerminals.stationId, stationId), eq(schema.paymentTerminals.isActive, true)));
+
+  return c.json({ success: true, data: { ...base, templates, nozzles, staff, dispensers, terminals } });
 });
 
 // GET /api/shifts/handovers?shiftId=...  (legacy-compatible read)
@@ -357,7 +427,11 @@ shiftsRouter.get('/handovers', async (c) => {
     .leftJoin(schema.users, eq(schema.users.id, schema.attendantHandovers.userId))
     .leftJoin(schema.dispenserUnits, eq(schema.dispenserUnits.id, schema.attendantHandovers.duId))
     .where(eq(schema.attendantHandovers.shiftId, shiftId));
-  return c.json({ success: true, data: rows.map(({ h, userName, duName }) => ({ ...h, userName: userName ?? 'Unknown', duName: duName ?? 'Unknown' })) });
+  const entryRows = await db
+    .select()
+    .from(schema.handoverTerminalEntries)
+    .where(eq(schema.handoverTerminalEntries.shiftId, shiftId));
+  return c.json({ success: true, data: rows.map(({ h, userName, duName }) => ({ ...h, userName: userName ?? 'Unknown', duName: duName ?? 'Unknown', terminalEntries: entryRows.filter((e) => e.handoverId === h.id) })) });
 });
 
 // POST /api/shifts/handovers  (legacy-compatible attendant cash/card/UPI/credit declaration)
@@ -376,6 +450,13 @@ shiftsRouter.post('/handovers', async (c) => {
   if (shift.status === 'LOCKED') {
     return c.json({ success: false, error: { code: 'INVARIANT_VIOLATION', message: 'Shift is locked' } }, 409);
   }
+  // Per-terminal card/UPI breakdown. When present, the card/UPI aggregates are
+  // derived from these rows so the two can never drift apart.
+  const terminalEntries: { terminalId: string; duId?: string | null; cardAmount: number; upiAmount: number; batchRef?: string | null }[] =
+    Array.isArray(body.terminalEntries) ? body.terminalEntries : [];
+  const hasTerminalEntries = terminalEntries.length > 0;
+  const derivedCard = terminalEntries.reduce((acc, e) => acc + Number(e.cardAmount ?? 0), 0);
+  const derivedUpi = terminalEntries.reduce((acc, e) => acc + Number(e.upiAmount ?? 0), 0);
   const values = {
     organizationId: user.organizationId,
     stationId: shift.stationId,
@@ -383,18 +464,37 @@ shiftsRouter.post('/handovers', async (c) => {
     userId,
     duId,
     cashHandedOver: String(body.cashHandedOver ?? 0),
-    cardHandedOver: String(body.cardHandedOver ?? 0),
-    upiHandedOver: String(body.upiHandedOver ?? 0),
+    cardHandedOver: String(hasTerminalEntries ? derivedCard : body.cardHandedOver ?? 0),
+    upiHandedOver: String(hasTerminalEntries ? derivedUpi : body.upiHandedOver ?? 0),
     creditHandedOver: String(body.creditHandedOver ?? 0),
     testingVolume: String(body.testingVolume ?? 0),
     expectedSales: String(body.expectedSales ?? 0),
     varianceAmount: String(body.varianceAmount ?? 0),
   };
-  // One handover per (shift, user, du): replace if re-declared.
+  // One handover per (shift, user, du): replace if re-declared. Per-terminal
+  // entries cascade-delete with the old handover row.
   await db
     .delete(schema.attendantHandovers)
     .where(and(eq(schema.attendantHandovers.shiftId, shiftId), eq(schema.attendantHandovers.userId, userId), eq(schema.attendantHandovers.duId, duId)));
   const [row] = await db.insert(schema.attendantHandovers).values(values).returning();
+
+  if (hasTerminalEntries) {
+    await db.insert(schema.handoverTerminalEntries).values(
+      terminalEntries
+        .filter((e) => e?.terminalId)
+        .map((e) => ({
+          organizationId: user.organizationId,
+          stationId: shift.stationId,
+          handoverId: row.id,
+          shiftId,
+          terminalId: e.terminalId,
+          duId: e.duId ?? duId ?? null,
+          cardAmount: String(e.cardAmount ?? 0),
+          upiAmount: String(e.upiAmount ?? 0),
+          batchRef: e.batchRef ?? null,
+        })),
+    );
+  }
 
   // Persist the closing nozzle readings declared in the handover so the shift
   // close picks up the volumes (volume = closing - opening).

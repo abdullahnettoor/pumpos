@@ -554,3 +554,19 @@ export const attendantHandovers = pgTable('attendant_handovers', {
   varianceAmount: numeric('variance_amount', { precision: 12, scale: 2 }).default('0').notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
+
+// Per-terminal card/UPI breakdown captured within an attendant handover. The
+// parent handover's card/upi aggregates are the sum of these rows when present.
+export const handoverTerminalEntries = pgTable('handover_terminal_entries', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  organizationId: uuid('organization_id').references(() => organizations.id).notNull(),
+  stationId: uuid('station_id').references(() => stations.id).notNull(),
+  handoverId: uuid('handover_id').references(() => attendantHandovers.id, { onDelete: 'cascade' }).notNull(),
+  shiftId: uuid('shift_id').references(() => shifts.id).notNull(),
+  terminalId: uuid('terminal_id').references(() => paymentTerminals.id).notNull(),
+  duId: uuid('du_id').references(() => dispenserUnits.id),
+  cardAmount: numeric('card_amount', { precision: 12, scale: 2 }).default('0').notNull(),
+  upiAmount: numeric('upi_amount', { precision: 12, scale: 2 }).default('0').notNull(),
+  batchRef: varchar('batch_ref', { length: 100 }),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});

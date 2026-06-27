@@ -1,5 +1,5 @@
 import React from 'react';
-import { FileText, Fuel, Info, Play } from 'lucide-react';
+import { FileText, Fuel, Info, Play, CreditCard } from 'lucide-react';
 
 interface OpenShiftFormProps {
   lastShiftSummary: any;
@@ -8,6 +8,9 @@ interface OpenShiftFormProps {
   dispensers: any[];
   staff: any[];
   nozzles: any[];
+  terminals: any[];
+  terminalAssignments: { terminalId: string; duId: string }[];
+  onTerminalAssignmentChange: (terminalId: string, duId: string) => void;
   selectedTemplateId: string;
   onTemplateChange: (id: string) => void;
   openingCash: number;
@@ -33,6 +36,9 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
   dispensers,
   staff,
   nozzles,
+  terminals,
+  terminalAssignments,
+  onTerminalAssignmentChange,
   selectedTemplateId,
   onTemplateChange,
   openingCash,
@@ -167,6 +173,57 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
                       {staff && staff.map((u: any) => (
                         <option key={u.id} value={u.id}>
                           {u.fullName} {!u.email ? ' (Attendant)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Optional Payment Terminal (POS) assignment to dispenser units */}
+        {terminals && terminals.length > 0 && (
+          <div style={{
+            borderTop: '1px solid var(--border-soft)',
+            paddingTop: '16px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '12px'
+          }}>
+            <h3 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-strong)' }}>
+              Payment Terminal (POS) Assignment (Optional)
+            </h3>
+            <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '-6px' }}>
+              Assign each POS machine to a dispenser so attendants can declare its card/UPI batch at handover. Leave as shift-wide if a terminal is shared across pumps.
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '16px' }}>
+              {terminals.map((term: any) => {
+                const assigned = terminalAssignments.find((t) => t.terminalId === term.id);
+                const rails = [term.supportsCard ? 'Card' : null, term.supportsUpi ? 'UPI' : null].filter(Boolean).join(' + ');
+                return (
+                  <div key={term.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+                    <span style={{ fontSize: '13px', color: 'var(--text-default)' }}>
+                      <CreditCard size={13} style={{ marginRight: '6px', verticalAlign: 'middle', display: 'inline' }} /> <strong>{term.label}</strong>
+                      {rails && <span style={{ color: 'var(--text-faint)', fontSize: '11px', marginLeft: '4px' }}>({rails})</span>}
+                    </span>
+                    <select
+                      value={assigned?.duId ?? ''}
+                      onChange={(e) => onTerminalAssignmentChange(term.id, e.target.value)}
+                      style={{
+                        height: '28px',
+                        padding: '0 8px',
+                        border: '1px solid var(--border-strong)',
+                        borderRadius: 'var(--radius-input)',
+                        fontSize: '12px',
+                        color: 'var(--text-strong)'
+                      }}
+                    >
+                      <option value="">-- Shift-wide (any pump) --</option>
+                      {dispensers && dispensers.map((du: any) => (
+                        <option key={du.id} value={du.id}>
+                          Dispenser {du.name}
                         </option>
                       ))}
                     </select>

@@ -55,6 +55,8 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [openingCash, setOpeningCash] = useState(0);
   const [staffAssignments, setStaffAssignments] = useState<{ userId: string; duId: string }[]>([]);
+  // Terminal→DU assignment for the shift being opened. duId '' means shift-wide (any DU).
+  const [terminalAssignments, setTerminalAssignments] = useState<{ terminalId: string; duId: string }[]>([]);
   const [initialReadings, setInitialReadings] = useState<{ nozzleId: string; openingReading: number }[]>([]);
   const [isOpening, setIsOpening] = useState(false);
 
@@ -586,6 +588,11 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         statusData.dispensers.map((du: any) => ({ duId: du.id, userId: statusData.staff?.[0]?.id ?? '' })),
       );
     }
+    if (statusData.terminals) {
+      setTerminalAssignments(
+        statusData.terminals.map((t: any) => ({ terminalId: t.id, duId: '' })),
+      );
+    }
     if (statusData.nozzles) {
       setInitialReadings(
         statusData.nozzles.map((nz: any) => ({ nozzleId: nz.id, openingReading: Number(nz.currentReading) })),
@@ -624,6 +631,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         shiftTemplateId: selectedTemplateId,
         openingCash,
         staffAssignments: staffAssignments.filter((a) => a.userId !== ''),
+        terminalLinks: terminalAssignments.map((t) => ({ terminalId: t.terminalId, duId: t.duId || null })),
       };
 
       // If no last shift exists, send the manual override initial readings
@@ -643,6 +651,12 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   const handleStaffAssignmentChange = (duId: string, userId: string) => {
     setStaffAssignments((prev) =>
       prev.map((a) => (a.duId === duId ? { ...a, userId } : a))
+    );
+  };
+
+  const handleTerminalAssignmentChange = (terminalId: string, duId: string) => {
+    setTerminalAssignments((prev) =>
+      prev.map((t) => (t.terminalId === terminalId ? { ...t, duId } : t))
     );
   };
 
@@ -761,7 +775,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     return <LoadingSpinner text="Resolving shift workspace states..." />;
   }
 
-  const { activeShift, lastShift, lastDssr: lastShiftSummary, canReopenLastShift, gracePeriodExpiresAt, templates, nozzles, staff, dispensers } = data;
+  const { activeShift, lastShift, lastDssr: lastShiftSummary, canReopenLastShift, gracePeriodExpiresAt, templates, nozzles, staff, dispensers, terminals } = data;
   const shiftScreenState: 'idle' | 'active' | 'closing' = activeShift
     ? (isPreparingClose ? 'closing' : 'active')
     : 'idle';
@@ -1069,6 +1083,9 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
             nozzles={activeShift.nozzleReadings.filter(
               (nr: any) => nr.duId === selectedHandoverAssignment.duId
             )}
+            terminals={(activeShift.terminalLinks || []).filter(
+              (t: any) => t.duId === selectedHandoverAssignment.duId || t.duId == null
+            )}
             existingHandover={activeShift.handovers?.find(
               (h: any) => h.userId === selectedHandoverAssignment.userId && h.duId === selectedHandoverAssignment.duId
             )}
@@ -1092,6 +1109,9 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         dispensers={dispensers}
         staff={staff}
         nozzles={nozzles}
+        terminals={terminals}
+        terminalAssignments={terminalAssignments}
+        onTerminalAssignmentChange={handleTerminalAssignmentChange}
         selectedTemplateId={selectedTemplateId}
         onTemplateChange={setSelectedTemplateId}
         openingCash={openingCash}
