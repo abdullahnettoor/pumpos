@@ -57,6 +57,7 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
     stockVariances = [],
     dipReadings = [],
     handovers = [],
+    terminalBreakdown = [],
   } = snapshotData;
 
   const handleReopen = async () => {
@@ -263,6 +264,75 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
                   </tr>
                 );
               })}
+            </tbody>
+          </table>
+        </>
+      )}
+
+      {/* POS Terminal Settlement Summary */}
+      {terminalBreakdown && terminalBreakdown.length > 0 && (
+        <>
+          <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.02em', marginTop: '32px' }}>
+            POS Terminal Settlement Summary
+          </h3>
+          <table style={{
+            width: '100%',
+            borderCollapse: 'collapse',
+            marginBottom: '32px',
+            fontSize: '13px'
+          }}>
+            <thead>
+              <tr style={{ borderBottom: '2px solid var(--border-strong)', textAlign: 'left', color: 'var(--text-muted)' }}>
+                <th style={{ padding: '8px 12px', fontWeight: 600 }}>Terminal</th>
+                <th style={{ padding: '8px 12px', fontWeight: 600 }}>Handled By</th>
+                <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Card (₹)</th>
+                <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>UPI (₹)</th>
+                <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Total (₹)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {terminalBreakdown.map((t: any, idx: number) => {
+                const card = Number(t.card || 0);
+                const upi = Number(t.upi || 0);
+                const contributors = (t.entries || []).filter((e: any) => Number(e.card || 0) > 0 || Number(e.upi || 0) > 0);
+                return (
+                  <tr key={idx} style={{ borderBottom: '1px solid var(--border-soft)', verticalAlign: 'top' }}>
+                    <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--text-strong)' }}>
+                      {t.terminalLabel}
+                      {t.provider && <span style={{ display: 'block', fontSize: '11px', color: 'var(--text-faint)', fontWeight: 500 }}>{t.provider}</span>}
+                    </td>
+                    <td style={{ padding: '10px 12px', color: 'var(--text-default)', fontSize: '12px' }}>
+                      {contributors.length > 0 ? (
+                        contributors.map((e: any, i: number) => (
+                          <div key={i} style={{ marginBottom: i < contributors.length - 1 ? '4px' : 0 }}>
+                            {e.attendantName}{e.duCode ? ` · ${e.duCode}` : ''}
+                            <span style={{ color: 'var(--text-faint)', fontFamily: 'var(--font-mono)' }}>
+                              {' '}(₹{(Number(e.card || 0) + Number(e.upi || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })})
+                            </span>
+                          </div>
+                        ))
+                      ) : (
+                        <span style={{ color: 'var(--text-faint)' }}>—</span>
+                      )}
+                    </td>
+                    <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>₹{card.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                    <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>₹{upi.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                    <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, color: 'var(--text-strong)', fontFamily: 'var(--font-mono)' }}>₹{(card + upi).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                  </tr>
+                );
+              })}
+              <tr style={{ borderTop: '2px solid var(--border-strong)', backgroundColor: 'var(--bg-surface-alt)', fontWeight: 700 }}>
+                <td colSpan={2} style={{ padding: '10px 12px', textTransform: 'uppercase', fontSize: '11px', color: 'var(--text-muted)' }}>POS Totals</td>
+                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--text-strong)' }}>
+                  ₹{terminalBreakdown.reduce((s: number, t: any) => s + Number(t.card || 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                </td>
+                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--text-strong)' }}>
+                  ₹{terminalBreakdown.reduce((s: number, t: any) => s + Number(t.upi || 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                </td>
+                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--text-strong)', fontSize: '14px' }}>
+                  ₹{terminalBreakdown.reduce((s: number, t: any) => s + Number(t.card || 0) + Number(t.upi || 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                </td>
+              </tr>
             </tbody>
           </table>
         </>
