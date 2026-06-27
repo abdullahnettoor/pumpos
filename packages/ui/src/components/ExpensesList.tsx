@@ -136,9 +136,6 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({ selectedStation, def
     return <div style={{ color: 'var(--text-muted)', padding: '24px' }}>Please select a station to view expenses.</div>;
   }
 
-  const filterInput: React.CSSProperties = { height: '28px', padding: '0 8px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', fontSize: '12px', backgroundColor: 'var(--bg-surface)' };
-  const filterLabel: React.CSSProperties = { fontSize: '10px', fontWeight: 600, color: 'var(--text-muted)' };
-
   return (
     <div className="animate-fade-in">
       <PageLayout
@@ -166,23 +163,23 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({ selectedStation, def
             )}
             <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr 1fr', gap: '12px', width: '100%' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                <label style={filterLabel}>Search</label>
-                <input type="text" placeholder="Search…" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} style={filterInput} />
+                <label className="field-label">Search</label>
+                <input type="text" className="input input-compact" placeholder="Search…" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                <label style={filterLabel}>Category</label>
-                <select value={selectedCategoryFilter} onChange={(e) => setSelectedCategoryFilter(e.target.value)} style={filterInput}>
+                <label className="field-label">Category</label>
+                <select className="select input-compact" value={selectedCategoryFilter} onChange={(e) => setSelectedCategoryFilter(e.target.value)}>
                   <option value="">All Categories</option>
                   {categories.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                <label style={filterLabel}>Start Date</label>
-                <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} style={filterInput} />
+                <label className="field-label">Start Date</label>
+                <input type="date" className="input input-compact" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                <label style={filterLabel}>End Date</label>
-                <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} style={filterInput} />
+                <label className="field-label">End Date</label>
+                <input type="date" className="input input-compact" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
               </div>
             </div>
           </>
