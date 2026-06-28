@@ -42,6 +42,7 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, d
   const error = (purchasesQ.error || statusQ.error || suppliersActiveQ.error) as Error | null;
 
   const [targetShiftId, setTargetShiftId] = useState('');
+  const [transactionDate, setTransactionDate] = useState('');
   const [allocations, setAllocations] = useState<Record<string, string>>({});
 
   // Purchase Form States
@@ -82,6 +83,7 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, d
   const resetPurchaseForm = () => {
     setFormError(null);
     setTargetShiftId(resolvePreferredShiftId(activeShift, recentClosedShifts));
+    setTransactionDate(new Date().toISOString().slice(0, 10));
     setSupplierId(suppliers[0]?.id ?? '');
     setProductId(products[0]?.id ?? '');
     setQuantity('');
@@ -218,7 +220,7 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, d
   const handleAddPurchase = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
-    if (!targetShiftId || !supplierId || !productId || !quantity || !totalAmount) return;
+    if (!supplierId || !productId || !quantity || !totalAmount) return;
 
     try {
       setSubmitting(true);
@@ -246,7 +248,8 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, d
       }
 
       await transactionService.recordPurchase({
-        shiftId: targetShiftId,
+        stationId: stationId ?? undefined,
+        transactionDate: transactionDate || undefined,
         supplierId,
         productId,
         quantity: qtyNum,
@@ -373,21 +376,7 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, d
         {activeTab === 'transactions' && (
           <button
             onClick={() => openPurchaseDrawer()}
-            disabled={!targetShiftId}
-            style={{
-              height: '32px',
-              padding: '0 12px',
-              borderRadius: 'var(--radius-input)',
-              backgroundColor: targetShiftId ? 'var(--brand-primary)' : 'var(--border-strong)',
-              color: 'white',
-              fontSize: '13px',
-              fontWeight: 500,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              border: 'none',
-              cursor: targetShiftId ? 'pointer' : 'not-allowed',
-            }}
+            className="btn btn-primary btn-md"
           >
             <Plus size={14} /> Add Purchase
           </button>
@@ -470,43 +459,20 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, d
       <div>
         {activeTab === 'transactions' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {targetShiftId ? (
-              <div style={{
-                backgroundColor: 'var(--state-info-bg)',
-                color: 'var(--state-info-fg)',
-                padding: '12px 14px',
-                borderRadius: 'var(--radius-card)',
-                fontSize: '12px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                border: '1px solid var(--border-soft)'
-              }}>
-                <Info size={14} />
-                <span>
-                  Purchase entries will post to{' '}
-                  <strong>
-                    {targetShiftId === activeShift?.id
-                      ? `${activeShift?.templateName} (Active)`
-                      : recentClosedShifts.find((shift) => shift.id === targetShiftId)?.templateName ?? 'selected shift'}
-                  </strong>
-                  {defaultShiftId === targetShiftId ? ' from the current context.' : '.'}
-                </span>
-              </div>
-            ) : (
-              <div style={{
-                backgroundColor: 'var(--state-warning-bg)',
-                color: 'var(--state-warning-fg)',
-                padding: '16px',
-                borderRadius: 'var(--radius-card)',
-                fontSize: '13px',
-                border: '1px solid var(--border-soft)',
-                lineHeight: '1.5'
-              }}>
-                <span style={{ fontWeight: 700, display: 'block', marginBottom: '4px' }}>Shift Gated Action</span>
-                Supplier purchases and tanker drops must belong to an active shift. Please open a shift first.
-              </div>
-            )}
+            <div style={{
+              backgroundColor: 'var(--state-info-bg)',
+              color: 'var(--state-info-fg)',
+              padding: '12px 14px',
+              borderRadius: 'var(--radius-card)',
+              fontSize: '12px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              border: '1px solid var(--border-soft)'
+            }}>
+              <Info size={14} />
+              <span>Purchases post to the selected date — no open shift required. Each raises a supplier payable; record the payment separately.</span>
+            </div>
 
             <div style={{
               backgroundColor: 'var(--bg-surface)',
@@ -677,11 +643,15 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, d
         onClose={closePurchaseDrawer}
         title="Log Supplier Fuel Intake"
       >
-        {targetShiftId ? (
+        {targetShiftId !== undefined && (
           <PurchaseEntryForm
-            shiftOptions={shiftOptions}
+            shiftOptions={[]}
             targetShiftId={targetShiftId}
             onTargetShiftIdChange={setTargetShiftId}
+            transactionDate={transactionDate}
+            onTransactionDateChange={setTransactionDate}
+            dateLabel="Purchase Date"
+            showShiftHintWhenSingle={false}
             supplierId={supplierId}
             onSupplierIdChange={setSupplierId}
             suppliers={suppliers}
@@ -714,19 +684,6 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, d
             invoicePlaceholder="e.g. INV-10022"
             notesPlaceholder="e.g. Tanker drop into Tank A"
           />
-        ) : (
-          <div style={{
-            backgroundColor: 'var(--state-warning-bg)',
-            color: 'var(--state-warning-fg)',
-            padding: '16px',
-            borderRadius: 'var(--radius-input)',
-            fontSize: '13px',
-            border: '1px solid var(--border-soft)',
-            lineHeight: '1.5'
-          }}>
-            <span style={{ fontWeight: 700, display: 'block', marginBottom: '4px' }}>Shift Gated Action</span>
-            Supplier purchases and tanker drops must belong to an active shift. Please open a shift first.
-          </div>
         )}
       </Drawer>
 

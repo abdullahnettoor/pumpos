@@ -29,6 +29,9 @@ export interface ExpenseEntryFormProps {
   descriptionPlaceholder?: string;
   categoryEmptyMessage?: string;
   showShiftHintWhenSingle?: boolean;
+  transactionDate?: string;
+  onTransactionDateChange?: (value: string) => void;
+  dateLabel?: string;
 }
 
 export const ExpenseEntryForm: React.FC<ExpenseEntryFormProps> = ({
@@ -55,11 +58,26 @@ export const ExpenseEntryForm: React.FC<ExpenseEntryFormProps> = ({
   descriptionPlaceholder,
   categoryEmptyMessage = 'No expense categories configured. Please add categories before recording expenses.',
   showShiftHintWhenSingle = true,
+  transactionDate,
+  onTransactionDateChange,
+  dateLabel = 'Expense Date',
 }) => {
   const hasMultipleShiftOptions = shiftOptions.length > 1;
 
   return (
     <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      {onTransactionDateChange && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>{dateLabel}</label>
+          <input
+            type="date"
+            value={transactionDate ?? ''}
+            onChange={(e) => onTransactionDateChange(e.target.value)}
+            disabled={submitting}
+            style={{ height: '32px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', padding: '0 8px' }}
+          />
+        </div>
+      )}
       {hasMultipleShiftOptions ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
           <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Target Shift</label>

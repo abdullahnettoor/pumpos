@@ -66,6 +66,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
   const [formError, setFormError] = useState<string | null>(null);
   const [drawerError, setDrawerError] = useState<string | null>(null);
   const [collectionShiftId, setCollectionShiftId] = useState('');
+  const [collectionTransactionDate, setCollectionTransactionDate] = useState('');
   const [collectionCustomerId, setCollectionCustomerId] = useState('');
   const [collectionAmount, setCollectionAmount] = useState('');
   const [collectionPaymentMethod, setCollectionPaymentMethod] = useState<'Cash' | 'Card' | 'UPI' | 'BankTransfer'>('Cash');
@@ -120,6 +121,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
   const resetCollectionForm = () => {
     const preferredShiftId = resolvePreferredShiftId(activeShift, recentClosedShifts);
     setCollectionShiftId(preferredShiftId);
+    setCollectionTransactionDate(new Date().toISOString().slice(0, 10));
     setCollectionCustomerId(customers[0]?.id || '');
     setCollectionAmount('');
     setCollectionPaymentMethod('Cash');
@@ -448,21 +450,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
         {activeTab === 'transactions' && (
           <button
             onClick={() => openCollectionDrawer()}
-            disabled={!(activeShift || recentClosedShifts.length > 0)}
-            style={{
-              height: '32px',
-              padding: '0 12px',
-              borderRadius: 'var(--radius-input)',
-              backgroundColor: activeShift || recentClosedShifts.length > 0 ? 'var(--brand-primary)' : 'var(--border-strong)',
-              color: 'white',
-              fontSize: '13px',
-              fontWeight: 500,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              border: 'none',
-              cursor: activeShift || recentClosedShifts.length > 0 ? 'pointer' : 'not-allowed',
-            }}
+            className="btn btn-primary btn-md"
           >
             <Plus size={14} /> Add Collection
           </button>
@@ -1250,15 +1238,12 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
         onClose={closeCollectionDrawer}
         title="Log Credit Transaction / Collection"
       >
-        {activeShift || recentClosedShifts.length > 0 ? (
-          <CollectionEntryForm
-            shiftOptions={[
-              ...(activeShift ? [{ id: activeShift.id, label: `Active: ${activeShift.templateName} (Open)` }] : []),
-              ...recentClosedShifts.map((s) => ({
-                id: s.id,
-                label: `Closed: ${s.templateName} (${new Date(s.closedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })})`,
-              })),
-            ]}
+        <CollectionEntryForm
+            shiftOptions={[]}
+            showShiftHintWhenSingle={false}
+            transactionDate={collectionTransactionDate}
+            onTransactionDateChange={setCollectionTransactionDate}
+            dateLabel="Collection Date"
             targetShiftId={collectionShiftId}
             onTargetShiftIdChange={setCollectionShiftId}
             customerId={collectionCustomerId}
@@ -1286,20 +1271,6 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
             walkInOptionLabel="-- Walk-in / Cash Customer --"
             customerOptionLabel={(cust) => `${cust.name} (${cust.customerType})`}
           />
-        ) : (
-          <div style={{
-            backgroundColor: 'var(--state-warning-bg)',
-            color: 'var(--state-warning-fg)',
-            padding: '16px',
-            borderRadius: 'var(--radius-input)',
-            fontSize: '13px',
-            border: '1px solid var(--border-soft)',
-            lineHeight: '1.5'
-          }}>
-            <span style={{ fontWeight: 700, display: 'block', marginBottom: '4px' }}>Shift Gated Action</span>
-            Collections and credit fleet sales must be logged during an active shift. Please open a shift first.
-          </div>
-        )}
       </Drawer>
 
       {/* Customer Ledger Drawer */}

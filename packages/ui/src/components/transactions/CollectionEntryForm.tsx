@@ -36,6 +36,9 @@ export interface CollectionEntryFormProps {
   customerLabelNonCredit?: string;
   customerOptionLabel?: (customer: any) => string;
   showShiftHintWhenSingle?: boolean;
+  transactionDate?: string;
+  onTransactionDateChange?: (value: string) => void;
+  dateLabel?: string;
 }
 
 export const CollectionEntryForm: React.FC<CollectionEntryFormProps> = ({
@@ -69,11 +72,26 @@ export const CollectionEntryForm: React.FC<CollectionEntryFormProps> = ({
   customerLabelNonCredit = 'Customer Account (Optional for Walk-in)',
   customerOptionLabel,
   showShiftHintWhenSingle = true,
+  transactionDate,
+  onTransactionDateChange,
+  dateLabel = 'Collection Date',
 }) => {
   const hasMultipleShiftOptions = shiftOptions.length > 1;
 
   return (
     <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      {onTransactionDateChange && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>{dateLabel}</label>
+          <input
+            type="date"
+            value={transactionDate ?? ''}
+            onChange={(e) => onTransactionDateChange(e.target.value)}
+            disabled={submitting}
+            style={{ height: '32px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', padding: '0 8px' }}
+          />
+        </div>
+      )}
       {hasMultipleShiftOptions ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
           <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Target Shift</label>

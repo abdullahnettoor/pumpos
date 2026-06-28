@@ -43,6 +43,9 @@ export interface PurchaseEntryFormProps {
   supplierEmptyMessage?: string;
   showShiftHintWhenSingle?: boolean;
   showDerivedUnitPrice?: boolean;
+  transactionDate?: string;
+  onTransactionDateChange?: (value: string) => void;
+  dateLabel?: string;
 }
 
 export const PurchaseEntryForm: React.FC<PurchaseEntryFormProps> = ({
@@ -83,6 +86,9 @@ export const PurchaseEntryForm: React.FC<PurchaseEntryFormProps> = ({
   supplierEmptyMessage = 'No active suppliers found. Please add or enable suppliers in the Supplier Registry tab.',
   showShiftHintWhenSingle = true,
   showDerivedUnitPrice = true,
+  transactionDate,
+  onTransactionDateChange,
+  dateLabel = 'Purchase Date',
 }) => {
   const hasMultipleShiftOptions = shiftOptions.length > 1;
   const allocatedTotal = Object.values(allocations).reduce((sum, val) => sum + (Number(val) || 0), 0);
@@ -92,6 +98,18 @@ export const PurchaseEntryForm: React.FC<PurchaseEntryFormProps> = ({
 
   return (
     <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      {onTransactionDateChange && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>{dateLabel}</label>
+          <input
+            type="date"
+            value={transactionDate ?? ''}
+            onChange={(e) => onTransactionDateChange(e.target.value)}
+            disabled={submitting}
+            style={{ height: '32px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', padding: '0 8px' }}
+          />
+        </div>
+      )}
       {hasMultipleShiftOptions ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
           <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Target Shift</label>

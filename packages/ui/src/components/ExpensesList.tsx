@@ -65,6 +65,7 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({ selectedStation, def
   // Drawer + form
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [targetShiftId, setTargetShiftId] = useState('');
+  const [transactionDate, setTransactionDate] = useState('');
   const [categoryId, setCategoryId] = useState('');
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
@@ -83,17 +84,18 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({ selectedStation, def
     setAmount('');
     setDescription('');
     setTargetShiftId(preferredShiftId);
+    setTransactionDate(new Date().toISOString().slice(0, 10));
     setIsDrawerOpen(true);
   };
   const closeDrawer = () => setIsDrawerOpen(false);
 
   const handleAddExpense = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!targetShiftId || !categoryId || !amount) return;
+    if (!categoryId || !amount) return;
     try {
       setSubmitting(true);
       setFormError(null);
-      await transactionService.recordExpense({ shiftId: targetShiftId, categoryId, amount: Number(amount), description: description || undefined });
+      await transactionService.recordExpense({ stationId: stationId ?? undefined, transactionDate: transactionDate || undefined, paidFrom: 'BANK', categoryId, amount: Number(amount), description: description || undefined });
       closeDrawer();
       invalidateOperational(stationId);
     } catch (err: any) {
@@ -142,25 +144,16 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({ selectedStation, def
         title="Expenses Tracker"
         subtitle="Log and reconcile daily petty cash operational expenditures."
         actions={
-          <button className="btn btn-primary btn-md" onClick={openDrawer} disabled={!preferredShiftId}>
+          <button className="btn btn-primary btn-md" onClick={openDrawer} disabled={categories.length === 0}>
             <Plus size={14} /> Add Expense
           </button>
         }
         toolbar={
           <>
-            {preferredShiftId ? (
-              <div style={{ backgroundColor: 'var(--state-info-bg)', color: 'var(--state-info-fg)', padding: '8px 12px', borderRadius: 'var(--radius-card)', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '8px', border: '1px solid var(--border-soft)', width: '100%' }}>
-                <Info size={14} />
-                <span>
-                  New expenses post to{' '}
-                  <strong>{preferredShiftId === activeShift?.id ? `${activeShift?.templateName} (Active)` : recentClosedShifts.find((s) => s.id === preferredShiftId)?.templateName ?? 'selected shift'}</strong>.
-                </span>
-              </div>
-            ) : (
-              <div style={{ backgroundColor: 'var(--state-warning-bg)', color: 'var(--state-warning-fg)', padding: '10px 12px', borderRadius: 'var(--radius-card)', fontSize: '12px', border: '1px solid var(--border-soft)', width: '100%' }}>
-                <strong>Shift-gated:</strong> open an operational shift before entering expenses.
-              </div>
-            )}
+            <div style={{ backgroundColor: 'var(--state-info-bg)', color: 'var(--state-info-fg)', padding: '8px 12px', borderRadius: 'var(--radius-card)', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '8px', border: '1px solid var(--border-soft)', width: '100%' }}>
+              <Info size={14} />
+              <span>Business expenses post to the selected date — no open shift required. Cash drawer expenses are entered from the shift workspace.</span>
+            </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr 1fr', gap: '12px', width: '100%' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
                 <label className="field-label">Search</label>
@@ -197,40 +190,31 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({ selectedStation, def
       </PageLayout>
 
       <Drawer isOpen={isDrawerOpen} onClose={closeDrawer} title="Log New Expense">
-        {preferredShiftId ? (
-          <ExpenseEntryForm
-            shiftOptions={[
-              ...(activeShift ? [{ id: activeShift.id, label: `Active: ${activeShift.templateName} (Open)` }] : []),
-              ...recentClosedShifts.map((shift) => ({
-                id: shift.id,
-                label: `Closed: ${shift.templateName} (${new Date(shift.closedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })})`,
-              })),
-            ]}
-            targetShiftId={targetShiftId}
-            onTargetShiftIdChange={setTargetShiftId}
-            categoryId={categoryId}
-            onCategoryIdChange={setCategoryId}
-            categories={categories}
-            amount={amount}
-            onAmountChange={setAmount}
-            description={description}
-            onDescriptionChange={setDescription}
-            submitting={submitting}
-            error={formError}
-            submittingLabel="Recording..."
-            submitDisabled={submitting || !amount || !categoryId}
-            amountLabel="Amount (₹)"
-            descriptionPlaceholder="e.g. Staff tea and refreshments"
-            onCancel={closeDrawer}
-            onSubmit={handleAddExpense}
-            submitLabel="Add Expense"
-          />
-        ) : (
-          <div style={{ backgroundColor: 'var(--state-warning-bg)', color: 'var(--state-warning-fg)', padding: '16px', borderRadius: 'var(--radius-input)', fontSize: '13px', border: '1px solid var(--border-soft)', lineHeight: '1.5' }}>
-            <span style={{ fontWeight: 700, display: 'block', marginBottom: '4px' }}>Shift Gated Action</span>
-            Petty expenses must be linked to a shift. Open an active operational shift before entering expenses.
-          </div>
-        )}
+        <ExpenseEntryForm
+          shiftOptions={[]}
+          targetShiftId={targetShiftId}
+          onTargetShiftIdChange={setTargetShiftId}
+          transactionDate={transactionDate}
+          onTransactionDateChange={setTransactionDate}
+          dateLabel="Expense Date"
+          showShiftHintWhenSingle={false}
+          categoryId={categoryId}
+          onCategoryIdChange={setCategoryId}
+          categories={categories}
+          amount={amount}
+          onAmountChange={setAmount}
+          description={description}
+          onDescriptionChange={setDescription}
+          submitting={submitting}
+          error={formError}
+          submittingLabel="Recording..."
+          submitDisabled={submitting || !amount || !categoryId}
+          amountLabel="Amount (₹)"
+          descriptionPlaceholder="e.g. Bank charges, owner drawings, office supplies"
+          onCancel={closeDrawer}
+          onSubmit={handleAddExpense}
+          submitLabel="Add Expense"
+        />
       </Drawer>
     </div>
   );

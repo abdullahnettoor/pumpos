@@ -496,7 +496,7 @@ export class CloudTransactionService {
     return request<any[]>('/transactions/collections');
   }
 
-  async recordExpense(payload: { shiftId: string; categoryId: string; amount: number; description?: string }): Promise<any> {
+  async recordExpense(payload: { shiftId?: string; stationId?: string; transactionDate?: string; paidFrom?: 'SHIFT_CASH' | 'BANK' | 'OWNER'; categoryId: string; amount: number; description?: string }): Promise<any> {
     return request<any>('/transactions/expenses', {
       method: 'POST',
       body: JSON.stringify(payload),
@@ -504,7 +504,9 @@ export class CloudTransactionService {
   }
 
   async recordPurchase(payload: {
-    shiftId: string;
+    shiftId?: string;
+    stationId?: string;
+    transactionDate?: string;
     supplierId: string;
     productId: string;
     quantity: number;
@@ -520,7 +522,9 @@ export class CloudTransactionService {
   }
 
   async recordCollection(payload: {
-    shiftId: string;
+    shiftId?: string;
+    stationId?: string;
+    transactionDate?: string;
     customerId?: string;
     vehicleId?: string | null;
     productId?: string | null;
@@ -556,7 +560,7 @@ export class CloudTransactionService {
     return request<any[]>(`/transactions/suppliers/${supplierId}/ledger`);
   }
 
-  async recordSupplierPayment(payload: { shiftId: string; supplierId: string; amount: number; notes?: string }): Promise<any> {
+  async recordSupplierPayment(payload: { shiftId?: string; stationId?: string; transactionDate?: string; paidFrom?: 'SHIFT_CASH' | 'BANK' | 'OWNER'; supplierId: string; amount: number; notes?: string }): Promise<any> {
     return request<any>('/transactions/supplier-payments', {
       method: 'POST',
       body: JSON.stringify(payload),
