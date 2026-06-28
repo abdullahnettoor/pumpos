@@ -114,6 +114,7 @@ export class DrizzleCustomerLedgerRepository implements CustomerLedgerRepository
       vehicleId: e.vehicleId,
       productId: e.productId,
       attendantId: e.attendantId ?? null,
+      duId: e.duId ?? null,
       transactionType: e.transactionType,
       amount: e.amount,
       quantity: e.quantity,
@@ -123,6 +124,31 @@ export class DrizzleCustomerLedgerRepository implements CustomerLedgerRepository
       notes: e.notes,
       createdAt: new Date(e.createdAt),
     });
+  }
+  async findById(id: string): Promise<CustomerLedgerEntry | null> {
+    const [r] = await this.db.select().from(schema.customerTransactions).where(eq(schema.customerTransactions.id, id)).limit(1);
+    if (!r) return null;
+    return {
+      id: r.id,
+      shiftId: r.shiftId,
+      businessDayId: r.businessDayId,
+      customerId: r.customerId,
+      vehicleId: r.vehicleId,
+      productId: r.productId,
+      attendantId: r.attendantId ?? null,
+      duId: r.duId ?? null,
+      transactionType: r.transactionType,
+      amount: r.amount,
+      quantity: r.quantity,
+      unitPrice: r.unitPrice,
+      referenceType: r.referenceType,
+      referenceId: r.referenceId,
+      notes: r.notes,
+      createdAt: r.createdAt.toISOString(),
+    };
+  }
+  async delete(id: string): Promise<void> {
+    await this.db.delete(schema.customerTransactions).where(eq(schema.customerTransactions.id, id));
   }
 }
 

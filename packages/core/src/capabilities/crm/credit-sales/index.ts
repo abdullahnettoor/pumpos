@@ -17,6 +17,8 @@ export interface RecordCreditSaleCommand {
   unitPrice?: number | string | null;
   /** Operator who recorded the credit sale; defaults to the acting user within a shift. */
   attendantId?: string | null;
+  /** DU the fuel-on-credit was dispensed from (when declared in a DU handover). */
+  duId?: string | null;
   notes?: string;
   transactionDate?: string;
 }
@@ -31,6 +33,7 @@ const schema = z.object({
   quantity: z.coerce.number().positive().nullish(),
   unitPrice: z.coerce.number().nonnegative().nullish(),
   attendantId: z.string().nullish(),
+  duId: z.string().nullish(),
   notes: z.string().max(500).optional(),
   transactionDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'transactionDate must be YYYY-MM-DD').optional(),
 });
@@ -92,6 +95,7 @@ export class RecordCreditSale implements UseCase<RecordCreditSaleCommand, Custom
       vehicleId: cmd.vehicleId ?? null,
       productId: cmd.productId ?? null,
       attendantId,
+      duId: shiftId ? (cmd.duId ?? null) : null,
       transactionType: 'Credit Sale',
       amount: String(cmd.amount),
       quantity: cmd.quantity != null ? String(cmd.quantity) : null,
@@ -114,5 +118,58 @@ export class RecordCreditSale implements UseCase<RecordCreditSaleCommand, Custom
     ]);
 
     return ok(entry);
+  }
+}
+
+export interface VoidCreditSaleCommand {
+  /** The customer_transactions id of the credit-sale ledger entry to void. */
+  id: string;
+}
+
+export interface VoidCreditSaleDeps {
+  ledger: CustomerLedgerRepository;
+  shifts: ShiftRepository;
+  events: EventPublisher;
+}
+
+/**
+ * Void (remove) a credit-sale receivable. Used to correct a credit fuel sale
+ * declared during a DU handover before the shift closes. Only a 'Credit Sale'
+ * entry whose originating shift is still OPEN may be voided — once the shift is
+ * closed the receivable is part of an immutable summary and must be reversed via
+ * an adjustment instead. Run inside runInTransaction.
+ */
+export class VoidCreditSale implements UseCase<VoidCreditSaleCommand, { id: string }> {
+  constructor(private readonly deps: VoidCreditSaleDeps) {}
+
+  async execute(input: VoidCreditSaleCommand, ctx: ExecutionContext): Promise<Result<{ id: string }>> {
+    if (!input?.id) return err(validationError('id is required'));
+    if (!this.deps.ledger.findById || !this.deps.ledger.delete) {
+      return err(invariantViolation('Ledger repository does not support void'));
+    }
+    const entry = await this.deps.ledger.findById(input.id);
+    if (!entry) return err(notFoundError('CreditSale', input.id));
+    if (entry.transactionType !== 'Credit Sale' || entry.referenceType !== 'CREDIT_SALE') {
+      return err(invariantViolation('Only a credit sale can be voided', { id: input.id, type: entry.transactionType }));
+    }
+    if (entry.shiftId) {
+      const shift = await this.deps.shifts.findById(entry.shiftId);
+      if (!shift || shift.organizationId !== ctx.organizationId) return err(notFoundError('Shift', entry.shiftId));
+      if (shift.status !== 'OPEN') return err(invariantViolation('Cannot void a credit sale after its shift is closed', { shiftId: shift.id, status: shift.status }));
+    }
+
+    await this.deps.ledger.delete(input.id);
+
+    await this.deps.events.publish([
+      eventFromContext(ctx, {
+        eventType: BusinessEvents.CREDIT_SALE_VOIDED,
+        aggregateType: 'Customer',
+        aggregateId: entry.customerId,
+        businessDayId: entry.businessDayId,
+        payload: { creditSaleId: input.id, customerId: entry.customerId, amount: entry.amount, duId: entry.duId ?? null },
+      }),
+    ]);
+
+    return ok({ id: input.id });
   }
 }

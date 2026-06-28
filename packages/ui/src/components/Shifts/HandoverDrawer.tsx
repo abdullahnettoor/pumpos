@@ -3,9 +3,10 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Drawer } from '../Drawer.js';
-import { CloudShiftService } from '../../services/cloud.js';
+import { CloudShiftService, CloudTransactionService } from '../../services/cloud.js';
 
 const shiftService = new CloudShiftService();
+const transactionService = new CloudTransactionService();
 
 // Define form validation schema using Zod
 const handoverFormSchema = z.object({
@@ -31,8 +32,14 @@ interface HandoverDrawerProps {
   duCode: string;
   nozzles: any[];
   terminals?: any[];
-  /** Per-attendant attributed non-fuel + fleet-credit totals (from /shifts/status). */
-  attributed?: { merchandiseTotal?: number; fleetCredit?: number; expectedExtra?: number } | null;
+  /** Credit-eligible (non-prepaid Credit/Fleet) customers, each with currentBalance + creditLimit. */
+  customers?: any[];
+  /** Combined search: returns vehicles (with their customer) matching a query. */
+  searchVehicles?: (q: string) => Promise<any[]>;
+  /** Fuel-on-credit lines already recorded for this (attendant, DU). */
+  creditSales?: any[];
+  /** Called after a credit line is added/voided so the parent can refetch status. */
+  onCreditChanged?: () => void | Promise<void>;
   existingHandover: any;
   onSaveSuccess: () => void;
 }
@@ -47,7 +54,10 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
   duCode,
   nozzles,
   terminals = [],
-  attributed,
+  customers = [],
+  searchVehicles,
+  creditSales = [],
+  onCreditChanged,
   existingHandover,
   onSaveSuccess,
 }) => {
@@ -125,6 +135,171 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
   const effectiveCard = hasTerminals ? terminalCardTotal : Number(formCard);
   const effectiveUpi = hasTerminals ? terminalUpiTotal : Number(formUpi);
 
+  // ---- Fuel-on-credit (credit chits) declared for this (attendant, DU) ----
+  const [creditLines, setCreditLines] = useState<any[]>([]);
+  const [ccOpen, setCcOpen] = useState(false);
+  const [ccQuery, setCcQuery] = useState('');
+  const [ccResults, setCcResults] = useState<any[]>([]);
+  const [ccSearching, setCcSearching] = useState(false);
+  const [ccShowResults, setCcShowResults] = useState(false);
+  const [ccCustomerId, setCcCustomerId] = useState('');
+  const [ccCustomerName, setCcCustomerName] = useState('');
+  const [ccVehicleId, setCcVehicleId] = useState<string | null>(null);
+  const [ccVehicleLabel, setCcVehicleLabel] = useState('');
+  const [ccProductId, setCcProductId] = useState('');
+  const [ccQty, setCcQty] = useState('');
+  const [ccPrice, setCcPrice] = useState('');
+  const [ccAmount, setCcAmount] = useState('');
+  const [ccNotes, setCcNotes] = useState('');
+  const [ccBusy, setCcBusy] = useState(false);
+
+  const resetCcRow = () => {
+    setCcQuery(''); setCcResults([]); setCcShowResults(false);
+    setCcCustomerId(''); setCcCustomerName(''); setCcVehicleId(null); setCcVehicleLabel('');
+    setCcProductId(''); setCcQty(''); setCcPrice(''); setCcAmount(''); setCcNotes('');
+  };
+  useEffect(() => {
+    if (isOpen) { setCreditLines(creditSales ?? []); setCcOpen(false); resetCcRow(); }
+  }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Fuel products dispensed at this DU (from its nozzles).
+  const duProducts = Array.from(
+    new Map(
+      nozzles
+        .filter((n: any) => n.productId)
+        .map((n: any) => [n.productId, { id: n.productId, name: n.productName ?? 'Fuel', code: n.productCode ?? '', price: Number(n.unitPrice || 0) }]),
+    ).values(),
+  );
+
+  // Combined search: vehicle registration OR customer name. Vehicles autofill the
+  // customer (+ product/price when the vehicle's fuel is dispensed at this DU).
+  useEffect(() => {
+    if (!ccOpen || ccCustomerId) { setCcShowResults(false); return; }
+    const q = ccQuery.trim();
+    if (!q) { setCcResults([]); setCcShowResults(false); return; }
+    let active = true;
+    setCcSearching(true);
+    const t = window.setTimeout(async () => {
+      let vehicles: any[] = [];
+      try { vehicles = searchVehicles ? await searchVehicles(q) : []; } catch { vehicles = []; }
+      vehicles = vehicles.filter((v: any) => !v.isPrepaid && v.customerType !== 'Regular');
+      const ql = q.toLowerCase();
+      const custMatches = (customers || []).filter((c: any) => (c.name || '').toLowerCase().includes(ql));
+      if (!active) return;
+      setCcResults([
+        ...vehicles.map((v: any) => ({ kind: 'vehicle', ...v })),
+        ...custMatches.map((c: any) => ({ kind: 'customer', id: c.id, customerId: c.id, customerName: c.name, customerType: c.customerType })),
+      ]);
+      setCcShowResults(true);
+      setCcSearching(false);
+    }, 200);
+    return () => { active = false; window.clearTimeout(t); };
+  }, [ccQuery, ccOpen, ccCustomerId, searchVehicles, customers]);
+
+  const selectCcResult = (r: any) => {
+    setCcCustomerId(r.customerId);
+    setCcCustomerName(r.customerName);
+    if (r.kind === 'vehicle') {
+      setCcVehicleId(r.id);
+      setCcVehicleLabel(r.registrationNumber);
+      setCcQuery(r.registrationNumber);
+      const match = duProducts.find((p) => p.id === r.defaultProductId);
+      if (match) {
+        setCcProductId(match.id);
+        if (match.price > 0) setCcPrice(match.price.toFixed(2));
+      }
+    } else {
+      setCcVehicleId(null);
+      setCcVehicleLabel('');
+      setCcQuery(r.customerName);
+    }
+    setCcShowResults(false);
+  };
+
+  const ccSelectedCustomer = customers.find((c: any) => c.id === ccCustomerId);
+  const ccLimit = Number(ccSelectedCustomer?.creditLimit ?? 0);
+  const ccBalance = Number(ccSelectedCustomer?.currentBalance ?? 0);
+  const ccAvailable = ccLimit > 0 ? ccLimit - ccBalance : null;
+  const ccExceeds = ccAvailable != null && Number(ccAmount) > ccAvailable;
+
+  const handleCcProductChange = (pid: string) => {
+    setCcProductId(pid);
+    // Price is fixed per nozzle — keep it internal (drives qty↔amount), no manual entry.
+    const p = duProducts.find((x) => x.id === pid);
+    const price = p && p.price > 0 ? p.price : 0;
+    setCcPrice(price > 0 ? price.toFixed(2) : '');
+    const q = Number(ccQty);
+    if (q > 0 && price > 0) setCcAmount((q * price).toFixed(2));
+  };
+  const handleCcQtyChange = (v: string) => {
+    setCcQty(v);
+    const q = Number(v); const pr = Number(ccPrice);
+    if (q > 0 && pr > 0) setCcAmount((q * pr).toFixed(2));
+  };
+  const handleCcAmountChange = (v: string) => {
+    setCcAmount(v);
+    const a = Number(v); const pr = Number(ccPrice);
+    if (a > 0 && pr > 0) setCcQty((a / pr).toFixed(3));
+  };
+
+  const addCreditLine = async () => {
+    setError(null);
+    const amt = Number(ccAmount);
+    if (!ccCustomerId) { setError('Search and select a customer or vehicle for the credit sale.'); return; }
+    if (!(amt > 0)) { setError('Enter a valid credit amount.'); return; }
+    try {
+      setCcBusy(true);
+      const entry = await transactionService.recordCollection({
+        shiftId,
+        customerId: ccCustomerId,
+        vehicleId: ccVehicleId,
+        productId: ccProductId || null,
+        quantity: Number(ccQty) > 0 ? Number(ccQty) : null,
+        unitPrice: ccPrice && Number(ccPrice) >= 0 ? Number(ccPrice) : null,
+        amount: amt,
+        paymentMethod: 'Credit',
+        attendantId: userId,
+        duId,
+        notes: ccNotes || undefined,
+      });
+      const prod = duProducts.find((p) => p.id === ccProductId);
+      setCreditLines((prev) => [...prev, {
+        id: entry?.id,
+        customerId: ccCustomerId,
+        customerName: ccCustomerName || ccSelectedCustomer?.name || 'Customer',
+        vehicleId: ccVehicleId,
+        vehicleLabel: ccVehicleLabel || null,
+        productId: ccProductId || null,
+        productName: prod?.name ?? null,
+        quantity: Number(ccQty) || null,
+        unitPrice: Number(ccPrice) || null,
+        amount: amt,
+        notes: ccNotes || null,
+      }]);
+      resetCcRow();
+      await onCreditChanged?.();
+    } catch (e: any) {
+      setError(e.message || 'Failed to add credit sale');
+    } finally {
+      setCcBusy(false);
+    }
+  };
+
+  const removeCreditLine = async (id: string) => {
+    if (!id) return;
+    setError(null);
+    try {
+      setCcBusy(true);
+      await transactionService.voidCreditSale(id);
+      setCreditLines((prev) => prev.filter((l) => l.id !== id));
+      await onCreditChanged?.();
+    } catch (e: any) {
+      setError(e.message || 'Failed to remove credit sale');
+    } finally {
+      setCcBusy(false);
+    }
+  };
+
   // Derived Calculations
   const calculatedNozzles = nozzles.map((nz) => {
     const opening = Number(nz.openingReading || 0);
@@ -153,14 +328,31 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
   const totalTestingVolume = calculatedNozzles.reduce((sum, n) => sum + n.testing, 0);
   const totalTestingDeduction = calculatedNozzles.reduce((sum, n) => sum + n.testingDeduction, 0);
 
-  const expectedFuelSales = Math.max(0, totalRawSales - totalTestingDeduction);
-  const attributedMerchandise = Number(attributed?.merchandiseTotal ?? 0);
-  const attributedFleetCredit = Number(attributed?.fleetCredit ?? 0);
-  const attributedExtra = Number(attributed?.expectedExtra ?? attributedMerchandise + attributedFleetCredit);
-  const expectedSales = expectedFuelSales + attributedExtra;
+  const expectedSales = Math.max(0, totalRawSales - totalTestingDeduction);
 
-  const totalDeclared = Number(formCash) + Number(effectiveCard) + Number(effectiveUpi) + Number(formCredit);
-  const variance = totalDeclared - expectedSales;
+  // Fuel-on-credit lines are declared in this section and saved immediately
+  // (each is a real receivable). The credit chits total is DERIVED from them and
+  // sits on the DECLARED side — the fuel is already metered in the nozzle reading,
+  // so credit is NOT added to expected (that would double-count).
+  const creditTotal = creditLines.reduce((sum, l) => sum + Number(l.amount || 0), 0);
+  const totalDeclared = Number(formCash) + Number(effectiveCard) + Number(effectiveUpi) + creditTotal;
+  // Round to paise so floating-point dust (e.g. -1e-13) doesn't read as a shortage.
+  const variance = Math.round((totalDeclared - expectedSales) * 100) / 100 || 0;
+
+  // Volume sanity: credit litres billed for a fuel must not exceed the litres
+  // metered (and not testing) for that fuel at this DU. Reactive to the readings.
+  const meteredByProduct = new Map<string, number>();
+  for (const n of calculatedNozzles) {
+    if (!n.productId) continue;
+    meteredByProduct.set(n.productId, (meteredByProduct.get(n.productId) ?? 0) + Math.max(0, n.volume - n.testing));
+  }
+  const creditLitresByProduct = new Map<string, number>();
+  for (const l of creditLines) {
+    if (l.productId && l.quantity) creditLitresByProduct.set(l.productId, (creditLitresByProduct.get(l.productId) ?? 0) + Number(l.quantity));
+  }
+  const volumeOverages = Array.from(creditLitresByProduct.entries())
+    .map(([pid, lit]) => ({ name: duProducts.find((p) => p.id === pid)?.name ?? 'Fuel', lit, metered: meteredByProduct.get(pid) ?? 0 }))
+    .filter((o) => o.lit > o.metered + 0.001);
 
   const onSubmit = async (values: HandoverFormValues) => {
     setError(null);
@@ -187,7 +379,7 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
         cashHandedOver: Number(values.cashHandedOver),
         cardHandedOver: effectiveCard,
         upiHandedOver: effectiveUpi,
-        creditHandedOver: Number(values.creditHandedOver),
+        creditHandedOver: creditTotal,
         testingVolume: totalTestingVolume, // aggregate sum of all nozzles testing volumes
         expectedSales,
         varianceAmount: variance,
@@ -316,56 +508,12 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
           </div>
         </div>
 
-        {/* 2. Handover Amounts Section */}
+        {/* 2. Card / UPI collections */}
         <div>
           <h3 style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '10px' }}>
-            2. Payment & Chit Deposits
+            2. Card / UPI Collections
           </h3>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-default)' }}>Cash Handed Over (₹)</label>
-              <input
-                type="number"
-                step="any"
-                {...register('cashHandedOver')}
-                style={{
-                  height: '32px',
-                  padding: '0 8px',
-                  border: '1px solid var(--border-strong)',
-                  borderRadius: 'var(--radius-input)',
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: '13px',
-                }}
-              />
-              {errors.cashHandedOver && (
-                <span style={{ color: 'var(--brand-danger)', fontSize: '10px' }}>
-                  {errors.cashHandedOver.message}
-                </span>
-              )}
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-default)' }}>Credit Chits Total (₹)</label>
-              <input
-                type="number"
-                step="any"
-                {...register('creditHandedOver')}
-                style={{
-                  height: '32px',
-                  padding: '0 8px',
-                  border: '1px solid var(--border-strong)',
-                  borderRadius: 'var(--radius-input)',
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: '13px',
-                }}
-              />
-              {errors.creditHandedOver && (
-                <span style={{ color: 'var(--brand-danger)', fontSize: '10px' }}>
-                  {errors.creditHandedOver.message}
-                </span>
-              )}
-            </div>
-
             {!hasTerminals && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-default)' }}>Card Swipe Total (₹)</label>
@@ -477,7 +625,170 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
           )}
         </div>
 
-        {/* 3. Live Reconciliation Summary Card */}
+        {/* 3. Fuel-on-credit sales (credit chits) for this DU */}
+        <div>
+          <h3 style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px', display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+            <span>3. Fuel-on-Credit Sales</span>
+            {creditTotal > 0 && <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-strong)' }}>₹{creditTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>}
+          </h3>
+          <p style={{ fontSize: '11px', color: 'var(--text-faint)', marginBottom: '10px' }}>
+            Fuel dispensed at this pump and billed to a customer's account. Each line is recorded immediately and feeds the credit chits total below.
+          </p>
+
+          {volumeOverages.length > 0 && (
+            <div style={{ backgroundColor: 'var(--state-warning-bg)', color: 'var(--state-warning-fg)', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', padding: '8px 10px', fontSize: '11px', marginBottom: '10px' }}>
+              Credit litres exceed metered volume for {volumeOverages.map((o) => `${o.name} (${o.lit.toLocaleString('en-IN')} L billed vs ${o.metered.toLocaleString('en-IN')} L metered)`).join(', ')}. Check the readings or the credit quantities.
+            </div>
+          )}
+
+          {creditLines.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '10px' }}>
+              {creditLines.map((l, idx) => (
+                <div key={l.id ?? idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', backgroundColor: 'var(--bg-surface-alt)', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', padding: '8px 10px' }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-strong)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {l.customerName}{l.vehicleLabel ? ` · ${l.vehicleLabel}` : ''}
+                    </div>
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                      {l.productName ?? 'Fuel'}{l.quantity ? ` · ${Number(l.quantity).toLocaleString('en-IN')} L` : ''}{l.notes ? ` · ${l.notes}` : ''}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
+                    <strong style={{ fontFamily: 'var(--font-mono)', fontSize: '13px' }}>₹{Number(l.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
+                    <button type="button" onClick={() => removeCreditLine(l.id)} disabled={ccBusy} title="Void this credit sale" style={{ background: 'transparent', border: 'none', color: 'var(--brand-danger)', cursor: 'pointer', fontSize: '12px', padding: '2px 4px' }}>✕</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {!ccOpen ? (
+            <button type="button" onClick={() => setCcOpen(true)} className="btn btn-secondary btn-sm" style={{ alignSelf: 'flex-start' }}>
+              + Add credit sale
+            </button>
+          ) : (
+            <div style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', padding: '10px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {/* Combined search: customer name OR vehicle number */}
+              {!ccCustomerId ? (
+                <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                  <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Search customer name or vehicle number</label>
+                  <input
+                    type="text"
+                    value={ccQuery}
+                    autoFocus
+                    onChange={(e) => setCcQuery(e.target.value)}
+                    onFocus={() => ccResults.length > 0 && setCcShowResults(true)}
+                    placeholder="e.g. Star Logistics or KA01AB1234"
+                    style={{ height: '30px', padding: '0 8px', width: '100%', minWidth: 0, border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-input)', fontSize: '12px' }}
+                  />
+                  {ccShowResults && ccResults.length > 0 && (
+                    <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, marginTop: '2px', maxHeight: '200px', overflowY: 'auto', backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-input)', boxShadow: '0 4px 12px rgba(0,0,0,0.08)', zIndex: 20 }}>
+                      {ccResults.map((r, i) => (
+                        <div
+                          key={(r.kind === 'vehicle' ? 'v' : 'c') + (r.id ?? i)}
+                          onMouseDown={(e) => { e.preventDefault(); selectCcResult(r); }}
+                          style={{ padding: '6px 8px', cursor: 'pointer', borderBottom: i === ccResults.length - 1 ? 'none' : '1px solid var(--border-soft)', fontSize: '12px' }}
+                        >
+                          <div style={{ fontWeight: 600, color: 'var(--text-default)' }}>
+                            {r.kind === 'vehicle' ? r.registrationNumber : r.customerName}
+                            <span style={{ marginLeft: '6px', fontSize: '9px', fontWeight: 600, color: r.kind === 'vehicle' ? 'var(--state-info-fg)' : 'var(--text-muted)', textTransform: 'uppercase' }}>{r.kind}</span>
+                          </div>
+                          <div style={{ color: 'var(--text-muted)', marginTop: '1px' }}>
+                            {r.kind === 'vehicle' ? `${r.customerName} · ${r.vehicleType ?? ''}${r.defaultProductName ? ` · ${r.defaultProductName}` : ''}` : r.customerType}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {ccShowResults && !ccSearching && ccResults.length === 0 && ccQuery.trim() && (
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', padding: '4px 2px' }}>No credit customer or vehicle matches "{ccQuery}".</div>
+                  )}
+                </div>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', padding: '6px 8px', border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-input)', backgroundColor: 'var(--bg-surface-alt)' }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-default)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {ccCustomerName}{ccVehicleLabel ? ` · ${ccVehicleLabel}` : ''}
+                    </div>
+                    {ccAvailable != null && <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Available credit ₹{ccAvailable.toLocaleString('en-IN')}</div>}
+                  </div>
+                  <button type="button" onClick={resetCcRow} disabled={ccBusy} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '11px', flexShrink: 0 }}>Change</button>
+                </div>
+              )}
+
+              {ccCustomerId && (
+                <>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr', gap: '8px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
+                      <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Fuel</label>
+                      <select value={ccProductId} onChange={(e) => handleCcProductChange(e.target.value)} disabled={ccBusy} style={{ height: '30px', padding: '0 6px', width: '100%', minWidth: 0, border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-input)', fontSize: '12px' }}>
+                        <option value="">-- Fuel --</option>
+                        {duProducts.map((p) => <option key={p.id} value={p.id}>{p.name}{p.code ? ` (${p.code})` : ''}</option>)}
+                      </select>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
+                      <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Qty (L){ccPrice ? ` · ₹${ccPrice}/L` : ''}</label>
+                      <input type="number" step="0.001" value={ccQty} onChange={(e) => handleCcQtyChange(e.target.value)} disabled={ccBusy} style={{ height: '30px', padding: '0 6px', width: '100%', minWidth: 0, border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-input)', fontFamily: 'var(--font-mono)', fontSize: '12px', textAlign: 'right' }} />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
+                      <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Amount (₹)</label>
+                      <input type="number" step="0.01" value={ccAmount} onChange={(e) => handleCcAmountChange(e.target.value)} disabled={ccBusy} style={{ height: '30px', padding: '0 6px', width: '100%', minWidth: 0, border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-input)', fontFamily: 'var(--font-mono)', fontSize: '12px', textAlign: 'right', fontWeight: 600 }} />
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
+                    <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Remarks (driver, slip no., notes)</label>
+                    <input type="text" value={ccNotes} onChange={(e) => setCcNotes(e.target.value)} disabled={ccBusy} placeholder="e.g. driver name / phone / slip ref" style={{ height: '30px', padding: '0 8px', width: '100%', minWidth: 0, border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-input)', fontSize: '12px' }} />
+                  </div>
+                  {ccExceeds && (
+                    <div style={{ fontSize: '11px', color: 'var(--state-warning-fg)' }}>
+                      Exceeds available credit{ccAvailable != null ? ` (₹${ccAvailable.toLocaleString('en-IN')})` : ''} — you can still record it.
+                    </div>
+                  )}
+                </>
+              )}
+
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button type="button" onClick={addCreditLine} disabled={ccBusy || !ccCustomerId || !(Number(ccAmount) > 0)} className="btn btn-primary btn-sm">
+                  {ccBusy ? 'Saving…' : '+ Add credit sale'}
+                </button>
+                <button type="button" onClick={() => { resetCcRow(); setCcOpen(false); }} disabled={ccBusy} className="btn btn-secondary btn-sm">Done</button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* 4. Cash & credit chits total */}
+        <div>
+          <h3 style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '10px' }}>
+            4. Cash Deposit
+          </h3>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 }}>
+              <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-default)' }}>Cash Handed Over (₹)</label>
+              <input
+                type="number"
+                step="any"
+                {...register('cashHandedOver')}
+                style={{ height: '32px', padding: '0 8px', width: '100%', minWidth: 0, border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-input)', fontFamily: 'var(--font-mono)', fontSize: '13px' }}
+              />
+              {errors.cashHandedOver && (
+                <span style={{ color: 'var(--brand-danger)', fontSize: '10px' }}>{errors.cashHandedOver.message}</span>
+              )}
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 }}>
+              <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-default)' }}>Credit Chits Total (₹)</label>
+              <div
+                style={{ height: '32px', padding: '0 8px', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', border: '1px dashed var(--border-strong)', borderRadius: 'var(--radius-input)', fontFamily: 'var(--font-mono)', fontSize: '13px', backgroundColor: 'var(--bg-surface-alt)', color: 'var(--text-default)' }}
+                title="Auto-derived from the fuel-on-credit sales above"
+              >
+                ₹{creditTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              </div>
+              <span style={{ fontSize: '10px', color: 'var(--text-faint)' }}>Auto from credit sales above</span>
+            </div>
+          </div>
+        </div>
+
+        {/* 5. Live Reconciliation Summary Card */}
         <div
           style={{
             backgroundColor: 'var(--bg-surface-alt)',
@@ -500,24 +811,12 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
             <span>Expected Fuel Sales Value:</span>
-            <strong style={{ fontFamily: 'var(--font-mono)' }}>₹{expectedFuelSales.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
+            <strong style={{ fontFamily: 'var(--font-mono)' }}>₹{expectedSales.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
           </div>
-          {attributedMerchandise > 0 && (
+          {creditTotal > 0 && (
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: 'var(--text-muted)' }}>
-              <span>+ Merchandise sold:</span>
-              <strong style={{ fontFamily: 'var(--font-mono)' }}>₹{attributedMerchandise.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
-            </div>
-          )}
-          {attributedFleetCredit > 0 && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: 'var(--text-muted)' }}>
-              <span>+ Fleet fuel-on-credit:</span>
-              <strong style={{ fontFamily: 'var(--font-mono)' }}>₹{attributedFleetCredit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
-            </div>
-          )}
-          {attributedExtra > 0 && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', fontWeight: 600 }}>
-              <span>Total Expected Accountability:</span>
-              <strong style={{ fontFamily: 'var(--font-mono)' }}>₹{expectedSales.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
+              <span>of which on credit (chits):</span>
+              <strong style={{ fontFamily: 'var(--font-mono)' }}>₹{creditTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
             </div>
           )}
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>

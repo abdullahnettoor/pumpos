@@ -34,6 +34,8 @@ export interface CustomerLedgerEntry {
   productId: string | null;
   /** Operator who recorded the entry (attendant accountability); null for back-office entries. */
   attendantId?: string | null;
+  /** DU the fuel-on-credit was dispensed from; set for credit sales declared in a DU handover. */
+  duId?: string | null;
   transactionType: string;
   amount: string;
   quantity: string | null;
@@ -46,6 +48,10 @@ export interface CustomerLedgerEntry {
 
 export interface CustomerLedgerRepository {
   save(entry: CustomerLedgerEntry): Promise<void>;
+  /** Look up a single ledger entry by id (for void/correction). */
+  findById?(id: string): Promise<CustomerLedgerEntry | null>;
+  /** Hard-delete a ledger entry (used to void an in-shift credit-sale correction). */
+  delete?(id: string): Promise<void>;
 }
 
 export interface RecordCollectionCommand {

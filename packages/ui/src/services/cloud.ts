@@ -533,12 +533,17 @@ export class CloudTransactionService {
     amount: number;
     paymentMethod: 'Cash' | 'Card' | 'UPI' | 'BankTransfer' | 'Credit';
     attendantId?: string | null;
+    duId?: string | null;
     notes?: string;
   }): Promise<any> {
     return request<any>('/transactions/collections', {
       method: 'POST',
       body: JSON.stringify(payload),
     });
+  }
+
+  async voidCreditSale(id: string): Promise<any> {
+    return request<any>(`/transactions/credit-sales/${id}`, { method: 'DELETE' });
   }
 
   async getInventoryStatus(stationId: string): Promise<any[]> {

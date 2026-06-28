@@ -19,6 +19,7 @@ import {
   RecordExpense,
   RecordCollection,
   RecordCreditSale,
+  VoidCreditSale,
   RecordPurchase,
   RecordSupplierPayment,
   CreateSale,
@@ -456,6 +457,21 @@ transactionsRouter.post('/collections', async (c) => {
       docNumbers,
       events,
     }).execute(body, buildContext(user, { stationId: body?.stationId })),
+  );
+  return sendResult(c, result);
+});
+
+// Void a credit fuel sale (correction while the shift is still open). The
+// receivable is removed; allowed only before the originating shift closes.
+transactionsRouter.delete('/credit-sales/:id', async (c) => {
+  const user = c.var.user;
+  const id = c.req.param('id');
+  const result = await runInTransaction(c.var.db, (tx, events) =>
+    new VoidCreditSale({
+      ledger: new DrizzleCustomerLedgerRepository(tx),
+      shifts: new DrizzleShiftRepository(tx),
+      events,
+    }).execute({ id }, buildContext(user)),
   );
   return sendResult(c, result);
 });

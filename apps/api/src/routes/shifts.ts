@@ -276,27 +276,59 @@ shiftsRouter.get('/status', async (c) => {
       .from(schema.sales)
       .where(and(eq(schema.sales.shiftId, dbActiveShift.id), ne(schema.sales.saleType, 'Fuel')))
       .groupBy(schema.sales.attendantId, schema.sales.paymentMethod);
-    const attributedCreditRows = await db
+
+    // Per-(attendant, DU) fuel-on-credit LINE ITEMS declared in the DU handover.
+    // These are the credit chits; each handover derives its credit total from
+    // its own lines (and the receivable is already metered via the nozzle, so
+    // it is NOT added to expectedSales — it sits on the declared side).
+    const creditLineRows = await db
       .select({
-        attendantId: schema.customerTransactions.attendantId,
-        total: sql<string>`COALESCE(SUM(${schema.customerTransactions.amount}), 0)`,
+        ct: schema.customerTransactions,
+        customerName: schema.customers.name,
+        productName: schema.products.name,
+        productCode: schema.products.code,
       })
       .from(schema.customerTransactions)
+      .leftJoin(schema.customers, eq(schema.customers.id, schema.customerTransactions.customerId))
+      .leftJoin(schema.products, eq(schema.products.id, schema.customerTransactions.productId))
       .where(
         and(
           eq(schema.customerTransactions.shiftId, dbActiveShift.id),
           eq(schema.customerTransactions.transactionType, 'Credit Sale'),
           eq(schema.customerTransactions.referenceType, 'CREDIT_SALE'),
         ),
-      )
-      .groupBy(schema.customerTransactions.attendantId);
+      );
+    const creditByUserDu = new Map<string, any[]>();
+    for (const r of creditLineRows) {
+      const key = `${r.ct.attendantId ?? ''}::${r.ct.duId ?? ''}`;
+      const list = creditByUserDu.get(key) ?? [];
+      list.push({
+        id: r.ct.id,
+        customerId: r.ct.customerId,
+        customerName: r.customerName ?? 'Customer',
+        vehicleId: r.ct.vehicleId,
+        productId: r.ct.productId,
+        productName: r.productName ?? null,
+        productCode: r.productCode ?? null,
+        quantity: r.ct.quantity != null ? Number(r.ct.quantity) : null,
+        unitPrice: r.ct.unitPrice != null ? Number(r.ct.unitPrice) : null,
+        amount: Number(r.ct.amount),
+        notes: r.ct.notes ?? null,
+      });
+      creditByUserDu.set(key, list);
+    }
+    const creditSalesFor = (userId: string | null | undefined, duId: string | null | undefined) =>
+      creditByUserDu.get(`${userId ?? ''}::${duId ?? ''}`) ?? [];
 
-    const attributedMap = new Map<string, { merchandiseCash: number; merchandiseCard: number; merchandiseUpi: number; merchandiseCredit: number; merchandiseTotal: number; fleetCredit: number; expectedExtra: number }>();
+    // Merchandise (standalone) attribution per attendant. Merchandise reconciles
+    // at shift close (drawer), NOT in the DU handover, so expectedExtra carries
+    // merchandise only — fuel credit is handled via the credit lines above.
+    const attributedMap = new Map<string, { merchandiseCash: number; merchandiseCard: number; merchandiseUpi: number; merchandiseCredit: number; merchandiseTotal: number; expectedExtra: number }>();
     const ensureAttr = (id: string | null) => {
       if (!id) return null;
       let a = attributedMap.get(id);
       if (!a) {
-        a = { merchandiseCash: 0, merchandiseCard: 0, merchandiseUpi: 0, merchandiseCredit: 0, merchandiseTotal: 0, fleetCredit: 0, expectedExtra: 0 };
+        a = { merchandiseCash: 0, merchandiseCard: 0, merchandiseUpi: 0, merchandiseCredit: 0, merchandiseTotal: 0, expectedExtra: 0 };
         attributedMap.set(id, a);
       }
       return a;
@@ -311,13 +343,8 @@ shiftsRouter.get('/status', async (c) => {
       else if (r.paymentMethod === 'UPI') a.merchandiseUpi += amt;
       else if (r.paymentMethod === 'Credit') a.merchandiseCredit += amt;
     }
-    for (const r of attributedCreditRows) {
-      const a = ensureAttr(r.attendantId);
-      if (!a) continue;
-      a.fleetCredit += Number(r.total) || 0;
-    }
-    for (const a of attributedMap.values()) a.expectedExtra = a.merchandiseTotal + a.fleetCredit;
-    const emptyAttr = { merchandiseCash: 0, merchandiseCard: 0, merchandiseUpi: 0, merchandiseCredit: 0, merchandiseTotal: 0, fleetCredit: 0, expectedExtra: 0 };
+    for (const a of attributedMap.values()) a.expectedExtra = a.merchandiseTotal;
+    const emptyAttr = { merchandiseCash: 0, merchandiseCard: 0, merchandiseUpi: 0, merchandiseCredit: 0, merchandiseTotal: 0, expectedExtra: 0 };
     const attributedFor = (userId: string | null | undefined) => (userId && attributedMap.get(userId)) || emptyAttr;
 
     const assignmentRows = await db
@@ -326,13 +353,18 @@ shiftsRouter.get('/status', async (c) => {
       .leftJoin(schema.users, eq(schema.users.id, schema.shiftStaffAssignments.userId))
       .leftJoin(schema.dispenserUnits, eq(schema.dispenserUnits.id, schema.shiftStaffAssignments.duId))
       .where(eq(schema.shiftStaffAssignments.shiftId, dbActiveShift.id));
-    const staffAssignments = assignmentRows.map(({ sa, staffUser, du }) => ({
-      ...sa,
-      userName: staffUser?.fullName ?? 'Unknown',
-      duName: du?.name ?? 'Unknown',
-      duCode: du?.code ?? 'Unknown',
-      attributed: attributedFor(sa.userId),
-    }));
+    const staffAssignments = assignmentRows.map(({ sa, staffUser, du }) => {
+      const creditSales = creditSalesFor(sa.userId, sa.duId);
+      return {
+        ...sa,
+        userName: staffUser?.fullName ?? 'Unknown',
+        duName: du?.name ?? 'Unknown',
+        duCode: du?.code ?? 'Unknown',
+        attributed: attributedFor(sa.userId),
+        creditSales,
+        creditTotal: creditSales.reduce((s: number, l: any) => s + Number(l.amount), 0),
+      };
+    });
 
     const handoverRows = await db.select().from(schema.attendantHandovers).where(eq(schema.attendantHandovers.shiftId, dbActiveShift.id));
     const handoverEntryRows = await db
@@ -343,6 +375,8 @@ shiftsRouter.get('/status', async (c) => {
       ...h,
       terminalEntries: handoverEntryRows.filter((e) => e.handoverId === h.id),
       attributed: attributedFor(h.userId),
+      creditSales: creditSalesFor(h.userId, h.duId),
+      creditTotal: creditSalesFor(h.userId, h.duId).reduce((s: number, l: any) => s + Number(l.amount), 0),
     }));
 
     const terminalLinkRows = await db

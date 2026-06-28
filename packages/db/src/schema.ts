@@ -278,6 +278,10 @@ export const customerTransactions = pgTable('customer_transactions', {
   // Operator who recorded the credit sale (attendant accountability). Set when
   // entered within a shift; null for back-office/business-day credit entries.
   attendantId: uuid('attendant_id').references(() => users.id),
+  // Dispensing unit the fuel-on-credit was dispensed from. Set when the credit
+  // sale is declared within a DU handover, so each handover derives its own
+  // credit-chit total. Null for merchandise credit / back-office entries.
+  duId: uuid('du_id').references(() => dispenserUnits.id),
   transactionType: varchar('transaction_type', { length: 50 }).notNull(), // 'Credit Sale', 'Collection', 'Adjustment'
   amount: numeric('amount', { precision: 12, scale: 2 }).notNull(),
   quantity: numeric('quantity', { precision: 12, scale: 3 }),

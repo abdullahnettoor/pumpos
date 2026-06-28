@@ -83,10 +83,18 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   // Handover Drawer states
   const [handoverDrawerOpen, setHandoverDrawerOpen] = useState(false);
   const [selectedHandoverAssignment, setSelectedHandoverAssignment] = useState<any>(null);
+  const [handoverCreditCustomers, setHandoverCreditCustomers] = useState<any[]>([]);
 
-  const handleOpenHandoverDrawer = (assignment: any) => {
+  const handleOpenHandoverDrawer = async (assignment: any) => {
     setSelectedHandoverAssignment(assignment);
     setHandoverDrawerOpen(true);
+    // Load credit-eligible customers for the in-handover fuel-on-credit section.
+    try {
+      const custList = await transactionService.getCustomers(true);
+      setHandoverCreditCustomers((custList || []).filter((c: any) => !c.isPrepaid && (c.customerType === 'Credit' || c.customerType === 'Fleet')));
+    } catch {
+      setHandoverCreditCustomers([]);
+    }
   };
 
   const [shiftTotals, setShiftTotals] = useState({
@@ -440,10 +448,6 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     void openQuickEntryDrawer('collection');
   };
 
-  const triggerCreditSaleDrawer = () => {
-    void openQuickEntryDrawer('credit-sale');
-  };
-
   const triggerPurchaseDrawer = () => {
     void openQuickEntryDrawer('purchase');
   };
@@ -456,7 +460,6 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     { key: 'expense', label: 'Add Expense', onClick: triggerExpenseDrawer, hotkey: 'E' },
     { key: 'collection', label: 'Log Collection', onClick: triggerCollectionDrawer, hotkey: 'C' },
     { key: 'merchandise-sale', label: 'Merchandise Sale', onClick: triggerMerchandiseSaleDrawer, hotkey: 'M' },
-    { key: 'credit-sale', label: 'Credit Sale (Vehicle)', onClick: triggerCreditSaleDrawer, hotkey: 'V' },
     { key: 'purchase', label: 'Add Purchase', onClick: triggerPurchaseDrawer, hotkey: 'P' },
   ];
 
@@ -478,7 +481,6 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
       if (k === 'e') { e.preventDefault(); triggerExpenseDrawer(); }
       else if (k === 'c') { e.preventDefault(); triggerCollectionDrawer(); }
       else if (k === 'm') { e.preventDefault(); triggerMerchandiseSaleDrawer(); }
-      else if (k === 'v') { e.preventDefault(); triggerCreditSaleDrawer(); }
       else if (k === 'p') { e.preventDefault(); triggerPurchaseDrawer(); }
     };
     window.addEventListener('keydown', handler);
@@ -1224,7 +1226,16 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
             terminals={(activeShift.terminalLinks || []).filter(
               (t: any) => t.duId === selectedHandoverAssignment.duId || t.duId == null
             )}
-            attributed={selectedHandoverAssignment.attributed}
+            customers={handoverCreditCustomers}
+            searchVehicles={(q: string) => transactionService.searchVehicles(q)}
+            creditSales={
+              (activeShift.staffAssignments || []).find(
+                (sa: any) => sa.userId === selectedHandoverAssignment.userId && sa.duId === selectedHandoverAssignment.duId,
+              )?.creditSales || selectedHandoverAssignment.creditSales || []
+            }
+            onCreditChanged={async () => {
+              await loadShiftStatus();
+            }}
             existingHandover={activeShift.handovers?.find(
               (h: any) => h.userId === selectedHandoverAssignment.userId && h.duId === selectedHandoverAssignment.duId
             )}
