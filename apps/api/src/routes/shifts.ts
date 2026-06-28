@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { and, desc, eq, ne } from 'drizzle-orm';
+import { and, desc, eq, ne, sql } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
 import { canOpenShift, canCloseShift, canReopenShift, isAuthorizedForStation, type Role } from '@pump/shared';
 import {
@@ -261,6 +261,65 @@ shiftsRouter.get('/status', async (c) => {
       duCode: du?.code ?? 'Unknown',
     }));
 
+    // --- Per-attendant attributed sales (for handover reconciliation) ---
+    // Non-fuel merchandise sales (any payment method) and pure fleet fuel-on-credit
+    // (referenceType CREDIT_SALE, i.e. not the ledger debit of a merchandise credit
+    // sale) recorded by each attendant during this shift. These fold into the
+    // attendant's expectedSales so their handover variance covers total
+    // accountability, not just metered fuel.
+    const attributedSaleRows = await db
+      .select({
+        attendantId: schema.sales.attendantId,
+        paymentMethod: schema.sales.paymentMethod,
+        total: sql<string>`COALESCE(SUM(${schema.sales.totalAmount}), 0)`,
+      })
+      .from(schema.sales)
+      .where(and(eq(schema.sales.shiftId, dbActiveShift.id), ne(schema.sales.saleType, 'Fuel')))
+      .groupBy(schema.sales.attendantId, schema.sales.paymentMethod);
+    const attributedCreditRows = await db
+      .select({
+        attendantId: schema.customerTransactions.attendantId,
+        total: sql<string>`COALESCE(SUM(${schema.customerTransactions.amount}), 0)`,
+      })
+      .from(schema.customerTransactions)
+      .where(
+        and(
+          eq(schema.customerTransactions.shiftId, dbActiveShift.id),
+          eq(schema.customerTransactions.transactionType, 'Credit Sale'),
+          eq(schema.customerTransactions.referenceType, 'CREDIT_SALE'),
+        ),
+      )
+      .groupBy(schema.customerTransactions.attendantId);
+
+    const attributedMap = new Map<string, { merchandiseCash: number; merchandiseCard: number; merchandiseUpi: number; merchandiseCredit: number; merchandiseTotal: number; fleetCredit: number; expectedExtra: number }>();
+    const ensureAttr = (id: string | null) => {
+      if (!id) return null;
+      let a = attributedMap.get(id);
+      if (!a) {
+        a = { merchandiseCash: 0, merchandiseCard: 0, merchandiseUpi: 0, merchandiseCredit: 0, merchandiseTotal: 0, fleetCredit: 0, expectedExtra: 0 };
+        attributedMap.set(id, a);
+      }
+      return a;
+    };
+    for (const r of attributedSaleRows) {
+      const a = ensureAttr(r.attendantId);
+      if (!a) continue;
+      const amt = Number(r.total) || 0;
+      a.merchandiseTotal += amt;
+      if (r.paymentMethod === 'Cash') a.merchandiseCash += amt;
+      else if (r.paymentMethod === 'Card') a.merchandiseCard += amt;
+      else if (r.paymentMethod === 'UPI') a.merchandiseUpi += amt;
+      else if (r.paymentMethod === 'Credit') a.merchandiseCredit += amt;
+    }
+    for (const r of attributedCreditRows) {
+      const a = ensureAttr(r.attendantId);
+      if (!a) continue;
+      a.fleetCredit += Number(r.total) || 0;
+    }
+    for (const a of attributedMap.values()) a.expectedExtra = a.merchandiseTotal + a.fleetCredit;
+    const emptyAttr = { merchandiseCash: 0, merchandiseCard: 0, merchandiseUpi: 0, merchandiseCredit: 0, merchandiseTotal: 0, fleetCredit: 0, expectedExtra: 0 };
+    const attributedFor = (userId: string | null | undefined) => (userId && attributedMap.get(userId)) || emptyAttr;
+
     const assignmentRows = await db
       .select({ sa: schema.shiftStaffAssignments, staffUser: schema.users, du: schema.dispenserUnits })
       .from(schema.shiftStaffAssignments)
@@ -272,6 +331,7 @@ shiftsRouter.get('/status', async (c) => {
       userName: staffUser?.fullName ?? 'Unknown',
       duName: du?.name ?? 'Unknown',
       duCode: du?.code ?? 'Unknown',
+      attributed: attributedFor(sa.userId),
     }));
 
     const handoverRows = await db.select().from(schema.attendantHandovers).where(eq(schema.attendantHandovers.shiftId, dbActiveShift.id));
@@ -282,6 +342,7 @@ shiftsRouter.get('/status', async (c) => {
     const handovers = handoverRows.map((h) => ({
       ...h,
       terminalEntries: handoverEntryRows.filter((e) => e.handoverId === h.id),
+      attributed: attributedFor(h.userId),
     }));
 
     const terminalLinkRows = await db

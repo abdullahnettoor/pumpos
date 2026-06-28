@@ -15,6 +15,7 @@ export class DrizzleSaleRepository implements SaleRepository {
       paymentMethod: sale.paymentMethod,
       customerId: sale.customerId,
       vehicleId: sale.vehicleId,
+      attendantId: sale.attendantId,
       subtotalAmount: sale.subtotalAmount,
       taxAmount: sale.taxAmount,
       totalAmount: sale.totalAmount,

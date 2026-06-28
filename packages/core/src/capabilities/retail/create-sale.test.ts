@@ -82,6 +82,7 @@ describe('CreateSale', () => {
       expect(result.data.sale.saleType).toBe('Product');
       expect(result.data.sale.totalAmount).toBe('500');
       expect(result.data.sale.shiftId).toBe('sh-1');
+      expect(result.data.sale.attendantId).toBe('u');
     }
     expect(d.stock.movements).toHaveLength(1);
     expect(d.stock.movements[0].quantity).toBe('-2');
@@ -113,6 +114,16 @@ describe('CreateSale', () => {
       ctx(),
     );
     expect(result.success).toBe(false);
+  });
+
+  it('attributes a sale to an explicit attendant when provided', async () => {
+    const d = deps();
+    const result = await new CreateSale(d).execute(
+      { shiftId: 'sh-1', paymentMethod: 'Cash', attendantId: 'att-9', lines: [{ productId: 'oil-1', quantity: 1, unitPrice: 100 }] },
+      ctx(),
+    );
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.sale.attendantId).toBe('att-9');
   });
 
   it('a fuel line yields saleType Fuel and emits FUEL_SALE_RECORDED', async () => {

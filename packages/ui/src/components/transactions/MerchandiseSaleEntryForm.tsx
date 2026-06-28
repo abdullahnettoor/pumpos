@@ -17,6 +17,11 @@ export interface MerchandiseSaleEntryFormProps {
   customers: any[];
   customerId: string;
   onCustomerIdChange: (value: string) => void;
+  /** Shift attendants (operators) for attribution. When provided, an attendant
+   * selector is shown and the chosen attendant is credited with the sale. */
+  attendants?: { userId: string; userName: string }[];
+  attendantId?: string;
+  onAttendantIdChange?: (value: string) => void;
   notes: string;
   onNotesChange: (value: string) => void;
   availableStock?: number;
@@ -54,6 +59,9 @@ export const MerchandiseSaleEntryForm: React.FC<MerchandiseSaleEntryFormProps> =
   customers,
   customerId,
   onCustomerIdChange,
+  attendants,
+  attendantId,
+  onAttendantIdChange,
   notes,
   onNotesChange,
   availableStock,
@@ -83,6 +91,15 @@ export const MerchandiseSaleEntryForm: React.FC<MerchandiseSaleEntryFormProps> =
           <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Target Shift</label>
           <select value={targetShiftId} onChange={(e) => onTargetShiftIdChange(e.target.value)} disabled={submitting} style={inputStyle}>
             {shiftOptions.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+          </select>
+        </div>
+      )}
+
+      {attendants && attendants.length > 0 && onAttendantIdChange && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Sold by</label>
+          <select value={attendantId ?? ''} onChange={(e) => onAttendantIdChange(e.target.value)} disabled={submitting} style={inputStyle}>
+            {attendants.map((a) => <option key={a.userId} value={a.userId}>{a.userName}</option>)}
           </select>
         </div>
       )}

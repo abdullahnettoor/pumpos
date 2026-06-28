@@ -23,6 +23,8 @@ export interface CreateSaleCommand {
   lines: SaleLineInput[];
   customerId?: string | null;
   vehicleId?: string | null;
+  /** Operator who made the sale; defaults to the acting user when omitted. */
+  attendantId?: string | null;
   notes?: string;
 }
 
@@ -40,6 +42,7 @@ const schema = z.object({
   lines: z.array(lineSchema).min(1, 'at least one line is required'),
   customerId: z.string().nullish(),
   vehicleId: z.string().nullish(),
+  attendantId: z.string().nullish(),
   notes: z.string().max(500).optional(),
 });
 
@@ -138,6 +141,7 @@ export class CreateSale implements UseCase<CreateSaleCommand, CreateSaleResult> 
     }
 
     const saleType: SaleType = hasFuel && hasItem ? 'Mixed' : hasFuel ? 'Fuel' : 'Product';
+    const attendantId = cmd.attendantId ?? ctx.actorId ?? null;
     const documentNumber = await this.deps.docNumbers.next('SALE');
     const sale: Sale = {
       id: saleId,
@@ -149,6 +153,7 @@ export class CreateSale implements UseCase<CreateSaleCommand, CreateSaleResult> 
       paymentMethod: cmd.paymentMethod,
       customerId: cmd.customerId ?? null,
       vehicleId: cmd.vehicleId ?? null,
+      attendantId,
       subtotalAmount: String(subtotal),
       taxAmount: String(taxTotal),
       totalAmount: String(total),
@@ -168,6 +173,7 @@ export class CreateSale implements UseCase<CreateSaleCommand, CreateSaleResult> 
         customerId: cmd.customerId,
         vehicleId: cmd.vehicleId ?? null,
         productId: null,
+        attendantId,
         transactionType: 'Credit Sale',
         amount: String(total),
         quantity: null,

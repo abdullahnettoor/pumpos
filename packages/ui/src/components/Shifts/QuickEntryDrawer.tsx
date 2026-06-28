@@ -56,6 +56,15 @@ interface QuickEntryDrawerProps {
   onCreditSaleAmountChange: (v: string) => void;
   creditSaleNotes: string;
   onCreditSaleNotesChange: (v: string) => void;
+  creditSaleAttendants?: { userId: string; userName: string }[];
+  creditSaleAttendantId?: string;
+  onCreditSaleAttendantIdChange?: (id: string) => void;
+  creditSaleCustomers?: any[];
+  creditSaleCustomerId?: string;
+  onCreditSaleCustomerIdChange?: (id: string) => void;
+  creditSaleProducts?: any[];
+  creditSaleProductId?: string;
+  onCreditSaleProductIdChange?: (id: string) => void;
   onCreditSaleSubmit: (e: React.FormEvent) => void | Promise<void>;
 
   // Purchase
@@ -93,6 +102,9 @@ interface QuickEntryDrawerProps {
   saleNotes: string;
   onSaleNotesChange: (v: string) => void;
   saleAvailableStock?: number;
+  saleAttendants?: { userId: string; userName: string }[];
+  saleAttendantId?: string;
+  onSaleAttendantIdChange?: (id: string) => void;
   onMerchandiseSaleSubmit: (e: React.FormEvent) => void | Promise<void>;
 }
 
@@ -199,6 +211,12 @@ export const QuickEntryDrawer: React.FC<QuickEntryDrawerProps> = (props) => {
               onTargetShiftIdChange={onTargetShiftIdChange}
               searchVehicles={props.searchVehicles}
               getPriceForProduct={props.getPriceForProduct}
+              customers={props.creditSaleCustomers}
+              customerId={props.creditSaleCustomerId}
+              onCustomerIdChange={props.onCreditSaleCustomerIdChange}
+              products={props.creditSaleProducts}
+              productId={props.creditSaleProductId}
+              onProductIdChange={props.onCreditSaleProductIdChange}
               selectedVehicle={props.creditSaleVehicle}
               onSelectedVehicleChange={props.onCreditSaleVehicleChange}
               quantity={props.creditSaleQuantity}
@@ -209,6 +227,9 @@ export const QuickEntryDrawer: React.FC<QuickEntryDrawerProps> = (props) => {
               onAmountChange={props.onCreditSaleAmountChange}
               notes={props.creditSaleNotes}
               onNotesChange={props.onCreditSaleNotesChange}
+              attendants={props.creditSaleAttendants}
+              attendantId={props.creditSaleAttendantId}
+              onAttendantIdChange={props.onCreditSaleAttendantIdChange}
               submitting={submitting}
               error={error}
               onCancel={onClose}
@@ -264,6 +285,9 @@ export const QuickEntryDrawer: React.FC<QuickEntryDrawerProps> = (props) => {
               customers={props.customers}
               customerId={props.saleCustomerId}
               onCustomerIdChange={props.onSaleCustomerIdChange}
+              attendants={props.saleAttendants}
+              attendantId={props.saleAttendantId}
+              onAttendantIdChange={props.onSaleAttendantIdChange}
               notes={props.saleNotes}
               onNotesChange={props.onSaleNotesChange}
               availableStock={props.saleAvailableStock}

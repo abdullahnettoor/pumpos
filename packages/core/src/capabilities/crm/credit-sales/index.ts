@@ -15,6 +15,8 @@ export interface RecordCreditSaleCommand {
   productId?: string | null;
   quantity?: number | string | null;
   unitPrice?: number | string | null;
+  /** Operator who recorded the credit sale; defaults to the acting user within a shift. */
+  attendantId?: string | null;
   notes?: string;
   transactionDate?: string;
 }
@@ -28,6 +30,7 @@ const schema = z.object({
   productId: z.string().nullish(),
   quantity: z.coerce.number().positive().nullish(),
   unitPrice: z.coerce.number().nonnegative().nullish(),
+  attendantId: z.string().nullish(),
   notes: z.string().max(500).optional(),
   transactionDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'transactionDate must be YYYY-MM-DD').optional(),
 });
@@ -78,6 +81,9 @@ export class RecordCreditSale implements UseCase<RecordCreditSaleCommand, Custom
     }
 
     const now = ctx.clock.now().toISOString();
+    // Attendant attribution applies only to shift-anchored credit sales; a
+    // back-office (business-day) credit entry has no attendant.
+    const attendantId = shiftId ? (cmd.attendantId ?? ctx.actorId ?? null) : null;
     const entry: CustomerLedgerEntry = {
       id: ctx.ids.newId(),
       shiftId,
@@ -85,6 +91,7 @@ export class RecordCreditSale implements UseCase<RecordCreditSaleCommand, Custom
       customerId: customer.id,
       vehicleId: cmd.vehicleId ?? null,
       productId: cmd.productId ?? null,
+      attendantId,
       transactionType: 'Credit Sale',
       amount: String(cmd.amount),
       quantity: cmd.quantity != null ? String(cmd.quantity) : null,

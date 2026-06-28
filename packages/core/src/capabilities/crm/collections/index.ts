@@ -32,6 +32,8 @@ export interface CustomerLedgerEntry {
   customerId: string;
   vehicleId: string | null;
   productId: string | null;
+  /** Operator who recorded the entry (attendant accountability); null for back-office entries. */
+  attendantId?: string | null;
   transactionType: string;
   amount: string;
   quantity: string | null;

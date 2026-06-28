@@ -275,6 +275,9 @@ export const customerTransactions = pgTable('customer_transactions', {
   customerId: uuid('customer_id').references(() => customers.id).notNull(),
   vehicleId: uuid('vehicle_id').references(() => customerVehicles.id),
   productId: uuid('product_id').references(() => products.id),
+  // Operator who recorded the credit sale (attendant accountability). Set when
+  // entered within a shift; null for back-office/business-day credit entries.
+  attendantId: uuid('attendant_id').references(() => users.id),
   transactionType: varchar('transaction_type', { length: 50 }).notNull(), // 'Credit Sale', 'Collection', 'Adjustment'
   amount: numeric('amount', { precision: 12, scale: 2 }).notNull(),
   quantity: numeric('quantity', { precision: 12, scale: 3 }),
@@ -331,6 +334,9 @@ export const sales = pgTable('sales', {
   paymentMethod: varchar('payment_method', { length: 20 }).default('Cash').notNull(), // 'Cash' | 'Card' | 'UPI' | 'Credit'
   customerId: uuid('customer_id').references(() => customers.id),
   vehicleId: uuid('vehicle_id').references(() => customerVehicles.id),
+  // Operator who made the sale (attendant accountability). Set when entered
+  // within a shift; folds into that attendant's handover reconciliation.
+  attendantId: uuid('attendant_id').references(() => users.id),
   subtotalAmount: numeric('subtotal_amount', { precision: 12, scale: 2 }).notNull(),
   taxAmount: numeric('tax_amount', { precision: 12, scale: 2 }).notNull(),
   totalAmount: numeric('total_amount', { precision: 12, scale: 2 }).notNull(),

@@ -532,6 +532,7 @@ export class CloudTransactionService {
     unitPrice?: number | null;
     amount: number;
     paymentMethod: 'Cash' | 'Card' | 'UPI' | 'BankTransfer' | 'Credit';
+    attendantId?: string | null;
     notes?: string;
   }): Promise<any> {
     return request<any>('/transactions/collections', {
@@ -584,6 +585,7 @@ export class CloudTransactionService {
     lines: { productId: string; quantity: number; unitPrice: number; discountAmount?: number; taxAmount?: number; tankId?: string | null }[];
     customerId?: string | null;
     vehicleId?: string | null;
+    attendantId?: string | null;
     notes?: string;
   }): Promise<any> {
     return request<any>('/transactions/sales', {

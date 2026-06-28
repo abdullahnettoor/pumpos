@@ -24,6 +24,8 @@ export interface Sale {
   paymentMethod: SalePaymentMethod;
   customerId: string | null;
   vehicleId: string | null;
+  /** Operator who made the sale (attendant accountability); null for back-office entries. */
+  attendantId: string | null;
   subtotalAmount: string;
   taxAmount: string;
   totalAmount: string;

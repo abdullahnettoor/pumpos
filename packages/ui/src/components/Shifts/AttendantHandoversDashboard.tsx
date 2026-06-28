@@ -76,7 +76,20 @@ export const AttendantHandoversDashboard: React.FC<AttendantHandoversDashboardPr
                     {isRecorded ? `₹${Number(handoverRecord.creditHandedOver).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '—'}
                   </td>
                   <td style={{ padding: '12px 20px', textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
-                    {isRecorded ? `₹${Number(handoverRecord.expectedSales).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '—'}
+                    {isRecorded
+                      ? `₹${Number(handoverRecord.expectedSales).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
+                      : (() => {
+                          const merch = Number(sa.attributed?.merchandiseTotal ?? 0);
+                          const fleet = Number(sa.attributed?.fleetCredit ?? 0);
+                          const extra = Number(sa.attributed?.expectedExtra ?? merch + fleet);
+                          if (extra <= 0) return '—';
+                          const parts = [merch > 0 ? 'merchandise' : null, fleet > 0 ? 'fuel credit' : null].filter(Boolean).join(' + ');
+                          return (
+                            <span title={`Attributed to this attendant (not yet declared): ${merch > 0 ? `merchandise ₹${merch.toLocaleString('en-IN')}` : ''}${merch > 0 && fleet > 0 ? ', ' : ''}${fleet > 0 ? `fuel-on-credit ₹${fleet.toLocaleString('en-IN')}` : ''}`} style={{ color: 'var(--brand-warning)', fontWeight: 500 }}>
+                              +₹{extra.toLocaleString('en-IN', { minimumFractionDigits: 2 })} {parts}
+                            </span>
+                          );
+                        })()}
                   </td>
                   <td style={{
                     padding: '12px 20px',

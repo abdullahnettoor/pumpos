@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { CloudProductService, CloudShiftService, CloudTankService, CloudTransactionService } from '../../services/cloud.js';
+import { CloudProductService, CloudShiftService, CloudTankService, CloudTransactionService, CloudUserAssignmentService } from '../../services/cloud.js';
 import { StatusBadge } from '../StatusBadge.js';
 import { ShiftSummaryView } from './ShiftSummaryView.js';
 import { ShiftTransactionsPanel } from './ShiftTransactionsPanel.js';
@@ -23,6 +23,7 @@ const shiftService = new CloudShiftService();
 const transactionService = new CloudTransactionService();
 const productService = new CloudProductService();
 const tankService = new CloudTankService();
+const userService = new CloudUserAssignmentService();
 
 type QuickEntryType = 'expense' | 'collection' | 'credit-sale' | 'purchase' | 'merchandise-sale';
 
@@ -128,6 +129,11 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   const [creditSaleUnitPrice, setCreditSaleUnitPrice] = useState('');
   const [creditSaleAmount, setCreditSaleAmount] = useState('');
   const [creditSaleNotes, setCreditSaleNotes] = useState('');
+  // Customer-first credit: book a credit fuel sale against a customer, vehicle optional.
+  const [creditSaleCustomerId, setCreditSaleCustomerId] = useState('');
+  const [creditSaleProductId, setCreditSaleProductId] = useState('');
+  const [creditCustomers, setCreditCustomers] = useState<any[]>([]);
+  const [creditProducts, setCreditProducts] = useState<any[]>([]);
 
   const [purchaseSupplierId, setPurchaseSupplierId] = useState('');
   const [purchaseProductId, setPurchaseProductId] = useState('');
@@ -145,6 +151,20 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   const [saleCustomerId, setSaleCustomerId] = useState('');
   const [saleNotes, setSaleNotes] = useState('');
   const [saleStock, setSaleStock] = useState<Record<string, number>>({});
+  const [saleAttendantId, setSaleAttendantId] = useState('');
+  const [creditSaleAttendantId, setCreditSaleAttendantId] = useState('');
+  // Merchandise can be sold by ANY station user (incl. office staff not on a DU/shift).
+  const [merchandiseSellers, setMerchandiseSellers] = useState<{ userId: string; userName: string }[]>([]);
+
+  // Attendants (operators) assigned to the active shift, for sale attribution.
+  const shiftAttendants = useMemo(() => {
+    const assignments = (statusQ.data?.activeShift?.staffAssignments as any[]) || [];
+    const seen = new Map<string, string>();
+    for (const a of assignments) {
+      if (a.userId && !seen.has(a.userId)) seen.set(a.userId, a.userName || 'Attendant');
+    }
+    return Array.from(seen.entries()).map(([userId, userName]) => ({ userId, userName }));
+  }, [statusQ.data]);
 
   const selectedProduct = useMemo(
     () => products.find((product) => product.id === purchaseProductId),
@@ -269,6 +289,17 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         setCreditSaleUnitPrice('');
         setCreditSaleAmount('');
         setCreditSaleNotes('');
+        setCreditSaleCustomerId('');
+        setCreditSaleProductId('');
+        setCreditSaleAttendantId(shiftAttendants[0]?.userId ?? '');
+        const [custList, prodList] = await Promise.all([
+          transactionService.getCustomers(true),
+          productService.listProducts(),
+        ]);
+        // Credit-eligible = Credit/Fleet customers that are not prepaid (prepaid draws
+        // down a balance, not a receivable). Fuel products selectable when no vehicle.
+        setCreditCustomers((custList || []).filter((c: any) => !c.isPrepaid && (c.customerType === 'Credit' || c.customerType === 'Fleet')));
+        setCreditProducts((prodList || []).filter((p: any) => p.productType === 'FUEL'));
       }
 
       if (type === 'merchandise-sale') {
@@ -283,12 +314,20 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         const stockMap: Record<string, number> = {};
         (items || []).forEach((i: any) => { stockMap[i.productId] = Number(i.quantity); });
         setSaleStock(stockMap);
+        // Merchandise sellers = all active station users (office staff included),
+        // not just DU/shift-assigned attendants.
+        const users = await userService.listUsers().catch(() => []);
+        const sellers = (users || [])
+          .filter((u: any) => (u.status ? u.status === 'ACTIVE' : true))
+          .map((u: any) => ({ userId: u.id, userName: u.fullName || u.email || 'User' }));
+        setMerchandiseSellers(sellers);
         setSaleProductId(nonFuel?.[0]?.id ?? '');
         setSaleQuantity('');
         setSaleUnitPrice(nonFuel?.[0]?.sellingPrice != null ? String(nonFuel[0].sellingPrice) : '');
         setSalePaymentMethod('Cash');
         setSaleCustomerId('');
         setSaleNotes('');
+        setSaleAttendantId(sellers[0]?.userId ?? '');
       }
 
       if (type === 'purchase') {
@@ -516,7 +555,8 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
 
   const handleCreditSaleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!targetShiftId || !creditSaleVehicle || !creditSaleAmount) {
+    const customerId = creditSaleVehicle?.customerId ?? creditSaleCustomerId;
+    if (!targetShiftId || !customerId || !creditSaleAmount) {
       return;
     }
 
@@ -534,13 +574,14 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
       setQuickEntryError(null);
       await transactionService.recordCollection({
         shiftId: targetShiftId,
-        customerId: creditSaleVehicle.customerId,
-        vehicleId: creditSaleVehicle.id,
-        productId: creditSaleVehicle.defaultProductId ?? null,
+        customerId,
+        vehicleId: creditSaleVehicle?.id ?? null,
+        productId: creditSaleVehicle?.defaultProductId ?? (creditSaleProductId || null),
         quantity: qtyNum && qtyNum > 0 ? qtyNum : null,
         unitPrice: priceNum != null && priceNum >= 0 ? priceNum : null,
         amount: amountNum,
         paymentMethod: 'Credit',
+        attendantId: creditSaleAttendantId || undefined,
         notes: creditSaleNotes || undefined,
       });
       closeQuickEntryDrawer();
@@ -581,6 +622,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         paymentMethod: salePaymentMethod,
         lines: [{ productId: saleProductId, quantity: qtyNum, unitPrice: priceNum, tankId: null }],
         customerId: salePaymentMethod === 'Credit' ? saleCustomerId : undefined,
+        attendantId: saleAttendantId || undefined,
         notes: saleNotes || undefined,
       });
       closeQuickEntryDrawer();
@@ -1116,6 +1158,15 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
           onCreditSaleAmountChange={setCreditSaleAmount}
           creditSaleNotes={creditSaleNotes}
           onCreditSaleNotesChange={setCreditSaleNotes}
+          creditSaleAttendants={shiftAttendants}
+          creditSaleAttendantId={creditSaleAttendantId}
+          onCreditSaleAttendantIdChange={setCreditSaleAttendantId}
+          creditSaleCustomers={creditCustomers}
+          creditSaleCustomerId={creditSaleCustomerId}
+          onCreditSaleCustomerIdChange={setCreditSaleCustomerId}
+          creditSaleProducts={creditProducts}
+          creditSaleProductId={creditSaleProductId}
+          onCreditSaleProductIdChange={setCreditSaleProductId}
           onCreditSaleSubmit={handleCreditSaleSubmit}
           suppliers={suppliers}
           products={products}
@@ -1149,6 +1200,9 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
           onSaleCustomerIdChange={setSaleCustomerId}
           saleNotes={saleNotes}
           onSaleNotesChange={setSaleNotes}
+          saleAttendants={merchandiseSellers}
+          saleAttendantId={saleAttendantId}
+          onSaleAttendantIdChange={setSaleAttendantId}
           onMerchandiseSaleSubmit={handleMerchandiseSaleSubmit}
         />
 
@@ -1170,6 +1224,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
             terminals={(activeShift.terminalLinks || []).filter(
               (t: any) => t.duId === selectedHandoverAssignment.duId || t.duId == null
             )}
+            attributed={selectedHandoverAssignment.attributed}
             existingHandover={activeShift.handovers?.find(
               (h: any) => h.userId === selectedHandoverAssignment.userId && h.duId === selectedHandoverAssignment.duId
             )}

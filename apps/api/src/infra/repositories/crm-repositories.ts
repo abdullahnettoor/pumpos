@@ -113,6 +113,7 @@ export class DrizzleCustomerLedgerRepository implements CustomerLedgerRepository
       customerId: e.customerId,
       vehicleId: e.vehicleId,
       productId: e.productId,
+      attendantId: e.attendantId ?? null,
       transactionType: e.transactionType,
       amount: e.amount,
       quantity: e.quantity,

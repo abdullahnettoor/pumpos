@@ -31,6 +31,8 @@ interface HandoverDrawerProps {
   duCode: string;
   nozzles: any[];
   terminals?: any[];
+  /** Per-attendant attributed non-fuel + fleet-credit totals (from /shifts/status). */
+  attributed?: { merchandiseTotal?: number; fleetCredit?: number; expectedExtra?: number } | null;
   existingHandover: any;
   onSaveSuccess: () => void;
 }
@@ -45,6 +47,7 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
   duCode,
   nozzles,
   terminals = [],
+  attributed,
   existingHandover,
   onSaveSuccess,
 }) => {
@@ -150,7 +153,11 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
   const totalTestingVolume = calculatedNozzles.reduce((sum, n) => sum + n.testing, 0);
   const totalTestingDeduction = calculatedNozzles.reduce((sum, n) => sum + n.testingDeduction, 0);
 
-  const expectedSales = Math.max(0, totalRawSales - totalTestingDeduction);
+  const expectedFuelSales = Math.max(0, totalRawSales - totalTestingDeduction);
+  const attributedMerchandise = Number(attributed?.merchandiseTotal ?? 0);
+  const attributedFleetCredit = Number(attributed?.fleetCredit ?? 0);
+  const attributedExtra = Number(attributed?.expectedExtra ?? attributedMerchandise + attributedFleetCredit);
+  const expectedSales = expectedFuelSales + attributedExtra;
 
   const totalDeclared = Number(formCash) + Number(effectiveCard) + Number(effectiveUpi) + Number(formCredit);
   const variance = totalDeclared - expectedSales;
@@ -493,8 +500,26 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
             <span>Expected Fuel Sales Value:</span>
-            <strong style={{ fontFamily: 'var(--font-mono)' }}>₹{expectedSales.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
+            <strong style={{ fontFamily: 'var(--font-mono)' }}>₹{expectedFuelSales.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
           </div>
+          {attributedMerchandise > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: 'var(--text-muted)' }}>
+              <span>+ Merchandise sold:</span>
+              <strong style={{ fontFamily: 'var(--font-mono)' }}>₹{attributedMerchandise.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
+            </div>
+          )}
+          {attributedFleetCredit > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: 'var(--text-muted)' }}>
+              <span>+ Fleet fuel-on-credit:</span>
+              <strong style={{ fontFamily: 'var(--font-mono)' }}>₹{attributedFleetCredit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
+            </div>
+          )}
+          {attributedExtra > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', fontWeight: 600 }}>
+              <span>Total Expected Accountability:</span>
+              <strong style={{ fontFamily: 'var(--font-mono)' }}>₹{expectedSales.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
+            </div>
+          )}
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
             <span>Declared Deposit Sum:</span>
             <strong style={{ fontFamily: 'var(--font-mono)' }}>₹{totalDeclared.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
