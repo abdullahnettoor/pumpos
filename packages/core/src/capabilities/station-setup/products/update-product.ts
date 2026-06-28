@@ -58,6 +58,8 @@ export class UpdateProduct implements UseCase<UpdateProductCommand, Product> {
       'stockTracked',
       'isTaxable',
       'unit',
+      'brand',
+      'category',
       'taxConfig',
       'isActive',
     ] as const) {
@@ -66,6 +68,10 @@ export class UpdateProduct implements UseCase<UpdateProductCommand, Product> {
         (updated as unknown as Record<string, unknown>)[key] = value;
         changes[key] = value;
       }
+    }
+    if (cmd.sellingPrice !== undefined) {
+      updated.sellingPrice = cmd.sellingPrice === null ? null : String(cmd.sellingPrice);
+      changes.sellingPrice = updated.sellingPrice;
     }
     updated.updatedAt = ctx.clock.now().toISOString();
 

@@ -132,6 +132,11 @@ export const products = pgTable('products', {
   stockTracked: boolean('stock_tracked').default(true).notNull(),
   isTaxable: boolean('is_taxable').default(true).notNull(),
   unit: varchar('unit', { length: 50 }).notNull(),
+  // Optional merchandise refinements: manufacturer/brand, finer category label,
+  // and a selling price (MRP) used to prefill merchandise sales.
+  brand: varchar('brand', { length: 150 }),
+  category: varchar('category', { length: 100 }),
+  sellingPrice: numeric('selling_price', { precision: 12, scale: 2 }),
   taxConfig: jsonb('tax_config').default({ gst_rate: 18, hsn_code: '' }).notNull(),
   isActive: boolean('is_active').default(true).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),

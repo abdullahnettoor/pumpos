@@ -19,6 +19,7 @@ export interface MerchandiseSaleEntryFormProps {
   onCustomerIdChange: (value: string) => void;
   notes: string;
   onNotesChange: (value: string) => void;
+  availableStock?: number;
   submitting: boolean;
   error?: string | null;
   onCancel: () => void;
@@ -55,6 +56,7 @@ export const MerchandiseSaleEntryForm: React.FC<MerchandiseSaleEntryFormProps> =
   onCustomerIdChange,
   notes,
   onNotesChange,
+  availableStock,
   submitting,
   error,
   onCancel,
@@ -66,6 +68,7 @@ export const MerchandiseSaleEntryForm: React.FC<MerchandiseSaleEntryFormProps> =
   const total = qtyNum * priceNum;
   const isCredit = paymentMethod === 'Credit';
   const selected = products.find((p) => p.id === productId);
+  const oversell = availableStock != null && qtyNum > availableStock;
 
   return (
     <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -93,7 +96,7 @@ export const MerchandiseSaleEntryForm: React.FC<MerchandiseSaleEntryFormProps> =
         ) : (
           <select value={productId} onChange={(e) => onProductIdChange(e.target.value)} disabled={submitting} style={inputStyle}>
             {products.map((p) => (
-              <option key={p.id} value={p.id}>{p.name} ({p.code}){p.unit ? ` · ${p.unit}` : ''}</option>
+              <option key={p.id} value={p.id}>{p.name}{p.brand ? ` · ${p.brand}` : ''} ({p.code}){p.unit ? ` · ${p.unit}` : ''}</option>
             ))}
           </select>
         )}
@@ -103,6 +106,11 @@ export const MerchandiseSaleEntryForm: React.FC<MerchandiseSaleEntryFormProps> =
         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
           <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Quantity{selected?.unit ? ` (${selected.unit})` : ''}</label>
           <input type="number" step="any" required value={quantity} onChange={(e) => onQuantityChange(e.target.value)} disabled={submitting} style={{ ...inputStyle, fontFamily: 'var(--font-mono)' }} />
+          {availableStock != null && (
+            <span style={{ fontSize: '10px', color: oversell ? 'var(--brand-danger)' : 'var(--text-faint)' }}>
+              On hand: {availableStock.toLocaleString('en-IN', { maximumFractionDigits: 2 })}{selected?.unit ? ` ${selected.unit}` : ''}
+            </span>
+          )}
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
           <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Unit Price (₹)</label>
@@ -155,6 +163,12 @@ export const MerchandiseSaleEntryForm: React.FC<MerchandiseSaleEntryFormProps> =
         <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Sale Total</span>
         <strong style={{ fontFamily: 'var(--font-mono)', fontSize: '15px', color: 'var(--text-strong)' }}>₹{total.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
       </div>
+
+      {oversell && (
+        <div style={{ backgroundColor: 'var(--state-warning-bg)', color: 'var(--state-warning-fg)', padding: '8px 12px', borderRadius: 'var(--radius-input)', fontSize: '12px', border: '1px solid var(--border-soft)' }}>
+          Selling {qtyNum.toLocaleString('en-IN', { maximumFractionDigits: 2 })} but only {Number(availableStock).toLocaleString('en-IN', { maximumFractionDigits: 2 })} on hand — stock will go negative. Record a purchase or stock count to correct it.
+        </div>
+      )}
 
       <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
         <button

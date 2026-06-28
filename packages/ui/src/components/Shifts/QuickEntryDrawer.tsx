@@ -92,6 +92,7 @@ interface QuickEntryDrawerProps {
   onSaleCustomerIdChange: (id: string) => void;
   saleNotes: string;
   onSaleNotesChange: (v: string) => void;
+  saleAvailableStock?: number;
   onMerchandiseSaleSubmit: (e: React.FormEvent) => void | Promise<void>;
 }
 
@@ -265,6 +266,7 @@ export const QuickEntryDrawer: React.FC<QuickEntryDrawerProps> = (props) => {
               onCustomerIdChange={props.onSaleCustomerIdChange}
               notes={props.saleNotes}
               onNotesChange={props.onSaleNotesChange}
+              availableStock={props.saleAvailableStock}
               submitting={submitting}
               error={error}
               onCancel={onClose}

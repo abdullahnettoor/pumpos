@@ -13,6 +13,9 @@ export interface CreateProductCommand {
   stockTracked?: boolean;
   isTaxable?: boolean;
   unit: string;
+  brand?: string | null;
+  category?: string | null;
+  sellingPrice?: string | number | null;
   taxConfig?: ProductTaxConfig;
 }
 
@@ -25,6 +28,9 @@ export interface UpdateProductCommand {
   stockTracked?: boolean;
   isTaxable?: boolean;
   unit?: string;
+  brand?: string | null;
+  category?: string | null;
+  sellingPrice?: string | number | null;
   taxConfig?: ProductTaxConfig;
   isActive?: boolean;
 }

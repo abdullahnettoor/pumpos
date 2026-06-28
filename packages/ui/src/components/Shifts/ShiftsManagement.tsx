@@ -144,6 +144,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   const [salePaymentMethod, setSalePaymentMethod] = useState<'Cash' | 'Card' | 'UPI' | 'Credit'>('Cash');
   const [saleCustomerId, setSaleCustomerId] = useState('');
   const [saleNotes, setSaleNotes] = useState('');
+  const [saleStock, setSaleStock] = useState<Record<string, number>>({});
 
   const selectedProduct = useMemo(
     () => products.find((product) => product.id === purchaseProductId),
@@ -271,16 +272,20 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
       }
 
       if (type === 'merchandise-sale') {
-        const [productList, activeCustomers] = await Promise.all([
+        const [productList, activeCustomers, items] = await Promise.all([
           productService.listProducts(),
           transactionService.getCustomers(true),
+          transactionService.getInventoryItems(selectedStation.id).catch(() => []),
         ]);
         const nonFuel = (productList || []).filter((p: any) => p.productType !== 'FUEL');
         setProducts(nonFuel);
         setCustomers(activeCustomers || []);
+        const stockMap: Record<string, number> = {};
+        (items || []).forEach((i: any) => { stockMap[i.productId] = Number(i.quantity); });
+        setSaleStock(stockMap);
         setSaleProductId(nonFuel?.[0]?.id ?? '');
         setSaleQuantity('');
-        setSaleUnitPrice('');
+        setSaleUnitPrice(nonFuel?.[0]?.sellingPrice != null ? String(nonFuel[0].sellingPrice) : '');
         setSalePaymentMethod('Cash');
         setSaleCustomerId('');
         setSaleNotes('');
@@ -545,6 +550,12 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     } finally {
       setQuickEntrySubmitting(false);
     }
+  };
+
+  const handleSaleProductChange = (productId: string) => {
+    setSaleProductId(productId);
+    const p = products.find((x: any) => x.id === productId);
+    setSaleUnitPrice(p?.sellingPrice != null ? String(p.sellingPrice) : '');
   };
 
   const handleMerchandiseSaleSubmit = async (e: React.FormEvent) => {
@@ -1126,7 +1137,8 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
           onPurchaseAllocationsChange={setPurchaseAllocations}
           onPurchaseSubmit={handlePurchaseSubmit}
           saleProductId={saleProductId}
-          onSaleProductIdChange={setSaleProductId}
+          onSaleProductIdChange={handleSaleProductChange}
+          saleAvailableStock={saleProductId ? saleStock[saleProductId] : undefined}
           saleQuantity={saleQuantity}
           onSaleQuantityChange={setSaleQuantity}
           saleUnitPrice={saleUnitPrice}

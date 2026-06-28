@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { CloudProductService } from '../../services/cloud.js';
-import { Product } from '@pump/shared';
+import { Product, PRODUCT_UNITS } from '@pump/shared';
 import { StatusBadge } from '../StatusBadge.js';
 import { Drawer } from '../Drawer.js';
 
@@ -13,6 +13,8 @@ export const ProductsCatalog: React.FC = () => {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isCodeEdited, setIsCodeEdited] = useState(false);
+  const [filterType, setFilterType] = useState('');
+  const [filterText, setFilterText] = useState('');
 
   // Form states
   const [name, setName] = useState('');
@@ -21,7 +23,9 @@ export const ProductsCatalog: React.FC = () => {
   const [inventoryType, setInventoryType] = useState<'BULK' | 'ITEM' | 'NONE'>('BULK');
   const [stockTracked, setStockTracked] = useState(true);
   const [isTaxable, setIsTaxable] = useState(true);
-  const [unit, setUnit] = useState('Liters');
+  const [unit, setUnit] = useState('L');
+  const [brand, setBrand] = useState('');
+  const [sellingPrice, setSellingPrice] = useState('');
   const [gstRate, setGstRate] = useState(18);
   const [hsnCode, setHsnCode] = useState('');
 
@@ -102,6 +106,8 @@ export const ProductsCatalog: React.FC = () => {
         stockTracked,
         isTaxable,
         unit,
+        brand: brand.trim() || null,
+        sellingPrice: sellingPrice === '' ? null : Number(sellingPrice),
         taxConfig: {
           gst_rate: gstRate,
           hsn_code: hsnCode,
@@ -132,6 +138,8 @@ export const ProductsCatalog: React.FC = () => {
     setStockTracked(p.stockTracked);
     setIsTaxable(p.isTaxable);
     setUnit(p.unit);
+    setBrand((p as any).brand ?? '');
+    setSellingPrice((p as any).sellingPrice != null ? String((p as any).sellingPrice) : '');
     setGstRate(p.taxConfig?.gst_rate || 18);
     setHsnCode(p.taxConfig?.hsn_code || '');
     setIsCodeEdited(true);
@@ -156,7 +164,9 @@ export const ProductsCatalog: React.FC = () => {
     setInventoryType('BULK');
     setStockTracked(true);
     setIsTaxable(true);
-    setUnit('Liters');
+    setUnit('L');
+    setBrand('');
+    setSellingPrice('');
     setGstRate(18);
     setHsnCode('');
     setIsCodeEdited(false);
@@ -356,19 +366,49 @@ export const ProductsCatalog: React.FC = () => {
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Sales Unit *</label>
-            <input
-              type="text"
+            <select
+              value={unit}
+              onChange={(e) => setUnit(e.target.value)}
+              required
               style={{
                 height: '32px',
                 padding: '0 8px',
                 borderRadius: 'var(--radius-input)',
                 border: '1px solid var(--border-strong)',
                 fontSize: '13px',
+                backgroundColor: 'var(--bg-surface)',
               }}
-              value={unit}
-              onChange={(e) => setUnit(e.target.value)}
-              placeholder="e.g. Liters, Nos"
-              required
+            >
+              {!PRODUCT_UNITS.some((u) => u.value === unit) && unit && (
+                <option value={unit}>{unit}</option>
+              )}
+              {PRODUCT_UNITS.map((u) => (
+                <option key={u.value} value={u.value}>{u.label}</option>
+              ))}
+            </select>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Brand / Company</label>
+            <input
+              type="text"
+              value={brand}
+              onChange={(e) => setBrand(e.target.value)}
+              placeholder="e.g. Castrol, Shell, Exide"
+              style={{ height: '32px', padding: '0 8px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', fontSize: '13px' }}
+            />
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Selling Price (₹){productType === 'FUEL' ? ' — fuel uses price schedule' : ''}</label>
+            <input
+              type="number"
+              step="any"
+              value={sellingPrice}
+              onChange={(e) => setSellingPrice(e.target.value)}
+              placeholder="Optional — prefills merchandise sales"
+              disabled={productType === 'FUEL'}
+              style={{ height: '32px', padding: '0 8px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', fontSize: '13px', fontFamily: 'var(--font-mono)' }}
             />
           </div>
 
@@ -479,21 +519,55 @@ export const ProductsCatalog: React.FC = () => {
       </Drawer>
 
       {/* Product List Table */}
+      <div style={{ display: 'flex', gap: '10px', marginBottom: '12px', flexWrap: 'wrap' }}>
+        <select
+          value={filterType}
+          onChange={(e) => setFilterType(e.target.value)}
+          style={{ height: '32px', padding: '0 8px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', fontSize: '13px', backgroundColor: 'var(--bg-surface)' }}
+        >
+          <option value="">All Types</option>
+          <option value="FUEL">FUEL</option>
+          <option value="LUBRICANT">LUBRICANT</option>
+          <option value="ADDITIVE">ADDITIVE</option>
+          <option value="ACCESSORY">ACCESSORY</option>
+          <option value="CONSUMABLE">CONSUMABLE</option>
+          <option value="SPARE_PART">SPARE PART</option>
+          <option value="SERVICE">SERVICE</option>
+          <option value="OTHER">OTHER</option>
+        </select>
+        <input
+          type="text"
+          value={filterText}
+          onChange={(e) => setFilterText(e.target.value)}
+          placeholder="Search name, code, brand…"
+          style={{ flex: 1, minWidth: '220px', height: '32px', padding: '0 8px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', fontSize: '13px' }}
+        />
+      </div>
       <div style={{ overflowX: 'auto', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-card)', backgroundColor: 'var(--bg-surface)' }}>
         <table className="dense-table" style={{ width: '100%' }}>
           <thead>
             <tr>
-              <th style={{ width: '35%', textAlign: 'left', padding: '10px 12px' }}>Name</th>
-              <th style={{ width: '15%', textAlign: 'left', padding: '10px 12px' }}>Code</th>
-              <th style={{ width: '15%', textAlign: 'left', padding: '10px 12px' }}>Type</th>
-              <th style={{ width: '15%', textAlign: 'right', padding: '10px 12px' }}>Tax (GST)</th>
-              <th style={{ width: '20%', textAlign: 'center', padding: '10px 12px' }}>Actions</th>
+              <th style={{ width: '28%', textAlign: 'left', padding: '10px 12px' }}>Name</th>
+              <th style={{ width: '14%', textAlign: 'left', padding: '10px 12px' }}>Brand</th>
+              <th style={{ width: '12%', textAlign: 'left', padding: '10px 12px' }}>Code</th>
+              <th style={{ width: '14%', textAlign: 'left', padding: '10px 12px' }}>Type</th>
+              <th style={{ width: '14%', textAlign: 'right', padding: '10px 12px' }}>Tax (GST)</th>
+              <th style={{ width: '18%', textAlign: 'center', padding: '10px 12px' }}>Actions</th>
             </tr>
           </thead>
           <tbody>
-            {products.map((p) => (
+            {products.filter((p) => {
+              if (filterType && p.productType !== filterType) return false;
+              if (filterText) {
+                const q = filterText.toLowerCase();
+                const hay = `${p.name} ${p.code} ${(p as any).brand ?? ''} ${(p as any).category ?? ''}`.toLowerCase();
+                if (!hay.includes(q)) return false;
+              }
+              return true;
+            }).map((p) => (
               <tr key={p.id} style={{ opacity: p.isActive ? 1 : 0.5, borderBottom: '1px solid var(--border-soft)' }}>
                 <td style={{ fontWeight: 600, color: 'var(--text-strong)', padding: '10px 12px' }}>{p.name}</td>
+                <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: '12px' }}>{(p as any).brand || '—'}</td>
                 <td style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', padding: '10px 12px' }}>{p.code}</td>
                 <td style={{ padding: '10px 12px' }}>
                   <StatusBadge 

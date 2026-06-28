@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import { BusinessEvents, err, eventFromContext, invariantViolation, ok, validationError } from '../../kernel/index.js';
+import { BusinessEvents, err, eventFromContext, ok, validationError } from '../../kernel/index.js';
 import type { DomainEvent, EventPublisher, ExecutionContext, Result, UseCase } from '../../kernel/index.js';
-import type { BusinessDayRepository } from '../station-ops/business-days/index.js';
+import { ensureBusinessDayForDate, type BusinessDayRepository } from '../station-ops/business-days/index.js';
 import type { StockMovement, StockMovementRepository, StockVariance, StockVarianceRepository } from './ports.js';
 
 export interface RecordStockCountCommand {
@@ -49,8 +49,8 @@ export class RecordStockCount implements UseCase<RecordStockCountCommand, Record
     if (!p.success) return err(validationError('Invalid RecordStockCount command', { issues: p.error.flatten() }));
     const cmd = p.data;
 
-    const bd = await this.deps.businessDays.findOpenByStation(ctx.organizationId, cmd.stationId);
-    if (!bd) return err(invariantViolation('No open business day for this station', { stationId: cmd.stationId }));
+    const date = ctx.clock.now().toISOString().slice(0, 10);
+    const bd = await ensureBusinessDayForDate(this.deps.businessDays, ctx, cmd.stationId, date);
 
     const isBulk = !!cmd.tankId;
     const expected = isBulk

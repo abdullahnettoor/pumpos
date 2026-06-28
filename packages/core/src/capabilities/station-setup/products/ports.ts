@@ -12,6 +12,9 @@ export interface Product {
   stockTracked: boolean;
   isTaxable: boolean;
   unit: string;
+  brand: string | null;
+  category: string | null;
+  sellingPrice: string | null;
   taxConfig: ProductTaxConfig;
   isActive: boolean;
   createdAt: string;

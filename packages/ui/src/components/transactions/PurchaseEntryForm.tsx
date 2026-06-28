@@ -169,7 +169,7 @@ export const PurchaseEntryForm: React.FC<PurchaseEntryFormProps> = ({
           style={{ height: '32px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', padding: '0 8px' }}
         >
           {products.map((product) => (
-            <option key={product.id} value={product.id}>{product.name}{product.code ? ` (${product.code})` : ''}</option>
+            <option key={product.id} value={product.id}>{product.name}{product.brand ? ` · ${product.brand}` : ''}{product.code ? ` (${product.code})` : ''}</option>
           ))}
         </select>
       </div>

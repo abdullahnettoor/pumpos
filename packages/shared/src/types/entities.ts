@@ -267,6 +267,9 @@ export interface Product {
   stockTracked: boolean;
   isTaxable: boolean;
   unit: string;
+  brand?: string | null;
+  category?: string | null;
+  sellingPrice?: string | number | null;
   taxConfig: {
     gst_rate?: number;
     hsn_code?: string;

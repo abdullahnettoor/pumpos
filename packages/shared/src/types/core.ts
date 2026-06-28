@@ -8,6 +8,25 @@ export type DocumentType = 'SALE' | 'PURCHASE' | 'COLLECTION';
 
 export type ProductType = 'FUEL' | 'LUBRICANT' | 'ADDITIVE' | 'ACCESSORY' | 'CONSUMABLE' | 'SPARE_PART' | 'SERVICE' | 'OTHER';
 
+/** Curated units of measure so the value is system-decided, not free text. */
+export const PRODUCT_UNITS = [
+  { value: 'L', label: 'Liters (L)' },
+  { value: 'ml', label: 'Milliliters (ml)' },
+  { value: 'kg', label: 'Kilograms (kg)' },
+  { value: 'g', label: 'Grams (g)' },
+  { value: 'Nos', label: 'Numbers (Nos)' },
+  { value: 'Bottle', label: 'Bottle' },
+  { value: 'Can', label: 'Can' },
+  { value: 'Box', label: 'Box' },
+  { value: 'Packet', label: 'Packet' },
+  { value: 'Set', label: 'Set' },
+  { value: 'Pair', label: 'Pair' },
+  { value: 'Meter', label: 'Meter' },
+  { value: 'Service', label: 'Service' },
+] as const;
+
+export type ProductUnit = (typeof PRODUCT_UNITS)[number]['value'];
+
 export type InventoryType = 'BULK' | 'ITEM' | 'NONE';
 
 export type CustomerType = 'Regular' | 'Credit' | 'Fleet';

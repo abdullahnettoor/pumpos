@@ -107,7 +107,7 @@ export async function readInventoryLevels(db: DbClient, organizationId: string, 
       productId: schema.products.id,
       name: schema.products.name,
       code: schema.products.code,
-      quantity: sql<string>`coalesce((select sum(sm.quantity) from stock_movements sm where sm.product_id = ${schema.products.id}), 0)`,
+      quantity: sql<string>`coalesce((select sum(sm.quantity) from stock_movements sm where sm.product_id = "products"."id"), 0)`,
     })
     .from(schema.products)
     .where(

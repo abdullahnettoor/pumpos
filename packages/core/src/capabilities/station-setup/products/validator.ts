@@ -17,6 +17,9 @@ const createSchema = z.object({
   stockTracked: z.boolean().optional(),
   isTaxable: z.boolean().optional(),
   unit: z.string().trim().min(1, 'unit is required').max(50),
+  brand: z.string().trim().max(150).nullish(),
+  category: z.string().trim().max(100).nullish(),
+  sellingPrice: z.coerce.number().nonnegative().nullish(),
   taxConfig: taxConfigSchema,
 });
 
@@ -37,6 +40,9 @@ const updateSchema = z.object({
   stockTracked: z.boolean().optional(),
   isTaxable: z.boolean().optional(),
   unit: z.string().trim().min(1).max(50).optional(),
+  brand: z.string().trim().max(150).nullish(),
+  category: z.string().trim().max(100).nullish(),
+  sellingPrice: z.coerce.number().nonnegative().nullish(),
   taxConfig: taxConfigSchema,
   isActive: z.boolean().optional(),
 });

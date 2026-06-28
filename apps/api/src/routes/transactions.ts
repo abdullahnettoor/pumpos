@@ -22,6 +22,7 @@ import {
   RecordPurchase,
   RecordSupplierPayment,
   CreateSale,
+  RecordStockCount,
   type Result,
 } from '@pump/core';
 import { buildContext } from '../infra/context.js';
@@ -39,7 +40,7 @@ import {
   DrizzleSupplierTransactionRepository,
 } from '../infra/repositories/purchasing-repositories.js';
 import { DrizzleExpenseRepository } from '../infra/repositories/finance-repositories.js';
-import { DrizzleStockMovementRepository } from '../infra/repositories/inventory-repositories.js';
+import { DrizzleStockMovementRepository, DrizzleStockVarianceRepository } from '../infra/repositories/inventory-repositories.js';
 import { DrizzleSaleRepository } from '../infra/repositories/retail-repositories.js';
 import {
   DrizzleShiftRepository,
@@ -638,7 +639,7 @@ transactionsRouter.get('/inventory/items', async (c) => {
       code: schema.products.code,
       unit: schema.products.unit,
       productType: schema.products.productType,
-      quantity: sql<string>`COALESCE((SELECT SUM(sm.quantity) FROM stock_movements sm WHERE sm.product_id = ${schema.products.id}), 0)`,
+      quantity: sql<string>`COALESCE((SELECT SUM(sm.quantity) FROM stock_movements sm WHERE sm.product_id = "products"."id"), 0)`,
     })
     .from(schema.products)
     .where(
@@ -652,6 +653,25 @@ transactionsRouter.get('/inventory/items', async (c) => {
     success: true,
     data: rows.map((r) => ({ ...r, quantity: Number(r.quantity) })),
   });
+});
+
+// POST /inventory/count — physical stock count / opening balance / adjustment.
+// Reconciles book stock to the measured actual (tankId for fuel, productId for items).
+transactionsRouter.post('/inventory/count', async (c) => {
+  const user = c.var.user;
+  const body = await c.req.json().catch(() => ({}));
+  if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId: body?.stationId })) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+  }
+  const result = await runInTransaction(c.var.db, (tx, events) =>
+    new RecordStockCount({
+      movements: new DrizzleStockMovementRepository(tx),
+      variances: new DrizzleStockVarianceRepository(tx),
+      businessDays: new DrizzleBusinessDayRepository(tx),
+      events,
+    }).execute(body, buildContext(user, { stationId: body?.stationId })),
+  );
+  return sendResult(c, result);
 });
 
 transactionsRouter.get('/inventory/movements', async (c) => {
@@ -669,6 +689,7 @@ transactionsRouter.get('/inventory/movements', async (c) => {
       tankName: schema.tanks.name,
       productName: schema.products.name,
       productCode: schema.products.code,
+      productUnit: schema.products.unit,
     })
     .from(schema.stockMovements)
     .innerJoin(schema.businessDays, eq(schema.stockMovements.businessDayId, schema.businessDays.id))
@@ -685,6 +706,7 @@ transactionsRouter.get('/inventory/movements', async (c) => {
       tankName: r.tankName ?? null,
       productName: r.productName ?? 'Unknown',
       productCode: r.productCode ?? 'Unknown',
+      productUnit: r.productUnit ?? null,
     })),
   });
 });
@@ -704,6 +726,7 @@ transactionsRouter.get('/inventory/variances', async (c) => {
       tankName: schema.tanks.name,
       productName: schema.products.name,
       productCode: schema.products.code,
+      productUnit: schema.products.unit,
     })
     .from(schema.stockVariances)
     .innerJoin(schema.businessDays, eq(schema.stockVariances.businessDayId, schema.businessDays.id))
@@ -722,6 +745,7 @@ transactionsRouter.get('/inventory/variances', async (c) => {
       tankName: r.tankName ?? null,
       productName: r.productName ?? 'Unknown',
       productCode: r.productCode ?? 'Unknown',
+      productUnit: r.productUnit ?? null,
     })),
   });
 });
