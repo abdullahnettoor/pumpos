@@ -76,7 +76,7 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
   };
 
   return (
-    <div className="card card-comfortable" style={{ maxWidth: '800px', margin: '0 auto' }}>
+    <div className="card card-comfortable print-area" style={{ maxWidth: '800px', margin: '0 auto' }}>
       {/* Header controls */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', borderBottom: '1px solid var(--border-soft)', paddingBottom: '16px' }} className="no-print">
         <button

@@ -20,7 +20,7 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack 
   const totalExpenses = Number(snapshot.totalExpenses || 0);
 
   return (
-    <div className="card card-comfortable" style={{ maxWidth: '920px', margin: '0 auto' }}>
+    <div className="card card-comfortable print-area" style={{ maxWidth: '920px', margin: '0 auto' }}>
       <div
         className="no-print"
         style={{
