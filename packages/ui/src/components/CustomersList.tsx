@@ -68,7 +68,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
   const [collectionShiftId, setCollectionShiftId] = useState('');
   const [collectionCustomerId, setCollectionCustomerId] = useState('');
   const [collectionAmount, setCollectionAmount] = useState('');
-  const [collectionPaymentMethod, setCollectionPaymentMethod] = useState<'Cash' | 'Card' | 'UPI' | 'Credit'>('Cash');
+  const [collectionPaymentMethod, setCollectionPaymentMethod] = useState<'Cash' | 'Card' | 'UPI' | 'BankTransfer'>('Cash');
   const [collectionNotes, setCollectionNotes] = useState('');
   const [collectionSubmitting, setCollectionSubmitting] = useState(false);
 
@@ -283,11 +283,6 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
     e.preventDefault();
     setFormError(null);
     if (!collectionShiftId || !collectionAmount) {
-      return;
-    }
-
-    if (collectionPaymentMethod === 'Credit' && !collectionCustomerId) {
-      setFormError('A customer account must be selected for Credit Fleet Sales.');
       return;
     }
 
@@ -1279,7 +1274,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
             error={formError}
             onCancel={closeCollectionDrawer}
             onSubmit={onAddCollection}
-            submitLabel={collectionPaymentMethod === 'Credit' ? 'Log Credit Sale' : 'Log Collection'}
+            submitLabel={'Log Collection'}
             submittingLabel="Recording..."
             submitDisabled={collectionSubmitting || !collectionAmount}
             amountLabel="Amount (₹)"

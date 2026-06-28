@@ -36,8 +36,8 @@ interface QuickEntryDrawerProps {
   onCollectionCustomerIdChange: (id: string) => void;
   collectionAmount: string;
   onCollectionAmountChange: (v: string) => void;
-  collectionPaymentMethod: 'Cash' | 'Card' | 'UPI' | 'Credit';
-  onCollectionPaymentMethodChange: (m: 'Cash' | 'Card' | 'UPI' | 'Credit') => void;
+  collectionPaymentMethod: 'Cash' | 'Card' | 'UPI' | 'BankTransfer';
+  onCollectionPaymentMethodChange: (m: 'Cash' | 'Card' | 'UPI' | 'BankTransfer') => void;
   collectionNotes: string;
   onCollectionNotesChange: (v: string) => void;
   onCollectionSubmit: (e: React.FormEvent) => void | Promise<void>;
@@ -159,7 +159,7 @@ export const QuickEntryDrawer: React.FC<QuickEntryDrawerProps> = (props) => {
               error={error}
               onCancel={onClose}
               onSubmit={props.onCollectionSubmit}
-              submitLabel={props.collectionPaymentMethod === 'Credit' ? 'Log Credit Sale' : 'Log Collection'}
+              submitLabel={'Log Collection'}
               submittingLabel="Recording..."
               submitDisabled={submitting || !props.collectionAmount}
               amountLabel="Amount (₹)"

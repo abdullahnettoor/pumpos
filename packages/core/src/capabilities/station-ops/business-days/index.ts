@@ -20,6 +20,44 @@ export interface BusinessDay {
 
 export interface BusinessDayRepository extends Repository<BusinessDay> {
   findOpenByStation(organizationId: string, stationId: string): Promise<BusinessDay | null>;
+  findByStationAndDate(organizationId: string, stationId: string, businessDate: string): Promise<BusinessDay | null>;
+}
+
+/**
+ * Resolve the business day a non-shift money movement belongs to, by its
+ * transaction date — creating the day lazily if it does not exist yet. This
+ * removes the "open a business day first" ceremony: any date is transactional
+ * (settlements/collections can land on Sundays/holidays). A day created for a
+ * past date is recorded as CLOSED (a historical bucket, invisible to the
+ * single-open-day shift logic); today/future is OPEN. The business day's date
+ * IS the transaction date, so no separate column is needed.
+ */
+export async function ensureBusinessDayForDate(
+  repo: BusinessDayRepository,
+  ctx: ExecutionContext,
+  stationId: string,
+  businessDate: string,
+): Promise<BusinessDay> {
+  const existing = await repo.findByStationAndDate(ctx.organizationId, stationId, businessDate);
+  if (existing) return existing;
+  const today = ctx.clock.now().toISOString().slice(0, 10);
+  const isPast = businessDate < today;
+  const nowIso = ctx.clock.now().toISOString();
+  const day: BusinessDay = {
+    id: ctx.ids.newId(),
+    organizationId: ctx.organizationId,
+    stationId,
+    businessDate,
+    status: isPast ? 'CLOSED' : 'OPEN',
+    openedBy: ctx.actorId ?? 'system',
+    openedAt: nowIso,
+    closedBy: isPast ? (ctx.actorId ?? 'system') : null,
+    closedAt: isPast ? nowIso : null,
+    createdAt: nowIso,
+    updatedAt: nowIso,
+  };
+  await repo.save(day);
+  return day;
 }
 
 export interface OpenBusinessDayCommand {

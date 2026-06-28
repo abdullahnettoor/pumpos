@@ -14,8 +14,8 @@ export interface CollectionEntryFormProps {
   customers: any[];
   amount: string;
   onAmountChange: (value: string) => void;
-  paymentMethod: 'Cash' | 'Card' | 'UPI' | 'Credit';
-  onPaymentMethodChange: (value: 'Cash' | 'Card' | 'UPI' | 'Credit') => void;
+  paymentMethod: 'Cash' | 'Card' | 'UPI' | 'BankTransfer';
+  onPaymentMethodChange: (value: 'Cash' | 'Card' | 'UPI' | 'BankTransfer') => void;
   notes: string;
   onNotesChange: (value: string) => void;
   submitting: boolean;
@@ -104,45 +104,50 @@ export const CollectionEntryForm: React.FC<CollectionEntryFormProps> = ({
         <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>{paymentMethodLabel}</label>
         {usePaymentMethodButtons ? (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '8px' }}>
-            {(['Cash', 'Card', 'UPI', 'Credit'] as const).map((method) => (
+            {([
+              { value: 'Cash', label: 'Cash' },
+              { value: 'Card', label: 'Card' },
+              { value: 'UPI', label: 'UPI' },
+              { value: 'BankTransfer', label: 'Bank' },
+            ] as const).map(({ value, label }) => (
               <button
-                key={method}
+                key={value}
                 type="button"
-                onClick={() => onPaymentMethodChange(method)}
+                onClick={() => onPaymentMethodChange(value)}
                 disabled={submitting}
                 style={{
                   height: '32px',
                   fontSize: '12px',
                   fontWeight: 600,
-                  backgroundColor: paymentMethod === method ? 'var(--brand-primary)' : 'var(--bg-surface-alt)',
-                  color: paymentMethod === method ? 'white' : 'var(--text-default)',
-                  border: paymentMethod === method ? 'none' : '1px solid var(--border-strong)',
+                  backgroundColor: paymentMethod === value ? 'var(--brand-primary)' : 'var(--bg-surface-alt)',
+                  color: paymentMethod === value ? 'white' : 'var(--text-default)',
+                  border: paymentMethod === value ? 'none' : '1px solid var(--border-strong)',
                   borderRadius: 'var(--radius-input)',
                   cursor: 'pointer',
                 }}
               >
-                {method}
+                {label}
               </button>
             ))}
           </div>
         ) : (
           <select
             value={paymentMethod}
-            onChange={(e) => onPaymentMethodChange(e.target.value as 'Cash' | 'Card' | 'UPI' | 'Credit')}
+            onChange={(e) => onPaymentMethodChange(e.target.value as 'Cash' | 'Card' | 'UPI' | 'BankTransfer')}
             disabled={submitting}
             style={{ height: '32px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', padding: '0 8px' }}
           >
             <option value="Cash">Cash</option>
             <option value="Card">Card</option>
             <option value="UPI">UPI</option>
-            <option value="Credit">Credit</option>
+            <option value="BankTransfer">Bank</option>
           </select>
         )}
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
         <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>
-          {paymentMethod === 'Credit' ? customerLabelCredit : customerLabelNonCredit}
+          {customerLabelNonCredit}
         </label>
         <select
           value={customerId}

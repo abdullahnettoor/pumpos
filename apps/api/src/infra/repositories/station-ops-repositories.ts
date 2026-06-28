@@ -81,6 +81,21 @@ export class DrizzleBusinessDayRepository implements BusinessDayRepository {
       .limit(1);
     return r ? this.toEntity(r) : null;
   }
+
+  async findByStationAndDate(organizationId: string, stationId: string, businessDate: string): Promise<BusinessDay | null> {
+    const [r] = await this.db
+      .select()
+      .from(schema.businessDays)
+      .where(
+        and(
+          eq(schema.businessDays.organizationId, organizationId),
+          eq(schema.businessDays.stationId, stationId),
+          eq(schema.businessDays.businessDate, businessDate),
+        ),
+      )
+      .limit(1);
+    return r ? this.toEntity(r) : null;
+  }
 }
 
 // ---------------- Shifts ----------------

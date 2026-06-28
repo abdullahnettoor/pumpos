@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { BusinessEvents, err, eventFromContext, invariantViolation, notFoundError, ok, validationError } from '../../../kernel/index.js';
 import type { EventPublisher, ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
 import type { ShiftRepository } from '../../station-ops/shifts/index.js';
-import type { BusinessDayRepository } from '../../station-ops/business-days/index.js';
+import { ensureBusinessDayForDate, type BusinessDayRepository } from '../../station-ops/business-days/index.js';
 
 export type PaidFrom = 'SHIFT_CASH' | 'BANK' | 'OWNER';
 
@@ -33,6 +33,7 @@ export interface RecordExpenseCommand {
   description?: string;
   paidFrom?: PaidFrom;
   affectsDrawer?: boolean;
+  transactionDate?: string;
 }
 
 const schema = z.object({
@@ -43,6 +44,7 @@ const schema = z.object({
   description: z.string().max(255).optional(),
   paidFrom: z.enum(['SHIFT_CASH', 'BANK', 'OWNER']).optional(),
   affectsDrawer: z.boolean().optional(),
+  transactionDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'transactionDate must be YYYY-MM-DD').optional(),
 });
 
 export interface RecordExpenseDeps {
@@ -78,8 +80,8 @@ export class RecordExpense implements UseCase<RecordExpenseCommand, Expense> {
       businessDayId = shift.businessDayId;
       shiftId = affectsDrawer ? shift.id : null;
     } else if (cmd.stationId) {
-      const bd = await this.deps.businessDays.findOpenByStation(ctx.organizationId, cmd.stationId);
-      if (!bd) return err(invariantViolation('No open business day for this station', { stationId: cmd.stationId }));
+      const date = cmd.transactionDate ?? ctx.clock.now().toISOString().slice(0, 10);
+      const bd = await ensureBusinessDayForDate(this.deps.businessDays, ctx, cmd.stationId, date);
       businessDayId = bd.id;
       shiftId = null;
       affectsDrawer = false;

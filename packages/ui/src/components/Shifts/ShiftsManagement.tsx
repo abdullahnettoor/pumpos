@@ -120,7 +120,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
 
   const [collectionCustomerId, setCollectionCustomerId] = useState('');
   const [collectionAmount, setCollectionAmount] = useState('');
-  const [collectionPaymentMethod, setCollectionPaymentMethod] = useState<'Cash' | 'Card' | 'UPI' | 'Credit'>('Cash');
+  const [collectionPaymentMethod, setCollectionPaymentMethod] = useState<'Cash' | 'Card' | 'UPI' | 'BankTransfer'>('Cash');
   const [collectionNotes, setCollectionNotes] = useState('');
 
   const [creditSaleVehicle, setCreditSaleVehicle] = useState<VehicleSearchResult | null>(null);
@@ -457,11 +457,6 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   const handleCollectionSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!targetShiftId || !collectionAmount) {
-      return;
-    }
-
-    if (collectionPaymentMethod === 'Credit' && !collectionCustomerId) {
-      setQuickEntryError('A customer account is required for Credit transactions.');
       return;
     }
 

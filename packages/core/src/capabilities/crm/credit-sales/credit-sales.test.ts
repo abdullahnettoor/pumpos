@@ -33,6 +33,9 @@ class BdRepo implements BusinessDayRepository {
   async findOpenByStation(orgId: string, stationId: string) {
     return this.rows.find((r) => r.organizationId === orgId && r.stationId === stationId && r.status === 'OPEN') ?? null;
   }
+  async findByStationAndDate(orgId: string, stationId: string, _date: string) {
+    return this.rows.find((r) => r.organizationId === orgId && r.stationId === stationId) ?? null;
+  }
 }
 
 function ctx(): ExecutionContext {
@@ -57,7 +60,7 @@ describe('RecordCreditSale', () => {
     if (result.success) {
       expect(result.data.transactionType).toBe('Credit Sale');
       expect(result.data.amount).toBe('4500');
-      expect(result.data.shiftId).toBeNull();
+      expect(result.data.shiftId).toBe('sh-1');
       expect(result.data.businessDayId).toBe('bd-1');
       expect(result.data.quantity).toBe('50');
     }

@@ -527,7 +527,7 @@ export class CloudTransactionService {
     quantity?: number | null;
     unitPrice?: number | null;
     amount: number;
-    paymentMethod: 'Cash' | 'Card' | 'UPI' | 'Credit';
+    paymentMethod: 'Cash' | 'Card' | 'UPI' | 'BankTransfer' | 'Credit';
     notes?: string;
   }): Promise<any> {
     return request<any>('/transactions/collections', {
