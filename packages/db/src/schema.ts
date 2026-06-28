@@ -32,15 +32,6 @@ export const stations = pgTable('stations', {
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
 
-export const documentSequences = pgTable('document_sequences', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  organizationId: uuid('organization_id').references(() => organizations.id).notNull(),
-  documentType: varchar('document_type', { length: 50 }).notNull(), // 'SALE', 'PURCHASE', 'COLLECTION'
-  currentNumber: integer('current_number').default(0).notNull(),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
-});
-
 export const users = pgTable('users', {
   id: uuid('id').defaultRandom().primaryKey(),
   organizationId: uuid('organization_id').references(() => organizations.id).notNull(),
@@ -471,31 +462,6 @@ export const dssrSnapshots = pgTable('dssr_snapshots', {
   generatedAt: timestamp('generated_at').defaultNow().notNull(),
 });
 
-export const auditLogs = pgTable('audit_logs', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  organizationId: uuid('organization_id').references(() => organizations.id).notNull(),
-  stationId: uuid('station_id').references(() => stations.id),
-  entityType: varchar('entity_type', { length: 100 }).notNull(),
-  entityId: uuid('entity_id').notNull(),
-  action: varchar('action', { length: 50 }).notNull(),
-  beforeData: jsonb('before_data'),
-  afterData: jsonb('after_data'),
-  performedBy: uuid('performed_by').references(() => users.id).notNull(),
-  performedAt: timestamp('performed_at').defaultNow().notNull(),
-});
-
-export const businessEvents = pgTable('business_events', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  eventId: uuid('event_id').notNull(),
-  eventType: varchar('event_type', { length: 100 }).notNull(),
-  organizationId: uuid('organization_id').references(() => organizations.id).notNull(),
-  stationId: uuid('station_id').references(() => stations.id),
-  entityType: varchar('entity_type', { length: 100 }).notNull(),
-  entityId: uuid('entity_id').notNull(),
-  payload: jsonb('payload').notNull(),
-  occurredAt: timestamp('occurred_at').defaultNow().notNull(),
-});
-
 // Canonical append-only business-event log (Handbook Vol. 4). Mirrors the
 // DomainEvent envelope in @pump/core. Audit log + sync/replay source; business
 // tables remain the query-optimized projections.
@@ -516,18 +482,6 @@ export const events = pgTable('events', {
   causationId: uuid('causation_id'),
   payload: jsonb('payload').notNull(),
   metadata: jsonb('metadata').default({}).notNull(),
-});
-
-export const syncEvents = pgTable('sync_events', {
-  eventId: uuid('event_id').primaryKey(),
-  eventType: varchar('event_type', { length: 100 }).notNull(),
-  entityType: varchar('entity_type', { length: 100 }).notNull(),
-  entityId: uuid('entity_id').notNull(),
-  payload: jsonb('payload').notNull(),
-  status: varchar('status', { length: 20 }).default('PENDING').notNull(), // 'PENDING', 'PROCESSING', 'SYNCED', 'FAILED'
-  retryCount: integer('retry_count').default(0).notNull(),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  syncedAt: timestamp('synced_at'),
 });
 
 // Caches the result of a mutating request keyed by a client-supplied

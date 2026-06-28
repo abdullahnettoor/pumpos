@@ -13,7 +13,6 @@ import { NozzleReadingsGrid } from './NozzleReadingsGrid.js';
 import { ShiftTotalsSummary } from './ShiftTotalsSummary.js';
 import { OpenShiftForm } from './OpenShiftForm.js';
 import { QuickEntryDrawer } from './QuickEntryDrawer.js';
-import type { VehicleSearchResult } from '../transactions/CreditSaleEntryForm.js';
 import { useShiftStatus, useInvalidateOperational } from '../../query/hooks.js';
 import { Station } from '@pump/shared';
 import { FileText, User, Lock, AlertTriangle, Check, Fuel, Info, Play, CalendarRange, History, Clock3 } from 'lucide-react';
@@ -25,7 +24,7 @@ const productService = new CloudProductService();
 const tankService = new CloudTankService();
 const userService = new CloudUserAssignmentService();
 
-type QuickEntryType = 'expense' | 'collection' | 'credit-sale' | 'purchase' | 'merchandise-sale';
+type QuickEntryType = 'expense' | 'collection' | 'purchase' | 'merchandise-sale';
 
 interface ShiftsManagementProps {
   selectedStation: Station | null;
@@ -132,17 +131,6 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   const [collectionPaymentMethod, setCollectionPaymentMethod] = useState<'Cash' | 'Card' | 'UPI' | 'BankTransfer'>('Cash');
   const [collectionNotes, setCollectionNotes] = useState('');
 
-  const [creditSaleVehicle, setCreditSaleVehicle] = useState<VehicleSearchResult | null>(null);
-  const [creditSaleQuantity, setCreditSaleQuantity] = useState('');
-  const [creditSaleUnitPrice, setCreditSaleUnitPrice] = useState('');
-  const [creditSaleAmount, setCreditSaleAmount] = useState('');
-  const [creditSaleNotes, setCreditSaleNotes] = useState('');
-  // Customer-first credit: book a credit fuel sale against a customer, vehicle optional.
-  const [creditSaleCustomerId, setCreditSaleCustomerId] = useState('');
-  const [creditSaleProductId, setCreditSaleProductId] = useState('');
-  const [creditCustomers, setCreditCustomers] = useState<any[]>([]);
-  const [creditProducts, setCreditProducts] = useState<any[]>([]);
-
   const [purchaseSupplierId, setPurchaseSupplierId] = useState('');
   const [purchaseProductId, setPurchaseProductId] = useState('');
   const [purchaseQuantity, setPurchaseQuantity] = useState('');
@@ -160,7 +148,6 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   const [saleNotes, setSaleNotes] = useState('');
   const [saleStock, setSaleStock] = useState<Record<string, number>>({});
   const [saleAttendantId, setSaleAttendantId] = useState('');
-  const [creditSaleAttendantId, setCreditSaleAttendantId] = useState('');
   // Merchandise can be sold by ANY station user (incl. office staff not on a DU/shift).
   const [merchandiseSellers, setMerchandiseSellers] = useState<{ userId: string; userName: string }[]>([]);
 
@@ -237,12 +224,6 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     setCollectionPaymentMethod('Cash');
     setCollectionNotes('');
 
-    setCreditSaleVehicle(null);
-    setCreditSaleQuantity('');
-    setCreditSaleUnitPrice('');
-    setCreditSaleAmount('');
-    setCreditSaleNotes('');
-
     setPurchaseSupplierId(suppliers[0]?.id ?? '');
     setPurchaseProductId(products[0]?.id ?? '');
     setPurchaseQuantity('');
@@ -289,25 +270,6 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         setCollectionAmount('');
         setCollectionPaymentMethod('Cash');
         setCollectionNotes('');
-      }
-
-      if (type === 'credit-sale') {
-        setCreditSaleVehicle(null);
-        setCreditSaleQuantity('');
-        setCreditSaleUnitPrice('');
-        setCreditSaleAmount('');
-        setCreditSaleNotes('');
-        setCreditSaleCustomerId('');
-        setCreditSaleProductId('');
-        setCreditSaleAttendantId(shiftAttendants[0]?.userId ?? '');
-        const [custList, prodList] = await Promise.all([
-          transactionService.getCustomers(true),
-          productService.listProducts(),
-        ]);
-        // Credit-eligible = Credit/Fleet customers that are not prepaid (prepaid draws
-        // down a balance, not a receivable). Fuel products selectable when no vehicle.
-        setCreditCustomers((custList || []).filter((c: any) => !c.isPrepaid && (c.customerType === 'Credit' || c.customerType === 'Fleet')));
-        setCreditProducts((prodList || []).filter((p: any) => p.productType === 'FUEL'));
       }
 
       if (type === 'merchandise-sale') {
@@ -550,46 +512,6 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
       await loadShiftStatus();
     } catch (err: any) {
       setQuickEntryError(err.message || 'Failed to record collection');
-    } finally {
-      setQuickEntrySubmitting(false);
-    }
-  };
-
-  const handleCreditSaleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const customerId = creditSaleVehicle?.customerId ?? creditSaleCustomerId;
-    if (!targetShiftId || !customerId || !creditSaleAmount) {
-      return;
-    }
-
-    const amountNum = Number(creditSaleAmount);
-    if (!Number.isFinite(amountNum) || amountNum <= 0) {
-      setQuickEntryError('Amount must be greater than zero.');
-      return;
-    }
-
-    const qtyNum = creditSaleQuantity ? Number(creditSaleQuantity) : null;
-    const priceNum = creditSaleUnitPrice ? Number(creditSaleUnitPrice) : null;
-
-    try {
-      setQuickEntrySubmitting(true);
-      setQuickEntryError(null);
-      await transactionService.recordCollection({
-        shiftId: targetShiftId,
-        customerId,
-        vehicleId: creditSaleVehicle?.id ?? null,
-        productId: creditSaleVehicle?.defaultProductId ?? (creditSaleProductId || null),
-        quantity: qtyNum && qtyNum > 0 ? qtyNum : null,
-        unitPrice: priceNum != null && priceNum >= 0 ? priceNum : null,
-        amount: amountNum,
-        paymentMethod: 'Credit',
-        attendantId: creditSaleAttendantId || undefined,
-        notes: creditSaleNotes || undefined,
-      });
-      closeQuickEntryDrawer();
-      await loadShiftStatus();
-    } catch (err: any) {
-      setQuickEntryError(err.message || 'Failed to record credit sale');
     } finally {
       setQuickEntrySubmitting(false);
     }
@@ -1142,34 +1064,6 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
           collectionNotes={collectionNotes}
           onCollectionNotesChange={setCollectionNotes}
           onCollectionSubmit={handleCollectionSubmit}
-          searchVehicles={(q) => transactionService.searchVehicles(q)}
-          getPriceForProduct={(productId) => {
-            if (!productId) return null;
-            const nr = data?.activeShift?.nozzleReadings?.find(
-              (r: any) => r.productId === productId && r.unitPrice != null
-            );
-            return nr ? Number(nr.unitPrice) : null;
-          }}
-          creditSaleVehicle={creditSaleVehicle}
-          onCreditSaleVehicleChange={setCreditSaleVehicle}
-          creditSaleQuantity={creditSaleQuantity}
-          onCreditSaleQuantityChange={setCreditSaleQuantity}
-          creditSaleUnitPrice={creditSaleUnitPrice}
-          onCreditSaleUnitPriceChange={setCreditSaleUnitPrice}
-          creditSaleAmount={creditSaleAmount}
-          onCreditSaleAmountChange={setCreditSaleAmount}
-          creditSaleNotes={creditSaleNotes}
-          onCreditSaleNotesChange={setCreditSaleNotes}
-          creditSaleAttendants={shiftAttendants}
-          creditSaleAttendantId={creditSaleAttendantId}
-          onCreditSaleAttendantIdChange={setCreditSaleAttendantId}
-          creditSaleCustomers={creditCustomers}
-          creditSaleCustomerId={creditSaleCustomerId}
-          onCreditSaleCustomerIdChange={setCreditSaleCustomerId}
-          creditSaleProducts={creditProducts}
-          creditSaleProductId={creditSaleProductId}
-          onCreditSaleProductIdChange={setCreditSaleProductId}
-          onCreditSaleSubmit={handleCreditSaleSubmit}
           suppliers={suppliers}
           products={products}
           purchaseSupplierId={purchaseSupplierId}

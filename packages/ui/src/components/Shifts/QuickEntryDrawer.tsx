@@ -2,11 +2,10 @@ import React from 'react';
 import { Drawer } from '../Drawer.js';
 import { ExpenseEntryForm } from '../transactions/ExpenseEntryForm.js';
 import { CollectionEntryForm } from '../transactions/CollectionEntryForm.js';
-import { CreditSaleEntryForm, VehicleSearchResult } from '../transactions/CreditSaleEntryForm.js';
 import { PurchaseEntryForm } from '../transactions/PurchaseEntryForm.js';
 import { MerchandiseSaleEntryForm } from '../transactions/MerchandiseSaleEntryForm.js';
 
-type QuickEntryType = 'expense' | 'collection' | 'credit-sale' | 'purchase' | 'merchandise-sale';
+type QuickEntryType = 'expense' | 'collection' | 'purchase' | 'merchandise-sale';
 
 interface QuickEntryDrawerProps {
   isOpen: boolean;
@@ -42,30 +41,6 @@ interface QuickEntryDrawerProps {
   collectionNotes: string;
   onCollectionNotesChange: (v: string) => void;
   onCollectionSubmit: (e: React.FormEvent) => void | Promise<void>;
-
-  // Credit sale
-  searchVehicles: (q: string) => Promise<VehicleSearchResult[]>;
-  getPriceForProduct: (productId: string | null | undefined) => number | null;
-  creditSaleVehicle: VehicleSearchResult | null;
-  onCreditSaleVehicleChange: (v: VehicleSearchResult | null) => void;
-  creditSaleQuantity: string;
-  onCreditSaleQuantityChange: (v: string) => void;
-  creditSaleUnitPrice: string;
-  onCreditSaleUnitPriceChange: (v: string) => void;
-  creditSaleAmount: string;
-  onCreditSaleAmountChange: (v: string) => void;
-  creditSaleNotes: string;
-  onCreditSaleNotesChange: (v: string) => void;
-  creditSaleAttendants?: { userId: string; userName: string }[];
-  creditSaleAttendantId?: string;
-  onCreditSaleAttendantIdChange?: (id: string) => void;
-  creditSaleCustomers?: any[];
-  creditSaleCustomerId?: string;
-  onCreditSaleCustomerIdChange?: (id: string) => void;
-  creditSaleProducts?: any[];
-  creditSaleProductId?: string;
-  onCreditSaleProductIdChange?: (id: string) => void;
-  onCreditSaleSubmit: (e: React.FormEvent) => void | Promise<void>;
 
   // Purchase
   suppliers: any[];
@@ -110,7 +85,7 @@ interface QuickEntryDrawerProps {
 
 /**
  * Slide-in quick-entry drawer for the active shift, hosting the expense / collection /
- * credit-sale / purchase entry forms. Extracted from ShiftsManagement; all state lives in
+ * purchase entry forms. Extracted from ShiftsManagement; all state lives in
  * the parent and is passed through.
  */
 export const QuickEntryDrawer: React.FC<QuickEntryDrawerProps> = (props) => {
@@ -125,8 +100,6 @@ export const QuickEntryDrawer: React.FC<QuickEntryDrawerProps> = (props) => {
         ? 'Add Expense'
         : quickEntryType === 'collection'
         ? 'Log Collection'
-        : quickEntryType === 'credit-sale'
-        ? 'Credit Sale'
         : quickEntryType === 'merchandise-sale'
         ? 'Merchandise Sale'
         : 'Add Purchase';
@@ -201,39 +174,6 @@ export const QuickEntryDrawer: React.FC<QuickEntryDrawerProps> = (props) => {
               usePaymentMethodButtons={true}
               walkInOptionLabel="-- Walk-in / Cash Customer --"
               customerOptionLabel={(cust) => `${cust.name} (${cust.customerType})`}
-            />
-          )}
-
-          {quickEntryType === 'credit-sale' && (
-            <CreditSaleEntryForm
-              shiftOptions={shiftOptions}
-              targetShiftId={targetShiftId}
-              onTargetShiftIdChange={onTargetShiftIdChange}
-              searchVehicles={props.searchVehicles}
-              getPriceForProduct={props.getPriceForProduct}
-              customers={props.creditSaleCustomers}
-              customerId={props.creditSaleCustomerId}
-              onCustomerIdChange={props.onCreditSaleCustomerIdChange}
-              products={props.creditSaleProducts}
-              productId={props.creditSaleProductId}
-              onProductIdChange={props.onCreditSaleProductIdChange}
-              selectedVehicle={props.creditSaleVehicle}
-              onSelectedVehicleChange={props.onCreditSaleVehicleChange}
-              quantity={props.creditSaleQuantity}
-              onQuantityChange={props.onCreditSaleQuantityChange}
-              unitPrice={props.creditSaleUnitPrice}
-              onUnitPriceChange={props.onCreditSaleUnitPriceChange}
-              amount={props.creditSaleAmount}
-              onAmountChange={props.onCreditSaleAmountChange}
-              notes={props.creditSaleNotes}
-              onNotesChange={props.onCreditSaleNotesChange}
-              attendants={props.creditSaleAttendants}
-              attendantId={props.creditSaleAttendantId}
-              onAttendantIdChange={props.onCreditSaleAttendantIdChange}
-              submitting={submitting}
-              error={error}
-              onCancel={onClose}
-              onSubmit={props.onCreditSaleSubmit}
             />
           )}
 
