@@ -17,7 +17,7 @@ export const ProductsCatalog: React.FC = () => {
   // Form states
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
-  const [productType, setProductType] = useState<'FUEL' | 'LUBRICANT' | 'ACCESSORY' | 'SERVICE'>('FUEL');
+  const [productType, setProductType] = useState<'FUEL' | 'LUBRICANT' | 'ADDITIVE' | 'ACCESSORY' | 'CONSUMABLE' | 'SPARE_PART' | 'SERVICE' | 'OTHER'>('FUEL');
   const [inventoryType, setInventoryType] = useState<'BULK' | 'ITEM' | 'NONE'>('BULK');
   const [stockTracked, setStockTracked] = useState(true);
   const [isTaxable, setIsTaxable] = useState(true);
@@ -310,7 +310,7 @@ export const ProductsCatalog: React.FC = () => {
             <select
               value={productType}
               onChange={(e) => {
-                const val = e.target.value as 'FUEL' | 'LUBRICANT' | 'ACCESSORY' | 'SERVICE';
+                const val = e.target.value as 'FUEL' | 'LUBRICANT' | 'ADDITIVE' | 'ACCESSORY' | 'CONSUMABLE' | 'SPARE_PART' | 'SERVICE' | 'OTHER';
                 setProductType(val);
                 setInventoryType(val === 'FUEL' ? 'BULK' : val === 'SERVICE' ? 'NONE' : 'ITEM');
               }}
@@ -325,8 +325,12 @@ export const ProductsCatalog: React.FC = () => {
             >
               <option value="FUEL">FUEL</option>
               <option value="LUBRICANT">LUBRICANT</option>
+              <option value="ADDITIVE">ADDITIVE (coolant, AdBlue, battery water)</option>
               <option value="ACCESSORY">ACCESSORY</option>
+              <option value="CONSUMABLE">CONSUMABLE</option>
+              <option value="SPARE_PART">SPARE PART</option>
               <option value="SERVICE">SERVICE</option>
+              <option value="OTHER">OTHER</option>
             </select>
           </div>
 

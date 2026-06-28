@@ -24,7 +24,7 @@ const transactionService = new CloudTransactionService();
 const productService = new CloudProductService();
 const tankService = new CloudTankService();
 
-type QuickEntryType = 'expense' | 'collection' | 'credit-sale' | 'purchase';
+type QuickEntryType = 'expense' | 'collection' | 'credit-sale' | 'purchase' | 'merchandise-sale';
 
 interface ShiftsManagementProps {
   selectedStation: Station | null;
@@ -136,6 +136,14 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   const [purchaseInvoiceNumber, setPurchaseInvoiceNumber] = useState('');
   const [purchaseNotes, setPurchaseNotes] = useState('');
   const [purchaseAllocations, setPurchaseAllocations] = useState<Record<string, string>>({});
+
+  // Merchandise (non-fuel) sale quick-entry state
+  const [saleProductId, setSaleProductId] = useState('');
+  const [saleQuantity, setSaleQuantity] = useState('');
+  const [saleUnitPrice, setSaleUnitPrice] = useState('');
+  const [salePaymentMethod, setSalePaymentMethod] = useState<'Cash' | 'Card' | 'UPI' | 'Credit'>('Cash');
+  const [saleCustomerId, setSaleCustomerId] = useState('');
+  const [saleNotes, setSaleNotes] = useState('');
 
   const selectedProduct = useMemo(
     () => products.find((product) => product.id === purchaseProductId),
@@ -262,6 +270,22 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         setCreditSaleNotes('');
       }
 
+      if (type === 'merchandise-sale') {
+        const [productList, activeCustomers] = await Promise.all([
+          productService.listProducts(),
+          transactionService.getCustomers(true),
+        ]);
+        const nonFuel = (productList || []).filter((p: any) => p.productType !== 'FUEL');
+        setProducts(nonFuel);
+        setCustomers(activeCustomers || []);
+        setSaleProductId(nonFuel?.[0]?.id ?? '');
+        setSaleQuantity('');
+        setSaleUnitPrice('');
+        setSalePaymentMethod('Cash');
+        setSaleCustomerId('');
+        setSaleNotes('');
+      }
+
       if (type === 'purchase') {
         const [activeSuppliers, productList, tankList] = await Promise.all([
           transactionService.getSuppliers(true),
@@ -380,9 +404,14 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     void openQuickEntryDrawer('purchase');
   };
 
+  const triggerMerchandiseSaleDrawer = () => {
+    void openQuickEntryDrawer('merchandise-sale');
+  };
+
   const quickEntryActions = [
     { key: 'expense', label: 'Add Expense', onClick: triggerExpenseDrawer, hotkey: 'E' },
     { key: 'collection', label: 'Log Collection', onClick: triggerCollectionDrawer, hotkey: 'C' },
+    { key: 'merchandise-sale', label: 'Merchandise Sale', onClick: triggerMerchandiseSaleDrawer, hotkey: 'M' },
     { key: 'credit-sale', label: 'Credit Sale (Vehicle)', onClick: triggerCreditSaleDrawer, hotkey: 'V' },
     { key: 'purchase', label: 'Add Purchase', onClick: triggerPurchaseDrawer, hotkey: 'P' },
   ];
@@ -404,6 +433,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
       const k = e.key.toLowerCase();
       if (k === 'e') { e.preventDefault(); triggerExpenseDrawer(); }
       else if (k === 'c') { e.preventDefault(); triggerCollectionDrawer(); }
+      else if (k === 'm') { e.preventDefault(); triggerMerchandiseSaleDrawer(); }
       else if (k === 'v') { e.preventDefault(); triggerCreditSaleDrawer(); }
       else if (k === 'p') { e.preventDefault(); triggerPurchaseDrawer(); }
     };
@@ -512,6 +542,40 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
       await loadShiftStatus();
     } catch (err: any) {
       setQuickEntryError(err.message || 'Failed to record credit sale');
+    } finally {
+      setQuickEntrySubmitting(false);
+    }
+  };
+
+  const handleMerchandiseSaleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!targetShiftId || !saleProductId || !saleQuantity || !saleUnitPrice) {
+      return;
+    }
+    if (salePaymentMethod === 'Credit' && !saleCustomerId) {
+      setQuickEntryError('A customer account is required for credit sales.');
+      return;
+    }
+    const qtyNum = Number(saleQuantity);
+    const priceNum = Number(saleUnitPrice);
+    if (!Number.isFinite(qtyNum) || qtyNum <= 0 || !Number.isFinite(priceNum) || priceNum < 0) {
+      setQuickEntryError('Enter a valid quantity and unit price.');
+      return;
+    }
+    try {
+      setQuickEntrySubmitting(true);
+      setQuickEntryError(null);
+      await transactionService.recordSale({
+        shiftId: targetShiftId,
+        paymentMethod: salePaymentMethod,
+        lines: [{ productId: saleProductId, quantity: qtyNum, unitPrice: priceNum, tankId: null }],
+        customerId: salePaymentMethod === 'Credit' ? saleCustomerId : undefined,
+        notes: saleNotes || undefined,
+      });
+      closeQuickEntryDrawer();
+      await loadShiftStatus();
+    } catch (err: any) {
+      setQuickEntryError(err.message || 'Failed to record merchandise sale');
     } finally {
       setQuickEntrySubmitting(false);
     }
@@ -1061,6 +1125,19 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
           purchaseAllocations={purchaseAllocations}
           onPurchaseAllocationsChange={setPurchaseAllocations}
           onPurchaseSubmit={handlePurchaseSubmit}
+          saleProductId={saleProductId}
+          onSaleProductIdChange={setSaleProductId}
+          saleQuantity={saleQuantity}
+          onSaleQuantityChange={setSaleQuantity}
+          saleUnitPrice={saleUnitPrice}
+          onSaleUnitPriceChange={setSaleUnitPrice}
+          salePaymentMethod={salePaymentMethod}
+          onSalePaymentMethodChange={setSalePaymentMethod}
+          saleCustomerId={saleCustomerId}
+          onSaleCustomerIdChange={setSaleCustomerId}
+          saleNotes={saleNotes}
+          onSaleNotesChange={setSaleNotes}
+          onMerchandiseSaleSubmit={handleMerchandiseSaleSubmit}
         />
 
         {selectedHandoverAssignment && (

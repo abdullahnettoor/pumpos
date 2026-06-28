@@ -6,7 +6,7 @@ export type SyncStatus = 'PENDING' | 'PROCESSING' | 'SYNCED' | 'FAILED';
 
 export type DocumentType = 'SALE' | 'PURCHASE' | 'COLLECTION';
 
-export type ProductType = 'FUEL' | 'LUBRICANT' | 'ACCESSORY' | 'SERVICE';
+export type ProductType = 'FUEL' | 'LUBRICANT' | 'ADDITIVE' | 'ACCESSORY' | 'CONSUMABLE' | 'SPARE_PART' | 'SERVICE' | 'OTHER';
 
 export type InventoryType = 'BULK' | 'ITEM' | 'NONE';
 

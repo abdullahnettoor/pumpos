@@ -91,6 +91,8 @@ export const PurchaseEntryForm: React.FC<PurchaseEntryFormProps> = ({
   dateLabel = 'Purchase Date',
 }) => {
   const hasMultipleShiftOptions = shiftOptions.length > 1;
+  const selectedFormProduct = products.find((p) => p.id === productId);
+  const unitLabel = selectedFormProduct?.unit || 'units';
   const allocatedTotal = Object.values(allocations).reduce((sum, val) => sum + (Number(val) || 0), 0);
   const quantityNum = Number(quantity || 0);
   const hasAllocationMismatch = Math.abs(allocatedTotal - quantityNum) >= 0.01;
@@ -174,7 +176,7 @@ export const PurchaseEntryForm: React.FC<PurchaseEntryFormProps> = ({
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>{quantityLabel}</label>
+          <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>{`Quantity (${unitLabel})`}</label>
           <input
             type="number"
             required
@@ -253,9 +255,9 @@ export const PurchaseEntryForm: React.FC<PurchaseEntryFormProps> = ({
           justifyContent: 'space-between',
           fontFamily: 'var(--font-mono)'
         }}>
-          <span>Derived Price per Litre:</span>
+          <span>Derived Unit Price:</span>
           <span style={{ fontWeight: 600, color: 'var(--text-strong)' }}>
-            ₹{(Number(totalAmount) / Number(quantity)).toFixed(4)}/L
+            ₹{(Number(totalAmount) / Number(quantity)).toFixed(4)}/{unitLabel}
           </span>
         </div>
       )}

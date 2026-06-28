@@ -4,8 +4,9 @@ import { ExpenseEntryForm } from '../transactions/ExpenseEntryForm.js';
 import { CollectionEntryForm } from '../transactions/CollectionEntryForm.js';
 import { CreditSaleEntryForm, VehicleSearchResult } from '../transactions/CreditSaleEntryForm.js';
 import { PurchaseEntryForm } from '../transactions/PurchaseEntryForm.js';
+import { MerchandiseSaleEntryForm } from '../transactions/MerchandiseSaleEntryForm.js';
 
-type QuickEntryType = 'expense' | 'collection' | 'credit-sale' | 'purchase';
+type QuickEntryType = 'expense' | 'collection' | 'credit-sale' | 'purchase' | 'merchandise-sale';
 
 interface QuickEntryDrawerProps {
   isOpen: boolean;
@@ -77,6 +78,21 @@ interface QuickEntryDrawerProps {
   purchaseAllocations: any;
   onPurchaseAllocationsChange: (a: any) => void;
   onPurchaseSubmit: (e: React.FormEvent) => void | Promise<void>;
+
+  // Merchandise (non-fuel) sale
+  saleProductId: string;
+  onSaleProductIdChange: (id: string) => void;
+  saleQuantity: string;
+  onSaleQuantityChange: (v: string) => void;
+  saleUnitPrice: string;
+  onSaleUnitPriceChange: (v: string) => void;
+  salePaymentMethod: 'Cash' | 'Card' | 'UPI' | 'Credit';
+  onSalePaymentMethodChange: (m: 'Cash' | 'Card' | 'UPI' | 'Credit') => void;
+  saleCustomerId: string;
+  onSaleCustomerIdChange: (id: string) => void;
+  saleNotes: string;
+  onSaleNotesChange: (v: string) => void;
+  onMerchandiseSaleSubmit: (e: React.FormEvent) => void | Promise<void>;
 }
 
 /**
@@ -98,6 +114,8 @@ export const QuickEntryDrawer: React.FC<QuickEntryDrawerProps> = (props) => {
         ? 'Log Collection'
         : quickEntryType === 'credit-sale'
         ? 'Credit Sale'
+        : quickEntryType === 'merchandise-sale'
+        ? 'Merchandise Sale'
         : 'Add Purchase';
     const shiftLabel =
       shiftOptions.find((o) => o.id === targetShiftId)?.label || activeShiftTemplateName;
@@ -225,6 +243,32 @@ export const QuickEntryDrawer: React.FC<QuickEntryDrawerProps> = (props) => {
               onCancel={onClose}
               onSubmit={props.onPurchaseSubmit}
               submitLabel="Add Purchase"
+            />
+          )}
+
+          {quickEntryType === 'merchandise-sale' && (
+            <MerchandiseSaleEntryForm
+              shiftOptions={shiftOptions}
+              targetShiftId={targetShiftId}
+              onTargetShiftIdChange={onTargetShiftIdChange}
+              products={props.products}
+              productId={props.saleProductId}
+              onProductIdChange={props.onSaleProductIdChange}
+              quantity={props.saleQuantity}
+              onQuantityChange={props.onSaleQuantityChange}
+              unitPrice={props.saleUnitPrice}
+              onUnitPriceChange={props.onSaleUnitPriceChange}
+              paymentMethod={props.salePaymentMethod}
+              onPaymentMethodChange={props.onSalePaymentMethodChange}
+              customers={props.customers}
+              customerId={props.saleCustomerId}
+              onCustomerIdChange={props.onSaleCustomerIdChange}
+              notes={props.saleNotes}
+              onNotesChange={props.onSaleNotesChange}
+              submitting={submitting}
+              error={error}
+              onCancel={onClose}
+              onSubmit={props.onMerchandiseSaleSubmit}
             />
           )}
         </>

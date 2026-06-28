@@ -3,7 +3,7 @@ import { err, ok, validationError } from '../../../kernel/index.js';
 import type { Result } from '../../../kernel/index.js';
 import type { CreateProductCommand, UpdateProductCommand } from './command.js';
 
-const productTypeEnum = z.enum(['FUEL', 'LUBRICANT', 'ACCESSORY', 'SERVICE']);
+const productTypeEnum = z.enum(['FUEL', 'LUBRICANT', 'ADDITIVE', 'ACCESSORY', 'CONSUMABLE', 'SPARE_PART', 'SERVICE', 'OTHER']);
 const inventoryTypeEnum = z.enum(['BULK', 'ITEM', 'NONE']);
 const taxConfigSchema = z
   .object({ gst_rate: z.number().min(0).max(100).optional(), hsn_code: z.string().max(20).optional() })

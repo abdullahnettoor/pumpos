@@ -482,7 +482,7 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, d
             }}>
               <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-soft)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)' }}>
-                  Fuel Intake Registry
+                  Purchase Records
                 </h3>
                 <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
                   Total Invoices: <strong>{purchases.length}</strong>
@@ -498,7 +498,7 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, d
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                     <thead>
                       <tr style={{ backgroundColor: 'var(--bg-surface-alt)', borderBottom: '1px solid var(--border-soft)', textAlign: 'left', color: 'var(--text-muted)' }}>
-                        <th style={{ padding: '10px 20px', fontWeight: 600 }}>Shift Date</th>
+                        <th style={{ padding: '10px 20px', fontWeight: 600 }}>Date</th>
                         <th style={{ padding: '10px 20px', fontWeight: 600 }}>Supplier</th>
                         <th style={{ padding: '10px 20px', fontWeight: 600 }}>Reference</th>
                         <th style={{ padding: '10px 20px', fontWeight: 600 }}>Invoice</th>
@@ -512,7 +512,7 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, d
                           <td style={{ padding: '12px 20px', color: 'var(--text-default)' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                               <Calendar size={13} style={{ color: 'var(--text-muted)' }} />
-                              {new Date(p.shiftDate).toLocaleDateString(undefined, { dateStyle: 'medium' })}
+                              {(() => { const d = p.businessDate ?? p.shiftDate; return d ? new Date(d).toLocaleDateString(undefined, { dateStyle: 'medium' }) : '—'; })()}
                             </div>
                           </td>
                           <td style={{ padding: '12px 20px', fontWeight: 600, color: 'var(--text-strong)' }}>
@@ -641,7 +641,7 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, d
       <Drawer
         isOpen={isPurchaseDrawerOpen}
         onClose={closePurchaseDrawer}
-        title="Log Supplier Fuel Intake"
+        title="Record Purchase"
       >
         {targetShiftId !== undefined && (
           <PurchaseEntryForm
@@ -674,15 +674,15 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, d
             error={formError}
             onCancel={closePurchaseDrawer}
             onSubmit={handleAddPurchase}
-            submitLabel="Record Intake"
+            submitLabel="Record Purchase"
             submittingLabel="Recording..."
             submitDisabled={submitting || !quantity || !totalAmount || !supplierId}
-            quantityLabel="Volume (Liters)"
+            quantityLabel="Quantity"
             totalAmountLabel="Total Amount (₹)"
-            productLabel="Product / Fuel Type"
+            productLabel="Product"
             invoiceLabel="Invoice Number / Reference"
             invoicePlaceholder="e.g. INV-10022"
-            notesPlaceholder="e.g. Tanker drop into Tank A"
+            notesPlaceholder="e.g. invoice ref / delivery note"
           />
         )}
       </Drawer>

@@ -544,6 +544,10 @@ export class CloudTransactionService {
     return request<any[]>(`/transactions/inventory/status?stationId=${stationId}`);
   }
 
+  async getInventoryItems(stationId: string): Promise<any[]> {
+    return request<any[]>(`/transactions/inventory/items?stationId=${stationId}`);
+  }
+
   async getInventoryMovements(stationId: string): Promise<any[]> {
     return request<any[]>(`/transactions/inventory/movements?stationId=${stationId}`);
   }

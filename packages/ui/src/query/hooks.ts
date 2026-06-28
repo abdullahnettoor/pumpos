@@ -30,6 +30,7 @@ export const queryKeys = {
   customerLedger: (customerId: string) => ['customer-ledger', customerId] as const,
   supplierLedger: (supplierId: string) => ['supplier-ledger', supplierId] as const,
   inventoryStatus: (stationId: string) => ['inventory-status', stationId] as const,
+  inventoryItems: (stationId: string) => ['inventory-items', stationId] as const,
   inventoryMovements: (stationId: string) => ['inventory-movements', stationId] as const,
   inventoryVariances: (stationId: string) => ['inventory-variances', stationId] as const,
   dssr: (stationId: string, date: string) => ['dssr', stationId, date] as const,
@@ -106,6 +107,15 @@ export function useInventoryStatus(stationId: string | null | undefined, options
   });
 }
 
+export function useInventoryItems(stationId: string | null | undefined, options?: Options<any[]>) {
+  return useQuery({
+    queryKey: queryKeys.inventoryItems(stationId ?? ''),
+    queryFn: () => txService.getInventoryItems(stationId!),
+    enabled: !!stationId,
+    ...options,
+  });
+}
+
 export function useInventoryMovements(stationId: string | null | undefined, options?: Options<any[]>) {
   return useQuery({
     queryKey: queryKeys.inventoryMovements(stationId ?? ''),
@@ -158,6 +168,7 @@ export function useInvalidateOperational() {
     qc.invalidateQueries({ queryKey: ['customers'] });
     if (stationId) {
       qc.invalidateQueries({ queryKey: ['inventory-status', stationId] });
+      qc.invalidateQueries({ queryKey: ['inventory-items', stationId] });
       qc.invalidateQueries({ queryKey: ['inventory-movements', stationId] });
       qc.invalidateQueries({ queryKey: ['inventory-variances', stationId] });
     }

@@ -3,13 +3,13 @@ import type { ColumnDef } from '@tanstack/react-table';
 import { Database, RefreshCw, AlertTriangle, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import { PageLayout } from './primitives/PageLayout.js';
 import { DataTable } from './primitives/DataTable.js';
-import { useInventoryStatus, useInventoryMovements, useInventoryVariances } from '../query/hooks.js';
+import { useInventoryStatus, useInventoryItems, useInventoryMovements, useInventoryVariances } from '../query/hooks.js';
 
 interface InventoryListProps {
   selectedStation: any | null;
 }
 
-type TabType = 'tanks' | 'movements' | 'variances';
+type TabType = 'tanks' | 'items' | 'movements' | 'variances';
 
 const fmtL = (n: number) => `${Number(n).toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} L`;
 const fmtDate = (s?: string) =>
@@ -71,17 +71,40 @@ const varianceColumns: ColumnDef<any, any>[] = [
   { accessorKey: 'reason', header: 'Reason', cell: ({ getValue }) => <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>{(getValue() as string) ?? 'Reconciliation run'}</span> },
 ];
 
+const itemColumns: ColumnDef<any, any>[] = [
+  { accessorKey: 'name', header: 'Product', cell: ({ row }) => <span style={{ fontWeight: 600, color: 'var(--text-strong)' }}>{row.original.name}</span> },
+  { accessorKey: 'code', header: 'Code', cell: ({ getValue }) => <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', fontSize: '12px' }}>{(getValue() as string) ?? '—'}</span> },
+  { accessorKey: 'productType', header: 'Type', cell: ({ getValue }) => <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>{(getValue() as string) ?? '—'}</span> },
+  { accessorKey: 'unit', header: 'Unit', cell: ({ getValue }) => <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>{(getValue() as string) ?? '—'}</span> },
+  {
+    accessorKey: 'quantity',
+    header: 'On Hand',
+    cell: ({ row }) => {
+      const q = Number(row.original.quantity);
+      const low = q <= 0;
+      return (
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontFamily: 'var(--font-mono)', fontWeight: 600, color: low ? 'var(--state-danger-fg)' : 'var(--text-strong)' }}>
+          {q.toLocaleString('en-IN', { maximumFractionDigits: 2 })} {row.original.unit ?? ''}
+          {low && <AlertTriangle size={12} style={{ color: 'var(--state-warning-fg)' }} />}
+        </span>
+      );
+    },
+  },
+];
+
 export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation }) => {
   const [activeTab, setActiveTab] = useState<TabType>('tanks');
   const stationId = selectedStation?.id ?? null;
 
   const tanksQ = useInventoryStatus(stationId);
+  const itemsQ = useInventoryItems(stationId);
   const movementsQ = useInventoryMovements(stationId);
   const variancesQ = useInventoryVariances(stationId);
 
-  const refreshing = tanksQ.isFetching || movementsQ.isFetching || variancesQ.isFetching;
+  const refreshing = tanksQ.isFetching || itemsQ.isFetching || movementsQ.isFetching || variancesQ.isFetching;
   const refresh = () => {
     tanksQ.refetch();
+    itemsQ.refetch();
     movementsQ.refetch();
     variancesQ.refetch();
   };
@@ -120,6 +143,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation })
         toolbar={
           <div style={{ display: 'flex', gap: 'var(--space-6)', borderBottom: '1px solid var(--border-soft)', width: '100%' }}>
             <button style={tabBtn('tanks')} onClick={() => setActiveTab('tanks')}>Tank Status</button>
+            <button style={tabBtn('items')} onClick={() => setActiveTab('items')}>Merchandise Stock</button>
             <button style={tabBtn('movements')} onClick={() => setActiveTab('movements')}>Stock Movements</button>
             <button style={tabBtn('variances')} onClick={() => setActiveTab('variances')}>Physical Reconciliations</button>
           </div>
@@ -165,6 +189,18 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation })
               })}
             </div>
           )
+        )}
+
+        {activeTab === 'items' && (
+          <DataTable
+            columns={itemColumns}
+            data={itemsQ.data}
+            isLoading={itemsQ.isLoading}
+            error={itemsQ.error as Error | null}
+            emptyMessage="No merchandise products configured. Add non-fuel products in Station Overview → Products."
+            getRowId={(r: any) => r.productId}
+            initialSorting={[{ id: 'name', desc: false }]}
+          />
         )}
 
         {activeTab === 'movements' && (

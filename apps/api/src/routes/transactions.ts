@@ -621,6 +621,39 @@ transactionsRouter.get('/inventory/status', async (c) => {
   return c.json({ success: true, data: enriched });
 });
 
+transactionsRouter.get('/inventory/items', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  const stationId = c.req.query('stationId');
+  if (!stationId) return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Missing stationId' } }, 400);
+  if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId })) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+  }
+  // Merchandise (non-fuel) stock-on-hand. Item products are org-scoped (no tank);
+  // quantity = sum of all stock movements for the product (tankId is null for items).
+  const rows = await db
+    .select({
+      productId: schema.products.id,
+      name: schema.products.name,
+      code: schema.products.code,
+      unit: schema.products.unit,
+      productType: schema.products.productType,
+      quantity: sql<string>`COALESCE((SELECT SUM(sm.quantity) FROM stock_movements sm WHERE sm.product_id = ${schema.products.id}), 0)`,
+    })
+    .from(schema.products)
+    .where(
+      and(
+        eq(schema.products.organizationId, user.organizationId),
+        eq(schema.products.inventoryType, 'ITEM'),
+        eq(schema.products.isActive, true),
+      ),
+    );
+  return c.json({
+    success: true,
+    data: rows.map((r) => ({ ...r, quantity: Number(r.quantity) })),
+  });
+});
+
 transactionsRouter.get('/inventory/movements', async (c) => {
   const db = c.var.db;
   const user = c.var.user;
