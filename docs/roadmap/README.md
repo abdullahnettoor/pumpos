@@ -1,0 +1,23 @@
+# PumpOS Roadmap
+
+Detailed implementation plans for the post-MVP phases. Each phase is independently
+shippable and extends existing domain entities (per `AGENTS.md`) rather than redesigning core.
+
+## Phase index
+| Phase | Theme | Status | Depends on |
+|---|---|---|---|
+| [R](phase-R-reports-pdf.md) | Reports & PDF hardening | In progress | — |
+| [L](phase-L-ledger.md) | Ledger / money visibility | Planned | R (PDF export reuse) |
+| [F](phase-F-financials.md) | Financials / P&L / COGS | Planned | L |
+| [U](phase-U-ui-uplift.md) | UI uplift & consistency | Planned | — |
+| [O](phase-O-offline-sync.md) | Offline & sync (desktop) | Future | — |
+| [X](phase-X-expansion.md) | Expansion modules | Future | core stable |
+
+## Suggested sequence
+R (finish) → L → F1–F2 → U → O → X. R and U can run in parallel with L.
+
+## Principles
+- `business_day_id` universal anchor; `shift_id` only when cash drawer involved.
+- Snapshots immutable; reports derive from snapshots/events/operational records.
+- Multi-tenant: every table has `organization_id`, RLS mandatory.
+- Extend entities; never duplicate validation; UI: list → drawer → edit.
