@@ -6,6 +6,7 @@
 export type ShiftSummarySection =
   | 'header'
   | 'meta'
+  | 'kpis'
   | 'nozzles'
   | 'handovers'
   | 'collections'
@@ -21,9 +22,21 @@ export interface ReportConfig {
 }
 
 export const DEFAULT_SHIFT_SUMMARY_CONFIG: ReportConfig = {
-  sections: ['header', 'meta', 'nozzles', 'handovers', 'variance', 'signatures'],
+  sections: ['header', 'meta', 'kpis', 'nozzles', 'handovers', 'variance', 'signatures'],
   showLogo: true,
   paper: 'A4',
+};
+
+// Design-system palette (mirrors packages/ui/src/index.css).
+const C = {
+  green: '#1F6A53',
+  ink: '#18201A',
+  body: '#2B342D',
+  muted: '#5E6A61',
+  line: '#D9DED6',
+  surfaceAlt: '#F1F3EF',
+  danger: '#9F3F36',
+  amber: '#8A6116',
 };
 
 const inr = (n: any) => `Rs. ${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -31,11 +44,28 @@ const vol = (n: any) => `${Number(n || 0).toLocaleString('en-IN', { minimumFract
 
 type Block = Record<string, unknown>;
 
+const sectionHeading = (t: string): Block => ({ text: t.toUpperCase(), style: 'h2', margin: [0, 14, 0, 6] });
+const kpiBox = (label: string, value: string, color = C.ink): Block => ({
+  table: { widths: ['*'], body: [[{ text: label.toUpperCase(), style: 'kpiLabel' }], [{ text: value, color, style: 'kpiValue' }]] },
+  layout: { hLineWidth: () => 0, vLineWidth: () => 0, fillColor: () => C.surfaceAlt, paddingLeft: () => 8, paddingRight: () => 8, paddingTop: () => 6, paddingBottom: () => 6 },
+});
+
+const zebra = (_cols: number) => ({
+  fillColor: (rowIndex: number) => (rowIndex === 0 ? C.green : rowIndex % 2 === 0 ? C.surfaceAlt : null),
+  hLineWidth: (i: number, node: any) => (i === 0 || i === node.table.body.length ? 0.5 : 0),
+  vLineWidth: () => 0,
+  hLineColor: () => C.line,
+  paddingTop: () => 5, paddingBottom: () => 5, paddingLeft: () => 8, paddingRight: () => 8,
+});
+
 const builders: Record<ShiftSummarySection, (s: any, cfg: ReportConfig) => Block[]> = {
   header: (_s, cfg) => [
-    { text: cfg.stationName || 'PumpOS', style: 'brand', alignment: 'center' },
-    { text: 'SHIFT SUMMARY RECORD', style: 'title', alignment: 'center' },
-    { text: 'Authoritative Operational Snapshot', style: 'muted', alignment: 'center', margin: [0, 0, 0, 12] },
+    {
+      table: { widths: ['*'], body: [[{ text: cfg.stationName || 'PumpOS', style: 'brand' }], [{ text: 'SHIFT SUMMARY RECORD', style: 'title' }]] },
+      layout: { hLineWidth: () => 0, vLineWidth: () => 0, fillColor: () => C.green, paddingLeft: () => 16, paddingRight: () => 16, paddingTop: () => 12, paddingBottom: () => 12 },
+      margin: [0, 0, 0, 4],
+    },
+    { text: 'Authoritative operational snapshot', style: 'muted', margin: [0, 0, 0, 10] },
   ],
   meta: (s) => [
     {
@@ -44,71 +74,67 @@ const builders: Record<ShiftSummarySection, (s: any, cfg: ReportConfig) => Block
         { text: [{ text: 'DURATION\n', style: 'label' }, { text: `${fmtTime(s.openedAt)} – ${fmtTime(s.closedAt)}`, style: 'val' }] },
         { text: [{ text: 'RECONCILED BY\n', style: 'label' }, { text: s.closedByName || s.closedBy || '—', style: 'val' }] },
       ],
-      margin: [0, 0, 0, 12],
+      columnGap: 12, margin: [0, 0, 0, 4],
+    },
+  ],
+  kpis: (s) => [
+    {
+      columns: [
+        kpiBox('Total Volume', vol(s.totalVolumeSold), C.green),
+        kpiBox('Expected Cash', inr(s.expectedCash)),
+        kpiBox('Variance', inr(s.cashVariance), Number(s.cashVariance) < 0 ? C.danger : C.green),
+      ],
+      columnGap: 8, margin: [0, 10, 0, 4],
     },
   ],
   nozzles: (s) => [
-    { text: 'NOZZLE RECONCILIATION & VOLUME SOLD', style: 'h2' },
+    sectionHeading('Nozzle Reconciliation & Volume Sold'),
     {
       table: {
-        headerRows: 1,
-        widths: ['auto', '*', 'auto', 'auto', 'auto'],
+        headerRows: 1, widths: ['auto', '*', 'auto', 'auto', 'auto'],
         body: [
-          ['Nozzle', 'Product', 'Opening', 'Closing', 'Volume'].map((t) => ({ text: t, style: 'th' })),
+          ['Nozzle', 'Product', 'Opening', 'Closing', 'Volume'].map((t, i) => ({ text: t, style: 'th', alignment: i > 1 ? 'right' : 'left' })),
           ...(s.nozzleReadings || []).map((r: any) => [
-            { text: r.nozzleName || r.nozzleNumber || '', style: 'td' },
+            { text: r.nozzleName || r.nozzleNumber || '', style: 'tdStrong' },
             { text: r.productName || '', style: 'td' },
             { text: Number(r.openingReading ?? r.opening ?? 0).toFixed(3), style: 'tdr' },
             { text: Number(r.closingReading ?? r.closing ?? 0).toFixed(3), style: 'tdr' },
-            { text: vol(r.volume ?? r.volumeSold), style: 'tdr' },
+            { text: vol(r.volume ?? r.volumeSold), style: 'tdrb' },
           ]),
-          [{ text: 'TOTAL FUEL SOLD', colSpan: 4, style: 'tdb' }, {}, {}, {}, { text: vol(s.totalVolumeSold), style: 'tdb' }],
+          [{ text: 'TOTAL FUEL SOLD', colSpan: 4, style: 'tdTotal' }, {}, {}, {}, { text: vol(s.totalVolumeSold), style: 'tdrTotal' }],
         ],
       },
-      layout: 'lightHorizontalLines',
-      margin: [0, 0, 0, 12],
+      layout: zebra(5),
     },
   ],
   handovers: (s) => [
-    { text: 'ATTENDANT HANDOVERS', style: 'h2' },
+    sectionHeading('Attendant Handovers'),
     {
       table: {
-        headerRows: 1,
-        widths: ['*', 'auto', 'auto', 'auto'],
+        headerRows: 1, widths: ['*', 'auto', 'auto', 'auto'],
         body: [
-          ['Attendant', 'Cash', 'Card/UPI', 'Credit'].map((t) => ({ text: t, style: 'th' })),
+          ['Attendant', 'Cash', 'Card/UPI', 'Credit'].map((t, i) => ({ text: t, style: 'th', alignment: i ? 'right' : 'left' })),
           ...(s.handovers || []).map((h: any) => [
-            { text: h.attendantName || '', style: 'td' },
+            { text: h.attendantName || '', style: 'tdStrong' },
             { text: inr(h.cashHandedOver), style: 'tdr' },
             { text: inr((h.cardHandedOver || 0) + (h.upiHandedOver || 0)), style: 'tdr' },
             { text: inr(h.creditHandedOver), style: 'tdr' },
           ]),
         ],
       },
-      layout: 'lightHorizontalLines',
-      margin: [0, 0, 0, 12],
+      layout: zebra(4),
     },
   ],
   collections: (s) => [
-    { text: 'NON-CASH PAYMENTS', style: 'h2' },
-    { columns: [{ text: `Card: ${inr(s.cardCollectionsSum)}` }, { text: `UPI: ${inr(s.upiCollectionsSum)}` }, { text: `Credit: ${inr(s.creditSalesSum)}` }], margin: [0, 0, 0, 12] },
+    sectionHeading('Non-Cash Payments'),
+    { columns: [kpiBox('Card', inr(s.cardCollectionsSum)), kpiBox('UPI', inr(s.upiCollectionsSum)), kpiBox('Credit', inr(s.creditSalesSum))], columnGap: 8 },
   ],
-  expenses: (s) => [
-    { text: 'PETTY EXPENSES', style: 'h2' },
-    { text: inr(s.cashExpensesSum), margin: [0, 0, 0, 12] },
-  ],
+  expenses: (s) => [sectionHeading('Petty Expenses'), kpiBox('Cash Expenses', inr(s.cashExpensesSum), C.amber)],
   variance: (s) => [
-    {
-      columns: [
-        { text: [{ text: 'EXPECTED CASH\n', style: 'label' }, { text: inr(s.expectedCash), style: 'val' }] },
-        { text: [{ text: 'CLOSING CASH\n', style: 'label' }, { text: inr(s.closingCash), style: 'val' }] },
-        { text: [{ text: 'VARIANCE\n', style: 'label' }, { text: inr(s.cashVariance), style: 'val' }] },
-      ],
-      margin: [0, 8, 0, 16],
-    },
+    { columns: [kpiBox('Opening Cash', inr(s.openingCash)), kpiBox('Closing Cash', inr(s.closingCash)), kpiBox('Variance', inr(s.cashVariance), Number(s.cashVariance) < 0 ? C.danger : C.green)], columnGap: 8, margin: [0, 12, 0, 4] },
   ],
   signatures: () => [
-    { columns: [{ text: '________________\nOperator', style: 'muted', alignment: 'center' }, { text: '________________\nManager', style: 'muted', alignment: 'center' }], margin: [0, 24, 0, 0] },
+    { columns: [{ text: '___________________\nOperator', style: 'sign' }, { text: '___________________\nManager', style: 'sign' }], columnGap: 40, margin: [0, 36, 0, 0] },
   ],
 };
 
@@ -125,20 +151,34 @@ export function buildShiftSummaryDoc(snapshot: any, config: ReportConfig = DEFAU
   }
   return {
     pageSize: config.paper,
-    pageMargins: [36, 36, 36, 36],
+    pageMargins: [40, 40, 40, 48],
+    footer: (current: number, total: number) => ({
+      columns: [
+        { text: `Generated ${new Date().toLocaleString('en-IN')}`, style: 'foot', alignment: 'left' },
+        { text: `Page ${current} of ${total}`, style: 'foot', alignment: 'right' },
+      ],
+      margin: [40, 12, 40, 0],
+    }),
     content,
     styles: {
-      brand: { fontSize: 16, bold: true, color: '#1F6A53' },
-      title: { fontSize: 14, bold: true, characterSpacing: 1 },
-      muted: { fontSize: 9, color: '#5E6A61' },
-      h2: { fontSize: 11, bold: true, margin: [0, 8, 0, 6] },
-      label: { fontSize: 8, color: '#5E6A61' },
-      val: { fontSize: 11, bold: true },
-      th: { fontSize: 9, bold: true, color: '#5E6A61' },
-      td: { fontSize: 10 },
-      tdr: { fontSize: 10, alignment: 'right' },
-      tdb: { fontSize: 10, bold: true },
+      brand: { fontSize: 15, bold: true, color: '#FFFFFF' },
+      title: { fontSize: 12, bold: true, color: '#FFFFFF', characterSpacing: 1.5, margin: [0, 3, 0, 0] },
+      muted: { fontSize: 9, color: C.muted },
+      h2: { fontSize: 10, bold: true, color: C.green, characterSpacing: 0.6 },
+      label: { fontSize: 7.5, color: C.muted, characterSpacing: 0.4 },
+      val: { fontSize: 11, bold: true, color: C.ink },
+      kpiLabel: { fontSize: 7.5, color: C.muted, characterSpacing: 0.4 },
+      kpiValue: { fontSize: 13, bold: true },
+      th: { fontSize: 8.5, bold: true, color: '#FFFFFF' },
+      td: { fontSize: 9.5, color: C.body },
+      tdStrong: { fontSize: 9.5, bold: true, color: C.ink },
+      tdr: { fontSize: 9.5, color: C.body, alignment: 'right' },
+      tdrb: { fontSize: 9.5, bold: true, color: C.ink, alignment: 'right' },
+      tdTotal: { fontSize: 9.5, bold: true, color: C.ink },
+      tdrTotal: { fontSize: 10, bold: true, color: C.green, alignment: 'right' },
+      sign: { fontSize: 9, color: C.muted, alignment: 'center' },
+      foot: { fontSize: 7.5, color: C.muted },
     },
-    defaultStyle: { fontSize: 10 },
+    defaultStyle: { fontSize: 10, color: C.body },
   };
 }
