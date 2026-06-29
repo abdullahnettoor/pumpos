@@ -4,6 +4,7 @@ import { useShiftStatus, useInvalidateOperational } from '../../query/hooks.js';
 import { StatusBadge } from '../StatusBadge.js';
 import { SyncIndicator } from '../SyncIndicator.js';
 import { LoadingSpinner } from '../LoadingSpinner.js';
+import { SkeletonGrid } from '../primitives/Skeleton.js';
 import { Station } from '@pump/shared';
 import { Play, Plus, FileText, Unlock, AlertTriangle, Lock } from 'lucide-react';
 
@@ -52,7 +53,15 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
 
   if (loading) {
     return (
-      <LoadingSpinner text="Loading operational summary metrics..." />
+      <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '24px', fontFamily: 'var(--font-sans)' }}>
+        <div>
+          <h1 style={{ fontSize: '20px', fontWeight: 600, color: 'var(--text-strong)' }}>Welcome back, {userName}</h1>
+          <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '2px' }}>
+            Station Control Center: <strong style={{ color: 'var(--text-default)' }}>{selectedStation.name}</strong> ({selectedStation.code})
+          </p>
+        </div>
+        <SkeletonGrid count={3} />
+      </div>
     );
   }
 

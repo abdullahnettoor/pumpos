@@ -102,10 +102,10 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation })
   const [activeTab, setActiveTab] = useState<TabType>('tanks');
   const stationId = selectedStation?.id ?? null;
 
-  const tanksQ = useInventoryStatus(stationId, { refetchOnMount: 'always' });
-  const itemsQ = useInventoryItems(stationId, { refetchOnMount: 'always' });
-  const movementsQ = useInventoryMovements(stationId, { refetchOnMount: 'always' });
-  const variancesQ = useInventoryVariances(stationId, { refetchOnMount: 'always' });
+  const tanksQ = useInventoryStatus(stationId);
+  const itemsQ = useInventoryItems(stationId);
+  const movementsQ = useInventoryMovements(stationId);
+  const variancesQ = useInventoryVariances(stationId);
 
   const refreshing = tanksQ.isFetching || itemsQ.isFetching || movementsQ.isFetching || variancesQ.isFetching;
   const refresh = () => {
