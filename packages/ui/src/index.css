@@ -1111,14 +1111,18 @@ a:focus-visible {
   .print-area * {
     visibility: visible;
   }
-  /* Pull the report to the page origin and let it fill the printable width. */
+  /* Pull the report to the page origin and let it fill the printable width.
+     `fixed` anchors to the page (not an inset ancestor), so the report uses the
+     full content width regardless of the app shell layout. */
   .print-area {
-    position: absolute;
+    position: fixed;
     left: 0;
     top: 0;
-    width: 100%;
-    max-width: none !important;
+    right: 0;
+    width: 100% !important;
+    max-width: 100% !important;
     margin: 0 !important;
+    padding: 0 !important;
     border: none !important;
     box-shadow: none !important;
     border-radius: 0 !important;
