@@ -54,6 +54,7 @@ const App: React.FC = () => {
   const [userName, setUserName] = useState<string>('');
   const [profileError, setProfileError] = useState<string | null>(null);
   const lastUserIdRef = useRef<string | null>(null);
+  const resolvedRef = useRef(false);
 
   useEffect(() => {
     // 1. Check current active session
@@ -79,7 +80,8 @@ const App: React.FC = () => {
       setAuthToken(currentSession.access_token);
 
       // If it's the same user session and we've already resolved permissions, skip resetting/re-fetching
-      if (isSameUser && userRole) {
+      // (uses a ref, not the captured `userRole`, to avoid a stale-closure flash on tab refocus).
+      if (isSameUser && resolvedRef.current) {
         return;
       }
 
@@ -92,6 +94,7 @@ const App: React.FC = () => {
         // Fetch session context from our backend (verifies JWT, gets user role & name)
         const sessionData = await stationService.getCurrentSession();
         setUserRole(sessionData.user.role);
+        resolvedRef.current = true;
         setUserName(sessionData.user.fullName || sessionData.user.email);
 
         // Fetch station setup status
@@ -114,6 +117,7 @@ const App: React.FC = () => {
         console.error('Failed to resolve backend profile:', err);
         setProfileError(err.message || 'Verification failed. Profile not found.');
         setUserRole(null);
+        resolvedRef.current = false;
         lastUserIdRef.current = null;
       } finally {
         setLoading(false);
@@ -121,6 +125,7 @@ const App: React.FC = () => {
     } else {
       // Clear token and states
       lastUserIdRef.current = null;
+      resolvedRef.current = false;
       setAuthToken('');
       setStations([]);
       setSelectedStation(null);

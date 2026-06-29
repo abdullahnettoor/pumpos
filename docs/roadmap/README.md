@@ -7,6 +7,7 @@ shippable and extends existing domain entities (per `AGENTS.md`) rather than red
 | Phase | Theme | Status | Depends on |
 |---|---|---|---|
 | [R](phase-R-reports-pdf.md) | Reports & PDF hardening | In progress | — |
+| [P](phase-P-performance.md) | Performance & caching | Planned (instrumentation done) | — |
 | [L](phase-L-ledger.md) | Ledger / money visibility | Planned | R (PDF export reuse) |
 | [F](phase-F-financials.md) | Financials / P&L / COGS | Planned | L |
 | [U](phase-U-ui-uplift.md) | UI uplift & consistency | Planned | — |
