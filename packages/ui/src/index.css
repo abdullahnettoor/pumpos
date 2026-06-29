@@ -1100,36 +1100,35 @@ a:focus-visible {
 
 /* ==================== Print (Save as PDF) ====================
    Scopes printing to the element marked `.print-area` (e.g. a Shift Summary
-   or DSSR card) so the app chrome (sidebar, top bar, toolbars) is excluded.
-   The browser/desktop-webview "Save as PDF" then captures only that report. */
+   or DSSR card). The app chrome (sidebar, top bar, toolbars) is dropped and the
+   fixed-height scroll containers are released so the report flows + paginates
+   full-width. */
 @media print {
-  /* Hide the whole app, then reveal only the report subtree. */
-  body * {
-    visibility: hidden;
+  /* Drop app chrome + any explicitly excluded controls. */
+  .no-print {
+    display: none !important;
   }
-  .print-area,
-  .print-area * {
-    visibility: visible;
+  /* Release the 100vh / overflow:hidden shell so content can paginate. */
+  .app-shell {
+    display: block !important;
+    height: auto !important;
+    width: auto !important;
+    overflow: visible !important;
   }
-  /* Pull the report to the page origin and let it fill the printable width.
-     `fixed` anchors to the page (not an inset ancestor), so the report uses the
-     full content width regardless of the app shell layout. */
+  .app-shell__main {
+    height: auto !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    position: static !important;
+  }
+  /* The report fills the printable width (inside @page margins). */
   .print-area {
-    position: fixed;
-    left: 0;
-    top: 0;
-    right: 0;
     width: 100% !important;
     max-width: 100% !important;
     margin: 0 !important;
-    padding: 0 !important;
     border: none !important;
     box-shadow: none !important;
     border-radius: 0 !important;
-  }
-  /* Anything tagged no-print is dropped even inside the report (e.g. action buttons). */
-  .no-print {
-    display: none !important;
   }
   /* Preserve the design-system colours (badges, surfaces) in print/PDF. */
   html,
@@ -1140,6 +1139,6 @@ a:focus-visible {
     print-color-adjust: exact;
   }
   @page {
-    margin: 14mm;
+    margin: 12mm;
   }
 }

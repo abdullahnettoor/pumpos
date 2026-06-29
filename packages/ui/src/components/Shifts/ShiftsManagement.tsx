@@ -817,7 +817,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     : 'idle';
 
   const renderShiftSubTabs = () => (
-    <div className="shift-subtabs">
+    <div className="shift-subtabs no-print">
       <button
         type="button"
         className={`shift-subtab${shiftSubTab === 'today' ? ' shift-subtab--active' : ''}`}

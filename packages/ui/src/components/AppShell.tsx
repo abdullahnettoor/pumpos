@@ -177,6 +177,7 @@ export const AppShell: React.FC<AppShellProps> = ({
 
   return (
     <div
+      className="app-shell"
       style={{
         display: 'flex',
         height: '100vh',
@@ -189,6 +190,7 @@ export const AppShell: React.FC<AppShellProps> = ({
     >
       {/* Sidebar Rail */}
       <aside
+        className="no-print"
         style={{
           width: collapsed ? '72px' : '220px',
           backgroundColor: 'var(--bg-surface-alt)',
@@ -355,6 +357,7 @@ export const AppShell: React.FC<AppShellProps> = ({
         ) : null}
         {/* Top Header details */}
         <header
+          className="no-print"
           style={{
             height: '56px',
             backgroundColor: 'var(--bg-surface)',
@@ -408,7 +411,7 @@ export const AppShell: React.FC<AppShellProps> = ({
         </header>
 
         {/* Content body layout */}
-        <main style={{ flex: 1, overflowY: 'auto', padding: 'var(--space-6)', position: 'relative' }}>
+        <main className="app-shell__main" style={{ flex: 1, overflowY: 'auto', padding: 'var(--space-6)', position: 'relative' }}>
           {children}
         </main>
       </div>
