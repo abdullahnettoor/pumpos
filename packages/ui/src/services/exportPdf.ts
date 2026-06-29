@@ -56,27 +56,12 @@ export async function exportReportPdf(target: HTMLElement | null, filename: stri
   await saver(bytes, name);
 }
 
-/** Vector PDF from a pdfmake docDefinition (engine-agnostic template) → routed
- *  through the same pluggable saver (web download / desktop Tauri save). */
-export async function exportDocPdf(docDefinition: any, filename: string): Promise<void> {
+/** Vector PDF from a @react-pdf/renderer document element (Flexbox + PDFKit,
+ *  no browser) → routed through the same pluggable saver. */
+export async function exportReactPdf(element: any, filename: string): Promise<void> {
   const name = filename.endsWith('.pdf') ? filename : `${filename}.pdf`;
-  const [pdfMakeMod, vfsMod] = await Promise.all([
-    import('pdfmake/build/pdfmake'),
-    import('pdfmake/build/vfs_fonts'),
-  ]);
-  const pdfMake: any = (pdfMakeMod as any).default ?? pdfMakeMod;
-  const vfs = (vfsMod as any).default ?? (vfsMod as any).pdfMake?.vfs ?? (vfsMod as any).vfs ?? vfsMod;
-  if (vfs) pdfMake.vfs = vfs;
-  pdfMake.fonts = pdfMake.fonts ?? {
-    Roboto: {
-      normal: 'Roboto-Regular.ttf',
-      bold: 'Roboto-Medium.ttf',
-      italics: 'Roboto-Italic.ttf',
-      bolditalics: 'Roboto-MediumItalic.ttf',
-    },
-  };
-  const bytes: Uint8Array = await new Promise((resolve) => {
-    pdfMake.createPdf(docDefinition).getBuffer((buf: Uint8Array) => resolve(new Uint8Array(buf)));
-  });
+  const { pdf } = await import('@react-pdf/renderer');
+  const blob: Blob = await pdf(element).toBlob();
+  const bytes = new Uint8Array(await blob.arrayBuffer());
   await saver(bytes, name);
 }
