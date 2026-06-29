@@ -6,8 +6,11 @@ import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persist
 // Query-key prefixes whose data is safe to persist across reloads (static +
 // semi-static tiers). Operational/live data and anything auth-related are never
 // persisted. Bump CACHE_BUSTER on shape changes to drop stale persisted cache.
-const PERSIST_PREFIXES = new Set(['tanks', 'products', 'customers', 'suppliers', 'expense-categories']);
-const CACHE_BUSTER = 'v1';
+const PERSIST_PREFIXES = new Set([
+  'tanks', 'products', 'customers', 'suppliers', 'expense-categories',
+  'stations', 'dispensers', 'nozzles', 'users', 'shift-templates',
+]);
+const CACHE_BUSTER = 'v2';
 
 /**
  * Shared QueryClient factory. App shells (web, desktop) create one client and

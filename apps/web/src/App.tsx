@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { 
   AppShell, 
   Login, 
@@ -12,6 +13,7 @@ import {
   InventoryList,
   ReportsOverview,
   CloudStationService, 
+  queryKeys,
   setApiBaseUrl,
   setAuthToken, 
   supabase 
@@ -66,6 +68,7 @@ export const App: React.FC = () => {
   const [profileError, setProfileError] = useState<string | null>(null);
   const lastUserIdRef = useRef<string | null>(null);
   const resolvedRef = useRef(false);
+  const qc = useQueryClient();
 
   useEffect(() => {
     // 1. Check current active session
@@ -108,8 +111,13 @@ export const App: React.FC = () => {
         resolvedRef.current = true;
         setUserName(sessionData.user.fullName || sessionData.user.email);
 
-        // Fetch station setup status
-        const list = await stationService.getStations();
+        // Stations rarely change — serve from the shared cache (+ localStorage) on
+        // repeat session resolves instead of re-hitting /setup/stations every time.
+        const list = await qc.fetchQuery({
+          queryKey: queryKeys.stations(),
+          queryFn: () => stationService.getStations(),
+          staleTime: 24 * 60 * 60_000,
+        });
         setStations(list);
         if (list.length > 0) {
           const active = list.find((station) => station.onboardingStatus === 'READY_FOR_OPERATIONS') || list[0];
@@ -158,7 +166,9 @@ export const App: React.FC = () => {
 
   const handleOnboardingComplete = async (completedStation: Station) => {
     try {
+      await qc.invalidateQueries({ queryKey: queryKeys.stations() });
       const list = await stationService.getStations();
+      qc.setQueryData(queryKeys.stations(), list);
       setStations(list);
       setSelectedStation(list.find((station) => station.id === completedStation.id) || completedStation);
     } catch (err) {

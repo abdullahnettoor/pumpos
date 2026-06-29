@@ -4,6 +4,11 @@ import {
   CloudTransactionService,
   CloudProductService,
   CloudTankService,
+  CloudStationService,
+  CloudDispenserService,
+  CloudNozzleService,
+  CloudUserAssignmentService,
+  CloudShiftTemplateService,
 } from '../services/cloud.js';
 
 /**
@@ -18,6 +23,11 @@ const shiftService = new CloudShiftService();
 const txService = new CloudTransactionService();
 const productSvc = new CloudProductService();
 const tankSvc = new CloudTankService();
+const stationSvc = new CloudStationService();
+const dispenserSvc = new CloudDispenserService();
+const nozzleSvc = new CloudNozzleService();
+const userSvc = new CloudUserAssignmentService();
+const templateSvc = new CloudShiftTemplateService();
 
 export const queryKeys = {
   shiftStatus: (stationId: string, lite = false) => ['shift-status', stationId, lite] as const,
@@ -38,6 +48,11 @@ export const queryKeys = {
   expenseCategories: () => ['expense-categories'] as const,
   products: () => ['products'] as const,
   tanks: (stationId: string) => ['tanks', stationId] as const,
+  stations: () => ['stations'] as const,
+  dispensers: (stationId: string) => ['dispensers', stationId] as const,
+  nozzles: (stationId: string) => ['nozzles', stationId] as const,
+  users: () => ['users'] as const,
+  shiftTemplates: () => ['shift-templates'] as const,
 } as const;
 
 type Options<T> = Omit<UseQueryOptions<T, Error, T, readonly unknown[]>, 'queryKey' | 'queryFn'>;
@@ -57,6 +72,38 @@ export const TIER = {
 
 export function useProducts(options?: Options<any[]>) {
   return useQuery({ queryKey: queryKeys.products(), queryFn: () => productSvc.listProducts(), ...TIER.semi, ...options });
+}
+
+export function useStations(options?: Options<any[]>) {
+  return useQuery({ queryKey: queryKeys.stations(), queryFn: () => stationSvc.getStations(), ...TIER.static, ...options });
+}
+
+export function useUsers(options?: Options<any[]>) {
+  return useQuery({ queryKey: queryKeys.users(), queryFn: () => userSvc.listUsers(), ...TIER.static, ...options });
+}
+
+export function useDispensers(stationId: string | null | undefined, options?: Options<any[]>) {
+  return useQuery({
+    queryKey: queryKeys.dispensers(stationId ?? ''),
+    queryFn: () => dispenserSvc.listDispensers(stationId!),
+    enabled: !!stationId,
+    ...TIER.static,
+    ...options,
+  });
+}
+
+export function useNozzles(stationId: string | null | undefined, options?: Options<any[]>) {
+  return useQuery({
+    queryKey: queryKeys.nozzles(stationId ?? ''),
+    queryFn: () => nozzleSvc.listNozzles(stationId!),
+    enabled: !!stationId,
+    ...TIER.static,
+    ...options,
+  });
+}
+
+export function useShiftTemplates(options?: Options<any[]>) {
+  return useQuery({ queryKey: queryKeys.shiftTemplates(), queryFn: () => templateSvc.listTemplates(), ...TIER.static, ...options });
 }
 
 export function useTanks(stationId: string | null | undefined, options?: Options<any[]>) {

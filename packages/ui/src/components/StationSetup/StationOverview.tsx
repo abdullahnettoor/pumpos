@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { CloudStationService } from '../../services/cloud.js';
+import { queryKeys } from '../../query/hooks.js';
 import { Station } from '@pump/shared';
 import { ProductsCatalog } from './ProductsCatalog.js';
 import { FuelPricingPanel } from './FuelPricingPanel.js';
@@ -23,6 +25,7 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
 }) => {
   const [stationsList, setStationsList] = useState<Station[]>([]);
   const [loading, setLoading] = useState(true);
+  const qc = useQueryClient();
   const [editing, setEditing] = useState(false);
   const [activeTab, setActiveTab] = useState<'general' | 'products' | 'pricing' | 'tanks' | 'dispensers' | 'terminals' | 'shifts' | 'roster'>('general');
 
@@ -49,10 +52,17 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
     }
   }, [selectedStation]);
 
-  const loadStations = async () => {
+  const loadStations = async (force = false) => {
     try {
       setLoading(true);
-      const list = await stationService.getStations();
+      if (force) await qc.invalidateQueries({ queryKey: queryKeys.stations() });
+      // Shared cache: repeat visits within staleTime serve from cache (+ localStorage)
+      // instead of re-hitting /setup/stations on every mount.
+      const list = await qc.fetchQuery({
+        queryKey: queryKeys.stations(),
+        queryFn: () => stationService.getStations(),
+        staleTime: 24 * 60 * 60_000,
+      });
       setStationsList(list);
       if (list.length > 0 && !selectedStation) {
         onStationSelected(list[0]);
@@ -85,7 +95,7 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
       });
       onStationSelected(updated);
       setEditing(false);
-      loadStations();
+      loadStations(true);
     } catch (err: any) {
       alert(err.message);
     }

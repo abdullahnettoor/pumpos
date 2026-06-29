@@ -64,6 +64,32 @@ Tasks:
 - Confirm indexes on hot filters (`shift_id`, `station_id`, `business_day_id`) — partially in
   migration 0002. Add any missing. Reuse one Hyperdrive connection per request (already via middleware).
 
+## P7 — Route static/semi data through the cache (audit)
+Several static/semi endpoints bypass TanStack Query (imperative `service.xxx()` calls) so the cache
+never applies — they hit the API on every visit. Migrate these to query hooks + persistence.
+
+| Data | Tier | Has hook? | Imperative call sites to migrate |
+|---|---|---|---|
+| stations (`/setup/stations`) | static | **no** (add `useStations`) | App.tsx (web/desktop), StationOverview, UserRolesAssignment |
+| session (`/session`) | semi | **no** (cache via fetchQuery) | App.tsx (web/desktop) |
+| dispensers | static | **no** (add `useDispensers`) | DispensersList |
+| nozzles | static | **no** (add `useNozzles`) | DispensersList |
+| users | static | **no** (add `useUsers`) | UserRolesAssignment, ShiftsManagement |
+| shift templates | static | **no** (add `useShiftTemplates`) | (setup) |
+| products | semi | yes (`useProducts`) | DispensersList, ProductsCatalog, TanksGrid, ShiftsManagement×2 |
+| tanks | static | yes (`useTanks`) | DispensersList, TanksGrid, ShiftsManagement |
+| customers | semi | yes (`useCustomers`) | ShiftsManagement×3, ShiftTransactionsPanel |
+| suppliers | semi | yes (`useSuppliers`) | ShiftsManagement, ShiftTransactionsPanel |
+| expense categories | semi | yes (`useExpenseCategories`) | ShiftsManagement, ShiftTransactionsPanel |
+
+Tasks:
+- Add missing keys/hooks: `stations`, `dispensers`, `nozzles`, `users`, `shift-templates`.
+- Add static keys to `PERSIST_PREFIXES`.
+- Migrate call sites to the hooks; in `App.tsx` (needs list synchronously for routing) use
+  `queryClient.fetchQuery(key, fn, { staleTime })` so repeat session resolves hit cache.
+- Note: `ShiftsManagement` loads lookups imperatively on drawer-open — convert to `queryClient
+  .ensureQueryData` or prefetch so they reuse cache.
+
 ---
 
 ## Measurement protocol
