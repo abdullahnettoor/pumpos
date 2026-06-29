@@ -474,6 +474,35 @@ for inventory.
 
 ---
 
+# Data Caching & Performance
+
+Client data is cached with TanStack Query, **tiered by how often it changes**, to keep the
+app fast without ever showing same-session stale data. Apply the `pump-data-caching` skill for
+any data fetch or mutation.
+
+Tiers (see `packages/ui/src/query/hooks.ts` → `TIER`):
+
+```text
+static       (stations, tanks, dispensers, nozzles, terminals, templates, users)  → 24h, persisted
+semi         (products, customers, suppliers, expense categories)                 → 10m, persisted
+operational  (shift status, sales, collections, inventory, DSSR)                  → 15s, not persisted
+```
+
+Mandatory rules:
+
+* Read through query hooks / `ensureQueryData` with a **centralized key** — never call
+  `service.getX()` directly in a component (that bypasses the cache).
+* **Every mutation invalidates its key(s).** Setup edits invalidate their static/semi key;
+  operational writes use `useInvalidateOperational` (which also refreshes `customers` and
+  `suppliers` whose balances move).
+* Persist only static/semi (`PERSIST_PREFIXES`); bump `CACHE_BUSTER` on payload shape changes.
+* Never use `refetchOnMount: 'always'` on tiered queries.
+
+Full plan + audit: `docs/roadmap/phase-P-performance.md`. Practice + review checklist:
+`.agents/skills/pump-data-caching/SKILL.md`.
+
+---
+
 # Offline Rules
 
 Desktop supports offline mode.
