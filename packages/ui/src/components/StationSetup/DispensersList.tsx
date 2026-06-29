@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   CloudDispenserService,
   CloudTankService,
   CloudProductService,
   CloudNozzleService
 } from '../../services/cloud.js';
+import { queryKeys, TIER } from '../../query/hooks.js';
 import { DispenserUnit, Tank, Product, Nozzle } from '@pump/shared';
 import { StatusBadge } from '../StatusBadge.js';
 import { Drawer } from '../Drawer.js';
@@ -26,6 +28,7 @@ interface NozzleInput {
 }
 
 export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => {
+  const qc = useQueryClient();
   const [dispensers, setDispensers] = useState<DispenserUnit[]>([]);
   const [tanks, setTanks] = useState<Tank[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -44,15 +47,19 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
     loadData();
   }, [stationId]);
 
-  const loadData = async () => {
+  const loadData = async (force = false) => {
     if (!stationId) return;
     try {
       setLoading(true);
+      if (force) await Promise.all([
+        qc.invalidateQueries({ queryKey: queryKeys.dispensers(stationId) }),
+        qc.invalidateQueries({ queryKey: queryKeys.nozzles(stationId) }),
+      ]);
       const [duList, tankList, prodList, nozzleList] = await Promise.all([
-        dispenserService.listDispensers(stationId),
-        tankService.listTanks(stationId),
-        productService.listProducts(),
-        nozzleService.listNozzles(stationId)
+        qc.ensureQueryData({ queryKey: queryKeys.dispensers(stationId), queryFn: () => dispenserService.listDispensers(stationId), staleTime: TIER.static.staleTime }),
+        qc.ensureQueryData({ queryKey: queryKeys.tanks(stationId), queryFn: () => tankService.listTanks(stationId), staleTime: TIER.static.staleTime }),
+        qc.ensureQueryData({ queryKey: queryKeys.products(), queryFn: () => productService.listProducts(), staleTime: TIER.semi.staleTime }),
+        qc.ensureQueryData({ queryKey: queryKeys.nozzles(stationId), queryFn: () => nozzleService.listNozzles(stationId), staleTime: TIER.static.staleTime }),
       ]);
 
       setDispensers(duList);
@@ -171,7 +178,7 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
 
       setIsFormOpen(false);
       resetForm();
-      loadData();
+      loadData(true);
     } catch (err: any) {
       alert(err.message || 'Failed to create dispenser unit and nozzles');
     } finally {

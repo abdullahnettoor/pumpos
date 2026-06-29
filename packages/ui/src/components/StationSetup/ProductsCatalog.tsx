@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { CloudProductService } from '../../services/cloud.js';
+import { queryKeys, TIER } from '../../query/hooks.js';
 import { Product, PRODUCT_UNITS } from '@pump/shared';
 import { StatusBadge } from '../StatusBadge.js';
 import { Drawer } from '../Drawer.js';
@@ -8,6 +10,7 @@ const productService = new CloudProductService();
 let isSeedingFuels = false;
 
 export const ProductsCatalog: React.FC = () => {
+  const qc = useQueryClient();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -33,10 +36,11 @@ export const ProductsCatalog: React.FC = () => {
     loadProducts();
   }, []);
 
-  const loadProducts = async () => {
+  const loadProducts = async (force = false) => {
     try {
       setLoading(true);
-      const data = await productService.listProducts();
+      if (force) await qc.invalidateQueries({ queryKey: queryKeys.products() });
+      const data = await qc.ensureQueryData({ queryKey: queryKeys.products(), queryFn: () => productService.listProducts(), staleTime: TIER.semi.staleTime });
       setProducts(data);
     } catch (err) {
       console.error('Failed to load products:', err);
@@ -70,7 +74,7 @@ export const ProductsCatalog: React.FC = () => {
           isActive: true,
         });
       }
-      loadProducts();
+      loadProducts(true);
     } catch (err: any) {
       alert(err.message || 'Failed to quick add standard product');
     }
@@ -123,7 +127,7 @@ export const ProductsCatalog: React.FC = () => {
 
       resetForm();
       setIsFormOpen(false);
-      loadProducts();
+      loadProducts(true);
     } catch (err: any) {
       alert(err.message || 'Failed to save product');
     }
@@ -150,7 +154,7 @@ export const ProductsCatalog: React.FC = () => {
     if (!confirm('Are you sure you want to archive this product?')) return;
     try {
       await productService.archiveProduct(id);
-      loadProducts();
+      loadProducts(true);
     } catch (err: any) {
       alert(err.message);
     }

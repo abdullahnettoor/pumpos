@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { CloudTankService, CloudProductService } from '../../services/cloud.js';
+import { queryKeys, TIER } from '../../query/hooks.js';
 import { Tank, Product } from '@pump/shared';
 import { StatusBadge } from '../StatusBadge.js';
 import { Drawer } from '../Drawer.js';
@@ -12,6 +14,7 @@ export interface TanksGridProps {
 }
 
 export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
+  const qc = useQueryClient();
   const [tanks, setTanks] = useState<Tank[]>([]);
   const [fuelProducts, setFuelProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -31,13 +34,14 @@ export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
     loadData();
   }, [stationId]);
 
-  const loadData = async () => {
+  const loadData = async (force = false) => {
     if (!stationId) return;
     try {
       setLoading(true);
+      if (force) await qc.invalidateQueries({ queryKey: queryKeys.tanks(stationId) });
       const [tankList, prodList] = await Promise.all([
-        tankService.listTanks(stationId),
-        productService.listProducts(),
+        qc.ensureQueryData({ queryKey: queryKeys.tanks(stationId), queryFn: () => tankService.listTanks(stationId), staleTime: TIER.static.staleTime }),
+        qc.ensureQueryData({ queryKey: queryKeys.products(), queryFn: () => productService.listProducts(), staleTime: TIER.semi.staleTime }),
       ]);
       setTanks(tankList);
       const fuels = prodList.filter((p) => p.productType === 'FUEL' && p.isActive);
@@ -70,7 +74,7 @@ export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
       });
       setIsFormOpen(false);
       resetForm();
-      loadData();
+      loadData(true);
     } catch (err: any) {
       alert(err.message || 'Failed to create tank');
     }
@@ -102,7 +106,7 @@ export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
         capacity: cap,
       });
 
-      await loadData();
+      await loadData(true);
     } catch (err: any) {
       alert(err.message || 'Failed to create tank');
     } finally {

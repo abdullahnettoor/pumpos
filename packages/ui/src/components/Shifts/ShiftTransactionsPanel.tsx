@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { CloudTransactionService } from '../../services/cloud.js';
+import { useQueryClient } from '@tanstack/react-query';
+import { queryKeys, TIER } from '../../query/hooks.js';
 import { 
   Plus, 
   Coins, 
@@ -27,6 +29,7 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
   onTransactionAdded,
   isReadOnly = false,
 }) => {
+  const qc = useQueryClient();
   const [activeTab, setActiveTab] = useState<'expenses' | 'purchases' | 'collections'>('expenses');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -86,9 +89,9 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
       setError(null);
 
       const [cats, sups, custs, txs] = await Promise.all([
-        transactionService.getExpenseCategories(),
-        transactionService.getSuppliers(),
-        transactionService.getCustomers(),
+        qc.ensureQueryData({ queryKey: queryKeys.expenseCategories(), queryFn: () => transactionService.getExpenseCategories(), staleTime: TIER.semi.staleTime }),
+        qc.ensureQueryData({ queryKey: queryKeys.suppliers(true), queryFn: () => transactionService.getSuppliers(), staleTime: TIER.semi.staleTime }),
+        qc.ensureQueryData({ queryKey: queryKeys.customers(true), queryFn: () => transactionService.getCustomers(), staleTime: TIER.semi.staleTime }),
         transactionService.getShiftTransactions(shiftId),
       ]);
 

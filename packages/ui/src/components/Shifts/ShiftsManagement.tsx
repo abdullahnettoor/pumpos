@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { CloudProductService, CloudShiftService, CloudTankService, CloudTransactionService, CloudUserAssignmentService } from '../../services/cloud.js';
 import { StatusBadge } from '../StatusBadge.js';
 import { ShiftSummaryView } from './ShiftSummaryView.js';
@@ -13,7 +14,7 @@ import { NozzleReadingsGrid } from './NozzleReadingsGrid.js';
 import { ShiftTotalsSummary } from './ShiftTotalsSummary.js';
 import { OpenShiftForm } from './OpenShiftForm.js';
 import { QuickEntryDrawer } from './QuickEntryDrawer.js';
-import { useShiftStatus, useInvalidateOperational } from '../../query/hooks.js';
+import { useShiftStatus, useInvalidateOperational, queryKeys, TIER } from '../../query/hooks.js';
 import { Station } from '@pump/shared';
 import { FileText, User, Lock, AlertTriangle, Check, Fuel, Info, Play, CalendarRange, History, Clock3 } from 'lucide-react';
 import { LoadingSpinner } from '../LoadingSpinner.js';
@@ -42,6 +43,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   const stationId = selectedStation?.id ?? null;
   const statusQ = useShiftStatus(stationId, false, { refetchOnWindowFocus: false });
   const invalidateOperational = useInvalidateOperational();
+  const qc = useQueryClient();
   const data = statusQ.data ?? null;
   const loading = statusQ.isLoading;
   const error = statusQ.error as Error | null;
@@ -89,7 +91,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     setHandoverDrawerOpen(true);
     // Load credit-eligible customers for the in-handover fuel-on-credit section.
     try {
-      const custList = await transactionService.getCustomers(true);
+      const custList = await qc.ensureQueryData({ queryKey: queryKeys.customers(true), queryFn: () => transactionService.getCustomers(true), staleTime: TIER.semi.staleTime });
       setHandoverCreditCustomers((custList || []).filter((c: any) => !c.isPrepaid && (c.customerType === 'Credit' || c.customerType === 'Fleet')));
     } catch {
       setHandoverCreditCustomers([]);
@@ -256,7 +258,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
       setTargetShiftId(data.activeShift.id);
 
       if (type === 'expense') {
-        const expenseCategories = await transactionService.getExpenseCategories();
+        const expenseCategories = await qc.ensureQueryData({ queryKey: queryKeys.expenseCategories(), queryFn: () => transactionService.getExpenseCategories(), staleTime: TIER.semi.staleTime });
         setCategories(expenseCategories || []);
         setExpenseCategoryId(expenseCategories?.[0]?.id ?? '');
         setExpenseAmount('');
@@ -264,7 +266,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
       }
 
       if (type === 'collection') {
-        const activeCustomers = await transactionService.getCustomers(true);
+        const activeCustomers = await qc.ensureQueryData({ queryKey: queryKeys.customers(true), queryFn: () => transactionService.getCustomers(true), staleTime: TIER.semi.staleTime });
         setCustomers(activeCustomers || []);
         setCollectionCustomerId(activeCustomers?.[0]?.id ?? '');
         setCollectionAmount('');
@@ -274,8 +276,8 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
 
       if (type === 'merchandise-sale') {
         const [productList, activeCustomers, items] = await Promise.all([
-          productService.listProducts(),
-          transactionService.getCustomers(true),
+          qc.ensureQueryData({ queryKey: queryKeys.products(), queryFn: () => productService.listProducts(), staleTime: TIER.semi.staleTime }),
+          qc.ensureQueryData({ queryKey: queryKeys.customers(true), queryFn: () => transactionService.getCustomers(true), staleTime: TIER.semi.staleTime }),
           transactionService.getInventoryItems(selectedStation.id).catch(() => []),
         ]);
         const nonFuel = (productList || []).filter((p: any) => p.productType !== 'FUEL');
@@ -286,7 +288,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         setSaleStock(stockMap);
         // Merchandise sellers = all active station users (office staff included),
         // not just DU/shift-assigned attendants.
-        const users = await userService.listUsers().catch(() => []);
+        const users = await qc.ensureQueryData({ queryKey: queryKeys.users(), queryFn: () => userService.listUsers(), staleTime: TIER.static.staleTime }).catch(() => []);
         const sellers = (users || [])
           .filter((u: any) => (u.status ? u.status === 'ACTIVE' : true))
           .map((u: any) => ({ userId: u.id, userName: u.fullName || u.email || 'User' }));
@@ -302,9 +304,9 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
 
       if (type === 'purchase') {
         const [activeSuppliers, productList, tankList] = await Promise.all([
-          transactionService.getSuppliers(true),
-          productService.listProducts(),
-          tankService.listTanks(selectedStation.id),
+          qc.ensureQueryData({ queryKey: queryKeys.suppliers(true), queryFn: () => transactionService.getSuppliers(true), staleTime: TIER.semi.staleTime }),
+          qc.ensureQueryData({ queryKey: queryKeys.products(), queryFn: () => productService.listProducts(), staleTime: TIER.semi.staleTime }),
+          qc.ensureQueryData({ queryKey: queryKeys.tanks(selectedStation.id), queryFn: () => tankService.listTanks(selectedStation.id), staleTime: TIER.static.staleTime }),
         ]);
 
         setSuppliers(activeSuppliers || []);

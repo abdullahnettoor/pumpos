@@ -3,6 +3,8 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { CloudUserAssignmentService, CloudStationService } from '../../services/cloud.js';
+import { useQueryClient } from '@tanstack/react-query';
+import { queryKeys, TIER } from '../../query/hooks.js';
 import { Station, userSchema } from '@pump/shared';
 import { Drawer } from '../Drawer.js';
 
@@ -22,6 +24,7 @@ const userFormSchema = z.object({
 type UserFormValues = z.infer<typeof userFormSchema>;
 
 export const UserRolesAssignment: React.FC = () => {
+  const qc = useQueryClient();
   const [users, setUsers] = useState<any[]>([]);
   const [stations, setStations] = useState<Station[]>([]);
   const [loading, setLoading] = useState(true);
@@ -58,12 +61,16 @@ export const UserRolesAssignment: React.FC = () => {
     loadData();
   }, []);
 
-  const loadData = async () => {
+  const loadData = async (force = false) => {
     try {
       setLoading(true);
+      if (force) await Promise.all([
+        qc.invalidateQueries({ queryKey: queryKeys.users() }),
+        qc.invalidateQueries({ queryKey: queryKeys.stations() }),
+      ]);
       const [userList, stationList] = await Promise.all([
-        userService.listUsers(),
-        stationService.getStations(),
+        qc.ensureQueryData({ queryKey: queryKeys.users(), queryFn: () => userService.listUsers(), staleTime: TIER.static.staleTime }),
+        qc.ensureQueryData({ queryKey: queryKeys.stations(), queryFn: () => stationService.getStations(), staleTime: TIER.static.staleTime }),
       ]);
       setUsers(userList);
       setStations(stationList);
@@ -99,7 +106,7 @@ export const UserRolesAssignment: React.FC = () => {
 
       resetForm();
       setIsFormOpen(false);
-      loadData();
+      loadData(true);
     } catch (err: any) {
       alert(err.message || 'Failed to save team member');
     }

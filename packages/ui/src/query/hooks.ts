@@ -233,6 +233,9 @@ export function useInvalidateOperational() {
     qc.invalidateQueries({ queryKey: ['purchases'] });
     qc.invalidateQueries({ queryKey: ['collections'] });
     qc.invalidateQueries({ queryKey: ['customers'] });
+    // Suppliers carry computed payable balances that move with purchases/payments,
+    // and new suppliers are created from PurchasesList — keep them fresh too.
+    qc.invalidateQueries({ queryKey: ['suppliers'] });
     if (stationId) {
       qc.invalidateQueries({ queryKey: ['inventory-status', stationId] });
       qc.invalidateQueries({ queryKey: ['inventory-items', stationId] });
