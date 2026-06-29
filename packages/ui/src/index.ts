@@ -18,7 +18,8 @@ export { LoadingSpinner } from './components/LoadingSpinner.js';
 export { ReportsOverview } from './components/ReportsOverview.js';
 export { supabase } from './services/supabase.js';
 export * from './services/cloud.js';
-export { exportReportPdf, setPdfSaver } from './services/exportPdf.js';
+export { exportReportPdf, exportDocPdf, setPdfSaver } from './services/exportPdf.js';
+export { buildShiftSummaryDoc, DEFAULT_SHIFT_SUMMARY_CONFIG } from './services/reports/shiftSummaryDoc.js';
 
 // Data layer (TanStack Query) + shared primitives
 export * from './query/queryClient.js';

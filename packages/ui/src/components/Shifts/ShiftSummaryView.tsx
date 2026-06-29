@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { CloudShiftService } from '../../services/cloud.js';
-import { exportReportPdf } from '../../services/exportPdf.js';
+import { exportDocPdf } from '../../services/exportPdf.js';
+import { buildShiftSummaryDoc, DEFAULT_SHIFT_SUMMARY_CONFIG } from '../../services/reports/shiftSummaryDoc.js';
 import { StatusBadge } from '../StatusBadge.js';
 import { ArrowLeft, Printer, Download, Unlock, AlertTriangle } from 'lucide-react';
 import { ShiftTransactionsPanel } from './ShiftTransactionsPanel.js';
@@ -91,7 +92,7 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
         <div style={{ display: 'flex', gap: '8px' }}>
           <button
             className="btn btn-secondary btn-sm"
-            onClick={() => exportReportPdf(printRef.current, `Shift_Summary_${String(shiftId).slice(0, 8)}`)}
+            onClick={() => exportDocPdf(buildShiftSummaryDoc(snapshotData, { ...DEFAULT_SHIFT_SUMMARY_CONFIG, stationName: templateName }), `Shift_Summary_${String(shiftId).slice(0, 8)}`)}
           >
             <Download size={13} /> Save PDF
           </button>
