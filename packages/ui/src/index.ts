@@ -18,7 +18,7 @@ export { LoadingSpinner } from './components/LoadingSpinner.js';
 export { ReportsOverview } from './components/ReportsOverview.js';
 export { supabase } from './services/supabase.js';
 export * from './services/cloud.js';
-export { exportReportPdf } from './services/exportPdf.js';
+export { exportReportPdf, setPdfSaver } from './services/exportPdf.js';
 
 // Data layer (TanStack Query) + shared primitives
 export * from './query/queryClient.js';
