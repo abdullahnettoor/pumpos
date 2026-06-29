@@ -1,5 +1,13 @@
 import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { persistQueryClient } from '@tanstack/query-persist-client-core';
+import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister';
+
+// Query-key prefixes whose data is safe to persist across reloads (static +
+// semi-static tiers). Operational/live data and anything auth-related are never
+// persisted. Bump CACHE_BUSTER on shape changes to drop stale persisted cache.
+const PERSIST_PREFIXES = new Set(['tanks', 'products', 'customers', 'suppliers', 'expense-categories']);
+const CACHE_BUSTER = 'v1';
 
 /**
  * Shared QueryClient factory. App shells (web, desktop) create one client and
@@ -30,9 +38,33 @@ export interface QueryProviderProps {
 
 let fallbackClient: QueryClient | null = null;
 
+/**
+ * Persists the static/semi-static slices of the cache to localStorage so the
+ * shell + dropdowns paint instantly on reload without a network wait. Called
+ * once per client; no-op outside the browser (e.g. SSR / tests).
+ */
+function enablePersistence(client: QueryClient) {
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  const persister = createSyncStoragePersister({ storage: window.localStorage, key: 'pumpos-rq-cache' });
+  persistQueryClient({
+    queryClient: client as any,
+    persister,
+    maxAge: 24 * 60 * 60_000,
+    buster: CACHE_BUSTER,
+    dehydrateOptions: {
+      shouldDehydrateQuery: (query) =>
+        query.state.status === 'success' && PERSIST_PREFIXES.has(String(query.queryKey?.[0])),
+    },
+  });
+}
+
 export const QueryProvider: React.FC<QueryProviderProps> = ({ client, children }) => {
   if (!client && !fallbackClient) {
     fallbackClient = createQueryClient();
   }
-  return <QueryClientProvider client={client ?? fallbackClient!}>{children}</QueryClientProvider>;
+  const active = client ?? fallbackClient!;
+  React.useEffect(() => {
+    enablePersistence(active);
+  }, [active]);
+  return <QueryClientProvider client={active}>{children}</QueryClientProvider>;
 };

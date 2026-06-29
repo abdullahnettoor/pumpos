@@ -73,29 +73,51 @@ async function projectShiftSummary(
   const snap = rawSnapshot ?? {};
   const recon = snap.reconciliation ?? {};
 
-  const [template] = await db
-    .select()
-    .from(schema.shiftTemplates)
-    .where(eq(schema.shiftTemplates.id, shift.shiftTemplateId))
-    .limit(1);
+  // Fetch every independent slice in ONE parallel batch instead of ~8 serial
+  // round-trips (the Hyperdrive latency was stacking to multi-second responses).
+  const [
+    templateRows,
+    closedUserRows,
+    openedUserRows,
+    nrRows,
+    hoRows,
+    teRows,
+    expenses,
+    purchases,
+    collections,
+  ] = await Promise.all([
+    db.select().from(schema.shiftTemplates).where(eq(schema.shiftTemplates.id, shift.shiftTemplateId)).limit(1),
+    shift.closedBy
+      ? db.select().from(schema.users).where(eq(schema.users.id, shift.closedBy)).limit(1)
+      : Promise.resolve([] as any[]),
+    shift.openedBy
+      ? db.select().from(schema.users).where(eq(schema.users.id, shift.openedBy)).limit(1)
+      : Promise.resolve([] as any[]),
+    db
+      .select({ nr: schema.nozzleReadings, nz: schema.nozzles, prod: schema.products })
+      .from(schema.nozzleReadings)
+      .leftJoin(schema.nozzles, eq(schema.nozzles.id, schema.nozzleReadings.nozzleId))
+      .leftJoin(schema.products, eq(schema.products.id, schema.nozzles.productId))
+      .where(eq(schema.nozzleReadings.shiftId, shift.id)),
+    db
+      .select({ h: schema.attendantHandovers, userName: schema.users.fullName, duName: schema.dispenserUnits.name })
+      .from(schema.attendantHandovers)
+      .leftJoin(schema.users, eq(schema.users.id, schema.attendantHandovers.userId))
+      .leftJoin(schema.dispenserUnits, eq(schema.dispenserUnits.id, schema.attendantHandovers.duId))
+      .where(eq(schema.attendantHandovers.shiftId, shift.id)),
+    db
+      .select({ e: schema.handoverTerminalEntries, label: schema.paymentTerminals.label, provider: schema.paymentTerminals.provider })
+      .from(schema.handoverTerminalEntries)
+      .leftJoin(schema.paymentTerminals, eq(schema.paymentTerminals.id, schema.handoverTerminalEntries.terminalId))
+      .where(eq(schema.handoverTerminalEntries.shiftId, shift.id)),
+    db.select().from(schema.expenses).where(eq(schema.expenses.shiftId, shift.id)),
+    db.select().from(schema.purchases).where(eq(schema.purchases.shiftId, shift.id)),
+    db.select().from(schema.collections).where(eq(schema.collections.shiftId, shift.id)),
+  ]);
 
-  let closedByName = 'System';
-  if (shift.closedBy) {
-    const [u] = await db.select().from(schema.users).where(eq(schema.users.id, shift.closedBy)).limit(1);
-    closedByName = u?.fullName ?? 'System';
-  }
-  let openedByName = 'System';
-  if (shift.openedBy) {
-    const [u] = await db.select().from(schema.users).where(eq(schema.users.id, shift.openedBy)).limit(1);
-    openedByName = u?.fullName ?? 'System';
-  }
-
-  const nrRows = await db
-    .select({ nr: schema.nozzleReadings, nz: schema.nozzles, prod: schema.products })
-    .from(schema.nozzleReadings)
-    .leftJoin(schema.nozzles, eq(schema.nozzles.id, schema.nozzleReadings.nozzleId))
-    .leftJoin(schema.products, eq(schema.products.id, schema.nozzles.productId))
-    .where(eq(schema.nozzleReadings.shiftId, shift.id));
+  const template = templateRows[0];
+  const closedByName = closedUserRows[0]?.fullName ?? 'System';
+  const openedByName = openedUserRows[0]?.fullName ?? 'System';
   const nozzleReadings = nrRows.map(({ nr, nz, prod }) => ({
     nozzleId: nr.nozzleId,
     nozzleName: nz?.name ?? 'Unknown',
@@ -108,17 +130,6 @@ async function projectShiftSummary(
   }));
   const totalVolumeSold = nozzleReadings.reduce((a, r) => a + r.volumeSold, 0) || Number(snap.totalVolume ?? 0);
 
-  const hoRows = await db
-    .select({ h: schema.attendantHandovers, userName: schema.users.fullName, duName: schema.dispenserUnits.name })
-    .from(schema.attendantHandovers)
-    .leftJoin(schema.users, eq(schema.users.id, schema.attendantHandovers.userId))
-    .leftJoin(schema.dispenserUnits, eq(schema.dispenserUnits.id, schema.attendantHandovers.duId))
-    .where(eq(schema.attendantHandovers.shiftId, shift.id));
-  const teRows = await db
-    .select({ e: schema.handoverTerminalEntries, label: schema.paymentTerminals.label, provider: schema.paymentTerminals.provider })
-    .from(schema.handoverTerminalEntries)
-    .leftJoin(schema.paymentTerminals, eq(schema.paymentTerminals.id, schema.handoverTerminalEntries.terminalId))
-    .where(eq(schema.handoverTerminalEntries.shiftId, shift.id));
   const handovers = hoRows.map(({ h, userName, duName }) => ({
     ...h,
     attendantName: userName ?? 'Unknown',
@@ -155,12 +166,6 @@ async function projectShiftSummary(
     });
   }
   const terminalBreakdown = Array.from(terminalBreakdownMap.values());
-
-  const [expenses, purchases, collections] = await Promise.all([
-    db.select().from(schema.expenses).where(eq(schema.expenses.shiftId, shift.id)),
-    db.select().from(schema.purchases).where(eq(schema.purchases.shiftId, shift.id)),
-    db.select().from(schema.collections).where(eq(schema.collections.shiftId, shift.id)),
-  ]);
 
   const openingCash = Number(snap.openingCash ?? shift.openingCash ?? 0);
   const closingCash = Number(snap.closingCash ?? shift.closingCash ?? 0);
@@ -223,32 +228,39 @@ shiftsRouter.get('/status', async (c) => {
   const lockGraceDays = settings.shift_lock_grace_days ?? 3;
   const now = Date.now();
 
-  const [businessDay] = await db
-    .select()
-    .from(schema.businessDays)
-    .where(and(eq(schema.businessDays.stationId, stationId), eq(schema.businessDays.status, 'OPEN')))
-    .limit(1);
-
-  // --- Active (OPEN) shift, enriched ---
-  const [dbActiveShift] = await db
-    .select()
-    .from(schema.shifts)
-    .where(and(eq(schema.shifts.stationId, stationId), eq(schema.shifts.status, 'OPEN')))
-    .limit(1);
+  // Business day + active shift are independent — fetch together.
+  const [businessDayRows, activeShiftRows] = await Promise.all([
+    db
+      .select()
+      .from(schema.businessDays)
+      .where(and(eq(schema.businessDays.stationId, stationId), eq(schema.businessDays.status, 'OPEN')))
+      .limit(1),
+    db
+      .select()
+      .from(schema.shifts)
+      .where(and(eq(schema.shifts.stationId, stationId), eq(schema.shifts.status, 'OPEN')))
+      .limit(1),
+  ]);
+  const businessDay = businessDayRows[0];
+  const dbActiveShift = activeShiftRows[0];
 
   let activeShift: any = null;
   if (dbActiveShift) {
-    const [template] = await db.select().from(schema.shiftTemplates).where(eq(schema.shiftTemplates.id, dbActiveShift.shiftTemplateId)).limit(1);
-    const [openedByUser] = await db.select().from(schema.users).where(eq(schema.users.id, dbActiveShift.openedBy)).limit(1);
+    const [templateRows2, openedByRows2, nozzleReadingRows] = await Promise.all([
+      db.select().from(schema.shiftTemplates).where(eq(schema.shiftTemplates.id, dbActiveShift.shiftTemplateId)).limit(1),
+      db.select().from(schema.users).where(eq(schema.users.id, dbActiveShift.openedBy)).limit(1),
+      db
+        .select({ nr: schema.nozzleReadings, nz: schema.nozzles, prod: schema.products, tnk: schema.tanks, du: schema.dispenserUnits })
+        .from(schema.nozzleReadings)
+        .leftJoin(schema.nozzles, eq(schema.nozzles.id, schema.nozzleReadings.nozzleId))
+        .leftJoin(schema.products, eq(schema.products.id, schema.nozzles.productId))
+        .leftJoin(schema.tanks, eq(schema.tanks.id, schema.nozzles.tankId))
+        .leftJoin(schema.dispenserUnits, eq(schema.dispenserUnits.id, schema.nozzles.duId))
+        .where(eq(schema.nozzleReadings.shiftId, dbActiveShift.id)),
+    ]);
+    const template = templateRows2[0];
+    const openedByUser = openedByRows2[0];
 
-    const nozzleReadingRows = await db
-      .select({ nr: schema.nozzleReadings, nz: schema.nozzles, prod: schema.products, tnk: schema.tanks, du: schema.dispenserUnits })
-      .from(schema.nozzleReadings)
-      .leftJoin(schema.nozzles, eq(schema.nozzles.id, schema.nozzleReadings.nozzleId))
-      .leftJoin(schema.products, eq(schema.products.id, schema.nozzles.productId))
-      .leftJoin(schema.tanks, eq(schema.tanks.id, schema.nozzles.tankId))
-      .leftJoin(schema.dispenserUnits, eq(schema.dispenserUnits.id, schema.nozzles.duId))
-      .where(eq(schema.nozzleReadings.shiftId, dbActiveShift.id));
     const nozzleReadings = nozzleReadingRows.map(({ nr, nz, prod, tnk, du }) => ({
       ...nr,
       nozzleName: nz?.name ?? 'Unknown',

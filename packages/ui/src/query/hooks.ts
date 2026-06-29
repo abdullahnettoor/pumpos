@@ -42,8 +42,21 @@ export const queryKeys = {
 
 type Options<T> = Omit<UseQueryOptions<T, Error, T, readonly unknown[]>, 'queryKey' | 'queryFn'>;
 
+/**
+ * Cache policy tiered by how often the data changes (Phase P):
+ *  - static: infrastructure (tanks/DUs/nozzles/terminals/templates) — rarely edited.
+ *  - semi: master data (products/customers/suppliers/categories) — changes occasionally.
+ *  - operational: live shift/sales/inventory — changes constantly.
+ * Hooks spread the tier BEFORE caller options so callers can still override.
+ */
+export const TIER = {
+  static: { staleTime: 24 * 60 * 60_000, gcTime: 24 * 60 * 60_000, refetchOnWindowFocus: false } as const,
+  semi: { staleTime: 10 * 60_000, gcTime: 60 * 60_000, refetchOnWindowFocus: false } as const,
+  operational: { staleTime: 15_000, gcTime: 5 * 60_000, refetchOnWindowFocus: true } as const,
+};
+
 export function useProducts(options?: Options<any[]>) {
-  return useQuery({ queryKey: queryKeys.products(), queryFn: () => productSvc.listProducts(), ...options });
+  return useQuery({ queryKey: queryKeys.products(), queryFn: () => productSvc.listProducts(), ...TIER.semi, ...options });
 }
 
 export function useTanks(stationId: string | null | undefined, options?: Options<any[]>) {
@@ -51,6 +64,7 @@ export function useTanks(stationId: string | null | undefined, options?: Options
     queryKey: queryKeys.tanks(stationId ?? ''),
     queryFn: () => tankSvc.listTanks(stationId!),
     enabled: !!stationId,
+    ...TIER.static,
     ...options,
   });
 }
@@ -61,6 +75,7 @@ export function useShiftStatus(stationId: string | null | undefined, lite = fals
     queryKey: queryKeys.shiftStatus(stationId ?? '', lite),
     queryFn: () => shiftService.getShiftStatus(stationId!, lite),
     enabled: !!stationId,
+    ...TIER.operational,
     ...options,
   });
 }
@@ -70,32 +85,33 @@ export function useShiftSummaries(stationId: string | null | undefined, options?
     queryKey: queryKeys.shiftSummaries(stationId ?? ''),
     queryFn: () => shiftService.getShiftSummaries(stationId!),
     enabled: !!stationId,
+    ...TIER.operational,
     ...options,
   });
 }
 
 export function useExpenses(options?: Options<any[]>) {
-  return useQuery({ queryKey: queryKeys.expenses(), queryFn: () => txService.getExpenses(), ...options });
+  return useQuery({ queryKey: queryKeys.expenses(), queryFn: () => txService.getExpenses(), ...TIER.operational, ...options });
 }
 
 export function usePurchases(options?: Options<any[]>) {
-  return useQuery({ queryKey: queryKeys.purchases(), queryFn: () => txService.getPurchases(), ...options });
+  return useQuery({ queryKey: queryKeys.purchases(), queryFn: () => txService.getPurchases(), ...TIER.operational, ...options });
 }
 
 export function useCollections(options?: Options<any[]>) {
-  return useQuery({ queryKey: queryKeys.collections(), queryFn: () => txService.getCollections(), ...options });
+  return useQuery({ queryKey: queryKeys.collections(), queryFn: () => txService.getCollections(), ...TIER.operational, ...options });
 }
 
 export function useCustomers(activeOnly = true, options?: Options<any[]>) {
-  return useQuery({ queryKey: queryKeys.customers(activeOnly), queryFn: () => txService.getCustomers(activeOnly), ...options });
+  return useQuery({ queryKey: queryKeys.customers(activeOnly), queryFn: () => txService.getCustomers(activeOnly), ...TIER.semi, ...options });
 }
 
 export function useSuppliers(activeOnly = true, options?: Options<any[]>) {
-  return useQuery({ queryKey: queryKeys.suppliers(activeOnly), queryFn: () => txService.getSuppliers(activeOnly), ...options });
+  return useQuery({ queryKey: queryKeys.suppliers(activeOnly), queryFn: () => txService.getSuppliers(activeOnly), ...TIER.semi, ...options });
 }
 
 export function useExpenseCategories(options?: Options<any[]>) {
-  return useQuery({ queryKey: queryKeys.expenseCategories(), queryFn: () => txService.getExpenseCategories(), ...options });
+  return useQuery({ queryKey: queryKeys.expenseCategories(), queryFn: () => txService.getExpenseCategories(), ...TIER.semi, ...options });
 }
 
 export function useInventoryStatus(stationId: string | null | undefined, options?: Options<any[]>) {
@@ -103,6 +119,7 @@ export function useInventoryStatus(stationId: string | null | undefined, options
     queryKey: queryKeys.inventoryStatus(stationId ?? ''),
     queryFn: () => txService.getInventoryStatus(stationId!),
     enabled: !!stationId,
+    ...TIER.operational,
     ...options,
   });
 }
@@ -112,6 +129,7 @@ export function useInventoryItems(stationId: string | null | undefined, options?
     queryKey: queryKeys.inventoryItems(stationId ?? ''),
     queryFn: () => txService.getInventoryItems(stationId!),
     enabled: !!stationId,
+    ...TIER.operational,
     ...options,
   });
 }
@@ -121,6 +139,7 @@ export function useInventoryMovements(stationId: string | null | undefined, opti
     queryKey: queryKeys.inventoryMovements(stationId ?? ''),
     queryFn: () => txService.getInventoryMovements(stationId!),
     enabled: !!stationId,
+    ...TIER.operational,
     ...options,
   });
 }
@@ -130,6 +149,7 @@ export function useInventoryVariances(stationId: string | null | undefined, opti
     queryKey: queryKeys.inventoryVariances(stationId ?? ''),
     queryFn: () => txService.getInventoryVariances(stationId!),
     enabled: !!stationId,
+    ...TIER.operational,
     ...options,
   });
 }
