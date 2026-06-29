@@ -1,5 +1,6 @@
 import React from 'react';
-import { ArrowLeft, Printer, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Printer, Download, AlertTriangle } from 'lucide-react';
+import { exportReportPdf } from '../services/exportPdf.js';
 
 interface DailyDssrViewProps {
   dailyDssr: any;
@@ -7,6 +8,7 @@ interface DailyDssrViewProps {
 }
 
 export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack }) => {
+  const printRef = React.useRef<HTMLDivElement>(null);
   const snapshot = dailyDssr?.snapshotData || {};
   const nozzles = Object.values(snapshot.nozzles || {}) as Array<any>;
   const shifts = snapshot.shifts || [];
@@ -20,7 +22,7 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack 
   const totalExpenses = Number(snapshot.totalExpenses || 0);
 
   return (
-    <div className="card card-comfortable print-area" style={{ maxWidth: '920px', margin: '0 auto' }}>
+    <div ref={printRef} className="card card-comfortable print-area" style={{ maxWidth: '920px', margin: '0 auto' }}>
       <div
         className="no-print"
         style={{
@@ -36,6 +38,9 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack 
           <ArrowLeft size={13} /> Back to Reports
         </button>
 
+        <button className="btn btn-secondary btn-sm" onClick={() => exportReportPdf(printRef.current, 'Daily_DSSR')}>
+          <Download size={13} /> Save PDF
+        </button>
         <button className="btn btn-secondary btn-sm" onClick={() => window.print()}>
           <Printer size={13} /> Print Daily DSSR
         </button>

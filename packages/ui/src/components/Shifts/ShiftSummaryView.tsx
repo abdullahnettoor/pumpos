@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { CloudShiftService } from '../../services/cloud.js';
+import { exportReportPdf } from '../../services/exportPdf.js';
 import { StatusBadge } from '../StatusBadge.js';
-import { ArrowLeft, Printer, Unlock, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Printer, Download, Unlock, AlertTriangle } from 'lucide-react';
 import { ShiftTransactionsPanel } from './ShiftTransactionsPanel.js';
 
 const shiftService = new CloudShiftService();
@@ -28,6 +29,7 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
   onTransactionAdded,
 }) => {
   const [reopening, setReopening] = useState(false);
+  const printRef = useRef<HTMLDivElement>(null);
 
   const { snapshotData, generatedAt } = shiftSummary;
   const {
@@ -76,7 +78,7 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
   };
 
   return (
-    <div className="card card-comfortable print-area" style={{ maxWidth: '800px', margin: '0 auto' }}>
+    <div ref={printRef} className="card card-comfortable print-area" style={{ maxWidth: '800px', margin: '0 auto' }}>
       {/* Header controls */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', borderBottom: '1px solid var(--border-soft)', paddingBottom: '16px' }} className="no-print">
         <button
@@ -87,6 +89,12 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
         </button>
 
         <div style={{ display: 'flex', gap: '8px' }}>
+          <button
+            className="btn btn-secondary btn-sm"
+            onClick={() => exportReportPdf(printRef.current, `Shift_Summary_${String(shiftId).slice(0, 8)}`)}
+          >
+            <Download size={13} /> Save PDF
+          </button>
           <button
             className="btn btn-secondary btn-sm"
             onClick={() => window.print()}
