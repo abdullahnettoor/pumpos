@@ -47,6 +47,7 @@ function getDbFromHyperdrive(env: Bindings): DbClient {
     throw new Error('Hyperdrive binding is missing or misconfigured');
   }
 
+  // Request-scoped client prevents cross-request I/O object reuse in Workers.
   return createDb(env.HYPERDRIVE.connectionString);
 }
 
