@@ -56,9 +56,19 @@ app.use('*', cors({
   origin: '*',
   allowHeaders: ['Content-Type', 'Authorization'],
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  exposeHeaders: ['Content-Length'],
+  exposeHeaders: ['Content-Length', 'Server-Timing'],
   maxAge: 600,
 }));
+
+// Latency instrumentation: total per-request time as a Server-Timing header
+// (visible in the browser Network tab) + a log line, so slow routes are obvious.
+app.use('*', async (c, next) => {
+  const start = Date.now();
+  await next();
+  const ms = Date.now() - start;
+  c.header('Server-Timing', `app;dur=${ms}`);
+  if (ms > 1000) console.warn(`[SLOW] ${c.req.method} ${new URL(c.req.url).pathname} ${ms}ms`);
+});
 
 // Setup Database instance middleware
 app.use('*', async (c, next) => {
