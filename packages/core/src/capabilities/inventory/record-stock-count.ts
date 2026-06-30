@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { resolveBusinessDate } from '@pump/shared';
 import { BusinessEvents, err, eventFromContext, ok, validationError } from '../../kernel/index.js';
 import type { DomainEvent, EventPublisher, ExecutionContext, Result, UseCase } from '../../kernel/index.js';
 import { ensureBusinessDayForDate, type BusinessDayRepository } from '../station-ops/business-days/index.js';
@@ -49,7 +50,7 @@ export class RecordStockCount implements UseCase<RecordStockCountCommand, Record
     if (!p.success) return err(validationError('Invalid RecordStockCount command', { issues: p.error.flatten() }));
     const cmd = p.data;
 
-    const date = ctx.clock.now().toISOString().slice(0, 10);
+    const date = resolveBusinessDate({ now: ctx.clock.now(), timeZone: ctx.timeZone, dayStartsAt: ctx.businessDayStartsAt });
     const bd = await ensureBusinessDayForDate(this.deps.businessDays, ctx, cmd.stationId, date);
 
     const isBulk = !!cmd.tankId;

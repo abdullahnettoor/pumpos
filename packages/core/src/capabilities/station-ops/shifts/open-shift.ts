@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { resolveBusinessDate } from '@pump/shared';
 import { BusinessEvents, conflictError, err, eventFromContext, ok, validationError } from '../../../kernel/index.js';
 import type { DomainEvent, EventPublisher, ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
 import type { BusinessDay, BusinessDayRepository } from '../business-days/index.js';
@@ -79,7 +80,7 @@ export class OpenShift implements UseCase<OpenShiftCommand, OpenShiftResult> {
     // day 1 while on day 5) without blocking today's day from being opened.
     // The operator may back-date (e.g. forgot to open yesterday); future dates
     // are rejected.
-    const today = now.toISOString().slice(0, 10);
+    const today = resolveBusinessDate({ now, timeZone: ctx.timeZone, dayStartsAt: ctx.businessDayStartsAt });
     if (cmd.businessDate && cmd.businessDate > today) {
       return err(validationError('Business date cannot be in the future', { businessDate: cmd.businessDate }));
     }

@@ -14,6 +14,10 @@ export interface ExecutionContext {
   businessDayId: string | null;
   actorId: string | null;
   correlationId: string | null;
+  /** IANA timezone of the active station, for business-date resolution. */
+  timeZone?: string | null;
+  /** Business-day start boundary 'HH:MM' (default '00:00'). */
+  businessDayStartsAt?: string | null;
   clock: Clock;
   ids: IdGenerator;
 }

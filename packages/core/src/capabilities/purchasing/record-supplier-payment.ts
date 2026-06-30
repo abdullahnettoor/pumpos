@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { resolveBusinessDate } from '@pump/shared';
 import { BusinessEvents, err, eventFromContext, invariantViolation, notFoundError, ok, validationError } from '../../kernel/index.js';
 import type { DomainEvent, EventPublisher, ExecutionContext, Result, UseCase } from '../../kernel/index.js';
 import type { ShiftRepository } from '../station-ops/shifts/index.js';
@@ -66,7 +67,7 @@ export class RecordSupplierPayment implements UseCase<RecordSupplierPaymentComma
       stationId = shift.stationId;
       shiftId = affectsDrawer ? shift.id : null;
     } else if (stationId) {
-      const date = cmd.transactionDate ?? ctx.clock.now().toISOString().slice(0, 10);
+      const date = cmd.transactionDate ?? resolveBusinessDate({ now: ctx.clock.now(), timeZone: ctx.timeZone, dayStartsAt: ctx.businessDayStartsAt });
       const bd = await ensureBusinessDayForDate(this.deps.businessDays, ctx, stationId, date);
       businessDayId = bd.id;
       shiftId = null;

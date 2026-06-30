@@ -15,7 +15,7 @@ import { ShiftTotalsSummary } from './ShiftTotalsSummary.js';
 import { OpenShiftForm } from './OpenShiftForm.js';
 import { QuickEntryDrawer } from './QuickEntryDrawer.js';
 import { useShiftStatus, useInvalidateOperational, queryKeys, TIER } from '../../query/hooks.js';
-import { Station } from '@pump/shared';
+import { Station, resolveBusinessDate } from '@pump/shared';
 import { FileText, User, Lock, AlertTriangle, Check, Fuel, Info, Play, CalendarRange, History, Clock3 } from 'lucide-react';
 import { LoadingSpinner } from '../LoadingSpinner.js';
 
@@ -55,13 +55,21 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
 
   // Open Shift Form States
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
-  const [businessDate, setBusinessDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [businessDate, setBusinessDate] = useState(() => resolveBusinessDate());
   const [openingCash, setOpeningCash] = useState(0);
   const [staffAssignments, setStaffAssignments] = useState<{ userId: string; duId: string }[]>([]);
   // Terminal→DU assignment for the shift being opened. duId '' means shift-wide (any DU).
   const [terminalAssignments, setTerminalAssignments] = useState<{ terminalId: string; duId: string }[]>([]);
   const [initialReadings, setInitialReadings] = useState<{ nozzleId: string; openingReading: number }[]>([]);
   const [isOpening, setIsOpening] = useState(false);
+
+  // Default the shift-open business date to the station's *local* business date
+  // (its timezone + day-start boundary), recomputed when the station changes.
+  useEffect(() => {
+    const s = (selectedStation?.settings ?? {}) as { timezone?: string; business_day_starts_at?: string };
+    setBusinessDate(resolveBusinessDate({ timeZone: s.timezone, dayStartsAt: s.business_day_starts_at }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedStation?.id]);
 
   // Active Shift Workspace States
   const [closingReadings, setClosingReadings] = useState<Record<string, number>>({});

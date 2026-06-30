@@ -81,6 +81,34 @@ Never force card/UPI/bank/credit movements into the drawer reconciliation.
 
 ---
 
+## Business-Day Date Resolution (timezone-aware)
+
+A business day is keyed by **`(station, calendar date)`**, lazily opened when the
+first shift OR financial entry of that date lands. Several business days may be
+**open at once**; a past day is closed **independently** at any time (e.g. close
+day 1 on day 5) — closing never blocks today's day. `OpenShift` and
+`ensureBusinessDayForDate` both resolve via `findByStationAndDate`, so shifts and
+financials always agree. Uniqueness is enforced by
+`business_days_org_station_date_uniq (org, station, date)`.
+
+The `business_date` (`varchar(10)` `YYYY-MM-DD`) is the single date anchor;
+audit timestamps stay UTC. **Never derive a business date with
+`new Date().toISOString().slice(0,10)`** — that is UTC-only and ignores the
+day-start boundary. Always use **`resolveBusinessDate({ now, timeZone, dayStartsAt })`**
+from `@pump/shared`, which converts the instant to the station's timezone and
+rolls back to the previous date when the local time is before the station's
+`business_day_starts_at` (a fuel day commonly runs 06:00 → 06:00).
+
+* The station's `timezone` + `business_day_starts_at` are captured at onboarding
+  and stored in `stations.settings`.
+* The API resolves them via `loadStationClock(db, stationId)` and passes them into
+  `buildContext` → `ExecutionContext.timeZone` / `.businessDayStartsAt`; core
+  use-cases read those when calling `resolveBusinessDate`.
+* The same helper is used client-side to default the shift-open date field.
+* TODO: render displayed timestamps in station timezone (currently UTC-instant).
+
+---
+
 ## Code Organization (ports & adapters)
 
 * **`packages/core`** (`@pump/core`) — framework-agnostic domain. Capability

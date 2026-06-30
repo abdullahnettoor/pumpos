@@ -13,6 +13,7 @@ import {
   type Result,
 } from '@pump/core';
 import { buildContext } from '../infra/context.js';
+import { loadStationClock } from '../infra/station-clock.js';
 import { runInTransaction } from '../infra/transaction.js';
 import {
   DrizzleNozzleRepository,
@@ -699,6 +700,7 @@ shiftsRouter.post('/open', async (c) => {
     return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
   }
   const db = c.var.db;
+  const clock = await loadStationClock(db, body?.stationId);
   const result = await runInTransaction(db, (tx, events) =>
     new OpenShift({
       shifts: new DrizzleShiftRepository(tx),
@@ -707,7 +709,7 @@ shiftsRouter.post('/open', async (c) => {
       nozzleReadings: new DrizzleNozzleReadingRepository(tx),
       fuelPrices: new DrizzleFuelPriceRepository(tx),
       events,
-    }).execute(body, buildContext(user, { stationId: body?.stationId })),
+    }).execute(body, buildContext(user, { stationId: body?.stationId, ...clock })),
   );
   return sendResult(c, result);
 });
@@ -790,8 +792,9 @@ shiftsRouter.post('/business-day/open', async (c) => {
   }
   const body = await c.req.json().catch(() => ({}));
   const db = c.var.db;
+  const clock = await loadStationClock(db, body?.stationId);
   const result = await runInTransaction(db, (tx, events) =>
-    new OpenBusinessDay({ repository: new DrizzleBusinessDayRepository(tx), events }).execute(body, buildContext(user, { stationId: body?.stationId })),
+    new OpenBusinessDay({ repository: new DrizzleBusinessDayRepository(tx), events }).execute(body, buildContext(user, { stationId: body?.stationId, ...clock })),
   );
   return sendResult(c, result);
 });

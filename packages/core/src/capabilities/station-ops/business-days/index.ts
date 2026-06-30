@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { resolveBusinessDate } from '@pump/shared';
 import { BusinessEvents, conflictError, err, eventFromContext, invariantViolation, notFoundError, ok, validationError } from '../../../kernel/index.js';
 import type { EventPublisher, ExecutionContext, Repository, Result, UseCase } from '../../../kernel/index.js';
 
@@ -40,7 +41,7 @@ export async function ensureBusinessDayForDate(
 ): Promise<BusinessDay> {
   const existing = await repo.findByStationAndDate(ctx.organizationId, stationId, businessDate);
   if (existing) return existing;
-  const today = ctx.clock.now().toISOString().slice(0, 10);
+  const today = resolveBusinessDate({ now: ctx.clock.now(), timeZone: ctx.timeZone, dayStartsAt: ctx.businessDayStartsAt });
   const isPast = businessDate < today;
   const nowIso = ctx.clock.now().toISOString();
   const day: BusinessDay = {
@@ -91,7 +92,7 @@ export class OpenBusinessDay implements UseCase<OpenBusinessDayCommand, Business
     if (!p.success) return err(validationError('Invalid OpenBusinessDay command', { issues: p.error.flatten() }));
 
     const now = ctx.clock.now();
-    const businessDate = p.data.businessDate ?? now.toISOString().slice(0, 10);
+    const businessDate = p.data.businessDate ?? resolveBusinessDate({ now, timeZone: ctx.timeZone, dayStartsAt: ctx.businessDayStartsAt });
     // One business day per (station, date). Several dates may be open at once;
     // a past day stays open until explicitly closed (close day 1 on day 5).
     const existing = await this.deps.repository.findByStationAndDate(ctx.organizationId, p.data.stationId, businessDate);

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { resolveBusinessDate } from '@pump/shared';
 import { BusinessEvents, err, eventFromContext, invariantViolation, notFoundError, ok, validationError } from '../../kernel/index.js';
 import type { DocumentNumberGenerator, DomainEvent, EventPublisher, ExecutionContext, Result, UseCase } from '../../kernel/index.js';
 import type { StockMovement, StockMovementRepository } from '../inventory/index.js';
@@ -81,7 +82,7 @@ export class RecordPurchase implements UseCase<RecordPurchaseCommand, RecordPurc
       businessDayId = shift.businessDayId;
       stationId = shift.stationId;
     } else if (stationId) {
-      const date = cmd.transactionDate ?? ctx.clock.now().toISOString().slice(0, 10);
+      const date = cmd.transactionDate ?? resolveBusinessDate({ now: ctx.clock.now(), timeZone: ctx.timeZone, dayStartsAt: ctx.businessDayStartsAt });
       const bd = await ensureBusinessDayForDate(this.deps.businessDays, ctx, stationId, date);
       businessDayId = bd.id;
     } else {

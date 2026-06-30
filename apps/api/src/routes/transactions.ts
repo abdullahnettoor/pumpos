@@ -27,6 +27,7 @@ import {
   type Result,
 } from '@pump/core';
 import { buildContext } from '../infra/context.js';
+import { loadStationClock } from '../infra/station-clock.js';
 import { runInTransaction } from '../infra/transaction.js';
 import { TimestampDocumentNumberGenerator } from '../infra/doc-numbers.js';
 import {
@@ -419,13 +420,14 @@ transactionsRouter.get('/expense-categories', async (c) => {
 transactionsRouter.post('/expenses', async (c) => {
   const user = c.var.user;
   const body = await c.req.json().catch(() => ({}));
+  const clock = await loadStationClock(c.var.db, body?.stationId);
   const result = await runInTransaction(c.var.db, (tx, events) =>
     new RecordExpense({
       expenses: new DrizzleExpenseRepository(tx),
       shifts: new DrizzleShiftRepository(tx),
       businessDays: new DrizzleBusinessDayRepository(tx),
       events,
-    }).execute(body, buildContext(user, { stationId: body?.stationId })),
+    }).execute(body, buildContext(user, { stationId: body?.stationId, ...clock })),
   );
   return sendResult(c, result);
 });
@@ -433,6 +435,7 @@ transactionsRouter.post('/expenses', async (c) => {
 transactionsRouter.post('/collections', async (c) => {
   const user = c.var.user;
   const body = await c.req.json().catch(() => ({}));
+  const clock = await loadStationClock(c.var.db, body?.stationId);
   // A "Credit" collection is a credit SALE (a receivable), not a payment. It is
   // recorded on the customer ledger with no drawer/stock impact.
   if (body?.paymentMethod === 'Credit') {
@@ -443,7 +446,7 @@ transactionsRouter.post('/collections', async (c) => {
         shifts: new DrizzleShiftRepository(tx),
         businessDays: new DrizzleBusinessDayRepository(tx),
         events,
-      }).execute(body, buildContext(user, { stationId: body?.stationId })),
+      }).execute(body, buildContext(user, { stationId: body?.stationId, ...clock })),
     );
     return sendResult(c, result);
   }
@@ -456,7 +459,7 @@ transactionsRouter.post('/collections', async (c) => {
       businessDays: new DrizzleBusinessDayRepository(tx),
       docNumbers,
       events,
-    }).execute(body, buildContext(user, { stationId: body?.stationId })),
+    }).execute(body, buildContext(user, { stationId: body?.stationId, ...clock })),
   );
   return sendResult(c, result);
 });
@@ -482,6 +485,7 @@ transactionsRouter.post('/purchases', async (c) => {
     return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions to record purchases' } }, 403);
   }
   const body = await c.req.json().catch(() => ({}));
+  const clock = await loadStationClock(c.var.db, body?.stationId);
   const result = await runInTransaction(c.var.db, (tx, events) =>
     new RecordPurchase({
       purchases: new DrizzlePurchaseRepository(tx),
@@ -492,7 +496,7 @@ transactionsRouter.post('/purchases', async (c) => {
       businessDays: new DrizzleBusinessDayRepository(tx),
       docNumbers,
       events,
-    }).execute(body, buildContext(user, { stationId: body?.stationId })),
+    }).execute(body, buildContext(user, { stationId: body?.stationId, ...clock })),
   );
   return sendResult(c, result);
 });
@@ -503,6 +507,7 @@ transactionsRouter.post('/supplier-payments', async (c) => {
     return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions to record supplier payments' } }, 403);
   }
   const body = await c.req.json().catch(() => ({}));
+  const clock = await loadStationClock(c.var.db, body?.stationId);
   const result = await runInTransaction(c.var.db, (tx, events) =>
     new RecordSupplierPayment({
       supplierTxns: new DrizzleSupplierTransactionRepository(tx),
@@ -510,7 +515,7 @@ transactionsRouter.post('/supplier-payments', async (c) => {
       shifts: new DrizzleShiftRepository(tx),
       businessDays: new DrizzleBusinessDayRepository(tx),
       events,
-    }).execute(body, buildContext(user, { stationId: body?.stationId })),
+    }).execute(body, buildContext(user, { stationId: body?.stationId, ...clock })),
   );
   return sendResult(c, result);
 });
@@ -712,13 +717,14 @@ transactionsRouter.post('/inventory/count', async (c) => {
   if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId: body?.stationId })) {
     return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
   }
+  const stockClock = await loadStationClock(c.var.db, body?.stationId);
   const result = await runInTransaction(c.var.db, (tx, events) =>
     new RecordStockCount({
       movements: new DrizzleStockMovementRepository(tx),
       variances: new DrizzleStockVarianceRepository(tx),
       businessDays: new DrizzleBusinessDayRepository(tx),
       events,
-    }).execute(body, buildContext(user, { stationId: body?.stationId })),
+    }).execute(body, buildContext(user, { stationId: body?.stationId, ...stockClock })),
   );
   return sendResult(c, result);
 });
