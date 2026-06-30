@@ -1,4 +1,7 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { purchaseEntryFormSchema, type PurchaseEntryFormValues } from '@pump/shared';
 
 export interface ShiftOption {
   id: string;
@@ -7,34 +10,17 @@ export interface ShiftOption {
 
 export interface PurchaseEntryFormProps {
   shiftOptions: ShiftOption[];
-  targetShiftId: string;
-  onTargetShiftIdChange: (value: string) => void;
-  supplierId: string;
-  onSupplierIdChange: (value: string) => void;
   suppliers: any[];
-  productId: string;
-  onProductIdChange: (value: string) => void;
   products: any[];
-  quantity: string;
-  onQuantityChange: (value: string) => void;
-  totalAmount: string;
-  onTotalAmountChange: (value: string) => void;
-  invoiceNumber: string;
-  onInvoiceNumberChange: (value: string) => void;
-  notes: string;
-  onNotesChange: (value: string) => void;
-  isFuel: boolean;
-  productTanks: any[];
-  allocations: Record<string, string>;
-  onAllocationsChange: (next: Record<string, string>) => void;
+  /** All station tanks; the form filters to the selected product's tanks. */
+  tanks: any[];
+  defaultValues?: Partial<PurchaseEntryFormValues>;
   submitting: boolean;
   error?: string | null;
   onCancel: () => void;
-  onSubmit: (e: React.FormEvent) => void;
+  onSubmit: (values: PurchaseEntryFormValues, allocations: Record<string, string>) => void | Promise<void>;
   submitLabel?: string;
   submittingLabel?: string;
-  submitDisabled?: boolean;
-  quantityLabel?: string;
   totalAmountLabel?: string;
   productLabel?: string;
   invoiceLabel?: string;
@@ -43,41 +29,42 @@ export interface PurchaseEntryFormProps {
   supplierEmptyMessage?: string;
   showShiftHintWhenSingle?: boolean;
   showDerivedUnitPrice?: boolean;
-  transactionDate?: string;
-  onTransactionDateChange?: (value: string) => void;
+  showDateField?: boolean;
   dateLabel?: string;
 }
 
+const fieldStyle: React.CSSProperties = {
+  height: '32px',
+  borderRadius: 'var(--radius-input)',
+  border: '1px solid var(--border-strong)',
+  padding: '0 8px',
+};
+const labelStyle: React.CSSProperties = { fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 };
+const errorTextStyle: React.CSSProperties = { fontSize: '11px', color: 'var(--brand-danger)' };
+
+const EMPTY_DEFAULTS: PurchaseEntryFormValues = {
+  targetShiftId: '',
+  transactionDate: '',
+  supplierId: '',
+  productId: '',
+  quantity: undefined as unknown as number,
+  totalAmount: undefined as unknown as number,
+  invoiceNumber: '',
+  notes: '',
+};
+
 export const PurchaseEntryForm: React.FC<PurchaseEntryFormProps> = ({
   shiftOptions,
-  targetShiftId,
-  onTargetShiftIdChange,
-  supplierId,
-  onSupplierIdChange,
   suppliers,
-  productId,
-  onProductIdChange,
   products,
-  quantity,
-  onQuantityChange,
-  totalAmount,
-  onTotalAmountChange,
-  invoiceNumber,
-  onInvoiceNumberChange,
-  notes,
-  onNotesChange,
-  isFuel,
-  productTanks,
-  allocations,
-  onAllocationsChange,
+  tanks,
+  defaultValues,
   submitting,
   error,
   onCancel,
   onSubmit,
   submitLabel = 'Add Purchase',
   submittingLabel = 'Saving...',
-  submitDisabled,
-  quantityLabel = 'Quantity',
   totalAmountLabel = 'Amount (INR)',
   productLabel = 'Product',
   invoiceLabel = 'Invoice Number',
@@ -86,41 +73,61 @@ export const PurchaseEntryForm: React.FC<PurchaseEntryFormProps> = ({
   supplierEmptyMessage = 'No active suppliers found. Please add or enable suppliers in the Supplier Registry tab.',
   showShiftHintWhenSingle = true,
   showDerivedUnitPrice = true,
-  transactionDate,
-  onTransactionDateChange,
+  showDateField = false,
   dateLabel = 'Purchase Date',
 }) => {
   const hasMultipleShiftOptions = shiftOptions.length > 1;
+
+  const { register, handleSubmit, reset, watch, formState: { errors } } = useForm<PurchaseEntryFormValues>({
+    resolver: zodResolver(purchaseEntryFormSchema) as any,
+    defaultValues: { ...EMPTY_DEFAULTS, ...defaultValues },
+  });
+
+  const [allocations, setAllocations] = useState<Record<string, string>>({});
+
+  const serializedDefaults = JSON.stringify(defaultValues ?? {});
+  useEffect(() => {
+    reset({ ...EMPTY_DEFAULTS, ...defaultValues });
+    setAllocations({});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serializedDefaults]);
+
+  const productId = watch('productId');
+  const quantity = watch('quantity');
+  const totalAmount = watch('totalAmount');
+
   const selectedFormProduct = products.find((p) => p.id === productId);
   const unitLabel = selectedFormProduct?.unit || 'units';
+  const isFuel = selectedFormProduct?.productType === 'FUEL';
+  const productTanks = tanks.filter((tank) => tank.productId === productId);
+
+  // Auto-fill allocation for a single-tank fuel product; clear for non-fuel.
+  useEffect(() => {
+    if (isFuel && productTanks.length === 1 && quantity) {
+      setAllocations({ [productTanks[0].id]: String(quantity) });
+    } else if (!isFuel) {
+      setAllocations({});
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isFuel, productId, quantity, productTanks.length]);
+
   const allocatedTotal = Object.values(allocations).reduce((sum, val) => sum + (Number(val) || 0), 0);
   const quantityNum = Number(quantity || 0);
   const hasAllocationMismatch = Math.abs(allocatedTotal - quantityNum) >= 0.01;
   const showDerivedPrice = showDerivedUnitPrice && Number(quantity) > 0 && Number(totalAmount) > 0;
 
   return (
-    <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-      {onTransactionDateChange && (
+    <form onSubmit={handleSubmit((values) => onSubmit(values, allocations))} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      {showDateField && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>{dateLabel}</label>
-          <input
-            type="date"
-            value={transactionDate ?? ''}
-            onChange={(e) => onTransactionDateChange(e.target.value)}
-            disabled={submitting}
-            style={{ height: '32px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', padding: '0 8px' }}
-          />
+          <label style={labelStyle}>{dateLabel}</label>
+          <input type="date" disabled={submitting} style={fieldStyle} {...register('transactionDate')} />
         </div>
       )}
       {hasMultipleShiftOptions ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Target Shift</label>
-          <select
-            value={targetShiftId}
-            onChange={(e) => onTargetShiftIdChange(e.target.value)}
-            disabled={submitting}
-            style={{ height: '32px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', padding: '0 8px' }}
-          >
+          <label style={labelStyle}>Target Shift</label>
+          <select disabled={submitting} style={fieldStyle} {...register('targetShiftId')}>
             {shiftOptions.map((option) => (
               <option key={option.id} value={option.id}>{option.label}</option>
             ))}
@@ -139,18 +146,13 @@ export const PurchaseEntryForm: React.FC<PurchaseEntryFormProps> = ({
       ) : null}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Supplier</label>
+        <label style={labelStyle}>Supplier</label>
         {suppliers.length === 0 ? (
           <div style={{ fontSize: '12px', color: 'var(--brand-warning)', padding: '6px 0' }}>
             {supplierEmptyMessage}
           </div>
         ) : (
-          <select
-            value={supplierId}
-            onChange={(e) => onSupplierIdChange(e.target.value)}
-            disabled={submitting}
-            style={{ height: '32px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', padding: '0 8px' }}
-          >
+          <select disabled={submitting} style={fieldStyle} {...register('supplierId')}>
             {suppliers.map((supplier) => (
               <option key={supplier.id} value={supplier.id}>
                 {supplier.name} {supplier.metadata?.gstin ? `(${supplier.metadata.gstin})` : ''}
@@ -158,44 +160,29 @@ export const PurchaseEntryForm: React.FC<PurchaseEntryFormProps> = ({
             ))}
           </select>
         )}
+        {errors.supplierId && <span style={errorTextStyle}>{errors.supplierId.message}</span>}
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>{productLabel}</label>
-        <select
-          value={productId}
-          onChange={(e) => onProductIdChange(e.target.value)}
-          disabled={submitting}
-          style={{ height: '32px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', padding: '0 8px' }}
-        >
+        <label style={labelStyle}>{productLabel}</label>
+        <select disabled={submitting} style={fieldStyle} {...register('productId')}>
           {products.map((product) => (
             <option key={product.id} value={product.id}>{product.name}{product.brand ? ` · ${product.brand}` : ''}{product.code ? ` (${product.code})` : ''}</option>
           ))}
         </select>
+        {errors.productId && <span style={errorTextStyle}>{errors.productId.message}</span>}
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>{`Quantity (${unitLabel})`}</label>
-          <input
-            type="number"
-            required
-            value={quantity}
-            onChange={(e) => onQuantityChange(e.target.value)}
-            disabled={submitting}
-            style={{ height: '32px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', padding: '0 8px' }}
-          />
+          <label style={labelStyle}>{`Quantity (${unitLabel})`}</label>
+          <input type="number" step="any" disabled={submitting} style={fieldStyle} {...register('quantity')} />
+          {errors.quantity && <span style={errorTextStyle}>{errors.quantity.message}</span>}
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>{totalAmountLabel}</label>
-          <input
-            type="number"
-            required
-            value={totalAmount}
-            onChange={(e) => onTotalAmountChange(e.target.value)}
-            disabled={submitting}
-            style={{ height: '32px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', padding: '0 8px' }}
-          />
+          <label style={labelStyle}>{totalAmountLabel}</label>
+          <input type="number" step="any" disabled={submitting} style={fieldStyle} {...register('totalAmount')} />
+          {errors.totalAmount && <span style={errorTextStyle}>{errors.totalAmount.message}</span>}
         </div>
       </div>
 
@@ -220,7 +207,7 @@ export const PurchaseEntryForm: React.FC<PurchaseEntryFormProps> = ({
                 type="number"
                 placeholder="0.00"
                 value={allocations[tank.id] || ''}
-                onChange={(e) => onAllocationsChange({ ...allocations, [tank.id]: e.target.value })}
+                onChange={(e) => setAllocations({ ...allocations, [tank.id]: e.target.value })}
                 disabled={submitting}
                 style={{ height: '28px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', padding: '0 8px', textAlign: 'right', fontSize: '12px' }}
               />
@@ -263,27 +250,13 @@ export const PurchaseEntryForm: React.FC<PurchaseEntryFormProps> = ({
       )}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>{invoiceLabel}</label>
-        <input
-          type="text"
-          placeholder={invoicePlaceholder}
-          value={invoiceNumber}
-          onChange={(e) => onInvoiceNumberChange(e.target.value)}
-          disabled={submitting}
-          style={{ height: '32px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', padding: '0 8px' }}
-        />
+        <label style={labelStyle}>{invoiceLabel}</label>
+        <input type="text" placeholder={invoicePlaceholder} disabled={submitting} style={fieldStyle} {...register('invoiceNumber')} />
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Notes</label>
-        <input
-          type="text"
-          placeholder={notesPlaceholder}
-          value={notes}
-          onChange={(e) => onNotesChange(e.target.value)}
-          disabled={submitting}
-          style={{ height: '32px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', padding: '0 8px' }}
-        />
+        <label style={labelStyle}>Notes</label>
+        <input type="text" placeholder={notesPlaceholder} disabled={submitting} style={fieldStyle} {...register('notes')} />
       </div>
 
       {error && (
@@ -301,7 +274,7 @@ export const PurchaseEntryForm: React.FC<PurchaseEntryFormProps> = ({
 
       <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
         <button type="button" onClick={onCancel} disabled={submitting} className="btn btn-secondary btn-md">Cancel</button>
-        <button type="submit" disabled={submitDisabled ?? (submitting || !quantity || !totalAmount)} className="btn btn-primary btn-md">
+        <button type="submit" disabled={submitting} className="btn btn-primary btn-md">
           {submitting ? submittingLabel : submitLabel}
         </button>
       </div>

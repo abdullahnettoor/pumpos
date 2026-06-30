@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
+import type { ExpenseEntryFormValues } from '@pump/shared';
 import { CloudTransactionService } from '../services/cloud.js';
 import { Calendar, Plus, Info } from 'lucide-react';
 import { PageLayout } from './primitives/PageLayout.js';
@@ -64,11 +65,7 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({ selectedStation, def
 
   // Drawer + form
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const [targetShiftId, setTargetShiftId] = useState('');
-  const [transactionDate, setTransactionDate] = useState('');
-  const [categoryId, setCategoryId] = useState('');
-  const [amount, setAmount] = useState('');
-  const [description, setDescription] = useState('');
+  const [formDefaults, setFormDefaults] = useState<Partial<ExpenseEntryFormValues>>({});
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -80,22 +77,22 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({ selectedStation, def
 
   const openDrawer = () => {
     setFormError(null);
-    setCategoryId(categories[0]?.id ?? '');
-    setAmount('');
-    setDescription('');
-    setTargetShiftId(preferredShiftId);
-    setTransactionDate(new Date().toISOString().slice(0, 10));
+    setFormDefaults({
+      categoryId: categories[0]?.id ?? '',
+      targetShiftId: preferredShiftId,
+      transactionDate: new Date().toISOString().slice(0, 10),
+      amount: undefined as unknown as number,
+      description: '',
+    });
     setIsDrawerOpen(true);
   };
   const closeDrawer = () => setIsDrawerOpen(false);
 
-  const handleAddExpense = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!categoryId || !amount) return;
+  const handleAddExpense = async (values: ExpenseEntryFormValues) => {
     try {
       setSubmitting(true);
       setFormError(null);
-      await transactionService.recordExpense({ stationId: stationId ?? undefined, transactionDate: transactionDate || undefined, paidFrom: 'BANK', categoryId, amount: Number(amount), description: description || undefined });
+      await transactionService.recordExpense({ stationId: stationId ?? undefined, transactionDate: values.transactionDate || undefined, paidFrom: 'BANK', categoryId: values.categoryId, amount: Number(values.amount), description: values.description || undefined });
       closeDrawer();
       invalidateOperational(stationId);
     } catch (err: any) {
@@ -192,23 +189,14 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({ selectedStation, def
       <Drawer isOpen={isDrawerOpen} onClose={closeDrawer} title="Log New Expense">
         <ExpenseEntryForm
           shiftOptions={[]}
-          targetShiftId={targetShiftId}
-          onTargetShiftIdChange={setTargetShiftId}
-          transactionDate={transactionDate}
-          onTransactionDateChange={setTransactionDate}
+          categories={categories}
+          defaultValues={formDefaults}
+          showDateField
           dateLabel="Expense Date"
           showShiftHintWhenSingle={false}
-          categoryId={categoryId}
-          onCategoryIdChange={setCategoryId}
-          categories={categories}
-          amount={amount}
-          onAmountChange={setAmount}
-          description={description}
-          onDescriptionChange={setDescription}
           submitting={submitting}
           error={formError}
           submittingLabel="Recording..."
-          submitDisabled={submitting || !amount || !categoryId}
           amountLabel="Amount (₹)"
           descriptionPlaceholder="e.g. Bank charges, owner drawings, office supplies"
           onCancel={closeDrawer}

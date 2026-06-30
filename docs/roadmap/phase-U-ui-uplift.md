@@ -9,10 +9,19 @@
 ## U1 — DataTable migration
 - Migrated to `DataTable` (in-cell action/ledger renderers, sortable, parity): PurchasesList ✅, CustomersList ✅,
   ProductsCatalog ✅ (tax column now VAT/GST/Exempt category-aware), PaymentTerminalsPanel ✅, UserRolesAssignment ✅.
-  Remaining: FuelPricingPanel (specialized price-history / inline-edit table).
+  Remaining: FuelPricingPanel (specialized price-history / inline-edit table) — now relocated to a
+  top-level **Fuel Pricing** nav view (out of Station Overview, since prices change often).
 
-## U2 — Forms → RHF + Zod
-- Standardize entry forms (Expense/Purchase/Collection/Merchandise) on react-hook-form + shared Zod schemas (`@pump/shared`).
+## U2 — Forms → RHF + Zod ✅
+- Entry forms (Expense/Purchase/Collection/Merchandise) are now **self-contained**: each owns its
+  state via react-hook-form + a shared Zod schema in `@pump/shared`
+  (`expenseEntryFormSchema`, `collectionEntryFormSchema`, `purchaseEntryFormSchema`,
+  `merchandiseSaleEntryFormSchema`; string-friendly via `z.coerce.number`). Forms expose
+  `defaultValues` + `onSubmit(values)` (Purchase also yields tank `allocations`); product→price
+  autofill, tank-allocation and stock lookups moved into the forms.
+- Consumers rewired: `ExpensesList`, `CustomersList` (collection), `PurchasesList`, and
+  `ShiftsManagement`/`QuickEntryDrawer` — the latter slimmed from ~60 threaded props to data
+  sources + per-form defaults + validated submit handlers. Build + shared tests green.
 
 ## U3 — Page shells & KPIs
 - Consistent `PageLayout` + KPI header per screen; list → drawer → edit everywhere; reduce modals.

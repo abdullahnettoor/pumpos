@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -84,36 +84,48 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
     },
   });
 
-  // Pre-fill form if existing handover is passed
+  // Pre-fill form if existing handover is passed.
+  //
+  // This must run only ONCE per drawer open. Recording an in-drawer credit sale
+  // calls onCreditChanged(), which makes the parent refetch shift status and pass
+  // fresh `nozzles`/`terminals`/`existingHandover` identities. Without this guard
+  // the effect would re-run on that refetch and overwrite the operator's
+  // in-progress nozzle/POS/cash entries.
+  const prefilledRef = useRef(false);
   useEffect(() => {
-    if (isOpen) {
-      setError(null);
-      if (existingHandover) {
-        setValue('cashHandedOver', Number(existingHandover.cashHandedOver ?? 0));
-        setValue('cardHandedOver', Number(existingHandover.cardHandedOver ?? 0));
-        setValue('upiHandedOver', Number(existingHandover.upiHandedOver ?? 0));
-        setValue('creditHandedOver', Number(existingHandover.creditHandedOver ?? 0));
-      } else {
-        setValue('cashHandedOver', 0);
-        setValue('cardHandedOver', 0);
-        setValue('upiHandedOver', 0);
-        setValue('creditHandedOver', 0);
-      }
-
-      // Initialize readings and testing maps
-      nozzles.forEach((nz) => {
-        setValue(`nozzleReadings.${nz.nozzleId}`, Number(nz.closingReading ?? nz.openingReading ?? 0));
-        setValue(`nozzleTesting.${nz.nozzleId}`, 0); // Default testing volume to 0
-      });
-
-      // Initialize per-terminal POS batch maps (pre-fill from existing entries).
-      const existingEntries: any[] = existingHandover?.terminalEntries ?? [];
-      terminals.forEach((t: any) => {
-        const prior = existingEntries.find((e) => e.terminalId === t.terminalId);
-        setValue(`terminalCard.${t.terminalId}`, Number(prior?.cardAmount ?? 0));
-        setValue(`terminalUpi.${t.terminalId}`, Number(prior?.upiAmount ?? 0));
-      });
+    if (!isOpen) {
+      prefilledRef.current = false;
+      return;
     }
+    if (prefilledRef.current) return;
+    prefilledRef.current = true;
+
+    setError(null);
+    if (existingHandover) {
+      setValue('cashHandedOver', Number(existingHandover.cashHandedOver ?? 0));
+      setValue('cardHandedOver', Number(existingHandover.cardHandedOver ?? 0));
+      setValue('upiHandedOver', Number(existingHandover.upiHandedOver ?? 0));
+      setValue('creditHandedOver', Number(existingHandover.creditHandedOver ?? 0));
+    } else {
+      setValue('cashHandedOver', 0);
+      setValue('cardHandedOver', 0);
+      setValue('upiHandedOver', 0);
+      setValue('creditHandedOver', 0);
+    }
+
+    // Initialize readings and testing maps
+    nozzles.forEach((nz) => {
+      setValue(`nozzleReadings.${nz.nozzleId}`, Number(nz.closingReading ?? nz.openingReading ?? 0));
+      setValue(`nozzleTesting.${nz.nozzleId}`, 0); // Default testing volume to 0
+    });
+
+    // Initialize per-terminal POS batch maps (pre-fill from existing entries).
+    const existingEntries: any[] = existingHandover?.terminalEntries ?? [];
+    terminals.forEach((t: any) => {
+      const prior = existingEntries.find((e) => e.terminalId === t.terminalId);
+      setValue(`terminalCard.${t.terminalId}`, Number(prior?.cardAmount ?? 0));
+      setValue(`terminalUpi.${t.terminalId}`, Number(prior?.upiAmount ?? 0));
+    });
   }, [isOpen, existingHandover, nozzles, terminals, setValue]);
 
   // Watch form values reactively for live expected sales and variance computations

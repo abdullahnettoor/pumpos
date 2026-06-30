@@ -1,4 +1,7 @@
-import React from 'react';
+import React, { useEffect } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { collectionEntryFormSchema, type CollectionEntryFormValues } from '@pump/shared';
 
 export interface ShiftOption {
   id: string;
@@ -7,24 +10,14 @@ export interface ShiftOption {
 
 export interface CollectionEntryFormProps {
   shiftOptions: ShiftOption[];
-  targetShiftId: string;
-  onTargetShiftIdChange: (value: string) => void;
-  customerId: string;
-  onCustomerIdChange: (value: string) => void;
   customers: any[];
-  amount: string;
-  onAmountChange: (value: string) => void;
-  paymentMethod: 'Cash' | 'Card' | 'UPI' | 'BankTransfer';
-  onPaymentMethodChange: (value: 'Cash' | 'Card' | 'UPI' | 'BankTransfer') => void;
-  notes: string;
-  onNotesChange: (value: string) => void;
+  defaultValues?: Partial<CollectionEntryFormValues>;
   submitting: boolean;
   error?: string | null;
   onCancel: () => void;
-  onSubmit: (e: React.FormEvent) => void;
+  onSubmit: (values: CollectionEntryFormValues) => void | Promise<void>;
   submitLabel?: string;
   submittingLabel?: string;
-  submitDisabled?: boolean;
   amountLabel?: string;
   amountPlaceholder?: string;
   notesLabel?: string;
@@ -32,35 +25,41 @@ export interface CollectionEntryFormProps {
   paymentMethodLabel?: string;
   usePaymentMethodButtons?: boolean;
   walkInOptionLabel?: string;
-  customerLabelCredit?: string;
-  customerLabelNonCredit?: string;
+  customerLabel?: string;
   customerOptionLabel?: (customer: any) => string;
   showShiftHintWhenSingle?: boolean;
-  transactionDate?: string;
-  onTransactionDateChange?: (value: string) => void;
+  showDateField?: boolean;
   dateLabel?: string;
 }
 
+const fieldStyle: React.CSSProperties = {
+  height: '32px',
+  borderRadius: 'var(--radius-input)',
+  border: '1px solid var(--border-strong)',
+  padding: '0 8px',
+};
+const labelStyle: React.CSSProperties = { fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 };
+const errorTextStyle: React.CSSProperties = { fontSize: '11px', color: 'var(--brand-danger)' };
+
+const EMPTY_DEFAULTS: CollectionEntryFormValues = {
+  targetShiftId: '',
+  transactionDate: '',
+  customerId: '',
+  amount: undefined as unknown as number,
+  paymentMethod: 'Cash',
+  notes: '',
+};
+
 export const CollectionEntryForm: React.FC<CollectionEntryFormProps> = ({
   shiftOptions,
-  targetShiftId,
-  onTargetShiftIdChange,
-  customerId,
-  onCustomerIdChange,
   customers,
-  amount,
-  onAmountChange,
-  paymentMethod,
-  onPaymentMethodChange,
-  notes,
-  onNotesChange,
+  defaultValues,
   submitting,
   error,
   onCancel,
   onSubmit,
   submitLabel = 'Log Collection',
   submittingLabel = 'Saving...',
-  submitDisabled,
   amountLabel = 'Amount (INR)',
   amountPlaceholder,
   notesLabel = 'Notes',
@@ -68,39 +67,39 @@ export const CollectionEntryForm: React.FC<CollectionEntryFormProps> = ({
   paymentMethodLabel = 'Payment Method',
   usePaymentMethodButtons = false,
   walkInOptionLabel = 'Walk-in / Not Linked',
-  customerLabelCredit = 'Customer Account (Required)',
-  customerLabelNonCredit = 'Customer Account (Optional for Walk-in)',
+  customerLabel = 'Customer Account (Optional for Walk-in)',
   customerOptionLabel,
   showShiftHintWhenSingle = true,
-  transactionDate,
-  onTransactionDateChange,
+  showDateField = false,
   dateLabel = 'Collection Date',
 }) => {
   const hasMultipleShiftOptions = shiftOptions.length > 1;
 
+  const { register, handleSubmit, reset, watch, setValue, formState: { errors } } = useForm<CollectionEntryFormValues>({
+    resolver: zodResolver(collectionEntryFormSchema) as any,
+    defaultValues: { ...EMPTY_DEFAULTS, ...defaultValues },
+  });
+
+  const serializedDefaults = JSON.stringify(defaultValues ?? {});
+  useEffect(() => {
+    reset({ ...EMPTY_DEFAULTS, ...defaultValues });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serializedDefaults]);
+
+  const paymentMethod = watch('paymentMethod');
+
   return (
-    <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-      {onTransactionDateChange && (
+    <form onSubmit={handleSubmit((values) => onSubmit(values))} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      {showDateField && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>{dateLabel}</label>
-          <input
-            type="date"
-            value={transactionDate ?? ''}
-            onChange={(e) => onTransactionDateChange(e.target.value)}
-            disabled={submitting}
-            style={{ height: '32px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', padding: '0 8px' }}
-          />
+          <label style={labelStyle}>{dateLabel}</label>
+          <input type="date" disabled={submitting} style={fieldStyle} {...register('transactionDate')} />
         </div>
       )}
       {hasMultipleShiftOptions ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Target Shift</label>
-          <select
-            value={targetShiftId}
-            onChange={(e) => onTargetShiftIdChange(e.target.value)}
-            disabled={submitting}
-            style={{ height: '32px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', padding: '0 8px' }}
-          >
+          <label style={labelStyle}>Target Shift</label>
+          <select disabled={submitting} style={fieldStyle} {...register('targetShiftId')}>
             {shiftOptions.map((option) => (
               <option key={option.id} value={option.id}>{option.label}</option>
             ))}
@@ -119,7 +118,7 @@ export const CollectionEntryForm: React.FC<CollectionEntryFormProps> = ({
       ) : null}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>{paymentMethodLabel}</label>
+        <label style={labelStyle}>{paymentMethodLabel}</label>
         {usePaymentMethodButtons ? (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '8px' }}>
             {([
@@ -131,7 +130,7 @@ export const CollectionEntryForm: React.FC<CollectionEntryFormProps> = ({
               <button
                 key={value}
                 type="button"
-                onClick={() => onPaymentMethodChange(value)}
+                onClick={() => setValue('paymentMethod', value, { shouldValidate: true })}
                 disabled={submitting}
                 style={{
                   height: '32px',
@@ -149,12 +148,7 @@ export const CollectionEntryForm: React.FC<CollectionEntryFormProps> = ({
             ))}
           </div>
         ) : (
-          <select
-            value={paymentMethod}
-            onChange={(e) => onPaymentMethodChange(e.target.value as 'Cash' | 'Card' | 'UPI' | 'BankTransfer')}
-            disabled={submitting}
-            style={{ height: '32px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', padding: '0 8px' }}
-          >
+          <select disabled={submitting} style={fieldStyle} {...register('paymentMethod')}>
             <option value="Cash">Cash</option>
             <option value="Card">Card</option>
             <option value="UPI">UPI</option>
@@ -164,15 +158,8 @@ export const CollectionEntryForm: React.FC<CollectionEntryFormProps> = ({
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>
-          {customerLabelNonCredit}
-        </label>
-        <select
-          value={customerId}
-          onChange={(e) => onCustomerIdChange(e.target.value)}
-          disabled={submitting}
-          style={{ height: '32px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', padding: '0 8px' }}
-        >
+        <label style={labelStyle}>{customerLabel}</label>
+        <select disabled={submitting} style={fieldStyle} {...register('customerId')}>
           <option value="">{walkInOptionLabel}</option>
           {customers.map((customer) => (
             <option key={customer.id} value={customer.id}>
@@ -183,28 +170,14 @@ export const CollectionEntryForm: React.FC<CollectionEntryFormProps> = ({
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>{amountLabel}</label>
-        <input
-          type="number"
-          required
-          placeholder={amountPlaceholder}
-          value={amount}
-          onChange={(e) => onAmountChange(e.target.value)}
-          disabled={submitting}
-          style={{ height: '32px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', padding: '0 8px' }}
-        />
+        <label style={labelStyle}>{amountLabel}</label>
+        <input type="number" step="any" placeholder={amountPlaceholder} disabled={submitting} style={fieldStyle} {...register('amount')} />
+        {errors.amount && <span style={errorTextStyle}>{errors.amount.message}</span>}
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>{notesLabel}</label>
-        <input
-          type="text"
-          placeholder={notesPlaceholder}
-          value={notes}
-          onChange={(e) => onNotesChange(e.target.value)}
-          disabled={submitting}
-          style={{ height: '32px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', padding: '0 8px' }}
-        />
+        <label style={labelStyle}>{notesLabel}</label>
+        <input type="text" placeholder={notesPlaceholder} disabled={submitting} style={fieldStyle} {...register('notes')} />
       </div>
 
       {error && (
@@ -222,7 +195,7 @@ export const CollectionEntryForm: React.FC<CollectionEntryFormProps> = ({
 
       <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
         <button type="button" onClick={onCancel} disabled={submitting} className="btn btn-secondary btn-md">Cancel</button>
-        <button type="submit" disabled={submitDisabled ?? (submitting || !amount)} className="btn btn-primary btn-md">
+        <button type="submit" disabled={submitting} className="btn btn-primary btn-md">
           {submitting ? submittingLabel : submitLabel}
         </button>
       </div>

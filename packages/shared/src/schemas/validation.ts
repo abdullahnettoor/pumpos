@@ -364,3 +364,61 @@ export const supplierPaymentSchema = z.object({
   notes: z.string().max(500).optional().nullable(),
 });
 
+// ---------------------------------------------------------------------------
+// UI entry-form schemas
+//
+// These back the transaction quick-entry forms (Expense / Collection / Purchase
+// / Merchandise sale) which are driven by react-hook-form + zodResolver. They
+// are string-friendly (number fields use z.coerce.number so raw <input> string
+// values validate and coerce in one pass) and intentionally looser than the
+// service-layer schemas above: `targetShiftId` is optional because some entry
+// points (e.g. the standalone Expenses page) post to a business day with no
+// drawer shift.
+// ---------------------------------------------------------------------------
+
+export const expenseEntryFormSchema = z.object({
+  targetShiftId: z.string().optional().default(''),
+  transactionDate: z.string().optional().default(''),
+  categoryId: z.string().min(1, 'Category is required'),
+  amount: z.coerce.number({ invalid_type_error: 'Amount is required' }).positive('Amount must be positive'),
+  description: z.string().max(255).optional().default(''),
+});
+export type ExpenseEntryFormValues = z.infer<typeof expenseEntryFormSchema>;
+
+export const collectionEntryFormSchema = z.object({
+  targetShiftId: z.string().optional().default(''),
+  transactionDate: z.string().optional().default(''),
+  customerId: z.string().optional().default(''),
+  amount: z.coerce.number({ invalid_type_error: 'Amount is required' }).positive('Amount must be positive'),
+  paymentMethod: z.enum(['Cash', 'Card', 'UPI', 'BankTransfer']).default('Cash'),
+  notes: z.string().max(500).optional().default(''),
+});
+export type CollectionEntryFormValues = z.infer<typeof collectionEntryFormSchema>;
+
+export const purchaseEntryFormSchema = z.object({
+  targetShiftId: z.string().optional().default(''),
+  transactionDate: z.string().optional().default(''),
+  supplierId: z.string().min(1, 'Supplier is required'),
+  productId: z.string().min(1, 'Product is required'),
+  quantity: z.coerce.number({ invalid_type_error: 'Quantity is required' }).positive('Quantity must be positive'),
+  totalAmount: z.coerce.number({ invalid_type_error: 'Amount is required' }).positive('Amount must be positive'),
+  invoiceNumber: z.string().max(100).optional().default(''),
+  notes: z.string().max(500).optional().default(''),
+});
+export type PurchaseEntryFormValues = z.infer<typeof purchaseEntryFormSchema>;
+
+export const merchandiseSaleEntryFormSchema = z.object({
+  targetShiftId: z.string().optional().default(''),
+  productId: z.string().min(1, 'Product is required'),
+  quantity: z.coerce.number({ invalid_type_error: 'Quantity is required' }).positive('Quantity must be positive'),
+  unitPrice: z.coerce.number({ invalid_type_error: 'Unit price is required' }).nonnegative('Unit price must be non-negative'),
+  paymentMethod: z.enum(['Cash', 'Card', 'UPI', 'Credit']).default('Cash'),
+  customerId: z.string().optional().default(''),
+  attendantId: z.string().optional().default(''),
+  notes: z.string().max(500).optional().default(''),
+}).refine((data) => data.paymentMethod !== 'Credit' || !!data.customerId, {
+  message: 'A customer account is required for credit sales',
+  path: ['customerId'],
+});
+export type MerchandiseSaleEntryFormValues = z.infer<typeof merchandiseSaleEntryFormSchema>;
+

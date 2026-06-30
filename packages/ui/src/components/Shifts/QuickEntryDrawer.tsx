@@ -4,6 +4,12 @@ import { ExpenseEntryForm } from '../transactions/ExpenseEntryForm.js';
 import { CollectionEntryForm } from '../transactions/CollectionEntryForm.js';
 import { PurchaseEntryForm } from '../transactions/PurchaseEntryForm.js';
 import { MerchandiseSaleEntryForm } from '../transactions/MerchandiseSaleEntryForm.js';
+import type {
+  ExpenseEntryFormValues,
+  CollectionEntryFormValues,
+  PurchaseEntryFormValues,
+  MerchandiseSaleEntryFormValues,
+} from '@pump/shared';
 
 type QuickEntryType = 'expense' | 'collection' | 'purchase' | 'merchandise-sale';
 
@@ -17,81 +23,40 @@ interface QuickEntryDrawerProps {
 
   shiftOptions: { id: string; label: string }[];
   targetShiftId: string;
-  onTargetShiftIdChange: (id: string) => void;
   activeShiftTemplateName?: string;
 
-  // Expense
+  // Shared data sources
   categories: any[];
-  expenseCategoryId: string;
-  onExpenseCategoryIdChange: (id: string) => void;
-  expenseAmount: string;
-  onExpenseAmountChange: (v: string) => void;
-  expenseDescription: string;
-  onExpenseDescriptionChange: (v: string) => void;
-  onExpenseSubmit: (e: React.FormEvent) => void | Promise<void>;
-
-  // Collection
   customers: any[];
-  collectionCustomerId: string;
-  onCollectionCustomerIdChange: (id: string) => void;
-  collectionAmount: string;
-  onCollectionAmountChange: (v: string) => void;
-  collectionPaymentMethod: 'Cash' | 'Card' | 'UPI' | 'BankTransfer';
-  onCollectionPaymentMethodChange: (m: 'Cash' | 'Card' | 'UPI' | 'BankTransfer') => void;
-  collectionNotes: string;
-  onCollectionNotesChange: (v: string) => void;
-  onCollectionSubmit: (e: React.FormEvent) => void | Promise<void>;
-
-  // Purchase
   suppliers: any[];
   products: any[];
-  purchaseSupplierId: string;
-  onPurchaseSupplierIdChange: (id: string) => void;
-  purchaseProductId: string;
-  onPurchaseProductIdChange: (id: string) => void;
-  purchaseQuantity: string;
-  onPurchaseQuantityChange: (v: string) => void;
-  purchaseTotalAmount: string;
-  onPurchaseTotalAmountChange: (v: string) => void;
-  purchaseInvoiceNumber: string;
-  onPurchaseInvoiceNumberChange: (v: string) => void;
-  purchaseNotes: string;
-  onPurchaseNotesChange: (v: string) => void;
-  isFuelPurchase: boolean;
-  purchaseProductTanks: any[];
-  purchaseAllocations: any;
-  onPurchaseAllocationsChange: (a: any) => void;
-  onPurchaseSubmit: (e: React.FormEvent) => void | Promise<void>;
+  tanks: any[];
+  attendants?: { userId: string; userName: string }[];
+  stockByProduct?: Record<string, number>;
 
-  // Merchandise (non-fuel) sale
-  saleProductId: string;
-  onSaleProductIdChange: (id: string) => void;
-  saleQuantity: string;
-  onSaleQuantityChange: (v: string) => void;
-  saleUnitPrice: string;
-  onSaleUnitPriceChange: (v: string) => void;
-  salePaymentMethod: 'Cash' | 'Card' | 'UPI' | 'Credit';
-  onSalePaymentMethodChange: (m: 'Cash' | 'Card' | 'UPI' | 'Credit') => void;
-  saleCustomerId: string;
-  onSaleCustomerIdChange: (id: string) => void;
-  saleNotes: string;
-  onSaleNotesChange: (v: string) => void;
-  saleAvailableStock?: number;
-  saleAttendants?: { userId: string; userName: string }[];
-  saleAttendantId?: string;
-  onSaleAttendantIdChange?: (id: string) => void;
-  onMerchandiseSaleSubmit: (e: React.FormEvent) => void | Promise<void>;
+  // Per-form default values
+  expenseDefaults: Partial<ExpenseEntryFormValues>;
+  collectionDefaults: Partial<CollectionEntryFormValues>;
+  purchaseDefaults: Partial<PurchaseEntryFormValues>;
+  merchandiseDefaults: Partial<MerchandiseSaleEntryFormValues>;
+
+  // Validated submit handlers
+  onExpenseSubmit: (values: ExpenseEntryFormValues) => void | Promise<void>;
+  onCollectionSubmit: (values: CollectionEntryFormValues) => void | Promise<void>;
+  onPurchaseSubmit: (values: PurchaseEntryFormValues, allocations: Record<string, string>) => void | Promise<void>;
+  onMerchandiseSaleSubmit: (values: MerchandiseSaleEntryFormValues) => void | Promise<void>;
 }
 
 /**
- * Slide-in quick-entry drawer for the active shift, hosting the expense / collection /
- * purchase entry forms. Extracted from ShiftsManagement; all state lives in
- * the parent and is passed through.
+ * Slide-in quick-entry drawer for the active shift, hosting the expense /
+ * collection / purchase / merchandise-sale entry forms. Each form is
+ * self-contained (react-hook-form + a shared Zod schema); this drawer supplies
+ * the data sources, per-form default values, and validated submit handlers.
  */
 export const QuickEntryDrawer: React.FC<QuickEntryDrawerProps> = (props) => {
   const {
     isOpen, onClose, quickEntryType, loading, submitting, error,
-    shiftOptions, targetShiftId, onTargetShiftIdChange, activeShiftTemplateName,
+    shiftOptions, targetShiftId, activeShiftTemplateName,
   } = props;
 
   const title = (() => {
@@ -128,15 +93,8 @@ export const QuickEntryDrawer: React.FC<QuickEntryDrawerProps> = (props) => {
           {quickEntryType === 'expense' && (
             <ExpenseEntryForm
               shiftOptions={shiftOptions}
-              targetShiftId={targetShiftId}
-              onTargetShiftIdChange={onTargetShiftIdChange}
-              categoryId={props.expenseCategoryId}
-              onCategoryIdChange={props.onExpenseCategoryIdChange}
               categories={props.categories}
-              amount={props.expenseAmount}
-              onAmountChange={props.onExpenseAmountChange}
-              description={props.expenseDescription}
-              onDescriptionChange={props.onExpenseDescriptionChange}
+              defaultValues={props.expenseDefaults}
               submitting={submitting}
               error={error}
               onCancel={onClose}
@@ -148,24 +106,14 @@ export const QuickEntryDrawer: React.FC<QuickEntryDrawerProps> = (props) => {
           {quickEntryType === 'collection' && (
             <CollectionEntryForm
               shiftOptions={shiftOptions}
-              targetShiftId={targetShiftId}
-              onTargetShiftIdChange={onTargetShiftIdChange}
-              customerId={props.collectionCustomerId}
-              onCustomerIdChange={props.onCollectionCustomerIdChange}
               customers={props.customers}
-              amount={props.collectionAmount}
-              onAmountChange={props.onCollectionAmountChange}
-              paymentMethod={props.collectionPaymentMethod}
-              onPaymentMethodChange={props.onCollectionPaymentMethodChange}
-              notes={props.collectionNotes}
-              onNotesChange={props.onCollectionNotesChange}
+              defaultValues={props.collectionDefaults}
               submitting={submitting}
               error={error}
               onCancel={onClose}
               onSubmit={props.onCollectionSubmit}
               submitLabel={'Log Collection'}
               submittingLabel="Recording..."
-              submitDisabled={submitting || !props.collectionAmount}
               amountLabel="Amount (₹)"
               amountPlaceholder="0.00"
               notesLabel="Notes / Fleet Slip ID"
@@ -180,26 +128,10 @@ export const QuickEntryDrawer: React.FC<QuickEntryDrawerProps> = (props) => {
           {quickEntryType === 'purchase' && (
             <PurchaseEntryForm
               shiftOptions={shiftOptions}
-              targetShiftId={targetShiftId}
-              onTargetShiftIdChange={onTargetShiftIdChange}
-              supplierId={props.purchaseSupplierId}
-              onSupplierIdChange={props.onPurchaseSupplierIdChange}
               suppliers={props.suppliers}
-              productId={props.purchaseProductId}
-              onProductIdChange={props.onPurchaseProductIdChange}
               products={props.products}
-              quantity={props.purchaseQuantity}
-              onQuantityChange={props.onPurchaseQuantityChange}
-              totalAmount={props.purchaseTotalAmount}
-              onTotalAmountChange={props.onPurchaseTotalAmountChange}
-              invoiceNumber={props.purchaseInvoiceNumber}
-              onInvoiceNumberChange={props.onPurchaseInvoiceNumberChange}
-              notes={props.purchaseNotes}
-              onNotesChange={props.onPurchaseNotesChange}
-              isFuel={props.isFuelPurchase}
-              productTanks={props.purchaseProductTanks}
-              allocations={props.purchaseAllocations}
-              onAllocationsChange={props.onPurchaseAllocationsChange}
+              tanks={props.tanks}
+              defaultValues={props.purchaseDefaults}
               submitting={submitting}
               error={error}
               onCancel={onClose}
@@ -211,26 +143,11 @@ export const QuickEntryDrawer: React.FC<QuickEntryDrawerProps> = (props) => {
           {quickEntryType === 'merchandise-sale' && (
             <MerchandiseSaleEntryForm
               shiftOptions={shiftOptions}
-              targetShiftId={targetShiftId}
-              onTargetShiftIdChange={onTargetShiftIdChange}
               products={props.products}
-              productId={props.saleProductId}
-              onProductIdChange={props.onSaleProductIdChange}
-              quantity={props.saleQuantity}
-              onQuantityChange={props.onSaleQuantityChange}
-              unitPrice={props.saleUnitPrice}
-              onUnitPriceChange={props.onSaleUnitPriceChange}
-              paymentMethod={props.salePaymentMethod}
-              onPaymentMethodChange={props.onSalePaymentMethodChange}
               customers={props.customers}
-              customerId={props.saleCustomerId}
-              onCustomerIdChange={props.onSaleCustomerIdChange}
-              attendants={props.saleAttendants}
-              attendantId={props.saleAttendantId}
-              onAttendantIdChange={props.onSaleAttendantIdChange}
-              notes={props.saleNotes}
-              onNotesChange={props.onSaleNotesChange}
-              availableStock={props.saleAvailableStock}
+              attendants={props.attendants}
+              stockByProduct={props.stockByProduct}
+              defaultValues={props.merchandiseDefaults}
               submitting={submitting}
               error={error}
               onCancel={onClose}

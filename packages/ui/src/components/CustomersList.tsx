@@ -10,7 +10,7 @@ import { DataTable } from './primitives/DataTable.js';
 import type { ColumnDef } from '@tanstack/react-table';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { customerCreateSchema } from '@pump/shared';
+import { customerCreateSchema, type CollectionEntryFormValues } from '@pump/shared';
 
 const transactionService = new CloudTransactionService();
 
@@ -160,12 +160,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
 
   const [formError, setFormError] = useState<string | null>(null);
   const [drawerError, setDrawerError] = useState<string | null>(null);
-  const [collectionShiftId, setCollectionShiftId] = useState('');
-  const [collectionTransactionDate, setCollectionTransactionDate] = useState('');
-  const [collectionCustomerId, setCollectionCustomerId] = useState('');
-  const [collectionAmount, setCollectionAmount] = useState('');
-  const [collectionPaymentMethod, setCollectionPaymentMethod] = useState<'Cash' | 'Card' | 'UPI' | 'BankTransfer'>('Cash');
-  const [collectionNotes, setCollectionNotes] = useState('');
+  const [collectionDefaults, setCollectionDefaults] = useState<Partial<CollectionEntryFormValues>>({});
   const [collectionSubmitting, setCollectionSubmitting] = useState(false);
 
   // Prepaid top-up state
@@ -215,12 +210,14 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
 
   const resetCollectionForm = () => {
     const preferredShiftId = resolvePreferredShiftId(activeShift, recentClosedShifts);
-    setCollectionShiftId(preferredShiftId);
-    setCollectionTransactionDate(new Date().toISOString().slice(0, 10));
-    setCollectionCustomerId(customers[0]?.id || '');
-    setCollectionAmount('');
-    setCollectionPaymentMethod('Cash');
-    setCollectionNotes('');
+    setCollectionDefaults({
+      targetShiftId: preferredShiftId,
+      transactionDate: new Date().toISOString().slice(0, 10),
+      customerId: customers[0]?.id || '',
+      amount: undefined as unknown as number,
+      paymentMethod: 'Cash',
+      notes: '',
+    });
     setCollectionSubmitting(false);
     setFormError(null);
   };
@@ -270,21 +267,12 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
     }
   }, [activeTab, vehicleCustomerId]);
 
-  useEffect(() => {
-    setCollectionShiftId(resolvePreferredShiftId(activeShift, recentClosedShifts));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusQ.data, defaultShiftId]);
-
   // Initialise default selections from query data once it loads.
   useEffect(() => {
     const eligible = allCustomers.filter((c: any) => c.customerType === 'Credit' || c.customerType === 'Fleet');
     setVehicleCustomerId((prev) => prev || eligible[0]?.id || '');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customersAllQ.data]);
-  useEffect(() => {
-    setCollectionCustomerId((prev) => prev || customers[0]?.id || '');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [customersActiveQ.data]);
 
   const loadVehicles = async (customerId: string) => {
     if (!customerId) {
@@ -376,21 +364,21 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
     }
   };
 
-  const onAddCollection = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const onAddCollection = async (values: CollectionEntryFormValues) => {
     setFormError(null);
-    if (!collectionShiftId || !collectionAmount) {
+    if (!values.targetShiftId) {
+      setFormError('A shift is required to record this entry.');
       return;
     }
 
     try {
       setCollectionSubmitting(true);
       await transactionService.recordCollection({
-        shiftId: collectionShiftId,
-        customerId: collectionCustomerId || undefined,
-        amount: Number(collectionAmount),
-        paymentMethod: collectionPaymentMethod,
-        notes: collectionNotes || undefined,
+        shiftId: values.targetShiftId,
+        customerId: values.customerId || undefined,
+        amount: Number(values.amount),
+        paymentMethod: values.paymentMethod,
+        notes: values.notes || undefined,
       });
 
       closeCollectionDrawer();
@@ -1212,27 +1200,16 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
         <CollectionEntryForm
             shiftOptions={[]}
             showShiftHintWhenSingle={false}
-            transactionDate={collectionTransactionDate}
-            onTransactionDateChange={setCollectionTransactionDate}
+            showDateField
             dateLabel="Collection Date"
-            targetShiftId={collectionShiftId}
-            onTargetShiftIdChange={setCollectionShiftId}
-            customerId={collectionCustomerId}
-            onCustomerIdChange={setCollectionCustomerId}
+            defaultValues={collectionDefaults}
             customers={customers}
-            amount={collectionAmount}
-            onAmountChange={setCollectionAmount}
-            paymentMethod={collectionPaymentMethod}
-            onPaymentMethodChange={setCollectionPaymentMethod}
-            notes={collectionNotes}
-            onNotesChange={setCollectionNotes}
             submitting={collectionSubmitting}
             error={formError}
             onCancel={closeCollectionDrawer}
             onSubmit={onAddCollection}
             submitLabel={'Log Collection'}
             submittingLabel="Recording..."
-            submitDisabled={collectionSubmitting || !collectionAmount}
             amountLabel="Amount (₹)"
             amountPlaceholder="0.00"
             notesLabel="Notes / Fleet Slip ID"
