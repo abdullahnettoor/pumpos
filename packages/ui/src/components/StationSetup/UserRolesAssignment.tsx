@@ -146,6 +146,7 @@ export const UserRolesAssignment: React.FC = () => {
       resetForm();
       setIsFormOpen(false);
       loadData(true);
+      toast.success(editingUser ? 'Team member updated.' : 'Team member added.');
     } catch (err: any) {
       toast.error(err.message || 'Failed to save team member');
     }

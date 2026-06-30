@@ -121,6 +121,7 @@ export const ProductsCatalog: React.FC = () => {
         });
       }
       loadProducts(true);
+      toast.success('Standard product added.');
     } catch (err: any) {
       toast.error(err.message || 'Failed to quick add standard product');
     }
@@ -175,6 +176,7 @@ export const ProductsCatalog: React.FC = () => {
       resetForm();
       setIsFormOpen(false);
       loadProducts(true);
+      toast.success(editingProduct ? 'Product updated.' : 'Product created.');
     } catch (err: any) {
       toast.error(err.message || 'Failed to save product');
     }
@@ -203,6 +205,7 @@ export const ProductsCatalog: React.FC = () => {
     try {
       await productService.archiveProduct(id);
       loadProducts(true);
+      toast.success('Product archived.');
     } catch (err: any) {
       toast.error(err.message);
     }

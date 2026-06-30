@@ -442,6 +442,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         amount: Number(values.amount),
         description: values.description || undefined,
       });
+      toast.success('Expense recorded.');
       closeQuickEntryDrawer();
       await loadShiftStatus();
     } catch (err: any) {
@@ -468,6 +469,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         paymentMethod: values.paymentMethod,
         notes: values.notes || undefined,
       });
+      toast.success('Collection recorded.');
       closeQuickEntryDrawer();
       await loadShiftStatus();
     } catch (err: any) {
@@ -500,6 +502,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         attendantId: values.attendantId || undefined,
         notes: values.notes || undefined,
       });
+      toast.success('Sale recorded.');
       closeQuickEntryDrawer();
       await loadShiftStatus();
     } catch (err: any) {
@@ -531,6 +534,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
           tankAllocations: l.tankAllocations && l.tankAllocations.length > 0 ? l.tankAllocations : undefined,
         })),
       });
+      toast.success('Purchase recorded.');
       closeQuickEntryDrawer();
       await loadShiftStatus();
     } catch (err: any) {
@@ -609,6 +613,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
 
       await shiftService.openShift(payload);
       await loadShiftStatus();
+      toast.success('Shift opened.');
     } catch (err: any) {
       toast.error(err.message || 'Failed to open shift');
     } finally {

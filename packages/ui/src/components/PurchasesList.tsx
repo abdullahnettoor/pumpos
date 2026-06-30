@@ -8,6 +8,7 @@ import { PurchaseEntryForm } from './transactions/PurchaseEntryForm.js';
 import { LedgerView } from './ledger/LedgerView.js';
 import { DataTable } from './primitives/DataTable.js';
 import { Tabs } from './primitives/Tabs.js';
+import { useToast } from './primitives/ToastProvider.js';
 import type { ColumnDef } from '@tanstack/react-table';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -104,6 +105,7 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, d
   const productsQ = useProducts();
   const tanksQ = useTanks(stationId);
   const invalidateOperational = useInvalidateOperational();
+  const toast = useToast();
 
   const purchases = purchasesQ.data ?? [];
   const activeShift = statusQ.data?.activeShift ?? null;
@@ -296,6 +298,7 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, d
 
       closePurchaseDrawer();
       invalidateOperational(stationId);
+      toast.success('Purchase recorded.');
     } catch (err: any) {
       setFormError(err.message || 'Failed to record supplier purchase');
     } finally {

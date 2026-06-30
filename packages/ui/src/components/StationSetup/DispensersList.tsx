@@ -181,6 +181,7 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
       setIsFormOpen(false);
       resetForm();
       loadData(true);
+      toast.success('Dispenser unit created.');
     } catch (err: any) {
       toast.error(err.message || 'Failed to create dispenser unit and nozzles');
     } finally {

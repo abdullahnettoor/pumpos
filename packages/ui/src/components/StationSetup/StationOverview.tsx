@@ -129,6 +129,7 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
       onStationSelected(updated);
       setEditing(false);
       loadStations(true);
+      toast.success('Station details saved.');
     } catch (err: any) {
       toast.error(err.message);
     }
@@ -161,6 +162,7 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
       onStationSelected(updated);
       setEditingBusiness(false);
       loadStations(true);
+      toast.success('Business details saved.');
     } catch (err: any) {
       toast.error(err.message);
     }

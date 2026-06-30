@@ -61,6 +61,7 @@ export const ShiftTemplates: React.FC = () => {
       });
       setIsFormOpen(false);
       loadTemplates();
+      toast.success('Shift template created.');
     } catch (err: any) {
       toast.error(err.message || 'Failed to create shift template');
     }
@@ -88,6 +89,7 @@ export const ShiftTemplates: React.FC = () => {
         isActive: true,
       });
       await loadTemplates();
+      toast.success('Default shifts created.');
     } catch (err: any) {
       toast.error(err.message || 'Failed to pre-fill default shifts');
     } finally {

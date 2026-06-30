@@ -5,6 +5,7 @@ import { CloudTransactionService } from '../services/cloud.js';
 import { Calendar, Plus, Info } from 'lucide-react';
 import { PageLayout } from './primitives/PageLayout.js';
 import { DataTable } from './primitives/DataTable.js';
+import { useToast } from './primitives/ToastProvider.js';
 import { Drawer } from './Drawer.js';
 import { ExpenseEntryForm } from './transactions/ExpenseEntryForm.js';
 import { useExpenses, useShiftStatus, useExpenseCategories, useInvalidateOperational } from '../query/hooks.js';
@@ -49,6 +50,7 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({ selectedStation, def
   const statusQ = useShiftStatus(stationId, true);
   const categoriesQ = useExpenseCategories();
   const invalidateOperational = useInvalidateOperational();
+  const toast = useToast();
 
   const expenses = expensesQ.data ?? [];
   const categories = categoriesQ.data ?? [];
@@ -95,6 +97,7 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({ selectedStation, def
       await transactionService.recordExpense({ stationId: stationId ?? undefined, transactionDate: values.transactionDate || undefined, paidFrom: 'BANK', categoryId: values.categoryId, amount: Number(values.amount), description: values.description || undefined });
       closeDrawer();
       invalidateOperational(stationId);
+      toast.success('Expense recorded.');
     } catch (err: any) {
       setFormError(err.message || 'Failed to record expense');
     } finally {

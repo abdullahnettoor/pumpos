@@ -86,6 +86,7 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
     try {
       setReopening(true);
       await shiftService.reopenShift(shiftId);
+      toast.success('Shift reopened.');
       onReopenSuccess();
     } catch (err: any) {
       toast.error(err.message || 'Failed to reopen shift');

@@ -9,6 +9,7 @@ import { LedgerView } from './ledger/LedgerView.js';
 import { DataTable } from './primitives/DataTable.js';
 import { Tabs } from './primitives/Tabs.js';
 import { useConfirm } from './primitives/ConfirmDialog.js';
+import { useToast } from './primitives/ToastProvider.js';
 import type { ColumnDef } from '@tanstack/react-table';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -125,6 +126,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
   const productsQ = useProducts();
   const invalidateOperational = useInvalidateOperational();
   const confirm = useConfirm();
+  const toast = useToast();
 
   const customers = customersActiveQ.data ?? [];
   const allCustomers = customersAllQ.data ?? [];
@@ -347,6 +349,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
 
       setIsVehicleDrawerOpen(false);
       await loadVehicles(vehicleForm.customerId);
+      toast.success(editingVehicle ? 'Vehicle updated.' : 'Vehicle added.');
     } catch (err: any) {
       setVehicleError(err.message || 'Failed to save vehicle');
     } finally {
@@ -362,6 +365,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
     try {
       await transactionService.deleteCustomerVehicle(vehicle.id);
       await loadVehicles(vehicle.customerId);
+      toast.success('Vehicle deleted.');
     } catch (err: any) {
       setVehicleError(err.message || 'Failed to delete vehicle');
     }
@@ -386,6 +390,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
 
       closeCollectionDrawer();
       invalidateOperational(stationId);
+      toast.success('Collection recorded.');
     } catch (err: any) {
       setFormError(err.message || 'Failed to record entry');
     } finally {
@@ -464,6 +469,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
 
       setIsDrawerOpen(false);
       invalidateOperational(stationId);
+      toast.success(editingCustomer ? 'Customer updated.' : 'Customer created.');
     } catch (err: any) {
       setDrawerError(err.message || 'Failed to save customer');
     }
@@ -495,6 +501,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
       setIsTopupDrawerOpen(false);
       invalidateOperational(stationId);
       await openLedgerDrawer(selectedLedgerCustomer);
+      toast.success('Top-up recorded.');
     } catch (err: any) {
       setTopupError(err.message || 'Failed to record top-up');
     } finally {

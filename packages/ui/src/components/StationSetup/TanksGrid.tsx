@@ -77,6 +77,7 @@ export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
       setIsFormOpen(false);
       resetForm();
       loadData(true);
+      toast.success('Tank created.');
     } catch (err: any) {
       toast.error(err.message || 'Failed to create tank');
     }
@@ -109,6 +110,7 @@ export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
       });
 
       await loadData(true);
+      toast.success('Tank created.');
     } catch (err: any) {
       toast.error(err.message || 'Failed to create tank');
     } finally {

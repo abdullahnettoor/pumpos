@@ -68,6 +68,7 @@ export const FuelPricingPanel: React.FC<FuelPricingPanelProps> = ({ selectedStat
       setPrice('');
       // Refresh local state
       await loadPricingData();
+      toast.success('Price updated.');
     } catch (err: any) {
       toast.error(err.message || 'Failed to record new price');
     } finally {

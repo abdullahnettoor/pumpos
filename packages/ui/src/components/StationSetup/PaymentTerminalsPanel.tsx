@@ -133,6 +133,7 @@ export const PaymentTerminalsPanel: React.FC<PaymentTerminalsPanelProps> = ({ st
       setIsFormOpen(false);
       resetForm();
       loadData();
+      toast.success(editingId ? 'Terminal updated.' : 'Terminal added.');
     } catch (err: any) {
       toast.error(err.message || 'Failed to save payment terminal');
     } finally {
@@ -144,6 +145,7 @@ export const PaymentTerminalsPanel: React.FC<PaymentTerminalsPanelProps> = ({ st
     try {
       await terminalService.updateTerminal(t.id, { isActive: !t.isActive });
       loadData();
+      toast.success(t.isActive ? 'Terminal disabled.' : 'Terminal enabled.');
     } catch (err: any) {
       toast.error(err.message || 'Failed to update terminal');
     }
