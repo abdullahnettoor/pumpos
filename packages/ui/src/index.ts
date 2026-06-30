@@ -36,5 +36,7 @@ export { KpiCard } from './components/primitives/KpiCard.js';
 export type { KpiCardProps, KpiTone } from './components/primitives/KpiCard.js';
 export { DataTable } from './components/primitives/DataTable.js';
 export type { DataTableProps } from './components/primitives/DataTable.js';
+export { Tabs } from './components/primitives/Tabs.js';
+export type { TabsProps, TabItem } from './components/primitives/Tabs.js';
 export { Skeleton, SkeletonCard, SkeletonGrid } from './components/primitives/Skeleton.js';
 

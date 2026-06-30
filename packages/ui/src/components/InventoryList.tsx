@@ -3,6 +3,7 @@ import type { ColumnDef } from '@tanstack/react-table';
 import { Database, RefreshCw, AlertTriangle, ArrowUpRight, ArrowDownRight, ClipboardCheck } from 'lucide-react';
 import { PageLayout } from './primitives/PageLayout.js';
 import { DataTable } from './primitives/DataTable.js';
+import { Tabs } from './primitives/Tabs.js';
 import { Drawer } from './Drawer.js';
 import { CloudTransactionService } from '../services/cloud.js';
 import { useInventoryStatus, useInventoryItems, useInventoryMovements, useInventoryVariances } from '../query/hooks.js';
@@ -173,17 +174,6 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation })
     );
   }
 
-  const tabBtn = (tab: TabType): React.CSSProperties => ({
-    padding: '10px 4px',
-    fontSize: '14px',
-    fontWeight: activeTab === tab ? 600 : 500,
-    color: activeTab === tab ? 'var(--brand-primary)' : 'var(--text-muted)',
-    borderBottom: activeTab === tab ? '2px solid var(--brand-primary)' : '2px solid transparent',
-    background: 'none',
-    border: 'none',
-    cursor: 'pointer',
-  });
-
   const tanks = tanksQ.data ?? [];
 
   return (
@@ -202,12 +192,18 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation })
           </div>
         }
         toolbar={
-          <div style={{ display: 'flex', gap: 'var(--space-6)', borderBottom: '1px solid var(--border-soft)', width: '100%' }}>
-            <button style={tabBtn('tanks')} onClick={() => setActiveTab('tanks')}>Tank Status</button>
-            <button style={tabBtn('items')} onClick={() => setActiveTab('items')}>Merchandise Stock</button>
-            <button style={tabBtn('movements')} onClick={() => setActiveTab('movements')}>Stock Movements</button>
-            <button style={tabBtn('variances')} onClick={() => setActiveTab('variances')}>Physical Reconciliations</button>
-          </div>
+          <Tabs
+            aria-label="Inventory views"
+            style={{ width: '100%' }}
+            activeId={activeTab}
+            onChange={(id) => setActiveTab(id as TabType)}
+            tabs={[
+              { id: 'tanks', label: 'Tank Status' },
+              { id: 'items', label: 'Merchandise Stock' },
+              { id: 'movements', label: 'Stock Movements' },
+              { id: 'variances', label: 'Physical Reconciliations' },
+            ]}
+          />
         }
       >
         {activeTab === 'tanks' && (

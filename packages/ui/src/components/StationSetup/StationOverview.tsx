@@ -7,6 +7,7 @@ import { ProductsCatalog } from './ProductsCatalog.js';
 import { TanksGrid } from './TanksGrid.js';
 import { DispensersList } from './DispensersList.js';
 import { ShiftTemplates } from './ShiftTemplates.js';
+import { Tabs } from '../primitives/Tabs.js';
 import { LoadingSpinner } from '../LoadingSpinner.js';
 import { UserRolesAssignment } from './UserRolesAssignment.js';
 import { PaymentTerminalsPanel } from './PaymentTerminalsPanel.js';
@@ -192,39 +193,20 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           
           {/* Tabs bar */}
-          <div style={{ display: 'flex', borderBottom: '1px solid var(--border-soft)', gap: '16px', overflowX: 'auto' }}>
-            {[
+          <Tabs
+            aria-label="Station setup"
+            activeId={activeTab}
+            onChange={(id) => setActiveTab(id as any)}
+            tabs={[
               { id: 'general', label: 'General Info' },
               { id: 'products', label: 'Products Catalog' },
               { id: 'tanks', label: 'Storage Tanks' },
               { id: 'dispensers', label: 'Dispenser Units' },
               { id: 'terminals', label: 'Payment Terminals' },
               { id: 'shifts', label: 'Shift Templates' },
-              { id: 'roster', label: 'Team Roster' }
-            ].map((tab) => {
-              const isActive = activeTab === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id as any)}
-                  style={{
-                    padding: '8px 12px 12px 12px',
-                    border: 'none',
-                    backgroundColor: 'transparent',
-                    color: isActive ? 'var(--brand-primary)' : 'var(--text-muted)',
-                    fontWeight: isActive ? 600 : 500,
-                    fontSize: '13px',
-                    borderBottom: isActive ? '2px solid var(--brand-primary)' : '2px solid transparent',
-                    cursor: 'pointer',
-                    transition: 'all 0.15s ease',
-                    whiteSpace: 'nowrap'
-                  }}
-                >
-                  {tab.label}
-                </button>
-              );
-            })}
-          </div>
+              { id: 'roster', label: 'Team Roster' },
+            ]}
+          />
 
           {/* Tab Content Panels */}
           <div style={{ backgroundColor: 'var(--bg-surface)', padding: '20px', borderRadius: 'var(--radius-card)', border: '1px solid var(--border-soft)', minHeight: '350px' }}>

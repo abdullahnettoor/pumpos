@@ -14,6 +14,7 @@ import { NozzleReadingsGrid } from './NozzleReadingsGrid.js';
 import { ShiftTotalsSummary } from './ShiftTotalsSummary.js';
 import { OpenShiftForm } from './OpenShiftForm.js';
 import { QuickEntryDrawer } from './QuickEntryDrawer.js';
+import { Tabs } from '../primitives/Tabs.js';
 import { useShiftStatus, useInvalidateOperational, queryKeys, TIER } from '../../query/hooks.js';
 import { Station, resolveBusinessDate } from '@pump/shared';
 import type {
@@ -747,46 +748,37 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     : 'idle';
 
   const renderShiftSubTabs = () => (
-    <div className="shift-subtabs no-print">
-      <button
-        type="button"
-        className={`shift-subtab${shiftSubTab === 'today' ? ' shift-subtab--active' : ''}`}
-        onClick={() => setShiftSubTab('today')}
-      >
-        <Clock3 size={13} /> Today
-        {activeShift && (
-          <span
-            style={{
-              marginLeft: '4px',
-              fontSize: '10px',
-              padding: '1px 6px',
-              borderRadius: '8px',
-              background: 'var(--state-success-bg)',
-              color: 'var(--state-success-fg)',
-              fontWeight: 600,
-              letterSpacing: '0.04em',
-              textTransform: 'uppercase',
-            }}
-          >
-            Open
-          </span>
-        )}
-      </button>
-      <button
-        type="button"
-        className={`shift-subtab${shiftSubTab === 'planning' ? ' shift-subtab--active' : ''}`}
-        onClick={() => setShiftSubTab('planning')}
-      >
-        <CalendarRange size={13} /> Planning
-      </button>
-      <button
-        type="button"
-        className={`shift-subtab${shiftSubTab === 'history' ? ' shift-subtab--active' : ''}`}
-        onClick={() => setShiftSubTab('history')}
-      >
-        <History size={13} /> History
-      </button>
-    </div>
+    <Tabs
+      aria-label="Shift views"
+      className="no-print"
+      activeId={shiftSubTab}
+      onChange={(id) => setShiftSubTab(id as 'today' | 'planning' | 'history')}
+      tabs={[
+        {
+          id: 'today',
+          label: 'Today',
+          icon: <Clock3 size={13} />,
+          badge: activeShift ? (
+            <span
+              style={{
+                fontSize: '10px',
+                padding: '1px 6px',
+                borderRadius: '8px',
+                background: 'var(--state-success-bg)',
+                color: 'var(--state-success-fg)',
+                fontWeight: 600,
+                letterSpacing: '0.04em',
+                textTransform: 'uppercase',
+              }}
+            >
+              Open
+            </span>
+          ) : undefined,
+        },
+        { id: 'planning', label: 'Planning', icon: <CalendarRange size={13} /> },
+        { id: 'history', label: 'History', icon: <History size={13} /> },
+      ]}
+    />
   );
 
   // Sub-tab: History

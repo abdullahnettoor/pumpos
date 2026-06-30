@@ -7,6 +7,7 @@ import { Drawer } from './Drawer.js';
 import { CollectionEntryForm } from './transactions/CollectionEntryForm.js';
 import { LedgerView } from './ledger/LedgerView.js';
 import { DataTable } from './primitives/DataTable.js';
+import { Tabs } from './primitives/Tabs.js';
 import type { ColumnDef } from '@tanstack/react-table';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -586,77 +587,16 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
       </div>
 
       {/* Tabs Menu */}
-      <div style={{
-        display: 'flex',
-        borderBottom: '1px solid var(--border-soft)',
-        gap: '24px',
-      }}>
-        <button
-          onClick={() => setActiveTab('transactions')}
-          style={{
-            padding: '12px 4px',
-            fontSize: '14px',
-            fontWeight: activeTab === 'transactions' ? 600 : 500,
-            color: activeTab === 'transactions' ? 'var(--primary)' : 'var(--text-muted)',
-            borderBottom: activeTab === 'transactions' ? '2px solid var(--primary)' : '2px solid transparent',
-            background: 'none',
-            borderTop: 'none',
-            borderLeft: 'none',
-            borderRight: 'none',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-          }}
-        >
-          <CreditCard size={16} />
-          Shift Collections & Sales
-        </button>
-
-        <button
-          onClick={() => setActiveTab('registry')}
-          style={{
-            padding: '12px 4px',
-            fontSize: '14px',
-            fontWeight: activeTab === 'registry' ? 600 : 500,
-            color: activeTab === 'registry' ? 'var(--primary)' : 'var(--text-muted)',
-            borderBottom: activeTab === 'registry' ? '2px solid var(--primary)' : '2px solid transparent',
-            background: 'none',
-            borderTop: 'none',
-            borderLeft: 'none',
-            borderRight: 'none',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-          }}
-        >
-          <Settings size={16} />
-          Customer Registry
-        </button>
-
-        <button
-          onClick={() => setActiveTab('vehicles')}
-          style={{
-            padding: '12px 4px',
-            fontSize: '14px',
-            fontWeight: activeTab === 'vehicles' ? 600 : 500,
-            color: activeTab === 'vehicles' ? 'var(--primary)' : 'var(--text-muted)',
-            borderBottom: activeTab === 'vehicles' ? '2px solid var(--primary)' : '2px solid transparent',
-            background: 'none',
-            borderTop: 'none',
-            borderLeft: 'none',
-            borderRight: 'none',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-          }}
-        >
-          <Truck size={16} />
-          Vehicles
-        </button>
-      </div>
+      <Tabs
+        aria-label="Customers"
+        activeId={activeTab}
+        onChange={(id) => setActiveTab(id as TabType)}
+        tabs={[
+          { id: 'transactions', label: 'Shift Collections & Sales', icon: <CreditCard size={15} /> },
+          { id: 'registry', label: 'Customer Registry', icon: <Settings size={15} /> },
+          { id: 'vehicles', label: 'Vehicles', icon: <Truck size={15} /> },
+        ]}
+      />
 
       {/* Tab Contents */}
       <div>

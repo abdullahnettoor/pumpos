@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { CloudShiftService } from '../services/cloud.js';
 import { DailyDssrView } from './DailyDssrView.js';
 import { LoadingSpinner } from './LoadingSpinner.js';
+import { Tabs } from './primitives/Tabs.js';
 import { Calendar, RefreshCw, Play, Zap, Layers } from 'lucide-react';
 
 const shiftService = new CloudShiftService();
@@ -124,48 +125,15 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
       </div>
 
       {/* Tab Navigation */}
-      <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid var(--border-soft)' }}>
-        <button
-          onClick={() => setActiveTab('daily-dssr')}
-          style={{
-            padding: '10px 18px',
-            backgroundColor: 'transparent',
-            borderBottom: activeTab === 'daily-dssr' ? '2px solid var(--brand-primary)' : '2px solid transparent',
-            borderTop: 'none',
-            borderLeft: 'none',
-            borderRight: 'none',
-            color: activeTab === 'daily-dssr' ? 'var(--brand-primary)' : 'var(--text-muted)',
-            fontWeight: activeTab === 'daily-dssr' ? 600 : 400,
-            fontSize: '13px',
-            cursor: 'pointer',
-            marginBottom: '-1px',
-            transition: 'all 0.15s ease',
-          }}
-        >
-          <Zap size={13} style={{ display: 'inline', marginRight: '6px', verticalAlign: 'middle' }} />
-          Daily DSSR
-        </button>
-        <button
-          onClick={() => setActiveTab('custom-reports')}
-          style={{
-            padding: '10px 18px',
-            backgroundColor: 'transparent',
-            borderBottom: activeTab === 'custom-reports' ? '2px solid var(--brand-primary)' : '2px solid transparent',
-            borderTop: 'none',
-            borderLeft: 'none',
-            borderRight: 'none',
-            color: activeTab === 'custom-reports' ? 'var(--brand-primary)' : 'var(--text-muted)',
-            fontWeight: activeTab === 'custom-reports' ? 600 : 400,
-            fontSize: '13px',
-            cursor: 'pointer',
-            marginBottom: '-1px',
-            transition: 'all 0.15s ease',
-          }}
-        >
-          <Layers size={13} style={{ display: 'inline', marginRight: '6px', verticalAlign: 'middle' }} />
-          Custom Reports
-        </button>
-      </div>
+      <Tabs
+        aria-label="Reports"
+        activeId={activeTab}
+        onChange={(id) => setActiveTab(id as ReportsTab)}
+        tabs={[
+          { id: 'daily-dssr', label: 'Daily DSSR', icon: <Zap size={13} /> },
+          { id: 'custom-reports', label: 'Custom Reports', icon: <Layers size={13} /> },
+        ]}
+      />
 
       {error && (
         <div

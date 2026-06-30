@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { CloudTransactionService } from '../../services/cloud.js';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys, TIER } from '../../query/hooks.js';
+import { Tabs } from '../primitives/Tabs.js';
 import { 
   Plus, 
   Coins, 
@@ -267,26 +268,16 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
           )}
         </div>
 
-        <div style={{ display: 'flex', gap: '8px', marginBottom: '-1px' }}>
-          <button
-            className={`btn ${activeTab === 'expenses' ? 'btn-ghost' : ''} btn-md`} style={{ borderBottom: activeTab === 'expenses' ? '2px solid var(--brand-primary)' : '2px solid transparent' }}
-            onClick={() => setActiveTab('expenses')}
-          >
-            <Coins size={14} /> Petty Expenses
-          </button>
-          <button
-            className={`btn ${activeTab === 'purchases' ? 'btn-ghost' : ''} btn-md`} style={{ borderBottom: activeTab === 'purchases' ? '2px solid var(--brand-primary)' : '2px solid transparent' }}
-            onClick={() => setActiveTab('purchases')}
-          >
-            <ShoppingCart size={14} /> Fuel Deliveries (Purchases)
-          </button>
-          <button
-            className={`btn ${activeTab === 'collections' ? 'btn-ghost' : ''} btn-md`} style={{ borderBottom: activeTab === 'collections' ? '2px solid var(--brand-primary)' : '2px solid transparent' }}
-            onClick={() => setActiveTab('collections')}
-          >
-            <CreditCard size={14} /> Credit Sales & Collections
-          </button>
-        </div>
+        <Tabs
+          aria-label="Shift transactions"
+          activeId={activeTab}
+          onChange={(id) => setActiveTab(id as 'expenses' | 'purchases' | 'collections')}
+          tabs={[
+            { id: 'expenses', label: 'Petty Expenses', icon: <Coins size={14} /> },
+            { id: 'purchases', label: 'Fuel Deliveries (Purchases)', icon: <ShoppingCart size={14} /> },
+            { id: 'collections', label: 'Credit Sales & Collections', icon: <CreditCard size={14} /> },
+          ]}
+        />
       </div>
 
       {/* Main Panel Content */}

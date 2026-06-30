@@ -24,7 +24,13 @@
   sources + per-form defaults + validated submit handlers. Build + shared tests green.
 
 ## U3 — Page shells & KPIs
-- Consistent `PageLayout` + KPI header per screen; list → drawer → edit everywhere; reduce modals.
+- **Tabs primitive ✅** — new accessible `Tabs` (`primitives/Tabs.tsx`, `role=tablist/tab`, ←/→/Home/End keys,
+  icon + badge support). Migrated every bespoke `borderBottom` tab strip onto it: ReportsOverview, InventoryList,
+  PurchasesList, CustomersList, StationOverview, ShiftsManagement subtabs (Today/Planning/History + "Open" badge),
+  ShiftTransactionsPanel. Removed the 3 divergent tab implementations.
+- Remaining: consistent `PageLayout` + KPI header per screen (Reports/Shifts still hand-roll); de-dup shift
+  transaction entry (QuickEntryDrawer vs ShiftTransactionsPanel); split overloaded Station "General Info";
+  replace `alert()`/`window.confirm` with drawer/confirm; gate dead Reports "Custom Reports" tab.
 
 ## U4 — Typed API client
 - Replace ad-hoc `request()` calls with a typed client sharing schemas.
