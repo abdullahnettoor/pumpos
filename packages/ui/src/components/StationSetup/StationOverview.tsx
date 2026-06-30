@@ -8,6 +8,7 @@ import { TanksGrid } from './TanksGrid.js';
 import { DispensersList } from './DispensersList.js';
 import { ShiftTemplates } from './ShiftTemplates.js';
 import { Tabs } from '../primitives/Tabs.js';
+import { useToast } from '../primitives/ToastProvider.js';
 import { LoadingSpinner } from '../LoadingSpinner.js';
 import { UserRolesAssignment } from './UserRolesAssignment.js';
 import { PaymentTerminalsPanel } from './PaymentTerminalsPanel.js';
@@ -27,6 +28,7 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
   const [stationsList, setStationsList] = useState<Station[]>([]);
   const [loading, setLoading] = useState(true);
   const qc = useQueryClient();
+  const toast = useToast();
   const [editing, setEditing] = useState(false);
   const [editingBusiness, setEditingBusiness] = useState(false);
   const [activeTab, setActiveTab] = useState<'general' | 'business' | 'products' | 'tanks' | 'dispensers' | 'terminals' | 'shifts' | 'roster'>('general');
@@ -128,7 +130,7 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
       setEditing(false);
       loadStations(true);
     } catch (err: any) {
-      alert(err.message);
+      toast.error(err.message);
     }
   };
 
@@ -160,7 +162,7 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
       setEditingBusiness(false);
       loadStations(true);
     } catch (err: any) {
-      alert(err.message);
+      toast.error(err.message);
     }
   };
 

@@ -6,6 +6,8 @@ import { Product, PRODUCT_UNITS } from '@pump/shared';
 import { StatusBadge } from '../StatusBadge.js';
 import { Drawer } from '../Drawer.js';
 import { DataTable } from '../primitives/DataTable.js';
+import { useToast } from '../primitives/ToastProvider.js';
+import { useConfirm } from '../primitives/ConfirmDialog.js';
 import type { ColumnDef } from '@tanstack/react-table';
 
 const productService = new CloudProductService();
@@ -52,6 +54,8 @@ const buildProductColumns = (startEdit: (p: any) => void, archive: (id: string) 
 
 export const ProductsCatalog: React.FC = () => {
   const qc = useQueryClient();
+  const toast = useToast();
+  const confirm = useConfirm();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -118,7 +122,7 @@ export const ProductsCatalog: React.FC = () => {
       }
       loadProducts(true);
     } catch (err: any) {
-      alert(err.message || 'Failed to quick add standard product');
+      toast.error(err.message || 'Failed to quick add standard product');
     }
   };
 
@@ -172,7 +176,7 @@ export const ProductsCatalog: React.FC = () => {
       setIsFormOpen(false);
       loadProducts(true);
     } catch (err: any) {
-      alert(err.message || 'Failed to save product');
+      toast.error(err.message || 'Failed to save product');
     }
   };
 
@@ -195,12 +199,12 @@ export const ProductsCatalog: React.FC = () => {
   };
 
   const handleArchive = async (id: string) => {
-    if (!confirm('Are you sure you want to archive this product?')) return;
+    if (!(await confirm({ title: 'Archive product?', message: 'This product will be archived and hidden from active lists.', confirmLabel: 'Archive', danger: true }))) return;
     try {
       await productService.archiveProduct(id);
       loadProducts(true);
     } catch (err: any) {
-      alert(err.message);
+      toast.error(err.message);
     }
   };
 

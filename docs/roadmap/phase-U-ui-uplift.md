@@ -40,6 +40,14 @@
   operations/timezone/day-start + onboarding status) and **Business & Branding** (legal/tax GSTIN/stateCode/RO code +
   branding/logo + report-section toggles), each with its own edit/view + save that merges into `settings` without
   clobbering the other group.
+- **Reports on `PageLayout` + Custom Reports gated ✅** — ReportsOverview now uses `PageLayout` (title/subtitle +
+  Refresh action); the dead "Custom Reports — Coming Soon" tab is gated behind `SHOW_CUSTOM_REPORTS=false` (tab strip
+  hidden while only DSSR exists).
+- Remaining: `PageLayout`/`KpiCard` on the hand-rolled parts of Shifts (deferred — deliberate custom layout).
+- **Toast notifications ✅** — new `ToastProvider` + `useToast()` (`primitives/ToastProvider.tsx`, stacked top-right,
+  auto-dismiss, error/success/info variants). Both apps wrapped in `main.tsx`. Migrated **all** ~24 native `alert(err)`
+  popups across 11 components to `toast.error(...)` (plus the ProductsCatalog archive `confirm` → `useConfirm`). No
+  native `alert`/`confirm` left in the UI — U3 dialog/notification cleanup complete.
 
 ## U4 — Typed API client
 - Replace ad-hoc `request()` calls with a typed client sharing schemas.

@@ -40,5 +40,7 @@ export { Tabs } from './components/primitives/Tabs.js';
 export type { TabsProps, TabItem } from './components/primitives/Tabs.js';
 export { ConfirmProvider, useConfirm } from './components/primitives/ConfirmDialog.js';
 export type { ConfirmOptions } from './components/primitives/ConfirmDialog.js';
+export { ToastProvider, useToast } from './components/primitives/ToastProvider.js';
+export type { ToastApi, ToastVariant, ToastOptions } from './components/primitives/ToastProvider.js';
 export { Skeleton, SkeletonCard, SkeletonGrid } from './components/primitives/Skeleton.js';
 

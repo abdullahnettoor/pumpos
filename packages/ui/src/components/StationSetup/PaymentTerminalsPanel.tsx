@@ -4,6 +4,7 @@ import { PaymentTerminal } from '@pump/shared';
 import { StatusBadge } from '../StatusBadge.js';
 import { Drawer } from '../Drawer.js';
 import { DataTable } from '../primitives/DataTable.js';
+import { useToast } from '../primitives/ToastProvider.js';
 import type { ColumnDef } from '@tanstack/react-table';
 
 const terminalService = new CloudPaymentTerminalService();
@@ -57,6 +58,7 @@ const buildTerminalColumns = (openEdit: (t: any) => void, toggleActive: (t: any)
 ];
 
 export const PaymentTerminalsPanel: React.FC<PaymentTerminalsPanelProps> = ({ stationId }) => {
+  const toast = useToast();
   const [terminals, setTerminals] = useState<PaymentTerminal[]>([]);
   const [loading, setLoading] = useState(true);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -132,7 +134,7 @@ export const PaymentTerminalsPanel: React.FC<PaymentTerminalsPanelProps> = ({ st
       resetForm();
       loadData();
     } catch (err: any) {
-      alert(err.message || 'Failed to save payment terminal');
+      toast.error(err.message || 'Failed to save payment terminal');
     } finally {
       setSubmitting(false);
     }
@@ -143,7 +145,7 @@ export const PaymentTerminalsPanel: React.FC<PaymentTerminalsPanelProps> = ({ st
       await terminalService.updateTerminal(t.id, { isActive: !t.isActive });
       loadData();
     } catch (err: any) {
-      alert(err.message || 'Failed to update terminal');
+      toast.error(err.message || 'Failed to update terminal');
     }
   };
 

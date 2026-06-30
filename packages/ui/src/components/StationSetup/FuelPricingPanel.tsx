@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { CloudPricingService } from '../../services/cloud.js';
 import { Station } from '@pump/shared';
+import { useToast } from '../primitives/ToastProvider.js';
 
 const pricingService = new CloudPricingService();
 
@@ -9,6 +10,7 @@ interface FuelPricingPanelProps {
 }
 
 export const FuelPricingPanel: React.FC<FuelPricingPanelProps> = ({ selectedStation }) => {
+  const toast = useToast();
   const [currentPrices, setCurrentPrices] = useState<any[]>([]);
   const [history, setHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -67,7 +69,7 @@ export const FuelPricingPanel: React.FC<FuelPricingPanelProps> = ({ selectedStat
       // Refresh local state
       await loadPricingData();
     } catch (err: any) {
-      alert(err.message || 'Failed to record new price');
+      toast.error(err.message || 'Failed to record new price');
     } finally {
       setSubmitting(false);
     }

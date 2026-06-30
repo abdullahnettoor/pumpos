@@ -8,6 +8,7 @@ import { queryKeys, TIER } from '../../query/hooks.js';
 import { Station, userSchema } from '@pump/shared';
 import { Drawer } from '../Drawer.js';
 import { DataTable } from '../primitives/DataTable.js';
+import { useToast } from '../primitives/ToastProvider.js';
 import type { ColumnDef } from '@tanstack/react-table';
 
 const userService = new CloudUserAssignmentService();
@@ -62,6 +63,7 @@ const buildUserColumns = (stations: any[], startEdit: (u: any) => void): ColumnD
 
 export const UserRolesAssignment: React.FC = () => {
   const qc = useQueryClient();
+  const toast = useToast();
   const [users, setUsers] = useState<any[]>([]);
   const [stations, setStations] = useState<Station[]>([]);
   const [loading, setLoading] = useState(true);
@@ -121,7 +123,7 @@ export const UserRolesAssignment: React.FC = () => {
   const handleCreateOrUpdate = async (values: any) => {
     // Custom check: if app access is enabled, email is required
     if (values.enableAppAccess && (!values.email || values.email.trim() === '')) {
-      alert('Email address is required for application login access.');
+      toast.error('Email address is required for application login access.');
       return;
     }
 
@@ -145,7 +147,7 @@ export const UserRolesAssignment: React.FC = () => {
       setIsFormOpen(false);
       loadData(true);
     } catch (err: any) {
-      alert(err.message || 'Failed to save team member');
+      toast.error(err.message || 'Failed to save team member');
     }
   };
 

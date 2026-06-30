@@ -5,6 +5,7 @@ import { queryKeys, TIER } from '../../query/hooks.js';
 import { Tank, Product } from '@pump/shared';
 import { StatusBadge } from '../StatusBadge.js';
 import { Drawer } from '../Drawer.js';
+import { useToast } from '../primitives/ToastProvider.js';
 
 const tankService = new CloudTankService();
 const productService = new CloudProductService();
@@ -15,6 +16,7 @@ export interface TanksGridProps {
 
 export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
   const qc = useQueryClient();
+  const toast = useToast();
   const [tanks, setTanks] = useState<Tank[]>([]);
   const [fuelProducts, setFuelProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -62,7 +64,7 @@ export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!productId) {
-      alert('Please define a fuel product in the catalog first.');
+      toast.error('Please define a fuel product in the catalog first.');
       return;
     }
     try {
@@ -76,19 +78,19 @@ export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
       resetForm();
       loadData(true);
     } catch (err: any) {
-      alert(err.message || 'Failed to create tank');
+      toast.error(err.message || 'Failed to create tank');
     }
   };
 
   const handleQuickAdd = async (fuelCode: 'MS' | 'HSD', capStr: string) => {
     const fuel = fuelProducts.find(p => p.code === fuelCode);
     if (!fuel) {
-      alert(`Please define active ${fuelCode === 'MS' ? 'Petrol (MS)' : 'Diesel (HSD)'} in the catalog first.`);
+      toast.error(`Please define active ${fuelCode === 'MS' ? 'Petrol (MS)' : 'Diesel (HSD)'} in the catalog first.`);
       return;
     }
     const cap = parseInt(capStr);
     if (!cap || cap <= 0) {
-      alert('Please enter a valid capacity');
+      toast.error('Please enter a valid capacity');
       return;
     }
 
@@ -108,7 +110,7 @@ export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
 
       await loadData(true);
     } catch (err: any) {
-      alert(err.message || 'Failed to create tank');
+      toast.error(err.message || 'Failed to create tank');
     } finally {
       setQuickSubmitting(false);
     }
@@ -117,7 +119,7 @@ export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
   const prefillSuggestion = (fuelCode: 'MS' | 'HSD') => {
     const fuel = fuelProducts.find(p => p.code === fuelCode);
     if (!fuel) {
-      alert(`Please define active ${fuelCode === 'MS' ? 'Petrol (MS)' : 'Diesel (HSD)'} in step 2 first.`);
+      toast.error(`Please define active ${fuelCode === 'MS' ? 'Petrol (MS)' : 'Diesel (HSD)'} in step 2 first.`);
       return;
     }
     

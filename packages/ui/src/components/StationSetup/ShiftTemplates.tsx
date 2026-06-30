@@ -3,10 +3,12 @@ import { CloudShiftTemplateService } from '../../services/cloud.js';
 import { ShiftTemplate } from '@pump/shared';
 import { StatusBadge } from '../StatusBadge.js';
 import { Drawer } from '../Drawer.js';
+import { useToast } from '../primitives/ToastProvider.js';
 
 const templateService = new CloudShiftTemplateService();
 
 export const ShiftTemplates: React.FC = () => {
+  const toast = useToast();
   const [templates, setTemplates] = useState<ShiftTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -60,7 +62,7 @@ export const ShiftTemplates: React.FC = () => {
       setIsFormOpen(false);
       loadTemplates();
     } catch (err: any) {
-      alert(err.message || 'Failed to create shift template');
+      toast.error(err.message || 'Failed to create shift template');
     }
   };
 
@@ -87,7 +89,7 @@ export const ShiftTemplates: React.FC = () => {
       });
       await loadTemplates();
     } catch (err: any) {
-      alert(err.message || 'Failed to pre-fill default shifts');
+      toast.error(err.message || 'Failed to pre-fill default shifts');
     } finally {
       setLoading(false);
     }

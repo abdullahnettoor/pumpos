@@ -14,6 +14,7 @@ import { ShiftTotalsSummary } from './ShiftTotalsSummary.js';
 import { OpenShiftForm } from './OpenShiftForm.js';
 import { QuickEntryDrawer } from './QuickEntryDrawer.js';
 import { Tabs } from '../primitives/Tabs.js';
+import { useToast } from '../primitives/ToastProvider.js';
 import { useShiftStatus, useInvalidateOperational, queryKeys, TIER } from '../../query/hooks.js';
 import { Station, resolveBusinessDate } from '@pump/shared';
 import type {
@@ -50,6 +51,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   const statusQ = useShiftStatus(stationId, false, { refetchOnWindowFocus: false });
   const invalidateOperational = useInvalidateOperational();
   const qc = useQueryClient();
+  const toast = useToast();
   const data = statusQ.data ?? null;
   const loading = statusQ.isLoading;
   const error = statusQ.error as Error | null;
@@ -608,7 +610,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
       await shiftService.openShift(payload);
       await loadShiftStatus();
     } catch (err: any) {
-      alert(err.message || 'Failed to open shift');
+      toast.error(err.message || 'Failed to open shift');
     } finally {
       setIsOpening(false);
     }
@@ -648,7 +650,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
       const closing = closingReadings[nr.nozzleId] ?? opening;
 
       if (closing < opening) {
-        alert(`Error: Closing reading for nozzle ${nr.nozzleName} (${closing}) cannot be less than opening reading (${opening})`);
+        toast.error(`Closing reading for nozzle ${nr.nozzleName} (${closing}) cannot be less than opening reading (${opening})`);
         return;
       }
     }
@@ -709,7 +711,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         nextTemplateId
       });
     } catch (err: any) {
-      alert(err.message || 'Failed to close shift');
+      toast.error(err.message || 'Failed to close shift');
     } finally {
       setIsClosing(false);
     }

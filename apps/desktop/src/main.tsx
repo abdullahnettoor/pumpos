@@ -1,7 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App.js';
-import { QueryProvider, createQueryClient, ErrorBoundary, setPdfSaver, ConfirmProvider } from '@pump/ui';
+import { QueryProvider, createQueryClient, ErrorBoundary, setPdfSaver, ConfirmProvider, ToastProvider } from '@pump/ui';
 import '@pump/ui/src/index.css';
 
 // Desktop: WKWebView (mac) / WebView2 (win) block browser file downloads, so
@@ -26,9 +26,11 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <ErrorBoundary>
       <QueryProvider client={queryClient}>
-        <ConfirmProvider>
-          <App />
-        </ConfirmProvider>
+        <ToastProvider>
+          <ConfirmProvider>
+            <App />
+          </ConfirmProvider>
+        </ToastProvider>
       </QueryProvider>
     </ErrorBoundary>
   </React.StrictMode>,

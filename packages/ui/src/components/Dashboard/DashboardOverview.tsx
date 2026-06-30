@@ -6,6 +6,7 @@ import { SyncIndicator } from '../SyncIndicator.js';
 import { LoadingSpinner } from '../LoadingSpinner.js';
 import { SkeletonGrid } from '../primitives/Skeleton.js';
 import { useConfirm } from '../primitives/ConfirmDialog.js';
+import { useToast } from '../primitives/ToastProvider.js';
 import { Station } from '@pump/shared';
 import { Play, Plus, FileText, Unlock, AlertTriangle, Lock } from 'lucide-react';
 
@@ -27,6 +28,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   const { data: summary, isLoading: loading, error, refetch } = useShiftStatus(selectedStation?.id);
   const invalidateOperational = useInvalidateOperational();
   const confirm = useConfirm();
+  const toast = useToast();
   const [isReopening, setIsReopening] = useState(false);
 
   const handleReopen = async (shiftId: string) => {
@@ -44,7 +46,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
       invalidateOperational(selectedStation?.id);
       onNavigate('/shifts');
     } catch (err: any) {
-      alert(err.message || 'Failed to reopen shift');
+      toast.error(err.message || 'Failed to reopen shift');
     } finally {
       setIsReopening(false);
     }

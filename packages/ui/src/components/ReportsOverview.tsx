@@ -3,9 +3,13 @@ import { CloudShiftService } from '../services/cloud.js';
 import { DailyDssrView } from './DailyDssrView.js';
 import { LoadingSpinner } from './LoadingSpinner.js';
 import { Tabs } from './primitives/Tabs.js';
+import { PageLayout } from './primitives/PageLayout.js';
 import { Calendar, RefreshCw, Play, Zap, Layers } from 'lucide-react';
 
 const shiftService = new CloudShiftService();
+
+// Custom Reports is not built yet; gate the placeholder tab off until it ships.
+const SHOW_CUSTOM_REPORTS = false;
 
 interface ReportsOverviewProps {
   selectedStation: any | null;
@@ -97,43 +101,33 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
   }
 
   return (
-    <div
-      className="animate-fade-in"
-      style={{ display: 'flex', flexDirection: 'column', gap: '20px', fontFamily: 'var(--font-sans)' }}
+    <PageLayout
+      title="Reports"
+      subtitle="Daily sales summaries and custom reporting. Per-shift summaries are in the Shift tab → History."
+      actions={activeTab === 'daily-dssr' ? (
+        <button
+          className="btn btn-secondary btn-sm"
+          onClick={loadDailyDssrs}
+          disabled={loading}
+          style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+        >
+          <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
+          Refresh
+        </button>
+      ) : undefined}
+      toolbar={SHOW_CUSTOM_REPORTS ? (
+        <Tabs
+          aria-label="Reports"
+          style={{ width: '100%' }}
+          activeId={activeTab}
+          onChange={(id) => setActiveTab(id as ReportsTab)}
+          tabs={[
+            { id: 'daily-dssr', label: 'Daily DSSR', icon: <Zap size={13} /> },
+            { id: 'custom-reports', label: 'Custom Reports', icon: <Layers size={13} /> },
+          ]}
+        />
+      ) : undefined}
     >
-      {/* Page Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <h1 style={{ fontSize: '20px', fontWeight: 600, color: 'var(--text-strong)' }}>
-            Reports
-          </h1>
-          <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '2px' }}>
-            Daily sales summaries and custom reporting. Per-shift summaries are in the Shift tab → History.
-          </p>
-        </div>
-        {activeTab === 'daily-dssr' && (
-          <button
-            className="btn btn-secondary btn-sm"
-            onClick={loadDailyDssrs}
-            disabled={loading}
-            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-          >
-            <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
-            Refresh
-          </button>
-        )}
-      </div>
-
-      {/* Tab Navigation */}
-      <Tabs
-        aria-label="Reports"
-        activeId={activeTab}
-        onChange={(id) => setActiveTab(id as ReportsTab)}
-        tabs={[
-          { id: 'daily-dssr', label: 'Daily DSSR', icon: <Zap size={13} /> },
-          { id: 'custom-reports', label: 'Custom Reports', icon: <Layers size={13} /> },
-        ]}
-      />
 
       {error && (
         <div
@@ -338,7 +332,7 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
       )}
 
       {/* Custom Reports Tab (placeholder) */}
-      {activeTab === 'custom-reports' && (
+      {SHOW_CUSTOM_REPORTS && activeTab === 'custom-reports' && (
         <div
           className="card"
           style={{
@@ -369,6 +363,6 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
           </div>
         </div>
       )}
-    </div>
+    </PageLayout>
   );
 };

@@ -10,6 +10,7 @@ import { queryKeys, TIER } from '../../query/hooks.js';
 import { DispenserUnit, Tank, Product, Nozzle } from '@pump/shared';
 import { StatusBadge } from '../StatusBadge.js';
 import { Drawer } from '../Drawer.js';
+import { useToast } from '../primitives/ToastProvider.js';
 
 const dispenserService = new CloudDispenserService();
 const tankService = new CloudTankService();
@@ -29,6 +30,7 @@ interface NozzleInput {
 
 export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => {
   const qc = useQueryClient();
+  const toast = useToast();
   const [dispensers, setDispensers] = useState<DispenserUnit[]>([]);
   const [tanks, setTanks] = useState<Tank[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -180,7 +182,7 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
       resetForm();
       loadData(true);
     } catch (err: any) {
-      alert(err.message || 'Failed to create dispenser unit and nozzles');
+      toast.error(err.message || 'Failed to create dispenser unit and nozzles');
     } finally {
       setSubmitting(false);
     }

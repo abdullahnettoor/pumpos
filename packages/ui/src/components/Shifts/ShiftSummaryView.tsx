@@ -6,6 +6,7 @@ import { StatusBadge } from '../StatusBadge.js';
 import { ArrowLeft, Printer, Download, Unlock, AlertTriangle } from 'lucide-react';
 import { ShiftTransactionsPanel } from './ShiftTransactionsPanel.js';
 import { useConfirm } from '../primitives/ConfirmDialog.js';
+import { useToast } from '../primitives/ToastProvider.js';
 
 const shiftService = new CloudShiftService();
 
@@ -34,6 +35,7 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
 }) => {
   const [reopening, setReopening] = useState(false);
   const confirm = useConfirm();
+  const toast = useToast();
   const printRef = useRef<HTMLDivElement>(null);
 
   const { snapshotData, generatedAt } = shiftSummary;
@@ -86,7 +88,7 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
       await shiftService.reopenShift(shiftId);
       onReopenSuccess();
     } catch (err: any) {
-      alert(err.message || 'Failed to reopen shift');
+      toast.error(err.message || 'Failed to reopen shift');
     } finally {
       setReopening(false);
     }
