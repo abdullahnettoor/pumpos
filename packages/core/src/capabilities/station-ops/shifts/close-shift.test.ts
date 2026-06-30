@@ -72,7 +72,7 @@ function openShiftRow(): Shift {
   return { id: 'sh-1', organizationId: 'org-1', stationId: 'st-1', businessDayId: 'bd', shiftTemplateId: 't', status: 'OPEN', openedBy: 'u', openedAt: '', closedBy: null, closedAt: null, lockedAt: null, openingCash: '5000', closingCash: null, createdAt: '', updatedAt: '' };
 }
 function reading(): NozzleReading {
-  return { id: 'r1', shiftId: 'sh-1', nozzleId: 'n1', openingReading: '1000', closingReading: '1000', volumeSold: '0', unitPrice: '100', createdAt: '' };
+  return { id: 'r1', shiftId: 'sh-1', nozzleId: 'n1', openingReading: '1000', closingReading: '1000', volumeSold: '0', testingVolume: '0', unitPrice: '100', createdAt: '' };
 }
 function nozzle(): Nozzle {
   return { id: 'n1', organizationId: 'org-1', stationId: 'st-1', duId: 'du', tankId: 'tk1', productId: 'pet', name: 'n1', currentReading: '1000', createdAt: '', updatedAt: '' };

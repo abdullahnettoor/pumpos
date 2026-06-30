@@ -370,6 +370,7 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
       const nozzleReadingsPayload = Object.entries(values.nozzleReadings).map(([nozzleId, closingVal]) => ({
         nozzleId,
         closingReading: Number(closingVal),
+        testingVolume: Number(values.nozzleTesting?.[nozzleId] ?? 0),
       }));
 
       const payload = {

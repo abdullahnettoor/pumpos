@@ -150,16 +150,24 @@ async function projectShiftSummary(
   const closedByName = closedUserRows[0]?.fullName ?? 'System';
   const openedByName = openedUserRows[0]?.fullName ?? 'System';
   const expensesEnriched = (expenses ?? []).map((r: any) => ({ ...r.e, categoryName: r.categoryName ?? 'General' }));
-  const nozzleReadings = nrRows.map(({ nr, nz, prod }) => ({
-    nozzleId: nr.nozzleId,
-    nozzleName: nz?.name ?? 'Unknown',
-    productName: prod?.name ?? 'Unknown',
-    productCode: prod?.code ?? '',
-    openingReading: Number(nr.openingReading),
-    closingReading: Number(nr.closingReading ?? nr.openingReading),
-    volumeSold: Number(nr.volumeSold ?? 0),
-    unitPrice: Number(nr.unitPrice ?? 0),
-  }));
+  const nozzleReadings = nrRows.map(({ nr, nz, prod }) => {
+    const gross = Number(nr.volumeSold ?? 0);
+    const testing = Math.min(Math.max(Number(nr.testingVolume ?? 0), 0), gross);
+    return {
+      nozzleId: nr.nozzleId,
+      nozzleName: nz?.name ?? 'Unknown',
+      productName: prod?.name ?? 'Unknown',
+      productCode: prod?.code ?? '',
+      openingReading: Number(nr.openingReading),
+      closingReading: Number(nr.closingReading ?? nr.openingReading),
+      volumeSold: gross,
+      testingVolume: testing,
+      netVolume: gross - testing,
+      unitPrice: Number(nr.unitPrice ?? 0),
+    };
+  });
+  const totalTestingVolume = nozzleReadings.reduce((a, r) => a + r.testingVolume, 0);
+  const totalNetVolumeSold = nozzleReadings.reduce((a, r) => a + r.netVolume, 0) || Number(snap.totalNetVolume ?? 0);
   const totalVolumeSold = nozzleReadings.reduce((a, r) => a + r.volumeSold, 0) || Number(snap.totalVolume ?? 0);
 
   const handovers = hoRows.map(({ h, userName, duName }) => ({
@@ -217,6 +225,8 @@ async function projectShiftSummary(
     cashNetChange: closingCash - openingCash,
     nozzleReadings,
     totalVolumeSold,
+    totalTestingVolume,
+    totalNetVolumeSold,
     handovers,
     terminalBreakdown,
     expenses: expensesEnriched,
@@ -654,7 +664,7 @@ shiftsRouter.post('/handovers', async (c) => {
 
   // Persist the closing nozzle readings declared in the handover so the shift
   // close picks up the volumes (volume = closing - opening).
-  const readings: { nozzleId: string; closingReading: number }[] = Array.isArray(body.nozzleReadings) ? body.nozzleReadings : [];
+  const readings: { nozzleId: string; closingReading: number; testingVolume?: number }[] = Array.isArray(body.nozzleReadings) ? body.nozzleReadings : [];
   for (const r of readings) {
     if (!r?.nozzleId || r.closingReading == null) continue;
     const [existing] = await db
@@ -666,9 +676,11 @@ shiftsRouter.post('/handovers', async (c) => {
     const opening = Number(existing.openingReading);
     const closing = Number(r.closingReading);
     if (closing < opening) continue;
+    const gross = closing - opening;
+    const testing = Math.min(Math.max(Number(r.testingVolume ?? 0), 0), gross);
     await db
       .update(schema.nozzleReadings)
-      .set({ closingReading: String(closing), volumeSold: String(closing - opening) })
+      .set({ closingReading: String(closing), volumeSold: String(gross), testingVolume: String(testing) })
       .where(eq(schema.nozzleReadings.id, existing.id));
   }
 

@@ -46,6 +46,8 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
     cashNetChange,
     nozzleReadings = [],
     totalVolumeSold = 0,
+    totalTestingVolume = 0,
+    totalNetVolumeSold = 0,
     warnings = [],
     expectedCash = Number(openingCash),
     cashVariance = 0,
@@ -201,23 +203,38 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
             <th style={{ padding: '8px 12px', fontWeight: 600 }}>Product</th>
             <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Opening Rd</th>
             <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Closing Rd</th>
-            <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Volume Sold</th>
+            <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Gross Vol</th>
+            <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Testing</th>
+            <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Net Sold</th>
           </tr>
         </thead>
         <tbody>
-          {nozzleReadings.map((nr: any, idx: number) => (
+          {nozzleReadings.map((nr: any, idx: number) => {
+            const gross = Number(nr.volumeSold ?? 0);
+            const testing = Number(nr.testingVolume ?? 0);
+            const net = nr.netVolume != null ? Number(nr.netVolume) : gross - testing;
+            return (
             <tr key={idx} style={{ borderBottom: '1px solid var(--border-soft)' }}>
               <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--text-strong)' }}>{nr.nozzleName}</td>
               <td style={{ padding: '10px 12px', color: 'var(--text-default)' }}>{nr.productName} ({nr.productCode})</td>
               <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{Number(nr.openingReading).toFixed(3)}</td>
               <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{Number(nr.closingReading).toFixed(3)}</td>
-              <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, color: 'var(--text-strong)', fontFamily: 'var(--font-mono)' }}>{Number(nr.volumeSold).toFixed(3)} L</td>
+              <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{gross.toFixed(3)}</td>
+              <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: testing > 0 ? 'var(--color-warning, #b45309)' : 'var(--text-muted)' }}>{testing.toFixed(3)}</td>
+              <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, color: 'var(--text-strong)', fontFamily: 'var(--font-mono)' }}>{net.toFixed(3)} L</td>
             </tr>
-          ))}
+            );
+          })}
           <tr style={{ borderTop: '2px solid var(--border-strong)', backgroundColor: 'var(--bg-surface-alt)', fontWeight: 700 }}>
-            <td colSpan={4} style={{ padding: '10px 12px', textTransform: 'uppercase', fontSize: '11px', color: 'var(--text-muted)' }}>Total Fuel Sold</td>
+            <td colSpan={4} style={{ padding: '10px 12px', textTransform: 'uppercase', fontSize: '11px', color: 'var(--text-muted)' }}>Total (Gross / Testing / Net)</td>
+            <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+              {Number(totalVolumeSold).toFixed(3)}
+            </td>
+            <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+              {Number(totalTestingVolume).toFixed(3)}
+            </td>
             <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--text-strong)', fontFamily: 'var(--font-mono)', fontSize: '14px' }}>
-              {Number(totalVolumeSold).toFixed(3)} L
+              {Number(totalNetVolumeSold || (Number(totalVolumeSold) - Number(totalTestingVolume))).toFixed(3)} L
             </td>
           </tr>
         </tbody>
@@ -239,6 +256,7 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
               <tr style={{ borderBottom: '2px solid var(--border-strong)', textAlign: 'left', color: 'var(--text-muted)' }}>
                 <th style={{ padding: '8px 12px', fontWeight: 600 }}>Attendant</th>
                 <th style={{ padding: '8px 12px', fontWeight: 600 }}>Dispenser</th>
+                <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Testing (L)</th>
                 <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Cash (₹)</th>
                 <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Card/UPI (₹)</th>
                 <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Credit Chits (₹)</th>
@@ -266,6 +284,7 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
                   <tr key={idx} style={{ borderBottom: '1px solid var(--border-soft)' }}>
                     <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--text-strong)' }}>{h.attendantName}</td>
                     <td style={{ padding: '10px 12px', color: 'var(--text-default)' }}>{h.duCode}</td>
+                    <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: Number(h.testingVolume || 0) > 0 ? 'var(--brand-warning)' : 'var(--text-muted)' }}>{Number(h.testingVolume || 0).toFixed(3)}</td>
                     <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>₹{cash.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                     <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>₹{cardUpi.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                     <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>₹{credit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>

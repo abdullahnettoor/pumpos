@@ -89,12 +89,20 @@ export class CloseShift implements UseCase<CloseShiftCommand, CloseShiftResult> 
     const enriched: Record<string, unknown>[] = [];
     const movements: StockMovementInput[] = [];
     let totalVolume = 0;
+    let totalTesting = 0;
+    let totalNetVolume = 0;
     let totalFuelSalesValue = 0;
     for (const reading of dbReadings) {
-      const volume = Number(reading.volumeSold);
+      const grossVolume = Number(reading.volumeSold);
+      // Testing/calibration fuel is dispensed then returned to the tank: it is
+      // neither a sale nor a stock loss, so net it out of sales value and stock.
+      const testing = Math.min(Math.max(Number(reading.testingVolume ?? 0), 0), grossVolume);
+      const netVolume = grossVolume - testing;
       const unitPrice = Number(reading.unitPrice ?? 0);
-      const salesValue = volume * unitPrice;
-      totalVolume += volume;
+      const salesValue = netVolume * unitPrice;
+      totalVolume += grossVolume;
+      totalTesting += testing;
+      totalNetVolume += netVolume;
       totalFuelSalesValue += salesValue;
       const nz = nozzleMap.get(reading.nozzleId);
       enriched.push({
@@ -102,18 +110,21 @@ export class CloseShift implements UseCase<CloseShiftCommand, CloseShiftResult> 
         productId: nz?.productId ?? null,
         openingReading: Number(reading.openingReading),
         closingReading: Number(reading.closingReading),
-        volumeSold: volume,
+        volumeSold: grossVolume,
+        grossVolume,
+        testingVolume: testing,
+        netVolume,
         unitPrice,
         salesValue,
       });
-      if (volume > 0 && nz) {
+      if (netVolume > 0 && nz) {
         movements.push({
           shiftId: shift.id,
           businessDayId: shift.businessDayId,
           productId: nz.productId,
           tankId: nz.tankId,
           movementType: 'Sale',
-          quantity: String(-volume),
+          quantity: String(-netVolume),
           referenceType: 'reading',
           referenceId: reading.id,
           notes: 'Metered fuel sale',
@@ -146,6 +157,8 @@ export class CloseShift implements UseCase<CloseShiftCommand, CloseShiftResult> 
       cashVariance,
       readings: enriched,
       totalVolume,
+      totalTesting,
+      totalNetVolume,
       totalFuelSalesValue,
       notes: cmd.notes ?? null,
     };

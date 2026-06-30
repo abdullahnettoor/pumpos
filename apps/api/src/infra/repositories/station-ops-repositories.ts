@@ -185,6 +185,7 @@ export class DrizzleNozzleReadingRepository implements NozzleReadingRepository {
       openingReading: r.openingReading,
       closingReading: r.closingReading,
       volumeSold: r.volumeSold,
+      testingVolume: r.testingVolume,
       unitPrice: r.unitPrice,
       createdAt: r.createdAt.toISOString(),
     };
@@ -212,6 +213,7 @@ export class DrizzleNozzleReadingRepository implements NozzleReadingRepository {
         openingReading: r.openingReading,
         closingReading: r.closingReading,
         volumeSold: r.volumeSold,
+        testingVolume: r.testingVolume,
         unitPrice: r.unitPrice,
         createdAt: new Date(r.createdAt),
       })),

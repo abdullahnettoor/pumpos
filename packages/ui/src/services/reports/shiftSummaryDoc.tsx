@@ -154,23 +154,33 @@ const builders: Record<ShiftSummarySection, (d: any, cfg: ReportConfig) => React
     </View>
   ) : null),
   nozzles: (d) => {
-    const rows: Cell[][] = (d.nozzleReadings || []).map((nr: any) => [
-      { text: nr.nozzleName || '' },
-      { text: `${nr.productName || ''}${nr.productCode ? ` (${nr.productCode})` : ''}` },
-      { text: fix3(nr.openingReading) },
-      { text: fix3(nr.closingReading ?? nr.openingReading) },
-      { text: vol3(nr.volumeSold) },
-    ]);
+    const rows: Cell[][] = (d.nozzleReadings || []).map((nr: any) => {
+      const gross = Number(nr.volumeSold ?? 0);
+      const testing = Number(nr.testingVolume ?? 0);
+      const net = nr.netVolume != null ? Number(nr.netVolume) : gross - testing;
+      return [
+        { text: nr.nozzleName || '' },
+        { text: `${nr.productName || ''}${nr.productCode ? ` (${nr.productCode})` : ''}` },
+        { text: fix3(nr.openingReading) },
+        { text: fix3(nr.closingReading ?? nr.openingReading) },
+        { text: vol3(gross) },
+        { text: vol3(testing), color: testing > 0 ? C.amber : C.muted },
+        { text: vol3(net) },
+      ];
+    });
+    const totalTesting = Number(d.totalTestingVolume ?? 0);
+    const totalNet = Number(d.totalNetVolumeSold ?? (Number(d.totalVolumeSold ?? 0) - totalTesting));
     return (
       <View key="nozzles"><Text style={s.h2}>NOZZLE RECONCILIATION &amp; VOLUME SOLD</Text>
         <TableView
           columns={[
-            { header: 'Nozzle', flex: 1.2, strong: true }, { header: 'Product', flex: 2.4 },
-            { header: 'Opening Rd', flex: 1.4, align: 'right', mono: true }, { header: 'Closing Rd', flex: 1.4, align: 'right', mono: true },
-            { header: 'Volume Sold', flex: 1.5, align: 'right', mono: true, strong: true },
+            { header: 'Nozzle', flex: 1.2, strong: true }, { header: 'Product', flex: 2.2 },
+            { header: 'Opening Rd', flex: 1.3, align: 'right', mono: true }, { header: 'Closing Rd', flex: 1.3, align: 'right', mono: true },
+            { header: 'Gross', flex: 1.2, align: 'right', mono: true }, { header: 'Testing', flex: 1.1, align: 'right', mono: true },
+            { header: 'Net Sold', flex: 1.3, align: 'right', mono: true, strong: true },
           ]}
           rows={rows}
-          total={[{ text: 'TOTAL FUEL SOLD' }, { text: '' }, { text: '' }, { text: '' }, { text: vol3(d.totalVolumeSold), color: C.green }]}
+          total={[{ text: 'TOTAL (GROSS / TESTING / NET)' }, { text: '' }, { text: '' }, { text: '' }, { text: vol3(d.totalVolumeSold), color: C.muted }, { text: vol3(totalTesting), color: C.muted }, { text: vol3(totalNet), color: C.green }]}
         />
       </View>
     );
@@ -180,6 +190,7 @@ const builders: Record<ShiftSummarySection, (d: any, cfg: ReportConfig) => React
       <TableView
         columns={[
           { header: 'Attendant', flex: 1.6, strong: true }, { header: 'Dispenser', flex: 1.1 },
+          { header: 'Testing (L)', flex: 1.0, align: 'right', mono: true },
           { header: 'Cash (\u20b9)', flex: 1.3, align: 'right', mono: true }, { header: 'Card/UPI (\u20b9)', flex: 1.4, align: 'right', mono: true },
           { header: 'Credit Chits (\u20b9)', flex: 1.5, align: 'right', mono: true }, { header: 'Expected (\u20b9)', flex: 1.4, align: 'right', mono: true, strong: true },
           { header: 'Variance (\u20b9)', flex: 1.4, align: 'right', mono: true },
@@ -188,6 +199,7 @@ const builders: Record<ShiftSummarySection, (d: any, cfg: ReportConfig) => React
           const v = Number(h.varianceAmount || 0);
           return [
             { text: h.attendantName || '' }, { text: h.duCode || '' },
+            { text: vol3(h.testingVolume) },
             { text: inr(h.cashHandedOver) }, { text: inr(Number(h.cardHandedOver || 0) + Number(h.upiHandedOver || 0)) },
             { text: inr(h.creditHandedOver) }, { text: inr(h.expectedSales) },
             { text: `${v > 0 ? '+' : ''}${inr(v)}`, color: varColor(v) },

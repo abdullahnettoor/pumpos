@@ -43,6 +43,8 @@ export interface NozzleReading {
   openingReading: string;
   closingReading: string;
   volumeSold: string;
+  /** Calibration/testing volume dispensed and returned to the tank (not a sale). */
+  testingVolume: string;
   unitPrice: string | null;
   createdAt: string;
 }

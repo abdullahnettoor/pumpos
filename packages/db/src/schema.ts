@@ -205,6 +205,7 @@ export const nozzleReadings = pgTable('nozzle_readings', {
   openingReading: numeric('opening_reading', { precision: 15, scale: 3 }).notNull(),
   closingReading: numeric('closing_reading', { precision: 15, scale: 3 }).notNull(),
   volumeSold: numeric('volume_sold', { precision: 12, scale: 3 }).notNull(),
+  testingVolume: numeric('testing_volume', { precision: 12, scale: 3 }).default('0').notNull(),
   unitPrice: numeric('unit_price', { precision: 10, scale: 2 }),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });

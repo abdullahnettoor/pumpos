@@ -150,6 +150,7 @@ export class OpenShift implements UseCase<OpenShiftCommand, OpenShiftResult> {
           openingReading: String(opening),
           closingReading: String(opening),
           volumeSold: '0',
+          testingVolume: '0',
           unitPrice: latestPriceByProduct.get(n.productId) ?? '0',
           createdAt: nowIso,
         };
