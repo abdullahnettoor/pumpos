@@ -37,6 +37,7 @@ export class CreateProduct implements UseCase<CreateProductCommand, Product> {
     }
 
     const inventoryType = cmd.inventoryType ?? defaultInventoryType(cmd.productType);
+    const taxCategory = cmd.taxCategory ?? (cmd.productType === 'FUEL' ? 'FUEL_VAT' : 'GST');
     const now = ctx.clock.now().toISOString();
     const product: Product = {
       id: ctx.ids.newId(),
@@ -46,12 +47,14 @@ export class CreateProduct implements UseCase<CreateProductCommand, Product> {
       productType: cmd.productType,
       inventoryType,
       stockTracked: cmd.stockTracked ?? inventoryType !== 'NONE',
-      isTaxable: cmd.isTaxable ?? cmd.productType !== 'FUEL',
+      // is_taxable is the legacy "GST applies" flag, now derived from category.
+      isTaxable: cmd.isTaxable ?? taxCategory === 'GST',
+      taxCategory,
       unit: cmd.unit,
       brand: cmd.brand ?? null,
       category: cmd.category ?? null,
       sellingPrice: cmd.sellingPrice != null ? String(cmd.sellingPrice) : null,
-      taxConfig: cmd.taxConfig ?? { gst_rate: 18, hsn_code: '' },
+      taxConfig: cmd.taxConfig ?? (taxCategory === 'FUEL_VAT' ? { vat_rate: 0, hsn_code: '' } : { gst_rate: 18, hsn_code: '' }),
       isActive: true,
       createdAt: now,
       updatedAt: now,

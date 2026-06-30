@@ -5,6 +5,7 @@ import {
   DocumentType,
   ProductType,
   InventoryType,
+  TaxCategory,
   CustomerType,
   TransactionType,
   MovementType,
@@ -284,13 +285,16 @@ export interface Product {
   inventoryType: InventoryType;
   stockTracked: boolean;
   isTaxable: boolean;
+  taxCategory: TaxCategory;
   unit: string;
   brand?: string | null;
   category?: string | null;
   sellingPrice?: string | number | null;
   taxConfig: {
     gst_rate?: number;
+    vat_rate?: number;
     hsn_code?: string;
+    cess?: number;
   };
   isActive: boolean;
   createdAt: string;

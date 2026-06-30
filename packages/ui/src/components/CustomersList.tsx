@@ -341,6 +341,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
       isActive: cust.isActive,
       metadata: {
         gstin: meta.gstin || '',
+        stateCode: meta.stateCode || '',
         pan: meta.pan || '',
         tradeName: meta.tradeName || '',
         billingAddress: meta.billingAddress || '',
@@ -363,6 +364,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
         isActive: data.isActive,
         metadata: {
           gstin: data.metadata?.gstin || null,
+          stateCode: data.metadata?.stateCode || null,
           pan: data.metadata?.pan || null,
           tradeName: data.metadata?.tradeName || null,
           billingAddress: data.metadata?.billingAddress || null,
@@ -1092,6 +1094,23 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
                     {custErrors.metadata.gstin.message}
                   </span>
                 )}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)' }}>State Code (place of supply)</label>
+                <input
+                  type="text"
+                  placeholder="e.g. 29"
+                  maxLength={2}
+                  {...registerCust('metadata.stateCode')}
+                  disabled={drawerSubmitting}
+                  style={{
+                    height: '32px',
+                    padding: '0 8px',
+                    borderRadius: 'var(--radius-input)',
+                    border: '1px solid var(--border-strong)',
+                    fontSize: '13px',
+                  }}
+                />
               </div>
               
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>

@@ -8,6 +8,15 @@ export type DocumentType = 'SALE' | 'PURCHASE' | 'COLLECTION';
 
 export type ProductType = 'FUEL' | 'LUBRICANT' | 'ADDITIVE' | 'ACCESSORY' | 'CONSUMABLE' | 'SPARE_PART' | 'SERVICE' | 'OTHER';
 
+/**
+ * Tax treatment of a product:
+ * - FUEL_VAT: petrol/diesel etc. — state VAT, outside GST (no input credit).
+ * - GST: lubricants/merchandise/services — CGST+SGST (intra) or IGST (inter).
+ * - EXEMPT: GST-exempt good.
+ * - NON_TAXABLE: no tax applies.
+ */
+export type TaxCategory = 'FUEL_VAT' | 'GST' | 'EXEMPT' | 'NON_TAXABLE';
+
 /** Curated units of measure so the value is system-decided, not free text. */
 export const PRODUCT_UNITS = [
   { value: 'L', label: 'Liters (L)' },

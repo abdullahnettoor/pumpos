@@ -25,12 +25,13 @@ export const ProductsCatalog: React.FC = () => {
   const [productType, setProductType] = useState<'FUEL' | 'LUBRICANT' | 'ADDITIVE' | 'ACCESSORY' | 'CONSUMABLE' | 'SPARE_PART' | 'SERVICE' | 'OTHER'>('FUEL');
   const [inventoryType, setInventoryType] = useState<'BULK' | 'ITEM' | 'NONE'>('BULK');
   const [stockTracked, setStockTracked] = useState(true);
-  const [isTaxable, setIsTaxable] = useState(true);
+  const [taxCategory, setTaxCategory] = useState<'FUEL_VAT' | 'GST' | 'EXEMPT' | 'NON_TAXABLE'>('FUEL_VAT');
   const [unit, setUnit] = useState('L');
   const [brand, setBrand] = useState('');
   const [sellingPrice, setSellingPrice] = useState('');
   const [gstRate, setGstRate] = useState(18);
   const [hsnCode, setHsnCode] = useState('');
+  const [vatRate, setVatRate] = useState(0);
 
   useEffect(() => {
     loadProducts();
@@ -57,9 +58,9 @@ export const ProductsCatalog: React.FC = () => {
           code: 'MS',
           productType: 'FUEL',
           stockTracked: true,
-          isTaxable: false,
+          taxCategory: 'FUEL_VAT',
           unit: 'Liters',
-          taxConfig: { gst_rate: 0, hsn_code: '2710' },
+          taxConfig: { vat_rate: 0, hsn_code: '2710' },
           isActive: true,
         });
       } else {
@@ -68,9 +69,9 @@ export const ProductsCatalog: React.FC = () => {
           code: 'HSD',
           productType: 'FUEL',
           stockTracked: true,
-          isTaxable: false,
+          taxCategory: 'FUEL_VAT',
           unit: 'Liters',
-          taxConfig: { gst_rate: 0, hsn_code: '2710' },
+          taxConfig: { vat_rate: 0, hsn_code: '2710' },
           isActive: true,
         });
       }
@@ -108,12 +109,13 @@ export const ProductsCatalog: React.FC = () => {
         productType,
         inventoryType,
         stockTracked,
-        isTaxable,
+        taxCategory,
         unit,
         brand: brand.trim() || null,
         sellingPrice: sellingPrice === '' ? null : Number(sellingPrice),
         taxConfig: {
           gst_rate: gstRate,
+          vat_rate: vatRate,
           hsn_code: hsnCode,
         },
         isActive: true,
@@ -140,12 +142,13 @@ export const ProductsCatalog: React.FC = () => {
     setProductType(p.productType);
     setInventoryType(p.inventoryType);
     setStockTracked(p.stockTracked);
-    setIsTaxable(p.isTaxable);
+    setTaxCategory((p as any).taxCategory || (p.productType === 'FUEL' ? 'FUEL_VAT' : 'GST'));
     setUnit(p.unit);
     setBrand((p as any).brand ?? '');
     setSellingPrice((p as any).sellingPrice != null ? String((p as any).sellingPrice) : '');
     setGstRate(p.taxConfig?.gst_rate || 18);
     setHsnCode(p.taxConfig?.hsn_code || '');
+    setVatRate((p.taxConfig as any)?.vat_rate || 0);
     setIsCodeEdited(true);
     setIsFormOpen(true);
   };
@@ -167,12 +170,13 @@ export const ProductsCatalog: React.FC = () => {
     setProductType('FUEL');
     setInventoryType('BULK');
     setStockTracked(true);
-    setIsTaxable(true);
+    setTaxCategory('FUEL_VAT');
     setUnit('L');
     setBrand('');
     setSellingPrice('');
     setGstRate(18);
     setHsnCode('');
+    setVatRate(0);
     setIsCodeEdited(false);
   };
 
@@ -430,24 +434,30 @@ export const ProductsCatalog: React.FC = () => {
               </label>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <input
-                type="checkbox"
-                id="isTaxable"
-                checked={isTaxable}
-                onChange={(e) => setIsTaxable(e.target.checked)}
-                style={{ cursor: 'pointer' }}
-              />
-              <label htmlFor="isTaxable" style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-strong)', cursor: 'pointer' }}>
-                Taxable Product (Apply GST rate on sales)
-              </label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-strong)' }}>Tax Category</label>
+              <select
+                value={taxCategory}
+                onChange={(e) => setTaxCategory(e.target.value as any)}
+                style={{ height: '32px', padding: '0 8px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', fontSize: '13px' }}
+              >
+                <option value="FUEL_VAT">Fuel — VAT (outside GST)</option>
+                <option value="GST">GST (lubricants / merchandise)</option>
+                <option value="EXEMPT">GST Exempt</option>
+                <option value="NON_TAXABLE">Non-Taxable</option>
+              </select>
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                Petrol/diesel attract state VAT (no input credit); lubes &amp; merchandise attract GST.
+              </span>
             </div>
           </div>
 
-          {isTaxable && (
+          {(taxCategory === 'GST' || taxCategory === 'FUEL_VAT') && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', borderTop: '1px solid var(--border-soft)', paddingTop: '12px' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>GST Rate (%)</label>
+                <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
+                  {taxCategory === 'GST' ? 'GST Rate (%)' : 'VAT Rate (%)'}
+                </label>
                 <input
                   type="number"
                   style={{
@@ -457,13 +467,13 @@ export const ProductsCatalog: React.FC = () => {
                     border: '1px solid var(--border-strong)',
                     fontSize: '13px',
                   }}
-                  value={gstRate}
-                  onChange={(e) => setGstRate(parseInt(e.target.value))}
+                  value={taxCategory === 'GST' ? gstRate : vatRate}
+                  onChange={(e) => (taxCategory === 'GST' ? setGstRate(parseFloat(e.target.value) || 0) : setVatRate(parseFloat(e.target.value) || 0))}
                 />
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>HSN Code</label>
+                <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>{taxCategory === 'GST' ? 'HSN / SAC Code' : 'HSN Code'}</label>
                 <input
                   type="text"
                   style={{

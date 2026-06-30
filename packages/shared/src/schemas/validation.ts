@@ -189,6 +189,7 @@ export const customerCreateSchema = z.object({
   isActive: z.boolean().default(true),
   metadata: z.object({
     gstin: z.string().max(15).optional().nullable(),
+    stateCode: z.string().max(2).optional().nullable(),
     pan: z.string().max(10).optional().nullable(),
     tradeName: z.string().max(255).optional().nullable(),
     billingAddress: z.string().max(500).optional().nullable(),
@@ -214,6 +215,7 @@ export const supplierCreateSchema = z.object({
   isActive: z.boolean().default(true),
   metadata: z.object({
     gstin: z.string().max(15).optional().nullable(),
+    stateCode: z.string().max(2).optional().nullable(),
     pan: z.string().max(10).optional().nullable(),
     tradeName: z.string().max(255).optional().nullable(),
     billingAddress: z.string().max(500).optional().nullable(),

@@ -122,6 +122,9 @@ export const products = pgTable('products', {
   inventoryType: varchar('inventory_type', { length: 20 }).default('ITEM').notNull(),
   stockTracked: boolean('stock_tracked').default(true).notNull(),
   isTaxable: boolean('is_taxable').default(true).notNull(),
+  // Tax treatment: 'FUEL_VAT' | 'GST' | 'EXEMPT' | 'NON_TAXABLE'. Fuel is VAT
+  // (outside GST); lubricants/merchandise are GST. is_taxable kept (derived).
+  taxCategory: varchar('tax_category', { length: 20 }).default('GST').notNull(),
   unit: varchar('unit', { length: 50 }).notNull(),
   // Optional merchandise refinements: manufacturer/brand, finer category label,
   // and a selling price (MRP) used to prefill merchandise sales.

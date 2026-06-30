@@ -5,8 +5,14 @@ import type { CreateProductCommand, UpdateProductCommand } from './command.js';
 
 const productTypeEnum = z.enum(['FUEL', 'LUBRICANT', 'ADDITIVE', 'ACCESSORY', 'CONSUMABLE', 'SPARE_PART', 'SERVICE', 'OTHER']);
 const inventoryTypeEnum = z.enum(['BULK', 'ITEM', 'NONE']);
+const taxCategoryEnum = z.enum(['FUEL_VAT', 'GST', 'EXEMPT', 'NON_TAXABLE']);
 const taxConfigSchema = z
-  .object({ gst_rate: z.number().min(0).max(100).optional(), hsn_code: z.string().max(20).optional() })
+  .object({
+    gst_rate: z.number().min(0).max(100).optional(),
+    vat_rate: z.number().min(0).max(100).optional(),
+    hsn_code: z.string().max(20).optional(),
+    cess: z.number().min(0).max(100).optional(),
+  })
   .optional();
 
 const createSchema = z.object({
@@ -16,6 +22,7 @@ const createSchema = z.object({
   inventoryType: inventoryTypeEnum.optional(),
   stockTracked: z.boolean().optional(),
   isTaxable: z.boolean().optional(),
+  taxCategory: taxCategoryEnum.optional(),
   unit: z.string().trim().min(1, 'unit is required').max(50),
   brand: z.string().trim().max(150).nullish(),
   category: z.string().trim().max(100).nullish(),
@@ -39,6 +46,7 @@ const updateSchema = z.object({
   inventoryType: inventoryTypeEnum.optional(),
   stockTracked: z.boolean().optional(),
   isTaxable: z.boolean().optional(),
+  taxCategory: taxCategoryEnum.optional(),
   unit: z.string().trim().min(1).max(50).optional(),
   brand: z.string().trim().max(150).nullish(),
   category: z.string().trim().max(100).nullish(),

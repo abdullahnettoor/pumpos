@@ -1,4 +1,4 @@
-import type { ProductType, InventoryType } from '@pump/shared';
+import type { ProductType, InventoryType, TaxCategory } from '@pump/shared';
 import type { Repository } from '../../../kernel/index.js';
 import type { ProductTaxConfig } from './command.js';
 
@@ -11,6 +11,7 @@ export interface Product {
   inventoryType: InventoryType;
   stockTracked: boolean;
   isTaxable: boolean;
+  taxCategory: TaxCategory;
   unit: string;
   brand: string | null;
   category: string | null;

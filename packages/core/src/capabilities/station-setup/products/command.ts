@@ -1,8 +1,10 @@
-import type { ProductType, InventoryType } from '@pump/shared';
+import type { ProductType, InventoryType, TaxCategory } from '@pump/shared';
 
 export interface ProductTaxConfig {
   gst_rate?: number;
+  vat_rate?: number;
   hsn_code?: string;
+  cess?: number;
 }
 
 export interface CreateProductCommand {
@@ -12,6 +14,7 @@ export interface CreateProductCommand {
   inventoryType?: InventoryType;
   stockTracked?: boolean;
   isTaxable?: boolean;
+  taxCategory?: TaxCategory;
   unit: string;
   brand?: string | null;
   category?: string | null;
@@ -27,6 +30,7 @@ export interface UpdateProductCommand {
   inventoryType?: InventoryType;
   stockTracked?: boolean;
   isTaxable?: boolean;
+  taxCategory?: TaxCategory;
   unit?: string;
   brand?: string | null;
   category?: string | null;

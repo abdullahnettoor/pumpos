@@ -1,6 +1,6 @@
 # Phase T — Product Tax Restructure & GST Invoicing
 
-**Status:** planned (own phase — large, cross-cutting). **Depends on:** R (PDF kit), L (ledger) helpful but not required.
+**Status:** T1–T3 done (deployed). T4–T5 remaining. **Depends on:** R (PDF kit), L (ledger) helpful but not required.
 
 **Goal:** Model Indian fuel-retail taxation correctly and enable **B2B GST tax invoices** with CGST/SGST/IGST line splits, while keeping fuel (VAT, outside GST) distinct from merchandise/lubes (GST).
 
@@ -9,7 +9,22 @@
 - **Lubricants, additives, merchandise → GST.** Intra-state = **CGST + SGST** (split 50/50); inter-state = **IGST**. Post-Sep-2025 slabs: 0 / 5 / 18 / 40 (lubes/most merch = 18).
 - CGST/SGST vs IGST is decided at **document time** by buyer-state vs station-state (place of supply) — never stored on the product.
 
-## T1 — Product tax model
+## T1 — Product tax model ✅ done
+- Added `tax_category` enum column (`FUEL_VAT | GST | EXEMPT | NON_TAXABLE`); `is_taxable` kept as derived
+  legacy flag (= category===GST). `tax_config` JSONB gained `vat_rate` + `cess`. Migration 0012 applied (9 FUEL_VAT / 8 GST).
+- Threaded through shared types, core command/use-cases/validator/ports, product repo adapter.
+- ProductsCatalog UI: Tax Category select + conditional VAT% / GST% + HSN/SAC. Quick-add fuel → FUEL_VAT.
+
+## T2 — Place of supply + buyer tax identity ✅ done
+- Customer (and supplier) `metadata.stateCode` added (UI field + schema + payload). Station supplier state is
+  `settings.legal.stateCode` (R1). Intra vs inter-state derived at computation time.
+
+## T3 — Tax computation service (`@pump/core`) ✅ done
+- Pure `computeTax(lines, { supplierStateCode, buyerStateCode })` + `computeLineTax` / `isInterState` in
+  `capabilities/finance/tax`. GST → CGST+SGST intra / IGST inter; FUEL_VAT → VAT; EXEMPT/NON_TAXABLE → 0; cess supported.
+  6 unit tests. Exported from core.
+
+## T1 — Product tax model (orig spec)
 - Replace product `is_taxable` boolean with **`taxCategory` enum**: `FUEL_VAT | GST | EXEMPT | NON_TAXABLE` (explicit column, queried).
 - Keep/extend `tax_config` JSONB: `{ hsnOrSac, gstRatePct, vatRatePct, cessPct }` (rarely queried → JSONB, per metadata rule).
 - Defaults: fuel products → `FUEL_VAT`; lubricants/accessories → `GST` @ 18.

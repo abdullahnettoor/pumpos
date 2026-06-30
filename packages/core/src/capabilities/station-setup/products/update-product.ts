@@ -57,6 +57,7 @@ export class UpdateProduct implements UseCase<UpdateProductCommand, Product> {
       'inventoryType',
       'stockTracked',
       'isTaxable',
+      'taxCategory',
       'unit',
       'brand',
       'category',
