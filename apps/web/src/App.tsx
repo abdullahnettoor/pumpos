@@ -12,6 +12,7 @@ import {
   CustomersList,
   InventoryList,
   ReportsOverview,
+  FuelPricingPanel,
   CloudStationService, 
   queryKeys,
   setApiBaseUrl,
@@ -192,6 +193,7 @@ export const App: React.FC = () => {
         { label: 'Expenses', path: '/expenses' },
         { label: 'Purchases', path: '/purchases', roles: ['Owner', 'Manager', 'Accountant'] },
         { label: 'Inventory', path: '/inventory', roles: ['Owner', 'Manager', 'Accountant'] },
+        { label: 'Fuel Pricing', path: '/pricing', roles: ['Owner', 'Manager'] },
         { label: 'Customers', path: '/customers' },
         { label: 'Reports', path: '/reports', roles: ['Owner', 'Manager', 'Accountant'] },
       ]
@@ -389,6 +391,8 @@ export const App: React.FC = () => {
         return <PurchasesList selectedStation={selectedStation} />;
       case '/inventory':
         return <InventoryList selectedStation={selectedStation} />;
+      case '/pricing':
+        return <FuelPricingPanel selectedStation={selectedStation} />;
       case '/customers':
         return <CustomersList selectedStation={selectedStation} />;
       case '/reports':
