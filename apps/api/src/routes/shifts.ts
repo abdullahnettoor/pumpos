@@ -293,6 +293,7 @@ shiftsRouter.get('/status', async (c) => {
       .select()
       .from(schema.businessDays)
       .where(and(eq(schema.businessDays.stationId, stationId), eq(schema.businessDays.status, 'OPEN')))
+      .orderBy(desc(schema.businessDays.businessDate))
       .limit(1),
     db
       .select()

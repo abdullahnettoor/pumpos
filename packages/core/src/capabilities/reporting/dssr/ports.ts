@@ -14,6 +14,8 @@ export interface DssrSnapshotRepository {
 
 export interface DssrShiftSummary {
   shiftId: string;
+  templateName?: string | null;
+  closedAt?: string | null;
   snapshot: Record<string, unknown>;
 }
 export interface DssrCollection {
@@ -40,6 +42,26 @@ export interface DssrSale {
   totalAmount: number;
 }
 
+/** Customer-ledger credit sale (receivable) created during the business day. */
+export interface DssrCreditSale {
+  customerType: string;
+  amount: number;
+}
+
+/** Business-day tank dip / physical-count reconciliation. */
+export interface DssrStockVariance {
+  tankName: string;
+  productName: string;
+  /** Measurement unit of the product (e.g. 'Litre', 'Piece'). */
+  unit: string;
+  /** 'BULK' (fuel tanks, volume) | 'ITEM' (packaged merchandise, count) | 'NONE'. */
+  inventoryType: string;
+  expectedQuantity: number;
+  actualQuantity: number;
+  varianceQuantity: number;
+  reason: string | null;
+}
+
 /** Everything anchored to a single business day, used to compose the DSSR. */
 export interface DssrSourceData {
   shiftSummaries: DssrShiftSummary[];
@@ -48,6 +70,12 @@ export interface DssrSourceData {
   purchases: DssrPurchase[];
   supplierPayments: DssrSupplierPayment[];
   sales: DssrSale[];
+  creditSales: DssrCreditSale[];
+  stockVariances: DssrStockVariance[];
+  /** productId → { name, code } for enriching fuel roll-up + nozzle rows. */
+  products: Record<string, { name: string; code: string }>;
+  /** nozzleId → nozzle name. */
+  nozzles: Record<string, string>;
 }
 
 export interface DssrDataReader {

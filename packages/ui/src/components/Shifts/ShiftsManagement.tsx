@@ -55,6 +55,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
 
   // Open Shift Form States
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
+  const [businessDate, setBusinessDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [openingCash, setOpeningCash] = useState(0);
   const [staffAssignments, setStaffAssignments] = useState<{ userId: string; duId: string }[]>([]);
   // Terminal→DU assignment for the shift being opened. duId '' means shift-wide (any DU).
@@ -666,6 +667,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
       const payload: any = {
         stationId: selectedStation.id,
         shiftTemplateId: selectedTemplateId,
+        businessDate,
         openingCash,
         staffAssignments: staffAssignments.filter((a) => a.userId !== ''),
         terminalLinks: terminalAssignments.map((t) => ({ terminalId: t.terminalId, duId: t.duId || null })),
@@ -1159,6 +1161,8 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         onTerminalAssignmentChange={handleTerminalAssignmentChange}
         selectedTemplateId={selectedTemplateId}
         onTemplateChange={setSelectedTemplateId}
+        businessDate={businessDate}
+        onBusinessDateChange={setBusinessDate}
         openingCash={openingCash}
         onOpeningCashChange={setOpeningCash}
         staffAssignments={staffAssignments}

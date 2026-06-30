@@ -17,6 +17,8 @@ export interface OpenShiftCommand {
   stationId: string;
   shiftTemplateId: string;
   openingCash: number | string;
+  /** Business day this shift anchors to (YYYY-MM-DD). Defaults to today. */
+  businessDate?: string;
   staffAssignments?: StaffAssignmentInput[];
   terminalLinks?: TerminalLinkInput[];
   initialReadings?: { nozzleId: string; openingReading: number }[];
@@ -26,6 +28,7 @@ const schema = z.object({
   stationId: z.string().min(1, 'stationId is required'),
   shiftTemplateId: z.string().min(1, 'shiftTemplateId is required'),
   openingCash: z.coerce.number().min(0, 'openingCash must be >= 0'),
+  businessDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'businessDate must be YYYY-MM-DD').optional(),
   staffAssignments: z.array(z.object({ userId: z.string().min(1), duId: z.string().min(1) })).optional(),
   terminalLinks: z.array(z.object({ terminalId: z.string().min(1), duId: z.string().nullish() })).optional(),
   initialReadings: z.array(z.object({ nozzleId: z.string().min(1), openingReading: z.coerce.number().min(0) })).optional(),
@@ -70,14 +73,24 @@ export class OpenShift implements UseCase<OpenShiftCommand, OpenShiftResult> {
     const now = ctx.clock.now();
     const nowIso = now.toISOString();
 
-    // Ensure an open business day (open one if none exists).
-    let businessDay = await this.deps.businessDays.findOpenByStation(ctx.organizationId, cmd.stationId);
+    // Anchor to TODAY's business day (calendar-date model): find it for this
+    // date, or lazily open it. Business days are per (station, date); several
+    // may stay open at once — an earlier day can be closed later (e.g. close
+    // day 1 while on day 5) without blocking today's day from being opened.
+    // The operator may back-date (e.g. forgot to open yesterday); future dates
+    // are rejected.
+    const today = now.toISOString().slice(0, 10);
+    if (cmd.businessDate && cmd.businessDate > today) {
+      return err(validationError('Business date cannot be in the future', { businessDate: cmd.businessDate }));
+    }
+    const businessDate = cmd.businessDate ?? today;
+    let businessDay = await this.deps.businessDays.findByStationAndDate(ctx.organizationId, cmd.stationId, businessDate);
     if (!businessDay) {
       businessDay = {
         id: ctx.ids.newId(),
         organizationId: ctx.organizationId,
         stationId: cmd.stationId,
-        businessDate: now.toISOString().slice(0, 10),
+        businessDate,
         status: 'OPEN',
         openedBy: ctx.actorId ?? 'system',
         openedAt: nowIso,

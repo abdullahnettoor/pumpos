@@ -13,6 +13,8 @@ interface OpenShiftFormProps {
   onTerminalAssignmentChange: (terminalId: string, duId: string) => void;
   selectedTemplateId: string;
   onTemplateChange: (id: string) => void;
+  businessDate: string;
+  onBusinessDateChange: (value: string) => void;
   openingCash: number;
   onOpeningCashChange: (value: number) => void;
   staffAssignments: { userId: string; duId: string }[];
@@ -41,6 +43,8 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
   onTerminalAssignmentChange,
   selectedTemplateId,
   onTemplateChange,
+  businessDate,
+  onBusinessDateChange,
   openingCash,
   onOpeningCashChange,
   staffAssignments,
@@ -114,6 +118,32 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
                 </option>
               ))}
             </select>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-default)' }}>
+              Business Date:
+            </label>
+            <input
+              type="date"
+              value={businessDate}
+              max={new Date().toISOString().slice(0, 10)}
+              onChange={(e) => onBusinessDateChange(e.target.value)}
+              required
+              style={{
+                height: '30px',
+                padding: '0 10px',
+                border: '1px solid var(--border-strong)',
+                borderRadius: 'var(--radius-input)',
+                fontFamily: 'var(--font-mono)',
+                fontSize: '13px',
+                color: 'var(--text-strong)',
+                backgroundColor: 'var(--bg-surface)'
+              }}
+            />
+            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+              Defaults to today. Back-date if opening for an earlier day.
+            </span>
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>

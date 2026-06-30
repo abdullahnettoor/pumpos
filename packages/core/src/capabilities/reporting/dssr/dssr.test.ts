@@ -35,13 +35,17 @@ function bday(): BusinessDay {
 function source(): DssrSourceData {
   return {
     shiftSummaries: [
-      { shiftId: 'sh-1', snapshot: { totalVolume: 1000, totalFuelSalesValue: 100000, expectedDrawerCash: 5000, cashVariance: -50, readings: [{ nozzleId: 'n1', productId: 'p1', volumeSold: 1000, salesValue: 100000 }] } },
+      { shiftId: 'sh-1', snapshot: { totalVolume: 1000, totalTesting: 20, totalNetVolume: 980, totalFuelSalesValue: 98000, expectedDrawerCash: 5000, cashVariance: -50, readings: [{ nozzleId: 'n1', productId: 'p1', grossVolume: 1000, testingVolume: 20, netVolume: 980, salesValue: 98000 }] } },
     ],
     collections: [{ paymentMethod: 'Cash', amount: 2000 }, { paymentMethod: 'UPI', amount: 1000 }],
     expenses: [{ affectsDrawer: true, paidFrom: 'SHIFT_CASH', amount: 300, status: 'ACTIVE' }, { affectsDrawer: false, paidFrom: 'BANK', amount: 5000, status: 'ACTIVE' }, { affectsDrawer: true, paidFrom: 'SHIFT_CASH', amount: 999, status: 'VOIDED' }],
     purchases: [{ amount: 450000 }],
     supplierPayments: [{ affectsDrawer: false, paidFrom: 'BANK', amount: 200000 }],
     sales: [{ paymentMethod: 'Cash', saleType: 'Product', totalAmount: 500 }, { paymentMethod: 'Credit', saleType: 'Product', totalAmount: 1180 }],
+    creditSales: [{ customerType: 'Regular', amount: 1000 }, { customerType: 'Fleet', amount: 4000 }],
+    stockVariances: [{ tankName: 'T1', productName: 'Petrol', unit: 'Litre', inventoryType: 'BULK', expectedQuantity: 5000, actualQuantity: 4990, varianceQuantity: -10, reason: null }],
+    products: { p1: { name: 'Petrol', code: 'MS' } },
+    nozzles: { n1: 'N1' },
   };
 }
 
@@ -58,15 +62,23 @@ describe('GenerateDssr', () => {
       const d = result.data.snapshotData as any;
       expect(d.shiftsIncluded).toBe(1);
       expect(d.fuel.totalVolume).toBe(1000);
-      expect(d.fuel.totalSalesValue).toBe(100000);
+      expect(d.fuel.totalNetVolume).toBe(980);
+      expect(d.fuel.totalTestingVolume).toBe(20);
+      expect(d.fuel.totalSalesValue).toBe(98000);
+      expect(d.fuel.byProduct[0].productName).toBe('Petrol');
+      expect(d.fuel.nozzles[0].nozzleName).toBe('N1');
       expect(d.merchandise.salesValue).toBe(1680);
       expect(d.merchandise.byPaymentMethod.Credit).toBe(1180);
       expect(d.collections.Cash).toBe(2000);
       expect(d.collections.total).toBe(3000);
+      expect(d.credit.normalCredit).toBe(1000);
+      expect(d.credit.fleetCredit).toBe(4000);
       expect(d.expenses.drawer).toBe(300); // voided excluded
       expect(d.expenses.business).toBe(5000);
       expect(d.purchases.total).toBe(450000);
       expect(d.supplierPayments.bank).toBe(200000);
+      expect(d.fuelStockVariance[0].status).toBe('Loss');
+      expect(d.merchandiseStockVariance.length).toBe(0);
       expect(d.drawer.totalCashVariance).toBe(-50);
     }
     expect(store.events.map((e) => e.eventType)).toContain(BusinessEvents.DSSR_GENERATED);

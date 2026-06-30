@@ -309,6 +309,8 @@ export interface ShiftOpenPayload {
   stationId: string;
   shiftTemplateId: string;
   openingCash: number;
+  /** Business day this shift anchors to (YYYY-MM-DD). Defaults to today. */
+  businessDate?: string;
   staffAssignments?: { userId: string; duId: string }[];
   initialReadings?: { nozzleId: string; openingReading: number }[];
 }

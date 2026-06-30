@@ -10,16 +10,34 @@ interface DailyDssrViewProps {
 export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack }) => {
   const printRef = React.useRef<HTMLDivElement>(null);
   const snapshot = dailyDssr?.snapshotData || {};
-  const nozzles = Object.values(snapshot.nozzles || {}) as Array<any>;
+
+  const fuel = snapshot.fuel || {};
+  const byProduct = (fuel.byProduct || []) as Array<any>;
+  const nozzles = (fuel.nozzles || []) as Array<any>;
+  const collections = snapshot.collections || {};
+  const credit = snapshot.credit || {};
+  const merchandise = snapshot.merchandise || {};
+  const expenses = snapshot.expenses || {};
+  const purchases = snapshot.purchases || {};
+  const supplierPayments = snapshot.supplierPayments || {};
+  const fuelStockVariance = (snapshot.fuelStockVariance || []) as Array<any>;
+  const merchandiseStockVariance = (snapshot.merchandiseStockVariance || []) as Array<any>;
   const shifts = snapshot.shifts || [];
   const warnings = snapshot.warnings || [];
 
-  const totalVolumeSold = Number(snapshot.totalVolumeSold || 0);
-  const totalCashCollections = Number(snapshot.totalCashCollections || 0);
-  const totalCardCollections = Number(snapshot.totalCardCollections || 0);
-  const totalUpiCollections = Number(snapshot.totalUpiCollections || 0);
-  const totalCreditSales = Number(snapshot.totalCreditSales || 0);
-  const totalExpenses = Number(snapshot.totalExpenses || 0);
+  const totalGrossVolume = Number(fuel.totalGrossVolume ?? fuel.totalVolume ?? 0);
+  const totalTestingVolume = Number(fuel.totalTestingVolume || 0);
+  const totalNetVolume = Number(fuel.totalNetVolume ?? totalGrossVolume - totalTestingVolume);
+  const totalFuelSalesValue = Number(fuel.totalSalesValue || 0);
+  const totalCashCollections = Number(collections.Cash || 0);
+  const totalCardCollections = Number(collections.Card || 0);
+  const totalUpiCollections = Number(collections.UPI || 0);
+  const totalBankCollections = Number(collections.BankTransfer || 0);
+  const totalCollections = Number(collections.total || 0);
+  const normalCredit = Number(credit.normalCredit || 0);
+  const fleetCredit = Number(credit.fleetCredit || 0);
+  const totalExpenses = Number(expenses.total || 0);
+  const inr = (n: number) => `₹${n.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
 
   return (
     <div ref={printRef} className="card card-comfortable print-area" style={{ maxWidth: '920px', margin: '0 auto' }}>
@@ -83,27 +101,33 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack 
         </div>
         <div>
           <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', textTransform: 'uppercase', fontWeight: 600 }}>
-            Fuel Volume Sold
+            Net Fuel Volume
           </span>
           <strong style={{ fontSize: '16px', color: 'var(--text-strong)', fontFamily: 'var(--font-mono)' }}>
-            {totalVolumeSold.toFixed(3)} L
+            {totalNetVolume.toFixed(3)} L
+          </strong>
+          <span style={{ fontSize: '10px', color: 'var(--text-muted)', display: 'block', fontFamily: 'var(--font-mono)' }}>
+            Gross {totalGrossVolume.toFixed(3)} − Testing {totalTestingVolume.toFixed(3)}
+          </span>
+        </div>
+        <div>
+          <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', textTransform: 'uppercase', fontWeight: 600 }}>
+            Fuel Sales Value
+          </span>
+          <strong style={{ fontSize: '16px', color: 'var(--text-strong)', fontFamily: 'var(--font-mono)' }}>
+            {inr(totalFuelSalesValue)}
           </strong>
         </div>
         <div>
           <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', textTransform: 'uppercase', fontWeight: 600 }}>
-            Total Cash Collections
+            Total Collections
           </span>
           <strong style={{ fontSize: '16px', color: 'var(--state-success-fg)', fontFamily: 'var(--font-mono)' }}>
-            ₹{totalCashCollections.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            {inr(totalCollections)}
           </strong>
-        </div>
-        <div>
-          <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', textTransform: 'uppercase', fontWeight: 600 }}>
-            Non Cash Collections
+          <span style={{ fontSize: '10px', color: 'var(--text-muted)', display: 'block', fontFamily: 'var(--font-mono)' }}>
+            Cash {inr(totalCashCollections)} · Non-cash {inr(totalCardCollections + totalUpiCollections + totalBankCollections)}
           </span>
-          <strong style={{ fontSize: '16px', color: 'var(--text-strong)', fontFamily: 'var(--font-mono)' }}>
-            ₹{(totalCardCollections + totalUpiCollections).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-          </strong>
         </div>
       </div>
 
@@ -146,27 +170,68 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack 
           marginBottom: '28px',
         }}
       >
-        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid var(--border-soft)' }}>
-          <span>Cash Collections</span>
-          <span style={{ fontWeight: 600, fontFamily: 'var(--font-mono)' }}>₹{totalCashCollections.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid var(--border-soft)' }}>
-          <span>Card Collections</span>
-          <span style={{ fontWeight: 600, fontFamily: 'var(--font-mono)' }}>₹{totalCardCollections.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid var(--border-soft)' }}>
-          <span>UPI Collections</span>
-          <span style={{ fontWeight: 600, fontFamily: 'var(--font-mono)' }}>₹{totalUpiCollections.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid var(--border-soft)' }}>
-          <span>Credit Sales</span>
-          <span style={{ fontWeight: 600, fontFamily: 'var(--font-mono)', color: 'var(--brand-warning)' }}>₹{totalCreditSales.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-        </div>
+        {([
+          { label: 'Cash Collections', value: inr(totalCashCollections) },
+          { label: 'Card Collections', value: inr(totalCardCollections) },
+          { label: 'UPI Collections', value: inr(totalUpiCollections) },
+          { label: 'Bank Transfer Collections', value: inr(totalBankCollections) },
+          { label: 'Merchandise Sales', value: inr(Number(merchandise.salesValue || 0)) },
+          { label: 'Normal Credit Sales', value: inr(normalCredit), color: 'var(--brand-warning)' },
+          { label: 'Fleet Credit Sales', value: inr(fleetCredit), color: 'var(--brand-warning)' },
+          { label: 'Purchases', value: inr(Number(purchases.total || 0)) },
+          { label: 'Supplier Payments (Drawer / Bank)', value: `${inr(Number(supplierPayments.drawer || 0))} / ${inr(Number(supplierPayments.bank || 0))}` },
+          { label: 'Drawer Expenses', value: inr(Number(expenses.drawer || 0)) },
+          { label: 'Business Expenses', value: inr(Number(expenses.business || 0)) },
+        ] as Array<{ label: string; value: string; color?: string }>).map((r, i) => (
+          <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '11px 16px', borderBottom: '1px solid var(--border-soft)' }}>
+            <span>{r.label}</span>
+            <span style={{ fontWeight: 600, fontFamily: 'var(--font-mono)', color: r.color || 'var(--text-default)' }}>{r.value}</span>
+          </div>
+        ))}
         <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 16px', backgroundColor: 'var(--bg-surface-alt)' }}>
-          <span>Total Cash Expenses</span>
-          <span style={{ fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--brand-danger)' }}>₹{totalExpenses.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+          <span style={{ fontWeight: 700 }}>Total Expenses</span>
+          <span style={{ fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--brand-danger)' }}>{inr(totalExpenses)}</span>
         </div>
       </div>
+
+      <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
+        Fuel Sales by Product
+      </h3>
+      <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '28px', fontSize: '13px' }}>
+        <thead>
+          <tr style={{ borderBottom: '2px solid var(--border-strong)', textAlign: 'left', color: 'var(--text-muted)' }}>
+            <th style={{ padding: '8px 12px', fontWeight: 600 }}>Product</th>
+            <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Gross (L)</th>
+            <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Testing (L)</th>
+            <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Net (L)</th>
+            <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Sales Value</th>
+          </tr>
+        </thead>
+        <tbody>
+          {byProduct.length > 0 ? (
+            byProduct.map((p: any, idx: number) => (
+              <tr key={idx} style={{ borderBottom: '1px solid var(--border-soft)' }}>
+                <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--text-strong)' }}>{p.productName || 'Unknown'}{p.productCode ? ` (${p.productCode})` : ''}</td>
+                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{Number(p.grossVolume || 0).toFixed(3)}</td>
+                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: Number(p.testingVolume || 0) > 0 ? 'var(--brand-warning)' : 'var(--text-muted)' }}>{Number(p.testingVolume || 0).toFixed(3)}</td>
+                <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, fontFamily: 'var(--font-mono)' }}>{Number(p.netVolume || 0).toFixed(3)}</td>
+                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{inr(Number(p.salesValue || 0))}</td>
+              </tr>
+            ))
+          ) : (
+            <tr>
+              <td colSpan={5} style={{ padding: '16px 12px', textAlign: 'center', color: 'var(--text-muted)' }}>No fuel sales in this daily DSSR.</td>
+            </tr>
+          )}
+          <tr style={{ borderTop: '2px solid var(--border-strong)', backgroundColor: 'var(--bg-surface-alt)', fontWeight: 700 }}>
+            <td style={{ padding: '10px 12px', textTransform: 'uppercase', fontSize: '11px', color: 'var(--text-muted)' }}>Total</td>
+            <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>{totalGrossVolume.toFixed(3)}</td>
+            <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>{totalTestingVolume.toFixed(3)}</td>
+            <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--text-strong)', fontSize: '14px' }}>{totalNetVolume.toFixed(3)}</td>
+            <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--text-strong)' }}>{inr(totalFuelSalesValue)}</td>
+          </tr>
+        </tbody>
+      </table>
 
       <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
         Nozzle Aggregation
@@ -176,8 +241,9 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack 
           <tr style={{ borderBottom: '2px solid var(--border-strong)', textAlign: 'left', color: 'var(--text-muted)' }}>
             <th style={{ padding: '8px 12px', fontWeight: 600 }}>Nozzle</th>
             <th style={{ padding: '8px 12px', fontWeight: 600 }}>Product</th>
-            <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Reading Instances</th>
-            <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Total Volume (L)</th>
+            <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Gross (L)</th>
+            <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Testing (L)</th>
+            <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Net (L)</th>
           </tr>
         </thead>
         <tbody>
@@ -186,29 +252,90 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack 
               <tr key={idx} style={{ borderBottom: '1px solid var(--border-soft)' }}>
                 <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--text-strong)' }}>{nz.nozzleName || 'Unknown'}</td>
                 <td style={{ padding: '10px 12px', color: 'var(--text-default)' }}>{nz.productName || 'Unknown'}</td>
-                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{Number(nz.instances || 0).toLocaleString('en-IN')}</td>
-                <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, fontFamily: 'var(--font-mono)' }}>
-                  {Number(nz.totalVolume || 0).toFixed(3)}
-                </td>
+                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{Number(nz.grossVolume || 0).toFixed(3)}</td>
+                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: Number(nz.testingVolume || 0) > 0 ? 'var(--brand-warning)' : 'var(--text-muted)' }}>{Number(nz.testingVolume || 0).toFixed(3)}</td>
+                <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, fontFamily: 'var(--font-mono)' }}>{Number(nz.netVolume || 0).toFixed(3)}</td>
               </tr>
             ))
           ) : (
             <tr>
-              <td colSpan={4} style={{ padding: '16px 12px', textAlign: 'center', color: 'var(--text-muted)' }}>
-                No nozzle data in this daily DSSR.
-              </td>
+              <td colSpan={5} style={{ padding: '16px 12px', textAlign: 'center', color: 'var(--text-muted)' }}>No nozzle data in this daily DSSR.</td>
             </tr>
           )}
-          <tr style={{ borderTop: '2px solid var(--border-strong)', backgroundColor: 'var(--bg-surface-alt)', fontWeight: 700 }}>
-            <td colSpan={3} style={{ padding: '10px 12px', textTransform: 'uppercase', fontSize: '11px', color: 'var(--text-muted)' }}>
-              Total Fuel Sold
-            </td>
-            <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--text-strong)', fontFamily: 'var(--font-mono)', fontSize: '14px' }}>
-              {totalVolumeSold.toFixed(3)}
-            </td>
-          </tr>
         </tbody>
       </table>
+
+      {fuelStockVariance.length > 0 && (
+        <>
+          <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
+            Tank Dip & Fuel Stock Variance <span style={{ textTransform: 'none', fontWeight: 400, color: 'var(--text-muted)', fontSize: '12px' }}>(Litres)</span>
+          </h3>
+          <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '28px', fontSize: '13px' }}>
+            <thead>
+              <tr style={{ borderBottom: '2px solid var(--border-strong)', textAlign: 'left', color: 'var(--text-muted)' }}>
+                <th style={{ padding: '8px 12px', fontWeight: 600 }}>Tank</th>
+                <th style={{ padding: '8px 12px', fontWeight: 600 }}>Product</th>
+                <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Book (L)</th>
+                <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Dip (L)</th>
+                <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Variance (L)</th>
+                <th style={{ padding: '8px 12px', fontWeight: 600 }}>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {fuelStockVariance.map((v: any, idx: number) => {
+                const variance = Number(v.varianceQuantity || 0);
+                const varColor = variance < 0 ? 'var(--brand-danger)' : variance > 0 ? 'var(--brand-warning)' : 'var(--state-success-fg)';
+                return (
+                  <tr key={idx} style={{ borderBottom: '1px solid var(--border-soft)' }}>
+                    <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--text-strong)' }}>{v.tankName || 'Unknown'}</td>
+                    <td style={{ padding: '10px 12px', color: 'var(--text-default)' }}>{v.productName || 'Unknown'}</td>
+                    <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{Number(v.expectedQuantity || 0).toFixed(3)}</td>
+                    <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{Number(v.actualQuantity || 0).toFixed(3)}</td>
+                    <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, fontFamily: 'var(--font-mono)', color: varColor }}>{variance > 0 ? '+' : ''}{variance.toFixed(3)}</td>
+                    <td style={{ padding: '10px 12px', color: varColor, fontWeight: 600 }}>{v.status || '-'}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </>
+      )}
+
+      {merchandiseStockVariance.length > 0 && (
+        <>
+          <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
+            Merchandise Stock Variance <span style={{ textTransform: 'none', fontWeight: 400, color: 'var(--text-muted)', fontSize: '12px' }}>(Units)</span>
+          </h3>
+          <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '28px', fontSize: '13px' }}>
+            <thead>
+              <tr style={{ borderBottom: '2px solid var(--border-strong)', textAlign: 'left', color: 'var(--text-muted)' }}>
+                <th style={{ padding: '8px 12px', fontWeight: 600 }}>Product</th>
+                <th style={{ padding: '8px 12px', fontWeight: 600 }}>Unit</th>
+                <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Book</th>
+                <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Counted</th>
+                <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Variance</th>
+                <th style={{ padding: '8px 12px', fontWeight: 600 }}>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {merchandiseStockVariance.map((v: any, idx: number) => {
+                const variance = Number(v.varianceQuantity || 0);
+                const varColor = variance < 0 ? 'var(--brand-danger)' : variance > 0 ? 'var(--brand-warning)' : 'var(--state-success-fg)';
+                return (
+                  <tr key={idx} style={{ borderBottom: '1px solid var(--border-soft)' }}>
+                    <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--text-strong)' }}>{v.productName || 'Unknown'}</td>
+                    <td style={{ padding: '10px 12px', color: 'var(--text-muted)' }}>{v.unit || '-'}</td>
+                    <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{Number(v.expectedQuantity || 0).toLocaleString('en-IN')}</td>
+                    <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{Number(v.actualQuantity || 0).toLocaleString('en-IN')}</td>
+                    <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, fontFamily: 'var(--font-mono)', color: varColor }}>{variance > 0 ? '+' : ''}{Number(variance).toLocaleString('en-IN')}</td>
+                    <td style={{ padding: '10px 12px', color: varColor, fontWeight: 600 }}>{v.status || '-'}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </>
+      )}
 
       <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
         Included Shifts
@@ -219,6 +346,7 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack 
             <th style={{ padding: '8px 12px', fontWeight: 600 }}>Shift ID</th>
             <th style={{ padding: '8px 12px', fontWeight: 600 }}>Template</th>
             <th style={{ padding: '8px 12px', fontWeight: 600 }}>Closed At</th>
+            <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Net Volume (L)</th>
             <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Cash Variance (₹)</th>
           </tr>
         </thead>
@@ -236,6 +364,7 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack 
                   <td style={{ padding: '10px 12px', color: 'var(--text-default)' }}>
                     {shift.closedAt ? new Date(shift.closedAt).toLocaleString('en-IN') : '-'}
                   </td>
+                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{Number(shift.netVolume || 0).toFixed(3)}</td>
                   <td style={{ padding: '10px 12px', textAlign: 'right', color: varColor, fontWeight: 600, fontFamily: 'var(--font-mono)' }}>
                     {variance > 0 ? '+' : ''}{variance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                   </td>
@@ -244,7 +373,7 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack 
             })
           ) : (
             <tr>
-              <td colSpan={4} style={{ padding: '16px 12px', textAlign: 'center', color: 'var(--text-muted)' }}>
+              <td colSpan={5} style={{ padding: '16px 12px', textAlign: 'center', color: 'var(--text-muted)' }}>
                 No shifts were included for this day.
               </td>
             </tr>

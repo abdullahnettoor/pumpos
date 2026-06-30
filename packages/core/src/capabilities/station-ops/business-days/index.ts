@@ -90,13 +90,15 @@ export class OpenBusinessDay implements UseCase<OpenBusinessDayCommand, Business
     const p = openSchema.safeParse(input);
     if (!p.success) return err(validationError('Invalid OpenBusinessDay command', { issues: p.error.flatten() }));
 
-    const existingOpen = await this.deps.repository.findOpenByStation(ctx.organizationId, p.data.stationId);
-    if (existingOpen) {
-      return err(conflictError('A business day is already open for this station; close it before opening a new one', { businessDayId: existingOpen.id, businessDate: existingOpen.businessDate }));
-    }
-
     const now = ctx.clock.now();
     const businessDate = p.data.businessDate ?? now.toISOString().slice(0, 10);
+    // One business day per (station, date). Several dates may be open at once;
+    // a past day stays open until explicitly closed (close day 1 on day 5).
+    const existing = await this.deps.repository.findByStationAndDate(ctx.organizationId, p.data.stationId, businessDate);
+    if (existing) {
+      return err(conflictError('A business day already exists for this station and date', { businessDayId: existing.id, businessDate: existing.businessDate }));
+    }
+
     const nowIso = now.toISOString();
     const day: BusinessDay = {
       id: ctx.ids.newId(),

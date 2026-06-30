@@ -78,6 +78,7 @@ export class DrizzleBusinessDayRepository implements BusinessDayRepository {
           eq(schema.businessDays.status, 'OPEN'),
         ),
       )
+      .orderBy(desc(schema.businessDays.businessDate))
       .limit(1);
     return r ? this.toEntity(r) : null;
   }

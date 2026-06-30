@@ -23,6 +23,9 @@ class InMemoryBusinessDayRepo implements BusinessDayRepository {
   async findOpenByStation(orgId: string, stationId: string) {
     return this.rows.find((r) => r.organizationId === orgId && r.stationId === stationId && r.status === 'OPEN') ?? null;
   }
+  async findByStationAndDate(orgId: string, stationId: string, businessDate: string) {
+    return this.rows.find((r) => r.organizationId === orgId && r.stationId === stationId && r.businessDate === businessDate) ?? null;
+  }
 }
 
 function makeContext(): ExecutionContext {
