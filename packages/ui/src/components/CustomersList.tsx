@@ -8,6 +8,7 @@ import { CollectionEntryForm } from './transactions/CollectionEntryForm.js';
 import { LedgerView } from './ledger/LedgerView.js';
 import { DataTable } from './primitives/DataTable.js';
 import { Tabs } from './primitives/Tabs.js';
+import { useConfirm } from './primitives/ConfirmDialog.js';
 import type { ColumnDef } from '@tanstack/react-table';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -123,6 +124,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
   const statusQ = useShiftStatus(stationId, true);
   const productsQ = useProducts();
   const invalidateOperational = useInvalidateOperational();
+  const confirm = useConfirm();
 
   const customers = customersActiveQ.data ?? [];
   const allCustomers = customersAllQ.data ?? [];
@@ -353,7 +355,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
   };
 
   const onDeleteVehicle = async (vehicle: any) => {
-    if (!window.confirm(`Delete vehicle ${vehicle.registrationNumber}?`)) {
+    if (!(await confirm({ title: 'Delete vehicle?', message: `This will remove vehicle ${vehicle.registrationNumber}.`, confirmLabel: 'Delete', danger: true }))) {
       return;
     }
 

@@ -5,6 +5,7 @@ import { letterheadFromStation } from '../../services/reports/letterhead.js';
 import { StatusBadge } from '../StatusBadge.js';
 import { ArrowLeft, Printer, Download, Unlock, AlertTriangle } from 'lucide-react';
 import { ShiftTransactionsPanel } from './ShiftTransactionsPanel.js';
+import { useConfirm } from '../primitives/ConfirmDialog.js';
 
 const shiftService = new CloudShiftService();
 
@@ -32,6 +33,7 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
   station,
 }) => {
   const [reopening, setReopening] = useState(false);
+  const confirm = useConfirm();
   const printRef = useRef<HTMLDivElement>(null);
 
   const { snapshotData, generatedAt } = shiftSummary;
@@ -71,7 +73,12 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
   } = snapshotData;
 
   const handleReopen = async () => {
-    if (!window.confirm('Reopening this shift will delete this compiled Shift Summary and set the shift state back to OPEN. Proceed?')) {
+    if (!(await confirm({
+      title: 'Reopen this shift?',
+      message: 'Reopening will delete this compiled Shift Summary and set the shift state back to OPEN.',
+      confirmLabel: 'Reopen',
+      danger: true,
+    }))) {
       return;
     }
     try {

@@ -12,6 +12,7 @@ import {
 import { CloudStationService } from '../../services/cloud.js';
 import { Drawer } from '../Drawer.js';
 import { StatusBadge } from '../StatusBadge.js';
+import { useConfirm } from '../primitives/ConfirmDialog.js';
 import {
   clearStoredOnboardingDraft,
   createDefaultOperatingSchedule,
@@ -151,6 +152,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
   const [currentStep, setCurrentStep] = useState(1);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isHydrated, setIsHydrated] = useState(false);
+  const confirm = useConfirm();
 
   // Modal Drawers
   const [fuelDrawer, setFuelDrawer] = useState<OnboardingProductDraft | null>(null);
@@ -588,8 +590,8 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     }));
   };
 
-  const discardDraft = () => {
-    if (!window.confirm('Discard the current onboarding draft? This will clear the locally stored setup.')) return;
+  const discardDraft = async () => {
+    if (!(await confirm({ title: 'Discard onboarding draft?', message: 'This will clear the locally stored setup and start over.', confirmLabel: 'Discard', danger: true }))) return;
     clearStoredOnboardingDraft();
     setDraft(createEmptyOnboardingDraft());
     setCurrentStep(1);

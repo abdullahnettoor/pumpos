@@ -38,5 +38,7 @@ export { DataTable } from './components/primitives/DataTable.js';
 export type { DataTableProps } from './components/primitives/DataTable.js';
 export { Tabs } from './components/primitives/Tabs.js';
 export type { TabsProps, TabItem } from './components/primitives/Tabs.js';
+export { ConfirmProvider, useConfirm } from './components/primitives/ConfirmDialog.js';
+export type { ConfirmOptions } from './components/primitives/ConfirmDialog.js';
 export { Skeleton, SkeletonCard, SkeletonGrid } from './components/primitives/Skeleton.js';
 

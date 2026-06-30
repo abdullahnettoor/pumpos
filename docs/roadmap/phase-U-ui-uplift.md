@@ -31,6 +31,11 @@
 - Remaining: consistent `PageLayout` + KPI header per screen (Reports/Shifts still hand-roll); de-dup shift
   transaction entry (QuickEntryDrawer vs ShiftTransactionsPanel); split overloaded Station "General Info";
   replace `alert()`/`window.confirm` with drawer/confirm; gate dead Reports "Custom Reports" tab.
+- **Confirm dialog ✅** — new promise-based `ConfirmProvider` + `useConfirm()` (`primitives/ConfirmDialog.tsx`,
+  styled `role=alertdialog`, Esc/Enter, danger variant). Both apps wrapped in `main.tsx`. Migrated all destructive
+  `window.confirm` sites (delete vehicle, reopen shift ×2, discard onboarding draft). Found the `ShiftTransactionsPanel`
+  "redundancy" is actually a distinct **post-close audit console** (ShiftSummaryView), not a dup — removed only the
+  dead import in ShiftsManagement. Remaining native dialogs are `alert(err)` error popups (→ future inline/toast).
 
 ## U4 — Typed API client
 - Replace ad-hoc `request()` calls with a typed client sharing schemas.

@@ -3,7 +3,6 @@ import { useQueryClient } from '@tanstack/react-query';
 import { CloudProductService, CloudShiftService, CloudTankService, CloudTransactionService, CloudUserAssignmentService } from '../../services/cloud.js';
 import { StatusBadge } from '../StatusBadge.js';
 import { ShiftSummaryView } from './ShiftSummaryView.js';
-import { ShiftTransactionsPanel } from './ShiftTransactionsPanel.js';
 import { HandoverDrawer } from './HandoverDrawer.js';
 import { ShiftControlBar } from './ShiftControlBar.js';
 import { ShiftHistoryTab } from './ShiftHistoryTab.js';

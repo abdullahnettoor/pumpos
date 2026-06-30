@@ -5,6 +5,7 @@ import { StatusBadge } from '../StatusBadge.js';
 import { SyncIndicator } from '../SyncIndicator.js';
 import { LoadingSpinner } from '../LoadingSpinner.js';
 import { SkeletonGrid } from '../primitives/Skeleton.js';
+import { useConfirm } from '../primitives/ConfirmDialog.js';
 import { Station } from '@pump/shared';
 import { Play, Plus, FileText, Unlock, AlertTriangle, Lock } from 'lucide-react';
 
@@ -25,10 +26,16 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
 }) => {
   const { data: summary, isLoading: loading, error, refetch } = useShiftStatus(selectedStation?.id);
   const invalidateOperational = useInvalidateOperational();
+  const confirm = useConfirm();
   const [isReopening, setIsReopening] = useState(false);
 
   const handleReopen = async (shiftId: string) => {
-    if (!window.confirm('Are you sure you want to reopen this shift? This will delete the generated DSSR snapshot and set the shift state back to OPEN.')) {
+    if (!(await confirm({
+      title: 'Reopen this shift?',
+      message: 'This will delete the generated DSSR snapshot and set the shift state back to OPEN.',
+      confirmLabel: 'Reopen',
+      danger: true,
+    }))) {
       return;
     }
     try {
