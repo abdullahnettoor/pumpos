@@ -111,7 +111,11 @@ async function projectShiftSummary(
       .from(schema.handoverTerminalEntries)
       .leftJoin(schema.paymentTerminals, eq(schema.paymentTerminals.id, schema.handoverTerminalEntries.terminalId))
       .where(eq(schema.handoverTerminalEntries.shiftId, shift.id)),
-    db.select().from(schema.expenses).where(eq(schema.expenses.shiftId, shift.id)),
+    db
+      .select({ e: schema.expenses, categoryName: schema.expenseCategories.name })
+      .from(schema.expenses)
+      .leftJoin(schema.expenseCategories, eq(schema.expenseCategories.id, schema.expenses.categoryId))
+      .where(eq(schema.expenses.shiftId, shift.id)),
     db.select().from(schema.purchases).where(eq(schema.purchases.shiftId, shift.id)),
     db.select().from(schema.collections).where(eq(schema.collections.shiftId, shift.id)),
     db
@@ -145,6 +149,7 @@ async function projectShiftSummary(
   const template = templateRows[0];
   const closedByName = closedUserRows[0]?.fullName ?? 'System';
   const openedByName = openedUserRows[0]?.fullName ?? 'System';
+  const expensesEnriched = (expenses ?? []).map((r: any) => ({ ...r.e, categoryName: r.categoryName ?? 'General' }));
   const nozzleReadings = nrRows.map(({ nr, nz, prod }) => ({
     nozzleId: nr.nozzleId,
     nozzleName: nz?.name ?? 'Unknown',
@@ -214,7 +219,7 @@ async function projectShiftSummary(
     totalVolumeSold,
     handovers,
     terminalBreakdown,
-    expenses,
+    expenses: expensesEnriched,
     purchases,
     collections,
     creditSales: (creditSaleRows ?? []).map((r: any) => ({

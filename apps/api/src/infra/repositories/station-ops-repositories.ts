@@ -234,14 +234,21 @@ export class DrizzleShiftReconciliationReader implements ShiftReconciliationRead
     const expenses = await this.db.select().from(schema.expenses).where(eq(schema.expenses.shiftId, shiftId));
     const supplierTxns = await this.db.select().from(schema.supplierTransactions).where(eq(schema.supplierTransactions.shiftId, shiftId));
     const sales = await this.db.select().from(schema.sales).where(eq(schema.sales.shiftId, shiftId));
+    const handovers = await this.db.select().from(schema.attendantHandovers).where(eq(schema.attendantHandovers.shiftId, shiftId));
 
     const sumBy = (rows: { amount: string; paymentMethod?: string }[], method: string) =>
       rows.filter((r) => r.paymentMethod === method).reduce((acc, r) => acc + Number(r.amount), 0);
 
+    // Cash sales for the drawer = the cash attendants declared in their DU handovers
+    // (fuel cash is never a `sales` row — it's metered and declared at handover).
+    // Fall back to merchandise cash `sales` for legacy shifts with no handovers.
+    const handoverCash = handovers.reduce((acc, h) => acc + Number(h.cashHandedOver ?? 0), 0);
+    const merchCashSales = sales
+      .filter((s) => s.paymentMethod === 'Cash')
+      .reduce((acc, s) => acc + Number(s.totalAmount), 0);
+
     return {
-      cashSales: sales
-        .filter((s) => s.paymentMethod === 'Cash')
-        .reduce((acc, s) => acc + Number(s.totalAmount), 0),
+      cashSales: handovers.length > 0 ? handoverCash : merchCashSales,
       cashCollections: sumBy(collections, 'Cash'),
       cardCollections: sumBy(collections, 'Card'),
       upiCollections: sumBy(collections, 'UPI'),

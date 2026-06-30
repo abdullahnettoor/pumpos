@@ -50,6 +50,7 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
     expectedCash = Number(openingCash),
     cashVariance = 0,
     cashCollectionsSum = 0,
+    cashSalesSum = 0,
     cardCollectionsSum = 0,
     upiCollectionsSum = 0,
     creditSalesSum = 0,
@@ -495,6 +496,10 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
         <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid var(--border-soft)' }}>
           <span>Opening Cash Float</span>
           <span style={{ fontWeight: 600, fontFamily: 'var(--font-mono)' }}>₹{Number(openingCash).toLocaleString('en-IN')}</span>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid var(--border-soft)', color: 'var(--state-success-fg)' }}>
+          <span>(+) Cash Sales (Attendant Handovers)</span>
+          <span style={{ fontWeight: 600, fontFamily: 'var(--font-mono)' }}>+ ₹{Number(cashSalesSum).toLocaleString('en-IN')}</span>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid var(--border-soft)', color: 'var(--state-success-fg)' }}>
           <span>(+) Cash Collections</span>

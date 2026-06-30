@@ -283,6 +283,7 @@ const builders: Record<ShiftSummarySection, (d: any, cfg: ReportConfig) => React
       <View style={s.reconBox}>
         {[
           { l: 'Opening Cash Float', v: inr0(d.openingCash), c: C.ink },
+          { l: '(+) Cash Sales (Attendant Handovers)', v: `+ ${inr0(d.cashSalesSum)}`, c: C.success },
           { l: '(+) Cash Collections', v: `+ ${inr0(d.cashCollectionsSum)}`, c: C.success },
           { l: '(-) Petty Cash Expenses', v: `- ${inr0(d.cashExpensesSum)}`, c: C.danger },
           { l: 'Expected Cash in Drawer', v: inr0(d.expectedCash), c: C.ink },
