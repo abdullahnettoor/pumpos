@@ -4,7 +4,7 @@
 
 ## What exists
 - Scoped print CSS (`.print-area`/`.no-print`) — `window.print()` captures only the report.
-- Client PDF: `@react-pdf/renderer` for Shift Summary (`packages/ui/src/services/reports/shiftSummaryDoc.tsx`), `html2pdf` for DSSR.
+- Client PDF: `@react-pdf/renderer` for Shift Summary (`packages/ui/src/services/reports/shiftSummaryDoc.tsx`) **and DSSR** (`dssrDoc.tsx`, reuses the shared primitive kit). `html2pdf` retained only as a generic fallback.
 - Pluggable saver `exportPdf.ts` (web download / desktop Tauri dialog+fs).
 - Self-hosted IBM Plex Sans/Mono (`scripts/download-fonts.mjs`, run `npm run fonts`).
 - Tauri plugins (dialog, fs) wired; capabilities set.
@@ -18,8 +18,10 @@
 - Settings UI: drag-order + toggle sections; live preview reuses the same `<ShiftSummaryDoc>`.
 - Default applied when unset.
 
-## R3 — DSSR template
-- Port DSSR from html2pdf → react-pdf using same primitives + config.
+## R3 — DSSR template ✅ done
+- DSSR ported html2pdf → react-pdf (`dssrDoc.tsx`) using the same primitives + mono fonts.
+- Shared kit exported from `shiftSummaryDoc.tsx` (`C`, `s`, `TableView`, `Kpi`, formatters) and reused.
+- Sections: header, meta, KPIs, financial summary, fuel-by-product, nozzle aggregation, fuel stock variance (L), merchandise stock variance (units), included shifts. Config-driven (`DEFAULT_DSSR_CONFIG`).
 
 ## R4 — Server PDF endpoint (mobile-proof)
 - `GET /reports/shift/:id.pdf`, `/reports/dssr/:id.pdf` (Hono). Auth + org match.

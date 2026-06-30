@@ -35,6 +35,8 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
   const [address, setAddress] = useState('');
   const [phone, setPhone] = useState('');
   const [graceMinutes, setGraceMinutes] = useState(15);
+  const [timezone, setTimezone] = useState('Asia/Kolkata');
+  const [businessDayStartsAt, setBusinessDayStartsAt] = useState('06:00');
   const [onboardingStatus, setOnboardingStatus] = useState<string>('NOT_STARTED');
 
   useEffect(() => {
@@ -48,6 +50,8 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
       setAddress(selectedStation.address || '');
       setPhone(selectedStation.phone || '');
       setGraceMinutes(selectedStation.settings?.shift_grace_minutes || 15);
+      setTimezone(selectedStation.settings?.timezone || 'Asia/Kolkata');
+      setBusinessDayStartsAt(selectedStation.settings?.business_day_starts_at || '06:00');
       setOnboardingStatus(selectedStation.onboardingStatus || 'NOT_STARTED');
     }
   }, [selectedStation]);
@@ -87,6 +91,8 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
         settings: {
           ...(selectedStation.settings || {}),
           shift_grace_minutes: graceMinutes,
+          timezone,
+          business_day_starts_at: businessDayStartsAt,
           shift_lock_grace_days: selectedStation.settings?.shift_lock_grace_days || 3,
           offline_warning_days: selectedStation.settings?.offline_warning_days || 3,
           offline_critical_days: selectedStation.settings?.offline_critical_days || 7,
@@ -241,6 +247,39 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
                           value={graceMinutes}
                           onChange={(e) => setGraceMinutes(parseInt(e.target.value))}
                         />
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                      <div className="form-group">
+                        <label className="form-label">Timezone</label>
+                        <select
+                          value={timezone}
+                          onChange={(e) => setTimezone(e.target.value)}
+                          style={{ width: '100%' }}
+                        >
+                          <option value="Asia/Kolkata">Asia/Kolkata (IST)</option>
+                          <option value="Asia/Dubai">Asia/Dubai (GST)</option>
+                          <option value="Asia/Colombo">Asia/Colombo</option>
+                          <option value="Asia/Kathmandu">Asia/Kathmandu</option>
+                          <option value="Asia/Dhaka">Asia/Dhaka</option>
+                          <option value="UTC">UTC</option>
+                        </select>
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                          Used to decide which calendar day operations belong to.
+                        </span>
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label">Business Day Starts At</label>
+                        <input
+                          type="time"
+                          className="form-input mono-num"
+                          value={businessDayStartsAt}
+                          onChange={(e) => setBusinessDayStartsAt(e.target.value)}
+                        />
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                          A fuel day commonly runs 06:00 → 06:00. Activity before this rolls to the previous day.
+                        </span>
                       </div>
                     </div>
 

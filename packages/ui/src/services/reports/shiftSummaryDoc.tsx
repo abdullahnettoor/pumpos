@@ -39,21 +39,21 @@ export const DEFAULT_SHIFT_SUMMARY_CONFIG: ReportConfig = {
   paper: 'A4',
 };
 
-const C = {
+export const C = {
   green: '#1F6A53', ink: '#18201A', body: '#2B342D', muted: '#5E6A61', faint: '#7A857C',
   line: '#D9DED6', surfaceAlt: '#F1F3EF', danger: '#9F3F36', amber: '#8A6116', success: '#1E6A4E',
   warnBg: '#F9F0DA', warnFg: '#8A6116', white: '#FFFFFF',
 };
 
-const inr = (n: any) => `\u20b9${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-const inr0 = (n: any) => `\u20b9${Number(n || 0).toLocaleString('en-IN')}`;
-const vol3 = (n: any) => `${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} L`;
-const vol1 = (n: any) => `${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} L`;
-const fix3 = (n: any) => Number(n || 0).toFixed(3);
-const fmtTime = (iso?: string) => { if (!iso) return '—'; try { return new Date(iso).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }); } catch { return '—'; } };
-const fmtDateTime = (iso?: string) => { if (!iso) return '—'; try { return new Date(iso).toLocaleString('en-IN'); } catch { return '—'; } };
+export const inr = (n: any) => `\u20b9${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+export const inr0 = (n: any) => `\u20b9${Number(n || 0).toLocaleString('en-IN')}`;
+export const vol3 = (n: any) => `${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} L`;
+export const vol1 = (n: any) => `${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} L`;
+export const fix3 = (n: any) => Number(n || 0).toFixed(3);
+export const fmtTime = (iso?: string) => { if (!iso) return '—'; try { return new Date(iso).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }); } catch { return '—'; } };
+export const fmtDateTime = (iso?: string) => { if (!iso) return '—'; try { return new Date(iso).toLocaleString('en-IN'); } catch { return '—'; } };
 
-const s = StyleSheet.create({
+export const s = StyleSheet.create({
   page: { paddingTop: 30, paddingHorizontal: 32, paddingBottom: 46, fontSize: 9, color: C.body, fontFamily: 'IBM Plex Sans' },
   band: { backgroundColor: C.green, paddingVertical: 12, paddingHorizontal: 16, borderRadius: 6 },
   brand: { fontSize: 15, color: C.white, fontWeight: 700 },
@@ -90,9 +90,9 @@ const s = StyleSheet.create({
 });
 
 // --- Generic table -----------------------------------------------------------
-type Col = { header: string; flex: number; align?: 'right'; mono?: boolean; strong?: boolean };
-type Cell = { text: string; color?: string };
-const TableView = ({ columns, rows, total }: { columns: Col[]; rows: Cell[][]; total?: Cell[] }) => (
+export type Col = { header: string; flex: number; align?: 'right'; mono?: boolean; strong?: boolean };
+export type Cell = { text: string; color?: string };
+export const TableView = ({ columns, rows, total }: { columns: Col[]; rows: Cell[][]; total?: Cell[] }) => (
   <View>
     <View style={[s.tr, s.thRow]}>
       {columns.map((c, i) => (
@@ -123,11 +123,11 @@ const TableView = ({ columns, rows, total }: { columns: Col[]; rows: Cell[][]; t
   </View>
 );
 
-const Kpi = ({ l, v, c = C.ink }: { l: string; v: string; c?: string }) => (
+export const Kpi = ({ l, v, c = C.ink }: { l: string; v: string; c?: string }) => (
   <View style={s.kpi}><Text style={s.kpiLabel}>{l.toUpperCase()}</Text><Text style={[s.kpiVal, { color: c }]}>{v}</Text></View>
 );
 
-const varColor = (v: number) => (v < 0 ? C.danger : v > 0 ? C.amber : C.success);
+export const varColor = (v: number) => (v < 0 ? C.danger : v > 0 ? C.amber : C.success);
 
 const builders: Record<ShiftSummarySection, (d: any, cfg: ReportConfig) => React.ReactNode> = {
   header: (d, cfg) => (

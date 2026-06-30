@@ -20,6 +20,7 @@ export { supabase } from './services/supabase.js';
 export * from './services/cloud.js';
 export { exportReportPdf, exportReactPdf, setPdfSaver } from './services/exportPdf.js';
 export { ShiftSummaryDoc, DEFAULT_SHIFT_SUMMARY_CONFIG } from './services/reports/shiftSummaryDoc.js';
+export { DssrDoc, DEFAULT_DSSR_CONFIG } from './services/reports/dssrDoc.js';
 
 // Data layer (TanStack Query) + shared primitives
 export * from './query/queryClient.js';
