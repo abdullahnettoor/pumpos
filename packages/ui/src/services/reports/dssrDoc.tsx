@@ -2,31 +2,13 @@ import React from 'react';
 import { Document, Page, View, Text } from '@react-pdf/renderer';
 import {
   C, s, TableView, Kpi, varColor, inr, inr0, vol3, fmtDateTime, LetterheadBand,
-  type Col, type Cell, type Letterhead,
+  type Col, type Cell,
 } from './shiftSummaryDoc.js';
+import type { DssrSection, DssrReportConfig } from './reportConfig.js';
+import { DEFAULT_DSSR_CONFIG } from './reportConfig.js';
 
-export type DssrSection =
-  | 'header' | 'meta' | 'kpis' | 'financial' | 'fuelByProduct'
-  | 'nozzles' | 'fuelStockVariance' | 'merchandiseStockVariance' | 'shifts';
-
-export interface DssrReportConfig {
-  sections: DssrSection[];
-  stationName?: string;
-  letterhead?: Letterhead;
-  paper: 'A4' | 'LETTER';
-}
-
-export const DEFAULT_DSSR_CONFIG: DssrReportConfig = {
-  sections: ['header', 'meta', 'kpis', 'financial', 'fuelByProduct', 'nozzles', 'fuelStockVariance', 'merchandiseStockVariance', 'shifts'],
-  paper: 'A4',
-};
-
-/** Human labels for the section-config UI (R2). `header` is always rendered. */
-export const DSSR_SECTION_LABELS: Record<DssrSection, string> = {
-  header: 'Header / Letterhead', meta: 'Day Meta', kpis: 'KPIs',
-  financial: 'Financial Summary', fuelByProduct: 'Fuel Sales by Product', nozzles: 'Nozzle Aggregation',
-  fuelStockVariance: 'Tank Dip & Fuel Variance', merchandiseStockVariance: 'Merchandise Variance', shifts: 'Included Shifts',
-};
+export type { DssrSection, DssrReportConfig } from './reportConfig.js';
+export { DEFAULT_DSSR_CONFIG, DSSR_SECTION_LABELS } from './reportConfig.js';
 
 const ReconRow = ({ label, value, color }: { label: string; value: string; color?: string }) => (
   <View style={s.reconRow}>

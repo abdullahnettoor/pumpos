@@ -18,48 +18,13 @@ Font.register({
   ],
 });
 
-export type ShiftSummarySection =
-  | 'header' | 'meta' | 'warnings' | 'nozzles' | 'handovers' | 'terminals'
-  | 'creditSales' | 'dips' | 'stockVariances' | 'cashRecon' | 'nonCash'
-  | 'expenses' | 'purchases' | 'collections' | 'signatures';
-
-export interface Letterhead {
-  legalName?: string;
-  gstin?: string;
-  stateCode?: string;
-  addressLine?: string;
-  pincode?: string;
-  roCode?: string;
-  contact?: string;
-  fuelBrand?: string;
-  logoDataUrl?: string | null;
-}
-
-export interface ReportConfig {
-  sections: ShiftSummarySection[];
-  showLogo: boolean;
-  stationName?: string;
-  letterhead?: Letterhead;
-  paper: 'A4' | 'LETTER';
-}
-
-export const DEFAULT_SHIFT_SUMMARY_CONFIG: ReportConfig = {
-  sections: [
-    'header', 'meta', 'warnings', 'nozzles', 'handovers', 'terminals', 'creditSales',
-    'dips', 'stockVariances', 'cashRecon', 'nonCash', 'expenses', 'purchases', 'collections', 'signatures',
-  ],
-  showLogo: true,
-  paper: 'A4',
-};
-
-/** Human labels for the section-config UI (R2). `header` is always rendered. */
-export const SHIFT_SUMMARY_SECTION_LABELS: Record<ShiftSummarySection, string> = {
-  header: 'Header / Letterhead', meta: 'Shift Meta', warnings: 'Warnings',
-  nozzles: 'Nozzle Reconciliation', handovers: 'Attendant Handovers', terminals: 'POS Terminals',
-  creditSales: 'Fuel-on-Credit Sales', dips: 'Tank Dips', stockVariances: 'Stock Variances',
-  cashRecon: 'Cash Reconciliation', nonCash: 'Non-Cash Summary', expenses: 'Expenses',
-  purchases: 'Purchases', collections: 'Collections', signatures: 'Signatures',
-};
+export type { ShiftSummarySection, ReportConfig } from './reportConfig.js';
+export { DEFAULT_SHIFT_SUMMARY_CONFIG, SHIFT_SUMMARY_SECTION_LABELS } from './reportConfig.js';
+export type { Letterhead } from './letterhead.js';
+export { letterheadFromStation } from './letterhead.js';
+import type { ShiftSummarySection, ReportConfig } from './reportConfig.js';
+import { DEFAULT_SHIFT_SUMMARY_CONFIG } from './reportConfig.js';
+import type { Letterhead } from './letterhead.js';
 
 export const C = {
   green: '#1F6A53', ink: '#18201A', body: '#2B342D', muted: '#5E6A61', faint: '#7A857C',
@@ -181,23 +146,6 @@ export const LetterheadBand = ({ title, stationName, letterhead }: { title: stri
     </View>
   );
 };
-
-/** Map a station record (with settings.legal/fuel_brand/logo) to a Letterhead. */
-export function letterheadFromStation(station: any): Letterhead | undefined {
-  if (!station) return undefined;
-  const set = station.settings || {};
-  const legal = set.legal || {};
-  return {
-    legalName: legal.legalName || station.name,
-    gstin: legal.gstin,
-    stateCode: legal.stateCode,
-    addressLine: legal.addressLine || station.address,
-    pincode: legal.pincode,
-    roCode: legal.roCode,
-    fuelBrand: set.fuel_brand,
-    logoDataUrl: set.logo_data_url,
-  };
-}
 
 const builders: Record<ShiftSummarySection, (d: any, cfg: ReportConfig) => React.ReactNode> = {
   header: (d, cfg) => (

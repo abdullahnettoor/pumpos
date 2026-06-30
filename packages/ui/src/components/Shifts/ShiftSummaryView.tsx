@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { CloudShiftService } from '../../services/cloud.js';
-import { exportReactPdf } from '../../services/exportPdf.js';
-import { ShiftSummaryDoc, DEFAULT_SHIFT_SUMMARY_CONFIG, letterheadFromStation } from '../../services/reports/shiftSummaryDoc.js';
+import { DEFAULT_SHIFT_SUMMARY_CONFIG } from '../../services/reports/reportConfig.js';
+import { letterheadFromStation } from '../../services/reports/letterhead.js';
 import { StatusBadge } from '../StatusBadge.js';
 import { ArrowLeft, Printer, Download, Unlock, AlertTriangle } from 'lucide-react';
 import { ShiftTransactionsPanel } from './ShiftTransactionsPanel.js';
@@ -99,7 +99,15 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
         <div style={{ display: 'flex', gap: '8px' }}>
           <button
             className="btn btn-secondary btn-sm"
-            onClick={() => exportReactPdf(<ShiftSummaryDoc snapshot={snapshotData} config={{ ...DEFAULT_SHIFT_SUMMARY_CONFIG, sections: (station?.settings?.report_config?.shiftSummary?.length ? station.settings.report_config.shiftSummary : DEFAULT_SHIFT_SUMMARY_CONFIG.sections) as any, stationName: station?.name || templateName, letterhead: letterheadFromStation(station) }} />, `Shift_Summary_${String(shiftId).slice(0, 8)}`)}
+            onClick={async () => {
+              const [{ exportReactPdf }, doc] = await Promise.all([
+                import('../../services/exportPdf.js'),
+                import('../../services/reports/shiftSummaryDoc.js'),
+              ]);
+              const sections = station?.settings?.report_config?.shiftSummary?.length ? station.settings.report_config.shiftSummary : DEFAULT_SHIFT_SUMMARY_CONFIG.sections;
+              const config = { ...DEFAULT_SHIFT_SUMMARY_CONFIG, sections: sections as any, stationName: station?.name || templateName, letterhead: letterheadFromStation(station) };
+              await exportReactPdf(React.createElement(doc.ShiftSummaryDoc, { snapshot: snapshotData, config }), `Shift_Summary_${String(shiftId).slice(0, 8)}`);
+            }}
           >
             <Download size={13} /> Save PDF
           </button>

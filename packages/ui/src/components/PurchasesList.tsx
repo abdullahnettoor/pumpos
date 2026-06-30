@@ -6,6 +6,8 @@ import { LoadingSpinner } from './LoadingSpinner.js';
 import { Drawer } from './Drawer.js';
 import { PurchaseEntryForm } from './transactions/PurchaseEntryForm.js';
 import { LedgerView } from './ledger/LedgerView.js';
+import { DataTable } from './primitives/DataTable.js';
+import type { ColumnDef } from '@tanstack/react-table';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { supplierPaymentSchema } from '@pump/shared';
@@ -18,6 +20,77 @@ interface PurchasesListProps {
 }
 
 type TabType = 'transactions' | 'registry';
+
+const purchaseColumns: ColumnDef<any, any>[] = [
+  {
+    accessorKey: 'businessDate',
+    header: 'Date',
+    cell: ({ row }) => {
+      const d = row.original.businessDate ?? row.original.shiftDate;
+      return (
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: 'var(--text-default)' }}>
+          <Calendar size={13} style={{ color: 'var(--text-muted)' }} />
+          {d ? new Date(d).toLocaleDateString(undefined, { dateStyle: 'medium' }) : '—'}
+        </span>
+      );
+    },
+  },
+  { accessorKey: 'supplierName', header: 'Supplier', cell: ({ getValue }) => <span style={{ fontWeight: 600, color: 'var(--text-strong)' }}>{(getValue() as string) || '—'}</span> },
+  { accessorKey: 'documentNumber', header: 'Reference', cell: ({ getValue }) => <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-default)' }}>{(getValue() as string) || '—'}</span> },
+  { accessorKey: 'invoiceNumber', header: 'Invoice', cell: ({ getValue }) => <span style={{ color: 'var(--text-strong)' }}>{(getValue() as string) || '--'}</span> },
+  { accessorKey: 'notes', header: 'Notes', cell: ({ getValue }) => <span style={{ color: 'var(--text-muted)' }}>{(getValue() as string) || '--'}</span> },
+  {
+    accessorKey: 'amount',
+    header: 'Total Amount',
+    cell: ({ getValue }) => <span style={{ fontWeight: 700, color: 'var(--text-strong)', fontFamily: 'var(--font-mono)' }}>₹{Number(getValue()).toLocaleString('en-IN')}</span>,
+  },
+];
+
+const buildSupplierColumns = (openLedger: (s: any) => void, openEdit: (s: any) => void): ColumnDef<any, any>[] => [
+  {
+    accessorKey: 'name',
+    header: 'Supplier Name',
+    cell: ({ row }) => {
+      const sup = row.original;
+      return (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <Building size={14} style={{ color: 'var(--text-muted)' }} />
+          <div>
+            <button type="button" onClick={() => openLedger(sup)} style={{ background: 'none', border: 'none', padding: 0, color: 'var(--brand-primary)', fontWeight: 600, textAlign: 'left', cursor: 'pointer', textDecoration: 'underline' }}>{sup.name}</button>
+            {sup.metadata?.tradeName && <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 400 }}>{sup.metadata.tradeName}</div>}
+            {sup.metadata?.gstin && <div style={{ fontSize: '10px', color: 'var(--primary)', fontFamily: 'var(--font-mono)', fontWeight: 500, marginTop: '2px' }}>GSTIN: {sup.metadata.gstin}</div>}
+          </div>
+        </div>
+      );
+    },
+  },
+  { accessorKey: 'phone', header: 'Phone', cell: ({ getValue }) => <span style={{ color: 'var(--text-muted)' }}>{(getValue() as string) || '-'}</span> },
+  {
+    accessorKey: 'isActive',
+    header: 'Status',
+    cell: ({ getValue }) => {
+      const active = getValue() as boolean;
+      return <span style={{ fontSize: '11px', fontWeight: 600, backgroundColor: active ? 'var(--state-success-bg)' : 'var(--state-danger-bg)', color: active ? 'var(--state-success-fg)' : 'var(--state-danger-fg)', padding: '2px 8px', borderRadius: 'var(--radius-chip)' }}>{active ? 'Active' : 'Suspended'}</span>;
+    },
+  },
+  {
+    accessorKey: 'currentBalance',
+    header: 'Outstanding Balance',
+    cell: ({ getValue }) => {
+      const bal = Number(getValue() || 0);
+      return <span style={{ fontWeight: 700, color: bal > 0 ? 'var(--brand-warning)' : 'var(--state-success-fg)', fontFamily: 'var(--font-mono)' }}>₹{bal.toLocaleString('en-IN')}</span>;
+    },
+  },
+  {
+    id: 'actions',
+    header: '',
+    cell: ({ row }) => (
+      <button onClick={() => openEdit(row.original)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '4px' }}>
+        <Edit size={14} />
+      </button>
+    ),
+  },
+];
 
 export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, defaultShiftId }) => {
   const [activeTab, setActiveTab] = useState<TabType>('transactions');
@@ -475,166 +548,29 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, d
               <span>Purchases post to the selected date — no open shift required. Each raises a supplier payable; record the payment separately.</span>
             </div>
 
-            <div style={{
-              backgroundColor: 'var(--bg-surface)',
-              border: '1px solid var(--border-soft)',
-              borderRadius: 'var(--radius-card)',
-              overflow: 'hidden'
-            }}>
-              <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-soft)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)' }}>
-                  Purchase Records
-                </h3>
-                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                  Total Invoices: <strong>{purchases.length}</strong>
-                </span>
-              </div>
-
-              {purchases.length === 0 ? (
-                <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>
-                  No purchases logged yet.
-                </div>
-              ) : (
-                <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-                    <thead>
-                      <tr style={{ backgroundColor: 'var(--bg-surface-alt)', borderBottom: '1px solid var(--border-soft)', textAlign: 'left', color: 'var(--text-muted)' }}>
-                        <th style={{ padding: '10px 20px', fontWeight: 600 }}>Date</th>
-                        <th style={{ padding: '10px 20px', fontWeight: 600 }}>Supplier</th>
-                        <th style={{ padding: '10px 20px', fontWeight: 600 }}>Reference</th>
-                        <th style={{ padding: '10px 20px', fontWeight: 600 }}>Invoice</th>
-                        <th style={{ padding: '10px 20px', fontWeight: 600 }}>Notes</th>
-                        <th style={{ padding: '10px 20px', fontWeight: 600, textAlign: 'right' }}>Total Amount</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {purchases.map((p, idx) => (
-                        <tr key={idx} style={{ borderBottom: '1px solid var(--border-soft)' }}>
-                          <td style={{ padding: '12px 20px', color: 'var(--text-default)' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                              <Calendar size={13} style={{ color: 'var(--text-muted)' }} />
-                              {(() => { const d = p.businessDate ?? p.shiftDate; return d ? new Date(d).toLocaleDateString(undefined, { dateStyle: 'medium' }) : '—'; })()}
-                            </div>
-                          </td>
-                          <td style={{ padding: '12px 20px', fontWeight: 600, color: 'var(--text-strong)' }}>
-                            {p.supplierName}
-                          </td>
-                          <td style={{ padding: '12px 20px', fontFamily: 'var(--font-mono)', color: 'var(--text-default)' }}>
-                            {p.documentNumber}
-                          </td>
-                          <td style={{ padding: '12px 20px', color: 'var(--text-strong)' }}>
-                            {p.invoiceNumber || '--'}
-                          </td>
-                          <td style={{ padding: '12px 20px', color: 'var(--text-muted)' }}>
-                            {p.notes || '--'}
-                          </td>
-                          <td style={{ padding: '12px 20px', textAlign: 'right', fontWeight: 700, color: 'var(--text-strong)', fontFamily: 'var(--font-mono)' }}>
-                            ₹{Number(p.amount).toLocaleString('en-IN')}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)' }}>Purchase Records</h3>
+              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Total Invoices: <strong>{purchases.length}</strong></span>
             </div>
+            <DataTable
+              columns={purchaseColumns}
+              data={purchases}
+              isLoading={loading}
+              error={error}
+              emptyMessage="No purchases logged yet."
+              getRowId={(r: any) => r.documentNumber || r.id}
+              initialSorting={[{ id: 'businessDate', desc: true }]}
+            />
           </div>
         )}
 
         {activeTab === 'registry' && (
-          <div style={{
-            backgroundColor: 'var(--bg-surface)',
-            border: '1px solid var(--border-soft)',
-            borderRadius: 'var(--radius-card)',
-            overflow: 'hidden'
-          }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left' }}>
-              <thead>
-                <tr style={{ backgroundColor: 'var(--bg-surface-alt)', borderBottom: '1px solid var(--border-soft)', color: 'var(--text-muted)' }}>
-                  <th style={{ padding: '12px 20px', fontWeight: 600 }}>Supplier Name</th>
-                  <th style={{ padding: '12px 20px', fontWeight: 600 }}>Phone</th>
-                  <th style={{ padding: '12px 20px', fontWeight: 600 }}>Status</th>
-                  <th style={{ padding: '12px 20px', fontWeight: 600, textAlign: 'right' }}>Outstanding Balance</th>
-                  <th style={{ padding: '12px 20px', fontWeight: 600, textAlign: 'center' }}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {allSuppliers.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)' }}>
-                      No suppliers registered.
-                    </td>
-                  </tr>
-                ) : (
-                  allSuppliers.map((sup) => (
-                    <tr key={sup.id} style={{ borderBottom: '1px solid var(--border-soft)' }}>
-                      <td style={{ padding: '12px 20px', fontWeight: 600, color: 'var(--text-strong)' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <Building size={14} style={{ color: 'var(--text-muted)' }} />
-                          <div>
-                            <button
-                              type="button"
-                              onClick={() => openLedgerDrawer(sup)}
-                              style={{
-                                background: 'none',
-                                border: 'none',
-                                padding: 0,
-                                color: 'var(--brand-primary)',
-                                fontWeight: 600,
-                                textAlign: 'left',
-                                cursor: 'pointer',
-                                textDecoration: 'underline',
-                              }}
-                            >
-                              {sup.name}
-                            </button>
-                            {sup.metadata?.tradeName && (
-                              <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 400 }}>{sup.metadata.tradeName}</div>
-                            )}
-                            {sup.metadata?.gstin && (
-                              <div style={{ fontSize: '10px', color: 'var(--primary)', fontFamily: 'var(--font-mono)', fontWeight: 500, marginTop: '2px' }}>GSTIN: {sup.metadata.gstin}</div>
-                            )}
-                          </div>
-                        </div>
-                      </td>
-                      <td style={{ padding: '12px 20px', color: 'var(--text-muted)' }}>
-                        {sup.phone || '-'}
-                      </td>
-                      <td style={{ padding: '12px 20px' }}>
-                        <span style={{
-                          fontSize: '11px',
-                          fontWeight: 600,
-                          backgroundColor: sup.isActive ? 'var(--state-success-bg)' : 'var(--state-danger-bg)',
-                          color: sup.isActive ? 'var(--state-success-fg)' : 'var(--state-danger-fg)',
-                          padding: '2px 8px',
-                          borderRadius: 'var(--radius-chip)'
-                        }}>
-                          {sup.isActive ? 'Active' : 'Suspended'}
-                        </span>
-                      </td>
-                      <td style={{ padding: '12px 20px', textAlign: 'right', fontWeight: 700, color: Number(sup.currentBalance || 0) > 0 ? 'var(--brand-warning)' : 'var(--state-success-fg)', fontFamily: 'var(--font-mono)' }}>
-                        ₹{Number(sup.currentBalance || 0).toLocaleString('en-IN')}
-                      </td>
-                      <td style={{ padding: '12px 20px', textAlign: 'center' }}>
-                        <button
-                          onClick={() => openEditDrawer(sup)}
-                          style={{
-                            border: 'none',
-                            background: 'none',
-                            cursor: 'pointer',
-                            color: 'var(--text-muted)',
-                            padding: '4px',
-                          }}
-                        >
-                          <Edit size={14} />
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+          <DataTable
+            columns={buildSupplierColumns(openLedgerDrawer, openEditDrawer)}
+            data={allSuppliers}
+            emptyMessage="No suppliers registered."
+            getRowId={(r: any) => r.id}
+          />
         )}
       </div>
 

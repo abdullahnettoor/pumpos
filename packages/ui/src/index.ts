@@ -19,8 +19,11 @@ export { ReportsOverview } from './components/ReportsOverview.js';
 export { supabase } from './services/supabase.js';
 export * from './services/cloud.js';
 export { exportReportPdf, exportReactPdf, setPdfSaver } from './services/exportPdf.js';
-export { ShiftSummaryDoc, DEFAULT_SHIFT_SUMMARY_CONFIG } from './services/reports/shiftSummaryDoc.js';
-export { DssrDoc, DEFAULT_DSSR_CONFIG } from './services/reports/dssrDoc.js';
+export {
+  DEFAULT_SHIFT_SUMMARY_CONFIG, DEFAULT_DSSR_CONFIG,
+  SHIFT_SUMMARY_SECTION_LABELS, DSSR_SECTION_LABELS,
+} from './services/reports/reportConfig.js';
+export { letterheadFromStation } from './services/reports/letterhead.js';
 export { LedgerView } from './components/ledger/LedgerView.js';
 
 // Data layer (TanStack Query) + shared primitives

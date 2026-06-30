@@ -6,6 +6,8 @@ import { LoadingSpinner } from './LoadingSpinner.js';
 import { Drawer } from './Drawer.js';
 import { CollectionEntryForm } from './transactions/CollectionEntryForm.js';
 import { LedgerView } from './ledger/LedgerView.js';
+import { DataTable } from './primitives/DataTable.js';
+import type { ColumnDef } from '@tanstack/react-table';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { customerCreateSchema } from '@pump/shared';
@@ -18,6 +20,98 @@ interface CustomersListProps {
 }
 
 type TabType = 'transactions' | 'registry' | 'vehicles';
+
+const chip = (text: string, bg: string, fg: string) => (
+  <span style={{ fontSize: '11px', fontWeight: 600, backgroundColor: bg, color: fg, padding: '2px 8px', borderRadius: 'var(--radius-chip)' }}>{text}</span>
+);
+
+const buildCustomerColumns = (openLedger: (c: any) => void, openEdit: (c: any) => void): ColumnDef<any, any>[] => [
+  {
+    accessorKey: 'name',
+    header: 'Customer Name',
+    cell: ({ row }) => {
+      const c = row.original;
+      return (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <User size={14} style={{ color: 'var(--text-muted)' }} />
+          <div>
+            <button type="button" onClick={() => openLedger(c)} style={{ background: 'none', border: 'none', padding: 0, color: 'var(--brand-primary)', fontWeight: 600, textAlign: 'left', cursor: 'pointer', textDecoration: 'underline' }}>{c.name}</button>
+            {c.metadata?.tradeName && <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 400 }}>{c.metadata.tradeName}</div>}
+            {c.metadata?.gstin && <div style={{ fontSize: '10px', color: 'var(--primary)', fontFamily: 'var(--font-mono)', fontWeight: 500, marginTop: '2px' }}>GSTIN: {c.metadata.gstin}</div>}
+          </div>
+        </div>
+      );
+    },
+  },
+  {
+    accessorKey: 'customerType',
+    header: 'Account Type',
+    cell: ({ getValue }) => {
+      const t = getValue() as string;
+      return chip(
+        t,
+        t === 'Fleet' ? 'var(--state-info-bg)' : t === 'Credit' ? 'var(--state-warning-bg)' : 'var(--bg-surface-alt)',
+        t === 'Fleet' ? 'var(--state-info-fg)' : t === 'Credit' ? 'var(--state-warning-fg)' : 'var(--text-strong)',
+      );
+    },
+  },
+  { accessorKey: 'phone', header: 'Phone', cell: ({ getValue }) => <span style={{ color: 'var(--text-muted)' }}>{(getValue() as string) || '-'}</span> },
+  {
+    accessorKey: 'creditLimit',
+    header: 'Credit Limit',
+    cell: ({ row }) => {
+      const limit = Number(row.original.creditLimit || 0);
+      const balance = Number(row.original.currentBalance || 0);
+      if (limit <= 0) return <span style={{ color: 'var(--text-muted)' }}>N/A</span>;
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <span style={{ fontFamily: 'var(--font-mono)' }}>₹{limit.toLocaleString('en-IN')}</span>
+          <div style={{ width: '80px', height: '4px', backgroundColor: 'var(--border-soft)', borderRadius: '2px', overflow: 'hidden' }}>
+            <div style={{ width: `${Math.min(100, (balance / limit) * 100)}%`, height: '100%', backgroundColor: balance > limit ? 'var(--brand-danger)' : balance >= limit * 0.75 ? 'var(--brand-warning)' : 'var(--brand-primary)' }} />
+          </div>
+        </div>
+      );
+    },
+  },
+  {
+    accessorKey: 'isPrepaid',
+    header: 'Prepaid Mode',
+    cell: ({ getValue }) => (getValue() ? chip('Enabled', 'var(--state-info-bg)', 'var(--state-info-fg)') : chip('Disabled', 'var(--bg-surface-alt)', 'var(--text-muted)')),
+  },
+  {
+    accessorKey: 'prepaidBalance',
+    header: 'Prepaid Balance',
+    cell: ({ row }) => {
+      const c = row.original;
+      return <span style={{ fontWeight: 700, color: c.isPrepaid ? 'var(--state-success-fg)' : 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>₹{Number(c.prepaidBalance || 0).toLocaleString('en-IN')}</span>;
+    },
+  },
+  { accessorKey: 'fleetCode', header: 'Fleet Code', cell: ({ getValue }) => <span style={{ color: 'var(--text-muted)' }}>{(getValue() as string) || '-'}</span> },
+  {
+    accessorKey: 'isActive',
+    header: 'Status',
+    cell: ({ getValue }) => (getValue() ? chip('Active', 'var(--state-success-bg)', 'var(--state-success-fg)') : chip('Suspended', 'var(--state-danger-bg)', 'var(--state-danger-fg)')),
+  },
+  {
+    accessorKey: 'currentBalance',
+    header: 'Outstanding Balance',
+    cell: ({ row }) => {
+      const limit = Number(row.original.creditLimit || 0);
+      const balance = Number(row.original.currentBalance || 0);
+      const color = limit > 0 && balance > limit ? 'var(--brand-danger)' : balance > 0 ? 'var(--brand-warning)' : 'var(--state-success-fg)';
+      return <span style={{ fontWeight: 700, color, fontFamily: 'var(--font-mono)' }}>₹{balance.toLocaleString('en-IN')}</span>;
+    },
+  },
+  {
+    id: 'actions',
+    header: '',
+    cell: ({ row }) => (
+      <button onClick={() => openEdit(row.original)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '4px' }}>
+        <Edit size={14} />
+      </button>
+    ),
+  },
+];
 
 export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, defaultShiftId }) => {
   const [activeTab, setActiveTab] = useState<TabType>('transactions');
@@ -657,155 +751,12 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
         )}
 
         {activeTab === 'registry' && (
-          <div style={{
-            backgroundColor: 'var(--bg-surface)',
-            border: '1px solid var(--border-soft)',
-            borderRadius: 'var(--radius-card)',
-            overflow: 'hidden'
-          }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left' }}>
-              <thead>
-                <tr style={{ backgroundColor: 'var(--bg-surface-alt)', borderBottom: '1px solid var(--border-soft)', color: 'var(--text-muted)' }}>
-                  <th style={{ padding: '12px 20px', fontWeight: 600 }}>Customer Name</th>
-                  <th style={{ padding: '12px 20px', fontWeight: 600 }}>Account Type</th>
-                  <th style={{ padding: '12px 20px', fontWeight: 600 }}>Phone</th>
-                  <th style={{ padding: '12px 20px', fontWeight: 600 }}>Credit Limit</th>
-                  <th style={{ padding: '12px 20px', fontWeight: 600 }}>Prepaid Mode</th>
-                  <th style={{ padding: '12px 20px', fontWeight: 600, textAlign: 'right' }}>Prepaid Balance</th>
-                  <th style={{ padding: '12px 20px', fontWeight: 600 }}>Fleet Code</th>
-                  <th style={{ padding: '12px 20px', fontWeight: 600 }}>Status</th>
-                  <th style={{ padding: '12px 20px', fontWeight: 600, textAlign: 'right' }}>Outstanding Balance</th>
-                  <th style={{ padding: '12px 20px', fontWeight: 600, textAlign: 'center' }}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {allCustomers.length === 0 ? (
-                  <tr>
-                    <td colSpan={10} style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)' }}>
-                      No customers registered.
-                    </td>
-                  </tr>
-                ) : (
-                  allCustomers.map((c) => {
-                    const balance = Number(c.currentBalance || 0);
-                    const limit = Number(c.creditLimit || 0);
-                    const prepaidBalance = Number(c.prepaidBalance || 0);
-                    return (
-                      <tr key={c.id} style={{ borderBottom: '1px solid var(--border-soft)' }}>
-                        <td style={{ padding: '12px 20px', fontWeight: 600, color: 'var(--text-strong)' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <User size={14} style={{ color: 'var(--text-muted)' }} />
-                            <div>
-                              <button
-                                type="button"
-                                onClick={() => openLedgerDrawer(c)}
-                                style={{
-                                  background: 'none',
-                                  border: 'none',
-                                  padding: 0,
-                                  color: 'var(--brand-primary)',
-                                  fontWeight: 600,
-                                  textAlign: 'left',
-                                  cursor: 'pointer',
-                                  textDecoration: 'underline',
-                                }}
-                              >
-                                {c.name}
-                              </button>
-                              {c.metadata?.tradeName && (
-                                <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 400 }}>{c.metadata.tradeName}</div>
-                              )}
-                              {c.metadata?.gstin && (
-                                <div style={{ fontSize: '10px', color: 'var(--primary)', fontFamily: 'var(--font-mono)', fontWeight: 500, marginTop: '2px' }}>GSTIN: {c.metadata.gstin}</div>
-                              )}
-                            </div>
-                          </div>
-                        </td>
-                        <td style={{ padding: '12px 20px' }}>
-                          <span style={{
-                            fontSize: '11px',
-                            fontWeight: 600,
-                            backgroundColor: c.customerType === 'Fleet' ? 'var(--state-info-bg)' : c.customerType === 'Credit' ? 'var(--state-warning-bg)' : 'var(--bg-surface-alt)',
-                            color: c.customerType === 'Fleet' ? 'var(--state-info-fg)' : c.customerType === 'Credit' ? 'var(--state-warning-fg)' : 'var(--text-strong)',
-                            padding: '2px 8px',
-                            borderRadius: 'var(--radius-chip)'
-                          }}>
-                            {c.customerType}
-                          </span>
-                        </td>
-                        <td style={{ padding: '12px 20px', color: 'var(--text-muted)' }}>
-                          {c.phone || '-'}
-                        </td>
-                        <td style={{ padding: '12px 20px', color: 'var(--text-default)' }}>
-                          {limit > 0 ? (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                              <span style={{ fontFamily: 'var(--font-mono)' }}>₹{limit.toLocaleString('en-IN')}</span>
-                              <div style={{ width: '80px', height: '4px', backgroundColor: 'var(--border-soft)', borderRadius: '2px', overflow: 'hidden' }}>
-                                <div style={{
-                                  width: `${Math.min(100, (balance / limit) * 100)}%`,
-                                  height: '100%',
-                                  backgroundColor: balance > limit ? 'var(--brand-danger)' : balance >= limit * 0.75 ? 'var(--brand-warning)' : 'var(--brand-primary)'
-                                }} />
-                              </div>
-                            </div>
-                          ) : (
-                            <span style={{ color: 'var(--text-muted)' }}>N/A</span>
-                          )}
-                        </td>
-                        <td style={{ padding: '12px 20px' }}>
-                          <span style={{
-                            fontSize: '11px',
-                            fontWeight: 600,
-                            backgroundColor: c.isPrepaid ? 'var(--state-info-bg)' : 'var(--bg-surface-alt)',
-                            color: c.isPrepaid ? 'var(--state-info-fg)' : 'var(--text-muted)',
-                            padding: '2px 8px',
-                            borderRadius: 'var(--radius-chip)'
-                          }}>
-                            {c.isPrepaid ? 'Enabled' : 'Disabled'}
-                          </span>
-                        </td>
-                        <td style={{ padding: '12px 20px', textAlign: 'right', fontWeight: 700, color: c.isPrepaid ? 'var(--state-success-fg)' : 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-                          ₹{prepaidBalance.toLocaleString('en-IN')}
-                        </td>
-                        <td style={{ padding: '12px 20px', color: 'var(--text-muted)' }}>
-                          {c.fleetCode || '-'}
-                        </td>
-                        <td style={{ padding: '12px 20px' }}>
-                          <span style={{
-                            fontSize: '11px',
-                            fontWeight: 600,
-                            backgroundColor: c.isActive ? 'var(--state-success-bg)' : 'var(--state-danger-bg)',
-                            color: c.isActive ? 'var(--state-success-fg)' : 'var(--state-danger-fg)',
-                            padding: '2px 8px',
-                            borderRadius: 'var(--radius-chip)'
-                          }}>
-                            {c.isActive ? 'Active' : 'Suspended'}
-                          </span>
-                        </td>
-                        <td style={{ padding: '12px 20px', textAlign: 'right', fontWeight: 700, color: limit > 0 && balance > limit ? 'var(--brand-danger)' : balance > 0 ? 'var(--brand-warning)' : 'var(--state-success-fg)', fontFamily: 'var(--font-mono)' }}>
-                          ₹{balance.toLocaleString('en-IN')}
-                        </td>
-                        <td style={{ padding: '12px 20px', textAlign: 'center' }}>
-                          <button
-                            onClick={() => openEditDrawer(c)}
-                            style={{
-                              border: 'none',
-                              background: 'none',
-                              cursor: 'pointer',
-                              color: 'var(--text-muted)',
-                              padding: '4px',
-                            }}
-                          >
-                            <Edit size={14} />
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
+          <DataTable
+            columns={buildCustomerColumns(openLedgerDrawer, openEditDrawer)}
+            data={allCustomers}
+            emptyMessage="No customers registered."
+            getRowId={(r: any) => r.id}
+          />
         )}
 
         {activeTab === 'vehicles' && (

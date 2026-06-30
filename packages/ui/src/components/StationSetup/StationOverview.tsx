@@ -11,8 +11,7 @@ import { ShiftTemplates } from './ShiftTemplates.js';
 import { LoadingSpinner } from '../LoadingSpinner.js';
 import { UserRolesAssignment } from './UserRolesAssignment.js';
 import { PaymentTerminalsPanel } from './PaymentTerminalsPanel.js';
-import { DEFAULT_SHIFT_SUMMARY_CONFIG, SHIFT_SUMMARY_SECTION_LABELS } from '../../services/reports/shiftSummaryDoc.js';
-import { DEFAULT_DSSR_CONFIG, DSSR_SECTION_LABELS } from '../../services/reports/dssrDoc.js';
+import { DEFAULT_SHIFT_SUMMARY_CONFIG, SHIFT_SUMMARY_SECTION_LABELS, DEFAULT_DSSR_CONFIG, DSSR_SECTION_LABELS } from '../../services/reports/reportConfig.js';
 
 const stationService = new CloudStationService();
 

@@ -7,7 +7,9 @@
 - Primitives: `PageLayout`, `DataTable`, `KpiCard`, `Drawer`. ExpensesList already on DataTable.
 
 ## U1 — DataTable migration
-- PurchasesList (3 raw `<table>`), CustomersList (registry 10-col w/ in-cell actions) → `DataTable` columns + in-cell action renderers. Visual parity check.
+- PurchasesList ✅ (purchases + supplier registry) and CustomersList ✅ (10-col registry) migrated to `DataTable`
+  with in-cell action/ledger renderers (visual parity, now sortable). Remaining: ProductsCatalog, PaymentTerminalsPanel,
+  UserRolesAssignment, FuelPricingPanel (lighter `dense-table` lists).
 
 ## U2 — Forms → RHF + Zod
 - Standardize entry forms (Expense/Purchase/Collection/Merchandise) on react-hook-form + shared Zod schemas (`@pump/shared`).
@@ -18,8 +20,10 @@
 ## U4 — Typed API client
 - Replace ad-hoc `request()` calls with a typed client sharing schemas.
 
-## U5 — Performance
-- Route-based code-splitting (resolves current >500kb chunk warning); lazy-load heavy deps (pdf, react-pdf).
+## U5 — Performance ✅ (PDF lazy-load done)
+- Report config/labels/letterhead extracted to plain modules (`reportConfig.ts`, `letterhead.ts`); the react-pdf
+  doc modules + `exportReactPdf` are now **dynamic-imported only on "Save PDF"**. Main bundle 2,360 kB → 1,041 kB;
+  `@react-pdf/renderer` (1.3 MB) + html2pdf (668 kB) are deferred lazy chunks. Remaining: route-level code-split of heavy screens.
 
 ## Expansion
 - Theming/dark mode, command palette, saved views, density toggle, a11y pass, empty/skeleton states.
