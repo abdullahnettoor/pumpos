@@ -61,6 +61,8 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
     dipReadings = [],
     handovers = [],
     terminalBreakdown = [],
+    creditSales = [],
+    creditSalesTotal = 0,
   } = snapshotData;
 
   const handleReopen = async () => {
@@ -340,6 +342,45 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
                 </td>
                 <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--text-strong)', fontSize: '14px' }}>
                   ₹{terminalBreakdown.reduce((s: number, t: any) => s + Number(t.card || 0) + Number(t.upi || 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </>
+      )}
+
+      {/* Fuel-on-Credit Sales (receivables billed during the shift) */}
+      {creditSales && creditSales.length > 0 && (
+        <>
+          <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.02em', marginTop: '32px' }}>
+            Fuel-on-Credit Sales
+          </h3>
+          <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '32px', fontSize: '13px' }}>
+            <thead>
+              <tr style={{ borderBottom: '2px solid var(--border-strong)', textAlign: 'left', color: 'var(--text-muted)' }}>
+                <th style={{ padding: '8px 12px', fontWeight: 600 }}>Customer</th>
+                <th style={{ padding: '8px 12px', fontWeight: 600 }}>Vehicle</th>
+                <th style={{ padding: '8px 12px', fontWeight: 600 }}>Product</th>
+                <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Qty (L)</th>
+                <th style={{ padding: '8px 12px', fontWeight: 600 }}>Notes</th>
+                <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Amount (₹)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {creditSales.map((r: any, idx: number) => (
+                <tr key={r.id || idx} style={{ borderBottom: '1px solid var(--border-soft)' }}>
+                  <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--text-strong)' }}>{r.customerName || 'Customer'}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text-default)', fontFamily: 'var(--font-mono)' }}>{r.vehicleNumber || '—'}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text-default)' }}>{r.productName || '—'}</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{r.quantity != null ? Number(r.quantity).toLocaleString('en-IN', { minimumFractionDigits: 3 }) : '—'}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text-faint)', fontSize: '12px' }}>{r.notes || '—'}</td>
+                  <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, fontFamily: 'var(--font-mono)' }}>₹{Number(r.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                </tr>
+              ))}
+              <tr style={{ borderTop: '2px solid var(--border-strong)', backgroundColor: 'var(--bg-surface-alt)', fontWeight: 700 }}>
+                <td colSpan={5} style={{ padding: '10px 12px', textTransform: 'uppercase', fontSize: '11px', color: 'var(--text-muted)' }}>Total Credit Sales</td>
+                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--text-strong)', fontSize: '14px' }}>
+                  ₹{(Number(creditSalesTotal) || creditSales.reduce((s: number, r: any) => s + Number(r.amount || 0), 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                 </td>
               </tr>
             </tbody>

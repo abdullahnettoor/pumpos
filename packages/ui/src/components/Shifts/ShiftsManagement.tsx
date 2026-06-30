@@ -189,9 +189,8 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         .filter((c: any) => c.paymentMethod === 'UPI')
         .reduce((sum: number, c: any) => sum + Number(c.amount), 0);
       
-      const creditSales = txs.collections
-        .filter((c: any) => c.paymentMethod === 'Credit')
-        .reduce((sum: number, c: any) => sum + Number(c.amount), 0);
+      const creditSales = (txs.creditSales || [])
+        .reduce((sum: number, r: any) => sum + Number(r.amount), 0);
 
       const cashExpenses = txs.expenses
         .reduce((sum: number, e: any) => sum + Number(e.amount), 0);

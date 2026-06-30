@@ -85,6 +85,7 @@ async function projectShiftSummary(
     expenses,
     purchases,
     collections,
+    creditSaleRows,
   ] = await Promise.all([
     db.select().from(schema.shiftTemplates).where(eq(schema.shiftTemplates.id, shift.shiftTemplateId)).limit(1),
     shift.closedBy
@@ -113,6 +114,32 @@ async function projectShiftSummary(
     db.select().from(schema.expenses).where(eq(schema.expenses.shiftId, shift.id)),
     db.select().from(schema.purchases).where(eq(schema.purchases.shiftId, shift.id)),
     db.select().from(schema.collections).where(eq(schema.collections.shiftId, shift.id)),
+    db
+      .select({
+        id: schema.customerTransactions.id,
+        amount: schema.customerTransactions.amount,
+        quantity: schema.customerTransactions.quantity,
+        unitPrice: schema.customerTransactions.unitPrice,
+        notes: schema.customerTransactions.notes,
+        duId: schema.customerTransactions.duId,
+        attendantId: schema.customerTransactions.attendantId,
+        customerId: schema.customerTransactions.customerId,
+        vehicleId: schema.customerTransactions.vehicleId,
+        productId: schema.customerTransactions.productId,
+        customerName: schema.customers.name,
+        productName: schema.products.name,
+        productCode: schema.products.code,
+      })
+      .from(schema.customerTransactions)
+      .leftJoin(schema.customers, eq(schema.customers.id, schema.customerTransactions.customerId))
+      .leftJoin(schema.products, eq(schema.products.id, schema.customerTransactions.productId))
+      .where(
+        and(
+          eq(schema.customerTransactions.shiftId, shift.id),
+          eq(schema.customerTransactions.transactionType, 'Credit Sale'),
+          eq(schema.customerTransactions.referenceType, 'CREDIT_SALE'),
+        ),
+      ),
   ]);
 
   const template = templateRows[0];
@@ -190,6 +217,23 @@ async function projectShiftSummary(
     expenses,
     purchases,
     collections,
+    creditSales: (creditSaleRows ?? []).map((r: any) => ({
+      id: r.id,
+      amount: Number(r.amount),
+      quantity: r.quantity != null ? Number(r.quantity) : null,
+      unitPrice: r.unitPrice != null ? Number(r.unitPrice) : null,
+      notes: r.notes ?? null,
+      duId: r.duId ?? null,
+      attendantId: r.attendantId ?? null,
+      customerId: r.customerId,
+      vehicleId: r.vehicleId ?? null,
+      productId: r.productId ?? null,
+      customerName: r.customerName ?? 'Customer',
+      productName: r.productName ?? null,
+      productCode: r.productCode ?? null,
+      vehicleNumber: r.vehicleNumber ?? null,
+    })),
+    creditSalesTotal: (creditSaleRows ?? []).reduce((sum: number, r: any) => sum + Number(r.amount), 0),
     expectedCash: Number(snap.expectedDrawerCash ?? openingCash),
     cashVariance: Number(snap.cashVariance ?? 0),
     cashSalesSum: Number(recon.cashSales ?? 0),

@@ -590,13 +590,46 @@ transactionsRouter.get('/collections', async (c) => {
 transactionsRouter.get('/shifts/:id/transactions', async (c) => {
   const db = c.var.db;
   const shiftId = c.req.param('id');
-  const [expenses, purchases, collections, sales] = await Promise.all([
+  const [expenses, purchases, collections, sales, creditSales] = await Promise.all([
     db.select().from(schema.expenses).where(eq(schema.expenses.shiftId, shiftId)),
     db.select().from(schema.purchases).where(eq(schema.purchases.shiftId, shiftId)),
     db.select().from(schema.collections).where(eq(schema.collections.shiftId, shiftId)),
     db.select().from(schema.sales).where(eq(schema.sales.shiftId, shiftId)),
+    // Stage B fuel-on-credit sales live in customer_transactions (a receivable),
+    // not the collections table — surface them so totals/reconciliation/summary see them.
+    db
+      .select({
+        id: schema.customerTransactions.id,
+        transactionType: schema.customerTransactions.transactionType,
+        amount: schema.customerTransactions.amount,
+        quantity: schema.customerTransactions.quantity,
+        unitPrice: schema.customerTransactions.unitPrice,
+        notes: schema.customerTransactions.notes,
+        createdAt: schema.customerTransactions.createdAt,
+        shiftId: schema.customerTransactions.shiftId,
+        duId: schema.customerTransactions.duId,
+        attendantId: schema.customerTransactions.attendantId,
+        customerId: schema.customerTransactions.customerId,
+        vehicleId: schema.customerTransactions.vehicleId,
+        productId: schema.customerTransactions.productId,
+        customerName: schema.customers.name,
+        productName: schema.products.name,
+        productCode: schema.products.code,
+        vehicleNumber: schema.customerVehicles.registrationNumber,
+      })
+      .from(schema.customerTransactions)
+      .leftJoin(schema.customers, eq(schema.customers.id, schema.customerTransactions.customerId))
+      .leftJoin(schema.products, eq(schema.products.id, schema.customerTransactions.productId))
+      .leftJoin(schema.customerVehicles, eq(schema.customerVehicles.id, schema.customerTransactions.vehicleId))
+      .where(
+        and(
+          eq(schema.customerTransactions.shiftId, shiftId),
+          eq(schema.customerTransactions.transactionType, 'Credit Sale'),
+          eq(schema.customerTransactions.referenceType, 'CREDIT_SALE'),
+        ),
+      ),
   ]);
-  return c.json({ success: true, data: { expenses, purchases, collections, sales } });
+  return c.json({ success: true, data: { expenses, purchases, collections, sales, creditSales } });
 });
 
 // ====================================================
