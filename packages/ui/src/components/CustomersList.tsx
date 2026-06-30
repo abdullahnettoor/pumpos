@@ -5,6 +5,7 @@ import { User, ShieldAlert, CreditCard, DollarSign, Plus, Info, Edit, Check, Set
 import { LoadingSpinner } from './LoadingSpinner.js';
 import { Drawer } from './Drawer.js';
 import { CollectionEntryForm } from './transactions/CollectionEntryForm.js';
+import { LedgerView } from './ledger/LedgerView.js';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { customerCreateSchema } from '@pump/shared';
@@ -1398,91 +1399,32 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
                 Statement of Account
               </h4>
 
-              {loadingLedger ? (
-                <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px' }}>
-                  Loading ledger transactions...
-                </div>
-              ) : ledgerError ? (
-                <div style={{ padding: '12px', backgroundColor: 'var(--state-danger-bg)', color: 'var(--state-danger-fg)', borderRadius: 'var(--radius-input)', fontSize: '12px' }}>
-                  {ledgerError}
-                </div>
-              ) : ledgerTransactions.length === 0 ? (
-                <div style={{ padding: '24px', border: '1px dashed var(--border-soft)', borderRadius: 'var(--radius-card)', textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px' }}>
-                  No transaction history found for this account.
-                </div>
-              ) : (
-                <div style={{ border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-card)', overflow: 'hidden' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', textAlign: 'left' }}>
-                    <thead>
-                      <tr style={{ backgroundColor: 'var(--bg-surface-alt)', borderBottom: '1px solid var(--border-soft)', color: 'var(--text-muted)' }}>
-                        <th style={{ padding: '8px 12px', fontWeight: 600 }}>Date / Shift</th>
-                        <th style={{ padding: '8px 12px', fontWeight: 600 }}>Type</th>
-                        <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Amount</th>
-                        <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Balance</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(() => {
-                        let running = 0;
-                        const sorted = [...ledgerTransactions].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-                        const enriched = sorted.map(tx => {
-                          const amt = Number(tx.amount);
-                          if (tx.transactionType === 'Credit Sale' || tx.transactionType === 'Adjustment') {
-                            running += amt;
-                          } else if (tx.transactionType === 'Collection') {
-                            running -= amt;
-                          } else if (tx.transactionType === 'Prepaid Top-up') {
-                            running += amt;
-                          } else if (tx.transactionType === 'Prepaid Charge') {
-                            running -= amt;
-                          }
-                          return { ...tx, runningBalance: running };
-                        });
-                        return [...enriched].reverse().map((tx) => {
-                          const amt = Number(tx.amount);
-                          const isDebit = tx.transactionType === 'Credit Sale' || tx.transactionType === 'Adjustment' || tx.transactionType === 'Prepaid Top-up';
-                          const txColor = tx.transactionType === 'Credit Sale'
-                            ? 'var(--brand-warning)'
-                            : tx.transactionType === 'Prepaid Top-up'
-                              ? 'var(--state-success-fg)'
-                              : 'var(--text-default)';
-                          return (
-                            <tr key={tx.id} style={{ borderBottom: '1px solid var(--border-soft)' }}>
-                              <td style={{ padding: '8px 12px' }}>
-                                <div style={{ fontWeight: 500, color: 'var(--text-strong)' }}>
-                                  {new Date(tx.shiftDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' })}
-                                </div>
-                                <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
-                                  {tx.shiftName}
-                                </div>
-                              </td>
-                              <td style={{ padding: '8px 12px' }}>
-                                <span style={{
-                                  fontWeight: 600,
-                                  color: txColor
-                                }}>
-                                  {tx.transactionType}
-                                </span>
-                                {tx.notes && (
-                                  <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                                    {tx.notes}
-                                  </div>
-                                )}
-                              </td>
-                              <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 600, fontFamily: 'var(--font-mono)', color: isDebit ? 'var(--text-strong)' : 'var(--state-success-fg)' }}>
-                                {isDebit ? '' : '-'}₹{amt.toLocaleString('en-IN')}
-                              </td>
-                              <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--text-strong)' }}>
-                                ₹{tx.runningBalance.toLocaleString('en-IN')}
-                              </td>
-                            </tr>
-                          );
-                        });
-                      })()}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+              <LedgerView
+                entries={ledgerTransactions}
+                loading={loadingLedger}
+                error={ledgerError}
+                amountLabel="Amount"
+                balanceLabel="Balance"
+                emptyText="No transaction history found for this account."
+                resolve={(tx: any) => {
+                  const type = tx.transactionType;
+                  const direction: 'debit' | 'credit' =
+                    type === 'Credit Sale' || type === 'Adjustment' || type === 'Prepaid Top-up' ? 'debit' : 'credit';
+                  const typeColor =
+                    type === 'Credit Sale' ? 'var(--brand-warning)' : type === 'Prepaid Top-up' ? 'var(--state-success-fg)' : undefined;
+                  return {
+                    id: tx.id,
+                    date: tx.createdAt,
+                    dateLabel: new Date(tx.shiftDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' }),
+                    subLabel: tx.shiftName,
+                    type,
+                    typeColor,
+                    notes: tx.notes,
+                    amount: Number(tx.amount),
+                    direction,
+                  };
+                }}
+              />
             </div>
 
             <button
