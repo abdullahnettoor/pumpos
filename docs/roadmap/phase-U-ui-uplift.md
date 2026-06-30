@@ -36,6 +36,10 @@
   `window.confirm` sites (delete vehicle, reopen shift ×2, discard onboarding draft). Found the `ShiftTransactionsPanel`
   "redundancy" is actually a distinct **post-close audit console** (ShiftSummaryView), not a dup — removed only the
   dead import in ShiftsManagement. Remaining native dialogs are `alert(err)` error popups (→ future inline/toast).
+- **Station "General Info" split ✅** — was overloaded; now two setup tabs: **General Info** (station basics +
+  operations/timezone/day-start + onboarding status) and **Business & Branding** (legal/tax GSTIN/stateCode/RO code +
+  branding/logo + report-section toggles), each with its own edit/view + save that merges into `settings` without
+  clobbering the other group.
 
 ## U4 — Typed API client
 - Replace ad-hoc `request()` calls with a typed client sharing schemas.

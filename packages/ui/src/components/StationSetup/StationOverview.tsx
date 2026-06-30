@@ -28,7 +28,8 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
   const [loading, setLoading] = useState(true);
   const qc = useQueryClient();
   const [editing, setEditing] = useState(false);
-  const [activeTab, setActiveTab] = useState<'general' | 'products' | 'tanks' | 'dispensers' | 'terminals' | 'shifts' | 'roster'>('general');
+  const [editingBusiness, setEditingBusiness] = useState(false);
+  const [activeTab, setActiveTab] = useState<'general' | 'business' | 'products' | 'tanks' | 'dispensers' | 'terminals' | 'shifts' | 'roster'>('general');
 
   // General tab form states
   const [name, setName] = useState('');
@@ -117,6 +118,28 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
           shift_grace_minutes: graceMinutes,
           timezone,
           business_day_starts_at: businessDayStartsAt,
+          shift_lock_grace_days: selectedStation.settings?.shift_lock_grace_days || 3,
+          offline_warning_days: selectedStation.settings?.offline_warning_days || 3,
+          offline_critical_days: selectedStation.settings?.offline_critical_days || 7,
+        },
+        onboardingStatus
+      });
+      onStationSelected(updated);
+      setEditing(false);
+      loadStations(true);
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  const handleSaveBusiness = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedStation) return;
+
+    try {
+      const updated = await stationService.updateStation(selectedStation.id, {
+        settings: {
+          ...(selectedStation.settings || {}),
           legal: {
             legalName: legalName || null,
             gstin: gstin || null,
@@ -131,14 +154,10 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
             shiftSummary: DEFAULT_SHIFT_SUMMARY_CONFIG.sections.filter((k) => ssEnabled.has(k)),
             dssr: DEFAULT_DSSR_CONFIG.sections.filter((k) => dssrEnabled.has(k)),
           },
-          shift_lock_grace_days: selectedStation.settings?.shift_lock_grace_days || 3,
-          offline_warning_days: selectedStation.settings?.offline_warning_days || 3,
-          offline_critical_days: selectedStation.settings?.offline_critical_days || 7,
         },
-        onboardingStatus
       });
       onStationSelected(updated);
-      setEditing(false);
+      setEditingBusiness(false);
       loadStations(true);
     } catch (err: any) {
       alert(err.message);
@@ -199,6 +218,7 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
             onChange={(id) => setActiveTab(id as any)}
             tabs={[
               { id: 'general', label: 'General Info' },
+              { id: 'business', label: 'Business & Branding' },
               { id: 'products', label: 'Products Catalog' },
               { id: 'tanks', label: 'Storage Tanks' },
               { id: 'dispensers', label: 'Dispenser Units' },
@@ -301,9 +321,82 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
                       </div>
                     </div>
 
-                    <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: '12px' }}>
+                    <div className="form-group" style={{ maxWidth: '300px' }}>
+                      <label className="form-label">Onboarding Readiness Status</label>
+                      <select
+                        value={onboardingStatus}
+                        onChange={(e) => setOnboardingStatus(e.target.value)}
+                        style={{ width: '100%' }}
+                      >
+                        <option value="NOT_STARTED">NOT STARTED</option>
+                        <option value="IN_PROGRESS">IN PROGRESS</option>
+                        <option value="READY_FOR_OPERATIONS">READY FOR OPERATIONS</option>
+                      </select>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '12px', borderTop: '1px solid var(--border-soft)', paddingTop: '12px' }}>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => setEditing(false)}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="btn btn-primary btn-sm"
+                      >
+                        Save Configuration
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-strong)' }}>{selectedStation.name}</h3>
+                        <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Status: <strong style={{ color: onboardingStatus === 'READY_FOR_OPERATIONS' ? 'var(--state-success-fg)' : 'var(--state-warning-fg)' }}>{onboardingStatus.replace(/_/g, ' ')}</strong></p>
+                      </div>
+                      <button
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => setEditing(true)}
+                      >
+                        Edit General Parameters
+                      </button>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', borderTop: '1px solid var(--border-soft)', paddingTop: '16px' }}>
+                      <div>
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Location Code</span>
+                        <p style={{ fontSize: '14px', fontWeight: 600, marginTop: '4px', color: 'var(--text-strong)', fontFamily: 'var(--font-mono)' }}>{selectedStation.code}</p>
+                      </div>
+                      <div>
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Contact</span>
+                        <p style={{ fontSize: '13px', fontWeight: 500, marginTop: '4px', color: 'var(--text-default)' }}>{selectedStation.phone || '—'}</p>
+                      </div>
+                      <div>
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Grace Period</span>
+                        <p style={{ fontSize: '13px', fontWeight: 500, marginTop: '4px', color: 'var(--text-default)', fontFamily: 'var(--font-mono)' }}>
+                          {selectedStation.settings?.shift_grace_minutes || 15} min
+                        </p>
+                      </div>
+                      <div style={{ gridColumn: 'span 2' }}>
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Address</span>
+                        <p style={{ fontSize: '13px', fontWeight: 500, marginTop: '4px', color: 'var(--text-default)' }}>{selectedStation.address || '—'}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'business' && (
+              <div>
+                {editingBusiness ? (
+                  <form onSubmit={handleSaveBusiness} style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxWidth: '600px' }}>
+                    <div>
                       <h3 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-strong)', marginBottom: '10px' }}>
-                        Legal &amp; Branding (Report Letterhead)
+                        Legal &amp; Tax (Report Letterhead)
                       </h3>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                         <div className="form-group">
@@ -330,6 +423,14 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
                           <label className="form-label">Pincode</label>
                           <input className="form-input mono-num" value={pincode} onChange={(e) => setPincode(e.target.value)} placeholder="560001" maxLength={6} />
                         </div>
+                      </div>
+                    </div>
+
+                    <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: '12px' }}>
+                      <h3 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-strong)', marginBottom: '10px' }}>
+                        Branding
+                      </h3>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                         <div className="form-group">
                           <label className="form-label">Fuel Company / Brand</label>
                           <select value={fuelBrand} onChange={(e) => setFuelBrand(e.target.value)} style={{ width: '100%' }}>
@@ -411,68 +512,41 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
                       <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Toggle which sections appear in each report. Header is always included.</span>
                     </div>
 
-                    <div className="form-group" style={{ maxWidth: '300px' }}>
-                      <label className="form-label">Onboarding Readiness Status</label>
-                      <select
-                        value={onboardingStatus}
-                        onChange={(e) => setOnboardingStatus(e.target.value)}
-                        style={{ width: '100%' }}
-                      >
-                        <option value="NOT_STARTED">NOT STARTED</option>
-                        <option value="IN_PROGRESS">IN PROGRESS</option>
-                        <option value="READY_FOR_OPERATIONS">READY FOR OPERATIONS</option>
-                      </select>
-                    </div>
-
                     <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '12px', borderTop: '1px solid var(--border-soft)', paddingTop: '12px' }}>
-                      <button
-                        type="button"
-                        className="btn btn-secondary btn-sm"
-                        onClick={() => setEditing(false)}
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        className="btn btn-primary btn-sm"
-                      >
-                        Save Configuration
-                      </button>
+                      <button type="button" className="btn btn-secondary btn-sm" onClick={() => setEditingBusiness(false)}>Cancel</button>
+                      <button type="submit" className="btn btn-primary btn-sm">Save Configuration</button>
                     </div>
                   </form>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <div>
-                        <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-strong)' }}>{selectedStation.name}</h3>
-                        <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Status: <strong style={{ color: onboardingStatus === 'READY_FOR_OPERATIONS' ? 'var(--state-success-fg)' : 'var(--state-warning-fg)' }}>{onboardingStatus.replace(/_/g, ' ')}</strong></p>
+                        <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-strong)' }}>Business, Tax &amp; Branding</h3>
+                        <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Legal identity and letterhead used across reports and invoices.</p>
                       </div>
-                      <button
-                        className="btn btn-secondary btn-sm"
-                        onClick={() => setEditing(true)}
-                      >
-                        Edit General Parameters
-                      </button>
+                      <button className="btn btn-secondary btn-sm" onClick={() => setEditingBusiness(true)}>Edit Business Details</button>
                     </div>
 
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', borderTop: '1px solid var(--border-soft)', paddingTop: '16px' }}>
                       <div>
-                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Location Code</span>
-                        <p style={{ fontSize: '14px', fontWeight: 600, marginTop: '4px', color: 'var(--text-strong)', fontFamily: 'var(--font-mono)' }}>{selectedStation.code}</p>
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Legal Name</span>
+                        <p style={{ fontSize: '13px', fontWeight: 500, marginTop: '4px', color: 'var(--text-default)' }}>{legalName || '—'}</p>
                       </div>
                       <div>
-                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Contact</span>
-                        <p style={{ fontSize: '13px', fontWeight: 500, marginTop: '4px', color: 'var(--text-default)' }}>{selectedStation.phone || '—'}</p>
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>GSTIN</span>
+                        <p style={{ fontSize: '13px', fontWeight: 500, marginTop: '4px', color: 'var(--text-default)', fontFamily: 'var(--font-mono)' }}>{gstin || '—'}</p>
                       </div>
                       <div>
-                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Grace Period</span>
-                        <p style={{ fontSize: '13px', fontWeight: 500, marginTop: '4px', color: 'var(--text-default)', fontFamily: 'var(--font-mono)' }}>
-                          {selectedStation.settings?.shift_grace_minutes || 15} min
-                        </p>
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>State Code</span>
+                        <p style={{ fontSize: '13px', fontWeight: 500, marginTop: '4px', color: 'var(--text-default)', fontFamily: 'var(--font-mono)' }}>{stateCode || '—'}</p>
                       </div>
-                      <div style={{ gridColumn: 'span 2' }}>
-                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Address</span>
-                        <p style={{ fontSize: '13px', fontWeight: 500, marginTop: '4px', color: 'var(--text-default)' }}>{selectedStation.address || '—'}</p>
+                      <div>
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Fuel Brand</span>
+                        <p style={{ fontSize: '13px', fontWeight: 500, marginTop: '4px', color: 'var(--text-default)' }}>{fuelBrand || '—'}</p>
+                      </div>
+                      <div>
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Logo</span>
+                        <p style={{ fontSize: '13px', fontWeight: 500, marginTop: '4px', color: 'var(--text-default)' }}>{logoDataUrl ? 'Uploaded' : '—'}</p>
                       </div>
                     </div>
                   </div>
