@@ -11,6 +11,8 @@ import { ShiftTemplates } from './ShiftTemplates.js';
 import { LoadingSpinner } from '../LoadingSpinner.js';
 import { UserRolesAssignment } from './UserRolesAssignment.js';
 import { PaymentTerminalsPanel } from './PaymentTerminalsPanel.js';
+import { DEFAULT_SHIFT_SUMMARY_CONFIG, SHIFT_SUMMARY_SECTION_LABELS } from '../../services/reports/shiftSummaryDoc.js';
+import { DEFAULT_DSSR_CONFIG, DSSR_SECTION_LABELS } from '../../services/reports/dssrDoc.js';
 
 const stationService = new CloudStationService();
 
@@ -37,6 +39,17 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
   const [graceMinutes, setGraceMinutes] = useState(15);
   const [timezone, setTimezone] = useState('Asia/Kolkata');
   const [businessDayStartsAt, setBusinessDayStartsAt] = useState('06:00');
+  // Legal / branding (letterhead for reports & invoices)
+  const [legalName, setLegalName] = useState('');
+  const [gstin, setGstin] = useState('');
+  const [stateCode, setStateCode] = useState('');
+  const [legalAddress, setLegalAddress] = useState('');
+  const [pincode, setPincode] = useState('');
+  const [roCode, setRoCode] = useState('');
+  const [fuelBrand, setFuelBrand] = useState('');
+  const [logoDataUrl, setLogoDataUrl] = useState<string | null>(null);
+  const [ssEnabled, setSsEnabled] = useState<Set<string>>(new Set(DEFAULT_SHIFT_SUMMARY_CONFIG.sections));
+  const [dssrEnabled, setDssrEnabled] = useState<Set<string>>(new Set(DEFAULT_DSSR_CONFIG.sections));
   const [onboardingStatus, setOnboardingStatus] = useState<string>('NOT_STARTED');
 
   useEffect(() => {
@@ -52,6 +65,18 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
       setGraceMinutes(selectedStation.settings?.shift_grace_minutes || 15);
       setTimezone(selectedStation.settings?.timezone || 'Asia/Kolkata');
       setBusinessDayStartsAt(selectedStation.settings?.business_day_starts_at || '06:00');
+      const legal = selectedStation.settings?.legal || {};
+      setLegalName(legal.legalName || '');
+      setGstin(legal.gstin || '');
+      setStateCode(legal.stateCode || '');
+      setLegalAddress(legal.addressLine || '');
+      setPincode(legal.pincode || '');
+      setRoCode(legal.roCode || '');
+      setFuelBrand(selectedStation.settings?.fuel_brand || '');
+      setLogoDataUrl(selectedStation.settings?.logo_data_url || null);
+      const rc = selectedStation.settings?.report_config || {};
+      setSsEnabled(new Set(rc.shiftSummary?.length ? rc.shiftSummary : DEFAULT_SHIFT_SUMMARY_CONFIG.sections));
+      setDssrEnabled(new Set(rc.dssr?.length ? rc.dssr : DEFAULT_DSSR_CONFIG.sections));
       setOnboardingStatus(selectedStation.onboardingStatus || 'NOT_STARTED');
     }
   }, [selectedStation]);
@@ -93,6 +118,20 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
           shift_grace_minutes: graceMinutes,
           timezone,
           business_day_starts_at: businessDayStartsAt,
+          legal: {
+            legalName: legalName || null,
+            gstin: gstin || null,
+            stateCode: stateCode || null,
+            addressLine: legalAddress || null,
+            pincode: pincode || null,
+            roCode: roCode || null,
+          },
+          fuel_brand: fuelBrand || null,
+          logo_data_url: logoDataUrl || null,
+          report_config: {
+            shiftSummary: DEFAULT_SHIFT_SUMMARY_CONFIG.sections.filter((k) => ssEnabled.has(k)),
+            dssr: DEFAULT_DSSR_CONFIG.sections.filter((k) => dssrEnabled.has(k)),
+          },
           shift_lock_grace_days: selectedStation.settings?.shift_lock_grace_days || 3,
           offline_warning_days: selectedStation.settings?.offline_warning_days || 3,
           offline_critical_days: selectedStation.settings?.offline_critical_days || 7,
@@ -281,6 +320,116 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
                           A fuel day commonly runs 06:00 → 06:00. Activity before this rolls to the previous day.
                         </span>
                       </div>
+                    </div>
+
+                    <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: '12px' }}>
+                      <h3 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-strong)', marginBottom: '10px' }}>
+                        Legal &amp; Branding (Report Letterhead)
+                      </h3>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                        <div className="form-group">
+                          <label className="form-label">Legal / Trade Name</label>
+                          <input className="form-input" value={legalName} onChange={(e) => setLegalName(e.target.value)} placeholder="e.g. Sri Lakshmi Fuels" />
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label">GSTIN</label>
+                          <input className="form-input mono-num" value={gstin} onChange={(e) => setGstin(e.target.value.toUpperCase())} placeholder="29ABCDE1234F1Z5" maxLength={15} />
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label">State Code (place of supply)</label>
+                          <input className="form-input mono-num" value={stateCode} onChange={(e) => setStateCode(e.target.value)} placeholder="e.g. 29 (Karnataka)" maxLength={2} />
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label">Retail Outlet / Dealer Code</label>
+                          <input className="form-input" value={roCode} onChange={(e) => setRoCode(e.target.value)} placeholder="RO / dealership code" />
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label">Address Line</label>
+                          <input className="form-input" value={legalAddress} onChange={(e) => setLegalAddress(e.target.value)} placeholder="Street, area, city" />
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label">Pincode</label>
+                          <input className="form-input mono-num" value={pincode} onChange={(e) => setPincode(e.target.value)} placeholder="560001" maxLength={6} />
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label">Fuel Company / Brand</label>
+                          <select value={fuelBrand} onChange={(e) => setFuelBrand(e.target.value)} style={{ width: '100%' }}>
+                            <option value="">— Select —</option>
+                            <option value="Indian Oil">Indian Oil (IOCL)</option>
+                            <option value="Bharat Petroleum">Bharat Petroleum (BPCL)</option>
+                            <option value="Hindustan Petroleum">Hindustan Petroleum (HPCL)</option>
+                            <option value="Nayara Energy">Nayara Energy</option>
+                            <option value="Jio-bp">Jio-bp (Reliance)</option>
+                            <option value="Shell">Shell</option>
+                            <option value="Other">Other</option>
+                          </select>
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label">Logo (optional, your own)</label>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            {logoDataUrl && <img src={logoDataUrl} alt="logo" style={{ width: 36, height: 36, objectFit: 'contain', border: '1px solid var(--border-soft)', borderRadius: 4 }} />}
+                            <input
+                              type="file"
+                              accept="image/png,image/jpeg"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (!file) return;
+                                const reader = new FileReader();
+                                reader.onload = () => setLogoDataUrl(typeof reader.result === 'string' ? reader.result : null);
+                                reader.readAsDataURL(file);
+                              }}
+                              style={{ fontSize: '12px' }}
+                            />
+                            {logoDataUrl && (
+                              <button type="button" className="btn btn-secondary btn-sm" onClick={() => setLogoDataUrl(null)}>Remove</button>
+                            )}
+                          </div>
+                          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Upload your outlet's own logo. Used on report letterheads.</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: '12px' }}>
+                      <h3 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-strong)', marginBottom: '10px' }}>
+                        Report Sections
+                      </h3>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+                        <div>
+                          <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-default)', marginBottom: '8px' }}>Shift Summary</div>
+                          {DEFAULT_SHIFT_SUMMARY_CONFIG.sections.map((key) => (
+                            <label key={key} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', padding: '3px 0', color: 'var(--text-default)' }}>
+                              <input
+                                type="checkbox"
+                                checked={ssEnabled.has(key)}
+                                disabled={key === 'header'}
+                                onChange={() => {
+                                  if (key === 'header') return;
+                                  setSsEnabled((prev) => { const n = new Set(prev); if (n.has(key)) n.delete(key); else n.add(key); return n; });
+                                }}
+                              />
+                              {SHIFT_SUMMARY_SECTION_LABELS[key]}
+                            </label>
+                          ))}
+                        </div>
+                        <div>
+                          <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-default)', marginBottom: '8px' }}>Daily DSSR</div>
+                          {DEFAULT_DSSR_CONFIG.sections.map((key) => (
+                            <label key={key} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', padding: '3px 0', color: 'var(--text-default)' }}>
+                              <input
+                                type="checkbox"
+                                checked={dssrEnabled.has(key)}
+                                disabled={key === 'header'}
+                                onChange={() => {
+                                  if (key === 'header') return;
+                                  setDssrEnabled((prev) => { const n = new Set(prev); if (n.has(key)) n.delete(key); else n.add(key); return n; });
+                                }}
+                              />
+                              {DSSR_SECTION_LABELS[key]}
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                      <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Toggle which sections appear in each report. Header is always included.</span>
                     </div>
 
                     <div className="form-group" style={{ maxWidth: '300px' }}>

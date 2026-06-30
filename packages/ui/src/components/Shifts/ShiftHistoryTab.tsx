@@ -85,6 +85,7 @@ export const ShiftHistoryTab: React.FC<ShiftHistoryTabProps> = ({
           userRole={userRole}
           canReopen={canReopen}
           shiftStatus={activeSummary.shiftStatus}
+          station={selectedStation}
           onReopenSuccess={() => {
             loadSummaries();
             handleBack();

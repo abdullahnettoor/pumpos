@@ -85,6 +85,7 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
       <div className="animate-fade-in">
         <DailyDssrView
           dailyDssr={activeDailyDssr}
+          station={selectedStation}
           onBack={() => {
             setActiveDailyDssr(null);
             loadDailyDssrs();

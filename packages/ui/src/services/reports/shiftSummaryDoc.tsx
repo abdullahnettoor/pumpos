@@ -1,5 +1,5 @@
 import React from 'react';
-import { Document, Page, View, Text, StyleSheet, Font } from '@react-pdf/renderer';
+import { Document, Page, View, Text, StyleSheet, Font, Image } from '@react-pdf/renderer';
 
 // Embed IBM Plex Sans + Mono (matches the app type, include the rupee glyph; Mono
 // is used for all numeric/currency cells). TTFs vendored locally (npm run fonts).
@@ -23,10 +23,23 @@ export type ShiftSummarySection =
   | 'creditSales' | 'dips' | 'stockVariances' | 'cashRecon' | 'nonCash'
   | 'expenses' | 'purchases' | 'collections' | 'signatures';
 
+export interface Letterhead {
+  legalName?: string;
+  gstin?: string;
+  stateCode?: string;
+  addressLine?: string;
+  pincode?: string;
+  roCode?: string;
+  contact?: string;
+  fuelBrand?: string;
+  logoDataUrl?: string | null;
+}
+
 export interface ReportConfig {
   sections: ShiftSummarySection[];
   showLogo: boolean;
   stationName?: string;
+  letterhead?: Letterhead;
   paper: 'A4' | 'LETTER';
 }
 
@@ -37,6 +50,15 @@ export const DEFAULT_SHIFT_SUMMARY_CONFIG: ReportConfig = {
   ],
   showLogo: true,
   paper: 'A4',
+};
+
+/** Human labels for the section-config UI (R2). `header` is always rendered. */
+export const SHIFT_SUMMARY_SECTION_LABELS: Record<ShiftSummarySection, string> = {
+  header: 'Header / Letterhead', meta: 'Shift Meta', warnings: 'Warnings',
+  nozzles: 'Nozzle Reconciliation', handovers: 'Attendant Handovers', terminals: 'POS Terminals',
+  creditSales: 'Fuel-on-Credit Sales', dips: 'Tank Dips', stockVariances: 'Stock Variances',
+  cashRecon: 'Cash Reconciliation', nonCash: 'Non-Cash Summary', expenses: 'Expenses',
+  purchases: 'Purchases', collections: 'Collections', signatures: 'Signatures',
 };
 
 export const C = {
@@ -129,13 +151,58 @@ export const Kpi = ({ l, v, c = C.ink }: { l: string; v: string; c?: string }) =
 
 export const varColor = (v: number) => (v < 0 ? C.danger : v > 0 ? C.amber : C.success);
 
+/**
+ * Branded report header: green band with legal/station name + a doc title, an
+ * optional uploaded logo, and a legal sub-line (GSTIN · RO code · brand · address).
+ * Shared by the shift summary and DSSR documents.
+ */
+export const LetterheadBand = ({ title, stationName, letterhead }: { title: string; stationName?: string; letterhead?: Letterhead }) => {
+  const lh = letterhead || {};
+  const heading = lh.legalName || stationName || 'PumpOS';
+  const legalBits = [
+    lh.gstin ? `GSTIN: ${lh.gstin}` : '',
+    lh.roCode ? `RO: ${lh.roCode}` : '',
+    lh.fuelBrand || '',
+    [lh.addressLine, lh.pincode].filter(Boolean).join(', '),
+    lh.contact || '',
+  ].filter(Boolean).join('  •  ');
+  return (
+    <View>
+      <View style={s.band}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <View>
+            <Text style={s.brand}>{heading}</Text>
+            <Text style={s.title}>{title}</Text>
+          </View>
+          {lh.logoDataUrl ? <Image src={lh.logoDataUrl} style={{ width: 48, height: 48, objectFit: 'contain' }} /> : null}
+        </View>
+      </View>
+      {legalBits ? <Text style={[s.sub, { marginTop: 4 }]}>{legalBits}</Text> : null}
+    </View>
+  );
+};
+
+/** Map a station record (with settings.legal/fuel_brand/logo) to a Letterhead. */
+export function letterheadFromStation(station: any): Letterhead | undefined {
+  if (!station) return undefined;
+  const set = station.settings || {};
+  const legal = set.legal || {};
+  return {
+    legalName: legal.legalName || station.name,
+    gstin: legal.gstin,
+    stateCode: legal.stateCode,
+    addressLine: legal.addressLine || station.address,
+    pincode: legal.pincode,
+    roCode: legal.roCode,
+    fuelBrand: set.fuel_brand,
+    logoDataUrl: set.logo_data_url,
+  };
+}
+
 const builders: Record<ShiftSummarySection, (d: any, cfg: ReportConfig) => React.ReactNode> = {
   header: (d, cfg) => (
     <View key="header">
-      <View style={s.band}>
-        <Text style={s.brand}>{cfg.stationName || 'PumpOS'}</Text>
-        <Text style={s.title}>SHIFT SUMMARY RECORD</Text>
-      </View>
+      <LetterheadBand title="SHIFT SUMMARY RECORD" stationName={cfg.stationName} letterhead={cfg.letterhead} />
       <Text style={s.sub}>Authoritative Operational Snapshot{d.generatedAt ? ` \u2022 Compiled ${fmtDateTime(d.generatedAt)}` : ''}</Text>
     </View>
   ),

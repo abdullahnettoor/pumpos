@@ -50,6 +50,17 @@ export interface PendingOpeningStockSeed {
   quantity: number;
 }
 
+/** Letterhead / legal identity for branded reports & GST invoices. */
+export interface StationLegalInfo {
+  legalName?: string;
+  gstin?: string;
+  stateCode?: string;
+  addressLine?: string;
+  pincode?: string;
+  roCode?: string; // retail-outlet / dealer code
+  contact?: string;
+}
+
 export interface StationSettings {
   shift_grace_minutes: number;
   shift_lock_grace_days: number;
@@ -59,6 +70,13 @@ export interface StationSettings {
   timezone?: string;
   operating_schedule?: WeeklyOperatingSchedule | null;
   pending_opening_stock_seed?: PendingOpeningStockSeed[] | null;
+  legal?: StationLegalInfo | null;
+  /** Oil marketing company brand the outlet operates under (display only). */
+  fuel_brand?: string | null;
+  /** Optional uploaded logo as a data URL (base64). Shown on report letterhead. */
+  logo_data_url?: string | null;
+  /** Per-document enabled report sections (ordered). Falls back to defaults. */
+  report_config?: { shiftSummary?: string[]; dssr?: string[] } | null;
 }
 
 export interface Station {

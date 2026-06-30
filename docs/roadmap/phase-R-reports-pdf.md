@@ -1,6 +1,6 @@
 # Phase R — Reports & PDF Hardening
 
-**Status:** in progress. **Goal:** branded, configurable, cross-platform reports (web, Windows, macOS, mobile) generated on demand from immutable snapshots.
+**Status:** mostly done (R1–R3 shipped; R4 server PDF + R5 distribution remain). **Goal:** branded, configurable, cross-platform reports (web, Windows, macOS, mobile) generated on demand from immutable snapshots.
 
 ## What exists
 - Scoped print CSS (`.print-area`/`.no-print`) — `window.print()` captures only the report.
@@ -9,14 +9,16 @@
 - Self-hosted IBM Plex Sans/Mono (`scripts/download-fonts.mjs`, run `npm run fonts`).
 - Tauri plugins (dialog, fs) wired; capabilities set.
 
-## R1 — Shift Summary polish
-- Station logo (base64/asset) in header; GSTIN/address letterhead.
-- Section registry already present (`ReportConfig.sections`); add `terminals`, `dipReadings`, `stockVariance` renderers.
+## R1 — Shift Summary polish ✅ done
+- Letterhead band: legal/trade name + GSTIN · RO code · fuel brand · address sub-line; dealer-uploaded
+  logo (base64 in `settings.logo_data_url`) rendered on both reports. `LetterheadBand` shared by both docs.
+- Branding captured in `stations.settings.legal` + `fuel_brand` + `logo_data_url`, editable in Station Overview.
+- (NOTE: we do not bundle OMC trademark logos — dealers upload their own; `fuel_brand` is a display label.)
 
-## R2 — Configurable report (station-picked sections)
-- `report_config` JSONB in station settings: `{ sections[], showLogo, paper, accentColor }`.
-- Settings UI: drag-order + toggle sections; live preview reuses the same `<ShiftSummaryDoc>`.
-- Default applied when unset.
+## R2 — Configurable report (station-picked sections) ✅ done
+- `settings.report_config = { shiftSummary: string[], dssr: string[] }` (ordered enabled sections).
+- Station Overview “Report Sections” toggles per report (`header` always on). Views build `config.sections`
+  from it, falling back to defaults. Reorder (drag) is a future enhancement; toggle shipped.
 
 ## R3 — DSSR template ✅ done
 - DSSR ported html2pdf → react-pdf (`dssrDoc.tsx`) using the same primitives + mono fonts.

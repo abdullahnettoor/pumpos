@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { CloudShiftService } from '../../services/cloud.js';
 import { exportReactPdf } from '../../services/exportPdf.js';
-import { ShiftSummaryDoc, DEFAULT_SHIFT_SUMMARY_CONFIG } from '../../services/reports/shiftSummaryDoc.js';
+import { ShiftSummaryDoc, DEFAULT_SHIFT_SUMMARY_CONFIG, letterheadFromStation } from '../../services/reports/shiftSummaryDoc.js';
 import { StatusBadge } from '../StatusBadge.js';
 import { ArrowLeft, Printer, Download, Unlock, AlertTriangle } from 'lucide-react';
 import { ShiftTransactionsPanel } from './ShiftTransactionsPanel.js';
@@ -17,6 +17,7 @@ interface ShiftSummaryViewProps {
   onBack?: () => void;
   shiftStatus?: 'CLOSED' | 'LOCKED';
   onTransactionAdded?: () => void;
+  station?: any;
 }
 
 export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
@@ -28,6 +29,7 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
   onBack,
   shiftStatus = 'CLOSED',
   onTransactionAdded,
+  station,
 }) => {
   const [reopening, setReopening] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
@@ -97,7 +99,7 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
         <div style={{ display: 'flex', gap: '8px' }}>
           <button
             className="btn btn-secondary btn-sm"
-            onClick={() => exportReactPdf(<ShiftSummaryDoc snapshot={snapshotData} config={{ ...DEFAULT_SHIFT_SUMMARY_CONFIG, stationName: templateName }} />, `Shift_Summary_${String(shiftId).slice(0, 8)}`)}
+            onClick={() => exportReactPdf(<ShiftSummaryDoc snapshot={snapshotData} config={{ ...DEFAULT_SHIFT_SUMMARY_CONFIG, sections: (station?.settings?.report_config?.shiftSummary?.length ? station.settings.report_config.shiftSummary : DEFAULT_SHIFT_SUMMARY_CONFIG.sections) as any, stationName: station?.name || templateName, letterhead: letterheadFromStation(station) }} />, `Shift_Summary_${String(shiftId).slice(0, 8)}`)}
           >
             <Download size={13} /> Save PDF
           </button>

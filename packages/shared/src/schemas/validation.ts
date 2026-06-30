@@ -44,6 +44,21 @@ export const stationSchema = z.object({
       productId: z.string().uuid('Invalid product ID'),
       quantity: z.number().nonnegative('Opening quantity must be non-negative'),
     })).optional().nullable(),
+    legal: z.object({
+      legalName: z.string().optional().nullable(),
+      gstin: z.string().max(15).optional().nullable(),
+      stateCode: z.string().max(2).optional().nullable(),
+      addressLine: z.string().optional().nullable(),
+      pincode: z.string().max(6).optional().nullable(),
+      roCode: z.string().optional().nullable(),
+      contact: z.string().optional().nullable(),
+    }).optional().nullable(),
+    fuel_brand: z.string().optional().nullable(),
+    logo_data_url: z.string().optional().nullable(),
+    report_config: z.object({
+      shiftSummary: z.array(z.string()).optional(),
+      dssr: z.array(z.string()).optional(),
+    }).optional().nullable(),
   }).default({
     shift_grace_minutes: 15,
     shift_lock_grace_days: 3,

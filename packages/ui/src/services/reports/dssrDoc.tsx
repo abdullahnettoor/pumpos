@@ -1,8 +1,8 @@
 import React from 'react';
 import { Document, Page, View, Text } from '@react-pdf/renderer';
 import {
-  C, s, TableView, Kpi, varColor, inr, inr0, vol3, fmtDateTime,
-  type Col, type Cell,
+  C, s, TableView, Kpi, varColor, inr, inr0, vol3, fmtDateTime, LetterheadBand,
+  type Col, type Cell, type Letterhead,
 } from './shiftSummaryDoc.js';
 
 export type DssrSection =
@@ -12,12 +12,20 @@ export type DssrSection =
 export interface DssrReportConfig {
   sections: DssrSection[];
   stationName?: string;
+  letterhead?: Letterhead;
   paper: 'A4' | 'LETTER';
 }
 
 export const DEFAULT_DSSR_CONFIG: DssrReportConfig = {
   sections: ['header', 'meta', 'kpis', 'financial', 'fuelByProduct', 'nozzles', 'fuelStockVariance', 'merchandiseStockVariance', 'shifts'],
   paper: 'A4',
+};
+
+/** Human labels for the section-config UI (R2). `header` is always rendered. */
+export const DSSR_SECTION_LABELS: Record<DssrSection, string> = {
+  header: 'Header / Letterhead', meta: 'Day Meta', kpis: 'KPIs',
+  financial: 'Financial Summary', fuelByProduct: 'Fuel Sales by Product', nozzles: 'Nozzle Aggregation',
+  fuelStockVariance: 'Tank Dip & Fuel Variance', merchandiseStockVariance: 'Merchandise Variance', shifts: 'Included Shifts',
 };
 
 const ReconRow = ({ label, value, color }: { label: string; value: string; color?: string }) => (
@@ -30,10 +38,7 @@ const ReconRow = ({ label, value, color }: { label: string; value: string; color
 const builders: Record<DssrSection, (d: any, cfg: DssrReportConfig) => React.ReactNode> = {
   header: (d, cfg) => (
     <View key="header">
-      <View style={s.band}>
-        <Text style={s.brand}>{cfg.stationName || 'PumpOS'}</Text>
-        <Text style={s.title}>DAILY SALES SUMMARY RECORD</Text>
-      </View>
+      <LetterheadBand title="DAILY SALES SUMMARY RECORD" stationName={cfg.stationName} letterhead={cfg.letterhead} />
       <Text style={s.sub}>
         Business Date {d.businessDate}{d.generatedAt ? ` \u2022 Generated ${fmtDateTime(d.generatedAt)}` : ''}
       </Text>

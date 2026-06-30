@@ -955,6 +955,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         canReopen={canReopenLastShift}
         gracePeriodExpiresAt={gracePeriodExpiresAt}
         shiftStatus={lastShift?.status}
+        station={selectedStation}
         onTransactionAdded={loadShiftStatus}
         onReopenSuccess={() => {
           setViewingShiftSummary(false);
