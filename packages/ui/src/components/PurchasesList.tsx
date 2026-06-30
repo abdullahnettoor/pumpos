@@ -124,6 +124,25 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, d
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
+  // Purchase detail drawer (line items + tax breakdown)
+  const [detailPurchase, setDetailPurchase] = useState<any | null>(null);
+  const [detailItems, setDetailItems] = useState<any[]>([]);
+  const [loadingDetail, setLoadingDetail] = useState(false);
+
+  const openPurchaseDetail = async (p: any) => {
+    setDetailPurchase(p);
+    setDetailItems([]);
+    setLoadingDetail(true);
+    try {
+      const items = await transactionService.getPurchaseItems(p.id);
+      setDetailItems(items || []);
+    } catch {
+      setDetailItems([]);
+    } finally {
+      setLoadingDetail(false);
+    }
+  };
+
   const resolvePreferredShiftId = (active: any | null, closedList: any[]) => {
     if (defaultShiftId) {
       const matchesActive = active?.id === defaultShiftId;
@@ -484,6 +503,7 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, d
               emptyMessage="No purchases logged yet."
               getRowId={(r: any) => r.documentNumber || r.id}
               initialSorting={[{ id: 'businessDate', desc: true }]}
+              onRowClick={(r: any) => openPurchaseDetail(r)}
             />
           </div>
         )}
@@ -523,6 +543,95 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, d
             invoicePlaceholder="e.g. INV-10022"
             notesPlaceholder="e.g. invoice ref / delivery note"
           />
+      </Drawer>
+
+      {/* Purchase Detail Drawer */}
+      <Drawer
+        isOpen={detailPurchase !== null}
+        onClose={() => setDetailPurchase(null)}
+        title="Purchase Invoice"
+      >
+        {detailPurchase && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', fontFamily: 'var(--font-sans)' }}>
+            {/* Header */}
+            <div style={{ backgroundColor: 'var(--bg-surface-alt)', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-card)', padding: '14px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', fontSize: '12px' }}>
+              <div>
+                <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Supplier</span>
+                <strong style={{ color: 'var(--text-strong)' }}>{detailPurchase.supplierName || '—'}</strong>
+              </div>
+              <div>
+                <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Date</span>
+                <strong style={{ color: 'var(--text-strong)' }}>{detailPurchase.businessDate ? new Date(detailPurchase.businessDate).toLocaleDateString(undefined, { dateStyle: 'medium' }) : '—'}</strong>
+              </div>
+              <div>
+                <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Reference</span>
+                <strong style={{ color: 'var(--text-strong)', fontFamily: 'var(--font-mono)' }}>{detailPurchase.documentNumber || '—'}</strong>
+              </div>
+              <div>
+                <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Supplier Invoice</span>
+                <strong style={{ color: 'var(--text-strong)' }}>{detailPurchase.invoiceNumber || '—'}</strong>
+              </div>
+            </div>
+
+            {/* Line items */}
+            <div>
+              <h4 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-strong)', marginBottom: '8px' }}>Line Items</h4>
+              {loadingDetail ? (
+                <div style={{ color: 'var(--text-muted)', fontSize: '13px', padding: '12px' }}>Loading line items…</div>
+              ) : detailItems.length === 0 ? (
+                <div style={{ color: 'var(--text-muted)', fontSize: '13px', padding: '12px' }}>No line items recorded for this purchase.</div>
+              ) : (
+                <div style={{ border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-card)', overflow: 'hidden' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                    <thead>
+                      <tr style={{ backgroundColor: 'var(--bg-surface-alt)', borderBottom: '1px solid var(--border-soft)', color: 'var(--text-muted)', textAlign: 'left' }}>
+                        <th style={{ padding: '8px 10px', fontWeight: 600 }}>Product</th>
+                        <th style={{ padding: '8px 10px', fontWeight: 600, textAlign: 'right' }}>Qty</th>
+                        <th style={{ padding: '8px 10px', fontWeight: 600, textAlign: 'right' }}>Rate</th>
+                        <th style={{ padding: '8px 10px', fontWeight: 600, textAlign: 'right' }}>Taxable</th>
+                        <th style={{ padding: '8px 10px', fontWeight: 600, textAlign: 'right' }}>Tax</th>
+                        <th style={{ padding: '8px 10px', fontWeight: 600, textAlign: 'right' }}>Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {detailItems.map((it) => {
+                        const tax = Number(it.cgst || 0) + Number(it.sgst || 0) + Number(it.igst || 0) + Number(it.vat || 0) + Number(it.cess || 0);
+                        const taxLabel = it.taxCategory === 'GST'
+                          ? (Number(it.igst || 0) > 0 ? `IGST ${it.gstRate || 0}%` : `GST ${it.gstRate || 0}%`)
+                          : it.taxCategory === 'FUEL_VAT' ? 'Incl.' : '—';
+                        return (
+                          <tr key={it.id} style={{ borderBottom: '1px solid var(--border-soft)' }}>
+                            <td style={{ padding: '8px 10px', color: 'var(--text-strong)', fontWeight: 600 }}>
+                              {it.productName}{it.productCode ? <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}> ({it.productCode})</span> : null}
+                            </td>
+                            <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{Number(it.quantity).toLocaleString('en-IN')}{it.unit ? ` ${it.unit}` : ''}</td>
+                            <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>₹{Number(it.unitPrice).toLocaleString('en-IN', { maximumFractionDigits: 4 })}</td>
+                            <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>₹{Number(it.taxableAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>{tax > 0 ? `₹${tax.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : <span style={{ fontSize: '11px' }}>{taxLabel}</span>}</td>
+                            <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--text-strong)' }}>₹{Number(it.lineTotal).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* Tax totals */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', backgroundColor: 'var(--bg-surface-alt)', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-card)', padding: '12px 14px', fontSize: '12px', fontFamily: 'var(--font-mono)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-muted)' }}><span>Taxable</span><span>₹{Number(detailPurchase.taxableAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span></div>
+              {Number(detailPurchase.cgstTotal || 0) > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-muted)' }}><span>CGST + SGST</span><span>₹{(Number(detailPurchase.cgstTotal || 0) + Number(detailPurchase.sgstTotal || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span></div>}
+              {Number(detailPurchase.igstTotal || 0) > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-muted)' }}><span>IGST</span><span>₹{Number(detailPurchase.igstTotal || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span></div>}
+              {Number(detailPurchase.cessTotal || 0) > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-muted)' }}><span>Cess</span><span>₹{Number(detailPurchase.cessTotal || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span></div>}
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, color: 'var(--text-strong)', borderTop: '1px solid var(--border-soft)', paddingTop: '4px', marginTop: '2px' }}><span>Invoice Total</span><span>₹{Number(detailPurchase.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span></div>
+            </div>
+
+            {detailPurchase.notes && (
+              <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}><strong style={{ color: 'var(--text-default)' }}>Notes:</strong> {detailPurchase.notes}</div>
+            )}
+          </div>
+        )}
       </Drawer>
 
       {/* CRUD Drawer */}

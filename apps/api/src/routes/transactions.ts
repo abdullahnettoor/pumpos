@@ -581,6 +581,26 @@ transactionsRouter.get('/purchases', async (c) => {
   return c.json({ success: true, data: rows.map((r) => ({ ...r.purchase, businessDate: r.businessDate, supplierName: r.supplierName ?? 'Unknown Supplier' })) });
 });
 
+transactionsRouter.get('/purchases/:id/items', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  const purchaseId = c.req.param('id');
+  const rows = await db
+    .select({
+      item: schema.purchaseItems,
+      productName: schema.products.name,
+      productCode: schema.products.code,
+      unit: schema.products.unit,
+    })
+    .from(schema.purchaseItems)
+    .innerJoin(schema.purchases, eq(schema.purchaseItems.purchaseId, schema.purchases.id))
+    .innerJoin(schema.businessDays, eq(schema.purchases.businessDayId, schema.businessDays.id))
+    .leftJoin(schema.products, eq(schema.purchaseItems.productId, schema.products.id))
+    .where(and(eq(schema.purchaseItems.purchaseId, purchaseId), eq(schema.businessDays.organizationId, user.organizationId)))
+    .orderBy(schema.purchaseItems.createdAt);
+  return c.json({ success: true, data: rows.map((r) => ({ ...r.item, productName: r.productName ?? 'Product', productCode: r.productCode ?? null, unit: r.unit ?? null })) });
+});
+
 transactionsRouter.get('/collections', async (c) => {
   const db = c.var.db;
   const user = c.var.user;

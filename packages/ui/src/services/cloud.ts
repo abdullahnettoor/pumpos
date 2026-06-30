@@ -492,6 +492,10 @@ export class CloudTransactionService {
     return request<any[]>('/transactions/purchases');
   }
 
+  async getPurchaseItems(purchaseId: string): Promise<any[]> {
+    return request<any[]>(`/transactions/purchases/${purchaseId}/items`);
+  }
+
   async getCollections(): Promise<any[]> {
     return request<any[]>('/transactions/collections');
   }
