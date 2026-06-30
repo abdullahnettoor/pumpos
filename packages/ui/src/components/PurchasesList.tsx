@@ -148,11 +148,9 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, d
       targetShiftId: resolvePreferredShiftId(activeShift, recentClosedShifts),
       transactionDate: new Date().toISOString().slice(0, 10),
       supplierId: suppliers[0]?.id ?? '',
-      productId: products[0]?.id ?? '',
-      quantity: undefined as unknown as number,
-      totalAmount: undefined as unknown as number,
       invoiceNumber: '',
       notes: '',
+      lines: [{ productId: products[0]?.id ?? '', quantity: undefined as unknown as number, unitPrice: undefined as unknown as number }],
     });
   };
 
@@ -261,58 +259,38 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, d
   // load-time behaviour now that data comes from the query cache).
   useEffect(() => {
     if (isPurchaseDrawerOpen) return;
-    setPurchaseDefaults((prev) => ({
-      ...prev,
-      targetShiftId: prev.targetShiftId || resolvePreferredShiftId(activeShift, recentClosedShifts),
-      supplierId: prev.supplierId || suppliers[0]?.id || '',
-      productId: prev.productId || products[0]?.id || '',
-    }));
+    setPurchaseDefaults((prev) => {
+      const lines = prev.lines && prev.lines.length > 0
+        ? prev.lines
+        : [{ productId: products[0]?.id ?? '', quantity: undefined as unknown as number, unitPrice: undefined as unknown as number }];
+      return {
+        ...prev,
+        targetShiftId: prev.targetShiftId || resolvePreferredShiftId(activeShift, recentClosedShifts),
+        supplierId: prev.supplierId || suppliers[0]?.id || '',
+        lines,
+      };
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statusQ.data, suppliersActiveQ.data, productsQ.data]);
 
-  const handleAddPurchase = async (values: PurchaseEntryFormValues, allocations: Record<string, string>) => {
+  const handleAddPurchase = async (values: PurchaseEntryFormValues) => {
     setFormError(null);
-    if (!values.supplierId || !values.productId || !values.quantity || !values.totalAmount) return;
+    if (!values.supplierId || values.lines.length === 0) return;
 
     try {
       setSubmitting(true);
-      const qtyNum = Number(values.quantity);
-      const totalAmtNum = Number(values.totalAmount);
-      const computedUnitPrice = qtyNum > 0 ? parseFloat((totalAmtNum / qtyNum).toFixed(6)) : 0;
-
-      const selectedProduct = products.find((p) => p.id === values.productId);
-      const isFuel = selectedProduct?.productType === 'FUEL';
-      const productTanks = tanks.filter((t) => t.productId === values.productId);
-
-      // Fuel split drop validation
-      let tankAllocations: { tankId: string; quantity: number }[] = [];
-      if (isFuel && productTanks.length > 0) {
-        let totalAllocated = 0;
-        for (const tank of productTanks) {
-          const qty = Number(allocations[tank.id] || 0);
-          if (qty > 0) {
-            tankAllocations.push({ tankId: tank.id, quantity: qty });
-            totalAllocated += qty;
-          }
-        }
-
-        if (Math.abs(totalAllocated - qtyNum) >= 0.01) {
-          setFormError(`Total allocated volume (${totalAllocated.toFixed(2)}L) must match the total invoice quantity (${qtyNum.toFixed(2)}L)`);
-          setSubmitting(false);
-          return;
-        }
-      }
-
       await transactionService.recordPurchase({
         stationId: stationId ?? undefined,
         transactionDate: values.transactionDate || undefined,
         supplierId: values.supplierId,
-        productId: values.productId,
-        quantity: qtyNum,
-        unitPrice: computedUnitPrice,
         invoiceNumber: values.invoiceNumber || undefined,
         notes: values.notes || undefined,
-        tankAllocations: tankAllocations.length > 0 ? tankAllocations : undefined,
+        lines: values.lines.map((l) => ({
+          productId: l.productId,
+          quantity: Number(l.quantity),
+          unitPrice: Number(l.unitPrice),
+          tankAllocations: l.tankAllocations && l.tankAllocations.length > 0 ? l.tankAllocations : undefined,
+        })),
       });
 
       closePurchaseDrawer();
@@ -577,8 +555,6 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, d
             onSubmit={handleAddPurchase}
             submitLabel="Record Purchase"
             submittingLabel="Recording..."
-            totalAmountLabel="Total Amount (₹)"
-            productLabel="Product"
             invoiceLabel="Invoice Number / Reference"
             invoicePlaceholder="e.g. INV-10022"
             notesPlaceholder="e.g. invoice ref / delivery note"

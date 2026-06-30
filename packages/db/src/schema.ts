@@ -441,8 +441,41 @@ export const purchases = pgTable('purchases', {
   businessDayId: uuid('business_day_id').references(() => businessDays.id).notNull(),
   supplierId: uuid('supplier_id').references(() => suppliers.id).notNull(),
   invoiceNumber: varchar('invoice_number', { length: 100 }),
+  // `amount` is the grand total (tax inclusive) = the supplier payable.
+  // The tax breakup below is denormalised from purchase_items for invoice/ITC reporting.
   amount: numeric('amount', { precision: 12, scale: 2 }).notNull(),
+  taxableAmount: numeric('taxable_amount', { precision: 12, scale: 2 }).default('0').notNull(),
+  cgstTotal: numeric('cgst_total', { precision: 12, scale: 2 }).default('0').notNull(),
+  sgstTotal: numeric('sgst_total', { precision: 12, scale: 2 }).default('0').notNull(),
+  igstTotal: numeric('igst_total', { precision: 12, scale: 2 }).default('0').notNull(),
+  vatTotal: numeric('vat_total', { precision: 12, scale: 2 }).default('0').notNull(),
+  cessTotal: numeric('cess_total', { precision: 12, scale: 2 }).default('0').notNull(),
   notes: varchar('notes', { length: 500 }),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+// Line items of a purchase (supplier tax invoice). Each line updates inventory
+// for its product and carries its own computed tax breakup. Fuel lines may split
+// the received quantity across destination tanks via `tankAllocations`.
+export const purchaseItems = pgTable('purchase_items', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  purchaseId: uuid('purchase_id').references(() => purchases.id).notNull(),
+  productId: uuid('product_id').references(() => products.id).notNull(),
+  quantity: numeric('quantity', { precision: 12, scale: 3 }).notNull(),
+  unitPrice: numeric('unit_price', { precision: 12, scale: 4 }).notNull(), // pre-tax rate
+  taxCategory: varchar('tax_category', { length: 20 }).default('GST').notNull(),
+  gstRate: numeric('gst_rate', { precision: 5, scale: 2 }),
+  vatRate: numeric('vat_rate', { precision: 5, scale: 2 }),
+  cessRate: numeric('cess_rate', { precision: 5, scale: 2 }),
+  hsnCode: varchar('hsn_code', { length: 50 }),
+  taxableAmount: numeric('taxable_amount', { precision: 12, scale: 2 }).notNull(),
+  cgst: numeric('cgst', { precision: 12, scale: 2 }).default('0').notNull(),
+  sgst: numeric('sgst', { precision: 12, scale: 2 }).default('0').notNull(),
+  igst: numeric('igst', { precision: 12, scale: 2 }).default('0').notNull(),
+  vat: numeric('vat', { precision: 12, scale: 2 }).default('0').notNull(),
+  cess: numeric('cess', { precision: 12, scale: 2 }).default('0').notNull(),
+  lineTotal: numeric('line_total', { precision: 12, scale: 2 }).notNull(),
+  tankAllocations: jsonb('tank_allocations'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 

@@ -39,11 +39,14 @@ import {
 } from '../infra/repositories/crm-repositories.js';
 import {
   DrizzlePurchaseRepository,
+  DrizzlePurchaseItemRepository,
   DrizzleSupplierTransactionRepository,
 } from '../infra/repositories/purchasing-repositories.js';
 import { DrizzleExpenseRepository } from '../infra/repositories/finance-repositories.js';
 import { DrizzleStockMovementRepository, DrizzleStockVarianceRepository } from '../infra/repositories/inventory-repositories.js';
 import { DrizzleSaleRepository } from '../infra/repositories/retail-repositories.js';
+import { DrizzleProductRepository } from '../infra/repositories/product.repo.js';
+import { DrizzleStationRepository } from '../infra/repositories/setup-repositories.js';
 import {
   DrizzleShiftRepository,
   DrizzleBusinessDayRepository,
@@ -489,9 +492,12 @@ transactionsRouter.post('/purchases', async (c) => {
   const result = await runInTransaction(c.var.db, (tx, events) =>
     new RecordPurchase({
       purchases: new DrizzlePurchaseRepository(tx),
+      purchaseItems: new DrizzlePurchaseItemRepository(tx),
       stock: new DrizzleStockMovementRepository(tx),
       supplierTxns: new DrizzleSupplierTransactionRepository(tx),
       suppliers: new DrizzleSupplierRepository(tx),
+      products: new DrizzleProductRepository(tx),
+      stations: new DrizzleStationRepository(tx),
       shifts: new DrizzleShiftRepository(tx),
       businessDays: new DrizzleBusinessDayRepository(tx),
       docNumbers,

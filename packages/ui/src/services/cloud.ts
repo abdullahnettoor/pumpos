@@ -508,12 +508,14 @@ export class CloudTransactionService {
     stationId?: string;
     transactionDate?: string;
     supplierId: string;
-    productId: string;
-    quantity: number;
-    unitPrice: number;
     invoiceNumber?: string;
     notes?: string;
-    tankAllocations?: { tankId: string; quantity: number }[] | null;
+    lines: {
+      productId: string;
+      quantity: number;
+      unitPrice: number;
+      tankAllocations?: { tankId: string; quantity: number }[];
+    }[];
   }): Promise<any> {
     return request<any>('/transactions/purchases', {
       method: 'POST',

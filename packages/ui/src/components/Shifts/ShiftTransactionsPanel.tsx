@@ -153,11 +153,13 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
       await transactionService.recordPurchase({
         shiftId,
         supplierId: purchaseSupplierId,
-        productId: purchaseProductId,
-        quantity: Number(purchaseQuantity),
-        unitPrice: Number(purchaseUnitPrice),
         invoiceNumber: purchaseInvoice || undefined,
         notes: purchaseNotes || undefined,
+        lines: [{
+          productId: purchaseProductId,
+          quantity: Number(purchaseQuantity),
+          unitPrice: Number(purchaseUnitPrice),
+        }],
       });
 
       // Clear form

@@ -282,7 +282,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         setPurchaseDefaults({
           targetShiftId: data.activeShift.id,
           supplierId: activeSuppliers?.[0]?.id ?? '',
-          productId: productList?.[0]?.id ?? '',
+          lines: [{ productId: productList?.[0]?.id ?? '', quantity: undefined as unknown as number, unitPrice: undefined as unknown as number }],
         });
       }
     } catch (err: any) {
@@ -507,9 +507,9 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     }
   };
 
-  const handlePurchaseSubmit = async (values: PurchaseEntryFormValues, allocations: Record<string, string>) => {
+  const handlePurchaseSubmit = async (values: PurchaseEntryFormValues) => {
     const shiftId = values.targetShiftId || targetShiftId;
-    if (!shiftId || !values.supplierId || !values.productId || !values.quantity || !values.totalAmount) {
+    if (!shiftId || !values.supplierId || values.lines.length === 0) {
       return;
     }
 
@@ -517,41 +517,17 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
       setQuickEntrySubmitting(true);
       setQuickEntryError(null);
 
-      const qtyNum = Number(values.quantity);
-      const totalAmtNum = Number(values.totalAmount);
-      const computedUnitPrice = qtyNum > 0 ? parseFloat((totalAmtNum / qtyNum).toFixed(6)) : 0;
-
-      const selectedProduct = products.find((p: any) => p.id === values.productId);
-      const isFuelPurchase = selectedProduct?.productType === 'FUEL';
-      const purchaseProductTanks = tanks.filter((t: any) => t.productId === values.productId);
-
-      let tankAllocations: { tankId: string; quantity: number }[] = [];
-      if (isFuelPurchase && purchaseProductTanks.length > 0) {
-        let totalAllocated = 0;
-        for (const tank of purchaseProductTanks) {
-          const qty = Number(allocations[tank.id] || 0);
-          if (qty > 0) {
-            tankAllocations.push({ tankId: tank.id, quantity: qty });
-            totalAllocated += qty;
-          }
-        }
-
-        if (Math.abs(totalAllocated - qtyNum) >= 0.01) {
-          setQuickEntryError(`Total allocated volume (${totalAllocated.toFixed(2)}L) must match invoice quantity (${qtyNum.toFixed(2)}L).`);
-          setQuickEntrySubmitting(false);
-          return;
-        }
-      }
-
       await transactionService.recordPurchase({
         shiftId,
         supplierId: values.supplierId,
-        productId: values.productId,
-        quantity: qtyNum,
-        unitPrice: computedUnitPrice,
         invoiceNumber: values.invoiceNumber || undefined,
         notes: values.notes || undefined,
-        tankAllocations: tankAllocations.length > 0 ? tankAllocations : undefined,
+        lines: values.lines.map((l) => ({
+          productId: l.productId,
+          quantity: Number(l.quantity),
+          unitPrice: Number(l.unitPrice),
+          tankAllocations: l.tankAllocations && l.tankAllocations.length > 0 ? l.tankAllocations : undefined,
+        })),
       });
       closeQuickEntryDrawer();
       await loadShiftStatus();

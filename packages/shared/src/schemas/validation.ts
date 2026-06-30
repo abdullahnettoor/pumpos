@@ -395,15 +395,23 @@ export const collectionEntryFormSchema = z.object({
 });
 export type CollectionEntryFormValues = z.infer<typeof collectionEntryFormSchema>;
 
+export const purchaseLineFormSchema = z.object({
+  productId: z.string().min(1, 'Product is required'),
+  quantity: z.coerce.number({ invalid_type_error: 'Quantity is required' }).positive('Quantity must be positive'),
+  unitPrice: z.coerce.number({ invalid_type_error: 'Rate is required' }).positive('Rate must be positive'),
+  // Fuel lines may split the received quantity across destination tanks. The
+  // form injects this on submit; it is not a user-typed RHF field.
+  tankAllocations: z.array(z.object({ tankId: z.string(), quantity: z.coerce.number().nonnegative() })).optional(),
+});
+export type PurchaseLineFormValues = z.infer<typeof purchaseLineFormSchema>;
+
 export const purchaseEntryFormSchema = z.object({
   targetShiftId: z.string().optional().default(''),
   transactionDate: z.string().optional().default(''),
   supplierId: z.string().min(1, 'Supplier is required'),
-  productId: z.string().min(1, 'Product is required'),
-  quantity: z.coerce.number({ invalid_type_error: 'Quantity is required' }).positive('Quantity must be positive'),
-  totalAmount: z.coerce.number({ invalid_type_error: 'Amount is required' }).positive('Amount must be positive'),
   invoiceNumber: z.string().max(100).optional().default(''),
   notes: z.string().max(500).optional().default(''),
+  lines: z.array(purchaseLineFormSchema).min(1, 'Add at least one line item'),
 });
 export type PurchaseEntryFormValues = z.infer<typeof purchaseEntryFormSchema>;
 

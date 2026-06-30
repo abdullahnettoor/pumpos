@@ -43,7 +43,7 @@ interface QuickEntryDrawerProps {
   // Validated submit handlers
   onExpenseSubmit: (values: ExpenseEntryFormValues) => void | Promise<void>;
   onCollectionSubmit: (values: CollectionEntryFormValues) => void | Promise<void>;
-  onPurchaseSubmit: (values: PurchaseEntryFormValues, allocations: Record<string, string>) => void | Promise<void>;
+  onPurchaseSubmit: (values: PurchaseEntryFormValues) => void | Promise<void>;
   onMerchandiseSaleSubmit: (values: MerchandiseSaleEntryFormValues) => void | Promise<void>;
 }
 
