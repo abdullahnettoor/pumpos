@@ -3,6 +3,8 @@ import { CloudPaymentTerminalService } from '../../services/cloud.js';
 import { PaymentTerminal } from '@pump/shared';
 import { StatusBadge } from '../StatusBadge.js';
 import { Drawer } from '../Drawer.js';
+import { DataTable } from '../primitives/DataTable.js';
+import type { ColumnDef } from '@tanstack/react-table';
 
 const terminalService = new CloudPaymentTerminalService();
 
@@ -25,6 +27,34 @@ const inputStyle: React.CSSProperties = {
   backgroundColor: 'var(--bg-surface)',
   color: 'var(--text-strong)',
 };
+
+const buildTerminalColumns = (openEdit: (t: any) => void, toggleActive: (t: any) => void): ColumnDef<any, any>[] => [
+  { accessorKey: 'label', header: 'Label', cell: ({ getValue }) => <span style={{ color: 'var(--text-strong)', fontWeight: 500 }}>{getValue() as string}</span> },
+  { accessorKey: 'provider', header: 'Provider', cell: ({ getValue }) => <span style={{ color: 'var(--text-default)' }}>{(getValue() as string) || '—'}</span> },
+  { accessorKey: 'terminalCode', header: 'Terminal ID', cell: ({ getValue }) => <span style={{ color: 'var(--text-default)', fontFamily: 'var(--font-mono)' }}>{(getValue() as string) || '—'}</span> },
+  {
+    id: 'accepts',
+    header: 'Accepts',
+    cell: ({ row }) => {
+      const t = row.original;
+      return <span style={{ color: 'var(--text-default)' }}>{[t.supportsCard ? 'Card' : null, t.supportsUpi ? 'UPI' : null].filter(Boolean).join(' + ') || '—'}</span>;
+    },
+  },
+  { accessorKey: 'isActive', header: 'Status', cell: ({ getValue }) => <StatusBadge status={getValue() ? 'Active' : 'Inactive'} type={getValue() ? 'success' : 'default'} /> },
+  {
+    id: 'actions',
+    header: '',
+    cell: ({ row }) => {
+      const t = row.original;
+      return (
+        <div style={{ display: 'flex', gap: '8px', whiteSpace: 'nowrap' }}>
+          <button onClick={() => openEdit(t)} style={{ padding: '4px 8px', backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-strong)', color: 'var(--text-default)', borderRadius: 'var(--radius-button)', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}>Edit</button>
+          <button onClick={() => toggleActive(t)} style={{ padding: '4px 8px', backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-strong)', color: 'var(--text-default)', borderRadius: 'var(--radius-button)', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}>{t.isActive ? 'Deactivate' : 'Reactivate'}</button>
+        </div>
+      );
+    },
+  },
+];
 
 export const PaymentTerminalsPanel: React.FC<PaymentTerminalsPanelProps> = ({ stationId }) => {
   const [terminals, setTerminals] = useState<PaymentTerminal[]>([]);
@@ -150,55 +180,12 @@ export const PaymentTerminalsPanel: React.FC<PaymentTerminalsPanelProps> = ({ st
         )}
       </div>
 
-      {terminals.length === 0 ? (
-        <div style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '32px', border: '1px dashed var(--border-strong)', borderRadius: 'var(--radius-card)' }}>
-          No payment terminals yet. Add your first PoS machine.
-        </div>
-      ) : (
-        <div style={{ border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-card)', overflow: 'hidden' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-            <thead>
-              <tr style={{ backgroundColor: 'var(--bg-surface-alt)', textAlign: 'left' }}>
-                <th style={{ padding: '8px 12px', color: 'var(--text-muted)', fontWeight: 600 }}>Label</th>
-                <th style={{ padding: '8px 12px', color: 'var(--text-muted)', fontWeight: 600 }}>Provider</th>
-                <th style={{ padding: '8px 12px', color: 'var(--text-muted)', fontWeight: 600 }}>Terminal ID</th>
-                <th style={{ padding: '8px 12px', color: 'var(--text-muted)', fontWeight: 600 }}>Accepts</th>
-                <th style={{ padding: '8px 12px', color: 'var(--text-muted)', fontWeight: 600 }}>Status</th>
-                <th style={{ padding: '8px 12px', color: 'var(--text-muted)', fontWeight: 600, textAlign: 'right' }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {terminals.map((t) => (
-                <tr key={t.id} style={{ borderTop: '1px solid var(--border-soft)' }}>
-                  <td style={{ padding: '8px 12px', color: 'var(--text-strong)', fontWeight: 500 }}>{t.label}</td>
-                  <td style={{ padding: '8px 12px', color: 'var(--text-default)' }}>{t.provider || '—'}</td>
-                  <td style={{ padding: '8px 12px', color: 'var(--text-default)', fontFamily: 'var(--font-mono)' }}>{t.terminalCode || '—'}</td>
-                  <td style={{ padding: '8px 12px', color: 'var(--text-default)' }}>
-                    {[t.supportsCard ? 'Card' : null, t.supportsUpi ? 'UPI' : null].filter(Boolean).join(' + ') || '—'}
-                  </td>
-                  <td style={{ padding: '8px 12px' }}>
-                    <StatusBadge status={t.isActive ? 'Active' : 'Inactive'} type={t.isActive ? 'success' : 'default'} />
-                  </td>
-                  <td style={{ padding: '8px 12px', textAlign: 'right', whiteSpace: 'nowrap' }}>
-                    <button
-                      onClick={() => openEdit(t)}
-                      style={{ marginRight: '8px', padding: '4px 8px', backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-strong)', color: 'var(--text-default)', borderRadius: 'var(--radius-button)', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => toggleActive(t)}
-                      style={{ padding: '4px 8px', backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-strong)', color: 'var(--text-default)', borderRadius: 'var(--radius-button)', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}
-                    >
-                      {t.isActive ? 'Deactivate' : 'Reactivate'}
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <DataTable
+        columns={buildTerminalColumns(openEdit, toggleActive)}
+        data={terminals}
+        emptyMessage="No payment terminals yet. Add your first PoS machine."
+        getRowId={(r: any) => r.id}
+      />
 
       <Drawer
         isOpen={isFormOpen}

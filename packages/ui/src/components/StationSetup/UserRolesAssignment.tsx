@@ -7,6 +7,8 @@ import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys, TIER } from '../../query/hooks.js';
 import { Station, userSchema } from '@pump/shared';
 import { Drawer } from '../Drawer.js';
+import { DataTable } from '../primitives/DataTable.js';
+import type { ColumnDef } from '@tanstack/react-table';
 
 const userService = new CloudUserAssignmentService();
 const stationService = new CloudStationService();
@@ -22,6 +24,41 @@ const userFormSchema = z.object({
 });
 
 type UserFormValues = z.infer<typeof userFormSchema>;
+
+const buildUserColumns = (stations: any[], startEdit: (u: any) => void): ColumnDef<any, any>[] => [
+  { accessorKey: 'fullName', header: 'Name', cell: ({ getValue }) => <span style={{ fontWeight: 600, color: 'var(--text-strong)' }}>{getValue() as string}</span> },
+  {
+    accessorKey: 'email',
+    header: 'Email / Type',
+    cell: ({ getValue }) => (getValue() as string) || <span style={{ color: 'var(--text-muted)', fontSize: '12px', fontStyle: 'italic' }}>Offline Attendant</span>,
+  },
+  {
+    accessorKey: 'role',
+    header: 'Role',
+    cell: ({ row }) => {
+      const u = row.original;
+      const bg = !u.email ? 'rgba(245, 158, 11, 0.15)' : u.role === 'Owner' ? 'rgba(99, 102, 241, 0.15)' : u.role === 'Manager' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(46, 94, 136, 0.15)';
+      const fg = !u.email ? '#f59e0b' : u.role === 'Owner' ? '#6366f1' : u.role === 'Manager' ? 'rgb(52, 211, 153)' : '#2e5e88';
+      return <span style={{ fontSize: '11px', fontWeight: 650, padding: '2px 6px', borderRadius: '4px', backgroundColor: bg, color: fg }}>{!u.email ? 'Attendant' : u.role}</span>;
+    },
+  },
+  {
+    id: 'stations',
+    header: 'Assigned Stations',
+    cell: ({ row }) => {
+      const u = row.original;
+      const assignedNames = u.stationIds ? u.stationIds.map((sid: string) => stations.find((s) => s.id === sid)?.name || 'Unknown').join(', ') : 'None';
+      return <span style={{ color: 'var(--text-muted)' }}>{u.role === 'Owner' ? 'All Stations (Global)' : assignedNames || 'None'}</span>;
+    },
+  },
+  {
+    id: 'actions',
+    header: '',
+    cell: ({ row }) => (
+      <button onClick={() => startEdit(row.original)} style={{ height: '24px', padding: '0 8px', fontSize: '11px', backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-strong)', color: 'var(--text-default)', borderRadius: '4px', cursor: 'pointer' }}>Edit</button>
+    ),
+  },
+];
 
 export const UserRolesAssignment: React.FC = () => {
   const qc = useQueryClient();
@@ -182,88 +219,12 @@ export const UserRolesAssignment: React.FC = () => {
       </div>
 
       {/* List / Table */}
-      <div style={{ overflowX: 'auto', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-card)', backgroundColor: 'var(--bg-surface)' }}>
-        <table className="dense-table" style={{ width: '100%' }}>
-          <thead>
-            <tr>
-              <th style={{ width: '25%', textAlign: 'left', padding: '10px 12px' }}>Name</th>
-              <th style={{ width: '30%', textAlign: 'left', padding: '10px 12px' }}>Email / Type</th>
-              <th style={{ width: '15%', textAlign: 'left', padding: '10px 12px' }}>Role</th>
-              <th style={{ width: '20%', textAlign: 'left', padding: '10px 12px' }}>Assigned Stations</th>
-              <th style={{ width: '10%', textAlign: 'center', padding: '10px 12px' }}>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {users.map((u) => {
-              const assignedNames = u.stationIds
-                 ? u.stationIds
-                    .map((sid: string) => stations.find((s) => s.id === sid)?.name || 'Unknown')
-                    .join(', ')
-                 : 'None';
-              return (
-                <tr key={u.id} style={{ borderBottom: '1px solid var(--border-soft)' }}>
-                  <td style={{ fontWeight: 600, color: 'var(--text-strong)', padding: '10px 12px' }}>{u.fullName}</td>
-                  <td style={{ padding: '10px 12px' }}>
-                    {u.email || (
-                      <span style={{ color: 'var(--text-muted)', fontSize: '12px', fontStyle: 'italic' }}>
-                        Offline Attendant
-                      </span>
-                    )}
-                  </td>
-                  <td style={{ padding: '10px 12px' }}>
-                    <span
-                      style={{
-                        fontSize: '11px',
-                        fontWeight: 650,
-                        padding: '2px 6px',
-                        borderRadius: '4px',
-                        backgroundColor:
-                          !u.email
-                            ? 'rgba(245, 158, 11, 0.15)'
-                            : u.role === 'Owner'
-                            ? 'rgba(99, 102, 241, 0.15)'
-                            : u.role === 'Manager'
-                            ? 'rgba(16, 185, 129, 0.15)'
-                            : 'rgba(46, 94, 136, 0.15)',
-                        color:
-                          !u.email
-                            ? '#f59e0b'
-                            : u.role === 'Owner'
-                            ? '#6366f1'
-                            : u.role === 'Manager'
-                            ? 'rgb(52, 211, 153)'
-                            : '#2e5e88',
-                      }}
-                    >
-                      {!u.email ? 'Attendant' : u.role}
-                    </span>
-                  </td>
-                  <td style={{ padding: '10px 12px', color: 'var(--text-muted)' }}>
-                    {u.role === 'Owner' ? 'All Stations (Global)' : assignedNames || 'None'}
-                  </td>
-                  <td style={{ padding: '10px 12px', textAlign: 'center' }}>
-                    <button
-                      onClick={() => startEdit(u)}
-                      style={{
-                        height: '24px',
-                        padding: '0 8px',
-                        fontSize: '11px',
-                        backgroundColor: 'var(--bg-surface)',
-                        border: '1px solid var(--border-strong)',
-                        color: 'var(--text-default)',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      Edit
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      <DataTable
+        columns={buildUserColumns(stations, startEdit)}
+        data={users}
+        emptyMessage="No team members yet."
+        getRowId={(r: any) => r.id}
+      />
 
       {/* Form Drawer */}
       <Drawer

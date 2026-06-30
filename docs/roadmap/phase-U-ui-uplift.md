@@ -7,9 +7,9 @@
 - Primitives: `PageLayout`, `DataTable`, `KpiCard`, `Drawer`. ExpensesList already on DataTable.
 
 ## U1 — DataTable migration
-- PurchasesList ✅ (purchases + supplier registry) and CustomersList ✅ (10-col registry) migrated to `DataTable`
-  with in-cell action/ledger renderers (visual parity, now sortable). Remaining: ProductsCatalog, PaymentTerminalsPanel,
-  UserRolesAssignment, FuelPricingPanel (lighter `dense-table` lists).
+- Migrated to `DataTable` (in-cell action/ledger renderers, sortable, parity): PurchasesList ✅, CustomersList ✅,
+  ProductsCatalog ✅ (tax column now VAT/GST/Exempt category-aware), PaymentTerminalsPanel ✅, UserRolesAssignment ✅.
+  Remaining: FuelPricingPanel (specialized price-history / inline-edit table).
 
 ## U2 — Forms → RHF + Zod
 - Standardize entry forms (Expense/Purchase/Collection/Merchandise) on react-hook-form + shared Zod schemas (`@pump/shared`).

@@ -5,9 +5,50 @@ import { queryKeys, TIER } from '../../query/hooks.js';
 import { Product, PRODUCT_UNITS } from '@pump/shared';
 import { StatusBadge } from '../StatusBadge.js';
 import { Drawer } from '../Drawer.js';
+import { DataTable } from '../primitives/DataTable.js';
+import type { ColumnDef } from '@tanstack/react-table';
 
 const productService = new CloudProductService();
 let isSeedingFuels = false;
+
+const buildProductColumns = (startEdit: (p: any) => void, archive: (id: string) => void): ColumnDef<any, any>[] => [
+  { accessorKey: 'name', header: 'Name', cell: ({ getValue }) => <span style={{ fontWeight: 600, color: 'var(--text-strong)' }}>{getValue() as string}</span> },
+  { accessorKey: 'brand', header: 'Brand', cell: ({ getValue }) => <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>{(getValue() as string) || '—'}</span> },
+  { accessorKey: 'code', header: 'Code', cell: ({ getValue }) => <span style={{ fontFamily: 'var(--font-mono)', fontSize: '12px' }}>{getValue() as string}</span> },
+  {
+    accessorKey: 'productType',
+    header: 'Type',
+    cell: ({ getValue }) => {
+      const t = getValue() as string;
+      return <StatusBadge status={t} type={t === 'FUEL' ? 'info' : t === 'LUBRICANT' ? 'success' : 'default'} />;
+    },
+  },
+  {
+    id: 'tax',
+    header: 'Tax',
+    cell: ({ row }) => {
+      const p = row.original;
+      const cat = p.taxCategory || (p.productType === 'FUEL' ? 'FUEL_VAT' : 'GST');
+      const text = cat === 'FUEL_VAT' ? `VAT ${p.taxConfig?.vat_rate || 0}%` : cat === 'GST' ? `GST ${p.taxConfig?.gst_rate || 0}%` : cat === 'EXEMPT' ? 'Exempt' : '—';
+      return <span style={{ fontFamily: 'var(--font-mono)' }}>{text}</span>;
+    },
+  },
+  {
+    id: 'actions',
+    header: '',
+    cell: ({ row }) => {
+      const p = row.original;
+      return (
+        <div style={{ display: 'flex', gap: '6px' }}>
+          <button onClick={() => startEdit(p)} style={{ height: '24px', padding: '0 8px', fontSize: '11px', backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-strong)', color: 'var(--text-default)', borderRadius: '4px', cursor: 'pointer' }}>Edit</button>
+          {p.isActive && (
+            <button onClick={() => archive(p.id)} style={{ height: '24px', padding: '0 8px', fontSize: '11px', backgroundColor: 'var(--state-danger-bg)', border: '1px solid rgba(159, 63, 54, 0.2)', color: 'var(--state-danger-fg)', borderRadius: '4px', cursor: 'pointer' }}>Archive</button>
+          )}
+        </div>
+      );
+    },
+  },
+];
 
 export const ProductsCatalog: React.FC = () => {
   const qc = useQueryClient();
@@ -557,89 +598,20 @@ export const ProductsCatalog: React.FC = () => {
           style={{ flex: 1, minWidth: '220px', height: '32px', padding: '0 8px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', fontSize: '13px' }}
         />
       </div>
-      <div style={{ overflowX: 'auto', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-card)', backgroundColor: 'var(--bg-surface)' }}>
-        <table className="dense-table" style={{ width: '100%' }}>
-          <thead>
-            <tr>
-              <th style={{ width: '28%', textAlign: 'left', padding: '10px 12px' }}>Name</th>
-              <th style={{ width: '14%', textAlign: 'left', padding: '10px 12px' }}>Brand</th>
-              <th style={{ width: '12%', textAlign: 'left', padding: '10px 12px' }}>Code</th>
-              <th style={{ width: '14%', textAlign: 'left', padding: '10px 12px' }}>Type</th>
-              <th style={{ width: '14%', textAlign: 'right', padding: '10px 12px' }}>Tax (GST)</th>
-              <th style={{ width: '18%', textAlign: 'center', padding: '10px 12px' }}>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {products.filter((p) => {
-              if (filterType && p.productType !== filterType) return false;
-              if (filterText) {
-                const q = filterText.toLowerCase();
-                const hay = `${p.name} ${p.code} ${(p as any).brand ?? ''} ${(p as any).category ?? ''}`.toLowerCase();
-                if (!hay.includes(q)) return false;
-              }
-              return true;
-            }).map((p) => (
-              <tr key={p.id} style={{ opacity: p.isActive ? 1 : 0.5, borderBottom: '1px solid var(--border-soft)' }}>
-                <td style={{ fontWeight: 600, color: 'var(--text-strong)', padding: '10px 12px' }}>{p.name}</td>
-                <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: '12px' }}>{(p as any).brand || '—'}</td>
-                <td style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', padding: '10px 12px' }}>{p.code}</td>
-                <td style={{ padding: '10px 12px' }}>
-                  <StatusBadge 
-                    status={p.productType} 
-                    type={p.productType === 'FUEL' ? 'info' : p.productType === 'LUBRICANT' ? 'success' : 'default'} 
-                  />
-                </td>
-                <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', padding: '10px 12px' }}>
-                  {p.isTaxable ? `${p.taxConfig?.gst_rate || 0}%` : 'Exempt'}
-                </td>
-                <td style={{ padding: '10px 12px' }}>
-                  <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
-                    <button
-                      onClick={() => startEdit(p)}
-                      style={{
-                        height: '24px',
-                        padding: '0 8px',
-                        fontSize: '11px',
-                        backgroundColor: 'var(--bg-surface)',
-                        border: '1px solid var(--border-strong)',
-                        color: 'var(--text-default)',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      Edit
-                    </button>
-                    {p.isActive && (
-                      <button
-                        onClick={() => handleArchive(p.id)}
-                        style={{
-                          height: '24px',
-                          padding: '0 8px',
-                          fontSize: '11px',
-                          backgroundColor: 'var(--state-danger-bg)',
-                          border: '1px solid rgba(159, 63, 54, 0.2)',
-                          color: 'var(--state-danger-fg)',
-                          borderRadius: '4px',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        Archive
-                      </button>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            ))}
-            {products.length === 0 && (
-              <tr>
-                <td colSpan={5} style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)' }}>
-                  No products added to the catalogue yet.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      <DataTable
+        columns={buildProductColumns(startEdit, handleArchive)}
+        data={products.filter((p) => {
+          if (filterType && p.productType !== filterType) return false;
+          if (filterText) {
+            const q = filterText.toLowerCase();
+            const hay = `${p.name} ${p.code} ${(p as any).brand ?? ''} ${(p as any).category ?? ''}`.toLowerCase();
+            if (!hay.includes(q)) return false;
+          }
+          return true;
+        })}
+        emptyMessage="No products added to the catalogue yet."
+        getRowId={(r: any) => r.id}
+      />
     </div>
   );
 };
