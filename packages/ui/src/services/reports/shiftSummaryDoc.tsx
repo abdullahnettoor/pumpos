@@ -1,8 +1,8 @@
 import React from 'react';
 import { Document, Page, View, Text, StyleSheet, Font } from '@react-pdf/renderer';
 
-// Embed IBM Plex Sans (matches the app type + includes the rupee glyph). TTFs
-// are vendored locally via scripts/download-fonts.mjs and served from /fonts.
+// Embed IBM Plex Sans + Mono (matches the app type, include the rupee glyph; Mono
+// is used for all numeric/currency cells). TTFs vendored locally (npm run fonts).
 Font.register({
   family: 'IBM Plex Sans',
   fonts: [
@@ -10,14 +10,18 @@ Font.register({
     { src: '/fonts/IBMPlexSans-SemiBold.ttf', fontWeight: 700 },
   ],
 });
-
-// Engine-agnostic Shift Summary report as a @react-pdf/renderer component.
-// Flexbox layout (Yoga) + PDFKit, no browser needed; the SAME component renders
-// client-side and server-side later. Sections are config-driven for the
-// upcoming "configurable shift summary" picker.
+Font.register({
+  family: 'IBM Plex Mono',
+  fonts: [
+    { src: '/fonts/IBMPlexMono-Regular.ttf' },
+    { src: '/fonts/IBMPlexMono-Medium.ttf', fontWeight: 700 },
+  ],
+});
 
 export type ShiftSummarySection =
-  | 'header' | 'meta' | 'kpis' | 'nozzles' | 'handovers' | 'collections' | 'expenses' | 'variance' | 'signatures';
+  | 'header' | 'meta' | 'warnings' | 'nozzles' | 'handovers' | 'terminals'
+  | 'creditSales' | 'dips' | 'stockVariances' | 'cashRecon' | 'nonCash'
+  | 'expenses' | 'purchases' | 'collections' | 'signatures';
 
 export interface ReportConfig {
   sections: ShiftSummarySection[];
@@ -27,88 +31,340 @@ export interface ReportConfig {
 }
 
 export const DEFAULT_SHIFT_SUMMARY_CONFIG: ReportConfig = {
-  sections: ['header', 'meta', 'kpis', 'nozzles', 'handovers', 'variance', 'signatures'],
+  sections: [
+    'header', 'meta', 'warnings', 'nozzles', 'handovers', 'terminals', 'creditSales',
+    'dips', 'stockVariances', 'cashRecon', 'nonCash', 'expenses', 'purchases', 'collections', 'signatures',
+  ],
   showLogo: true,
   paper: 'A4',
 };
 
-const C = { green: '#1F6A53', ink: '#18201A', body: '#2B342D', muted: '#5E6A61', line: '#D9DED6', surfaceAlt: '#F1F3EF', danger: '#9F3F36', amber: '#8A6116', white: '#FFFFFF' };
-const inr = (n: any) => `₹${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-const vol = (n: any) => `${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} L`;
+const C = {
+  green: '#1F6A53', ink: '#18201A', body: '#2B342D', muted: '#5E6A61', faint: '#7A857C',
+  line: '#D9DED6', surfaceAlt: '#F1F3EF', danger: '#9F3F36', amber: '#8A6116', success: '#1E6A4E',
+  warnBg: '#F9F0DA', warnFg: '#8A6116', white: '#FFFFFF',
+};
+
+const inr = (n: any) => `\u20b9${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const inr0 = (n: any) => `\u20b9${Number(n || 0).toLocaleString('en-IN')}`;
+const vol3 = (n: any) => `${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} L`;
+const vol1 = (n: any) => `${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} L`;
+const fix3 = (n: any) => Number(n || 0).toFixed(3);
 const fmtTime = (iso?: string) => { if (!iso) return '—'; try { return new Date(iso).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }); } catch { return '—'; } };
+const fmtDateTime = (iso?: string) => { if (!iso) return '—'; try { return new Date(iso).toLocaleString('en-IN'); } catch { return '—'; } };
 
 const s = StyleSheet.create({
-  page: { paddingTop: 32, paddingHorizontal: 36, paddingBottom: 48, fontSize: 10, color: C.body, fontFamily: 'IBM Plex Sans' },
+  page: { paddingTop: 30, paddingHorizontal: 32, paddingBottom: 46, fontSize: 9, color: C.body, fontFamily: 'IBM Plex Sans' },
   band: { backgroundColor: C.green, paddingVertical: 12, paddingHorizontal: 16, borderRadius: 6 },
   brand: { fontSize: 15, color: C.white, fontWeight: 700 },
   title: { fontSize: 11, color: C.white, marginTop: 3, letterSpacing: 1.5, fontWeight: 700 },
-  sub: { fontSize: 9, color: C.muted, marginTop: 6 },
-  metaRow: { flexDirection: 'row', marginTop: 12, gap: 12 },
-  metaCell: { flex: 1 },
-  label: { fontSize: 7.5, color: C.muted },
-  val: { fontSize: 11, color: C.ink, fontWeight: 700, marginTop: 2 },
-  kpiRow: { flexDirection: 'row', gap: 8, marginTop: 12 },
-  kpi: { flex: 1, backgroundColor: C.surfaceAlt, borderRadius: 6, padding: 8 },
-  kpiLabel: { fontSize: 7.5, color: C.muted },
-  kpiVal: { fontSize: 13, fontWeight: 700, marginTop: 3 },
-  h2: { fontSize: 10, color: C.green, fontWeight: 700, marginTop: 16, marginBottom: 6, letterSpacing: 0.6 },
-  tr: { flexDirection: 'row' },
-  thRow: { backgroundColor: C.green, borderRadius: 4 },
-  th: { color: C.white, fontSize: 8.5, fontWeight: 700, paddingVertical: 5, paddingHorizontal: 8 },
-  td: { fontSize: 9.5, paddingVertical: 4, paddingHorizontal: 8, color: C.body },
-  tdStrong: { fontSize: 9.5, paddingVertical: 4, paddingHorizontal: 8, color: C.ink, fontWeight: 700 },
+  sub: { fontSize: 8.5, color: C.muted, marginTop: 6 },
+  metaBox: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, backgroundColor: C.surfaceAlt, borderRadius: 6, padding: 12, marginTop: 12 },
+  metaCell: { width: '22%', minWidth: 110 },
+  label: { fontSize: 7, color: C.muted },
+  val: { fontSize: 10, color: C.ink, fontWeight: 700, marginTop: 2 },
+  valMono: { fontSize: 10, color: C.ink, fontFamily: 'IBM Plex Mono', marginTop: 2 },
+  h2: { fontSize: 9.5, color: C.green, fontWeight: 700, marginTop: 16, marginBottom: 6, letterSpacing: 0.5 },
+  warn: { backgroundColor: C.warnBg, borderRadius: 6, padding: 10, marginTop: 12 },
+  warnTitle: { fontSize: 8.5, color: C.warnFg, fontWeight: 700, marginBottom: 4 },
+  warnItem: { fontSize: 8.5, color: C.warnFg, marginTop: 2 },
+  tr: { flexDirection: 'row', alignItems: 'flex-start' },
+  thRow: { backgroundColor: C.green, borderRadius: 3 },
+  th: { color: C.white, fontSize: 7.5, fontWeight: 700, paddingVertical: 5, paddingHorizontal: 6 },
+  cell: { fontSize: 8.5, paddingVertical: 4, paddingHorizontal: 6, color: C.body },
+  cellStrong: { fontSize: 8.5, paddingVertical: 4, paddingHorizontal: 6, color: C.ink, fontWeight: 700 },
+  cellMono: { fontSize: 8.5, paddingVertical: 4, paddingHorizontal: 6, color: C.body, fontFamily: 'IBM Plex Mono' },
+  cellMonoStrong: { fontSize: 8.5, paddingVertical: 4, paddingHorizontal: 6, color: C.ink, fontFamily: 'IBM Plex Mono', fontWeight: 700 },
   zebra: { backgroundColor: C.surfaceAlt },
-  totalRow: { borderTopWidth: 0.5, borderTopColor: C.line },
-  signRow: { flexDirection: 'row', gap: 40, marginTop: 40 },
-  sign: { flex: 1, fontSize: 9, color: C.muted, textAlign: 'center', borderTopWidth: 0.5, borderTopColor: C.muted, paddingTop: 4 },
-  foot: { position: 'absolute', bottom: 24, left: 36, right: 36, flexDirection: 'row', justifyContent: 'space-between', fontSize: 7.5, color: C.muted },
+  totalRow: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: C.line, backgroundColor: C.surfaceAlt },
+  totalLabel: { flex: 1, fontSize: 8, paddingVertical: 5, paddingHorizontal: 6, color: C.muted, fontWeight: 700 },
+  reconRow: { flexDirection: 'row', justifyContent: 'space-between', borderBottomWidth: 0.5, borderBottomColor: C.line, paddingVertical: 6, paddingHorizontal: 10 },
+  reconBox: { borderWidth: 0.5, borderColor: C.line, borderRadius: 6, marginTop: 4, marginBottom: 8 },
+  kpiRow: { flexDirection: 'row', gap: 8, marginTop: 4 },
+  kpi: { flex: 1, backgroundColor: C.surfaceAlt, borderRadius: 6, padding: 8 },
+  kpiLabel: { fontSize: 7, color: C.muted },
+  kpiVal: { fontSize: 12, fontFamily: 'IBM Plex Mono', marginTop: 3 },
+  signRow: { flexDirection: 'row', gap: 40, marginTop: 36 },
+  sign: { flex: 1, fontSize: 8.5, color: C.muted, textAlign: 'center', borderTopWidth: 0.5, borderTopColor: C.muted, paddingTop: 4 },
+  foot: { position: 'absolute', bottom: 22, left: 32, right: 32, flexDirection: 'row', justifyContent: 'space-between', fontSize: 7, color: C.muted },
 });
+
+// --- Generic table -----------------------------------------------------------
+type Col = { header: string; flex: number; align?: 'right'; mono?: boolean; strong?: boolean };
+type Cell = { text: string; color?: string };
+const TableView = ({ columns, rows, total }: { columns: Col[]; rows: Cell[][]; total?: Cell[] }) => (
+  <View>
+    <View style={[s.tr, s.thRow]}>
+      {columns.map((c, i) => (
+        <Text key={i} style={[s.th, { flex: c.flex }, c.align === 'right' ? { textAlign: 'right' } : {}]}>{c.header}</Text>
+      ))}
+    </View>
+    {rows.map((cells, ri) => (
+      <View key={ri} style={[s.tr, ri % 2 === 1 ? s.zebra : {}]}>
+        {cells.map((cell, ci) => {
+          const c = columns[ci];
+          const base = c.mono ? (c.strong ? s.cellMonoStrong : s.cellMono) : (c.strong ? s.cellStrong : s.cell);
+          return (
+            <Text key={ci} style={[base, { flex: c.flex }, c.align === 'right' ? { textAlign: 'right' } : {}, cell.color ? { color: cell.color } : {}]}>{cell.text}</Text>
+          );
+        })}
+      </View>
+    ))}
+    {total && (
+      <View style={s.totalRow}>
+        {total.map((cell, ci) => {
+          const c = columns[ci];
+          return (
+            <Text key={ci} style={[c.mono ? s.cellMonoStrong : s.cellStrong, { flex: c.flex }, c.align === 'right' ? { textAlign: 'right' } : {}, { color: cell.color ?? C.ink }]}>{cell.text}</Text>
+          );
+        })}
+      </View>
+    )}
+  </View>
+);
 
 const Kpi = ({ l, v, c = C.ink }: { l: string; v: string; c?: string }) => (
   <View style={s.kpi}><Text style={s.kpiLabel}>{l.toUpperCase()}</Text><Text style={[s.kpiVal, { color: c }]}>{v}</Text></View>
 );
 
-const renderers: Record<ShiftSummarySection, (d: any, cfg: ReportConfig) => React.ReactNode> = {
-  header: (_d, cfg) => (
-    <View key="h"><View style={s.band}><Text style={s.brand}>{cfg.stationName || 'PumpOS'}</Text><Text style={s.title}>SHIFT SUMMARY RECORD</Text></View><Text style={s.sub}>Authoritative operational snapshot</Text></View>
+const varColor = (v: number) => (v < 0 ? C.danger : v > 0 ? C.amber : C.success);
+
+const builders: Record<ShiftSummarySection, (d: any, cfg: ReportConfig) => React.ReactNode> = {
+  header: (d, cfg) => (
+    <View key="header">
+      <View style={s.band}>
+        <Text style={s.brand}>{cfg.stationName || 'PumpOS'}</Text>
+        <Text style={s.title}>SHIFT SUMMARY RECORD</Text>
+      </View>
+      <Text style={s.sub}>Authoritative Operational Snapshot{d.generatedAt ? ` \u2022 Compiled ${fmtDateTime(d.generatedAt)}` : ''}</Text>
+    </View>
   ),
   meta: (d) => (
-    <View key="m" style={s.metaRow}>
-      <View style={s.metaCell}><Text style={s.label}>SHIFT</Text><Text style={s.val}>{d.templateName || '—'}</Text></View>
-      <View style={s.metaCell}><Text style={s.label}>DURATION</Text><Text style={s.val}>{fmtTime(d.openedAt)} - {fmtTime(d.closedAt)}</Text></View>
+    <View key="meta" style={s.metaBox}>
+      <View style={s.metaCell}><Text style={s.label}>SHIFT ID</Text><Text style={s.valMono}>{String(d.shiftId || '').slice(0, 8)}...</Text></View>
+      <View style={s.metaCell}><Text style={s.label}>SHIFT TEMPLATE</Text><Text style={s.val}>{d.templateName || 'Custom'}</Text></View>
+      <View style={s.metaCell}><Text style={s.label}>OPERATIONAL DURATION</Text><Text style={s.val}>{fmtTime(d.openedAt)} - {fmtTime(d.closedAt)}</Text></View>
       <View style={s.metaCell}><Text style={s.label}>RECONCILED BY</Text><Text style={s.val}>{d.closedByName || d.closedBy || '—'}</Text></View>
     </View>
   ),
-  kpis: (d) => (
-    <View key="k" style={s.kpiRow}><Kpi l="Total Volume" v={vol(d.totalVolumeSold)} c={C.green} /><Kpi l="Expected Cash" v={inr(d.expectedCash)} /><Kpi l="Variance" v={inr(d.cashVariance)} c={Number(d.cashVariance) < 0 ? C.danger : C.green} /></View>
-  ),
-  nozzles: (d) => (
-    <View key="n"><Text style={s.h2}>NOZZLE RECONCILIATION & VOLUME SOLD</Text>
-      <View style={[s.tr, s.thRow]}><Text style={[s.th, { width: 50 }]}>Nozzle</Text><Text style={[s.th, { flex: 1 }]}>Product</Text><Text style={[s.th, { width: 70, textAlign: 'right' }]}>Opening</Text><Text style={[s.th, { width: 70, textAlign: 'right' }]}>Closing</Text><Text style={[s.th, { width: 80, textAlign: 'right' }]}>Volume</Text></View>
-      {(d.nozzleReadings || []).map((r: any, i: number) => (
-        <View key={i} style={[s.tr, i % 2 ? s.zebra : {}]}><Text style={[s.tdStrong, { width: 50 }]}>{r.nozzleName || r.nozzleNumber || ''}</Text><Text style={[s.td, { flex: 1 }]}>{r.productName || ''}</Text><Text style={[s.td, { width: 70, textAlign: 'right' }]}>{Number(r.openingReading ?? 0).toFixed(3)}</Text><Text style={[s.td, { width: 70, textAlign: 'right' }]}>{Number(r.closingReading ?? 0).toFixed(3)}</Text><Text style={[s.tdStrong, { width: 80, textAlign: 'right' }]}>{vol(r.volume ?? r.volumeSold)}</Text></View>
-      ))}
-      <View style={[s.tr, s.totalRow]}><Text style={[s.tdStrong, { flex: 1 }]}>TOTAL FUEL SOLD</Text><Text style={[s.tdStrong, { width: 80, textAlign: 'right', color: C.green }]}>{vol(d.totalVolumeSold)}</Text></View>
+  warnings: (d) => (d.warnings && d.warnings.length > 0 ? (
+    <View key="warnings" style={s.warn}>
+      <Text style={s.warnTitle}>Warnings Captured at Close Time:</Text>
+      {d.warnings.map((w: string, i: number) => <Text key={i} style={s.warnItem}>• {w}</Text>)}
+    </View>
+  ) : null),
+  nozzles: (d) => {
+    const rows: Cell[][] = (d.nozzleReadings || []).map((nr: any) => [
+      { text: nr.nozzleName || '' },
+      { text: `${nr.productName || ''}${nr.productCode ? ` (${nr.productCode})` : ''}` },
+      { text: fix3(nr.openingReading) },
+      { text: fix3(nr.closingReading ?? nr.openingReading) },
+      { text: vol3(nr.volumeSold) },
+    ]);
+    return (
+      <View key="nozzles"><Text style={s.h2}>NOZZLE RECONCILIATION &amp; VOLUME SOLD</Text>
+        <TableView
+          columns={[
+            { header: 'Nozzle', flex: 1.2, strong: true }, { header: 'Product', flex: 2.4 },
+            { header: 'Opening Rd', flex: 1.4, align: 'right', mono: true }, { header: 'Closing Rd', flex: 1.4, align: 'right', mono: true },
+            { header: 'Volume Sold', flex: 1.5, align: 'right', mono: true, strong: true },
+          ]}
+          rows={rows}
+          total={[{ text: 'TOTAL FUEL SOLD' }, { text: '' }, { text: '' }, { text: '' }, { text: vol3(d.totalVolumeSold), color: C.green }]}
+        />
+      </View>
+    );
+  },
+  handovers: (d) => (d.handovers && d.handovers.length > 0 ? (
+    <View key="handovers"><Text style={s.h2}>ATTENDANT HANDOVERS SUMMARY</Text>
+      <TableView
+        columns={[
+          { header: 'Attendant', flex: 1.6, strong: true }, { header: 'Dispenser', flex: 1.1 },
+          { header: 'Cash (\u20b9)', flex: 1.3, align: 'right', mono: true }, { header: 'Card/UPI (\u20b9)', flex: 1.4, align: 'right', mono: true },
+          { header: 'Credit Chits (\u20b9)', flex: 1.5, align: 'right', mono: true }, { header: 'Expected (\u20b9)', flex: 1.4, align: 'right', mono: true, strong: true },
+          { header: 'Variance (\u20b9)', flex: 1.4, align: 'right', mono: true },
+        ]}
+        rows={(d.handovers || []).map((h: any) => {
+          const v = Number(h.varianceAmount || 0);
+          return [
+            { text: h.attendantName || '' }, { text: h.duCode || '' },
+            { text: inr(h.cashHandedOver) }, { text: inr(Number(h.cardHandedOver || 0) + Number(h.upiHandedOver || 0)) },
+            { text: inr(h.creditHandedOver) }, { text: inr(h.expectedSales) },
+            { text: `${v > 0 ? '+' : ''}${inr(v)}`, color: varColor(v) },
+          ];
+        })}
+      />
+    </View>
+  ) : null),
+  terminals: (d) => {
+    const tb = d.terminalBreakdown || [];
+    if (tb.length === 0) return null;
+    const rows: Cell[][] = tb.map((t: any) => {
+      const handledBy = (t.entries || [])
+        .filter((e: any) => Number(e.card || 0) > 0 || Number(e.upi || 0) > 0)
+        .map((e: any) => `${e.attendantName}${e.duCode ? ` · ${e.duCode}` : ''} (${inr(Number(e.card || 0) + Number(e.upi || 0))})`)
+        .join('\n') || '—';
+      return [
+        { text: `${t.terminalLabel || 'Unknown'}${t.provider ? `\n${t.provider}` : ''}` },
+        { text: handledBy },
+        { text: inr(t.card) }, { text: inr(t.upi) }, { text: inr(Number(t.card || 0) + Number(t.upi || 0)) },
+      ];
+    });
+    const totCard = tb.reduce((a: number, t: any) => a + Number(t.card || 0), 0);
+    const totUpi = tb.reduce((a: number, t: any) => a + Number(t.upi || 0), 0);
+    return (
+      <View key="terminals"><Text style={s.h2}>POS TERMINAL SETTLEMENT SUMMARY</Text>
+        <TableView
+          columns={[
+            { header: 'Terminal', flex: 1.6, strong: true }, { header: 'Handled By', flex: 2.6 },
+            { header: 'Card (\u20b9)', flex: 1.3, align: 'right', mono: true }, { header: 'UPI (\u20b9)', flex: 1.3, align: 'right', mono: true },
+            { header: 'Total (\u20b9)', flex: 1.4, align: 'right', mono: true, strong: true },
+          ]}
+          rows={rows}
+          total={[{ text: 'POS TOTALS' }, { text: '' }, { text: inr(totCard) }, { text: inr(totUpi) }, { text: inr(totCard + totUpi), color: C.green }]}
+        />
+      </View>
+    );
+  },
+  creditSales: (d) => (d.creditSales && d.creditSales.length > 0 ? (
+    <View key="creditSales"><Text style={s.h2}>FUEL-ON-CREDIT SALES</Text>
+      <TableView
+        columns={[
+          { header: 'Customer', flex: 1.8, strong: true }, { header: 'Vehicle', flex: 1.3, mono: true },
+          { header: 'Product', flex: 1.4 }, { header: 'Qty (L)', flex: 1.1, align: 'right', mono: true },
+          { header: 'Notes', flex: 1.8 }, { header: 'Amount (\u20b9)', flex: 1.3, align: 'right', mono: true, strong: true },
+        ]}
+        rows={(d.creditSales || []).map((r: any) => [
+          { text: r.customerName || 'Customer' }, { text: r.vehicleNumber || '—' },
+          { text: r.productName || '—' }, { text: r.quantity != null ? vol3(r.quantity).replace(' L', '') : '—' },
+          { text: r.notes || '—' }, { text: inr(r.amount) },
+        ])}
+        total={[{ text: 'TOTAL CREDIT SALES' }, { text: '' }, { text: '' }, { text: '' }, { text: '' }, { text: inr(d.creditSalesTotal ?? (d.creditSales || []).reduce((a: number, r: any) => a + Number(r.amount || 0), 0)), color: C.green }]}
+      />
+    </View>
+  ) : null),
+  dips: (d) => (d.dipReadings && d.dipReadings.length > 0 ? (
+    <View key="dips"><Text style={s.h2}>TANK PHYSICAL DIP RECONCILIATION</Text>
+      <TableView
+        columns={[
+          { header: 'Tank', flex: 1.6, strong: true }, { header: 'Product', flex: 2 },
+          { header: 'Tank Capacity', flex: 1.5, align: 'right', mono: true }, { header: 'Physical Actual Stock', flex: 1.8, align: 'right', mono: true, strong: true },
+        ]}
+        rows={(d.dipReadings || []).map((r: any) => [
+          { text: r.tankName || '' }, { text: `${r.productName || ''}${r.productCode ? ` (${r.productCode})` : ''}` },
+          { text: `${Number(r.capacity || 0).toLocaleString('en-IN')} L` }, { text: vol1(r.actualQuantity) },
+        ])}
+      />
+    </View>
+  ) : null),
+  stockVariances: (d) => (d.stockVariances && d.stockVariances.length > 0 ? (
+    <View key="stockVariances"><Text style={s.h2}>PRODUCT STOCK VARIANCES</Text>
+      <TableView
+        columns={[
+          { header: 'Product', flex: 2, strong: true }, { header: 'Expected Stock', flex: 1.4, align: 'right', mono: true },
+          { header: 'Physical Actual', flex: 1.4, align: 'right', mono: true }, { header: 'Variance', flex: 1.3, align: 'right', mono: true },
+          { header: 'Status', flex: 1.4 },
+        ]}
+        rows={(d.stockVariances || []).map((sv: any) => {
+          const diff = Number(sv.varianceQuantity || 0);
+          const severe = Number(sv.expectedQuantity || 0) > 0 && Math.abs(diff) > 0.005 * Number(sv.expectedQuantity);
+          return [
+            { text: `${sv.productName || ''}${sv.productCode ? ` (${sv.productCode})` : ''}` },
+            { text: vol1(sv.expectedQuantity) }, { text: vol1(sv.actualQuantity) },
+            { text: `${diff > 0 ? '+' : ''}${vol1(diff)}`, color: diff < 0 ? C.danger : diff > 0 ? C.success : C.ink },
+            { text: severe ? 'Discrepancy (>0.5%)' : 'Normal', color: severe ? C.warnFg : C.success },
+          ];
+        })}
+      />
+    </View>
+  ) : null),
+  cashRecon: (d) => (
+    <View key="cashRecon"><Text style={s.h2}>CASH RECONCILIATION &amp; VARIANCES</Text>
+      <View style={s.reconBox}>
+        {[
+          { l: 'Opening Cash Float', v: inr0(d.openingCash), c: C.ink },
+          { l: '(+) Cash Collections', v: `+ ${inr0(d.cashCollectionsSum)}`, c: C.success },
+          { l: '(-) Petty Cash Expenses', v: `- ${inr0(d.cashExpensesSum)}`, c: C.danger },
+          { l: 'Expected Cash in Drawer', v: inr0(d.expectedCash), c: C.ink },
+          { l: 'Actual Closing Cash (Entered)', v: inr0(d.closingCash), c: C.ink },
+        ].map((r, i) => (
+          <View key={i} style={s.reconRow}>
+            <Text style={{ fontSize: 9, color: r.c }}>{r.l}</Text>
+            <Text style={{ fontSize: 9, color: r.c, fontFamily: 'IBM Plex Mono', fontWeight: 700 }}>{r.v}</Text>
+          </View>
+        ))}
+        <View style={[s.reconRow, { borderBottomWidth: 0, backgroundColor: Math.abs(Number(d.cashVariance || 0)) > 100 ? '#F8E3E0' : C.surfaceAlt }]}>
+          <Text style={{ fontSize: 10, fontWeight: 700, color: Math.abs(Number(d.cashVariance || 0)) > 100 ? C.danger : C.ink }}>Cash Variance</Text>
+          <Text style={{ fontSize: 10, fontFamily: 'IBM Plex Mono', fontWeight: 700, color: Math.abs(Number(d.cashVariance || 0)) > 100 ? C.danger : C.ink }}>
+            {Number(d.cashVariance || 0) > 0 ? '+' : ''}{inr0(d.cashVariance)}{Number(d.cashVariance || 0) === 0 ? ' (Perfect Match)' : Math.abs(Number(d.cashVariance || 0)) > 100 ? ' (Discrepancy)' : ''}
+          </Text>
+        </View>
+      </View>
     </View>
   ),
-  handovers: (d) => (
-    <View key="ha"><Text style={s.h2}>ATTENDANT HANDOVERS</Text>
-      <View style={[s.tr, s.thRow]}><Text style={[s.th, { flex: 1 }]}>Attendant</Text><Text style={[s.th, { width: 90, textAlign: 'right' }]}>Cash</Text><Text style={[s.th, { width: 90, textAlign: 'right' }]}>Card/UPI</Text><Text style={[s.th, { width: 90, textAlign: 'right' }]}>Credit</Text></View>
-      {(d.handovers || []).map((h: any, i: number) => (
-        <View key={i} style={[s.tr, i % 2 ? s.zebra : {}]}><Text style={[s.tdStrong, { flex: 1 }]}>{h.attendantName || ''}</Text><Text style={[s.td, { width: 90, textAlign: 'right' }]}>{inr(h.cashHandedOver)}</Text><Text style={[s.td, { width: 90, textAlign: 'right' }]}>{inr((h.cardHandedOver || 0) + (h.upiHandedOver || 0))}</Text><Text style={[s.td, { width: 90, textAlign: 'right' }]}>{inr(h.creditHandedOver)}</Text></View>
-      ))}
+  nonCash: (d) => (
+    <View key="nonCash"><Text style={s.h2}>NON-CASH PAYMENTS &amp; CREDIT SALES</Text>
+      <View style={s.kpiRow}>
+        <Kpi l="Card Payments" v={inr0(d.cardCollectionsSum)} />
+        <Kpi l="UPI/QR Payments" v={inr0(d.upiCollectionsSum)} />
+        <Kpi l="Credit Account Sales" v={inr0(d.creditSalesSum)} c={C.amber} />
+      </View>
     </View>
   ),
-  collections: (d) => (<View key="c"><Text style={s.h2}>NON-CASH PAYMENTS</Text><View style={s.kpiRow}><Kpi l="Card" v={inr(d.cardCollectionsSum)} /><Kpi l="UPI" v={inr(d.upiCollectionsSum)} /><Kpi l="Credit" v={inr(d.creditSalesSum)} /></View></View>),
-  expenses: (d) => (<View key="e"><Text style={s.h2}>PETTY EXPENSES</Text><View style={s.kpiRow}><Kpi l="Cash Expenses" v={inr(d.cashExpensesSum)} c={C.amber} /></View></View>),
-  variance: (d) => (<View key="v" style={s.kpiRow}><Kpi l="Opening Cash" v={inr(d.openingCash)} /><Kpi l="Closing Cash" v={inr(d.closingCash)} /><Kpi l="Variance" v={inr(d.cashVariance)} c={Number(d.cashVariance) < 0 ? C.danger : C.green} /></View>),
-  signatures: () => (<View key="sg" style={s.signRow}><Text style={s.sign}>Operator</Text><Text style={s.sign}>Manager</Text></View>),
+  expenses: (d) => (d.expenses && d.expenses.length > 0 ? (
+    <View key="expenses"><Text style={s.h2}>SHIFT PETTY CASH EXPENSES</Text>
+      <TableView
+        columns={[
+          { header: 'Category', flex: 1.6, strong: true }, { header: 'Description', flex: 2.6 },
+          { header: 'Amount', flex: 1.2, align: 'right', mono: true },
+        ]}
+        rows={(d.expenses || []).map((e: any) => [
+          { text: e.categoryName || 'General' }, { text: e.description || '—' }, { text: `- ${inr0(e.amount)}`, color: C.danger },
+        ])}
+      />
+    </View>
+  ) : null),
+  purchases: (d) => (d.purchases && d.purchases.length > 0 ? (
+    <View key="purchases"><Text style={s.h2}>SUPPLIER FUEL INTAKES</Text>
+      <TableView
+        columns={[
+          { header: 'Supplier', flex: 1.8, strong: true }, { header: 'Ref / Invoice', flex: 1.8, mono: true },
+          { header: 'Notes', flex: 2 }, { header: 'Amount', flex: 1.2, align: 'right', mono: true },
+        ]}
+        rows={(d.purchases || []).map((p: any) => [
+          { text: p.supplierName || 'Unknown Supplier' },
+          { text: `${p.documentNumber || ''}${p.invoiceNumber ? ` (${p.invoiceNumber})` : ''}` },
+          { text: p.notes || '—' }, { text: inr0(p.amount) },
+        ])}
+      />
+    </View>
+  ) : null),
+  collections: (d) => (d.collections && d.collections.length > 0 ? (
+    <View key="collections"><Text style={s.h2}>COLLECTIONS &amp; ACCOUNT SALES LOGS</Text>
+      <TableView
+        columns={[
+          { header: 'Customer', flex: 1.8, strong: true }, { header: 'Method', flex: 1.1 },
+          { header: 'Notes', flex: 2.2 }, { header: 'Amount', flex: 1.2, align: 'right', mono: true },
+        ]}
+        rows={(d.collections || []).map((c: any) => [
+          { text: c.customerName || 'Walk-in Customer' }, { text: c.paymentMethod || '' },
+          { text: c.notes || '—' }, { text: inr0(c.amount), color: c.paymentMethod === 'Credit' ? C.muted : C.success },
+        ])}
+      />
+    </View>
+  ) : null),
+  signatures: () => (
+    <View key="signatures" style={s.signRow}>
+      <Text style={s.sign}>Operator / Reconciliation Staff Signature</Text>
+      <Text style={s.sign}>Owner / Manager Verification Signature</Text>
+    </View>
+  ),
 };
 
 export const ShiftSummaryDoc: React.FC<{ snapshot: any; config?: ReportConfig }> = ({ snapshot, config = DEFAULT_SHIFT_SUMMARY_CONFIG }) => (
   <Document>
     <Page size={config.paper} style={s.page}>
-      {config.sections.map((key) => renderers[key]?.(snapshot, config))}
+      {config.sections.map((key) => builders[key]?.(snapshot, config))}
       <View style={s.foot} fixed>
         <Text>Generated {new Date().toLocaleString('en-IN')}</Text>
         <Text render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} />
