@@ -16,6 +16,8 @@ import type {
   ShiftReconciliationTotals,
   ShiftRepository,
   ShiftSummaryWriter,
+  CreditSalesReader,
+  CreditSaleRecord,
   StockMovementInput,
   StockMovementWriter,
 } from './ports.js';
@@ -49,6 +51,10 @@ class ReadingRepo implements NozzleReadingRepository {
 class ReconReader implements ShiftReconciliationReader {
   constructor(private readonly totals: ShiftReconciliationTotals) {}
   async totalsForShift() { return this.totals; }
+}
+class CreditSalesReaderMock implements CreditSalesReader {
+  constructor(private readonly records: CreditSaleRecord[] = []) {}
+  async listByShift(shiftId: string) { return this.records.filter((r) => r.customerId); }
 }
 class StockWriter implements StockMovementWriter {
   readonly saved: StockMovementInput[] = [];
@@ -88,9 +94,10 @@ describe('CloseShift', () => {
     const summaries = new SummaryWriter();
     const store = new InMemoryEventStore();
     const events = new InProcessEventDispatcher({ store });
+    const creditSales = new CreditSalesReaderMock([]);
 
     // expected = 5000 + 2000 - 300 = 6700; declare 6700 -> variance 0
-    const result = await new CloseShift({ shifts, nozzles, nozzleReadings: readings, reconciliation: recon, stockMovements: stock, summaries, events })
+    const result = await new CloseShift({ shifts, nozzles, nozzleReadings: readings, reconciliation: recon, creditSales, stockMovements: stock, summaries, events })
       .execute({ shiftId: 'sh-1', closingCash: 6700, nozzleReadings: [{ nozzleId: 'n1', closingReading: 1100 }] }, makeContext());
 
     expect(result.success).toBe(true);
@@ -114,6 +121,7 @@ describe('CloseShift', () => {
     const result = await new CloseShift({
       shifts: new ShiftRepo([closed]), nozzles: new NozzleRepo([]), nozzleReadings: new ReadingRepo([]),
       reconciliation: new ReconReader({ cashSales: 0, cashCollections: 0, cardCollections: 0, upiCollections: 0, creditCollections: 0, drawerExpenses: 0, drawerSupplierPayments: 0 }),
+      creditSales: new CreditSalesReaderMock([]),
       stockMovements: new StockWriter(), summaries: new SummaryWriter(), events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
     }).execute({ shiftId: 'sh-1', closingCash: 0 }, makeContext());
     expect(result.success).toBe(false);

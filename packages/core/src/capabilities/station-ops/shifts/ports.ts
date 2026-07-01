@@ -72,6 +72,27 @@ export interface ShiftReconciliationReader {
   totalsForShift(shiftId: string): Promise<ShiftReconciliationTotals>;
 }
 
+export interface CreditSaleRecord {
+  id: string;
+  amount: number;
+  quantity: number | null;
+  unitPrice: number | null;
+  notes: string | null;
+  duId: string | null;
+  attendantId: string | null;
+  customerId: string;
+  vehicleId: string | null;
+  productId: string | null;
+  customerName: string;
+  productName: string | null;
+  productCode: string | null;
+  vehicleNumber: string | null;
+}
+
+export interface CreditSalesReader {
+  listByShift(shiftId: string): Promise<CreditSaleRecord[]>;
+}
+
 export interface StockMovementInput {
   shiftId: string | null;
   businessDayId: string;

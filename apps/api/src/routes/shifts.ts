@@ -24,6 +24,7 @@ import {
   DrizzleShiftRepository,
   DrizzleNozzleReadingRepository,
   DrizzleShiftReconciliationReader,
+  DrizzleCreditSalesReader,
   DrizzleStockMovementWriter,
   DrizzleShiftSummaryWriter,
 } from '../infra/repositories/station-ops-repositories.js';
@@ -134,10 +135,12 @@ async function projectShiftSummary(
         customerName: schema.customers.name,
         productName: schema.products.name,
         productCode: schema.products.code,
+        vehicleNumber: schema.customerVehicles.registrationNumber,
       })
       .from(schema.customerTransactions)
       .leftJoin(schema.customers, eq(schema.customers.id, schema.customerTransactions.customerId))
       .leftJoin(schema.products, eq(schema.products.id, schema.customerTransactions.productId))
+      .leftJoin(schema.customerVehicles, eq(schema.customerVehicles.id, schema.customerTransactions.vehicleId))
       .where(
         and(
           eq(schema.customerTransactions.shiftId, shift.id),
@@ -744,6 +747,7 @@ shiftsRouter.post('/close', async (c) => {
       nozzles: new DrizzleNozzleRepository(tx),
       nozzleReadings: new DrizzleNozzleReadingRepository(tx),
       reconciliation: new DrizzleShiftReconciliationReader(tx),
+      creditSales: new DrizzleCreditSalesReader(tx),
       stockMovements: new DrizzleStockMovementWriter(tx),
       summaries: new DrizzleShiftSummaryWriter(tx),
       events,

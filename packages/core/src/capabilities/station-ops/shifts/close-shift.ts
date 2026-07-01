@@ -3,6 +3,7 @@ import { BusinessEvents, err, eventFromContext, invariantViolation, notFoundErro
 import type { EventPublisher, ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
 import type { NozzleRepository } from '../../station-setup/nozzles/index.js';
 import type {
+  CreditSalesReader,
   NozzleReadingRepository,
   Shift,
   ShiftReconciliationReader,
@@ -33,6 +34,7 @@ export interface CloseShiftDeps {
   nozzles: NozzleRepository;
   nozzleReadings: NozzleReadingRepository;
   reconciliation: ShiftReconciliationReader;
+  creditSales: CreditSalesReader;
   stockMovements: StockMovementWriter;
   summaries: ShiftSummaryWriter;
   events: EventPublisher;
@@ -144,6 +146,10 @@ export class CloseShift implements UseCase<CloseShiftCommand, CloseShiftResult> 
       openingCash + totals.cashSales + totals.cashCollections - totals.drawerExpenses - totals.drawerSupplierPayments - cashDrops;
     const cashVariance = closingCash - expectedDrawerCash;
 
+    // Fetch credit sales with vehicle information for immutable snapshot.
+    const creditSalesRecords = await this.deps.creditSales.listByShift(shift.id);
+    const creditSalesTotal = creditSalesRecords.reduce((sum, r) => sum + Number(r.amount), 0);
+
     const nowIso = ctx.clock.now().toISOString();
     const snapshot: Record<string, unknown> = {
       generatedAt: nowIso,
@@ -160,6 +166,23 @@ export class CloseShift implements UseCase<CloseShiftCommand, CloseShiftResult> 
       totalTesting,
       totalNetVolume,
       totalFuelSalesValue,
+      creditSales: creditSalesRecords.map((r) => ({
+        id: r.id,
+        amount: r.amount,
+        quantity: r.quantity,
+        unitPrice: r.unitPrice,
+        notes: r.notes,
+        duId: r.duId,
+        attendantId: r.attendantId,
+        customerId: r.customerId,
+        vehicleId: r.vehicleId,
+        productId: r.productId,
+        customerName: r.customerName,
+        productName: r.productName,
+        productCode: r.productCode,
+        vehicleNumber: r.vehicleNumber,
+      })),
+      creditSalesTotal,
       notes: cmd.notes ?? null,
     };
     await this.deps.summaries.save(shift.id, snapshot);

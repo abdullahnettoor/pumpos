@@ -11,6 +11,8 @@ import type {
   NozzleReadingRepository,
   ShiftReconciliationReader,
   ShiftReconciliationTotals,
+  CreditSalesReader,
+  CreditSaleRecord,
   StockMovementInput,
   StockMovementWriter,
   ShiftSummaryWriter,
@@ -297,5 +299,49 @@ export class DrizzleShiftSummaryWriter implements ShiftSummaryWriter {
   }
   async deleteForShift(shiftId: string): Promise<void> {
     await this.db.delete(schema.shiftSummaries).where(eq(schema.shiftSummaries.shiftId, shiftId));
+  }
+}
+
+// ---------------- Credit Sales ----------------
+export class DrizzleCreditSalesReader implements CreditSalesReader {
+  constructor(private readonly db: DbClient) {}
+
+  async listByShift(shiftId: string): Promise<CreditSaleRecord[]> {
+    const rows = await this.db
+      .select({
+        ct: schema.customerTransactions,
+        customerName: schema.customers.name,
+        productName: schema.products.name,
+        productCode: schema.products.code,
+        registrationNumber: schema.customerVehicles.registrationNumber,
+      })
+      .from(schema.customerTransactions)
+      .leftJoin(schema.customers, eq(schema.customers.id, schema.customerTransactions.customerId))
+      .leftJoin(schema.products, eq(schema.products.id, schema.customerTransactions.productId))
+      .leftJoin(schema.customerVehicles, eq(schema.customerVehicles.id, schema.customerTransactions.vehicleId))
+      .where(
+        and(
+          eq(schema.customerTransactions.shiftId, shiftId),
+          eq(schema.customerTransactions.transactionType, 'Credit Sale'),
+          eq(schema.customerTransactions.referenceType, 'CREDIT_SALE'),
+        ),
+      );
+
+    return rows.map((r) => ({
+      id: r.ct.id,
+      amount: Number(r.ct.amount),
+      quantity: r.ct.quantity != null ? Number(r.ct.quantity) : null,
+      unitPrice: r.ct.unitPrice != null ? Number(r.ct.unitPrice) : null,
+      notes: r.ct.notes ?? null,
+      duId: r.ct.duId ?? null,
+      attendantId: r.ct.attendantId ?? null,
+      customerId: r.ct.customerId,
+      vehicleId: r.ct.vehicleId ?? null,
+      productId: r.ct.productId ?? null,
+      customerName: r.customerName ?? 'Customer',
+      productName: r.productName ?? null,
+      productCode: r.productCode ?? null,
+      vehicleNumber: r.registrationNumber ?? null,
+    }));
   }
 }
