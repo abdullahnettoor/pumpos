@@ -13,6 +13,7 @@ import {
   InventoryList,
   ReportsOverview,
   FuelPricingPanel,
+  DesignSystem,
   CloudStationService, 
   queryKeys,
   setApiBaseUrl,
@@ -40,6 +41,17 @@ const environmentTag = (() => {
     if (hostname.includes('-preview.')) return 'Preview';
   }
   return null;
+})();
+
+// Local development only: the Design System reference tab is never shown in
+// deployed (dev/preview/prod) builds.
+const isLocalDev = (() => {
+  if (import.meta.env.DEV) return true;
+  if (typeof window !== 'undefined') {
+    const h = window.location.hostname;
+    return h === 'localhost' || h === '127.0.0.1';
+  }
+  return false;
 })();
 
 const App: React.FC = () => {
@@ -189,6 +201,10 @@ const App: React.FC = () => {
     : [
         { label: 'Onboarding Setup', path: '/onboarding', roles: ['Owner', 'Manager'] }
       ];
+
+  const navItemsWithDev = isLocalDev
+    ? [...navItems, { label: 'Design System', path: '/design-system' }]
+    : navItems;
 
   const renderContent = () => {
     // 1. If not logged in, render the Login screen
@@ -389,6 +405,8 @@ const App: React.FC = () => {
             userRole={userRole || 'Staff'}
           />
         );
+      case '/design-system':
+        return isLocalDev ? <DesignSystem /> : <div>Not found</div>;
       default:
         return <div>Not found</div>;
     }
@@ -418,7 +436,7 @@ const App: React.FC = () => {
 
   return (
     <AppShell
-      navItems={navItems}
+      navItems={navItemsWithDev}
       currentPath={currentPath}
       onNavigate={setCurrentPath}
       userRole={userRole || 'Staff'}

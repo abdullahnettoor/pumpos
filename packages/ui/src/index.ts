@@ -26,6 +26,7 @@ export {
 } from './services/reports/reportConfig.js';
 export { letterheadFromStation } from './services/reports/letterhead.js';
 export { LedgerView } from './components/ledger/LedgerView.js';
+export { DesignSystem } from './components/DesignSystem.js';
 
 // Data layer (TanStack Query) + shared primitives
 export * from './query/queryClient.js';
@@ -43,5 +44,7 @@ export type { ConfirmOptions } from './components/primitives/ConfirmDialog.js';
 export { ToastProvider, useToast } from './components/primitives/ToastProvider.js';
 export type { ToastApi, ToastVariant, ToastOptions } from './components/primitives/ToastProvider.js';
 export { Skeleton, SkeletonCard, SkeletonGrid } from './components/primitives/Skeleton.js';
+export { Field, TextInput, NumberInput, MoneyInput, Textarea, Select } from './components/primitives/Field.js';
+export type { FieldProps, TextInputProps, NumberInputProps, TextareaProps, SelectProps } from './components/primitives/Field.js';
 export { formatMoney, inr, formatQty } from './utils/format.js';
 

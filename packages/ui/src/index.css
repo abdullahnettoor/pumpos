@@ -334,6 +334,42 @@ a:focus-visible {
   margin-top: 4px;
 }
 
+/* Muted helper text under a field (the neutral counterpart to .field-error). */
+.field-hint {
+  display: block;
+  font-size: 11px;
+  color: var(--text-faint);
+  margin-top: 4px;
+}
+
+/* Required marker appended to a field label. */
+.field-required {
+  color: var(--state-danger-fg);
+  margin-left: 2px;
+}
+
+/* Invalid state for the canonical .input / .select / .textarea primitives. */
+.input-invalid,
+.input-invalid:focus {
+  border-color: var(--brand-danger);
+  box-shadow: 0 0 0 2px rgba(180, 74, 63, 0.15);
+}
+
+/* Disabled inputs read as inert without disappearing. */
+.input:disabled,
+.select:disabled,
+.textarea:disabled {
+  background-color: var(--bg-surface-alt);
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
+/* Right-aligned monospace figures for numeric / money inputs. */
+.input-numeric {
+  font-family: var(--font-mono);
+  text-align: right;
+}
+
 /* ==================== Table System ==================== */
 .dense-table {
   width: 100%;
