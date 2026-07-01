@@ -2,29 +2,25 @@ import React, { useEffect, useState } from 'react';
 import { CloudShiftService } from '../services/cloud.js';
 import { DailyDssrView } from './DailyDssrView.js';
 import { LoadingSpinner } from './LoadingSpinner.js';
-import { Tabs } from './primitives/Tabs.js';
 import { PageLayout } from './primitives/PageLayout.js';
 import { inr } from '../utils/format.js';
-import { Calendar, RefreshCw, Play, Zap, Layers } from 'lucide-react';
+import { Calendar, RefreshCw, Play, Zap } from 'lucide-react';
 
 const shiftService = new CloudShiftService();
-
-// Custom Reports is not built yet; gate the placeholder tab off until it ships.
-const SHOW_CUSTOM_REPORTS = false;
 
 interface ReportsOverviewProps {
   selectedStation: any | null;
   userRole: 'Owner' | 'Manager' | 'Accountant' | 'Staff';
 }
 
-type ReportsTab = 'daily-dssr' | 'custom-reports';
+type ReportsTab = 'daily-dssr';
 
 export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
   selectedStation,
 }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<ReportsTab>('daily-dssr');
+  const [activeTab] = useState<ReportsTab>('daily-dssr');
 
   // Daily DSSR states
   const [dailyDssrList, setDailyDssrList] = useState<any[]>([]);
@@ -104,7 +100,7 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
   return (
     <PageLayout
       title="Reports"
-      subtitle="Daily sales summaries and custom reporting. Per-shift summaries are in the Shift tab → History."
+      subtitle="Daily sales summaries. Per-shift summaries are in the Shift tab → History."
       actions={activeTab === 'daily-dssr' ? (
         <button
           className="btn btn-secondary btn-sm"
@@ -115,18 +111,6 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
           <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
           Refresh
         </button>
-      ) : undefined}
-      toolbar={SHOW_CUSTOM_REPORTS ? (
-        <Tabs
-          aria-label="Reports"
-          style={{ width: '100%' }}
-          activeId={activeTab}
-          onChange={(id) => setActiveTab(id as ReportsTab)}
-          tabs={[
-            { id: 'daily-dssr', label: 'Daily DSSR', icon: <Zap size={13} /> },
-            { id: 'custom-reports', label: 'Custom Reports', icon: <Layers size={13} /> },
-          ]}
-        />
       ) : undefined}
     >
 
@@ -328,39 +312,6 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
                 </div>
               </div>
             )}
-          </div>
-        </div>
-      )}
-
-      {/* Custom Reports Tab (placeholder) */}
-      {SHOW_CUSTOM_REPORTS && activeTab === 'custom-reports' && (
-        <div
-          className="card"
-          style={{
-            padding: '40px 24px',
-            textAlign: 'center',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: '12px',
-          }}
-        >
-          <Layers size={32} style={{ color: 'var(--text-faint)' }} />
-          <div>
-            <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-strong)' }}>
-              Custom Reports Coming Soon
-            </h3>
-            <p
-              style={{
-                fontSize: '13px',
-                color: 'var(--text-muted)',
-                marginTop: '4px',
-                maxWidth: '460px',
-              }}
-            >
-              Configurable date-range reports for sales, expenses, variance trends, customer
-              ledgers, fuel throughput, and GST exports.
-            </p>
           </div>
         </div>
       )}

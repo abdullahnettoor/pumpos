@@ -24,7 +24,7 @@ import type {
   PurchaseEntryFormValues,
   MerchandiseSaleEntryFormValues,
 } from '@pump/shared';
-import { FileText, User, Lock, AlertTriangle, Check, Fuel, Info, Play, CalendarRange, History, Clock3 } from 'lucide-react';
+import { FileText, User, Lock, AlertTriangle, Check, Fuel, Info, Play, History, Clock3 } from 'lucide-react';
 import { LoadingSpinner } from '../LoadingSpinner.js';
 
 const shiftService = new CloudShiftService();
@@ -59,7 +59,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   const [viewingShiftSummary, setViewingShiftSummary] = useState(false);
 
   // Shift Tab Sub-Navigation
-  const [shiftSubTab, setShiftSubTab] = useState<'today' | 'planning' | 'history'>('today');
+  const [shiftSubTab, setShiftSubTab] = useState<'today' | 'history'>('today');
   const [viewHistoryShiftId, setViewHistoryShiftId] = useState<string | null>(null);
 
   // Open Shift Form States
@@ -759,7 +759,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
       aria-label="Shift views"
       className="no-print"
       activeId={shiftSubTab}
-      onChange={(id) => setShiftSubTab(id as 'today' | 'planning' | 'history')}
+      onChange={(id) => setShiftSubTab(id as 'today' | 'history')}
       tabs={[
         {
           id: 'today',
@@ -782,7 +782,6 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
             </span>
           ) : undefined,
         },
-        { id: 'planning', label: 'Planning', icon: <CalendarRange size={13} /> },
         { id: 'history', label: 'History', icon: <History size={13} /> },
       ]}
     />
@@ -802,39 +801,6 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
           viewShiftId={viewHistoryShiftId}
           onClearViewShiftId={() => setViewHistoryShiftId(null)}
         />
-      </div>
-    );
-  }
-
-  // Sub-tab: Planning (placeholder)
-  if (shiftSubTab === 'planning') {
-    return (
-      <div
-        className="animate-fade-in"
-        style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontFamily: 'var(--font-sans)' }}
-      >
-        {renderShiftSubTabs()}
-        <div
-          className="card"
-          style={{
-            padding: '40px 24px',
-            textAlign: 'center',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: '12px',
-          }}
-        >
-          <CalendarRange size={32} style={{ color: 'var(--text-faint)' }} />
-          <div>
-            <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-strong)' }}>
-              Shift Planning Coming Soon
-            </h3>
-            <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px', maxWidth: '420px' }}>
-              Schedule upcoming shifts, assign attendant rosters and dispenser allocations, and pre-fill templates for the week ahead.
-            </p>
-          </div>
-        </div>
       </div>
     );
   }
