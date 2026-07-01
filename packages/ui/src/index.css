@@ -454,6 +454,37 @@ a:focus-visible {
   outline-offset: 2px;
 }
 
+/* ==================== Segmented Control ==================== */
+.segmented {
+  display: grid;
+  gap: 8px;
+}
+.segmented-item {
+  height: 36px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-default);
+  background-color: var(--bg-surface-alt);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-input);
+  cursor: pointer;
+  transition: background-color 0.1s, color 0.1s, border-color 0.1s;
+}
+.segmented--sm .segmented-item {
+  height: 32px;
+  font-size: 12px;
+}
+.segmented-item--active {
+  background-color: var(--brand-primary);
+  color: #fff;
+  border-color: transparent;
+}
+.segmented-item:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* ==================== Table System ==================== */
 .dense-table {
   width: 100%;

@@ -4,6 +4,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { merchandiseSaleEntryFormSchema, type MerchandiseSaleEntryFormValues } from '@pump/shared';
 import type { ShiftOption } from './ExpenseEntryForm.js';
 import { Field, TextInput, NumberInput, Select } from '../primitives/Field.js';
+import { Segmented } from '../primitives/Segmented.js';
+import { Combobox } from '../primitives/Combobox.js';
 import { inr, formatQty } from '../../utils/format.js';
 
 export interface MerchandiseSaleEntryFormProps {
@@ -65,6 +67,7 @@ export const MerchandiseSaleEntryForm: React.FC<MerchandiseSaleEntryFormProps> =
 
   const productId = watch('productId');
   const paymentMethod = watch('paymentMethod');
+  const customerId = watch('customerId');
   const qtyNum = Number(watch('quantity')) || 0;
   const priceNum = Number(watch('unitPrice')) || 0;
   const total = qtyNum * priceNum;
@@ -72,8 +75,6 @@ export const MerchandiseSaleEntryForm: React.FC<MerchandiseSaleEntryFormProps> =
   const selected = products.find((p) => p.id === productId);
   const availableStock = stockByProduct && productId ? stockByProduct[productId] : undefined;
   const oversell = availableStock != null && qtyNum > availableStock;
-
-  const productReg = register('productId');
 
   return (
     <form onSubmit={handleSubmit((values) => onSubmit(values))} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -105,20 +106,23 @@ export const MerchandiseSaleEntryForm: React.FC<MerchandiseSaleEntryFormProps> =
             No non-fuel products found. Add merchandise products in Station Overview → Products first.
           </div>
         ) : (
-          <Select
-            disabled={submitting}
-            invalid={!!errors.productId}
-            {...productReg}
-            onChange={(e) => {
-              productReg.onChange(e);
-              const p = products.find((x) => x.id === e.target.value);
+          <Combobox
+            options={products.map((p) => ({
+              value: p.id,
+              label: `${p.name}${p.brand ? ` · ${p.brand}` : ''} (${p.code})`,
+              sublabel: p.unit ? String(p.unit) : undefined,
+            }))}
+            value={productId ?? ''}
+            onChange={(v) => {
+              setValue('productId', v, { shouldValidate: true });
+              const p = products.find((x) => x.id === v);
               setValue('unitPrice', (p?.sellingPrice != null ? Number(p.sellingPrice) : undefined) as unknown as number);
             }}
-          >
-            {products.map((p) => (
-              <option key={p.id} value={p.id}>{p.name}{p.brand ? ` · ${p.brand}` : ''} ({p.code}){p.unit ? ` · ${p.unit}` : ''}</option>
-            ))}
-          </Select>
+            placeholder="Select product…"
+            searchPlaceholder="Search products…"
+            invalid={!!errors.productId}
+            disabled={submitting}
+          />
         )}
       </Field>
 
@@ -136,38 +140,36 @@ export const MerchandiseSaleEntryForm: React.FC<MerchandiseSaleEntryFormProps> =
       </div>
 
       <Field label="Payment Method">
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '8px' }}>
-          {(['Cash', 'Card', 'UPI', 'Credit'] as const).map((m) => (
-            <button
-              key={m}
-              type="button"
-              onClick={() => setValue('paymentMethod', m, { shouldValidate: true })}
-              disabled={submitting}
-              style={{
-                height: '36px',
-                fontSize: '12px',
-                fontWeight: 600,
-                backgroundColor: paymentMethod === m ? 'var(--brand-primary)' : 'var(--bg-surface-alt)',
-                color: paymentMethod === m ? 'white' : 'var(--text-default)',
-                border: paymentMethod === m ? 'none' : '1px solid var(--border-strong)',
-                borderRadius: 'var(--radius-input)',
-                cursor: 'pointer',
-              }}
-            >
-              {m}
-            </button>
-          ))}
-        </div>
+        <Segmented
+          options={[
+            { value: 'Cash', label: 'Cash' },
+            { value: 'Card', label: 'Card' },
+            { value: 'UPI', label: 'UPI' },
+            { value: 'Credit', label: 'Credit' },
+          ]}
+          value={paymentMethod}
+          onChange={(v) => setValue('paymentMethod', v as typeof paymentMethod, { shouldValidate: true })}
+          disabled={submitting}
+          aria-label="Payment Method"
+        />
       </Field>
 
       <Field
         label={isCredit ? 'Customer Account (Required for Credit)' : 'Customer Account (Optional)'}
         error={errors.customerId?.message}
       >
-        <Select disabled={submitting} invalid={!!errors.customerId} {...register('customerId')}>
-          <option value="">-- Walk-in / Cash Customer --</option>
-          {customers.map((c) => <option key={c.id} value={c.id}>{c.name} ({c.customerType})</option>)}
-        </Select>
+        <Combobox
+          options={[
+            { value: '', label: '-- Walk-in / Cash Customer --' },
+            ...customers.map((c) => ({ value: c.id, label: `${c.name} (${c.customerType})` })),
+          ]}
+          value={customerId ?? ''}
+          onChange={(v) => setValue('customerId', v, { shouldValidate: true })}
+          placeholder="Walk-in / Cash Customer"
+          searchPlaceholder="Search customers…"
+          invalid={!!errors.customerId}
+          disabled={submitting}
+        />
       </Field>
 
       <Field label="Notes">

@@ -3,6 +3,8 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { collectionEntryFormSchema, type CollectionEntryFormValues } from '@pump/shared';
 import { Field, TextInput, NumberInput, Select, DateField } from '../primitives/Field.js';
+import { Segmented } from '../primitives/Segmented.js';
+import { Combobox } from '../primitives/Combobox.js';
 
 export interface ShiftOption {
   id: string;
@@ -78,6 +80,7 @@ export const CollectionEntryForm: React.FC<CollectionEntryFormProps> = ({
   }, [serializedDefaults]);
 
   const paymentMethod = watch('paymentMethod');
+  const customerId = watch('customerId');
 
   return (
     <form onSubmit={handleSubmit((values) => onSubmit(values))} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -108,33 +111,18 @@ export const CollectionEntryForm: React.FC<CollectionEntryFormProps> = ({
 
       <Field label={paymentMethodLabel}>
         {usePaymentMethodButtons ? (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '8px' }}>
-            {([
+          <Segmented
+            options={[
               { value: 'Cash', label: 'Cash' },
               { value: 'Card', label: 'Card' },
               { value: 'UPI', label: 'UPI' },
               { value: 'BankTransfer', label: 'Bank' },
-            ] as const).map(({ value, label }) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() => setValue('paymentMethod', value, { shouldValidate: true })}
-                disabled={submitting}
-                style={{
-                  height: '36px',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  backgroundColor: paymentMethod === value ? 'var(--brand-primary)' : 'var(--bg-surface-alt)',
-                  color: paymentMethod === value ? 'white' : 'var(--text-default)',
-                  border: paymentMethod === value ? 'none' : '1px solid var(--border-strong)',
-                  borderRadius: 'var(--radius-input)',
-                  cursor: 'pointer',
-                }}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+            ]}
+            value={paymentMethod}
+            onChange={(v) => setValue('paymentMethod', v as typeof paymentMethod, { shouldValidate: true })}
+            disabled={submitting}
+            aria-label={paymentMethodLabel}
+          />
         ) : (
           <Select disabled={submitting} {...register('paymentMethod')}>
             <option value="Cash">Cash</option>
@@ -146,14 +134,20 @@ export const CollectionEntryForm: React.FC<CollectionEntryFormProps> = ({
       </Field>
 
       <Field label={customerLabel}>
-        <Select disabled={submitting} {...register('customerId')}>
-          <option value="">{walkInOptionLabel}</option>
-          {customers.map((customer) => (
-            <option key={customer.id} value={customer.id}>
-              {customerOptionLabel ? customerOptionLabel(customer) : customer.name}
-            </option>
-          ))}
-        </Select>
+        <Combobox
+          options={[
+            { value: '', label: walkInOptionLabel },
+            ...customers.map((customer) => ({
+              value: customer.id,
+              label: customerOptionLabel ? customerOptionLabel(customer) : customer.name,
+            })),
+          ]}
+          value={customerId ?? ''}
+          onChange={(v) => setValue('customerId', v, { shouldValidate: true })}
+          placeholder={walkInOptionLabel}
+          searchPlaceholder="Search customers…"
+          disabled={submitting}
+        />
       </Field>
 
       <Field label={amountLabel} error={errors.amount?.message}>

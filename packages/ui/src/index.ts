@@ -52,5 +52,9 @@ export { Tooltip } from './components/primitives/Tooltip.js';
 export type { TooltipProps } from './components/primitives/Tooltip.js';
 export { Menu, Popover } from './components/primitives/Menu.js';
 export type { MenuProps, MenuItem, PopoverProps } from './components/primitives/Menu.js';
+export { Segmented } from './components/primitives/Segmented.js';
+export type { SegmentedProps, SegmentedOption } from './components/primitives/Segmented.js';
+export { Combobox } from './components/primitives/Combobox.js';
+export type { ComboboxProps, ComboboxOption } from './components/primitives/Combobox.js';
 export { formatMoney, inr, formatQty } from './utils/format.js';
 

@@ -9,6 +9,8 @@ import { useToast } from './primitives/ToastProvider.js';
 import { useConfirm } from './primitives/ConfirmDialog.js';
 import { Field, TextInput, NumberInput, MoneyInput, Textarea, Select, DateField } from './primitives/Field.js';
 import { Checkbox, Switch } from './primitives/Toggle.js';
+import { Segmented } from './primitives/Segmented.js';
+import { Combobox } from './primitives/Combobox.js';
 import { Tooltip } from './primitives/Tooltip.js';
 import { Menu, Popover } from './primitives/Menu.js';
 import { Drawer } from './Drawer.js';
@@ -269,7 +271,19 @@ const ButtonsPanel: React.FC = () => {
   );
 };
 
-const InputsPanel: React.FC = () => (
+const COMBO_OPTIONS = [
+  { value: '', label: 'Walk-in / Not linked' },
+  { value: 'c1', label: 'Sri Balaji Transports', sublabel: 'Fleet · ₹12,400 due' },
+  { value: 'c2', label: 'Anand Logistics', sublabel: 'Credit · ₹0 due' },
+  { value: 'c3', label: 'Kaveri Travels', sublabel: 'Fleet · ₹3,150 due' },
+  { value: 'c4', label: 'RTC Depot 4', sublabel: 'Credit · ₹88,000 due' },
+  { value: 'c5', label: 'Walk-in — Ramesh', sublabel: 'Regular' },
+];
+
+const InputsPanel: React.FC = () => {
+  const [customer, setCustomer] = useState('c1');
+  const [method, setMethod] = useState('Cash');
+  return (
   <div>
     <Section title="Form primitives (recommended)" description="The canonical building blocks: a Field wrapper (label · required marker · hint / error) plus ref-forwarding TextInput, NumberInput, MoneyInput, Select and Textarea. They drop straight into React Hook Form's register and give every form an identical look, focus ring, invalid state and disabled treatment. Prefer these over inline-styled inputs.">
       <Card style={{ maxWidth: 460 }}>
@@ -313,6 +327,32 @@ const InputsPanel: React.FC = () => (
       </Card>
     </Section>
 
+    <Section title="Searchable select (Combobox)" description="For long dynamic lists — customers, products, suppliers — where a native select has no type-ahead. Keyboard: ↑/↓ move, Enter picks, Esc closes. Use a native Select for short fixed lists (payment method, status).">
+      <Card style={{ maxWidth: 460 }}>
+        <Field label="Customer account" hint={`Selected: ${COMBO_OPTIONS.find((o) => o.value === customer)?.label ?? '—'}`}>
+          <Combobox options={COMBO_OPTIONS} value={customer} onChange={setCustomer} placeholder="Select customer…" searchPlaceholder="Search customers…" />
+        </Field>
+      </Card>
+    </Section>
+
+    <Section title="Segmented control" description="A compact button group for a small fixed set of options (payment method, filters, view toggles). Replaces the hand-rolled inline button grids. Controlled; wire into RHF with a Controller.">
+      <Card style={{ maxWidth: 460 }}>
+        <Field label={`Payment method — ${method}`}>
+          <Segmented
+            options={[
+              { value: 'Cash', label: 'Cash' },
+              { value: 'Card', label: 'Card' },
+              { value: 'UPI', label: 'UPI' },
+              { value: 'Credit', label: 'Credit' },
+            ]}
+            value={method}
+            onChange={setMethod}
+            aria-label="Payment method"
+          />
+        </Field>
+      </Card>
+    </Section>
+
     <Section title="Selection controls" description="Checkbox for multi-select / form booleans that submit; Switch for instant on/off settings. Both wrap a native input (brand-tinted / visually-hidden) so they stay keyboard-accessible and RHF-compatible.">
       <Card>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', maxWidth: 360 }}>
@@ -346,7 +386,8 @@ const InputsPanel: React.FC = () => (
       </Card>
     </Section>
   </div>
-);
+  );
+};
 
 const ComponentsPanel: React.FC = () => {
   const [tab, setTab] = useState('overview');

@@ -4,6 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { purchaseEntryFormSchema, type PurchaseEntryFormValues } from '@pump/shared';
 import { inr } from '../../utils/format.js';
 import { Field, TextInput, NumberInput, Select, DateField } from '../primitives/Field.js';
+import { Combobox } from '../primitives/Combobox.js';
 
 export interface ShiftOption {
   id: string;
@@ -207,13 +208,19 @@ export const PurchaseEntryForm: React.FC<PurchaseEntryFormProps> = ({
         {suppliers.length === 0 ? (
           <div style={{ fontSize: '12px', color: 'var(--brand-warning)', padding: '6px 0' }}>{supplierEmptyMessage}</div>
         ) : (
-          <Select disabled={submitting} invalid={!!errors.supplierId} {...register('supplierId')}>
-            {suppliers.map((supplier) => (
-              <option key={supplier.id} value={supplier.id}>
-                {supplier.name} {supplier.metadata?.gstin ? `(${supplier.metadata.gstin})` : ''}
-              </option>
-            ))}
-          </Select>
+          <Combobox
+            options={suppliers.map((supplier) => ({
+              value: supplier.id,
+              label: supplier.name,
+              sublabel: supplier.metadata?.gstin ? String(supplier.metadata.gstin) : undefined,
+            }))}
+            value={watch('supplierId') ?? ''}
+            onChange={(v) => setValue('supplierId', v, { shouldValidate: true })}
+            placeholder="Select supplier…"
+            searchPlaceholder="Search suppliers…"
+            invalid={!!errors.supplierId}
+            disabled={submitting}
+          />
         )}
       </Field>
 
@@ -249,12 +256,21 @@ export const PurchaseEntryForm: React.FC<PurchaseEntryFormProps> = ({
               <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
                 <div style={{ flex: 2, display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 }}>
                   <label style={labelStyle}>Product</label>
-                  <Select disabled={submitting} invalid={!!errors.lines?.[i]?.productId} {...register(`lines.${i}.productId` as const)}>
-                    <option value="">-- Select --</option>
-                    {products.map((p) => (
-                      <option key={p.id} value={p.id}>{p.name}{p.brand ? ` · ${p.brand}` : ''}{p.code ? ` (${p.code})` : ''}</option>
-                    ))}
-                  </Select>
+                  <Combobox
+                    options={[
+                      { value: '', label: '-- Select --' },
+                      ...products.map((p) => ({
+                        value: p.id,
+                        label: `${p.name}${p.brand ? ` · ${p.brand}` : ''}${p.code ? ` (${p.code})` : ''}`,
+                      })),
+                    ]}
+                    value={line?.productId ?? ''}
+                    onChange={(v) => setValue(`lines.${i}.productId` as const, v, { shouldValidate: true })}
+                    placeholder="Select product…"
+                    searchPlaceholder="Search products…"
+                    invalid={!!errors.lines?.[i]?.productId}
+                    disabled={submitting}
+                  />
                   {errors.lines?.[i]?.productId && <span style={errorTextStyle}>{errors.lines[i]?.productId?.message}</span>}
                 </div>
                 {fields.length > 1 && (
