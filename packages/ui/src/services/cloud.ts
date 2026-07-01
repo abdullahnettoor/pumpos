@@ -51,23 +51,51 @@ function getHeaders() {
   };
 }
 
-async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const url = `${apiBase}${path}`;
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      ...getHeaders(),
-      ...options.headers,
-    },
-  });
+type ApiError = Error & { code?: string; details?: Record<string, any>; status?: number };
 
-  const res = await response.json() as any;
+/**
+ * Shared typed API client. Unwraps the `{ success, data }` envelope and throws a
+ * typed `ApiError` (with `code`/`details`/`status`) on failures, mapping network
+ * and non-JSON failures to friendly messages. Pass an `idempotencyKey` on a
+ * mutation to have the server de-duplicate retries / offline replays of the same
+ * logical action (its idempotency middleware caches the first response). Keys are
+ * opt-in — reuse the SAME key across explicit retries of one action, or the
+ * server will treat each call as distinct.
+ */
+async function request<T>(
+  path: string,
+  options: RequestInit = {},
+  extras: { idempotencyKey?: string } = {},
+): Promise<T> {
+  const url = `${apiBase}${path}`;
+  const headers: Record<string, string> = { ...getHeaders(), ...(options.headers as Record<string, string> | undefined) };
+  if (extras.idempotencyKey && !headers['Idempotency-Key'] && !headers['idempotency-key']) {
+    headers['Idempotency-Key'] = extras.idempotencyKey;
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(url, { ...options, headers });
+  } catch {
+    const error = new Error('Network error — please check your connection and try again.') as ApiError;
+    error.code = 'NETWORK';
+    throw error;
+  }
+
+  let res: any;
+  try {
+    res = await response.json();
+  } catch {
+    const error = new Error(
+      response.ok ? 'Unexpected empty response from the server.' : `Request failed (${response.status}).`,
+    ) as ApiError;
+    error.code = 'BAD_RESPONSE';
+    error.status = response.status;
+    throw error;
+  }
+
   if (!res.success) {
-    const error = new Error(res.error?.message || 'API request failed') as Error & {
-      code?: string;
-      details?: Record<string, any>;
-      status?: number;
-    };
+    const error = new Error(res.error?.message || 'API request failed') as ApiError;
     error.code = res.error?.code;
     error.details = res.error?.details;
     error.status = response.status;

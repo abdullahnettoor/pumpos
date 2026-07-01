@@ -50,7 +50,12 @@
   native `alert`/`confirm` left in the UI — U3 dialog/notification cleanup complete.
 
 ## U4 — Typed API client
-- Replace ad-hoc `request()` calls with a typed client sharing schemas.
+- Shared `request()` in `cloud.ts` hardened: unwraps `{success,data}`, throws typed `ApiError`
+  (`code`/`details`/`status`), and now maps **network** + **non-JSON** failures to friendly messages (so the toast
+  layer shows something meaningful instead of a cryptic error). Added opt-in **`Idempotency-Key`** plumbing
+  (`request(path, opts, { idempotencyKey })`) — the server already honors it (idempotency middleware); CORS now allows
+  the `Idempotency-Key` header + `PATCH`. Per-action key generation/reuse (double-submit + offline replay dedup) lands
+  with Phase O's offline queue. Service methods keep their typed signatures over the shared client.
 
 ## U5 — Performance ✅ (PDF lazy-load done)
 - Report config/labels/letterhead extracted to plain modules (`reportConfig.ts`, `letterhead.ts`); the react-pdf

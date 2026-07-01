@@ -54,8 +54,8 @@ function getDbFromHyperdrive(env: Bindings): DbClient {
 // Enable CORS
 app.use('*', cors({
   origin: '*',
-  allowHeaders: ['Content-Type', 'Authorization'],
-  allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key'],
+  allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   exposeHeaders: ['Content-Length', 'Server-Timing'],
   maxAge: 600,
 }));
