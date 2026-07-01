@@ -44,7 +44,13 @@ export type { ConfirmOptions } from './components/primitives/ConfirmDialog.js';
 export { ToastProvider, useToast } from './components/primitives/ToastProvider.js';
 export type { ToastApi, ToastVariant, ToastOptions } from './components/primitives/ToastProvider.js';
 export { Skeleton, SkeletonCard, SkeletonGrid } from './components/primitives/Skeleton.js';
-export { Field, TextInput, NumberInput, MoneyInput, Textarea, Select } from './components/primitives/Field.js';
+export { Field, TextInput, NumberInput, MoneyInput, Textarea, Select, DateField } from './components/primitives/Field.js';
 export type { FieldProps, TextInputProps, NumberInputProps, TextareaProps, SelectProps } from './components/primitives/Field.js';
+export { Checkbox, Switch } from './components/primitives/Toggle.js';
+export type { CheckboxProps, SwitchProps } from './components/primitives/Toggle.js';
+export { Tooltip } from './components/primitives/Tooltip.js';
+export type { TooltipProps } from './components/primitives/Tooltip.js';
+export { Menu, Popover } from './components/primitives/Menu.js';
+export type { MenuProps, MenuItem, PopoverProps } from './components/primitives/Menu.js';
 export { formatMoney, inr, formatQty } from './utils/format.js';
 

@@ -7,7 +7,10 @@ import { DataTable } from './primitives/DataTable.js';
 import { SkeletonGrid } from './primitives/Skeleton.js';
 import { useToast } from './primitives/ToastProvider.js';
 import { useConfirm } from './primitives/ConfirmDialog.js';
-import { Field, TextInput, NumberInput, MoneyInput, Textarea, Select } from './primitives/Field.js';
+import { Field, TextInput, NumberInput, MoneyInput, Textarea, Select, DateField } from './primitives/Field.js';
+import { Checkbox, Switch } from './primitives/Toggle.js';
+import { Tooltip } from './primitives/Tooltip.js';
+import { Menu, Popover } from './primitives/Menu.js';
 import { Drawer } from './Drawer.js';
 import { StatusBadge } from './StatusBadge.js';
 import { inr, formatMoney, formatQty } from '../utils/format.js';
@@ -279,6 +282,9 @@ const InputsPanel: React.FC = () => (
         <Field label="Litres dispensed">
           <NumberInput defaultValue={1240.5} />
         </Field>
+        <Field label="Business date">
+          <DateField defaultValue="2026-07-01" />
+        </Field>
         <Field label="Fuel type">
           <Select>
             <option>Petrol</option>
@@ -304,6 +310,21 @@ const InputsPanel: React.FC = () => (
   <MoneyInput {...register('openingCash')} invalid={!!errors.openingCash} />
 </Field>`}
         </pre>
+      </Card>
+    </Section>
+
+    <Section title="Selection controls" description="Checkbox for multi-select / form booleans that submit; Switch for instant on/off settings. Both wrap a native input (brand-tinted / visually-hidden) so they stay keyboard-accessible and RHF-compatible.">
+      <Card>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', maxWidth: 360 }}>
+          <Checkbox defaultChecked label="Tax-inclusive pricing" description="Fuel is recorded inclusive of GST." />
+          <Checkbox label="Send daily DSSR email" />
+          <Checkbox disabled label="Locked option (disabled)" />
+          <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: 'var(--space-3)', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+            <Switch defaultChecked label="Station open" description="Toggle accepts shifts today." />
+            <Switch label="Maintenance mode" />
+            <Switch disabled label="Disabled switch" />
+          </div>
+        </div>
       </Card>
     </Section>
 
@@ -418,6 +439,45 @@ const OverlaysPanel: React.FC = () => {
           </p>
         </div>
       </Drawer>
+
+      <Section title="Dropdown menu" description="A trigger button plus a list of actions. Closes on select, outside click or Esc. Use for row / entity actions instead of crowding a row with buttons.">
+        <Card>
+          <Menu
+            trigger={<>Actions ▾</>}
+            items={[
+              { label: 'View details', onSelect: () => {} },
+              { label: 'Edit', onSelect: () => {} },
+              { label: 'Archive', onSelect: () => {} },
+              { label: 'Delete', danger: true, onSelect: () => {} },
+            ]}
+          />
+        </Card>
+      </Section>
+
+      <Section title="Popover" description="A floating panel anchored to a trigger for richer content — filter forms, column pickers, quick summaries. Closes on outside click or Esc.">
+        <Card>
+          <Popover trigger={<>Filters</>}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', minWidth: 200, padding: 'var(--space-2)' }}>
+              <Field label="From" style={{ marginBottom: 0 }}><DateField defaultValue="2026-06-01" /></Field>
+              <Field label="To" style={{ marginBottom: 0 }}><DateField defaultValue="2026-06-30" /></Field>
+              <Checkbox label="Only with variance" />
+            </div>
+          </Popover>
+        </Card>
+      </Section>
+
+      <Section title="Tooltip" description="Hover / focus bubble for hints and truncated values. Wire meaningful hints through this instead of bare title attributes.">
+        <Card>
+          <div style={{ display: 'flex', gap: 'var(--space-4)', alignItems: 'center', flexWrap: 'wrap' }}>
+            <Tooltip content="Reconciles at shift close">
+              <button className="btn btn-secondary btn-sm">Hover me</button>
+            </Tooltip>
+            <Tooltip content="Expected − Actual drawer cash" placement="bottom">
+              <span style={{ fontSize: '13px', color: 'var(--brand-secondary)', textDecoration: 'underline dotted', cursor: 'help' }}>What is variance?</span>
+            </Tooltip>
+          </div>
+        </Card>
+      </Section>
     </div>
   );
 };

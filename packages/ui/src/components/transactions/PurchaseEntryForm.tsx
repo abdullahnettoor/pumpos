@@ -3,6 +3,7 @@ import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { purchaseEntryFormSchema, type PurchaseEntryFormValues } from '@pump/shared';
 import { inr } from '../../utils/format.js';
+import { Field, TextInput, NumberInput, Select, DateField } from '../primitives/Field.js';
 
 export interface ShiftOption {
   id: string;
@@ -33,12 +34,6 @@ export interface PurchaseEntryFormProps {
   dateLabel?: string;
 }
 
-const fieldStyle: React.CSSProperties = {
-  height: '32px',
-  borderRadius: 'var(--radius-input)',
-  border: '1px solid var(--border-strong)',
-  padding: '0 8px',
-};
 const labelStyle: React.CSSProperties = { fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 };
 const errorTextStyle: React.CSSProperties = { fontSize: '11px', color: 'var(--brand-danger)' };
 
@@ -190,41 +185,37 @@ export const PurchaseEntryForm: React.FC<PurchaseEntryFormProps> = ({
       style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}
     >
       {showDateField && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          <label style={labelStyle}>{dateLabel}</label>
-          <input type="date" disabled={submitting} style={fieldStyle} {...register('transactionDate')} />
-        </div>
+        <Field label={dateLabel}>
+          <DateField disabled={submitting} {...register('transactionDate')} />
+        </Field>
       )}
       {hasMultipleShiftOptions ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          <label style={labelStyle}>Target Shift</label>
-          <select disabled={submitting} style={fieldStyle} {...register('targetShiftId')}>
+        <Field label="Target Shift">
+          <Select disabled={submitting} {...register('targetShiftId')}>
             {shiftOptions.map((option) => (
               <option key={option.id} value={option.id}>{option.label}</option>
             ))}
-          </select>
-        </div>
+          </Select>
+        </Field>
       ) : showShiftHintWhenSingle && shiftOptions.length === 1 ? (
         <div style={{ backgroundColor: 'var(--state-info-bg)', color: 'var(--state-info-fg)', padding: '10px 12px', borderRadius: 'var(--radius-input)', fontSize: '12px' }}>
           Logging to shift: <strong>{shiftOptions[0].label}</strong>
         </div>
       ) : null}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        <label style={labelStyle}>Supplier</label>
+      <Field label="Supplier" error={errors.supplierId?.message}>
         {suppliers.length === 0 ? (
           <div style={{ fontSize: '12px', color: 'var(--brand-warning)', padding: '6px 0' }}>{supplierEmptyMessage}</div>
         ) : (
-          <select disabled={submitting} style={fieldStyle} {...register('supplierId')}>
+          <Select disabled={submitting} invalid={!!errors.supplierId} {...register('supplierId')}>
             {suppliers.map((supplier) => (
               <option key={supplier.id} value={supplier.id}>
                 {supplier.name} {supplier.metadata?.gstin ? `(${supplier.metadata.gstin})` : ''}
               </option>
             ))}
-          </select>
+          </Select>
         )}
-        {errors.supplierId && <span style={errorTextStyle}>{errors.supplierId.message}</span>}
-      </div>
+      </Field>
 
       {/* Line items */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -258,12 +249,12 @@ export const PurchaseEntryForm: React.FC<PurchaseEntryFormProps> = ({
               <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
                 <div style={{ flex: 2, display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 }}>
                   <label style={labelStyle}>Product</label>
-                  <select disabled={submitting} style={fieldStyle} {...register(`lines.${i}.productId` as const)}>
+                  <Select disabled={submitting} invalid={!!errors.lines?.[i]?.productId} {...register(`lines.${i}.productId` as const)}>
                     <option value="">-- Select --</option>
                     {products.map((p) => (
                       <option key={p.id} value={p.id}>{p.name}{p.brand ? ` · ${p.brand}` : ''}{p.code ? ` (${p.code})` : ''}</option>
                     ))}
-                  </select>
+                  </Select>
                   {errors.lines?.[i]?.productId && <span style={errorTextStyle}>{errors.lines[i]?.productId?.message}</span>}
                 </div>
                 {fields.length > 1 && (
@@ -276,13 +267,13 @@ export const PurchaseEntryForm: React.FC<PurchaseEntryFormProps> = ({
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                   <label style={labelStyle}>{`Quantity (${unitLabel})`}</label>
-                  <input type="number" step="any" disabled={submitting} style={fieldStyle} {...register(`lines.${i}.quantity` as const)} />
+                  <NumberInput disabled={submitting} invalid={!!errors.lines?.[i]?.quantity} {...register(`lines.${i}.quantity` as const)} />
                   {errors.lines?.[i]?.quantity && <span style={errorTextStyle}>{errors.lines[i]?.quantity?.message}</span>}
                 </div>
                 {isFuel ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                     <label style={labelStyle}>Total Amount (₹)</label>
-                    <input type="number" step="any" disabled={submitting} style={fieldStyle}
+                    <NumberInput disabled={submitting}
                       value={fuelTotal}
                       onChange={(e) => setLineTotals((prev) => ({ ...prev, [field.id]: e.target.value }))} />
                     {errors.lines?.[i]?.unitPrice && !fuelTotal && <span style={errorTextStyle}>Total is required</span>}
@@ -290,7 +281,7 @@ export const PurchaseEntryForm: React.FC<PurchaseEntryFormProps> = ({
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                     <label style={labelStyle}>Rate (₹, pre-tax)</label>
-                    <input type="number" step="any" disabled={submitting} style={fieldStyle} {...register(`lines.${i}.unitPrice` as const)} />
+                    <NumberInput disabled={submitting} invalid={!!errors.lines?.[i]?.unitPrice} {...register(`lines.${i}.unitPrice` as const)} />
                     {errors.lines?.[i]?.unitPrice && <span style={errorTextStyle}>{errors.lines[i]?.unitPrice?.message}</span>}
                   </div>
                 )}
@@ -347,15 +338,13 @@ export const PurchaseEntryForm: React.FC<PurchaseEntryFormProps> = ({
         </div>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        <label style={labelStyle}>{invoiceLabel}</label>
-        <input type="text" placeholder={invoicePlaceholder} disabled={submitting} style={fieldStyle} {...register('invoiceNumber')} />
-      </div>
+      <Field label={invoiceLabel}>
+        <TextInput placeholder={invoicePlaceholder} disabled={submitting} {...register('invoiceNumber')} />
+      </Field>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        <label style={labelStyle}>Notes</label>
-        <input type="text" placeholder={notesPlaceholder} disabled={submitting} style={fieldStyle} {...register('notes')} />
-      </div>
+      <Field label="Notes">
+        <TextInput placeholder={notesPlaceholder} disabled={submitting} {...register('notes')} />
+      </Field>
 
       {(allocError || error) && (
         <div style={{ backgroundColor: 'var(--state-danger-bg)', color: 'var(--state-danger-fg)', padding: '8px 12px', borderRadius: 'var(--radius-input)', fontSize: '12px', border: '1px solid var(--border-soft)' }}>

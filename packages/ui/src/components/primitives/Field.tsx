@@ -52,6 +52,18 @@ export const TextInput = React.forwardRef<HTMLInputElement, TextInputProps>(
 );
 TextInput.displayName = 'TextInput';
 
+/**
+ * Native date input styled as the canonical `.input`. Keeps the OS date picker
+ * (accessible, locale-aware) while matching every other field. Use instead of
+ * bespoke `type="date"` inputs.
+ */
+export const DateField = React.forwardRef<HTMLInputElement, TextInputProps>(
+  ({ invalid, className, ...props }, ref) => (
+    <input ref={ref} type="date" className={cx('input', invalid && 'input-invalid', className)} {...props} />
+  ),
+);
+DateField.displayName = 'DateField';
+
 export interface NumberInputProps extends TextInputProps {}
 
 export const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(

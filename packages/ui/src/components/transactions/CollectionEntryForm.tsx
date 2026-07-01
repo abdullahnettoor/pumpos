@@ -2,12 +2,12 @@ import React, { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { collectionEntryFormSchema, type CollectionEntryFormValues } from '@pump/shared';
+import { Field, TextInput, NumberInput, Select, DateField } from '../primitives/Field.js';
 
 export interface ShiftOption {
   id: string;
   label: string;
 }
-
 export interface CollectionEntryFormProps {
   shiftOptions: ShiftOption[];
   customers: any[];
@@ -31,15 +31,6 @@ export interface CollectionEntryFormProps {
   showDateField?: boolean;
   dateLabel?: string;
 }
-
-const fieldStyle: React.CSSProperties = {
-  height: '32px',
-  borderRadius: 'var(--radius-input)',
-  border: '1px solid var(--border-strong)',
-  padding: '0 8px',
-};
-const labelStyle: React.CSSProperties = { fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 };
-const errorTextStyle: React.CSSProperties = { fontSize: '11px', color: 'var(--brand-danger)' };
 
 const EMPTY_DEFAULTS: CollectionEntryFormValues = {
   targetShiftId: '',
@@ -91,20 +82,18 @@ export const CollectionEntryForm: React.FC<CollectionEntryFormProps> = ({
   return (
     <form onSubmit={handleSubmit((values) => onSubmit(values))} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
       {showDateField && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          <label style={labelStyle}>{dateLabel}</label>
-          <input type="date" disabled={submitting} style={fieldStyle} {...register('transactionDate')} />
-        </div>
+        <Field label={dateLabel}>
+          <DateField disabled={submitting} {...register('transactionDate')} />
+        </Field>
       )}
       {hasMultipleShiftOptions ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          <label style={labelStyle}>Target Shift</label>
-          <select disabled={submitting} style={fieldStyle} {...register('targetShiftId')}>
+        <Field label="Target Shift">
+          <Select disabled={submitting} {...register('targetShiftId')}>
             {shiftOptions.map((option) => (
               <option key={option.id} value={option.id}>{option.label}</option>
             ))}
-          </select>
-        </div>
+          </Select>
+        </Field>
       ) : showShiftHintWhenSingle && shiftOptions.length === 1 ? (
         <div style={{
           backgroundColor: 'var(--state-info-bg)',
@@ -117,8 +106,7 @@ export const CollectionEntryForm: React.FC<CollectionEntryFormProps> = ({
         </div>
       ) : null}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        <label style={labelStyle}>{paymentMethodLabel}</label>
+      <Field label={paymentMethodLabel}>
         {usePaymentMethodButtons ? (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '8px' }}>
             {([
@@ -133,7 +121,7 @@ export const CollectionEntryForm: React.FC<CollectionEntryFormProps> = ({
                 onClick={() => setValue('paymentMethod', value, { shouldValidate: true })}
                 disabled={submitting}
                 style={{
-                  height: '32px',
+                  height: '36px',
                   fontSize: '12px',
                   fontWeight: 600,
                   backgroundColor: paymentMethod === value ? 'var(--brand-primary)' : 'var(--bg-surface-alt)',
@@ -148,37 +136,33 @@ export const CollectionEntryForm: React.FC<CollectionEntryFormProps> = ({
             ))}
           </div>
         ) : (
-          <select disabled={submitting} style={fieldStyle} {...register('paymentMethod')}>
+          <Select disabled={submitting} {...register('paymentMethod')}>
             <option value="Cash">Cash</option>
             <option value="Card">Card</option>
             <option value="UPI">UPI</option>
             <option value="BankTransfer">Bank</option>
-          </select>
+          </Select>
         )}
-      </div>
+      </Field>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        <label style={labelStyle}>{customerLabel}</label>
-        <select disabled={submitting} style={fieldStyle} {...register('customerId')}>
+      <Field label={customerLabel}>
+        <Select disabled={submitting} {...register('customerId')}>
           <option value="">{walkInOptionLabel}</option>
           {customers.map((customer) => (
             <option key={customer.id} value={customer.id}>
               {customerOptionLabel ? customerOptionLabel(customer) : customer.name}
             </option>
           ))}
-        </select>
-      </div>
+        </Select>
+      </Field>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        <label style={labelStyle}>{amountLabel}</label>
-        <input type="number" step="any" placeholder={amountPlaceholder} disabled={submitting} style={fieldStyle} {...register('amount')} />
-        {errors.amount && <span style={errorTextStyle}>{errors.amount.message}</span>}
-      </div>
+      <Field label={amountLabel} error={errors.amount?.message}>
+        <NumberInput placeholder={amountPlaceholder} disabled={submitting} invalid={!!errors.amount} {...register('amount')} />
+      </Field>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        <label style={labelStyle}>{notesLabel}</label>
-        <input type="text" placeholder={notesPlaceholder} disabled={submitting} style={fieldStyle} {...register('notes')} />
-      </div>
+      <Field label={notesLabel}>
+        <TextInput placeholder={notesPlaceholder} disabled={submitting} {...register('notes')} />
+      </Field>
 
       {error && (
         <div style={{

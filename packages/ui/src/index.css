@@ -370,6 +370,90 @@ a:focus-visible {
   text-align: right;
 }
 
+/* ==================== Checkbox & Switch ==================== */
+.pump-check {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-default);
+}
+.pump-check--disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.pump-check-input {
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+  accent-color: var(--brand-primary);
+  cursor: inherit;
+  flex-shrink: 0;
+}
+.pump-check-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.pump-check-label {
+  font-weight: 500;
+  color: var(--text-strong);
+}
+.pump-check-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.pump-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  cursor: pointer;
+}
+.pump-switch--disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.pump-switch-input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
+}
+.pump-switch-track {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: 34px;
+  height: 20px;
+  border-radius: 999px;
+  background-color: var(--border-strong);
+  transition: background-color 0.15s ease-in-out;
+  flex-shrink: 0;
+}
+.pump-switch-thumb {
+  position: absolute;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background-color: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  transition: transform 0.15s ease-in-out;
+}
+.pump-switch-input:checked + .pump-switch-track {
+  background-color: var(--brand-primary);
+}
+.pump-switch-input:checked + .pump-switch-track .pump-switch-thumb {
+  transform: translateX(14px);
+}
+.pump-switch-input:focus-visible + .pump-switch-track {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 2px;
+}
+
 /* ==================== Table System ==================== */
 .dense-table {
   width: 100%;

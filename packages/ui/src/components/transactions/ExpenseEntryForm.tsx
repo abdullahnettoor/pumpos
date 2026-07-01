@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { expenseEntryFormSchema, type ExpenseEntryFormValues } from '@pump/shared';
+import { Field, TextInput, NumberInput, Select, DateField } from '../primitives/Field.js';
 
 export interface ShiftOption {
   id: string;
@@ -28,15 +29,6 @@ export interface ExpenseEntryFormProps {
   showDateField?: boolean;
   dateLabel?: string;
 }
-
-const fieldStyle: React.CSSProperties = {
-  height: '32px',
-  borderRadius: 'var(--radius-input)',
-  border: '1px solid var(--border-strong)',
-  padding: '0 8px',
-};
-const labelStyle: React.CSSProperties = { fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 };
-const errorTextStyle: React.CSSProperties = { fontSize: '11px', color: 'var(--brand-danger)' };
 
 const EMPTY_DEFAULTS: ExpenseEntryFormValues = {
   targetShiftId: '',
@@ -81,20 +73,18 @@ export const ExpenseEntryForm: React.FC<ExpenseEntryFormProps> = ({
   return (
     <form onSubmit={handleSubmit((values) => onSubmit(values))} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
       {showDateField && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          <label style={labelStyle}>{dateLabel}</label>
-          <input type="date" disabled={submitting} style={fieldStyle} {...register('transactionDate')} />
-        </div>
+        <Field label={dateLabel}>
+          <DateField disabled={submitting} {...register('transactionDate')} />
+        </Field>
       )}
       {hasMultipleShiftOptions ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          <label style={labelStyle}>Target Shift</label>
-          <select disabled={submitting} style={fieldStyle} {...register('targetShiftId')}>
+        <Field label="Target Shift">
+          <Select disabled={submitting} {...register('targetShiftId')}>
             {shiftOptions.map((option) => (
               <option key={option.id} value={option.id}>{option.label}</option>
             ))}
-          </select>
-        </div>
+          </Select>
+        </Field>
       ) : showShiftHintWhenSingle && shiftOptions.length === 1 ? (
         <div style={{
           backgroundColor: 'var(--state-info-bg)',
@@ -107,32 +97,27 @@ export const ExpenseEntryForm: React.FC<ExpenseEntryFormProps> = ({
         </div>
       ) : null}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        <label style={labelStyle}>{categoryLabel}</label>
+      <Field label={categoryLabel} error={errors.categoryId?.message}>
         {categories.length === 0 ? (
           <div style={{ fontSize: '12px', color: 'var(--brand-warning)', padding: '6px 0' }}>
             {categoryEmptyMessage}
           </div>
         ) : (
-          <select disabled={submitting} style={fieldStyle} {...register('categoryId')}>
+          <Select disabled={submitting} invalid={!!errors.categoryId} {...register('categoryId')}>
             {categories.map((cat) => (
               <option key={cat.id} value={cat.id}>{cat.name}</option>
             ))}
-          </select>
+          </Select>
         )}
-        {errors.categoryId && <span style={errorTextStyle}>{errors.categoryId.message}</span>}
-      </div>
+      </Field>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        <label style={labelStyle}>{amountLabel}</label>
-        <input type="number" step="any" disabled={submitting} style={fieldStyle} {...register('amount')} />
-        {errors.amount && <span style={errorTextStyle}>{errors.amount.message}</span>}
-      </div>
+      <Field label={amountLabel} error={errors.amount?.message}>
+        <NumberInput disabled={submitting} invalid={!!errors.amount} {...register('amount')} />
+      </Field>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        <label style={labelStyle}>{descriptionLabel}</label>
-        <input type="text" placeholder={descriptionPlaceholder} disabled={submitting} style={fieldStyle} {...register('description')} />
-      </div>
+      <Field label={descriptionLabel}>
+        <TextInput placeholder={descriptionPlaceholder} disabled={submitting} {...register('description')} />
+      </Field>
 
       {error && (
         <div style={{

@@ -3,6 +3,8 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { merchandiseSaleEntryFormSchema, type MerchandiseSaleEntryFormValues } from '@pump/shared';
 import type { ShiftOption } from './ExpenseEntryForm.js';
+import { Field, TextInput, NumberInput, Select } from '../primitives/Field.js';
+import { inr, formatQty } from '../../utils/format.js';
 
 export interface MerchandiseSaleEntryFormProps {
   shiftOptions: ShiftOption[];
@@ -19,15 +21,6 @@ export interface MerchandiseSaleEntryFormProps {
   onCancel: () => void;
   onSubmit: (values: MerchandiseSaleEntryFormValues) => void | Promise<void>;
 }
-
-const inputStyle: React.CSSProperties = {
-  height: '32px',
-  borderRadius: 'var(--radius-input)',
-  border: '1px solid var(--border-strong)',
-  padding: '0 8px',
-};
-const labelStyle: React.CSSProperties = { fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 };
-const errorTextStyle: React.CSSProperties = { fontSize: '11px', color: 'var(--brand-danger)' };
 
 const EMPTY_DEFAULTS: MerchandiseSaleEntryFormValues = {
   targetShiftId: '',
@@ -91,33 +84,30 @@ export const MerchandiseSaleEntryForm: React.FC<MerchandiseSaleEntryFormProps> =
       )}
 
       {hasMultipleShiftOptions && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          <label style={labelStyle}>Target Shift</label>
-          <select disabled={submitting} style={inputStyle} {...register('targetShiftId')}>
+        <Field label="Target Shift">
+          <Select disabled={submitting} {...register('targetShiftId')}>
             {shiftOptions.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
-          </select>
-        </div>
+          </Select>
+        </Field>
       )}
 
       {attendants && attendants.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          <label style={labelStyle}>Sold by</label>
-          <select disabled={submitting} style={inputStyle} {...register('attendantId')}>
+        <Field label="Sold by">
+          <Select disabled={submitting} {...register('attendantId')}>
             {attendants.map((a) => <option key={a.userId} value={a.userId}>{a.userName}</option>)}
-          </select>
-        </div>
+          </Select>
+        </Field>
       )}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        <label style={labelStyle}>Product</label>
+      <Field label="Product" error={errors.productId?.message}>
         {products.length === 0 ? (
           <div style={{ fontSize: '12px', color: 'var(--brand-warning)', padding: '6px 0' }}>
             No non-fuel products found. Add merchandise products in Station Overview → Products first.
           </div>
         ) : (
-          <select
+          <Select
             disabled={submitting}
-            style={inputStyle}
+            invalid={!!errors.productId}
             {...productReg}
             onChange={(e) => {
               productReg.onChange(e);
@@ -128,31 +118,24 @@ export const MerchandiseSaleEntryForm: React.FC<MerchandiseSaleEntryFormProps> =
             {products.map((p) => (
               <option key={p.id} value={p.id}>{p.name}{p.brand ? ` · ${p.brand}` : ''} ({p.code}){p.unit ? ` · ${p.unit}` : ''}</option>
             ))}
-          </select>
+          </Select>
         )}
-        {errors.productId && <span style={errorTextStyle}>{errors.productId.message}</span>}
-      </div>
+      </Field>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          <label style={labelStyle}>Quantity{selected?.unit ? ` (${selected.unit})` : ''}</label>
-          <input type="number" step="any" disabled={submitting} style={{ ...inputStyle, fontFamily: 'var(--font-mono)' }} {...register('quantity')} />
-          {availableStock != null && (
-            <span style={{ fontSize: '10px', color: oversell ? 'var(--brand-danger)' : 'var(--text-faint)' }}>
-              On hand: {availableStock.toLocaleString('en-IN', { maximumFractionDigits: 2 })}{selected?.unit ? ` ${selected.unit}` : ''}
-            </span>
-          )}
-          {errors.quantity && <span style={errorTextStyle}>{errors.quantity.message}</span>}
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          <label style={labelStyle}>Unit Price (₹)</label>
-          <input type="number" step="any" disabled={submitting} style={{ ...inputStyle, fontFamily: 'var(--font-mono)' }} {...register('unitPrice')} />
-          {errors.unitPrice && <span style={errorTextStyle}>{errors.unitPrice.message}</span>}
-        </div>
+        <Field
+          label={`Quantity${selected?.unit ? ` (${selected.unit})` : ''}`}
+          error={errors.quantity?.message}
+          hint={availableStock != null ? `On hand: ${formatQty(availableStock)}${selected?.unit ? ` ${selected.unit}` : ''}` : undefined}
+        >
+          <NumberInput disabled={submitting} invalid={!!errors.quantity || oversell} {...register('quantity')} />
+        </Field>
+        <Field label="Unit Price (₹)" error={errors.unitPrice?.message}>
+          <NumberInput disabled={submitting} invalid={!!errors.unitPrice} {...register('unitPrice')} />
+        </Field>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        <label style={labelStyle}>Payment Method</label>
+      <Field label="Payment Method">
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '8px' }}>
           {(['Cash', 'Card', 'UPI', 'Credit'] as const).map((m) => (
             <button
@@ -161,7 +144,7 @@ export const MerchandiseSaleEntryForm: React.FC<MerchandiseSaleEntryFormProps> =
               onClick={() => setValue('paymentMethod', m, { shouldValidate: true })}
               disabled={submitting}
               style={{
-                height: '32px',
+                height: '36px',
                 fontSize: '12px',
                 fontWeight: 600,
                 backgroundColor: paymentMethod === m ? 'var(--brand-primary)' : 'var(--bg-surface-alt)',
@@ -175,32 +158,30 @@ export const MerchandiseSaleEntryForm: React.FC<MerchandiseSaleEntryFormProps> =
             </button>
           ))}
         </div>
-      </div>
+      </Field>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        <label style={labelStyle}>
-          {isCredit ? 'Customer Account (Required for Credit)' : 'Customer Account (Optional)'}
-        </label>
-        <select disabled={submitting} style={inputStyle} {...register('customerId')}>
+      <Field
+        label={isCredit ? 'Customer Account (Required for Credit)' : 'Customer Account (Optional)'}
+        error={errors.customerId?.message}
+      >
+        <Select disabled={submitting} invalid={!!errors.customerId} {...register('customerId')}>
           <option value="">-- Walk-in / Cash Customer --</option>
           {customers.map((c) => <option key={c.id} value={c.id}>{c.name} ({c.customerType})</option>)}
-        </select>
-        {errors.customerId && <span style={errorTextStyle}>{errors.customerId.message}</span>}
-      </div>
+        </Select>
+      </Field>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        <label style={labelStyle}>Notes</label>
-        <input type="text" placeholder="Optional reference" disabled={submitting} style={inputStyle} {...register('notes')} />
-      </div>
+      <Field label="Notes">
+        <TextInput placeholder="Optional reference" disabled={submitting} {...register('notes')} />
+      </Field>
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'var(--bg-surface-alt)', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', padding: '10px 12px' }}>
         <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Sale Total</span>
-        <strong style={{ fontFamily: 'var(--font-mono)', fontSize: '15px', color: 'var(--text-strong)' }}>₹{total.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
+        <strong style={{ fontFamily: 'var(--font-mono)', fontSize: '15px', color: 'var(--text-strong)' }}>{inr(total)}</strong>
       </div>
 
       {oversell && (
         <div style={{ backgroundColor: 'var(--state-warning-bg)', color: 'var(--state-warning-fg)', padding: '8px 12px', borderRadius: 'var(--radius-input)', fontSize: '12px', border: '1px solid var(--border-soft)' }}>
-          Selling {qtyNum.toLocaleString('en-IN', { maximumFractionDigits: 2 })} but only {Number(availableStock).toLocaleString('en-IN', { maximumFractionDigits: 2 })} on hand — stock will go negative. Record a purchase or stock count to correct it.
+          Selling {formatQty(qtyNum)} but only {formatQty(Number(availableStock))} on hand — stock will go negative. Record a purchase or stock count to correct it.
         </div>
       )}
 
