@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { and, desc, eq, ilike, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, ilike, lte, sql } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
 import {
   isAuthorizedForStation,
@@ -599,6 +599,47 @@ transactionsRouter.get('/purchases/:id/items', async (c) => {
     .where(and(eq(schema.purchaseItems.purchaseId, purchaseId), eq(schema.businessDays.organizationId, user.organizationId)))
     .orderBy(schema.purchaseItems.createdAt);
   return c.json({ success: true, data: rows.map((r) => ({ ...r.item, productName: r.productName ?? 'Product', productCode: r.productCode ?? null, unit: r.unit ?? null })) });
+});
+
+// GST input-tax-credit (ITC) register: GST purchase lines over a date range.
+// Fuel (VAT) and exempt lines carry no input credit and are excluded.
+transactionsRouter.get('/purchases/gst-register', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  const from = c.req.query('from');
+  const to = c.req.query('to');
+  const conds = [eq(schema.businessDays.organizationId, user.organizationId), eq(schema.purchaseItems.taxCategory, 'GST')];
+  if (from) conds.push(gte(schema.businessDays.businessDate, from));
+  if (to) conds.push(lte(schema.businessDays.businessDate, to));
+  const rows = await db
+    .select({
+      item: schema.purchaseItems,
+      businessDate: schema.businessDays.businessDate,
+      supplierName: schema.suppliers.name,
+      supplierGstin: schema.suppliers.metadata,
+      invoiceNumber: schema.purchases.invoiceNumber,
+      documentNumber: schema.purchases.documentNumber,
+      productName: schema.products.name,
+      productCode: schema.products.code,
+    })
+    .from(schema.purchaseItems)
+    .innerJoin(schema.purchases, eq(schema.purchaseItems.purchaseId, schema.purchases.id))
+    .innerJoin(schema.businessDays, eq(schema.purchases.businessDayId, schema.businessDays.id))
+    .leftJoin(schema.suppliers, eq(schema.purchases.supplierId, schema.suppliers.id))
+    .leftJoin(schema.products, eq(schema.purchaseItems.productId, schema.products.id))
+    .where(and(...conds))
+    .orderBy(desc(schema.businessDays.businessDate));
+  const data = rows.map((r) => ({
+    ...r.item,
+    businessDate: r.businessDate,
+    supplierName: r.supplierName ?? 'Unknown Supplier',
+    supplierGstin: (r.supplierGstin as Record<string, unknown> | null)?.gstin ?? null,
+    invoiceNumber: r.invoiceNumber,
+    documentNumber: r.documentNumber,
+    productName: r.productName ?? 'Product',
+    productCode: r.productCode ?? null,
+  }));
+  return c.json({ success: true, data });
 });
 
 transactionsRouter.get('/collections', async (c) => {

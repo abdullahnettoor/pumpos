@@ -496,6 +496,14 @@ export class CloudTransactionService {
     return request<any[]>(`/transactions/purchases/${purchaseId}/items`);
   }
 
+  async getPurchaseGstRegister(from?: string, to?: string): Promise<any[]> {
+    const qs = new URLSearchParams();
+    if (from) qs.set('from', from);
+    if (to) qs.set('to', to);
+    const suffix = qs.toString() ? `?${qs.toString()}` : '';
+    return request<any[]>(`/transactions/purchases/gst-register${suffix}`);
+  }
+
   async getCollections(): Promise<any[]> {
     return request<any[]>('/transactions/collections');
   }
