@@ -4,6 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Drawer } from '../Drawer.js';
 import { CloudShiftService, CloudTransactionService } from '../../services/cloud.js';
+import { inr } from '../../utils/format.js';
 
 const shiftService = new CloudShiftService();
 const transactionService = new CloudTransactionService();
@@ -723,7 +724,7 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
                     <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-default)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {ccCustomerName}{ccVehicleLabel ? ` · ${ccVehicleLabel}` : ''}
                     </div>
-                    {ccAvailable != null && <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Available credit ₹{ccAvailable.toLocaleString('en-IN')}</div>}
+                    {ccAvailable != null && <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Available credit {inr(ccAvailable)}</div>}
                   </div>
                   <button type="button" onClick={resetCcRow} disabled={ccBusy} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '11px', flexShrink: 0 }}>Change</button>
                 </div>
@@ -754,7 +755,7 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
                   </div>
                   {ccExceeds && (
                     <div style={{ fontSize: '11px', color: 'var(--state-warning-fg)' }}>
-                      Exceeds available credit{ccAvailable != null ? ` (₹${ccAvailable.toLocaleString('en-IN')})` : ''} — you can still record it.
+                      Exceeds available credit{ccAvailable != null ? ` (${inr(ccAvailable)})` : ''} — you can still record it.
                     </div>
                   )}
                 </>

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Check, Play, FileText } from 'lucide-react';
+import { inr } from '../../utils/format.js';
 
 export interface ShiftCloseResult {
   expectedCash: number;
@@ -35,16 +36,16 @@ export const ShiftCloseSuccess: React.FC<ShiftCloseSuccessProps> = ({ result, on
       <div style={{ border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', display: 'flex', flexDirection: 'column', fontSize: '13px', overflow: 'hidden', backgroundColor: 'var(--bg-surface-alt)', textAlign: 'left' }}>
         <div style={{ display: 'flex', alignSelf: 'stretch', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid var(--border-soft)' }}>
           <span>Expected Safe Cash</span>
-          <span style={{ fontWeight: 600, fontFamily: 'var(--font-mono)' }}>₹{result.expectedCash.toLocaleString('en-IN')}</span>
+          <span style={{ fontWeight: 600, fontFamily: 'var(--font-mono)' }}>{inr(result.expectedCash)}</span>
         </div>
         <div style={{ display: 'flex', alignSelf: 'stretch', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid var(--border-soft)' }}>
           <span>Actual Closing Cash Entered</span>
-          <span style={{ fontWeight: 600, fontFamily: 'var(--font-mono)' }}>₹{result.closingCash.toLocaleString('en-IN')}</span>
+          <span style={{ fontWeight: 600, fontFamily: 'var(--font-mono)' }}>{inr(result.closingCash)}</span>
         </div>
         <div style={{ display: 'flex', alignSelf: 'stretch', justifyContent: 'space-between', padding: '12px 16px', fontWeight: 700, color: result.variance === 0 ? 'var(--state-success-fg)' : 'var(--brand-danger)' }}>
           <span>Cash Variance</span>
           <span style={{ fontFamily: 'var(--font-mono)' }}>
-            {result.variance > 0 ? '+' : ''}₹{result.variance.toLocaleString('en-IN')}
+            {result.variance > 0 ? '+' : ''}{inr(result.variance)}
             {result.variance === 0 ? ' (Perfect Match)' : ''}
           </span>
         </div>

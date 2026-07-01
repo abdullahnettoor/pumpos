@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { CloudTransactionService } from '../../services/cloud.js';
+import { inr } from '../../utils/format.js';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys, TIER } from '../../query/hooks.js';
 import { Tabs } from '../primitives/Tabs.js';
@@ -694,7 +695,7 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
                       )}
                     </div>
                     <div style={{ fontWeight: 700, color: 'var(--brand-danger)' }}>
-                      - ₹{Number(tx.amount).toLocaleString('en-IN')}
+                      - {inr(tx.amount)}
                     </div>
                   </div>
                 ))
@@ -732,7 +733,7 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
                       )}
                     </div>
                     <div style={{ fontWeight: 700, color: 'var(--text-strong)', textAlign: 'right' }}>
-                      ₹{Number(tx.amount).toLocaleString('en-IN')}
+                      {inr(tx.amount)}
                     </div>
                   </div>
                 ))
@@ -780,7 +781,7 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
                       fontWeight: 700,
                       color: tx.paymentMethod === 'Credit' ? 'var(--text-muted)' : 'var(--state-success-fg)'
                     }}>
-                      {tx.paymentMethod === 'Credit' ? '' : '+ '}₹{Number(tx.amount).toLocaleString('en-IN')}
+                      {tx.paymentMethod === 'Credit' ? '' : '+ '}{inr(tx.amount)}
                     </div>
                   </div>
                 ))
@@ -802,13 +803,13 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
             <div>
               <span style={{ color: 'var(--text-muted)' }}>Petty Expenses:</span>
               <strong style={{ display: 'block', fontSize: '13px', color: 'var(--brand-danger)' }}>
-                ₹{loggedTransactions.expenses.reduce((sum, e) => sum + Number(e.amount), 0).toLocaleString('en-IN')}
+                {inr(loggedTransactions.expenses.reduce((sum, e) => sum + Number(e.amount), 0))}
               </strong>
             </div>
             <div>
               <span style={{ color: 'var(--text-muted)' }}>Cash Collections:</span>
               <strong style={{ display: 'block', fontSize: '13px', color: 'var(--state-success-fg)' }}>
-                ₹{loggedTransactions.collections.filter(c => c.paymentMethod === 'Cash').reduce((sum, c) => sum + Number(c.amount), 0).toLocaleString('en-IN')}
+                {inr(loggedTransactions.collections.filter(c => c.paymentMethod === 'Cash').reduce((sum, c) => sum + Number(c.amount), 0))}
               </strong>
             </div>
           </div>

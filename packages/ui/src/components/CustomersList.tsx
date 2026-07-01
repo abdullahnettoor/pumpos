@@ -7,6 +7,7 @@ import { Drawer } from './Drawer.js';
 import { CollectionEntryForm } from './transactions/CollectionEntryForm.js';
 import { LedgerView } from './ledger/LedgerView.js';
 import { DataTable } from './primitives/DataTable.js';
+import { inr } from '../utils/format.js';
 import { Tabs } from './primitives/Tabs.js';
 import { useConfirm } from './primitives/ConfirmDialog.js';
 import { useToast } from './primitives/ToastProvider.js';
@@ -68,7 +69,7 @@ const buildCustomerColumns = (openLedger: (c: any) => void, openEdit: (c: any) =
       if (limit <= 0) return <span style={{ color: 'var(--text-muted)' }}>N/A</span>;
       return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          <span style={{ fontFamily: 'var(--font-mono)' }}>₹{limit.toLocaleString('en-IN')}</span>
+          <span style={{ fontFamily: 'var(--font-mono)' }}>{inr(limit)}</span>
           <div style={{ width: '80px', height: '4px', backgroundColor: 'var(--border-soft)', borderRadius: '2px', overflow: 'hidden' }}>
             <div style={{ width: `${Math.min(100, (balance / limit) * 100)}%`, height: '100%', backgroundColor: balance > limit ? 'var(--brand-danger)' : balance >= limit * 0.75 ? 'var(--brand-warning)' : 'var(--brand-primary)' }} />
           </div>
@@ -86,7 +87,7 @@ const buildCustomerColumns = (openLedger: (c: any) => void, openEdit: (c: any) =
     header: 'Prepaid Balance',
     cell: ({ row }) => {
       const c = row.original;
-      return <span style={{ fontWeight: 700, color: c.isPrepaid ? 'var(--state-success-fg)' : 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>₹{Number(c.prepaidBalance || 0).toLocaleString('en-IN')}</span>;
+      return <span style={{ fontWeight: 700, color: c.isPrepaid ? 'var(--state-success-fg)' : 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{inr(c.prepaidBalance || 0)}</span>;
     },
   },
   { accessorKey: 'fleetCode', header: 'Fleet Code', cell: ({ getValue }) => <span style={{ color: 'var(--text-muted)' }}>{(getValue() as string) || '-'}</span> },
@@ -102,7 +103,7 @@ const buildCustomerColumns = (openLedger: (c: any) => void, openEdit: (c: any) =
       const limit = Number(row.original.creditLimit || 0);
       const balance = Number(row.original.currentBalance || 0);
       const color = limit > 0 && balance > limit ? 'var(--brand-danger)' : balance > 0 ? 'var(--brand-warning)' : 'var(--state-success-fg)';
-      return <span style={{ fontWeight: 700, color, fontFamily: 'var(--font-mono)' }}>₹{balance.toLocaleString('en-IN')}</span>;
+      return <span style={{ fontWeight: 700, color, fontFamily: 'var(--font-mono)' }}>{inr(balance)}</span>;
     },
   },
   {
@@ -676,7 +677,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
                         <td style={{ padding: '12px 20px', fontWeight: 600, color: 'var(--text-strong)' }}>{c.name}</td>
                         <td style={{ padding: '12px 20px', color: 'var(--text-default)' }}>{c.customerType}</td>
                         <td style={{ padding: '12px 20px', textAlign: 'right', fontWeight: 700, color: balance > 0 ? 'var(--brand-warning)' : 'var(--state-success-fg)', fontFamily: 'var(--font-mono)' }}>
-                          ₹{balance.toLocaleString('en-IN')}
+                          {inr(balance)}
                         </td>
                       </tr>
                     );
@@ -1222,7 +1223,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
                           ? 'var(--brand-warning)'
                           : 'var(--state-success-fg)'
                   }}>
-                    ₹{Number(selectedLedgerCustomer.isPrepaid ? selectedLedgerCustomer.prepaidBalance : selectedLedgerCustomer.currentBalance || 0).toLocaleString('en-IN')}
+                    {inr(selectedLedgerCustomer.isPrepaid ? selectedLedgerCustomer.prepaidBalance : selectedLedgerCustomer.currentBalance || 0)}
                   </div>
                 </div>
               </div>
@@ -1231,7 +1232,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
                 <div>
                   <span style={{ color: 'var(--text-muted)', display: 'block' }}>Credit Limit</span>
                   <strong style={{ color: 'var(--text-strong)', fontFamily: 'var(--font-mono)' }}>
-                    {selectedLedgerCustomer.creditLimit > 0 ? `₹${Number(selectedLedgerCustomer.creditLimit).toLocaleString('en-IN')}` : 'N/A'}
+                    {selectedLedgerCustomer.creditLimit > 0 ? inr(selectedLedgerCustomer.creditLimit) : 'N/A'}
                   </strong>
                 </div>
                 {selectedLedgerCustomer.creditLimit > 0 && (
@@ -1241,7 +1242,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
                       color: (selectedLedgerCustomer.creditLimit - selectedLedgerCustomer.currentBalance) < 0 ? 'var(--brand-danger)' : 'var(--text-strong)',
                       fontFamily: 'var(--font-mono)'
                     }}>
-                      ₹{Math.max(0, Number(selectedLedgerCustomer.creditLimit) - Number(selectedLedgerCustomer.currentBalance)).toLocaleString('en-IN')}
+                      {inr(Math.max(0, Number(selectedLedgerCustomer.creditLimit) - Number(selectedLedgerCustomer.currentBalance)))}
                     </strong>
                   </div>
                 )}

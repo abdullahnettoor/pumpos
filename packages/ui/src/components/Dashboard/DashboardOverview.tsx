@@ -5,6 +5,7 @@ import { StatusBadge } from '../StatusBadge.js';
 import { SyncIndicator } from '../SyncIndicator.js';
 import { LoadingSpinner } from '../LoadingSpinner.js';
 import { SkeletonGrid } from '../primitives/Skeleton.js';
+import { inr } from '../../utils/format.js';
 import { useConfirm } from '../primitives/ConfirmDialog.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import { Station } from '@pump/shared';
@@ -150,7 +151,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                   Opened by {activeShift.openedByName} at {new Date(activeShift.openedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </p>
                 <div style={{ display: 'flex', gap: '16px', marginTop: '12px', fontSize: '13px' }}>
-                  <span>Opening Cash: <strong>₹{Number(activeShift.openingCash).toLocaleString('en-IN')}</strong></span>
+                  <span>Opening Cash: <strong>{inr(activeShift.openingCash)}</strong></span>
                 </div>
               </div>
             ) : (
@@ -217,7 +218,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                 {lastDssr && (
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px', marginTop: '12px', fontSize: '12px', color: 'var(--text-default)' }}>
                     <div>Total Fuel Sold: <strong>{Number(lastDssr.snapshotData.totalVolumeSold).toFixed(2)} L</strong></div>
-                    <div>Closing Cash: <strong>₹{Number(lastDssr.snapshotData.closingCash).toLocaleString('en-IN')}</strong></div>
+                    <div>Closing Cash: <strong>{inr(lastDssr.snapshotData.closingCash)}</strong></div>
                   </div>
                 )}
               </div>

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { purchaseEntryFormSchema, type PurchaseEntryFormValues } from '@pump/shared';
+import { inr } from '../../utils/format.js';
 
 export interface ShiftOption {
   id: string;
@@ -40,7 +41,6 @@ const fieldStyle: React.CSSProperties = {
 };
 const labelStyle: React.CSSProperties = { fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 };
 const errorTextStyle: React.CSSProperties = { fontSize: '11px', color: 'var(--brand-danger)' };
-const inr = (n: number) => `₹${n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 const EMPTY_DEFAULTS: PurchaseEntryFormValues = {
   targetShiftId: '',

@@ -1,6 +1,6 @@
 import React from 'react';
 import { StatusBadge } from '../StatusBadge.js';
-
+import { inr } from '../../utils/format.js';
 interface AttendantHandoversDashboardProps {
   staffAssignments: any[];
   handovers: any[];
@@ -86,7 +86,7 @@ export const AttendantHandoversDashboard: React.FC<AttendantHandoversDashboardPr
                           const merch = Number(sa.attributed?.merchandiseTotal ?? 0);
                           if (merch <= 0) return '—';
                           return (
-                            <span title={`Merchandise sold by this attendant (reconciles at shift close): ₹${merch.toLocaleString('en-IN')}`} style={{ color: 'var(--brand-warning)', fontWeight: 500 }}>
+                            <span title={`Merchandise sold by this attendant (reconciles at shift close): ${inr(merch)}`} style={{ color: 'var(--brand-warning)', fontWeight: 500 }}>
                               +₹{merch.toLocaleString('en-IN', { minimumFractionDigits: 2 })} merchandise
                             </span>
                           );

@@ -7,6 +7,7 @@ import { Drawer } from './Drawer.js';
 import { PurchaseEntryForm } from './transactions/PurchaseEntryForm.js';
 import { LedgerView } from './ledger/LedgerView.js';
 import { DataTable } from './primitives/DataTable.js';
+import { inr } from '../utils/format.js';
 import { Tabs } from './primitives/Tabs.js';
 import { useToast } from './primitives/ToastProvider.js';
 import type { ColumnDef } from '@tanstack/react-table';
@@ -44,7 +45,7 @@ const purchaseColumns: ColumnDef<any, any>[] = [
   {
     accessorKey: 'amount',
     header: 'Total Amount',
-    cell: ({ getValue }) => <span style={{ fontWeight: 700, color: 'var(--text-strong)', fontFamily: 'var(--font-mono)' }}>₹{Number(getValue()).toLocaleString('en-IN')}</span>,
+    cell: ({ getValue }) => <span style={{ fontWeight: 700, color: 'var(--text-strong)', fontFamily: 'var(--font-mono)' }}>{inr(getValue())}</span>,
   },
 ];
 
@@ -80,7 +81,7 @@ const buildSupplierColumns = (openLedger: (s: any) => void, openEdit: (s: any) =
     header: 'Outstanding Balance',
     cell: ({ getValue }) => {
       const bal = Number(getValue() || 0);
-      return <span style={{ fontWeight: 700, color: bal > 0 ? 'var(--brand-warning)' : 'var(--state-success-fg)', fontFamily: 'var(--font-mono)' }}>₹{bal.toLocaleString('en-IN')}</span>;
+      return <span style={{ fontWeight: 700, color: bal > 0 ? 'var(--brand-warning)' : 'var(--state-success-fg)', fontFamily: 'var(--font-mono)' }}>{inr(bal)}</span>;
     },
   },
   {
@@ -1006,7 +1007,7 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, d
                     fontFamily: 'var(--font-mono)',
                     color: selectedLedgerSupplier.currentBalance > 0 ? 'var(--brand-warning)' : 'var(--state-success-fg)'
                   }}>
-                    ₹{Number(selectedLedgerSupplier.currentBalance || 0).toLocaleString('en-IN')}
+                    {inr(selectedLedgerSupplier.currentBalance || 0)}
                   </div>
                 </div>
               </div>

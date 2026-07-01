@@ -1,4 +1,5 @@
 import React from 'react';
+import { inr } from '../../utils/format.js';
 
 interface ShiftTotals {
   cashExpenses: number;
@@ -59,7 +60,7 @@ export const ShiftTotalsSummary: React.FC<ShiftTotalsSummaryProps> = ({
         <div style={{ padding: '12px', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', backgroundColor: 'var(--bg-canvas)' }}>
           <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', fontWeight: 600 }}>Petty Expenses</span>
           <strong style={{ fontSize: '15px', color: 'var(--brand-danger)', fontFamily: 'var(--font-mono)' }}>
-            ₹{shiftTotals.cashExpenses.toLocaleString('en-IN')}
+            {inr(shiftTotals.cashExpenses)}
           </strong>
           <span style={{ fontSize: '10px', color: 'var(--text-faint)', display: 'block', marginTop: '2px' }}>
             {shiftTotals.expenseCount} items recorded
@@ -69,7 +70,7 @@ export const ShiftTotalsSummary: React.FC<ShiftTotalsSummaryProps> = ({
         <div style={{ padding: '12px', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', backgroundColor: 'var(--bg-canvas)' }}>
           <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', fontWeight: 600 }}>Cash Handed Over</span>
           <strong style={{ fontSize: '15px', color: 'var(--state-success-fg)', fontFamily: 'var(--font-mono)' }}>
-            ₹{cashCollections.toLocaleString('en-IN')}
+            {inr(cashCollections)}
           </strong>
           <span style={{ fontSize: '10px', color: 'var(--text-faint)', display: 'block', marginTop: '2px' }}>
             {handoverCount} handovers received
@@ -79,27 +80,27 @@ export const ShiftTotalsSummary: React.FC<ShiftTotalsSummaryProps> = ({
         <div style={{ padding: '12px', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', backgroundColor: 'var(--bg-canvas)' }}>
           <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', fontWeight: 600 }}>Card & UPI Handover</span>
           <strong style={{ fontSize: '15px', color: 'var(--text-strong)', fontFamily: 'var(--font-mono)' }}>
-            ₹{(cardCollections + upiCollections).toLocaleString('en-IN')}
+            {inr(cardCollections + upiCollections)}
           </strong>
           <span style={{ fontSize: '10px', color: 'var(--text-faint)', display: 'block', marginTop: '2px' }}>
-            Card: ₹{cardCollections.toLocaleString('en-IN')} • UPI: ₹{upiCollections.toLocaleString('en-IN')}
+            Card: {inr(cardCollections)} • UPI: {inr(upiCollections)}
           </span>
         </div>
 
         <div style={{ padding: '12px', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', backgroundColor: 'var(--bg-canvas)' }}>
           <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', fontWeight: 600 }}>Credit Fleet Chits</span>
           <strong style={{ fontSize: '15px', color: 'var(--brand-warning)', fontFamily: 'var(--font-mono)' }}>
-            ₹{creditSales.toLocaleString('en-IN')}
+            {inr(creditSales)}
           </strong>
           <span style={{ fontSize: '10px', color: 'var(--text-faint)', display: 'block', marginTop: '2px' }}>
-            Logged Bills: ₹{shiftTotals.creditSales.toLocaleString('en-IN')}
+            Logged Bills: {inr(shiftTotals.creditSales)}
           </span>
         </div>
 
         <div style={{ padding: '12px', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', backgroundColor: 'var(--bg-canvas)' }}>
           <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', fontWeight: 600 }}>Supplier Purchases</span>
           <strong style={{ fontSize: '15px', color: 'var(--brand-secondary)', fontFamily: 'var(--font-mono)' }}>
-            ₹{shiftTotals.purchaseTotal.toLocaleString('en-IN')}
+            {inr(shiftTotals.purchaseTotal)}
           </strong>
           <span style={{ fontSize: '10px', color: 'var(--text-faint)', display: 'block', marginTop: '2px' }}>
             {shiftTotals.purchaseCount} drops recorded

@@ -4,6 +4,7 @@ import { DailyDssrView } from './DailyDssrView.js';
 import { LoadingSpinner } from './LoadingSpinner.js';
 import { Tabs } from './primitives/Tabs.js';
 import { PageLayout } from './primitives/PageLayout.js';
+import { inr } from '../utils/format.js';
 import { Calendar, RefreshCw, Play, Zap, Layers } from 'lucide-react';
 
 const shiftService = new CloudShiftService();
@@ -291,7 +292,7 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
                               fontFamily: 'var(--font-mono)',
                             }}
                           >
-                            ₹{Number(data.totalCashCollections || 0).toLocaleString('en-IN')}
+                            {inr(data.totalCashCollections || 0)}
                           </strong>
                         </div>
                       </div>

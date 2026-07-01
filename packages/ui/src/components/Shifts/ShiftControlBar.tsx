@@ -1,4 +1,5 @@
 import React from 'react';
+import { inr } from '../../utils/format.js';
 import { Clock3, FileText, Fuel, Receipt, ShoppingCart, Wallet } from 'lucide-react';
 import { StatusBadge } from '../StatusBadge.js';
 
@@ -98,7 +99,7 @@ export const ShiftControlBar: React.FC<ShiftControlBarProps> = ({
           <span className="shift-control-bar__meta">
             Float{' '}
             <strong className="font-mono">
-              ₹{Number(activeShift.openingCash).toLocaleString('en-IN')}
+              {inr(activeShift.openingCash)}
             </strong>
           </span>
         </div>
@@ -125,13 +126,13 @@ export const ShiftControlBar: React.FC<ShiftControlBarProps> = ({
           <span>
             Coll{' '}
             <strong className="font-mono">
-              ₹{collectionsTotal.toLocaleString('en-IN')}
+              {inr(collectionsTotal)}
             </strong>
           </span>
           <span>
             Exp{' '}
             <strong className="font-mono">
-              ₹{shiftTotals.cashExpenses.toLocaleString('en-IN')}
+              {inr(shiftTotals.cashExpenses)}
             </strong>
           </span>
           <span>

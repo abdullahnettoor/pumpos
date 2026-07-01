@@ -5,6 +5,7 @@ import { CloudTransactionService } from '../services/cloud.js';
 import { Calendar, Plus, Info } from 'lucide-react';
 import { PageLayout } from './primitives/PageLayout.js';
 import { DataTable } from './primitives/DataTable.js';
+import { inr } from '../utils/format.js';
 import { useToast } from './primitives/ToastProvider.js';
 import { Drawer } from './Drawer.js';
 import { ExpenseEntryForm } from './transactions/ExpenseEntryForm.js';
@@ -38,7 +39,7 @@ const expenseColumns: ColumnDef<any, any>[] = [
     header: 'Amount',
     cell: ({ getValue }) => (
       <span style={{ fontWeight: 700, color: 'var(--brand-danger)', fontFamily: 'var(--font-mono)' }}>
-        ₹{Number(getValue()).toLocaleString('en-IN')}
+        {inr(getValue())}
       </span>
     ),
   },

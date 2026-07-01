@@ -1,4 +1,5 @@
 import React from 'react';
+import { inr } from '../../utils/format.js';
 
 export interface LedgerResolved {
   id: string;
@@ -28,7 +29,6 @@ export interface LedgerViewProps {
   emptyText?: string;
 }
 
-const inr = (n: number) => `\u20b9${Number(n || 0).toLocaleString('en-IN')}`;
 
 /**
  * Generic Tally-style running-balance ledger table. Reused for customer,

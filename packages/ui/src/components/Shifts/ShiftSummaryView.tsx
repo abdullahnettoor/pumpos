@@ -7,6 +7,7 @@ import { ArrowLeft, Printer, Download, Unlock, AlertTriangle } from 'lucide-reac
 import { ShiftTransactionsPanel } from './ShiftTransactionsPanel.js';
 import { useConfirm } from '../primitives/ConfirmDialog.js';
 import { useToast } from '../primitives/ToastProvider.js';
+import { inr } from '../../utils/format.js';
 
 const shiftService = new CloudShiftService();
 
@@ -534,27 +535,27 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid var(--border-soft)' }}>
           <span>Opening Cash Float</span>
-          <span style={{ fontWeight: 600, fontFamily: 'var(--font-mono)' }}>₹{Number(openingCash).toLocaleString('en-IN')}</span>
+          <span style={{ fontWeight: 600, fontFamily: 'var(--font-mono)' }}>{inr(openingCash)}</span>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid var(--border-soft)', color: 'var(--state-success-fg)' }}>
           <span>(+) Cash Sales (Attendant Handovers)</span>
-          <span style={{ fontWeight: 600, fontFamily: 'var(--font-mono)' }}>+ ₹{Number(cashSalesSum).toLocaleString('en-IN')}</span>
+          <span style={{ fontWeight: 600, fontFamily: 'var(--font-mono)' }}>+ {inr(cashSalesSum)}</span>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid var(--border-soft)', color: 'var(--state-success-fg)' }}>
           <span>(+) Cash Collections</span>
-          <span style={{ fontWeight: 600, fontFamily: 'var(--font-mono)' }}>+ ₹{Number(cashCollectionsSum).toLocaleString('en-IN')}</span>
+          <span style={{ fontWeight: 600, fontFamily: 'var(--font-mono)' }}>+ {inr(cashCollectionsSum)}</span>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid var(--border-soft)', color: 'var(--brand-danger)' }}>
           <span>(-) Petty Cash Expenses</span>
-          <span style={{ fontWeight: 600, fontFamily: 'var(--font-mono)' }}>- ₹{Number(cashExpensesSum).toLocaleString('en-IN')}</span>
+          <span style={{ fontWeight: 600, fontFamily: 'var(--font-mono)' }}>- {inr(cashExpensesSum)}</span>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid var(--border-soft)', fontWeight: 600 }}>
           <span>Expected Cash in Drawer</span>
-          <span style={{ fontWeight: 600, fontFamily: 'var(--font-mono)' }}>₹{Number(expectedCash).toLocaleString('en-IN')}</span>
+          <span style={{ fontWeight: 600, fontFamily: 'var(--font-mono)' }}>{inr(expectedCash)}</span>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid var(--border-soft)' }}>
           <span>Actual Closing Cash (Entered)</span>
-          <span style={{ fontWeight: 600, fontFamily: 'var(--font-mono)' }}>₹{Number(closingCash).toLocaleString('en-IN')}</span>
+          <span style={{ fontWeight: 600, fontFamily: 'var(--font-mono)' }}>{inr(closingCash)}</span>
         </div>
         <div style={{
           display: 'flex',
@@ -569,7 +570,7 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
           <span style={{
             fontFamily: 'var(--font-mono)'
           }}>
-            {cashVariance > 0 ? '+' : ''}₹{Number(cashVariance).toLocaleString('en-IN')}
+            {cashVariance > 0 ? '+' : ''}{inr(cashVariance)}
             {cashVariance === 0 ? ' (Perfect Match)' : Math.abs(cashVariance) > 100 ? ` (Discrepancy)` : ''}
           </span>
         </div>
@@ -587,15 +588,15 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
       }}>
         <div style={{ padding: '12px', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', backgroundColor: 'var(--bg-surface)' }}>
           <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', fontWeight: 600 }}>Card Payments</span>
-          <strong style={{ fontSize: '15px', color: 'var(--text-strong)', fontFamily: 'var(--font-mono)' }}>₹{Number(cardCollectionsSum).toLocaleString('en-IN')}</strong>
+          <strong style={{ fontSize: '15px', color: 'var(--text-strong)', fontFamily: 'var(--font-mono)' }}>{inr(cardCollectionsSum)}</strong>
         </div>
         <div style={{ padding: '12px', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', backgroundColor: 'var(--bg-surface)' }}>
           <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', fontWeight: 600 }}>UPI/QR Payments</span>
-          <strong style={{ fontSize: '15px', color: 'var(--text-strong)', fontFamily: 'var(--font-mono)' }}>₹{Number(upiCollectionsSum).toLocaleString('en-IN')}</strong>
+          <strong style={{ fontSize: '15px', color: 'var(--text-strong)', fontFamily: 'var(--font-mono)' }}>{inr(upiCollectionsSum)}</strong>
         </div>
         <div style={{ padding: '12px', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', backgroundColor: 'var(--bg-surface)' }}>
           <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', fontWeight: 600 }}>Credit Account Sales</span>
-          <strong style={{ fontSize: '15px', color: 'var(--brand-warning)', fontFamily: 'var(--font-mono)' }}>₹{Number(creditSalesSum).toLocaleString('en-IN')}</strong>
+          <strong style={{ fontSize: '15px', color: 'var(--brand-warning)', fontFamily: 'var(--font-mono)' }}>{inr(creditSalesSum)}</strong>
         </div>
       </div>
 
@@ -618,7 +619,7 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
                 <tr key={idx} style={{ borderBottom: '1px solid var(--border-soft)' }}>
                   <td style={{ padding: '6px 8px', fontWeight: 600 }}>{e.categoryName}</td>
                   <td style={{ padding: '6px 8px', color: 'var(--text-muted)' }}>{e.description}</td>
-                  <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600, color: 'var(--brand-danger)' }}>- ₹{Number(e.amount).toLocaleString('en-IN')}</td>
+                  <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600, color: 'var(--brand-danger)' }}>- {inr(e.amount)}</td>
                 </tr>
               ))}
             </tbody>
@@ -646,7 +647,7 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
                   <td style={{ padding: '6px 8px', fontWeight: 600 }}>{p.supplierName}</td>
                   <td style={{ padding: '6px 8px', color: 'var(--text-default)' }}>{p.documentNumber} {p.invoiceNumber ? `(${p.invoiceNumber})` : ''}</td>
                   <td style={{ padding: '6px 8px', color: 'var(--text-muted)' }}>{p.notes}</td>
-                  <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600 }}>₹{Number(p.amount).toLocaleString('en-IN')}</td>
+                  <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600 }}>{inr(p.amount)}</td>
                 </tr>
               ))}
             </tbody>
@@ -686,7 +687,7 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
                   </td>
                   <td style={{ padding: '6px 8px', color: 'var(--text-muted)' }}>{c.notes}</td>
                   <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600, color: c.paymentMethod === 'Credit' ? 'var(--text-muted)' : 'var(--state-success-fg)' }}>
-                    ₹{Number(c.amount).toLocaleString('en-IN')}
+                    {inr(c.amount)}
                   </td>
                 </tr>
               ))}

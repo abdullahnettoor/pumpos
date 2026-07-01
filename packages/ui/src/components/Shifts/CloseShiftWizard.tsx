@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Drawer } from '../Drawer.js';
+import { inr } from '../../utils/format.js';
 import { AlertTriangle, Check, ChevronLeft, ChevronRight, Lock, Wallet, Droplet, FileText } from 'lucide-react';
 
 export interface CloseShiftWizardProps {
@@ -156,19 +157,19 @@ export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
             <div className="close-wizard-summary-card">
               <div className="close-wizard-row">
                 <span>Opening Cash Float</span>
-                <span className="font-mono">₹{openingCash.toLocaleString('en-IN')}</span>
+                <span className="font-mono">{inr(openingCash)}</span>
               </div>
               <div className="close-wizard-row" style={{ color: 'var(--state-success-fg)' }}>
                 <span>(+) Cash Collections</span>
-                <span className="font-mono">+ ₹{cashCollections.toLocaleString('en-IN')}</span>
+                <span className="font-mono">+ {inr(cashCollections)}</span>
               </div>
               <div className="close-wizard-row" style={{ color: 'var(--brand-danger)' }}>
                 <span>(−) Petty Cash Expenses</span>
-                <span className="font-mono">− ₹{cashExpenses.toLocaleString('en-IN')}</span>
+                <span className="font-mono">− {inr(cashExpenses)}</span>
               </div>
               <div className="close-wizard-row close-wizard-row--total">
                 <span>Expected Safe Cash</span>
-                <span className="font-mono">₹{expectedCash.toLocaleString('en-IN')}</span>
+                <span className="font-mono">{inr(expectedCash)}</span>
               </div>
             </div>
 
@@ -188,7 +189,7 @@ export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
               className="close-wizard-variance"
               data-state={cashVariance === 0 ? 'match' : cashVariance > 0 ? 'surplus' : 'shortage'}
             >
-              Variance: {cashVariance > 0 ? '+' : ''}₹{cashVariance.toLocaleString('en-IN')}
+              Variance: {cashVariance > 0 ? '+' : ''}{inr(cashVariance)}
               {cashVariance === 0
                 ? ' (Perfect Match)'
                 : cashVariance > 0
@@ -328,11 +329,11 @@ export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
             <div className="close-wizard-summary-card">
               <div className="close-wizard-row">
                 <span>Expected Safe Cash</span>
-                <span className="font-mono">₹{expectedCash.toLocaleString('en-IN')}</span>
+                <span className="font-mono">{inr(expectedCash)}</span>
               </div>
               <div className="close-wizard-row">
                 <span>Counted Closing Cash</span>
-                <span className="font-mono">₹{closingCash.toLocaleString('en-IN')}</span>
+                <span className="font-mono">{inr(closingCash)}</span>
               </div>
               <div
                 className="close-wizard-row close-wizard-row--total"
@@ -343,7 +344,7 @@ export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
               >
                 <span>Cash Variance</span>
                 <span className="font-mono">
-                  {cashVariance > 0 ? '+' : ''}₹{cashVariance.toLocaleString('en-IN')}
+                  {cashVariance > 0 ? '+' : ''}{inr(cashVariance)}
                 </span>
               </div>
               <div className="close-wizard-row">

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { inr } from '../../utils/format.js';
 import { CloudProductService, CloudShiftService, CloudTankService, CloudTransactionService, CloudUserAssignmentService } from '../../services/cloud.js';
 import { StatusBadge } from '../StatusBadge.js';
 import { ShiftSummaryView } from './ShiftSummaryView.js';
@@ -360,14 +361,14 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     // Mismatch check for credit chits vs customer bills
     const detailedCreditSum = shiftTotals.creditSales;
     if (hasHandovers && Math.abs(detailedCreditSum - totalCreditHandedOver) > 1.00) {
-      warnings.push(`Credit Sales mismatch: Attendants declared ₹${totalCreditHandedOver.toLocaleString('en-IN')} in chits, but only ₹${detailedCreditSum.toLocaleString('en-IN')} of detailed customer billing has been logged in the transaction panel.`);
+      warnings.push(`Credit Sales mismatch: Attendants declared ${inr(totalCreditHandedOver)} in chits, but only ${inr(detailedCreditSum)} of detailed customer billing has been logged in the transaction panel.`);
     }
 
     if (closingCash === 0 && expectedCash > 0) {
       warnings.push('Closing cash is ₹0, indicating no collections entered.');
     }
     if (Math.abs(cashVariance) > 100) {
-      warnings.push(`Cash discrepancy detected! Variance is ₹${cashVariance.toLocaleString('en-IN')} (Expected: ₹${expectedCash.toLocaleString('en-IN')}, Entered: ₹${closingCash.toLocaleString('en-IN')})`);
+      warnings.push(`Cash discrepancy detected! Variance is ${inr(cashVariance)} (Expected: ${inr(expectedCash)}, Entered: ${inr(closingCash)})`);
     }
   }
 

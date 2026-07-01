@@ -43,4 +43,5 @@ export type { ConfirmOptions } from './components/primitives/ConfirmDialog.js';
 export { ToastProvider, useToast } from './components/primitives/ToastProvider.js';
 export type { ToastApi, ToastVariant, ToastOptions } from './components/primitives/ToastProvider.js';
 export { Skeleton, SkeletonCard, SkeletonGrid } from './components/primitives/Skeleton.js';
+export { formatMoney, inr, formatQty } from './utils/format.js';
 
