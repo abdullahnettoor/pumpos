@@ -377,11 +377,11 @@ const InputsPanel: React.FC = () => {
       </Card>
     </Section>
 
-    <Section title="⚠ Legacy classes being retired" description="Three legacy CSS input classes still exist in older screens (.form-input @14px, .input @13px, .input-compact @12px) plus per-form inline style objects. Target state: every form uses the primitives above so there is exactly one input look. This tab is the reference for that migration.">
+    <Section title="Legacy .form-input — now unified" description="The old .form-input class and bare <select> elements are now aliased to the canonical .input look (36px · 13px · strong border), so existing setup screens match the primitives without a per-input rewrite. New forms should still use the Field + primitives above; .input-compact (28px) remains for filter bars.">
       <Card>
         <div style={{ display: 'flex', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
-          <div><Mono>.form-input (legacy)</Mono><input className="form-input" defaultValue="14px" style={{ maxWidth: 160 }} /></div>
-          <div><Mono>&lt;TextInput /&gt; (target)</Mono><TextInput defaultValue="13px" style={{ maxWidth: 160 }} /></div>
+          <div><Mono>.form-input (aliased)</Mono><input className="form-input" defaultValue="matches" style={{ maxWidth: 160 }} /></div>
+          <div><Mono>&lt;TextInput /&gt;</Mono><TextInput defaultValue="matches" style={{ maxWidth: 160 }} /></div>
         </div>
       </Card>
     </Section>

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { useForm, useFieldArray } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
+import { useFieldArray } from 'react-hook-form';
 import { purchaseEntryFormSchema, type PurchaseEntryFormValues } from '@pump/shared';
+import { useZodForm } from '../../forms/useZodForm.js';
 import { inr } from '../../utils/format.js';
 import { Field, TextInput, NumberInput, Select, DateField } from '../primitives/Field.js';
 import { Combobox } from '../primitives/Combobox.js';
@@ -70,8 +70,7 @@ export const PurchaseEntryForm: React.FC<PurchaseEntryFormProps> = ({
 }) => {
   const hasMultipleShiftOptions = shiftOptions.length > 1;
 
-  const { register, handleSubmit, reset, watch, control, setValue, formState: { errors } } = useForm<PurchaseEntryFormValues>({
-    resolver: zodResolver(purchaseEntryFormSchema) as any,
+  const { register, handleSubmit, reset, watch, control, setValue, formState: { errors } } = useZodForm<PurchaseEntryFormValues>(purchaseEntryFormSchema, {
     defaultValues: { ...EMPTY_DEFAULTS, ...defaultValues },
   });
   const { fields, append, remove } = useFieldArray({ control, name: 'lines' });

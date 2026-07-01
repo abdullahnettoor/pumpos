@@ -56,5 +56,6 @@ export { Segmented } from './components/primitives/Segmented.js';
 export type { SegmentedProps, SegmentedOption } from './components/primitives/Segmented.js';
 export { Combobox } from './components/primitives/Combobox.js';
 export type { ComboboxProps, ComboboxOption } from './components/primitives/Combobox.js';
+export { useZodForm } from './forms/useZodForm.js';
 export { formatMoney, inr, formatQty } from './utils/format.js';
 

@@ -1,7 +1,6 @@
 import React, { useEffect } from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
 import { collectionEntryFormSchema, type CollectionEntryFormValues } from '@pump/shared';
+import { useZodForm } from '../../forms/useZodForm.js';
 import { Field, TextInput, NumberInput, Select, DateField } from '../primitives/Field.js';
 import { Segmented } from '../primitives/Segmented.js';
 import { Combobox } from '../primitives/Combobox.js';
@@ -68,8 +67,7 @@ export const CollectionEntryForm: React.FC<CollectionEntryFormProps> = ({
 }) => {
   const hasMultipleShiftOptions = shiftOptions.length > 1;
 
-  const { register, handleSubmit, reset, watch, setValue, formState: { errors } } = useForm<CollectionEntryFormValues>({
-    resolver: zodResolver(collectionEntryFormSchema) as any,
+  const { register, handleSubmit, reset, watch, setValue, formState: { errors } } = useZodForm<CollectionEntryFormValues>(collectionEntryFormSchema, {
     defaultValues: { ...EMPTY_DEFAULTS, ...defaultValues },
   });
 

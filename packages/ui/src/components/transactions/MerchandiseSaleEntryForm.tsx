@@ -1,7 +1,6 @@
 import React, { useEffect } from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
 import { merchandiseSaleEntryFormSchema, type MerchandiseSaleEntryFormValues } from '@pump/shared';
+import { useZodForm } from '../../forms/useZodForm.js';
 import type { ShiftOption } from './ExpenseEntryForm.js';
 import { Field, TextInput, NumberInput, Select } from '../primitives/Field.js';
 import { Segmented } from '../primitives/Segmented.js';
@@ -54,8 +53,7 @@ export const MerchandiseSaleEntryForm: React.FC<MerchandiseSaleEntryFormProps> =
 }) => {
   const hasMultipleShiftOptions = shiftOptions.length > 1;
 
-  const { register, handleSubmit, reset, watch, setValue, formState: { errors } } = useForm<MerchandiseSaleEntryFormValues>({
-    resolver: zodResolver(merchandiseSaleEntryFormSchema) as any,
+  const { register, handleSubmit, reset, watch, setValue, formState: { errors } } = useZodForm<MerchandiseSaleEntryFormValues>(merchandiseSaleEntryFormSchema, {
     defaultValues: { ...EMPTY_DEFAULTS, ...defaultValues },
   });
 

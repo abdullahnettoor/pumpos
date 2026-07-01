@@ -1,7 +1,6 @@
 import React, { useEffect } from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
 import { expenseEntryFormSchema, type ExpenseEntryFormValues } from '@pump/shared';
+import { useZodForm } from '../../forms/useZodForm.js';
 import { Field, TextInput, NumberInput, Select, DateField } from '../primitives/Field.js';
 
 export interface ShiftOption {
@@ -59,8 +58,7 @@ export const ExpenseEntryForm: React.FC<ExpenseEntryFormProps> = ({
 }) => {
   const hasMultipleShiftOptions = shiftOptions.length > 1;
 
-  const { register, handleSubmit, reset, formState: { errors } } = useForm<ExpenseEntryFormValues>({
-    resolver: zodResolver(expenseEntryFormSchema) as any,
+  const { register, handleSubmit, reset, formState: { errors } } = useZodForm<ExpenseEntryFormValues>(expenseEntryFormSchema, {
     defaultValues: { ...EMPTY_DEFAULTS, ...defaultValues },
   });
 
