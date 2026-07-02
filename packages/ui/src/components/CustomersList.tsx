@@ -9,6 +9,7 @@ import { LedgerView } from './ledger/LedgerView.js';
 import { DataTable } from './primitives/DataTable.js';
 import { inr } from '../utils/format.js';
 import { Tabs } from './primitives/Tabs.js';
+import { PageLayout } from './primitives/PageLayout.js';
 import { useConfirm } from './primitives/ConfirmDialog.js';
 import { useToast } from './primitives/ToastProvider.js';
 import type { ColumnDef } from '@tanstack/react-table';
@@ -531,57 +532,41 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
   }
 
   return (
-    <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '24px', fontFamily: 'var(--font-sans)' }}>
-      {/* Page Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <h1 style={{ fontSize: '20px', fontWeight: 600, color: 'var(--text-strong)' }}>
-            Customer Fleet Accounts
-          </h1>
-          <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '2px' }}>
-            Manage fleet customer profiles, credit limits, and record shift collections.
-          </p>
-        </div>
-        
-        {activeTab === 'transactions' && (
-          <button
-            onClick={() => openCollectionDrawer()}
-            className="btn btn-primary btn-md"
-          >
-            <Plus size={14} /> Add Collection
-          </button>
-        )}
-        {activeTab === 'registry' && (
-          <button
-            onClick={openCreateDrawer}
-            className="btn btn-primary btn-md"
-          >
-            <Plus size={14} /> Add Customer
-          </button>
-        )}
-        {activeTab === 'vehicles' && (
-          <button
-            onClick={openCreateVehicleDrawer}
-            disabled={!vehicleCustomerId}
-            className="btn btn-primary btn-md"
-          >
-            <Plus size={14} /> Add Vehicle
-          </button>
-        )}
-      </div>
-
-      {/* Tabs Menu */}
-      <Tabs
-        aria-label="Customers"
-        activeId={activeTab}
-        onChange={(id) => setActiveTab(id as TabType)}
-        tabs={[
-          { id: 'transactions', label: 'Shift Collections & Sales', icon: <CreditCard size={15} /> },
-          { id: 'registry', label: 'Customer Registry', icon: <Settings size={15} /> },
-          { id: 'vehicles', label: 'Vehicles', icon: <Truck size={15} /> },
-        ]}
-      />
-
+    <PageLayout
+      title="Customer Fleet Accounts"
+      subtitle="Manage fleet customer profiles, credit limits, and record shift collections."
+      actions={
+        <>
+          {activeTab === 'transactions' && (
+            <button onClick={() => openCollectionDrawer()} className="btn btn-primary btn-md">
+              <Plus size={14} /> Add Collection
+            </button>
+          )}
+          {activeTab === 'registry' && (
+            <button onClick={openCreateDrawer} className="btn btn-primary btn-md">
+              <Plus size={14} /> Add Customer
+            </button>
+          )}
+          {activeTab === 'vehicles' && (
+            <button onClick={openCreateVehicleDrawer} disabled={!vehicleCustomerId} className="btn btn-primary btn-md">
+              <Plus size={14} /> Add Vehicle
+            </button>
+          )}
+        </>
+      }
+      toolbar={
+        <Tabs
+          aria-label="Customers"
+          activeId={activeTab}
+          onChange={(id) => setActiveTab(id as TabType)}
+          tabs={[
+            { id: 'transactions', label: 'Shift Collections & Sales', icon: <CreditCard size={15} /> },
+            { id: 'registry', label: 'Customer Registry', icon: <Settings size={15} /> },
+            { id: 'vehicles', label: 'Vehicles', icon: <Truck size={15} /> },
+          ]}
+        />
+      }
+    >
       {/* Tab Contents */}
       <div>
         {activeTab === 'transactions' && (
@@ -1520,7 +1505,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
           </div>
         </form>
       </Drawer>
-    </div>
+    </PageLayout>
   );
 };
 

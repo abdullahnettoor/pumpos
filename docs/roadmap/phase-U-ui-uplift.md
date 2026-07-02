@@ -75,13 +75,13 @@ one-file swap.
 | Dashboard | ✅ | Role-aware widgets, tanks/prices, financial rollup, low-stock `Banner`s, network-aware SyncIndicator |
 | Organization | ✅ | New Owner tab: Stations/Team/Activity/Profile |
 | Reports | ✅ | Fixed UTC→business-date (`resolveBusinessDate` w/ station clock); `DateField`; already on `PageLayout`. Kept as extensible hub (L/F/X add tabs) |
-| Shifts (Today) | ☐ | Verify PageLayout, discoverable shortcuts, close-wizard polish |
-| Expenses | ☐ | Business-day context, primitives, states |
-| Purchases | ☐ | DataTable/primitives; finish GST register tab |
-| Customers | ☐ | Vehicles tab completeness, Combobox, ledger |
-| Inventory | ☐ | 4 tabs end-to-end, KpiCard, low-stock Banner |
-| Station Overview | ☐ | Primitives + inline validation on config tabs |
-| Fuel Pricing | ☐ | Price-history DataTable; fix `effectiveFrom` timezone |
+| Shifts (Today) | ✅ | Reviewed — already aligned (Tabs, LoadingSpinner, StatusBadge, .btn, inr, `<kbd>` hotkeys). Per-card lazy = Phase P5 |
+| Expenses | ✅ | Audited clean (PageLayout, DataTable, inr, primitives) |
+| Purchases | ✅ | PageLayout header + Tabs toolbar; Add Supplier → .btn; GST dates → .input; GST money → inr |
+| Customers | ✅ | PageLayout header + Tabs toolbar; Add Customer/Vehicle → .btn |
+| Inventory | ✅ | Audited clean (PageLayout, DataTable, .btn) |
+| Station Overview | ✅ | Selects inherit canonical .input (post-U6.5 CSS unify); inline-validation polish optional later |
+| Fuel Pricing | ✅ | money → inr; native inputs → NumberInput/Select; datetime → .input; submit → .btn; LoadingSpinner |
 
 **UI fold-ins from other phases (do while on the relevant page):** R letterhead + report-sections
 config (Station Overview / Reports); T DSSR tax-breakup (Reports); O sync-blocking on close + retry

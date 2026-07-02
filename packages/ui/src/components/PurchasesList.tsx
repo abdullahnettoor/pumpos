@@ -9,6 +9,7 @@ import { LedgerView } from './ledger/LedgerView.js';
 import { DataTable } from './primitives/DataTable.js';
 import { inr } from '../utils/format.js';
 import { Tabs } from './primitives/Tabs.js';
+import { PageLayout } from './primitives/PageLayout.js';
 import { useToast } from './primitives/ToastProvider.js';
 import type { ColumnDef } from '@tanstack/react-table';
 import { useForm } from 'react-hook-form';
@@ -459,48 +460,36 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, d
   ];
 
   return (
-    <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '24px', fontFamily: 'var(--font-sans)' }}>
-      {/* Page Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <h1 style={{ fontSize: '20px', fontWeight: 600, color: 'var(--text-strong)' }}>
-            Supplier Purchases
-          </h1>
-          <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '2px' }}>
-            Record product inventory purchases, fuel tanker drops, and manage supplier accounts.
-          </p>
-        </div>
-
-        {activeTab === 'transactions' && (
-          <button
-            onClick={() => openPurchaseDrawer()}
-            className="btn btn-primary btn-md"
-          >
-            <Plus size={14} /> Add Purchase
-          </button>
-        )}
-        {activeTab === 'registry' && (
-          <button
-            onClick={openCreateDrawer}
-            className="btn btn-primary btn-md"
-          >
-            <Plus size={14} /> Add Supplier
-          </button>
-        )}
-      </div>
-
-      {/* Tabs Menu */}
-      <Tabs
-        aria-label="Purchases"
-        activeId={activeTab}
-        onChange={(id) => setActiveTab(id as TabType)}
-        tabs={[
-          { id: 'transactions', label: 'Intakes & Drops', icon: <ShoppingCart size={15} /> },
-          { id: 'registry', label: 'Supplier Registry', icon: <Settings size={15} /> },
-          { id: 'gst', label: 'GST / ITC', icon: <Percent size={15} /> },
-        ]}
-      />
-
+    <PageLayout
+      title="Supplier Purchases"
+      subtitle="Record product inventory purchases, fuel tanker drops, and manage supplier accounts."
+      actions={
+        <>
+          {activeTab === 'transactions' && (
+            <button onClick={() => openPurchaseDrawer()} className="btn btn-primary btn-md">
+              <Plus size={14} /> Add Purchase
+            </button>
+          )}
+          {activeTab === 'registry' && (
+            <button onClick={openCreateDrawer} className="btn btn-primary btn-md">
+              <Plus size={14} /> Add Supplier
+            </button>
+          )}
+        </>
+      }
+      toolbar={
+        <Tabs
+          aria-label="Purchases"
+          activeId={activeTab}
+          onChange={(id) => setActiveTab(id as TabType)}
+          tabs={[
+            { id: 'transactions', label: 'Intakes & Drops', icon: <ShoppingCart size={15} /> },
+            { id: 'registry', label: 'Supplier Registry', icon: <Settings size={15} /> },
+            { id: 'gst', label: 'GST / ITC', icon: <Percent size={15} /> },
+          ]}
+        />
+      }
+    >
       {/* Tab Contents */}
       <div>
         {activeTab === 'transactions' && (
@@ -1196,7 +1185,7 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, d
           </div>
         )}
       </Drawer>
-    </div>
+    </PageLayout>
   );
 };
 
