@@ -4,6 +4,7 @@ import { PaymentTerminal } from '@pump/shared';
 import { StatusBadge } from '../StatusBadge.js';
 import { Drawer } from '../Drawer.js';
 import { DataTable } from '../primitives/DataTable.js';
+import { Checkbox } from '../primitives/Toggle.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import type { ColumnDef } from '@tanstack/react-table';
 
@@ -235,14 +236,8 @@ export const PaymentTerminalsPanel: React.FC<PaymentTerminalsPanelProps> = ({ st
           </div>
 
           <div style={{ display: 'flex', gap: '20px' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: 'var(--text-default)' }}>
-              <input type="checkbox" checked={supportsCard} onChange={(e) => setSupportsCard(e.target.checked)} />
-              Accepts Card
-            </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: 'var(--text-default)' }}>
-              <input type="checkbox" checked={supportsUpi} onChange={(e) => setSupportsUpi(e.target.checked)} />
-              Accepts UPI
-            </label>
+            <Checkbox label="Accepts Card" checked={supportsCard} onChange={(e) => setSupportsCard(e.target.checked)} />
+            <Checkbox label="Accepts UPI" checked={supportsUpi} onChange={(e) => setSupportsUpi(e.target.checked)} />
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', borderTop: '1px solid var(--border-soft)', paddingTop: '16px' }}>

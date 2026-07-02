@@ -6,6 +6,7 @@ import { Product, PRODUCT_UNITS } from '@pump/shared';
 import { StatusBadge } from '../StatusBadge.js';
 import { Drawer } from '../Drawer.js';
 import { DataTable } from '../primitives/DataTable.js';
+import { Checkbox } from '../primitives/Toggle.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import { useConfirm } from '../primitives/ConfirmDialog.js';
 import type { ColumnDef } from '@tanstack/react-table';
@@ -470,16 +471,11 @@ export const ProductsCatalog: React.FC = () => {
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', margin: '4px 0' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <input
-                type="checkbox"
-                id="stockTracked"
+              <Checkbox
+                label="Track Inventory (Maintain stock levels automatically)"
                 checked={stockTracked}
                 onChange={(e) => setStockTracked(e.target.checked)}
-                style={{ cursor: 'pointer' }}
               />
-              <label htmlFor="stockTracked" style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-strong)', cursor: 'pointer' }}>
-                Track Inventory (Maintain stock levels automatically)
-              </label>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>

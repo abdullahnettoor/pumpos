@@ -1,6 +1,7 @@
 import React from 'react';
 import { OnboardingDraft, OnboardingPaymentTerminalDraft } from '@pump/shared';
 import { createPaymentTerminalDraft } from '../onboardingDraft.js';
+import { Checkbox } from '../../primitives/Toggle.js';
 
 interface Step8PaymentTerminalsProps {
   draft: OnboardingDraft;
@@ -107,22 +108,16 @@ export const Step8PaymentTerminals: React.FC<Step8PaymentTerminalsProps> = ({
               </div>
 
               <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: 'var(--text-default)' }}>
-                  <input
-                    type="checkbox"
-                    checked={terminal.supportsCard}
-                    onChange={(e) => updateTerminal(terminal.draftId, { supportsCard: e.target.checked })}
-                  />
-                  Accepts Card
-                </label>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: 'var(--text-default)' }}>
-                  <input
-                    type="checkbox"
-                    checked={terminal.supportsUpi}
-                    onChange={(e) => updateTerminal(terminal.draftId, { supportsUpi: e.target.checked })}
-                  />
-                  Accepts UPI
-                </label>
+                <Checkbox
+                  label="Accepts Card"
+                  checked={terminal.supportsCard}
+                  onChange={(e) => updateTerminal(terminal.draftId, { supportsCard: e.target.checked })}
+                />
+                <Checkbox
+                  label="Accepts UPI"
+                  checked={terminal.supportsUpi}
+                  onChange={(e) => updateTerminal(terminal.draftId, { supportsUpi: e.target.checked })}
+                />
               </div>
             </div>
           ))}

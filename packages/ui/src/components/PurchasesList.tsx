@@ -7,6 +7,7 @@ import { Drawer } from './Drawer.js';
 import { PurchaseEntryForm } from './transactions/PurchaseEntryForm.js';
 import { LedgerView } from './ledger/LedgerView.js';
 import { DataTable } from './primitives/DataTable.js';
+import { Checkbox } from './primitives/Toggle.js';
 import { inr } from '../utils/format.js';
 import { Tabs } from './primitives/Tabs.js';
 import { PageLayout } from './primitives/PageLayout.js';
@@ -885,17 +886,12 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, d
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
-            <input
-              type="checkbox"
-              id="supIsActive"
+            <Checkbox
+              label="Supplier Active (Clear for purchase drops)"
               checked={supIsActive}
               onChange={(e) => setSupIsActive(e.target.checked)}
               disabled={drawerSubmitting}
-              style={{ cursor: 'pointer' }}
             />
-            <label htmlFor="supIsActive" style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-strong)', cursor: 'pointer' }}>
-              Supplier Active (Clear for purchase drops)
-            </label>
           </div>
 
           <div style={{ display: 'flex', gap: '12px', marginTop: '12px' }}>

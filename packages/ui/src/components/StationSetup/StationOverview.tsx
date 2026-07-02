@@ -11,7 +11,7 @@ import { Tabs } from '../primitives/Tabs.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import { LoadingSpinner } from '../LoadingSpinner.js';
 import { PaymentTerminalsPanel } from './PaymentTerminalsPanel.js';
-import { DEFAULT_SHIFT_SUMMARY_CONFIG, SHIFT_SUMMARY_SECTION_LABELS, DEFAULT_DSSR_CONFIG, DSSR_SECTION_LABELS } from '../../services/reports/reportConfig.js';
+import { ReportConfigPanel } from './ReportConfigPanel.js';
 
 const stationService = new CloudStationService();
 
@@ -30,7 +30,7 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
   const toast = useToast();
   const [editing, setEditing] = useState(false);
   const [editingBusiness, setEditingBusiness] = useState(false);
-  const [activeTab, setActiveTab] = useState<'general' | 'business' | 'products' | 'tanks' | 'dispensers' | 'terminals' | 'shifts'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'business' | 'reports' | 'products' | 'tanks' | 'dispensers' | 'terminals' | 'shifts'>('general');
 
   // General tab form states
   const [name, setName] = useState('');
@@ -49,9 +49,6 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
   const [roCode, setRoCode] = useState('');
   const [fuelBrand, setFuelBrand] = useState('');
   const [logoDataUrl, setLogoDataUrl] = useState<string | null>(null);
-  const [ssEnabled, setSsEnabled] = useState<Set<string>>(new Set(DEFAULT_SHIFT_SUMMARY_CONFIG.sections));
-  const [dssrEnabled, setDssrEnabled] = useState<Set<string>>(new Set(DEFAULT_DSSR_CONFIG.sections));
-  const [paper, setPaper] = useState<'A4' | 'LETTER'>('A4');
   const [onboardingStatus, setOnboardingStatus] = useState<string>('NOT_STARTED');
 
   useEffect(() => {
@@ -76,10 +73,6 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
       setRoCode(legal.roCode || '');
       setFuelBrand(selectedStation.settings?.fuel_brand || '');
       setLogoDataUrl(selectedStation.settings?.logo_data_url || null);
-      const rc = selectedStation.settings?.report_config || {};
-      setSsEnabled(new Set(rc.shiftSummary?.length ? rc.shiftSummary : DEFAULT_SHIFT_SUMMARY_CONFIG.sections));
-      setDssrEnabled(new Set(rc.dssr?.length ? rc.dssr : DEFAULT_DSSR_CONFIG.sections));
-      setPaper(rc.paper === 'LETTER' ? 'LETTER' : 'A4');
       setOnboardingStatus(selectedStation.onboardingStatus || 'NOT_STARTED');
     }
   }, [selectedStation]);
@@ -154,11 +147,6 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
           },
           fuel_brand: fuelBrand || null,
           logo_data_url: logoDataUrl || null,
-          report_config: {
-            shiftSummary: DEFAULT_SHIFT_SUMMARY_CONFIG.sections.filter((k) => ssEnabled.has(k)),
-            dssr: DEFAULT_DSSR_CONFIG.sections.filter((k) => dssrEnabled.has(k)),
-            paper,
-          },
         },
       });
       onStationSelected(updated);
@@ -198,6 +186,7 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
             tabs={[
               { id: 'general', label: 'General Info' },
               { id: 'business', label: 'Business & Branding' },
+              { id: 'reports', label: 'Reports' },
               { id: 'products', label: 'Products Catalog' },
               { id: 'tanks', label: 'Storage Tanks' },
               { id: 'dispensers', label: 'Dispenser Units' },
@@ -448,54 +437,9 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
                     </div>
 
                     <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: '12px' }}>
-                      <h3 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-strong)', marginBottom: '10px' }}>
-                        Report Sections
-                      </h3>
-                      <div className="form-group" style={{ maxWidth: '220px', marginBottom: '14px' }}>
-                        <label className="form-label">Paper Size</label>
-                        <select className="select" value={paper} onChange={(e) => setPaper(e.target.value as 'A4' | 'LETTER')} style={{ width: '100%' }}>
-                          <option value="A4">A4 (210 × 297 mm)</option>
-                          <option value="LETTER">US Letter (8.5 × 11 in)</option>
-                        </select>
-                        <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Applies to all PDF reports (Shift Summary, DSSR, Ledger statements).</span>
-                      </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
-                        <div>
-                          <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-default)', marginBottom: '8px' }}>Shift Summary</div>
-                          {DEFAULT_SHIFT_SUMMARY_CONFIG.sections.map((key) => (
-                            <label key={key} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', padding: '3px 0', color: 'var(--text-default)' }}>
-                              <input
-                                type="checkbox"
-                                checked={ssEnabled.has(key)}
-                                disabled={key === 'header'}
-                                onChange={() => {
-                                  if (key === 'header') return;
-                                  setSsEnabled((prev) => { const n = new Set(prev); if (n.has(key)) n.delete(key); else n.add(key); return n; });
-                                }}
-                              />
-                              {SHIFT_SUMMARY_SECTION_LABELS[key]}
-                            </label>
-                          ))}
-                        </div>
-                        <div>
-                          <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-default)', marginBottom: '8px' }}>Daily DSSR</div>
-                          {DEFAULT_DSSR_CONFIG.sections.map((key) => (
-                            <label key={key} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', padding: '3px 0', color: 'var(--text-default)' }}>
-                              <input
-                                type="checkbox"
-                                checked={dssrEnabled.has(key)}
-                                disabled={key === 'header'}
-                                onChange={() => {
-                                  if (key === 'header') return;
-                                  setDssrEnabled((prev) => { const n = new Set(prev); if (n.has(key)) n.delete(key); else n.add(key); return n; });
-                                }}
-                              />
-                              {DSSR_SECTION_LABELS[key]}
-                            </label>
-                          ))}
-                        </div>
-                      </div>
-                      <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Toggle which sections appear in each report. Header is always included.</span>
+                      <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                        Report paper size and which sections appear on each PDF are configured in the <strong>Reports</strong> tab.
+                      </span>
                     </div>
 
                     <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '12px', borderTop: '1px solid var(--border-soft)', paddingTop: '12px' }}>
@@ -534,14 +478,17 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
                         <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Logo</span>
                         <p style={{ fontSize: '13px', fontWeight: 500, marginTop: '4px', color: 'var(--text-default)' }}>{logoDataUrl ? 'Uploaded' : '—'}</p>
                       </div>
-                      <div>
-                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Report Paper</span>
-                        <p style={{ fontSize: '13px', fontWeight: 500, marginTop: '4px', color: 'var(--text-default)' }}>{paper === 'LETTER' ? 'US Letter' : 'A4'}</p>
-                      </div>
                     </div>
                   </div>
                 )}
               </div>
+            )}
+
+            {activeTab === 'reports' && (
+              <ReportConfigPanel
+                selectedStation={selectedStation}
+                onSaved={(updated) => { onStationSelected(updated); loadStations(true); }}
+              />
             )}
 
             {activeTab === 'products' && <ProductsCatalog />}

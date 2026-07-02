@@ -7,6 +7,7 @@ import { Drawer } from './Drawer.js';
 import { CollectionEntryForm } from './transactions/CollectionEntryForm.js';
 import { LedgerView } from './ledger/LedgerView.js';
 import { DataTable } from './primitives/DataTable.js';
+import { Checkbox } from './primitives/Toggle.js';
 import { inr } from '../utils/format.js';
 import { Tabs } from './primitives/Tabs.js';
 import { PageLayout } from './primitives/PageLayout.js';
@@ -1033,30 +1034,20 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
             </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
-            <input
-              type="checkbox"
-              id="custIsPrepaid"
+          <div style={{ marginTop: '4px' }}>
+            <Checkbox
+              label="Enable Prepaid Wallet Mode"
               {...registerCust('isPrepaid')}
               disabled={drawerSubmitting}
-              style={{ cursor: 'pointer' }}
             />
-            <label htmlFor="custIsPrepaid" style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-strong)', cursor: 'pointer' }}>
-              Enable Prepaid Wallet Mode
-            </label>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
-            <input
-              type="checkbox"
-              id="custIsActive"
+          <div style={{ marginTop: '4px' }}>
+            <Checkbox
+              label="Account Active (Clear for operational logging)"
               {...registerCust('isActive')}
               disabled={drawerSubmitting}
-              style={{ cursor: 'pointer' }}
             />
-            <label htmlFor="custIsActive" style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-strong)', cursor: 'pointer' }}>
-              Account Active (Clear for operational logging)
-            </label>
           </div>
 
           <div style={{ display: 'flex', gap: '12px', marginTop: '12px' }}>
@@ -1453,16 +1444,12 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <input
-              type="checkbox"
-              id="vehicleIsActive"
+            <Checkbox
+              label="Vehicle Active"
               checked={vehicleForm.isActive}
               onChange={(e) => setVehicleForm((prev) => ({ ...prev, isActive: e.target.checked }))}
               disabled={vehicleSubmitting}
             />
-            <label htmlFor="vehicleIsActive" style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-strong)' }}>
-              Vehicle Active
-            </label>
           </div>
 
           <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>

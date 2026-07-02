@@ -8,6 +8,7 @@ import { queryKeys, TIER } from '../../query/hooks.js';
 import { Station, userSchema } from '@pump/shared';
 import { Drawer } from '../Drawer.js';
 import { DataTable } from '../primitives/DataTable.js';
+import { Checkbox } from '../primitives/Toggle.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import type { ColumnDef } from '@tanstack/react-table';
 
@@ -256,13 +257,11 @@ export const UserRolesAssignment: React.FC = () => {
             {errors.fullName && <span style={{ color: 'var(--state-danger-fg)', fontSize: '11px' }}>{errors.fullName.message}</span>}
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px', margin: '4px 0' }}>
-            <input
-              type="checkbox"
-              id="enableAppAccess"
+          <div style={{ margin: '4px 0' }}>
+            <Checkbox
+              label="Enable App Access (allows login)"
               {...register('enableAppAccess')}
             />
-            <label htmlFor="enableAppAccess" style={{ cursor: 'pointer', color: 'var(--text-strong)', fontWeight: 500 }}>Enable App Access (allows login)</label>
           </div>
 
           {watchEnableAppAccess && (
@@ -328,14 +327,12 @@ export const UserRolesAssignment: React.FC = () => {
               <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Assign Stations</label>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '6px' }}>
                 {stations.map((s) => (
-                  <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px' }}>
-                    <input
-                      type="checkbox"
-                      checked={watchStationIds.includes(s.id)}
-                      onChange={(e) => handleStationCheckbox(s.id, e.target.checked)}
-                    />
-                    {s.name} ({s.code})
-                  </label>
+                  <Checkbox
+                    key={s.id}
+                    label={`${s.name} (${s.code})`}
+                    checked={watchStationIds.includes(s.id)}
+                    onChange={(e) => handleStationCheckbox(s.id, e.target.checked)}
+                  />
                 ))}
               </div>
             </div>

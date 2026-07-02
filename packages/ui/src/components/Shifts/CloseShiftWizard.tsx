@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Drawer } from '../Drawer.js';
+import { Checkbox } from '../primitives/Toggle.js';
 import { inr } from '../../utils/format.js';
 import { AlertTriangle, Check, ChevronLeft, ChevronRight, Lock, Wallet, Droplet, FileText } from 'lucide-react';
 
@@ -238,9 +239,9 @@ export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
               on-the-ground count. Otherwise system will use computed expected stock.
             </p>
 
-            <label className="close-wizard-toggle">
-              <input
-                type="checkbox"
+            <div className="close-wizard-toggle">
+              <Checkbox
+                label="I recorded physical dip readings this shift"
                 checked={recordDip}
                 onChange={(e) => {
                   const next = e.target.checked;
@@ -248,8 +249,7 @@ export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
                   if (!next) onDipReadingsChange({});
                 }}
               />
-              <span>I recorded physical dip readings this shift</span>
-            </label>
+            </div>
 
             {recordDip && stationTanks.length === 0 && (
               <div className="close-wizard-helper" style={{ marginTop: '8px' }}>
@@ -310,14 +310,13 @@ export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
                     <li key={idx}>{w}</li>
                   ))}
                 </ul>
-                <label className="close-wizard-toggle">
-                  <input
-                    type="checkbox"
+                <div className="close-wizard-toggle">
+                  <Checkbox
+                    label="I confirm these readings are correct and wish to proceed anyway."
                     checked={confirmWarningsChecked}
                     onChange={(e) => onConfirmWarningsChange(e.target.checked)}
                   />
-                  <span>I confirm these readings are correct and wish to proceed anyway.</span>
-                </label>
+                </div>
               </>
             )}
           </section>
