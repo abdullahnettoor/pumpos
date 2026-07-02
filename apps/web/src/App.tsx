@@ -67,8 +67,21 @@ const isLocalDev = (() => {
 
 export const App: React.FC = () => {
   const [currentPath, setCurrentPath] = useState('/dashboard');
-  const [syncStatus] = useState<'online' | 'offline' | 'synced' | 'pending' | 'failed'>('synced');
-  
+  const [syncStatus, setSyncStatus] = useState<'online' | 'offline' | 'synced' | 'pending' | 'failed'>(
+    typeof navigator !== 'undefined' && navigator.onLine === false ? 'offline' : 'online',
+  );
+
+  // Reflect real browser network status in the top-bar indicator.
+  useEffect(() => {
+    const update = () => setSyncStatus(navigator.onLine ? 'online' : 'offline');
+    window.addEventListener('online', update);
+    window.addEventListener('offline', update);
+    return () => {
+      window.removeEventListener('online', update);
+      window.removeEventListener('offline', update);
+    };
+  }, []);
+
   // Track globally active/selected station for setup context
   const [stations, setStations] = useState<Station[]>([]);
   const [selectedStation, setSelectedStation] = useState<Station | null>(null);
@@ -122,7 +135,7 @@ export const App: React.FC = () => {
         const sessionData = await stationService.getCurrentSession();
         setUserRole(sessionData.user.role);
         resolvedRef.current = true;
-        setUserName(sessionData.user.fullName || sessionData.user.email);
+        setUserName(sessionData.user.fullName?.trim() || sessionData.user.email);
 
         // Stations rarely change — serve from the shared cache (+ localStorage) on
         // repeat session resolves instead of re-hitting /setup/stations every time.
@@ -455,7 +468,7 @@ export const App: React.FC = () => {
       userRole={userRole || 'Staff'}
       userName={userName}
       syncStatus={syncStatus}
-      pendingSyncCount={syncStatus === 'pending' ? 3 : 0}
+      pendingSyncCount={0}
       onLogout={handleLogout}
       stations={stations}
       selectedStation={selectedStation}

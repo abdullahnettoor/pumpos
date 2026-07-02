@@ -9,6 +9,7 @@ import {
   CloudNozzleService,
   CloudUserAssignmentService,
   CloudShiftTemplateService,
+  CloudPricingService,
 } from '../services/cloud.js';
 
 /**
@@ -28,6 +29,7 @@ const dispenserSvc = new CloudDispenserService();
 const nozzleSvc = new CloudNozzleService();
 const userSvc = new CloudUserAssignmentService();
 const templateSvc = new CloudShiftTemplateService();
+const pricingSvc = new CloudPricingService();
 
 export const queryKeys = {
   shiftStatus: (stationId: string, lite = false) => ['shift-status', stationId, lite] as const,
@@ -53,6 +55,7 @@ export const queryKeys = {
   nozzles: (stationId: string) => ['nozzles', stationId] as const,
   users: () => ['users'] as const,
   shiftTemplates: () => ['shift-templates'] as const,
+  pricing: (stationId: string) => ['pricing', stationId] as const,
 } as const;
 
 type Options<T> = Omit<UseQueryOptions<T, Error, T, readonly unknown[]>, 'queryKey' | 'queryFn'>;
@@ -104,6 +107,16 @@ export function useNozzles(stationId: string | null | undefined, options?: Optio
 
 export function useShiftTemplates(options?: Options<any[]>) {
   return useQuery({ queryKey: queryKeys.shiftTemplates(), queryFn: () => templateSvc.listTemplates(), ...TIER.static, ...options });
+}
+
+export function usePricing(stationId: string | null | undefined, options?: Options<any[]>) {
+  return useQuery({
+    queryKey: queryKeys.pricing(stationId ?? ''),
+    queryFn: () => pricingSvc.getPricing(stationId!),
+    enabled: !!stationId,
+    ...TIER.semi,
+    ...options,
+  });
 }
 
 export function useTanks(stationId: string | null | undefined, options?: Options<any[]>) {

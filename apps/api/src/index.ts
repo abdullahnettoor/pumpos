@@ -25,6 +25,7 @@ type Variables = {
   user: {
     id: string;
     email: string | null;
+    fullName: string | null;
     organizationId: string;
     role: Role;
     assignedStationIds: string[];
@@ -192,6 +193,7 @@ api.use('*', async (c, next) => {
     c.set('user', {
       id: dbUser.id,
       email: dbUser.email,
+      fullName: dbUser.fullName ?? null,
       organizationId: dbUser.organizationId,
       role: dbUser.role as Role,
       assignedStationIds: assigns.map(a => a.stationId),
