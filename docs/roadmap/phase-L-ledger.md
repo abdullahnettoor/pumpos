@@ -29,6 +29,11 @@
 
 ## L4 — Expense register
 - Category-grouped expense view + KPIs.
+- **Done ✅** — `reports/ExpenseRegister.tsx` as a **Reports tab** (Daily DSSR | Expense Register). Business-date
+  range filter (defaults to current business month via `resolveBusinessDate`), KPI strip (total / entries /
+  categories / largest category), category breakdown with % bars, and a full `DataTable` (date, category,
+  description, paid-from, amount). Client-side over cached `useExpenses` (VOIDED excluded); no backend. Reports
+  is now the extensible hub for L/F/X report tabs.
 
 ## L5 — PDF statements
 - Reuse Phase R: `buildCustomerStatementDoc` etc. → download via existing saver.

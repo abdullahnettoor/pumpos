@@ -3,10 +3,12 @@ import { CloudShiftService } from '../services/cloud.js';
 import { DailyDssrView } from './DailyDssrView.js';
 import { LoadingSpinner } from './LoadingSpinner.js';
 import { PageLayout } from './primitives/PageLayout.js';
+import { Tabs } from './primitives/Tabs.js';
 import { DateField } from './primitives/Field.js';
+import { ExpenseRegister } from './reports/ExpenseRegister.js';
 import { inr } from '../utils/format.js';
 import { resolveBusinessDate } from '@pump/shared';
-import { Calendar, RefreshCw, Play, Zap } from 'lucide-react';
+import { Calendar, RefreshCw, Play, Zap, Receipt } from 'lucide-react';
 
 const shiftService = new CloudShiftService();
 
@@ -15,14 +17,14 @@ interface ReportsOverviewProps {
   userRole: 'Owner' | 'Manager' | 'Accountant' | 'Staff';
 }
 
-type ReportsTab = 'daily-dssr';
+type ReportsTab = 'daily-dssr' | 'expense-register';
 
 export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
   selectedStation,
 }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab] = useState<ReportsTab>('daily-dssr');
+  const [activeTab, setActiveTab] = useState<ReportsTab>('daily-dssr');
 
   // Daily DSSR states
   const [dailyDssrList, setDailyDssrList] = useState<any[]>([]);
@@ -104,7 +106,7 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
   return (
     <PageLayout
       title="Reports"
-      subtitle="Daily sales summaries. Per-shift summaries are in the Shift tab → History."
+      subtitle="Daily sales summaries and registers. Per-shift summaries are in the Shift tab → History."
       actions={activeTab === 'daily-dssr' ? (
         <button
           className="btn btn-secondary btn-sm"
@@ -116,6 +118,17 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
           Refresh
         </button>
       ) : undefined}
+      toolbar={
+        <Tabs
+          aria-label="Reports"
+          activeId={activeTab}
+          onChange={(id) => setActiveTab(id as ReportsTab)}
+          tabs={[
+            { id: 'daily-dssr', label: 'Daily DSSR', icon: <Zap size={13} /> },
+            { id: 'expense-register', label: 'Expense Register', icon: <Receipt size={13} /> },
+          ]}
+        />
+      }
     >
 
       {error && (
@@ -308,6 +321,8 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
           </div>
         </div>
       )}
+
+      {activeTab === 'expense-register' && <ExpenseRegister selectedStation={selectedStation} />}
     </PageLayout>
   );
 };
