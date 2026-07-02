@@ -49,8 +49,12 @@
   `INVOICE_GENERATED`) + `InvoiceRepository`/`InvoiceSequenceRepository` ports + `financialYear()` helper. Drizzle
   adapters. Routes: `POST /transactions/sales/:id/invoice` (issue, Owner/Manager/Accountant), `GET
   /transactions/invoices`, `GET /transactions/invoices/:id`, `GET /transactions/sales/:id/invoice`.
-- **Part 2 (PDF + UI) — remaining**: `invoiceDoc.tsx` (react-pdf, reuse kit) + a UI entry point to issue/download
-  from a B2B merchandise sale, and an invoices list.
+- **Part 2 (PDF + UI) ✅ done + deployed**: `services/reports/invoiceDoc.tsx` (`InvoiceDoc`) reuses the Phase-R
+  react-pdf kit (letterhead band, generic table) — line items + CGST/SGST-or-IGST summary + round-off + **amount
+  in words** (Indian numbering), supplier identity read from the snapshot. Backend `GET /transactions/sales`
+  (non-fuel sales with invoice status). Reports **Invoices** tab (`InvoicesPanel`): date range, KPIs
+  (sales / invoiced / pending), per-row **Issue** (idempotent) → downloads PDF, or **PDF** re-download for issued
+  ones; Staff can't issue. `useSales`/`useInvoices` hooks + `issueInvoice`/`getInvoices`/`getSales` service.
 
 ## T5 — Reports
 - DSSR/shift summary tax breakup (output VAT vs output GST) for the day.

@@ -898,6 +898,52 @@ transactionsRouter.get('/sales/:id/invoice', async (c) => {
   return c.json({ success: true, data: invoice });
 });
 
+// GET /transactions/sales?stationId=&from=&to= — non-fuel (merchandise) sales
+// with their invoice status, for the Invoices workspace. Fuel sales are excluded
+// (they're VAT, not GST-invoiceable here).
+transactionsRouter.get('/sales', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  const stationId = c.req.query('stationId');
+  const from = c.req.query('from');
+  const to = c.req.query('to');
+  if (!stationId) return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Missing stationId' } }, 400);
+  if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId })) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+  }
+  const rows = await db
+    .select({
+      id: schema.sales.id,
+      documentNumber: schema.sales.documentNumber,
+      saleType: schema.sales.saleType,
+      paymentMethod: schema.sales.paymentMethod,
+      customerId: schema.sales.customerId,
+      subtotalAmount: schema.sales.subtotalAmount,
+      taxAmount: schema.sales.taxAmount,
+      totalAmount: schema.sales.totalAmount,
+      createdAt: schema.sales.createdAt,
+      businessDate: schema.businessDays.businessDate,
+      customerName: schema.customers.name,
+      invoiceId: schema.invoices.id,
+      invoiceNumber: schema.invoices.invoiceNumber,
+    })
+    .from(schema.sales)
+    .innerJoin(schema.businessDays, eq(schema.sales.businessDayId, schema.businessDays.id))
+    .leftJoin(schema.customers, eq(schema.customers.id, schema.sales.customerId))
+    .leftJoin(schema.invoices, eq(schema.invoices.saleId, schema.sales.id))
+    .where(
+      and(
+        eq(schema.businessDays.stationId, stationId),
+        eq(schema.businessDays.organizationId, user.organizationId),
+        ne(schema.sales.saleType, 'Fuel'),
+        ...(from ? [gte(schema.businessDays.businessDate, from)] : []),
+        ...(to ? [lte(schema.businessDays.businessDate, to)] : []),
+      ),
+    )
+    .orderBy(desc(schema.sales.createdAt));
+  return c.json({ success: true, data: rows });
+});
+
 transactionsRouter.get('/shifts/:id/transactions', async (c) => {
   const db = c.var.db;
   const shiftId = c.req.param('id');

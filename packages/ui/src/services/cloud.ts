@@ -626,6 +626,41 @@ export class CloudTransactionService {
     return request<any[]>(`/transactions/suppliers/${supplierId}/ledger`);
   }
 
+  /** Issue (or fetch existing) GST tax invoice for a sale. Idempotent. */
+  async issueInvoice(saleId: string): Promise<any> {
+    return request<any>(`/transactions/sales/${saleId}/invoice`, { method: 'POST', body: '{}' });
+  }
+
+  /** The invoice already issued for a sale, or null if none. */
+  async getInvoiceForSale(saleId: string): Promise<any | null> {
+    try {
+      return await request<any>(`/transactions/sales/${saleId}/invoice`);
+    } catch {
+      return null;
+    }
+  }
+
+  async getInvoices(params: { stationId?: string; from?: string; to?: string } = {}): Promise<any[]> {
+    const qs = new URLSearchParams();
+    if (params.stationId) qs.set('stationId', params.stationId);
+    if (params.from) qs.set('from', params.from);
+    if (params.to) qs.set('to', params.to);
+    const q = qs.toString();
+    return request<any[]>(`/transactions/invoices${q ? `?${q}` : ''}`);
+  }
+
+  async getInvoice(id: string): Promise<any> {
+    return request<any>(`/transactions/invoices/${id}`);
+  }
+
+  /** Non-fuel (merchandise) sales with invoice status, for the Invoices workspace. */
+  async getSales(params: { stationId: string; from?: string; to?: string }): Promise<any[]> {
+    const qs = new URLSearchParams({ stationId: params.stationId });
+    if (params.from) qs.set('from', params.from);
+    if (params.to) qs.set('to', params.to);
+    return request<any[]>(`/transactions/sales?${qs.toString()}`);
+  }
+
   async recordSupplierPayment(payload: { shiftId?: string; stationId?: string; transactionDate?: string; paidFrom?: 'SHIFT_CASH' | 'BANK' | 'OWNER'; supplierId: string; amount: number; notes?: string }): Promise<any> {
     return request<any>('/transactions/supplier-payments', {
       method: 'POST',

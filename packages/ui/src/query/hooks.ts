@@ -63,6 +63,8 @@ export const queryKeys = {
   organization: () => ['organization'] as const,
   events: (stationId: string, type: string) => ['events', stationId, type] as const,
   moneyMovements: (stationId: string, from: string, to: string) => ['money-movements', stationId, from, to] as const,
+  invoices: (stationId: string, from: string, to: string) => ['invoices', stationId, from, to] as const,
+  sales: (stationId: string, from: string, to: string) => ['sales', stationId, from, to] as const,
 } as const;
 
 type Options<T> = Omit<UseQueryOptions<T, Error, T, readonly unknown[]>, 'queryKey' | 'queryFn'>;
@@ -143,6 +145,26 @@ export function useMoneyMovements(params: { stationId?: string | null; from?: st
   return useQuery({
     queryKey: queryKeys.moneyMovements(params.stationId ?? '', params.from ?? '', params.to ?? ''),
     queryFn: () => txService.getMoneyMovements({ stationId: params.stationId!, from: params.from, to: params.to }),
+    enabled: !!params.stationId,
+    ...TIER.operational,
+    ...options,
+  });
+}
+
+export function useInvoices(params: { stationId?: string | null; from?: string; to?: string }, options?: Options<any[]>) {
+  return useQuery({
+    queryKey: queryKeys.invoices(params.stationId ?? '', params.from ?? '', params.to ?? ''),
+    queryFn: () => txService.getInvoices({ stationId: params.stationId ?? undefined, from: params.from, to: params.to }),
+    enabled: !!params.stationId,
+    ...TIER.operational,
+    ...options,
+  });
+}
+
+export function useSales(params: { stationId?: string | null; from?: string; to?: string }, options?: Options<any[]>) {
+  return useQuery({
+    queryKey: queryKeys.sales(params.stationId ?? '', params.from ?? '', params.to ?? ''),
+    queryFn: () => txService.getSales({ stationId: params.stationId!, from: params.from, to: params.to }),
     enabled: !!params.stationId,
     ...TIER.operational,
     ...options,
