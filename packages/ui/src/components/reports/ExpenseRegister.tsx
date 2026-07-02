@@ -1,10 +1,10 @@
 import React, { useMemo, useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
-import { resolveBusinessDate } from '@pump/shared';
 import { useExpenses } from '../../query/hooks.js';
 import { DataTable } from '../primitives/DataTable.js';
 import { KpiCard } from '../primitives/KpiCard.js';
-import { DateField } from '../primitives/Field.js';
+import { DateRangeField, computeRange } from '../primitives/DateRangeField.js';
+import type { DateRange } from '../primitives/DateRangeField.js';
 import { inr } from '../../utils/format.js';
 import { Calendar } from 'lucide-react';
 
@@ -51,9 +51,8 @@ export interface ExpenseRegisterProps {
  */
 export const ExpenseRegister: React.FC<ExpenseRegisterProps> = ({ selectedStation }) => {
   const s = (selectedStation as any)?.settings || {};
-  const today = resolveBusinessDate({ timeZone: s.timezone, dayStartsAt: s.business_day_starts_at });
-  const [from, setFrom] = useState(`${today.slice(0, 8)}01`);
-  const [to, setTo] = useState(today);
+  const clock = { timeZone: s.timezone, dayStartsAt: s.business_day_starts_at };
+  const [range, setRange] = useState<DateRange>(() => computeRange('this-month', clock));
 
   const { data: expenses, isLoading, error } = useExpenses();
 
@@ -62,9 +61,9 @@ export const ExpenseRegister: React.FC<ExpenseRegisterProps> = ({ selectedStatio
       (expenses || []).filter((e: any) => {
         if (e.status === 'VOIDED') return false;
         const d = e.businessDate ?? e.shiftDate;
-        return d && d >= from && d <= to;
+        return d && d >= range.from && d <= range.to;
       }),
-    [expenses, from, to],
+    [expenses, range.from, range.to],
   );
 
   const total = filtered.reduce((sum: number, e: any) => sum + Number(e.amount || 0), 0);
@@ -83,16 +82,7 @@ export const ExpenseRegister: React.FC<ExpenseRegisterProps> = ({ selectedStatio
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-      <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
-        <div>
-          <label className="field-label">From</label>
-          <DateField value={from} onChange={(e) => setFrom(e.target.value)} />
-        </div>
-        <div>
-          <label className="field-label">To</label>
-          <DateField value={to} onChange={(e) => setTo(e.target.value)} />
-        </div>
-      </div>
+      <DateRangeField value={range} onChange={setRange} clock={clock} />
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px' }}>
         <KpiCard label="Total Expenses" value={inr(total)} tone="danger" />

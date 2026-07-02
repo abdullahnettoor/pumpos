@@ -658,11 +658,12 @@ transactionsRouter.get('/collections', async (c) => {
 });
 
 // GET /transactions/money-movements?stationId=&from=&to=
-// Cash & Bank "payments & receipts" ledger (Phase L3): discretely recorded money
-// movements — collections IN, expenses OUT, supplier payments OUT — classified by
-// account (Cash vs Bank). Deliberately EXCLUDES fuel/drawer sales (reconciled in
-// the DSSR) and OWNER-funded items (don't touch cash/bank), so it never
-// double-counts the authoritative shift/DSSR figures.
+// Money-account "payments & receipts" ledger (Phase L3/L6): discretely recorded
+// money movements — collections IN, expenses OUT, supplier payments OUT —
+// classified by the funding account (Cash / Bank / Owner). Cash & Bank drive the
+// Cash & Bank ledger tab; Owner-funded rows drive the Owner ledger tab. Always
+// EXCLUDES fuel/drawer sales (reconciled in the DSSR), so it never double-counts
+// the authoritative shift/DSSR figures.
 transactionsRouter.get('/money-movements', async (c) => {
   const db = c.var.db;
   const user = c.var.user;
@@ -701,10 +702,10 @@ transactionsRouter.get('/money-movements', async (c) => {
       .where(and(eq(schema.supplierTransactions.transactionType, 'Payment'), ...dateConds)),
   ]);
 
-  const accountForPaidFrom = (pf: string): 'Cash' | 'Bank' | null =>
-    pf === 'SHIFT_CASH' ? 'Cash' : pf === 'BANK' ? 'Bank' : null;
+  const accountForPaidFrom = (pf: string): 'Cash' | 'Bank' | 'Owner' =>
+    pf === 'SHIFT_CASH' ? 'Cash' : pf === 'OWNER' ? 'Owner' : 'Bank';
 
-  type Movement = { id: string; date: string; createdAt: any; account: 'Cash' | 'Bank'; direction: 'in' | 'out'; label: string; source: string; amount: number };
+  type Movement = { id: string; date: string; createdAt: any; account: 'Cash' | 'Bank' | 'Owner'; direction: 'in' | 'out'; label: string; source: string; amount: number };
   const movements: Movement[] = [];
 
   for (const r of collectionRows) {
@@ -721,12 +722,10 @@ transactionsRouter.get('/money-movements', async (c) => {
   }
   for (const r of expenseRows) {
     const account = accountForPaidFrom(r.paidFrom);
-    if (!account) continue;
     movements.push({ id: r.id, date: r.businessDate, createdAt: r.createdAt, account, direction: 'out', label: r.categoryName || r.description || 'Expense', source: 'Expense', amount: Number(r.amount) });
   }
   for (const r of paymentRows) {
     const account = accountForPaidFrom(r.paidFrom);
-    if (!account) continue;
     movements.push({ id: r.id, date: r.businessDate, createdAt: r.createdAt, account, direction: 'out', label: r.supplierName ? `Payment · ${r.supplierName}` : 'Supplier payment', source: 'Supplier Payment', amount: Number(r.amount) });
   }
 

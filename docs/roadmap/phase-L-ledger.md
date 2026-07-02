@@ -44,5 +44,20 @@
 ## L5 — PDF statements
 - Reuse Phase R: `buildCustomerStatementDoc` etc. → download via existing saver.
 
+## L6 — Entity-aware unified Ledger ✅ done (deployed)
+- Reports **Ledger** tab: pick a ledger **type** (`Segmented`: Customer | Supplier | Cash | Bank | Owner) →
+  entity `Combobox` (only for Customer/Supplier) → period → **View Ledger** button. **Submit-to-fetch**: the
+  data query only fires on the button (draft form changes never hit the backend).
+- `reports/UnifiedLedger.tsx` is **registry-driven** — `REGISTRY[type]` supplies `resolve()`, debit/credit rule,
+  KPI labels, balance meaning & tone, caption. Adding a future entity (employee, fleet, GST, specific bank
+  account) = **one registry entry**, zero redesign.
+- Reuses the generic `<LedgerView>` (running balance, debit raises) + `useCustomerLedger`/`useSupplierLedger`
+  (party ledgers, clamped client-side to the period) and `useMoneyMovements` (Cash/Bank/Owner, filtered by account).
+- Backend: `money-movements` now also classifies **Owner** (`paidFrom OWNER`), so the Owner ledger finally has a
+  home. Cash & Bank tab still filters to Cash/Bank so it's unaffected. Deployed.
+- KPIs per type: Customer (Credit Sales / Collections / Receivable), Supplier (Purchases / Payments / Payable),
+  Cash & Bank (Received / Paid Out / Balance), Owner (Owner Funded / Repaid-Drawn / Owner Funding). Balances are
+  period-relative (opening balances = expansion).
+
 ## Expansion
 - Aging buckets, reminders, interest on overdue, multi-currency, dedicated `bank_accounts`/`cash_accounts` with reconciliation, statement email/WhatsApp.

@@ -1,8 +1,8 @@
 import React, { useMemo, useState } from 'react';
-import { resolveBusinessDate } from '@pump/shared';
 import { useMoneyMovements } from '../../query/hooks.js';
 import { KpiCard } from '../primitives/KpiCard.js';
-import { DateField } from '../primitives/Field.js';
+import { DateRangeField, computeRange } from '../primitives/DateRangeField.js';
+import type { DateRange } from '../primitives/DateRangeField.js';
 import { Segmented } from '../primitives/Segmented.js';
 import { inr } from '../../utils/format.js';
 
@@ -20,12 +20,11 @@ export interface CashBankLedgerProps {
  */
 export const CashBankLedger: React.FC<CashBankLedgerProps> = ({ selectedStation }) => {
   const s = (selectedStation as any)?.settings || {};
-  const today = resolveBusinessDate({ timeZone: s.timezone, dayStartsAt: s.business_day_starts_at });
-  const [from, setFrom] = useState(`${today.slice(0, 8)}01`);
-  const [to, setTo] = useState(today);
+  const clock = { timeZone: s.timezone, dayStartsAt: s.business_day_starts_at };
+  const [range, setRange] = useState<DateRange>(() => computeRange('this-month', clock));
   const [account, setAccount] = useState<'Cash' | 'Bank'>('Cash');
 
-  const { data: movements, isLoading, error } = useMoneyMovements({ stationId: selectedStation?.id, from, to });
+  const { data: movements, isLoading, error } = useMoneyMovements({ stationId: selectedStation?.id, from: range.from, to: range.to });
 
   const rows = useMemo(
     () => (movements || []).filter((m: any) => m.account === account),
@@ -61,16 +60,7 @@ export const CashBankLedger: React.FC<CashBankLedgerProps> = ({ selectedStation 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
       <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end', flexWrap: 'wrap', justifyContent: 'space-between' }}>
-        <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
-          <div>
-            <label className="field-label">From</label>
-            <DateField value={from} onChange={(e) => setFrom(e.target.value)} />
-          </div>
-          <div>
-            <label className="field-label">To</label>
-            <DateField value={to} onChange={(e) => setTo(e.target.value)} />
-          </div>
-        </div>
+        <DateRangeField value={range} onChange={setRange} clock={clock} />
         <div style={{ minWidth: 200 }}>
           <Segmented
             options={[{ value: 'Cash', label: 'Cash' }, { value: 'Bank', label: 'Bank' }]}

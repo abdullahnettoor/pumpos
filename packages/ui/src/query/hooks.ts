@@ -200,6 +200,26 @@ export function useSuppliers(activeOnly = true, options?: Options<any[]>) {
   return useQuery({ queryKey: queryKeys.suppliers(activeOnly), queryFn: () => txService.getSuppliers(activeOnly), ...TIER.semi, ...options });
 }
 
+export function useCustomerLedger(customerId: string | null | undefined, options?: Options<any[]>) {
+  return useQuery({
+    queryKey: queryKeys.customerLedger(customerId ?? ''),
+    queryFn: () => txService.getCustomerLedger(customerId!),
+    enabled: !!customerId,
+    ...TIER.operational,
+    ...options,
+  });
+}
+
+export function useSupplierLedger(supplierId: string | null | undefined, options?: Options<any[]>) {
+  return useQuery({
+    queryKey: queryKeys.supplierLedger(supplierId ?? ''),
+    queryFn: () => txService.getSupplierLedger(supplierId!),
+    enabled: !!supplierId,
+    ...TIER.operational,
+    ...options,
+  });
+}
+
 export function useExpenseCategories(options?: Options<any[]>) {
   return useQuery({ queryKey: queryKeys.expenseCategories(), queryFn: () => txService.getExpenseCategories(), ...TIER.semi, ...options });
 }

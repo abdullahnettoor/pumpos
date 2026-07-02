@@ -46,6 +46,8 @@ export type { ToastApi, ToastVariant, ToastOptions } from './components/primitiv
 export { Skeleton, SkeletonCard, SkeletonGrid } from './components/primitives/Skeleton.js';
 export { Field, TextInput, NumberInput, MoneyInput, Textarea, Select, DateField } from './components/primitives/Field.js';
 export type { FieldProps, TextInputProps, NumberInputProps, TextareaProps, SelectProps } from './components/primitives/Field.js';
+export { DateRangeField, computeRange } from './components/primitives/DateRangeField.js';
+export type { DateRangeFieldProps, DateRange, RangePreset, RangeClock } from './components/primitives/DateRangeField.js';
 export { Checkbox, Switch } from './components/primitives/Toggle.js';
 export type { CheckboxProps, SwitchProps } from './components/primitives/Toggle.js';
 export { Tooltip } from './components/primitives/Tooltip.js';
