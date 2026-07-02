@@ -7,6 +7,7 @@ import {
   useMoneyMovements,
 } from '../../query/hooks.js';
 import { LedgerView } from '../ledger/LedgerView.js';
+import { computeLedgerRows } from '../ledger/LedgerView.js';
 import type { LedgerResolved } from '../ledger/LedgerView.js';
 import { KpiCard } from '../primitives/KpiCard.js';
 import type { KpiTone } from '../primitives/KpiCard.js';
@@ -14,6 +15,7 @@ import { Combobox } from '../primitives/Combobox.js';
 import { DateRangeField, computeRange } from '../primitives/DateRangeField.js';
 import type { DateRange } from '../primitives/DateRangeField.js';
 import { inr } from '../../utils/format.js';
+import { Download } from 'lucide-react';
 
 export interface UnifiedLedgerProps {
   selectedStation: any | null;
@@ -29,8 +31,25 @@ const TYPE_OPTIONS = [
   { value: 'owner', label: 'Owner' },
 ];
 
+const TYPE_LABEL: Record<EntityType, string> = {
+  customer: 'Customer',
+  supplier: 'Supplier',
+  cash: 'Cash',
+  bank: 'Bank',
+  owner: 'Owner',
+};
+
 const fmtDate = (v: any) =>
   v ? new Date(v).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' }) : '—';
+
+// Build the PDF "Particulars" cell: always keep the transaction type, and append
+// any free-text note. Money rows whose note already starts with the type (e.g.
+// type "Collection" / note "Collection · ABC") aren't duplicated.
+const particularsOf = (type: string, notes?: string): string => {
+  if (!notes) return type;
+  if (notes === type || notes.startsWith(type)) return notes;
+  return `${type} — ${notes}`;
+};
 
 interface LedgerSource {
   /** Requires picking a specific entity (customer/supplier). */
@@ -241,16 +260,46 @@ export const UnifiedLedger: React.FC<UnifiedLedgerProps> = ({ selectedStation })
     };
   }, [committed, customerLedger.data, customerLedger.isLoading, customerLedger.error, supplierLedger.data, supplierLedger.isLoading, supplierLedger.error, money.data, money.isLoading, money.error]);
 
-  const totals = useMemo(() => {
-    let debit = 0;
-    let credit = 0;
-    for (const tx of entries) {
-      const r = resolvedCfg.resolve(tx);
-      if (r.direction === 'debit') debit += r.amount;
-      else credit += r.amount;
+  const computed = useMemo(() => computeLedgerRows(entries, resolvedCfg.resolve), [entries, resolvedCfg]);
+  const totals = { debit: computed.totalDebit, credit: computed.totalCredit, net: computed.closingBalance };
+
+  const [downloading, setDownloading] = useState(false);
+  const downloadPdf = async () => {
+    if (!committed || computed.rows.length === 0) return;
+    setDownloading(true);
+    try {
+      const [{ exportReactPdf }, { LedgerDoc }, { letterheadFromStation }] = await Promise.all([
+        import('../../services/exportPdf.js'),
+        import('../../services/reports/ledgerDoc.js'),
+        import('../../services/reports/letterhead.js'),
+      ]);
+      const docRows = computed.rows.map((r) => ({
+        dateLabel: r.dateLabel,
+        particulars: particularsOf(r.type, r.notes),
+        debit: r.direction === 'debit' ? r.amount : 0,
+        credit: r.direction === 'credit' ? r.amount : 0,
+        balance: r.runningBalance,
+      }));
+      const entityName = committed.entityLabel || labelForType(committed.type) || TYPE_LABEL[committed.type];
+      const element = React.createElement(LedgerDoc, {
+        title: `${TYPE_LABEL[committed.type].toUpperCase()} LEDGER`,
+        entityName,
+        periodLabel: `${fmtDate(committed.from)} — ${fmtDate(committed.to)}`,
+        debitLabel: resolvedCfg.kpiDebitLabel,
+        creditLabel: resolvedCfg.kpiCreditLabel,
+        balanceLabel: resolvedCfg.balanceLabel,
+        rows: docRows,
+        totals: { debit: totals.debit, credit: totals.credit, balance: totals.net },
+        stationName: selectedStation?.name,
+        letterhead: letterheadFromStation(selectedStation),
+        generatedAt: new Date().toISOString(),
+      });
+      const slug = (entityName || committed.type).replace(/[^a-z0-9]+/gi, '_');
+      await exportReactPdf(element, `Ledger_${slug}_${committed.from}_${committed.to}`);
+    } finally {
+      setDownloading(false);
     }
-    return { debit, credit, net: debit - credit };
-  }, [entries, resolvedCfg]);
+  };
 
   const needsEntity = cfg.needsEntity;
   const canSubmit = (!needsEntity || !!entityId) && !!range.from && !!range.to && (!!selectedStation || needsEntity);
@@ -304,13 +353,24 @@ export const UnifiedLedger: React.FC<UnifiedLedgerProps> = ({ selectedStation })
         </div>
       ) : (
         <>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', flexWrap: 'wrap' }}>
-            <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-strong)', margin: 0 }}>
-              {committed.entityLabel || labelForType(committed.type)}
-            </h3>
-            <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-              {fmtDate(committed.from)} — {fmtDate(committed.to)}
-            </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', flexWrap: 'wrap' }}>
+              <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-strong)', margin: 0 }}>
+                {committed.entityLabel || labelForType(committed.type)}
+              </h3>
+              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                {fmtDate(committed.from)} — {fmtDate(committed.to)}
+              </span>
+            </div>
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={downloadPdf}
+              disabled={downloading || loading || computed.rows.length === 0}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+            >
+              <Download size={13} />
+              {downloading ? 'Preparing…' : 'Download PDF'}
+            </button>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px' }}>

@@ -25,7 +25,8 @@ export {
   SHIFT_SUMMARY_SECTION_LABELS, DSSR_SECTION_LABELS,
 } from './services/reports/reportConfig.js';
 export { letterheadFromStation } from './services/reports/letterhead.js';
-export { LedgerView } from './components/ledger/LedgerView.js';
+export { LedgerView, computeLedgerRows } from './components/ledger/LedgerView.js';
+export type { LedgerResolved, LedgerComputed, LedgerViewProps } from './components/ledger/LedgerView.js';
 export { DesignSystem } from './components/DesignSystem.js';
 
 // Data layer (TanStack Query) + shared primitives

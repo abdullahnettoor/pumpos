@@ -43,6 +43,13 @@
 
 ## L5 — PDF statements
 - Reuse Phase R: `buildCustomerStatementDoc` etc. → download via existing saver.
+- **Done ✅** — `services/reports/ledgerDoc.tsx` (`LedgerDoc`) reuses the shared Phase-R react-pdf kit
+  (`LetterheadBand`, `Kpi`, `TableView` from `shiftSummaryDoc`). The Ledger tab has a **Download PDF** button
+  that lazily imports `exportReactPdf` + `LedgerDoc` + `letterheadFromStation`, feeds it the *same*
+  `computeLedgerRows` output as the on-screen table (so PDF ⇔ screen match), and routes bytes through the
+  pluggable saver (web download / Tauri fs). Works for all five entity types (title/labels/period from the
+  registry). Filename `Ledger_{entity}_{from}_{to}.pdf`. Refactor: extracted `computeLedgerRows` +
+  `LedgerComputed` from `LedgerView` (exported from `@pump/ui`) so the view, KPIs and PDF share one calc.
 
 ## L6 — Entity-aware unified Ledger ✅ done (deployed)
 - Reports **Ledger** tab: pick a ledger **type** (`Segmented`: Customer | Supplier | Cash | Bank | Owner) →

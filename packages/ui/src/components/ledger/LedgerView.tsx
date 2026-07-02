@@ -18,6 +18,44 @@ export interface LedgerResolved {
   direction: 'debit' | 'credit';
 }
 
+export interface LedgerComputed {
+  /** Resolved rows in chronological (oldest→newest) order, each with balance. */
+  rows: (LedgerResolved & { runningBalance: number })[];
+  totalDebit: number;
+  totalCredit: number;
+  /** Balance after the last row (period closing balance). */
+  closingBalance: number;
+}
+
+/**
+ * Resolve + sort entries oldest→newest and accumulate the running balance
+ * (debit raises, credit lowers) plus column totals. Shared by `<LedgerView>`
+ * and the PDF statement builder so both agree exactly.
+ */
+export function computeLedgerRows(
+  entries: any[],
+  resolve: (tx: any) => LedgerResolved,
+  openingBalance = 0,
+): LedgerComputed {
+  let running = openingBalance;
+  let totalDebit = 0;
+  let totalCredit = 0;
+  const rows = (entries || [])
+    .map(resolve)
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+    .map((r) => {
+      if (r.direction === 'debit') {
+        running += r.amount;
+        totalDebit += r.amount;
+      } else {
+        running -= r.amount;
+        totalCredit += r.amount;
+      }
+      return { ...r, runningBalance: running };
+    });
+  return { rows, totalDebit, totalCredit, closingBalance: running };
+}
+
 export interface LedgerViewProps {
   entries: any[];
   resolve: (tx: any) => LedgerResolved;
@@ -70,24 +108,8 @@ export const LedgerView: React.FC<LedgerViewProps> = ({
   }
 
   // Compute the running balance oldest→newest, then display newest first.
-  let running = openingBalance;
-  let totalDebit = 0;
-  let totalCredit = 0;
-  const sorted = entries
-    .map(resolve)
-    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-    .map((r) => {
-      if (r.direction === 'debit') {
-        running += r.amount;
-        totalDebit += r.amount;
-      } else {
-        running -= r.amount;
-        totalCredit += r.amount;
-      }
-      return { ...r, runningBalance: running };
-    });
+  const { rows: sorted, totalDebit, totalCredit, closingBalance } = computeLedgerRows(entries, resolve, openingBalance);
   const rows = [...sorted].reverse();
-  const closingBalance = running;
 
   return (
     <div style={{ border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-card)', overflow: 'hidden' }}>
