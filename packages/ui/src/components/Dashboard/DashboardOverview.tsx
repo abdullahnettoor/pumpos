@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import { CloudShiftService } from '../../services/cloud.js';
 import {
-  useShiftStatus, useInvalidateOperational, useInventoryStatus, usePricing, useProducts,
+  useShiftStatus, useInvalidateOperational, useInventoryStatus, useInventoryItems, usePricing, useProducts,
   useExpenses, usePurchases, useCollections, useCustomers, useSuppliers, useShiftSummaries,
 } from '../../query/hooks.js';
 import { StatusBadge } from '../StatusBadge.js';
 import { LoadingSpinner } from '../LoadingSpinner.js';
 import { SkeletonGrid } from '../primitives/Skeleton.js';
 import { KpiCard } from '../primitives/KpiCard.js';
+import { Banner } from '../primitives/Banner.js';
 import { inr, formatQty } from '../../utils/format.js';
 import { useConfirm } from '../primitives/ConfirmDialog.js';
 import { useToast } from '../primitives/ToastProvider.js';
@@ -34,6 +35,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   const { data: tanks } = useInventoryStatus(selectedStation?.id);
   const { data: prices } = usePricing(selectedStation?.id);
   const { data: products } = useProducts();
+  const { data: inventoryItems } = useInventoryItems(selectedStation?.id, { enabled: canSeeFinancials });
   const { data: expenses } = useExpenses({ enabled: canSeeFinancials });
   const { data: purchases } = usePurchases({ enabled: canSeeFinancials });
   const { data: collections } = useCollections({ enabled: canSeeFinancials });
@@ -156,6 +158,35 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
     (cp: any) => fuelProductIds.size === 0 || fuelProductIds.has(cp.productId),
   );
 
+  // Dashboard alerts (extensible). Low-stock warnings differ for fuel (% of
+  // tank capacity) vs merchandise (out-of-stock / oversold). Gated to roles that
+  // can act on inventory; each carries an action to the stock page.
+  // Thresholds are sensible defaults — make them station-configurable later.
+  type DashAlert = { id: string; severity: 'danger' | 'warning'; message: string; actionLabel: string; path: string };
+  const alerts: DashAlert[] = [];
+  if (canSeeFinancials) {
+    tankRows.forEach((t) => {
+      const cap = Number(t.capacity) || 0;
+      const vol = Number(t.currentVolume) || 0;
+      if (!cap) return;
+      const pct = (vol / cap) * 100;
+      if (pct < 5) {
+        alerts.push({ id: `tank-${t.id}`, severity: 'danger', message: `${t.name} (${t.productName}) critically low — ${pct.toFixed(0)}% · ${formatQty(vol, 0)} L`, actionLabel: 'View Stock', path: '/inventory' });
+      } else if (pct < 15) {
+        alerts.push({ id: `tank-${t.id}`, severity: 'warning', message: `${t.name} (${t.productName}) running low — ${pct.toFixed(0)}% · ${formatQty(vol, 0)} L`, actionLabel: 'View Stock', path: '/inventory' });
+      }
+    });
+    (inventoryItems || []).forEach((i: any) => {
+      const q = Number(i.quantity) || 0;
+      // Negative stock is a genuine anomaly (a sale recorded beyond on-hand).
+      // Plain zero is NOT flagged — many products are simply not stocked.
+      if (q < 0) {
+        alerts.push({ id: `item-${i.productId}`, severity: 'danger', message: `${i.name} oversold — ${formatQty(q)} ${i.unit ?? ''}`.trim(), actionLabel: 'View Stock', path: '/inventory' });
+      }
+    });
+    alerts.sort((a, b) => (a.severity === b.severity ? 0 : a.severity === 'danger' ? -1 : 1));
+  }
+
   return (
     <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '24px', fontFamily: 'var(--font-sans)' }}>
       {/* Top Welcome Panel */}
@@ -169,6 +200,17 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
           </p>
         </div>
       </div>
+
+      {/* Alerts — role-gated actionable warnings (low stock, etc.) */}
+      {alerts.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {alerts.map((a) => (
+            <Banner key={a.id} severity={a.severity} actionLabel={a.actionLabel} onAction={() => onNavigate(a.path)}>
+              {a.message}
+            </Banner>
+          ))}
+        </div>
+      )}
 
       {/* Main Grid: Launch Surfaces */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' }}>

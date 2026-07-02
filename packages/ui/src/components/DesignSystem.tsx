@@ -13,6 +13,7 @@ import { Segmented } from './primitives/Segmented.js';
 import { Combobox } from './primitives/Combobox.js';
 import { Tooltip } from './primitives/Tooltip.js';
 import { Menu, Popover } from './primitives/Menu.js';
+import { Banner } from './primitives/Banner.js';
 import { Drawer } from './Drawer.js';
 import { StatusBadge } from './StatusBadge.js';
 import { inr, formatMoney, formatQty } from '../utils/format.js';
@@ -564,6 +565,25 @@ const FeedbackPanel: React.FC = () => {
             <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
               Last result: <strong style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-strong)' }}>{lastResult}</strong>
             </span>
+          </div>
+        </Card>
+      </Section>
+
+      <Section title="Banners" description="Inline, section-level status messages — the persistent counterpart to a toast. Persistent banners stay until their condition clears (low stock, offline); dismissible banners show a × and hide on click. Severity maps to state colours; supports an optional inline action.">
+        <Card>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+            <Banner severity="danger" actionLabel="View Stock" onAction={() => {}}>
+              Tank 1 (Petrol) critically low — 4% · 480 L
+            </Banner>
+            <Banner severity="warning">
+              Tank 2 (Diesel) running low — 12% · 1,440 L
+            </Banner>
+            <Banner severity="info" title="Offline">
+              Working from local cache — changes will sync when you reconnect.
+            </Banner>
+            <Banner severity="success" dismissible>
+              DSSR compiled for 01 Jul. This banner is dismissible.
+            </Banner>
           </div>
         </Card>
       </Section>
