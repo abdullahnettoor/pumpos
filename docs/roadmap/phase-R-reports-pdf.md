@@ -16,9 +16,11 @@
 - (NOTE: we do not bundle OMC trademark logos — dealers upload their own; `fuel_brand` is a display label.)
 
 ## R2 — Configurable report (station-picked sections) ✅ done
-- `settings.report_config = { shiftSummary: string[], dssr: string[] }` (ordered enabled sections).
-- Station Overview “Report Sections” toggles per report (`header` always on). Views build `config.sections`
-  from it, falling back to defaults. Reorder (drag) is a future enhancement; toggle shipped.
+- `settings.report_config = { shiftSummary: string[], dssr: string[], paper: 'A4'|'LETTER' }` (ordered enabled sections + paper size).
+- Station Overview “Report Sections” toggles per report (`header` always on) + a **Paper Size** (A4 / US Letter)
+  selector. Views build `config.sections`/`config.paper` from it (via `paperFromStation`), falling back to
+  defaults. Paper size flows into all PDFs (Shift Summary, DSSR, Ledger statements). Reorder (drag) is a future
+  enhancement; toggle + paper shipped.
 
 ## R3 — DSSR template ✅ done
 - DSSR ported html2pdf → react-pdf (`dssrDoc.tsx`) using the same primitives + mono fonts.

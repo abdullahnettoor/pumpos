@@ -51,6 +51,7 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
   const [logoDataUrl, setLogoDataUrl] = useState<string | null>(null);
   const [ssEnabled, setSsEnabled] = useState<Set<string>>(new Set(DEFAULT_SHIFT_SUMMARY_CONFIG.sections));
   const [dssrEnabled, setDssrEnabled] = useState<Set<string>>(new Set(DEFAULT_DSSR_CONFIG.sections));
+  const [paper, setPaper] = useState<'A4' | 'LETTER'>('A4');
   const [onboardingStatus, setOnboardingStatus] = useState<string>('NOT_STARTED');
 
   useEffect(() => {
@@ -78,6 +79,7 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
       const rc = selectedStation.settings?.report_config || {};
       setSsEnabled(new Set(rc.shiftSummary?.length ? rc.shiftSummary : DEFAULT_SHIFT_SUMMARY_CONFIG.sections));
       setDssrEnabled(new Set(rc.dssr?.length ? rc.dssr : DEFAULT_DSSR_CONFIG.sections));
+      setPaper(rc.paper === 'LETTER' ? 'LETTER' : 'A4');
       setOnboardingStatus(selectedStation.onboardingStatus || 'NOT_STARTED');
     }
   }, [selectedStation]);
@@ -155,6 +157,7 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
           report_config: {
             shiftSummary: DEFAULT_SHIFT_SUMMARY_CONFIG.sections.filter((k) => ssEnabled.has(k)),
             dssr: DEFAULT_DSSR_CONFIG.sections.filter((k) => dssrEnabled.has(k)),
+            paper,
           },
         },
       });
@@ -448,6 +451,14 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
                       <h3 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-strong)', marginBottom: '10px' }}>
                         Report Sections
                       </h3>
+                      <div className="form-group" style={{ maxWidth: '220px', marginBottom: '14px' }}>
+                        <label className="form-label">Paper Size</label>
+                        <select className="select" value={paper} onChange={(e) => setPaper(e.target.value as 'A4' | 'LETTER')} style={{ width: '100%' }}>
+                          <option value="A4">A4 (210 × 297 mm)</option>
+                          <option value="LETTER">US Letter (8.5 × 11 in)</option>
+                        </select>
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Applies to all PDF reports (Shift Summary, DSSR, Ledger statements).</span>
+                      </div>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
                         <div>
                           <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-default)', marginBottom: '8px' }}>Shift Summary</div>
@@ -522,6 +533,10 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
                       <div>
                         <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Logo</span>
                         <p style={{ fontSize: '13px', fontWeight: 500, marginTop: '4px', color: 'var(--text-default)' }}>{logoDataUrl ? 'Uploaded' : '—'}</p>
+                      </div>
+                      <div>
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Report Paper</span>
+                        <p style={{ fontSize: '13px', fontWeight: 500, marginTop: '4px', color: 'var(--text-default)' }}>{paper === 'LETTER' ? 'US Letter' : 'A4'}</p>
                       </div>
                     </div>
                   </div>

@@ -1,7 +1,7 @@
 import React from 'react';
 import { ArrowLeft, Printer, Download, AlertTriangle } from 'lucide-react';
 import { exportReactPdf } from '../services/exportPdf.js';
-import { DEFAULT_DSSR_CONFIG } from '../services/reports/reportConfig.js';
+import { DEFAULT_DSSR_CONFIG, paperFromStation } from '../services/reports/reportConfig.js';
 import { letterheadFromStation } from '../services/reports/letterhead.js';
 
 interface DailyDssrViewProps {
@@ -65,7 +65,7 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
             import('../services/reports/dssrDoc.js'),
           ]);
           const sections = station?.settings?.report_config?.dssr?.length ? station.settings.report_config.dssr : DEFAULT_DSSR_CONFIG.sections;
-          const config = { ...DEFAULT_DSSR_CONFIG, sections: sections as any, stationName: station?.name, letterhead: letterheadFromStation(station) };
+          const config = { ...DEFAULT_DSSR_CONFIG, sections: sections as any, stationName: station?.name, letterhead: letterheadFromStation(station), paper: paperFromStation(station) };
           await exportReactPdf(React.createElement(doc.DssrDoc, { dssr: dailyDssr, config }), `Daily_DSSR_${dailyDssr?.businessDate || ''}`);
         }}>
           <Download size={13} /> Save PDF

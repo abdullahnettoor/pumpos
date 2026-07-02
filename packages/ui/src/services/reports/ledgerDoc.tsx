@@ -28,6 +28,7 @@ export interface LedgerDocProps {
   stationName?: string;
   letterhead?: Letterhead;
   generatedAt?: string;
+  paper?: 'A4' | 'LETTER';
 }
 
 /**
@@ -48,6 +49,7 @@ export const LedgerDoc: React.FC<LedgerDocProps> = ({
   stationName,
   letterhead,
   generatedAt,
+  paper = 'A4',
 }) => {
   const cols: Col[] = [
     { header: 'Date', flex: 1.3, strong: true },
@@ -73,7 +75,7 @@ export const LedgerDoc: React.FC<LedgerDocProps> = ({
 
   return (
     <Document>
-      <Page size="A4" style={s.page}>
+      <Page size={paper} style={s.page}>
         <LetterheadBand title={title} stationName={stationName} letterhead={letterhead} />
         <Text style={s.sub}>
           {entityName} {'\u2022'} {periodLabel}

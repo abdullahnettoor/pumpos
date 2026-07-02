@@ -73,6 +73,7 @@ export const stationSchema = z.object({
     report_config: z.object({
       shiftSummary: z.array(z.string()).optional(),
       dssr: z.array(z.string()).optional(),
+      paper: z.enum(['A4', 'LETTER']).optional(),
     }).optional().nullable(),
   }).default({
     shift_grace_minutes: 15,

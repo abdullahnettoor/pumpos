@@ -293,6 +293,7 @@ export const UnifiedLedger: React.FC<UnifiedLedgerProps> = ({ selectedStation })
         stationName: selectedStation?.name,
         letterhead: letterheadFromStation(selectedStation),
         generatedAt: new Date().toISOString(),
+        paper: selectedStation?.settings?.report_config?.paper === 'LETTER' ? 'LETTER' : 'A4',
       });
       const slug = (entityName || committed.type).replace(/[^a-z0-9]+/gi, '_');
       await exportReactPdf(element, `Ledger_${slug}_${committed.from}_${committed.to}`);

@@ -56,3 +56,8 @@ export const DSSR_SECTION_LABELS: Record<DssrSection, string> = {
   financial: 'Financial Summary', fuelByProduct: 'Fuel Sales by Product', nozzles: 'Nozzle Aggregation',
   fuelStockVariance: 'Tank Dip & Fuel Variance', merchandiseStockVariance: 'Merchandise Variance', shifts: 'Included Shifts',
 };
+
+/** Resolve the configured paper size from a station's settings (default A4). */
+export function paperFromStation(station: any): 'A4' | 'LETTER' {
+  return station?.settings?.report_config?.paper === 'LETTER' ? 'LETTER' : 'A4';
+}

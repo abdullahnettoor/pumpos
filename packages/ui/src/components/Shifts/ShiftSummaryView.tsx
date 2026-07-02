@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { CloudShiftService } from '../../services/cloud.js';
-import { DEFAULT_SHIFT_SUMMARY_CONFIG } from '../../services/reports/reportConfig.js';
+import { DEFAULT_SHIFT_SUMMARY_CONFIG, paperFromStation } from '../../services/reports/reportConfig.js';
 import { letterheadFromStation } from '../../services/reports/letterhead.js';
 import { StatusBadge } from '../StatusBadge.js';
 import { ArrowLeft, Printer, Download, Unlock, AlertTriangle } from 'lucide-react';
@@ -116,7 +116,7 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
                 import('../../services/reports/shiftSummaryDoc.js'),
               ]);
               const sections = station?.settings?.report_config?.shiftSummary?.length ? station.settings.report_config.shiftSummary : DEFAULT_SHIFT_SUMMARY_CONFIG.sections;
-              const config = { ...DEFAULT_SHIFT_SUMMARY_CONFIG, sections: sections as any, stationName: station?.name || templateName, letterhead: letterheadFromStation(station) };
+              const config = { ...DEFAULT_SHIFT_SUMMARY_CONFIG, sections: sections as any, stationName: station?.name || templateName, letterhead: letterheadFromStation(station), paper: paperFromStation(station) };
               await exportReactPdf(React.createElement(doc.ShiftSummaryDoc, { snapshot: snapshotData, config }), `Shift_Summary_${String(shiftId).slice(0, 8)}`);
             }}
           >

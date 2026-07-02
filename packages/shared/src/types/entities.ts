@@ -77,7 +77,7 @@ export interface StationSettings {
   /** Optional uploaded logo as a data URL (base64). Shown on report letterhead. */
   logo_data_url?: string | null;
   /** Per-document enabled report sections (ordered). Falls back to defaults. */
-  report_config?: { shiftSummary?: string[]; dssr?: string[] } | null;
+  report_config?: { shiftSummary?: string[]; dssr?: string[]; paper?: 'A4' | 'LETTER' } | null;
 }
 
 export interface Station {
