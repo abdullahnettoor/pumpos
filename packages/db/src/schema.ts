@@ -481,6 +481,51 @@ export const purchaseItems = pgTable('purchase_items', {
 });
 
 // ----------------------------------------------------
+// INVOICING DOMAIN (Phase T4)
+// ----------------------------------------------------
+
+// Outbound B2B GST tax invoices. Immutable snapshot of the buyer/supplier
+// identity + CGST/SGST/IGST split + priced lines at issue time; numbered by a
+// gapless per-FY-per-GSTIN series.
+export const invoices = pgTable('invoices', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  organizationId: uuid('organization_id').references(() => organizations.id).notNull(),
+  stationId: uuid('station_id').references(() => stations.id),
+  saleId: uuid('sale_id').references(() => sales.id),
+  invoiceNumber: varchar('invoice_number', { length: 50 }).notNull(),
+  financialYear: varchar('financial_year', { length: 9 }).notNull(), // '2026-27'
+  issuedDate: varchar('issued_date', { length: 10 }).notNull(), // YYYY-MM-DD (business date)
+  buyerCustomerId: uuid('buyer_customer_id').references(() => customers.id),
+  buyerName: varchar('buyer_name', { length: 255 }),
+  buyerGstin: varchar('buyer_gstin', { length: 20 }),
+  buyerStateCode: varchar('buyer_state_code', { length: 2 }),
+  interState: boolean('inter_state').default(false).notNull(),
+  taxableAmount: numeric('taxable_amount', { precision: 12, scale: 2 }).default('0').notNull(),
+  cgstTotal: numeric('cgst_total', { precision: 12, scale: 2 }).default('0').notNull(),
+  sgstTotal: numeric('sgst_total', { precision: 12, scale: 2 }).default('0').notNull(),
+  igstTotal: numeric('igst_total', { precision: 12, scale: 2 }).default('0').notNull(),
+  vatTotal: numeric('vat_total', { precision: 12, scale: 2 }).default('0').notNull(),
+  cessTotal: numeric('cess_total', { precision: 12, scale: 2 }).default('0').notNull(),
+  roundOff: numeric('round_off', { precision: 12, scale: 2 }).default('0').notNull(),
+  totalAmount: numeric('total_amount', { precision: 12, scale: 2 }).default('0').notNull(),
+  snapshotData: jsonb('snapshot_data').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+// Generic gapless document numbering store (per org + doc type + scope + FY).
+// `scope` is the sub-series key (e.g. supplier GSTIN for invoices), '' if N/A.
+// Stores only the last issued number per counter.
+export const documentSequences = pgTable('document_sequences', {
+  organizationId: uuid('organization_id').references(() => organizations.id).notNull(),
+  docType: varchar('doc_type', { length: 30 }).default('INVOICE').notNull(),
+  scope: varchar('scope', { length: 40 }).default('').notNull(),
+  financialYear: varchar('financial_year', { length: 9 }).default('').notNull(),
+  lastNumber: integer('last_number').default(0).notNull(),
+}, (t) => ({
+  pk: primaryKey({ columns: [t.organizationId, t.docType, t.scope, t.financialYear] }),
+}));
+
+// ----------------------------------------------------
 // REPORTING, AUDIT & SYNC DOMAINS
 // ----------------------------------------------------
 

@@ -43,6 +43,14 @@
 - Invoice **numbering**: reintroduce a gapless **per-FY-per-GSTIN** series (e.g. `INV/2026-27/00001`). NOTE: `document_sequences` was dropped in tech-debt — reintroduce a small numbering store for this.
 - Invoice PDF via the Phase-R react-pdf kit: letterhead (R1) + line splits + HSN/SAC + tax summary + amount in words.
 - Scope: B2B merchandise/lube sales first; fuel VAT invoice later.
+- **Part 1 (backend) ✅ done + deployed** — migration 0014 (`invoices` immutable snapshot + `invoice_sequences`
+  gapless store). Core `GenerateInvoice` use-case (idempotent per sale; reuses `computeTax`; assigns
+  `INV/{FY}/{00001}` via `InvoiceSequenceRepository.nextNumber` atomic upsert; invoice-level round-off; emits
+  `INVOICE_GENERATED`) + `InvoiceRepository`/`InvoiceSequenceRepository` ports + `financialYear()` helper. Drizzle
+  adapters. Routes: `POST /transactions/sales/:id/invoice` (issue, Owner/Manager/Accountant), `GET
+  /transactions/invoices`, `GET /transactions/invoices/:id`, `GET /transactions/sales/:id/invoice`.
+- **Part 2 (PDF + UI) — remaining**: `invoiceDoc.tsx` (react-pdf, reuse kit) + a UI entry point to issue/download
+  from a B2B merchandise sale, and an invoices list.
 
 ## T5 — Reports
 - DSSR/shift summary tax breakup (output VAT vs output GST) for the day.

@@ -86,6 +86,7 @@ export const BusinessEvents = {
   EXPENSE_VOIDED: 'EXPENSE_VOIDED',
   PAYMENT_RECEIVED: 'PAYMENT_RECEIVED',
   PAYMENT_MADE: 'PAYMENT_MADE',
+  INVOICE_GENERATED: 'INVOICE_GENERATED',
 } as const;
 
 export type BusinessEventType = (typeof BusinessEvents)[keyof typeof BusinessEvents];

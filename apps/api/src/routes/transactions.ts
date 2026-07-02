@@ -24,6 +24,7 @@ import {
   RecordSupplierPayment,
   CreateSale,
   RecordStockCount,
+  GenerateInvoice,
   type Result,
 } from '@pump/core';
 import { buildContext } from '../infra/context.js';
@@ -45,6 +46,7 @@ import {
 import { DrizzleExpenseRepository } from '../infra/repositories/finance-repositories.js';
 import { DrizzleStockMovementRepository, DrizzleStockVarianceRepository } from '../infra/repositories/inventory-repositories.js';
 import { DrizzleSaleRepository } from '../infra/repositories/retail-repositories.js';
+import { DrizzleInvoiceRepository, DrizzleDocumentSequenceRepository } from '../infra/repositories/invoicing-repositories.js';
 import { DrizzleProductRepository } from '../infra/repositories/product.repo.js';
 import { DrizzleStationRepository } from '../infra/repositories/setup-repositories.js';
 import {
@@ -731,6 +733,169 @@ transactionsRouter.get('/money-movements', async (c) => {
 
   movements.sort((a, b) => (b.date || '').localeCompare(a.date || '') || String(b.createdAt).localeCompare(String(a.createdAt)));
   return c.json({ success: true, data: movements });
+});
+
+// ====================================================
+// INVOICING — GST tax invoices (Phase T4)
+// ====================================================
+
+const INVOICE_ROLES = new Set<Role>(['Owner', 'Manager', 'Accountant']);
+
+// POST /transactions/sales/:id/invoice — issue a GST tax invoice for a sale.
+// Idempotent: if the sale was already invoiced, the existing invoice is returned.
+transactionsRouter.post('/sales/:id/invoice', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  if (!INVOICE_ROLES.has(user.role)) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } }, 403);
+  }
+  const saleId = c.req.param('id');
+
+  const saleRows = await db
+    .select({
+      id: schema.sales.id,
+      customerId: schema.sales.customerId,
+      businessDayId: schema.sales.businessDayId,
+      stationId: schema.businessDays.stationId,
+      businessDate: schema.businessDays.businessDate,
+      organizationId: schema.businessDays.organizationId,
+    })
+    .from(schema.sales)
+    .innerJoin(schema.businessDays, eq(schema.sales.businessDayId, schema.businessDays.id))
+    .where(eq(schema.sales.id, saleId))
+    .limit(1);
+  const sale = saleRows[0];
+  if (!sale || sale.organizationId !== user.organizationId) {
+    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Sale not found' } }, 404);
+  }
+  if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId: sale.stationId })) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+  }
+
+  const items = await db
+    .select({
+      productId: schema.saleItems.productId,
+      quantity: schema.saleItems.quantity,
+      unitPrice: schema.saleItems.unitPrice,
+      discountAmount: schema.saleItems.discountAmount,
+      name: schema.products.name,
+      taxCategory: schema.products.taxCategory,
+      taxConfig: schema.products.taxConfig,
+    })
+    .from(schema.saleItems)
+    .innerJoin(schema.products, eq(schema.products.id, schema.saleItems.productId))
+    .where(eq(schema.saleItems.saleId, saleId));
+  if (items.length === 0) {
+    return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Sale has no line items to invoice' } }, 400);
+  }
+
+  let buyer: { customerId: string | null; name: string | null; gstin: string | null; stateCode: string | null } = {
+    customerId: null, name: null, gstin: null, stateCode: null,
+  };
+  if (sale.customerId) {
+    const cust = await new DrizzleCustomerRepository(db).findById(sale.customerId);
+    const md = ((cust?.metadata as Record<string, any>) || {});
+    buyer = { customerId: sale.customerId, name: cust?.name ?? null, gstin: md.gstin ?? null, stateCode: md.stateCode ?? null };
+  }
+  const station = await new DrizzleStationRepository(db).findById(sale.stationId);
+  const legal = ((station?.settings as any)?.legal) || {};
+
+  const lines = items.map((it) => {
+    const tc = (it.taxConfig as Record<string, any>) || {};
+    return {
+      productId: it.productId,
+      name: it.name,
+      hsnCode: tc.hsn_code ?? null,
+      taxCategory: it.taxCategory as any,
+      gstRate: tc.gst_rate ?? null,
+      vatRate: tc.vat_rate ?? null,
+      cessRate: tc.cess ?? null,
+      quantity: it.quantity,
+      unitPrice: it.unitPrice,
+      discount: it.discountAmount,
+    };
+  });
+
+  const result = await runInTransaction(db, (tx, events) =>
+    new GenerateInvoice({
+      invoices: new DrizzleInvoiceRepository(tx),
+      sequences: new DrizzleDocumentSequenceRepository(tx),
+      events,
+    }).execute(
+      {
+        saleId,
+        stationId: sale.stationId,
+        businessDayId: sale.businessDayId,
+        issuedDate: sale.businessDate,
+        supplierGstin: legal.gstin ?? null,
+        supplierStateCode: legal.stateCode ?? null,
+        buyerCustomerId: buyer.customerId,
+        buyerName: buyer.name,
+        buyerGstin: buyer.gstin,
+        buyerStateCode: buyer.stateCode,
+        placeOfSupply: buyer.stateCode ?? legal.stateCode ?? null,
+        lines,
+      },
+      buildContext(user, { stationId: sale.stationId, businessDayId: sale.businessDayId }),
+    ),
+  );
+  return sendResult(c, result);
+});
+
+// GET /transactions/invoices?stationId=&from=&to= — list issued invoices.
+transactionsRouter.get('/invoices', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  const stationId = c.req.query('stationId');
+  const from = c.req.query('from');
+  const to = c.req.query('to');
+  const conds = [
+    eq(schema.invoices.organizationId, user.organizationId),
+    ...(stationId ? [eq(schema.invoices.stationId, stationId)] : []),
+    ...(from ? [gte(schema.invoices.issuedDate, from)] : []),
+    ...(to ? [lte(schema.invoices.issuedDate, to)] : []),
+  ];
+  const rows = await db
+    .select({
+      id: schema.invoices.id,
+      invoiceNumber: schema.invoices.invoiceNumber,
+      issuedDate: schema.invoices.issuedDate,
+      saleId: schema.invoices.saleId,
+      buyerName: schema.invoices.buyerName,
+      buyerGstin: schema.invoices.buyerGstin,
+      interState: schema.invoices.interState,
+      taxableAmount: schema.invoices.taxableAmount,
+      totalAmount: schema.invoices.totalAmount,
+      createdAt: schema.invoices.createdAt,
+    })
+    .from(schema.invoices)
+    .where(and(...conds))
+    .orderBy(desc(schema.invoices.createdAt));
+  return c.json({ success: true, data: rows });
+});
+
+// GET /transactions/invoices/:id — full invoice (for PDF / reprint).
+transactionsRouter.get('/invoices/:id', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  const rows = await db.select().from(schema.invoices).where(eq(schema.invoices.id, c.req.param('id'))).limit(1);
+  const invoice = rows[0];
+  if (!invoice || invoice.organizationId !== user.organizationId) {
+    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Invoice not found' } }, 404);
+  }
+  return c.json({ success: true, data: invoice });
+});
+
+// GET /transactions/sales/:id/invoice — the invoice for a sale, if any.
+transactionsRouter.get('/sales/:id/invoice', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  const rows = await db.select().from(schema.invoices).where(eq(schema.invoices.saleId, c.req.param('id'))).limit(1);
+  const invoice = rows[0];
+  if (!invoice || invoice.organizationId !== user.organizationId) {
+    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'No invoice for this sale' } }, 404);
+  }
+  return c.json({ success: true, data: invoice });
 });
 
 transactionsRouter.get('/shifts/:id/transactions', async (c) => {
