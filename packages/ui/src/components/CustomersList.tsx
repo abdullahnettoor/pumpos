@@ -554,20 +554,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
         {activeTab === 'registry' && (
           <button
             onClick={openCreateDrawer}
-            style={{
-              height: '32px',
-              padding: '0 12px',
-              borderRadius: 'var(--radius-input)',
-              backgroundColor: 'var(--brand-primary)',
-              color: 'white',
-              fontSize: '13px',
-              fontWeight: 500,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              border: 'none',
-              cursor: 'pointer',
-            }}
+            className="btn btn-primary btn-md"
           >
             <Plus size={14} /> Add Customer
           </button>
@@ -576,20 +563,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
           <button
             onClick={openCreateVehicleDrawer}
             disabled={!vehicleCustomerId}
-            style={{
-              height: '32px',
-              padding: '0 12px',
-              borderRadius: 'var(--radius-input)',
-              backgroundColor: vehicleCustomerId ? 'var(--brand-primary)' : 'var(--border-strong)',
-              color: 'white',
-              fontSize: '13px',
-              fontWeight: 500,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              border: 'none',
-              cursor: vehicleCustomerId ? 'pointer' : 'not-allowed',
-            }}
+            className="btn btn-primary btn-md"
           >
             <Plus size={14} /> Add Vehicle
           </button>

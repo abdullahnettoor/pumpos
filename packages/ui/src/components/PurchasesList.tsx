@@ -482,20 +482,7 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, d
         {activeTab === 'registry' && (
           <button
             onClick={openCreateDrawer}
-            style={{
-              height: '32px',
-              padding: '0 12px',
-              borderRadius: 'var(--radius-input)',
-              backgroundColor: 'var(--brand-primary)',
-              color: 'white',
-              fontSize: '13px',
-              fontWeight: 500,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              border: 'none',
-              cursor: 'pointer',
-            }}
+            className="btn btn-primary btn-md"
           >
             <Plus size={14} /> Add Supplier
           </button>
@@ -570,11 +557,11 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, d
             <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)' }}>From</label>
-                <input type="date" value={gstFrom} onChange={(e) => setGstFrom(e.target.value)} className="input input-compact" style={{ height: '32px', padding: '0 8px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', fontSize: '13px' }} />
+                <input type="date" value={gstFrom} onChange={(e) => setGstFrom(e.target.value)} className="input input-compact" />
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)' }}>To</label>
-                <input type="date" value={gstTo} onChange={(e) => setGstTo(e.target.value)} style={{ height: '32px', padding: '0 8px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', fontSize: '13px' }} />
+                <input type="date" value={gstTo} onChange={(e) => setGstTo(e.target.value)} className="input input-compact" />
               </div>
               <button className="btn btn-secondary btn-md" onClick={loadGstRegister} disabled={gstLoading}>{gstLoading ? 'Loading…' : 'Apply'}</button>
             </div>
@@ -591,7 +578,7 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, d
               ].map((card) => (
                 <div key={card.label} style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-card)', padding: '12px 14px' }}>
                   <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{card.label}</span>
-                  <p style={{ fontSize: '16px', fontWeight: 700, marginTop: '4px', color: card.strong ? 'var(--brand-primary)' : 'var(--text-strong)', fontFamily: 'var(--font-mono)' }}>₹{card.value.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                  <p style={{ fontSize: '16px', fontWeight: 700, marginTop: '4px', color: card.strong ? 'var(--brand-primary)' : 'var(--text-strong)', fontFamily: 'var(--font-mono)' }}>{inr(card.value)}</p>
                 </div>
               ))}
             </div>

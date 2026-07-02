@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { CloudPricingService } from '../../services/cloud.js';
 import { Station } from '@pump/shared';
 import { useToast } from '../primitives/ToastProvider.js';
+import { LoadingSpinner } from '../LoadingSpinner.js';
+import { Field, NumberInput, Select } from '../primitives/Field.js';
+import { inr } from '../../utils/format.js';
 
 const pricingService = new CloudPricingService();
 
@@ -81,7 +84,7 @@ export const FuelPricingPanel: React.FC<FuelPricingPanelProps> = ({ selectedStat
   }
 
   if (loading) {
-    return <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>Loading fuel pricing metrics...</div>;
+    return <LoadingSpinner text="Loading fuel pricing..." />;
   }
 
   return (
@@ -119,7 +122,7 @@ export const FuelPricingPanel: React.FC<FuelPricingPanelProps> = ({ selectedStat
                   </span>
                 </div>
                 <div style={{ fontFamily: 'var(--font-mono)', fontSize: '16px', fontWeight: 700, color: 'var(--brand-primary)' }}>
-                  ₹{Number(cp.price).toFixed(2)}/L
+                  {inr(cp.price)}/L
                 </div>
               </div>
             ))}
@@ -140,78 +143,40 @@ export const FuelPricingPanel: React.FC<FuelPricingPanelProps> = ({ selectedStat
               <h4 style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-strong)', marginBottom: '12px' }}>Record Price Update</h4>
               <form onSubmit={handleRecordPricing} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)' }}>Fuel Product *</label>
-                    <select
-                      value={selectedProductId}
-                      onChange={(e) => setSelectedProductId(e.target.value)}
-                      style={{
-                        height: '32px',
-                        padding: '0 8px',
-                        borderRadius: 'var(--radius-input)',
-                        border: '1px solid var(--border-strong)',
-                        fontSize: '13px',
-                        backgroundColor: 'var(--bg-surface)'
-                      }}
-                      required
-                    >
+                  <Field label="Fuel product" required style={{ marginBottom: 0 }}>
+                    <Select value={selectedProductId} onChange={(e) => setSelectedProductId(e.target.value)} required>
                       {currentPrices.map(cp => (
                         <option key={cp.productId} value={cp.productId}>{cp.productName}</option>
                       ))}
-                    </select>
-                  </div>
-                  
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)' }}>Rate per Litre (₹) *</label>
-                    <input
-                      type="number"
+                    </Select>
+                  </Field>
+
+                  <Field label="Rate per litre (₹)" required style={{ marginBottom: 0 }}>
+                    <NumberInput
                       step="0.01"
                       placeholder="e.g. 96.43"
                       value={price}
                       onChange={(e) => setPrice(e.target.value)}
-                      style={{
-                        height: '32px',
-                        padding: '0 8px',
-                        borderRadius: 'var(--radius-input)',
-                        border: '1px solid var(--border-strong)',
-                        fontSize: '13px',
-                      }}
                       required
                     />
-                  </div>
+                  </Field>
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)' }}>Effective From *</label>
+                <Field label="Effective from" required style={{ marginBottom: 0 }}>
                   <input
                     type="datetime-local"
+                    className="input"
                     value={effectiveFrom}
                     onChange={(e) => setEffectiveFrom(e.target.value)}
-                    style={{
-                      height: '32px',
-                      padding: '0 8px',
-                      borderRadius: 'var(--radius-input)',
-                      border: '1px solid var(--border-strong)',
-                      fontSize: '13px',
-                    }}
                     required
                   />
-                </div>
+                </Field>
 
                 <button
                   type="submit"
+                  className="btn btn-primary btn-md"
                   disabled={submitting}
-                  style={{
-                    height: '32px',
-                    backgroundColor: submitting ? 'var(--text-muted)' : 'var(--brand-primary)',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: 'var(--radius-button)',
-                    fontWeight: 600,
-                    fontSize: '13px',
-                    cursor: submitting ? 'not-allowed' : 'pointer',
-                    marginTop: '8px'
-                  }}
+                  style={{ marginTop: '8px' }}
                 >
                   {submitting ? 'Applying...' : 'Apply New Rate'}
                 </button>
@@ -243,7 +208,7 @@ export const FuelPricingPanel: React.FC<FuelPricingPanelProps> = ({ selectedStat
                       {record.productName}
                     </td>
                     <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', fontSize: '12px', padding: '10px 12px' }}>
-                      ₹{Number(record.price).toFixed(2)}
+                      {inr(record.price)}
                     </td>
                     <td style={{ fontSize: '12px', color: 'var(--text-muted)', padding: '10px 12px' }}>
                       {new Date(record.effectiveFrom).toLocaleString()}
