@@ -22,7 +22,10 @@ export interface LedgerViewProps {
   entries: any[];
   resolve: (tx: any) => LedgerResolved;
   openingBalance?: number;
+  /** @deprecated superseded by the two-column debit/credit layout. */
   amountLabel?: string;
+  debitLabel?: string;
+  creditLabel?: string;
   balanceLabel?: string;
   loading?: boolean;
   error?: string | null;
@@ -32,14 +35,17 @@ export interface LedgerViewProps {
 
 /**
  * Generic Tally-style running-balance ledger table. Reused for customer,
- * supplier, cash and bank statements (Phase L). The running balance is computed
- * on demand (debit raises, credit lowers) — nothing is stored. Newest row first.
+ * supplier, cash and bank statements (Phase L). Two-column debit/credit layout
+ * with a totals footer — matches the accounting convention operators expect.
+ * The running balance is computed on demand (debit raises, credit lowers) —
+ * nothing is stored. Newest row first.
  */
 export const LedgerView: React.FC<LedgerViewProps> = ({
   entries,
   resolve,
   openingBalance = 0,
-  amountLabel = 'Amount',
+  debitLabel = 'Debit',
+  creditLabel = 'Credit',
   balanceLabel = 'Balance',
   loading,
   error,
@@ -65,14 +71,23 @@ export const LedgerView: React.FC<LedgerViewProps> = ({
 
   // Compute the running balance oldest→newest, then display newest first.
   let running = openingBalance;
+  let totalDebit = 0;
+  let totalCredit = 0;
   const sorted = entries
     .map(resolve)
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
     .map((r) => {
-      running += r.direction === 'debit' ? r.amount : -r.amount;
+      if (r.direction === 'debit') {
+        running += r.amount;
+        totalDebit += r.amount;
+      } else {
+        running -= r.amount;
+        totalCredit += r.amount;
+      }
       return { ...r, runningBalance: running };
     });
   const rows = [...sorted].reverse();
+  const closingBalance = running;
 
   return (
     <div style={{ border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-card)', overflow: 'hidden' }}>
@@ -81,7 +96,8 @@ export const LedgerView: React.FC<LedgerViewProps> = ({
           <tr style={{ backgroundColor: 'var(--bg-surface-alt)', borderBottom: '1px solid var(--border-soft)', color: 'var(--text-muted)' }}>
             <th style={{ padding: '8px 12px', fontWeight: 600 }}>Date / Period</th>
             <th style={{ padding: '8px 12px', fontWeight: 600 }}>Type</th>
-            <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>{amountLabel}</th>
+            <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>{debitLabel}</th>
+            <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>{creditLabel}</th>
             <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>{balanceLabel}</th>
           </tr>
         </thead>
@@ -98,8 +114,11 @@ export const LedgerView: React.FC<LedgerViewProps> = ({
                   <span style={{ fontWeight: 600, color: r.typeColor || 'var(--text-default)' }}>{r.type}</span>
                   {r.notes && <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '2px' }}>{r.notes}</div>}
                 </td>
-                <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 600, fontFamily: 'var(--font-mono)', color: isDebit ? 'var(--text-strong)' : 'var(--state-success-fg)' }}>
-                  {isDebit ? '' : '-'}{inr(r.amount)}
+                <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 600, fontFamily: 'var(--font-mono)', color: 'var(--text-strong)' }}>
+                  {isDebit ? inr(r.amount) : ''}
+                </td>
+                <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 600, fontFamily: 'var(--font-mono)', color: 'var(--state-success-fg)' }}>
+                  {isDebit ? '' : inr(r.amount)}
                 </td>
                 <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--text-strong)' }}>
                   {inr(r.runningBalance)}
@@ -108,6 +127,14 @@ export const LedgerView: React.FC<LedgerViewProps> = ({
             );
           })}
         </tbody>
+        <tfoot>
+          <tr style={{ backgroundColor: 'var(--bg-surface-alt)', borderTop: '1px solid var(--border-strong)' }}>
+            <td style={{ padding: '8px 12px', fontWeight: 700, color: 'var(--text-strong)' }} colSpan={2}>Totals</td>
+            <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--text-strong)' }}>{inr(totalDebit)}</td>
+            <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--state-success-fg)' }}>{inr(totalCredit)}</td>
+            <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--text-strong)' }}>{inr(closingBalance)}</td>
+          </tr>
+        </tfoot>
       </table>
     </div>
   );

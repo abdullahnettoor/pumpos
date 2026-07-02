@@ -324,7 +324,8 @@ export const UnifiedLedger: React.FC<UnifiedLedgerProps> = ({ selectedStation })
           <LedgerView
             entries={entries}
             resolve={resolvedCfg.resolve}
-            amountLabel={resolvedCfg.amountLabel}
+            debitLabel={resolvedCfg.kpiDebitLabel}
+            creditLabel={resolvedCfg.kpiCreditLabel}
             balanceLabel={resolvedCfg.balanceLabel}
             loading={loading}
             error={error}
