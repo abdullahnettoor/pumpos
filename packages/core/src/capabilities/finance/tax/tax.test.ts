@@ -54,4 +54,23 @@ describe('computeTax', () => {
     expect(r.totals.vat).toBe(400);
     expect(r.totals.grandTotal).toBe(1000 + 180 + 10 + 2000 + 400);
   });
+
+  it('back-calculates the taxable base from a tax-inclusive (MRP) GST amount', () => {
+    // ₹118 MRP at 18% GST → ₹100 taxable + ₹18 tax.
+    const r = computeTax([{ taxCategory: 'GST', taxableAmount: 118, gstRatePct: 18, inclusive: true }], { supplierStateCode: '29', buyerStateCode: '29' });
+    expect(r.lines[0].taxableAmount).toBe(100);
+    expect(r.lines[0].cgst).toBe(9);
+    expect(r.lines[0].sgst).toBe(9);
+    expect(r.lines[0].total).toBe(118);
+    expect(r.totals.grandTotal).toBe(118);
+  });
+
+  it('back-calculates inclusive GST + cess together', () => {
+    // ₹119 MRP at 18% GST + 1% cess → ₹100 taxable.
+    const r = computeTax([{ taxCategory: 'GST', taxableAmount: 119, gstRatePct: 18, cessPct: 1, inclusive: true }], { supplierStateCode: '29', buyerStateCode: '27' });
+    expect(r.lines[0].taxableAmount).toBe(100);
+    expect(r.lines[0].igst).toBe(18);
+    expect(r.lines[0].cess).toBe(1);
+    expect(r.lines[0].total).toBe(119);
+  });
 });

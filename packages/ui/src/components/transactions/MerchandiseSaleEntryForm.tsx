@@ -74,6 +74,28 @@ export const MerchandiseSaleEntryForm: React.FC<MerchandiseSaleEntryFormProps> =
   const availableStock = stockByProduct && productId ? stockByProduct[productId] : undefined;
   const oversell = availableStock != null && qtyNum > availableStock;
 
+  // Tax breakdown preview. Retail merchandise is usually priced tax-inclusive
+  // (MRP): the tax is extracted from the price. B2B/pre-tax prices add tax on top.
+  const taxCat = selected?.taxCategory || (selected?.productType === 'FUEL' ? 'FUEL_VAT' : 'GST');
+  const taxRate = taxCat === 'GST' ? Number(selected?.taxConfig?.gst_rate ?? 0) : taxCat === 'FUEL_VAT' ? Number(selected?.taxConfig?.vat_rate ?? 0) : 0;
+  const inclusive = selected?.taxConfig?.price_inclusive !== false;
+  const hasTax = taxRate > 0 && (taxCat === 'GST' || taxCat === 'FUEL_VAT');
+  let taxableValue = total;
+  let taxValue = 0;
+  let grossTotal = total;
+  if (hasTax) {
+    if (inclusive) {
+      taxableValue = total / (1 + taxRate / 100);
+      taxValue = total - taxableValue;
+      grossTotal = total;
+    } else {
+      taxableValue = total;
+      taxValue = total * (taxRate / 100);
+      grossTotal = total + taxValue;
+    }
+  }
+  const taxLabel = taxCat === 'FUEL_VAT' ? 'VAT' : 'GST';
+
   return (
     <form onSubmit={handleSubmit((values) => onSubmit(values))} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
       {error && (
@@ -174,9 +196,23 @@ export const MerchandiseSaleEntryForm: React.FC<MerchandiseSaleEntryFormProps> =
         <TextInput placeholder="Optional reference" disabled={submitting} {...register('notes')} />
       </Field>
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'var(--bg-surface-alt)', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', padding: '10px 12px' }}>
-        <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Sale Total</span>
-        <strong style={{ fontFamily: 'var(--font-mono)', fontSize: '15px', color: 'var(--text-strong)' }}>{inr(total)}</strong>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', backgroundColor: 'var(--bg-surface-alt)', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', padding: '10px 12px' }}>
+        {hasTax && (
+          <>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-muted)' }}>
+              <span>Taxable Value{inclusive ? ' (excl. tax)' : ''}</span>
+              <span style={{ fontFamily: 'var(--font-mono)' }}>{inr(taxableValue)}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-muted)' }}>
+              <span>{taxLabel} @ {taxRate}%{inclusive ? ' (included)' : ''}</span>
+              <span style={{ fontFamily: 'var(--font-mono)' }}>{inr(taxValue)}</span>
+            </div>
+          </>
+        )}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: hasTax ? '1px solid var(--border-soft)' : 'none', paddingTop: hasTax ? '4px' : 0 }}>
+          <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Sale Total</span>
+          <strong style={{ fontFamily: 'var(--font-mono)', fontSize: '15px', color: 'var(--text-strong)' }}>{inr(grossTotal)}</strong>
+        </div>
       </div>
 
       {oversell && (

@@ -90,6 +90,8 @@ export interface GenerateInvoiceLineInput {
   quantity: number | string;
   unitPrice: number | string;
   discount?: number | string;
+  /** Unit price is tax-inclusive (retail MRP) — extract tax rather than add it. */
+  inclusive?: boolean;
 }
 
 export interface GenerateInvoiceCommand {
@@ -124,6 +126,7 @@ const lineSchema = z.object({
   quantity: z.coerce.number().positive(),
   unitPrice: z.coerce.number().min(0),
   discount: z.coerce.number().min(0).optional(),
+  inclusive: z.boolean().optional(),
 });
 
 const schema = z.object({
@@ -168,18 +171,21 @@ export class GenerateInvoice implements UseCase<GenerateInvoiceCommand, Invoice>
       const qty = Number(line.quantity);
       const unitPrice = Number(line.unitPrice);
       const discount = Number(line.discount ?? 0);
-      const taxableAmount = round2(qty * unitPrice - discount);
+      const lineAmount = round2(qty * unitPrice - discount);
       const tax = computeLineTax(
-        { taxCategory: line.taxCategory, taxableAmount, gstRatePct: line.gstRate, vatRatePct: line.vatRate, cessPct: line.cessRate },
+        { taxCategory: line.taxCategory, taxableAmount: lineAmount, gstRatePct: line.gstRate, vatRatePct: line.vatRate, cessPct: line.cessRate, inclusive: line.inclusive },
         interState,
       );
+      // Show the pre-tax unit rate on the invoice so Rate × Qty = Taxable (for
+      // inclusive/MRP lines the entered price included tax).
+      const displayUnit = line.inclusive && qty > 0 ? round2(tax.taxableAmount / qty) : unitPrice;
       snapshotLines.push({
         productId: line.productId,
         name: line.name,
         hsnCode: line.hsnCode ?? null,
         taxCategory: line.taxCategory,
         quantity: qty,
-        unitPrice,
+        unitPrice: displayUnit,
         discount,
         taxableAmount: tax.taxableAmount,
         gstRate: line.gstRate ?? null,

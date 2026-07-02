@@ -295,6 +295,8 @@ export interface Product {
     vat_rate?: number;
     hsn_code?: string;
     cess?: number;
+    /** Selling price is tax-inclusive (retail MRP); tax is extracted, not added. */
+    price_inclusive?: boolean;
   };
   isActive: boolean;
   createdAt: string;

@@ -78,6 +78,7 @@ export const ProductsCatalog: React.FC = () => {
   const [gstRate, setGstRate] = useState(18);
   const [hsnCode, setHsnCode] = useState('');
   const [vatRate, setVatRate] = useState(0);
+  const [priceInclusive, setPriceInclusive] = useState(true);
 
   useEffect(() => {
     loadProducts();
@@ -164,6 +165,7 @@ export const ProductsCatalog: React.FC = () => {
           gst_rate: gstRate,
           vat_rate: vatRate,
           hsn_code: hsnCode,
+          price_inclusive: priceInclusive,
         },
         isActive: true,
       };
@@ -196,6 +198,7 @@ export const ProductsCatalog: React.FC = () => {
     setSellingPrice((p as any).sellingPrice != null ? String((p as any).sellingPrice) : '');
     setGstRate(p.taxConfig?.gst_rate || 18);
     setHsnCode(p.taxConfig?.hsn_code || '');
+    setPriceInclusive(p.taxConfig?.price_inclusive !== false);
     setVatRate((p.taxConfig as any)?.vat_rate || 0);
     setIsCodeEdited(true);
     setIsFormOpen(true);
@@ -225,6 +228,7 @@ export const ProductsCatalog: React.FC = () => {
     setSellingPrice('');
     setGstRate(18);
     setHsnCode('');
+    setPriceInclusive(true);
     setVatRate(0);
     setIsCodeEdited(false);
   };
@@ -532,6 +536,17 @@ export const ProductsCatalog: React.FC = () => {
                   placeholder="e.g. 2710"
                 />
               </div>
+
+              {taxCategory === 'GST' && (
+                <div>
+                  <Checkbox
+                    label="Selling price is tax-inclusive (MRP)"
+                    description="Retail MRP includes GST — tax is extracted from the price, not added on top. Turn off for pre-tax (B2B) rates."
+                    checked={priceInclusive}
+                    onChange={(e) => setPriceInclusive(e.target.checked)}
+                  />
+                </div>
+              )}
             </div>
           )}
 

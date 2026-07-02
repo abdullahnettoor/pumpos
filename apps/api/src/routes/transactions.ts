@@ -802,6 +802,9 @@ transactionsRouter.post('/sales/:id/invoice', async (c) => {
 
   const lines = items.map((it) => {
     const tc = (it.taxConfig as Record<string, any>) || {};
+    // Retail merchandise is usually MRP (tax-inclusive). Honour the product's
+    // price_inclusive flag; default GST lines to inclusive when unset.
+    const inclusive = it.taxCategory === 'GST' ? tc.price_inclusive !== false : false;
     return {
       productId: it.productId,
       name: it.name,
@@ -813,6 +816,7 @@ transactionsRouter.post('/sales/:id/invoice', async (c) => {
       quantity: it.quantity,
       unitPrice: it.unitPrice,
       discount: it.discountAmount,
+      inclusive,
     };
   });
 

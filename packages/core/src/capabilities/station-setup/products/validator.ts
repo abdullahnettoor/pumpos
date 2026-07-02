@@ -12,6 +12,7 @@ const taxConfigSchema = z
     vat_rate: z.number().min(0).max(100).optional(),
     hsn_code: z.string().max(20).optional(),
     cess: z.number().min(0).max(100).optional(),
+    price_inclusive: z.boolean().optional(),
   })
   .optional();
 

@@ -59,6 +59,14 @@
 ## T5 — Reports
 - DSSR/shift summary tax breakup (output VAT vs output GST) for the day.
 
+## Tax-inclusive (MRP) pricing ✅ done + deployed
+- Retail merchandise/lubes are priced MRP (tax-inclusive) — tax is extracted, not added. `computeLineTax` gained
+  an `inclusive` flag (back-calculates the taxable base from the gross). Products carry `taxConfig.price_inclusive`
+  (default true for GST; ProductsCatalog checkbox). GST invoice generation honours it (line rate shown pre-tax so
+  Rate×Qty=Taxable). MerchandiseSaleEntryForm shows a live Taxable / GST / Total breakdown.
+- Reality confirmed by research: B2B/registered or on-request ⇒ tax invoice; B2C walk-in small value ⇒ optional
+  consolidated day-end invoice; fuel ⇒ VAT, bulk from readings, no GST invoice.
+
 ## Open questions
 - Rounding rules (per-line vs invoice-level), reverse charge (RCM) — defer.
 - E-invoice (IRN/QR) for turnover thresholds — future.

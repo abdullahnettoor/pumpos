@@ -10,11 +10,17 @@ import type { TaxCategory } from '@pump/shared';
 
 export interface TaxLineInput {
   taxCategory: TaxCategory;
-  /** Pre-tax line amount. */
+  /**
+   * Line amount. Pre-tax (exclusive) by default; when `inclusive` is true this
+   * is the tax-inclusive gross (e.g. retail MRP) and the taxable base is
+   * back-calculated from it.
+   */
   taxableAmount: number;
   gstRatePct?: number | null;
   vatRatePct?: number | null;
   cessPct?: number | null;
+  /** Treat `taxableAmount` as tax-inclusive (MRP) and derive the taxable base. */
+  inclusive?: boolean;
 }
 
 export interface TaxLineResult {
@@ -65,7 +71,21 @@ export function isInterState(ctx: TaxContext): boolean {
 }
 
 export function computeLineTax(line: TaxLineInput, interState: boolean): TaxLineResult {
-  const taxable = round2(line.taxableAmount);
+  const gstRate = Math.max(0, line.gstRatePct ?? 0);
+  const vatRate = Math.max(0, line.vatRatePct ?? 0);
+  const cessRate = Math.max(0, line.cessPct ?? 0);
+
+  // When the amount is tax-inclusive (retail MRP), back-calculate the taxable
+  // base so tax is extracted from the price rather than added on top.
+  let taxable = line.taxableAmount;
+  if (line.inclusive) {
+    let divisor = 1;
+    if (line.taxCategory === 'GST') divisor = 1 + (gstRate + cessRate) / 100;
+    else if (line.taxCategory === 'FUEL_VAT') divisor = 1 + vatRate / 100;
+    taxable = divisor > 0 ? line.taxableAmount / divisor : line.taxableAmount;
+  }
+  taxable = round2(taxable);
+
   let cgst = 0;
   let sgst = 0;
   let igst = 0;
@@ -73,16 +93,15 @@ export function computeLineTax(line: TaxLineInput, interState: boolean): TaxLine
   let cess = 0;
 
   if (line.taxCategory === 'GST') {
-    const rate = Math.max(0, line.gstRatePct ?? 0);
     if (interState) {
-      igst = round2((taxable * rate) / 100);
+      igst = round2((taxable * gstRate) / 100);
     } else {
-      cgst = round2((taxable * rate) / 200);
+      cgst = round2((taxable * gstRate) / 200);
       sgst = cgst;
     }
-    cess = round2((taxable * Math.max(0, line.cessPct ?? 0)) / 100);
+    cess = round2((taxable * cessRate) / 100);
   } else if (line.taxCategory === 'FUEL_VAT') {
-    vat = round2((taxable * Math.max(0, line.vatRatePct ?? 0)) / 100);
+    vat = round2((taxable * vatRate) / 100);
   }
   // EXEMPT / NON_TAXABLE → no tax.
 

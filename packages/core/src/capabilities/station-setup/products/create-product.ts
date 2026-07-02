@@ -54,7 +54,7 @@ export class CreateProduct implements UseCase<CreateProductCommand, Product> {
       brand: cmd.brand ?? null,
       category: cmd.category ?? null,
       sellingPrice: cmd.sellingPrice != null ? String(cmd.sellingPrice) : null,
-      taxConfig: cmd.taxConfig ?? (taxCategory === 'FUEL_VAT' ? { vat_rate: 0, hsn_code: '' } : { gst_rate: 18, hsn_code: '' }),
+      taxConfig: cmd.taxConfig ?? (taxCategory === 'FUEL_VAT' ? { vat_rate: 0, hsn_code: '' } : { gst_rate: 18, hsn_code: '', price_inclusive: true }),
       isActive: true,
       createdAt: now,
       updatedAt: now,
