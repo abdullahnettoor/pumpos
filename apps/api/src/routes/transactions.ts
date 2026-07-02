@@ -99,24 +99,23 @@ transactionsRouter.get('/suppliers', async (c) => {
   const user = c.var.user;
   const activeOnly = c.req.query('activeOnly') !== 'false';
 
-  const list = await new DrizzleSupplierRepository(db).listByOrganization(user.organizationId, activeOnly);
-
   // Outstanding balance = Σ purchases − Σ payments, scoped to org via business_days.
-  const txns = await db
-    .select({
-      supplierId: schema.supplierTransactions.supplierId,
-      transactionType: schema.supplierTransactions.transactionType,
-      amount: schema.supplierTransactions.amount,
-    })
-    .from(schema.supplierTransactions)
-    .innerJoin(schema.businessDays, eq(schema.supplierTransactions.businessDayId, schema.businessDays.id))
-    .where(eq(schema.businessDays.organizationId, user.organizationId));
+  // Aggregated in SQL (one row per supplier) + run alongside the list query.
+  const [list, balanceRows] = await Promise.all([
+    new DrizzleSupplierRepository(db).listByOrganization(user.organizationId, activeOnly),
+    db
+      .select({
+        supplierId: schema.supplierTransactions.supplierId,
+        balance: sql<string>`COALESCE(SUM(CASE WHEN ${schema.supplierTransactions.transactionType} = 'Payment' THEN -${schema.supplierTransactions.amount} ELSE ${schema.supplierTransactions.amount} END), 0)`,
+      })
+      .from(schema.supplierTransactions)
+      .innerJoin(schema.businessDays, eq(schema.supplierTransactions.businessDayId, schema.businessDays.id))
+      .where(eq(schema.businessDays.organizationId, user.organizationId))
+      .groupBy(schema.supplierTransactions.supplierId),
+  ]);
 
   const balances: Record<string, number> = {};
-  for (const tx of txns) {
-    const amount = Number(tx.amount);
-    balances[tx.supplierId] = (balances[tx.supplierId] ?? 0) + (tx.transactionType === 'Payment' ? -amount : amount);
-  }
+  for (const r of balanceRows) balances[r.supplierId] = Number(r.balance);
   return c.json({ success: true, data: list.map((s) => ({ ...s, currentBalance: balances[s.id] ?? 0 })) });
 });
 
@@ -190,24 +189,23 @@ transactionsRouter.get('/customers', async (c) => {
   const user = c.var.user;
   const activeOnly = c.req.query('activeOnly') !== 'false';
 
-  const list = await new DrizzleCustomerRepository(db).listByOrganization(user.organizationId, activeOnly);
-
   // Receivable = Σ credit sales/adjustments − Σ collections, scoped via business_days.
-  const txns = await db
-    .select({
-      customerId: schema.customerTransactions.customerId,
-      transactionType: schema.customerTransactions.transactionType,
-      amount: schema.customerTransactions.amount,
-    })
-    .from(schema.customerTransactions)
-    .innerJoin(schema.businessDays, eq(schema.customerTransactions.businessDayId, schema.businessDays.id))
-    .where(eq(schema.businessDays.organizationId, user.organizationId));
+  // Aggregated in SQL (one row per customer) + run alongside the list query.
+  const [list, balanceRows] = await Promise.all([
+    new DrizzleCustomerRepository(db).listByOrganization(user.organizationId, activeOnly),
+    db
+      .select({
+        customerId: schema.customerTransactions.customerId,
+        balance: sql<string>`COALESCE(SUM(CASE WHEN ${schema.customerTransactions.transactionType} = 'Collection' THEN -${schema.customerTransactions.amount} ELSE ${schema.customerTransactions.amount} END), 0)`,
+      })
+      .from(schema.customerTransactions)
+      .innerJoin(schema.businessDays, eq(schema.customerTransactions.businessDayId, schema.businessDays.id))
+      .where(eq(schema.businessDays.organizationId, user.organizationId))
+      .groupBy(schema.customerTransactions.customerId),
+  ]);
 
   const balances: Record<string, number> = {};
-  for (const tx of txns) {
-    const amount = Number(tx.amount);
-    balances[tx.customerId] = (balances[tx.customerId] ?? 0) + (tx.transactionType === 'Collection' ? -amount : amount);
-  }
+  for (const r of balanceRows) balances[r.customerId] = Number(r.balance);
   return c.json({ success: true, data: list.map((cust) => ({ ...cust, currentBalance: balances[cust.id] ?? 0 })) });
 });
 
@@ -716,30 +714,33 @@ transactionsRouter.get('/inventory/status', async (c) => {
   if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId })) {
     return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
   }
-  const stationTanks = await db
-    .select()
+  // Single query: per-tank current volume (Σ stock movements) + product info.
+  // Replaces the previous 1 + 2N round-trips (per-tank product + aggregate).
+  const rows = await db
+    .select({
+      id: schema.tanks.id,
+      name: schema.tanks.name,
+      productId: schema.tanks.productId,
+      capacity: schema.tanks.capacity,
+      productName: schema.products.name,
+      productCode: schema.products.code,
+      total: sql<string>`COALESCE(SUM(${schema.stockMovements.quantity}), 0)`,
+    })
     .from(schema.tanks)
-    .where(and(eq(schema.tanks.stationId, stationId), eq(schema.tanks.organizationId, user.organizationId)));
+    .leftJoin(schema.products, eq(schema.products.id, schema.tanks.productId))
+    .leftJoin(schema.stockMovements, eq(schema.stockMovements.tankId, schema.tanks.id))
+    .where(and(eq(schema.tanks.stationId, stationId), eq(schema.tanks.organizationId, user.organizationId)))
+    .groupBy(schema.tanks.id, schema.products.name, schema.products.code);
 
-  const enriched = await Promise.all(
-    stationTanks.map(async (t) => {
-      const [prod] = await db.select().from(schema.products).where(eq(schema.products.id, t.productId)).limit(1);
-      const [agg] = await db
-        .select({ total: sql<string>`COALESCE(SUM(${schema.stockMovements.quantity}), 0)` })
-        .from(schema.stockMovements)
-        .where(eq(schema.stockMovements.tankId, t.id));
-      const currentVolume = Number(agg?.total ?? 0);
-      return {
-        id: t.id,
-        name: t.name,
-        productId: t.productId,
-        productName: prod?.name ?? 'Unknown',
-        productCode: prod?.code ?? 'Unknown',
-        capacity: Number(t.capacity),
-        currentVolume: Math.max(0, currentVolume),
-      };
-    }),
-  );
+  const enriched = rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    productId: r.productId,
+    productName: r.productName ?? 'Unknown',
+    productCode: r.productCode ?? 'Unknown',
+    capacity: Number(r.capacity),
+    currentVolume: Math.max(0, Number(r.total ?? 0)),
+  }));
   return c.json({ success: true, data: enriched });
 });
 

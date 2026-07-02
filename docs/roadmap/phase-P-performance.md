@@ -54,6 +54,15 @@ Tasks:
 - `/shifts/status`: collapse 2 user lookups into JOINs; wrap independent selects in `Promise.all`.
   Target ~18s → ~2–3s. Then apply to `/inventory/status`, `/transactions`.
 - Verify before/after via Server-Timing.
+- **Done (partial):** `/shifts/status` — the 6 independent active-shift queries (attributed sales, credit lines,
+  staff assignments, handovers, handover terminal entries, terminal links) now run in one `Promise.all` (was 6
+  sequential); the last-shift lookups (template + closedBy + summary) likewise batched. Deployed.
+- **Done:** `/inventory/status` — collapsed the N+1 (1 + 2×tanks round-trips) into a **single** JOIN + GROUP BY
+  query (tanks ⊕ products ⊕ Σ stock_movements). Deployed.
+- **Done:** `/transactions/customers` + `/suppliers` — balances now aggregated in SQL (`GROUP BY` party, one row
+  each) instead of fetching every transaction row to sum in JS, and run in `Promise.all` with the list query.
+  Deployed. (Scales as transaction volume grows.)
+- Remaining: (bigger) running the active-shift vs last-shift/recent blocks concurrently in `/shifts/status`.
 
 ## P5 — Lazy per-section UI
 - Split heavy pages (Shifts) into independent hooks per card (overview / nozzles / handovers /

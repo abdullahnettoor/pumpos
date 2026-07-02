@@ -343,37 +343,63 @@ shiftsRouter.get('/status', async (c) => {
     // sale) recorded by each attendant during this shift. These fold into the
     // attendant's expectedSales so their handover variance covers total
     // accountability, not just metered fuel.
-    const attributedSaleRows = await db
-      .select({
-        attendantId: schema.sales.attendantId,
-        paymentMethod: schema.sales.paymentMethod,
-        total: sql<string>`COALESCE(SUM(${schema.sales.totalAmount}), 0)`,
-      })
-      .from(schema.sales)
-      .where(and(eq(schema.sales.shiftId, dbActiveShift.id), ne(schema.sales.saleType, 'Fuel')))
-      .groupBy(schema.sales.attendantId, schema.sales.paymentMethod);
+    const [
+      attributedSaleRows,
+      creditLineRows,
+      assignmentRows,
+      handoverRows,
+      handoverEntryRows,
+      terminalLinkRows,
+    ] = await Promise.all([
+      db
+        .select({
+          attendantId: schema.sales.attendantId,
+          paymentMethod: schema.sales.paymentMethod,
+          total: sql<string>`COALESCE(SUM(${schema.sales.totalAmount}), 0)`,
+        })
+        .from(schema.sales)
+        .where(and(eq(schema.sales.shiftId, dbActiveShift.id), ne(schema.sales.saleType, 'Fuel')))
+        .groupBy(schema.sales.attendantId, schema.sales.paymentMethod),
+      db
+        .select({
+          ct: schema.customerTransactions,
+          customerName: schema.customers.name,
+          productName: schema.products.name,
+          productCode: schema.products.code,
+        })
+        .from(schema.customerTransactions)
+        .leftJoin(schema.customers, eq(schema.customers.id, schema.customerTransactions.customerId))
+        .leftJoin(schema.products, eq(schema.products.id, schema.customerTransactions.productId))
+        .where(
+          and(
+            eq(schema.customerTransactions.shiftId, dbActiveShift.id),
+            eq(schema.customerTransactions.transactionType, 'Credit Sale'),
+            eq(schema.customerTransactions.referenceType, 'CREDIT_SALE'),
+          ),
+        ),
+      db
+        .select({ sa: schema.shiftStaffAssignments, staffUser: schema.users, du: schema.dispenserUnits })
+        .from(schema.shiftStaffAssignments)
+        .leftJoin(schema.users, eq(schema.users.id, schema.shiftStaffAssignments.userId))
+        .leftJoin(schema.dispenserUnits, eq(schema.dispenserUnits.id, schema.shiftStaffAssignments.duId))
+        .where(eq(schema.shiftStaffAssignments.shiftId, dbActiveShift.id)),
+      db.select().from(schema.attendantHandovers).where(eq(schema.attendantHandovers.shiftId, dbActiveShift.id)),
+      db
+        .select()
+        .from(schema.handoverTerminalEntries)
+        .where(eq(schema.handoverTerminalEntries.shiftId, dbActiveShift.id)),
+      db
+        .select({ link: schema.shiftTerminalLinks, term: schema.paymentTerminals, du: schema.dispenserUnits })
+        .from(schema.shiftTerminalLinks)
+        .leftJoin(schema.paymentTerminals, eq(schema.paymentTerminals.id, schema.shiftTerminalLinks.terminalId))
+        .leftJoin(schema.dispenserUnits, eq(schema.dispenserUnits.id, schema.shiftTerminalLinks.duId))
+        .where(eq(schema.shiftTerminalLinks.shiftId, dbActiveShift.id)),
+    ]);
 
     // Per-(attendant, DU) fuel-on-credit LINE ITEMS declared in the DU handover.
     // These are the credit chits; each handover derives its credit total from
     // its own lines (and the receivable is already metered via the nozzle, so
     // it is NOT added to expectedSales — it sits on the declared side).
-    const creditLineRows = await db
-      .select({
-        ct: schema.customerTransactions,
-        customerName: schema.customers.name,
-        productName: schema.products.name,
-        productCode: schema.products.code,
-      })
-      .from(schema.customerTransactions)
-      .leftJoin(schema.customers, eq(schema.customers.id, schema.customerTransactions.customerId))
-      .leftJoin(schema.products, eq(schema.products.id, schema.customerTransactions.productId))
-      .where(
-        and(
-          eq(schema.customerTransactions.shiftId, dbActiveShift.id),
-          eq(schema.customerTransactions.transactionType, 'Credit Sale'),
-          eq(schema.customerTransactions.referenceType, 'CREDIT_SALE'),
-        ),
-      );
     const creditByUserDu = new Map<string, any[]>();
     for (const r of creditLineRows) {
       const key = `${r.ct.attendantId ?? ''}::${r.ct.duId ?? ''}`;
@@ -423,12 +449,6 @@ shiftsRouter.get('/status', async (c) => {
     const emptyAttr = { merchandiseCash: 0, merchandiseCard: 0, merchandiseUpi: 0, merchandiseCredit: 0, merchandiseTotal: 0, expectedExtra: 0 };
     const attributedFor = (userId: string | null | undefined) => (userId && attributedMap.get(userId)) || emptyAttr;
 
-    const assignmentRows = await db
-      .select({ sa: schema.shiftStaffAssignments, staffUser: schema.users, du: schema.dispenserUnits })
-      .from(schema.shiftStaffAssignments)
-      .leftJoin(schema.users, eq(schema.users.id, schema.shiftStaffAssignments.userId))
-      .leftJoin(schema.dispenserUnits, eq(schema.dispenserUnits.id, schema.shiftStaffAssignments.duId))
-      .where(eq(schema.shiftStaffAssignments.shiftId, dbActiveShift.id));
     const staffAssignments = assignmentRows.map(({ sa, staffUser, du }) => {
       const creditSales = creditSalesFor(sa.userId, sa.duId);
       return {
@@ -442,11 +462,6 @@ shiftsRouter.get('/status', async (c) => {
       };
     });
 
-    const handoverRows = await db.select().from(schema.attendantHandovers).where(eq(schema.attendantHandovers.shiftId, dbActiveShift.id));
-    const handoverEntryRows = await db
-      .select()
-      .from(schema.handoverTerminalEntries)
-      .where(eq(schema.handoverTerminalEntries.shiftId, dbActiveShift.id));
     const handovers = handoverRows.map((h) => ({
       ...h,
       terminalEntries: handoverEntryRows.filter((e) => e.handoverId === h.id),
@@ -455,12 +470,6 @@ shiftsRouter.get('/status', async (c) => {
       creditTotal: creditSalesFor(h.userId, h.duId).reduce((s: number, l: any) => s + Number(l.amount), 0),
     }));
 
-    const terminalLinkRows = await db
-      .select({ link: schema.shiftTerminalLinks, term: schema.paymentTerminals, du: schema.dispenserUnits })
-      .from(schema.shiftTerminalLinks)
-      .leftJoin(schema.paymentTerminals, eq(schema.paymentTerminals.id, schema.shiftTerminalLinks.terminalId))
-      .leftJoin(schema.dispenserUnits, eq(schema.dispenserUnits.id, schema.shiftTerminalLinks.duId))
-      .where(eq(schema.shiftTerminalLinks.shiftId, dbActiveShift.id));
     const terminalLinks = terminalLinkRows.map(({ link, term, du }) => ({
       id: link.id,
       terminalId: link.terminalId,
@@ -512,15 +521,18 @@ shiftsRouter.get('/status', async (c) => {
         if (now <= reopenExpiryTime) gracePeriodExpiresAt = new Date(reopenExpiryTime).toISOString();
       }
     }
-    const [template] = await db.select().from(schema.shiftTemplates).where(eq(schema.shiftTemplates.id, dbLastShift.shiftTemplateId)).limit(1);
-    let closedByName = 'System';
-    if (dbLastShift.closedBy) {
-      const [closedByUser] = await db.select().from(schema.users).where(eq(schema.users.id, dbLastShift.closedBy)).limit(1);
-      closedByName = closedByUser?.fullName ?? 'System';
-    }
+    const [lastTemplateRows, lastClosedByRows, lastSummaryRows] = await Promise.all([
+      db.select().from(schema.shiftTemplates).where(eq(schema.shiftTemplates.id, dbLastShift.shiftTemplateId)).limit(1),
+      dbLastShift.closedBy
+        ? db.select().from(schema.users).where(eq(schema.users.id, dbLastShift.closedBy)).limit(1)
+        : Promise.resolve([] as any[]),
+      db.select().from(schema.shiftSummaries).where(eq(schema.shiftSummaries.shiftId, dbLastShift.id)).limit(1),
+    ]);
+    const template = lastTemplateRows[0];
+    const closedByName = lastClosedByRows[0]?.fullName ?? 'System';
+    const summary = lastSummaryRows[0];
     if (currentStatus === 'CLOSED' && gracePeriodExpiresAt && canReopenShift(user.role)) canReopenLastShift = true;
     lastShift = { ...dbLastShift, status: currentStatus, lockedAt, templateName: template?.name ?? 'Custom', closedByName };
-    const [summary] = await db.select().from(schema.shiftSummaries).where(eq(schema.shiftSummaries.shiftId, dbLastShift.id)).limit(1);
     lastDssr = summary ? { ...summary, snapshotData: await projectShiftSummary(db, dbLastShift, summary.snapshotData) } : null;
   }
 
