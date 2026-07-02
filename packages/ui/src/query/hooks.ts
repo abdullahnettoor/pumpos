@@ -62,6 +62,7 @@ export const queryKeys = {
   pricing: (stationId: string) => ['pricing', stationId] as const,
   organization: () => ['organization'] as const,
   events: (stationId: string, type: string) => ['events', stationId, type] as const,
+  moneyMovements: (stationId: string, from: string, to: string) => ['money-movements', stationId, from, to] as const,
 } as const;
 
 type Options<T> = Omit<UseQueryOptions<T, Error, T, readonly unknown[]>, 'queryKey' | 'queryFn'>;
@@ -133,6 +134,16 @@ export function useEvents(params?: { stationId?: string; type?: string; limit?: 
   return useQuery({
     queryKey: queryKeys.events(params?.stationId ?? '', params?.type ?? ''),
     queryFn: () => eventsSvc.getEvents(params),
+    ...TIER.operational,
+    ...options,
+  });
+}
+
+export function useMoneyMovements(params: { stationId?: string | null; from?: string; to?: string }, options?: Options<any[]>) {
+  return useQuery({
+    queryKey: queryKeys.moneyMovements(params.stationId ?? '', params.from ?? '', params.to ?? ''),
+    queryFn: () => txService.getMoneyMovements({ stationId: params.stationId!, from: params.from, to: params.to }),
+    enabled: !!params.stationId,
     ...TIER.operational,
     ...options,
   });

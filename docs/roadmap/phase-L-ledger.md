@@ -26,6 +26,12 @@
 
 ## L3 — Cash & Bank ledgers (virtual)
 - Aggregate collections/expenses/supplier payments by `paidFrom`/`affectsDrawer`; unified statement. No new tables.
+- **Done ✅** — backend `GET /transactions/money-movements?stationId=&from=&to=` (3 Promise.all queries → merge):
+  collections IN, expenses OUT, supplier payments OUT, classified **Cash** (paymentMethod Cash / paidFrom
+  SHIFT_CASH) vs **Bank** (Card/UPI/BankTransfer / paidFrom BANK); OWNER + fuel/drawer sales EXCLUDED so it never
+  double-counts the DSSR. Frontend `reports/CashBankLedger.tsx` — Reports **Cash & Bank** tab: Cash/Bank
+  `Segmented`, date range, In/Out/Net `KpiCard`s, movements table with period-relative running balance. Deployed.
+  (Opening balances / `bank_accounts` = L-expansion.)
 
 ## L4 — Expense register
 - Category-grouped expense view + KPIs.

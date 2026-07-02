@@ -6,9 +6,10 @@ import { PageLayout } from './primitives/PageLayout.js';
 import { Tabs } from './primitives/Tabs.js';
 import { DateField } from './primitives/Field.js';
 import { ExpenseRegister } from './reports/ExpenseRegister.js';
+import { CashBankLedger } from './reports/CashBankLedger.js';
 import { inr } from '../utils/format.js';
 import { resolveBusinessDate } from '@pump/shared';
-import { Calendar, RefreshCw, Play, Zap, Receipt } from 'lucide-react';
+import { Calendar, RefreshCw, Play, Zap, Receipt, Wallet } from 'lucide-react';
 
 const shiftService = new CloudShiftService();
 
@@ -17,7 +18,7 @@ interface ReportsOverviewProps {
   userRole: 'Owner' | 'Manager' | 'Accountant' | 'Staff';
 }
 
-type ReportsTab = 'daily-dssr' | 'expense-register';
+type ReportsTab = 'daily-dssr' | 'expense-register' | 'cash-bank';
 
 export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
   selectedStation,
@@ -125,6 +126,7 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
           onChange={(id) => setActiveTab(id as ReportsTab)}
           tabs={[
             { id: 'daily-dssr', label: 'Daily DSSR', icon: <Zap size={13} /> },
+            { id: 'cash-bank', label: 'Cash & Bank', icon: <Wallet size={13} /> },
             { id: 'expense-register', label: 'Expense Register', icon: <Receipt size={13} /> },
           ]}
         />
@@ -323,6 +325,8 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
       )}
 
       {activeTab === 'expense-register' && <ExpenseRegister selectedStation={selectedStation} />}
+
+      {activeTab === 'cash-bank' && <CashBankLedger selectedStation={selectedStation} />}
     </PageLayout>
   );
 };

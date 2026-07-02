@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { and, desc, eq, gte, ilike, lte, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, ilike, lte, ne, sql } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
 import {
   isAuthorizedForStation,
@@ -655,6 +655,83 @@ transactionsRouter.get('/collections', async (c) => {
     .where(eq(schema.businessDays.organizationId, user.organizationId))
     .orderBy(desc(schema.collections.createdAt));
   return c.json({ success: true, data: rows.map((r) => ({ ...r.collection, businessDate: r.businessDate, customerName: r.customerName ?? 'Walk-in Customer' })) });
+});
+
+// GET /transactions/money-movements?stationId=&from=&to=
+// Cash & Bank "payments & receipts" ledger (Phase L3): discretely recorded money
+// movements — collections IN, expenses OUT, supplier payments OUT — classified by
+// account (Cash vs Bank). Deliberately EXCLUDES fuel/drawer sales (reconciled in
+// the DSSR) and OWNER-funded items (don't touch cash/bank), so it never
+// double-counts the authoritative shift/DSSR figures.
+transactionsRouter.get('/money-movements', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  const stationId = c.req.query('stationId');
+  const from = c.req.query('from');
+  const to = c.req.query('to');
+  if (!stationId) return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Missing stationId' } }, 400);
+  if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId })) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+  }
+  const dateConds = [
+    eq(schema.businessDays.stationId, stationId),
+    eq(schema.businessDays.organizationId, user.organizationId),
+    ...(from ? [gte(schema.businessDays.businessDate, from)] : []),
+    ...(to ? [lte(schema.businessDays.businessDate, to)] : []),
+  ];
+
+  const [collectionRows, expenseRows, paymentRows] = await Promise.all([
+    db
+      .select({ id: schema.collections.id, amount: schema.collections.amount, paymentMethod: schema.collections.paymentMethod, createdAt: schema.collections.createdAt, businessDate: schema.businessDays.businessDate, customerName: schema.customers.name })
+      .from(schema.collections)
+      .innerJoin(schema.businessDays, eq(schema.collections.businessDayId, schema.businessDays.id))
+      .leftJoin(schema.customers, eq(schema.customers.id, schema.collections.customerId))
+      .where(and(...dateConds)),
+    db
+      .select({ id: schema.expenses.id, amount: schema.expenses.amount, paidFrom: schema.expenses.paidFrom, description: schema.expenses.description, createdAt: schema.expenses.createdAt, businessDate: schema.businessDays.businessDate, categoryName: schema.expenseCategories.name })
+      .from(schema.expenses)
+      .innerJoin(schema.businessDays, eq(schema.expenses.businessDayId, schema.businessDays.id))
+      .leftJoin(schema.expenseCategories, eq(schema.expenseCategories.id, schema.expenses.categoryId))
+      .where(and(ne(schema.expenses.status, 'VOIDED'), ...dateConds)),
+    db
+      .select({ id: schema.supplierTransactions.id, amount: schema.supplierTransactions.amount, paidFrom: schema.supplierTransactions.paidFrom, notes: schema.supplierTransactions.notes, createdAt: schema.supplierTransactions.createdAt, businessDate: schema.businessDays.businessDate, supplierName: schema.suppliers.name })
+      .from(schema.supplierTransactions)
+      .innerJoin(schema.businessDays, eq(schema.supplierTransactions.businessDayId, schema.businessDays.id))
+      .leftJoin(schema.suppliers, eq(schema.suppliers.id, schema.supplierTransactions.supplierId))
+      .where(and(eq(schema.supplierTransactions.transactionType, 'Payment'), ...dateConds)),
+  ]);
+
+  const accountForPaidFrom = (pf: string): 'Cash' | 'Bank' | null =>
+    pf === 'SHIFT_CASH' ? 'Cash' : pf === 'BANK' ? 'Bank' : null;
+
+  type Movement = { id: string; date: string; createdAt: any; account: 'Cash' | 'Bank'; direction: 'in' | 'out'; label: string; source: string; amount: number };
+  const movements: Movement[] = [];
+
+  for (const r of collectionRows) {
+    movements.push({
+      id: r.id,
+      date: r.businessDate,
+      createdAt: r.createdAt,
+      account: r.paymentMethod === 'Cash' ? 'Cash' : 'Bank',
+      direction: 'in',
+      label: r.customerName ? `Collection · ${r.customerName}` : 'Collection',
+      source: 'Collection',
+      amount: Number(r.amount),
+    });
+  }
+  for (const r of expenseRows) {
+    const account = accountForPaidFrom(r.paidFrom);
+    if (!account) continue;
+    movements.push({ id: r.id, date: r.businessDate, createdAt: r.createdAt, account, direction: 'out', label: r.categoryName || r.description || 'Expense', source: 'Expense', amount: Number(r.amount) });
+  }
+  for (const r of paymentRows) {
+    const account = accountForPaidFrom(r.paidFrom);
+    if (!account) continue;
+    movements.push({ id: r.id, date: r.businessDate, createdAt: r.createdAt, account, direction: 'out', label: r.supplierName ? `Payment · ${r.supplierName}` : 'Supplier payment', source: 'Supplier Payment', amount: Number(r.amount) });
+  }
+
+  movements.sort((a, b) => (b.date || '').localeCompare(a.date || '') || String(b.createdAt).localeCompare(String(a.createdAt)));
+  return c.json({ success: true, data: movements });
 });
 
 transactionsRouter.get('/shifts/:id/transactions', async (c) => {

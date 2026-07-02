@@ -536,6 +536,13 @@ export class CloudTransactionService {
     return request<any[]>('/transactions/collections');
   }
 
+  async getMoneyMovements(params: { stationId: string; from?: string; to?: string }): Promise<any[]> {
+    const qs = new URLSearchParams({ stationId: params.stationId });
+    if (params.from) qs.set('from', params.from);
+    if (params.to) qs.set('to', params.to);
+    return request<any[]>(`/transactions/money-movements?${qs.toString()}`);
+  }
+
   async recordExpense(payload: { shiftId?: string; stationId?: string; transactionDate?: string; paidFrom?: 'SHIFT_CASH' | 'BANK' | 'OWNER'; categoryId: string; amount: number; description?: string }): Promise<any> {
     return request<any>('/transactions/expenses', {
       method: 'POST',
