@@ -6,6 +6,7 @@ import {
   OnboardingWizard, 
   StationOverview, 
   DashboardOverview,
+  OrganizationOverview,
   ShiftsManagement,
   ExpensesList,
   PurchasesList,
@@ -221,6 +222,7 @@ export const App: React.FC = () => {
         { label: 'Fuel Pricing', path: '/pricing', roles: ['Owner', 'Manager'] },
         { label: 'Customers', path: '/customers' },
         { label: 'Reports', path: '/reports', roles: ['Owner', 'Manager', 'Accountant'] },
+        { label: 'Organization', path: '/organization', roles: ['Owner'] },
       ]
     : [
         { label: 'Onboarding Setup', path: '/onboarding', roles: ['Owner', 'Manager'] }
@@ -429,6 +431,15 @@ export const App: React.FC = () => {
           <ReportsOverview
             selectedStation={selectedStation}
             userRole={userRole || 'Staff'}
+          />
+        );
+      case '/organization':
+        return (
+          <OrganizationOverview
+            stations={stations}
+            selectedStation={selectedStation}
+            onStationChange={handleStationChange}
+            onNavigate={setCurrentPath}
           />
         );
       case '/design-system':

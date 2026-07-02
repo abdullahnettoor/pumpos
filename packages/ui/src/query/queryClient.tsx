@@ -8,7 +8,7 @@ import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persist
 // persisted. Bump CACHE_BUSTER on shape changes to drop stale persisted cache.
 const PERSIST_PREFIXES = new Set([
   'tanks', 'products', 'customers', 'suppliers', 'expense-categories',
-  'stations', 'dispensers', 'nozzles', 'users', 'shift-templates', 'pricing',
+  'stations', 'dispensers', 'nozzles', 'users', 'shift-templates', 'pricing', 'organization',
 ]);
 const CACHE_BUSTER = 'v2';
 

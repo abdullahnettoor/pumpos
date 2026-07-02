@@ -10,6 +10,7 @@ import {
   CloudUserAssignmentService,
   CloudShiftTemplateService,
   CloudPricingService,
+  CloudOrganizationService,
 } from '../services/cloud.js';
 
 /**
@@ -30,6 +31,7 @@ const nozzleSvc = new CloudNozzleService();
 const userSvc = new CloudUserAssignmentService();
 const templateSvc = new CloudShiftTemplateService();
 const pricingSvc = new CloudPricingService();
+const orgSvc = new CloudOrganizationService();
 
 export const queryKeys = {
   shiftStatus: (stationId: string, lite = false) => ['shift-status', stationId, lite] as const,
@@ -56,6 +58,7 @@ export const queryKeys = {
   users: () => ['users'] as const,
   shiftTemplates: () => ['shift-templates'] as const,
   pricing: (stationId: string) => ['pricing', stationId] as const,
+  organization: () => ['organization'] as const,
 } as const;
 
 type Options<T> = Omit<UseQueryOptions<T, Error, T, readonly unknown[]>, 'queryKey' | 'queryFn'>;
@@ -117,6 +120,10 @@ export function usePricing(stationId: string | null | undefined, options?: Optio
     ...TIER.semi,
     ...options,
   });
+}
+
+export function useOrganization(options?: Options<any>) {
+  return useQuery({ queryKey: queryKeys.organization(), queryFn: () => orgSvc.getOrganization(), ...TIER.static, ...options });
 }
 
 export function useTanks(stationId: string | null | undefined, options?: Options<any[]>) {

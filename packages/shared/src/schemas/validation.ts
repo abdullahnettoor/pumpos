@@ -18,6 +18,21 @@ export const organizationSchema = z.object({
   subscriptionStatus: z.string().default('Active'),
 });
 
+/** Owner-editable organization profile (name + legal/branding metadata). */
+export const organizationUpdateSchema = z.object({
+  name: z.string().min(2, 'Organization name must be at least 2 characters').max(255),
+  metadata: z.object({
+    legalName: z.string().max(255).optional().nullable(),
+    gstin: z.string().max(15).optional().nullable(),
+    pan: z.string().max(10).optional().nullable(),
+    stateCode: z.string().max(2).optional().nullable(),
+    address: z.string().max(500).optional().nullable(),
+    phone: z.string().max(50).optional().nullable(),
+    email: z.string().email('Invalid email address').or(z.literal('')).optional().nullable(),
+  }).optional().nullable(),
+});
+export type OrganizationUpdateValues = z.infer<typeof organizationUpdateSchema>;
+
 export const stationSchema = z.object({
   name: z.string().min(2, 'Station name must be at least 2 characters'),
   code: z.string().min(2, 'Station code must be at least 2 characters').toUpperCase(),

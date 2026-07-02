@@ -10,7 +10,6 @@ import { ShiftTemplates } from './ShiftTemplates.js';
 import { Tabs } from '../primitives/Tabs.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import { LoadingSpinner } from '../LoadingSpinner.js';
-import { UserRolesAssignment } from './UserRolesAssignment.js';
 import { PaymentTerminalsPanel } from './PaymentTerminalsPanel.js';
 import { DEFAULT_SHIFT_SUMMARY_CONFIG, SHIFT_SUMMARY_SECTION_LABELS, DEFAULT_DSSR_CONFIG, DSSR_SECTION_LABELS } from '../../services/reports/reportConfig.js';
 
@@ -31,7 +30,7 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
   const toast = useToast();
   const [editing, setEditing] = useState(false);
   const [editingBusiness, setEditingBusiness] = useState(false);
-  const [activeTab, setActiveTab] = useState<'general' | 'business' | 'products' | 'tanks' | 'dispensers' | 'terminals' | 'shifts' | 'roster'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'business' | 'products' | 'tanks' | 'dispensers' | 'terminals' | 'shifts'>('general');
 
   // General tab form states
   const [name, setName] = useState('');
@@ -183,33 +182,6 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
           <h2 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-strong)' }}>Station Setup & Administration</h2>
           <p style={{ color: 'var(--text-muted)', fontSize: '12px' }}>Review and modify station components, products, tanks, nozzles, and settings.</p>
         </div>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <select
-            value={selectedStation?.id || ''}
-            onChange={(e) => {
-              const found = stationsList.find((s) => s.id === e.target.value);
-              onStationSelected(found || null);
-            }}
-            style={{
-              padding: '0 8px',
-              height: '32px',
-              backgroundColor: 'var(--bg-surface)',
-              border: '1px solid var(--border-strong)',
-              borderRadius: 'var(--radius-input)',
-              fontSize: '13px',
-              color: 'var(--text-strong)',
-              cursor: 'pointer'
-            }}
-          >
-            <option value="">Select Location</option>
-            {stationsList.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name} ({s.code})
-              </option>
-            ))}
-          </select>
-
-        </div>
       </div>
 
       {selectedStation ? (
@@ -228,7 +200,6 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
               { id: 'dispensers', label: 'Dispenser Units' },
               { id: 'terminals', label: 'Payment Terminals' },
               { id: 'shifts', label: 'Shift Templates' },
-              { id: 'roster', label: 'Team Roster' },
             ]}
           />
 
@@ -563,7 +534,6 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
             {activeTab === 'dispensers' && <DispensersList stationId={selectedStation.id} />}
             {activeTab === 'terminals' && <PaymentTerminalsPanel stationId={selectedStation.id} />}
             {activeTab === 'shifts' && <ShiftTemplates />}
-            {activeTab === 'roster' && <UserRolesAssignment />}
           </div>
         </div>
       ) : (

@@ -195,7 +195,7 @@ export const UserRolesAssignment: React.FC = () => {
       {/* Header section with + Add Button */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h2 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-strong)' }}>Team & Roster</h2>
+          <h2 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-strong)' }}>Team</h2>
           <p style={{ color: 'var(--text-muted)', fontSize: '12px' }}>Manage user access permissions, station scoping, and offline pump attendants.</p>
         </div>
         {!isFormOpen && (
@@ -356,7 +356,7 @@ export const UserRolesAssignment: React.FC = () => {
               opacity: isSubmitting ? 0.6 : 1,
             }}
           >
-            {isSubmitting ? 'Saving...' : (editingUser ? 'Save Profile Changes' : 'Add to Roster')}
+            {isSubmitting ? 'Saving...' : (editingUser ? 'Save Profile Changes' : 'Add Member')}
           </button>
         </form>
       </Drawer>

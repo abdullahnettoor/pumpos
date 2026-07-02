@@ -658,3 +658,16 @@ export class CloudPricingService {
     });
   }
 }
+
+export class CloudOrganizationService {
+  async getOrganization(): Promise<any> {
+    return request<any>('/organization');
+  }
+
+  async updateOrganization(payload: { name: string; metadata?: Record<string, unknown> | null }): Promise<any> {
+    return request<any>('/organization', {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+  }
+}

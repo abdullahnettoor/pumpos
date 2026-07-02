@@ -58,7 +58,7 @@ export const Tabs: React.FC<TabsProps> = ({ tabs, activeId, onChange, size = 'md
       aria-label={rest['aria-label']}
       onKeyDown={handleKeyDown}
       className={className}
-      style={{ display: 'flex', gap: '4px', borderBottom: '1px solid var(--border-soft)', overflowX: 'auto', ...style }}
+      style={{ display: 'flex', gap: '4px', boxShadow: 'inset 0 -1px 0 var(--border-soft)', overflowX: 'auto', overflowY: 'hidden', ...style }}
     >
       {tabs.map((tab) => {
         const active = tab.id === activeId;
@@ -83,7 +83,6 @@ export const Tabs: React.FC<TabsProps> = ({ tabs, activeId, onChange, size = 'md
               background: 'transparent',
               border: 'none',
               borderBottom: active ? '2px solid var(--brand-primary)' : '2px solid transparent',
-              marginBottom: '-1px',
               color: tab.disabled ? 'var(--text-faint)' : active ? 'var(--brand-primary)' : 'var(--text-muted)',
               cursor: tab.disabled ? 'not-allowed' : 'pointer',
               transition: 'color 0.15s ease, border-color 0.15s ease',
@@ -91,7 +90,28 @@ export const Tabs: React.FC<TabsProps> = ({ tabs, activeId, onChange, size = 'md
           >
             {tab.icon}
             {tab.label}
-            {tab.badge}
+            {typeof tab.badge === 'number' ? (
+              <span
+                style={{
+                  fontSize: '10px',
+                  fontWeight: 700,
+                  minWidth: '16px',
+                  height: '16px',
+                  padding: '0 5px',
+                  borderRadius: '999px',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  lineHeight: 1,
+                  backgroundColor: active ? 'var(--brand-primary)' : 'var(--bg-surface-alt)',
+                  color: active ? '#fff' : 'var(--text-muted)',
+                }}
+              >
+                {tab.badge}
+              </span>
+            ) : (
+              tab.badge
+            )}
           </button>
         );
       })}

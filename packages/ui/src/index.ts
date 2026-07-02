@@ -6,7 +6,7 @@ export { ErrorBoundary } from './components/ErrorBoundary.js';
 export { Login } from './components/Auth/Login.js';
 export { OnboardingWizard } from './components/StationSetup/OnboardingWizard.js';
 export { StationOverview } from './components/StationSetup/StationOverview.js';
-export { FuelPricingPanel } from './components/StationSetup/FuelPricingPanel.js';
+export { OrganizationOverview } from './components/Organization/OrganizationOverview.js';export { FuelPricingPanel } from './components/StationSetup/FuelPricingPanel.js';
 export { DashboardOverview } from './components/Dashboard/DashboardOverview.js';
 export { ShiftsManagement } from './components/Shifts/ShiftsManagement.js';
 export { ShiftSummaryView } from './components/Shifts/ShiftSummaryView.js';

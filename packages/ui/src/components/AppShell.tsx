@@ -152,6 +152,17 @@ const getIconSvg = (label: string) => {
           <path d="M14 13h2a2 2 0 0 1 2 2v2a2 2 0 0 0 2 2a2 2 0 0 0 2-2V9.83a2 2 0 0 0-.59-1.42L18 5" />
         </svg>
       );
+    case 'organization':
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="7" width="18" height="14" rx="1" />
+          <path d="M8 7V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v3" />
+          <line x1="9" y1="11" x2="9" y2="11.01" />
+          <line x1="15" y1="11" x2="15" y2="11.01" />
+          <line x1="9" y1="15" x2="9" y2="15.01" />
+          <line x1="15" y1="15" x2="15" y2="15.01" />
+        </svg>
+      );
     default:
       return (
         <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -173,9 +184,7 @@ export const AppShell: React.FC<AppShellProps> = ({
   syncStatus,
   pendingSyncCount = 0,
   onLogout,
-  stations = [],
   selectedStation = null,
-  onStationChange,
   environmentTag = null,
 }) => {
   const [collapsed, setCollapsed] = useState(false);
@@ -379,40 +388,9 @@ export const AppShell: React.FC<AppShellProps> = ({
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-            {stations.length > 1 ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 600, letterSpacing: '0.05em' }}>Station:</span>
-                <select
-                  value={selectedStation?.id || ''}
-                  onChange={(e) => {
-                    const target = stations.find((s) => s.id === e.target.value);
-                    if (target && onStationChange) onStationChange(target);
-                  }}
-                  style={{
-                    border: '1px solid var(--border-soft)',
-                    borderRadius: 'var(--radius-input)',
-                    padding: '4px 24px 4px 8px',
-                    fontSize: '13px',
-                    fontWeight: 600,
-                    height: '28px',
-                    backgroundColor: 'var(--bg-surface-alt)',
-                    color: 'var(--text-strong)',
-                    cursor: 'pointer',
-                    outline: 'none',
-                  }}
-                >
-                  {stations.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            ) : (
-              <span style={{ fontSize: '14px', color: 'var(--text-strong)', fontWeight: 600 }}>
-                {selectedStation ? selectedStation.name : 'Workspace Setup'}
-              </span>
-            )}
+            <span style={{ fontSize: '14px', color: 'var(--text-strong)', fontWeight: 600 }}>
+              {selectedStation ? selectedStation.name : 'Workspace Setup'}
+            </span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
             <SyncIndicator status={syncStatus} pendingCount={pendingSyncCount} />

@@ -9,6 +9,7 @@ export const organizations = pgTable('organizations', {
   name: varchar('name', { length: 255 }).notNull(),
   subscriptionPlan: varchar('subscription_plan', { length: 50 }).default('Core').notNull(),
   subscriptionStatus: varchar('subscription_status', { length: 50 }).default('Active').notNull(),
+  metadata: jsonb('metadata').default({}).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });

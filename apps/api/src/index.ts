@@ -3,7 +3,7 @@ import { cors } from 'hono/cors';
 import { verify, decode } from 'hono/jwt';
 import { createDb, DbClient, schema } from '@pump/db';
 import { eq } from 'drizzle-orm';
-import { Role } from '@pump/shared';
+import { Role, canManageUsers, organizationUpdateSchema } from '@pump/shared';
 import { stationSetupRouter } from './routes/station-setup.js';
 import { paymentTerminalsRouter } from './routes/payment-terminals.js';
 import { productsRouter } from './routes/products.js';
@@ -222,6 +222,37 @@ api.get('/session', (c) => {
       user,
     },
   });
+});
+
+// GET /api/organization - current organization profile
+api.get('/organization', async (c) => {
+  const user = c.var.user;
+  const db = c.var.db;
+  const org = await db.query.organizations.findFirst({ where: eq(schema.organizations.id, user.organizationId) });
+  if (!org) {
+    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Organization not found' } }, 404);
+  }
+  return c.json({ success: true, data: org });
+});
+
+// PUT /api/organization - update org name + profile metadata (Owner only)
+api.put('/organization', async (c) => {
+  const user = c.var.user;
+  if (!canManageUsers(user.role)) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Only Owners can manage the organization' } }, 403);
+  }
+  const body = await c.req.json().catch(() => ({}));
+  const parsed = organizationUpdateSchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: parsed.error.issues[0]?.message || 'Invalid input' } }, 400);
+  }
+  const db = c.var.db;
+  const [updated] = await db
+    .update(schema.organizations)
+    .set({ name: parsed.data.name, metadata: parsed.data.metadata ?? {}, updatedAt: new Date() })
+    .where(eq(schema.organizations.id, user.organizationId))
+    .returning();
+  return c.json({ success: true, data: updated });
 });
 
 // Idempotency: dedupe mutating requests that carry an Idempotency-Key header.
