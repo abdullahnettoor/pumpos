@@ -62,5 +62,31 @@
   doc modules + `exportReactPdf` are now **dynamic-imported only on "Save PDF"**. Main bundle 2,360 kB → 1,041 kB;
   `@react-pdf/renderer` (1.3 MB) + html2pdf (668 kB) are deferred lazy chunks. Remaining: route-level code-split of heavy screens.
 
+## U7 — Page-by-page design-system pass (in progress)
+Bring every screen to the same design-system bar. Checklist per page: `PageLayout` header;
+`Field`+primitives for inputs (`Combobox` for long selects, `Segmented` for choices); `DataTable`
+for lists; `KpiCard`/`Banner`/`StatusBadge`; `inr()`/`formatQty()`; consistent empty/loading/error
+states; role-awareness; tokens only. **Loader convention:** always route loading UI through the
+single `LoadingSpinner` wrapper (never bespoke inline spinners) so a future branded/logo loader is a
+one-file swap.
+
+| Page | Status | Notes |
+|---|---|---|
+| Dashboard | ✅ | Role-aware widgets, tanks/prices, financial rollup, low-stock `Banner`s, network-aware SyncIndicator |
+| Organization | ✅ | New Owner tab: Stations/Team/Activity/Profile |
+| Reports | ✅ | Fixed UTC→business-date (`resolveBusinessDate` w/ station clock); `DateField`; already on `PageLayout`. Kept as extensible hub (L/F/X add tabs) |
+| Shifts (Today) | ☐ | Verify PageLayout, discoverable shortcuts, close-wizard polish |
+| Expenses | ☐ | Business-day context, primitives, states |
+| Purchases | ☐ | DataTable/primitives; finish GST register tab |
+| Customers | ☐ | Vehicles tab completeness, Combobox, ledger |
+| Inventory | ☐ | 4 tabs end-to-end, KpiCard, low-stock Banner |
+| Station Overview | ☐ | Primitives + inline validation on config tabs |
+| Fuel Pricing | ☐ | Price-history DataTable; fix `effectiveFrom` timezone |
+
+**UI fold-ins from other phases (do while on the relevant page):** R letterhead + report-sections
+config (Station Overview / Reports); T DSSR tax-breakup (Reports); O sync-blocking on close + retry
+toasts (Shifts). **New builds deferred to their phases:** L ledgers/expense register, F P&L/rollups,
+X attendance/GST-exports/fleet/WhatsApp/hardware — these become Reports/new tabs later.
+
 ## Expansion
 - Theming/dark mode, command palette, saved views, density toggle, a11y pass, empty/skeleton states.

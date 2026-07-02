@@ -3,7 +3,9 @@ import { CloudShiftService } from '../services/cloud.js';
 import { DailyDssrView } from './DailyDssrView.js';
 import { LoadingSpinner } from './LoadingSpinner.js';
 import { PageLayout } from './primitives/PageLayout.js';
+import { DateField } from './primitives/Field.js';
 import { inr } from '../utils/format.js';
+import { resolveBusinessDate } from '@pump/shared';
 import { Calendar, RefreshCw, Play, Zap } from 'lucide-react';
 
 const shiftService = new CloudShiftService();
@@ -25,7 +27,10 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
   // Daily DSSR states
   const [dailyDssrList, setDailyDssrList] = useState<any[]>([]);
   const [activeDailyDssr, setActiveDailyDssr] = useState<any | null>(null);
-  const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = useState<string>(() => {
+    const s = (selectedStation as any)?.settings || {};
+    return resolveBusinessDate({ timeZone: s.timezone, dayStartsAt: s.business_day_starts_at });
+  });
   const [generatingDailyDssr, setGeneratingDailyDssr] = useState(false);
 
   useEffect(() => {
@@ -39,12 +44,11 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
     try {
       setLoading(true);
       setError(null);
-      const toDate = new Date();
-      const fromDate = new Date(toDate);
-      fromDate.setDate(fromDate.getDate() - 30);
-
-      const from = fromDate.toISOString().split('T')[0];
-      const to = toDate.toISOString().split('T')[0];
+      const s = (selectedStation as any).settings || {};
+      const to = resolveBusinessDate({ timeZone: s.timezone, dayStartsAt: s.business_day_starts_at });
+      const fromD = new Date(`${to}T00:00:00Z`);
+      fromD.setUTCDate(fromD.getUTCDate() - 30);
+      const from = fromD.toISOString().split('T')[0];
 
       const list = await shiftService.getDailyDssrRange(selectedStation.id, from, to);
       setDailyDssrList(list);
@@ -150,20 +154,9 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
               >
                 Business Date
               </label>
-              <input
-                type="date"
+              <DateField
                 value={selectedDate}
                 onChange={(e) => setSelectedDate(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '8px 10px',
-                  border: '1px solid var(--border-soft)',
-                  borderRadius: 'var(--radius-input)',
-                  fontSize: '13px',
-                  fontFamily: 'inherit',
-                  backgroundColor: 'var(--bg-surface)',
-                  color: 'var(--text-strong)',
-                }}
               />
             </div>
             <button
