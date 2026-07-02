@@ -11,6 +11,7 @@ import {
   CloudShiftTemplateService,
   CloudPricingService,
   CloudOrganizationService,
+  CloudEventsService,
 } from '../services/cloud.js';
 
 /**
@@ -32,6 +33,7 @@ const userSvc = new CloudUserAssignmentService();
 const templateSvc = new CloudShiftTemplateService();
 const pricingSvc = new CloudPricingService();
 const orgSvc = new CloudOrganizationService();
+const eventsSvc = new CloudEventsService();
 
 export const queryKeys = {
   shiftStatus: (stationId: string, lite = false) => ['shift-status', stationId, lite] as const,
@@ -59,6 +61,7 @@ export const queryKeys = {
   shiftTemplates: () => ['shift-templates'] as const,
   pricing: (stationId: string) => ['pricing', stationId] as const,
   organization: () => ['organization'] as const,
+  events: (stationId: string, type: string) => ['events', stationId, type] as const,
 } as const;
 
 type Options<T> = Omit<UseQueryOptions<T, Error, T, readonly unknown[]>, 'queryKey' | 'queryFn'>;
@@ -124,6 +127,15 @@ export function usePricing(stationId: string | null | undefined, options?: Optio
 
 export function useOrganization(options?: Options<any>) {
   return useQuery({ queryKey: queryKeys.organization(), queryFn: () => orgSvc.getOrganization(), ...TIER.static, ...options });
+}
+
+export function useEvents(params?: { stationId?: string; type?: string; limit?: number }, options?: Options<any[]>) {
+  return useQuery({
+    queryKey: queryKeys.events(params?.stationId ?? '', params?.type ?? ''),
+    queryFn: () => eventsSvc.getEvents(params),
+    ...TIER.operational,
+    ...options,
+  });
 }
 
 export function useTanks(stationId: string | null | undefined, options?: Options<any[]>) {

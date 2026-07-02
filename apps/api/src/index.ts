@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { verify, decode } from 'hono/jwt';
 import { createDb, DbClient, schema } from '@pump/db';
-import { eq } from 'drizzle-orm';
+import { eq, and, desc } from 'drizzle-orm';
 import { Role, canManageUsers, organizationUpdateSchema } from '@pump/shared';
 import { stationSetupRouter } from './routes/station-setup.js';
 import { paymentTerminalsRouter } from './routes/payment-terminals.js';
@@ -253,6 +253,42 @@ api.put('/organization', async (c) => {
     .where(eq(schema.organizations.id, user.organizationId))
     .returning();
   return c.json({ success: true, data: updated });
+});
+
+// GET /api/activity - human-readable business-event activity feed (Owner only).
+// (Named /activity rather than /events so ad-blockers don't block it.)
+// Org-scoped; optional ?stationId= and ?type= filters, ?limit= (default 50, max 200).
+api.get('/activity', async (c) => {
+  const user = c.var.user;
+  if (!canManageUsers(user.role)) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Only Owners can view the activity log' } }, 403);
+  }
+  const db = c.var.db;
+  const stationId = c.req.query('stationId');
+  const type = c.req.query('type');
+  const limit = Math.min(Number(c.req.query('limit')) || 50, 200);
+  const conds = [eq(schema.events.organizationId, user.organizationId)];
+  if (stationId) conds.push(eq(schema.events.stationId, stationId));
+  if (type) conds.push(eq(schema.events.eventType, type));
+  const rows = await db
+    .select({
+      id: schema.events.id,
+      eventType: schema.events.eventType,
+      stationId: schema.events.stationId,
+      stationName: schema.stations.name,
+      aggregateType: schema.events.aggregateType,
+      occurredAt: schema.events.occurredAt,
+      recordedAt: schema.events.recordedAt,
+      actorName: schema.users.fullName,
+      payload: schema.events.payload,
+    })
+    .from(schema.events)
+    .leftJoin(schema.stations, eq(schema.stations.id, schema.events.stationId))
+    .leftJoin(schema.users, eq(schema.users.id, schema.events.actorId))
+    .where(and(...conds))
+    .orderBy(desc(schema.events.recordedAt))
+    .limit(limit);
+  return c.json({ success: true, data: rows });
 });
 
 // Idempotency: dedupe mutating requests that carry an Idempotency-Key header.

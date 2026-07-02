@@ -671,3 +671,14 @@ export class CloudOrganizationService {
     });
   }
 }
+
+export class CloudEventsService {
+  async getEvents(params?: { stationId?: string; type?: string; limit?: number }): Promise<any[]> {
+    const qs = new URLSearchParams();
+    if (params?.stationId) qs.set('stationId', params.stationId);
+    if (params?.type) qs.set('type', params.type);
+    if (params?.limit) qs.set('limit', String(params.limit));
+    const suffix = qs.toString() ? `?${qs.toString()}` : '';
+    return request<any[]>(`/activity${suffix}`);
+  }
+}

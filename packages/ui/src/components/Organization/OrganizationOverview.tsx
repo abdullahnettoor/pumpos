@@ -5,6 +5,7 @@ import { Tabs } from '../primitives/Tabs.js';
 import { StatusBadge } from '../StatusBadge.js';
 import { UserRolesAssignment } from '../StationSetup/UserRolesAssignment.js';
 import { OrgProfile } from './OrgProfile.js';
+import { ActivityFeed } from './ActivityFeed.js';
 import { Check } from 'lucide-react';
 
 export interface OrganizationOverviewProps {
@@ -37,7 +38,7 @@ export const OrganizationOverview: React.FC<OrganizationOverviewProps> = ({
   onStationChange,
   onNavigate,
 }) => {
-  const [tab, setTab] = useState<'stations' | 'team' | 'profile'>('stations');
+  const [tab, setTab] = useState<'stations' | 'team' | 'activity' | 'profile'>('stations');
 
   return (
     <PageLayout
@@ -47,10 +48,11 @@ export const OrganizationOverview: React.FC<OrganizationOverviewProps> = ({
         <Tabs
           aria-label="Organization"
           activeId={tab}
-          onChange={(id) => setTab(id as 'stations' | 'team' | 'profile')}
+          onChange={(id) => setTab(id as 'stations' | 'team' | 'activity' | 'profile')}
           tabs={[
             { id: 'stations', label: 'Stations', badge: stations.length },
             { id: 'team', label: 'Team' },
+            { id: 'activity', label: 'Activity' },
             { id: 'profile', label: 'Profile' },
           ]}
         />
@@ -96,6 +98,8 @@ export const OrganizationOverview: React.FC<OrganizationOverviewProps> = ({
       )}
 
       {tab === 'team' && <UserRolesAssignment />}
+
+      {tab === 'activity' && <ActivityFeed stations={stations} />}
 
       {tab === 'profile' && <OrgProfile />}
     </PageLayout>

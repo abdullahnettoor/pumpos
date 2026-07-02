@@ -8,6 +8,7 @@ shippable and extends existing domain entities (per `AGENTS.md`) rather than red
 |---|---|---|---|
 | [R](phase-R-reports-pdf.md) | Reports & PDF hardening | In progress | — |
 | [P](phase-P-performance.md) | Performance & caching | Planned (instrumentation done) | — |
+| [D](phase-D-data-pagination.md) | Data access & pagination | Planned | P (complementary) |
 | [L](phase-L-ledger.md) | Ledger / money visibility | Planned | R (PDF export reuse) |
 | [T](phase-T-tax.md) | Product tax restructure & GST invoicing | Planned | R, L |
 | [F](phase-F-financials.md) | Financials / P&L / COGS | Planned | L |
