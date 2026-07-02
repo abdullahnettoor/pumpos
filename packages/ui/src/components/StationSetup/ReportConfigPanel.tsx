@@ -7,7 +7,7 @@ import {
   DEFAULT_SHIFT_SUMMARY_CONFIG, SHIFT_SUMMARY_SECTION_LABELS,
   DEFAULT_DSSR_CONFIG, DSSR_SECTION_LABELS,
 } from '../../services/reports/reportConfig.js';
-import { ChevronUp, ChevronDown, Save } from 'lucide-react';
+import { Save, GripVertical } from 'lucide-react';
 
 const stationService = new CloudStationService();
 
@@ -27,16 +27,25 @@ function buildOrdered(defaults: string[], saved?: string[]): OrderedSection[] {
   const savedList = (saved && saved.length ? saved : defaults).filter((k) => defaults.includes(k));
   const enabledSet = new Set(savedList);
   const remaining = defaults.filter((k) => !enabledSet.has(k));
-  return [...savedList, ...remaining].map((key) => ({ key, enabled: enabledSet.has(key) }));
+  const ordered = [...savedList, ...remaining];
+  // 'header' is always pinned first regardless of stored order.
+  if (ordered.includes('header')) {
+    ordered.splice(ordered.indexOf('header'), 1);
+    ordered.unshift('header');
+  }
+  return ordered.map((key) => ({ key, enabled: key === 'header' ? true : enabledSet.has(key) }));
 }
 
-const move = (list: OrderedSection[], index: number, dir: -1 | 1): OrderedSection[] => {
-  const target = index + dir;
-  if (target < 0 || target >= list.length) return list;
+/** Move the item at `from` to position `to`, preserving the rest of the order. */
+const reorder = (list: OrderedSection[], from: number, to: number): OrderedSection[] => {
+  if (from === to || from < 0 || to < 0 || from >= list.length || to >= list.length) return list;
   const next = [...list];
-  [next[index], next[target]] = [next[target], next[index]];
+  const [item] = next.splice(from, 1);
+  next.splice(to, 0, item);
   return next;
 };
+
+type ListId = 'ss' | 'dssr';
 
 /**
  * Station-level report configuration (Phase R2): choose paper size, toggle and
@@ -51,6 +60,7 @@ export const ReportConfigPanel: React.FC<ReportConfigPanelProps> = ({ selectedSt
   const [dssr, setDssr] = useState<OrderedSection[]>([]);
   const [previewDoc, setPreviewDoc] = useState<'shiftSummary' | 'dssr'>('shiftSummary');
   const [saving, setSaving] = useState(false);
+  const [drag, setDrag] = useState<{ list: ListId; index: number } | null>(null);
 
   useEffect(() => {
     const rc = selectedStation?.settings?.report_config || {};
@@ -107,6 +117,7 @@ export const ReportConfigPanel: React.FC<ReportConfigPanelProps> = ({ selectedSt
 
   const renderList = (
     title: string,
+    listId: ListId,
     list: OrderedSection[],
     setter: React.Dispatch<React.SetStateAction<OrderedSection[]>>,
     labels: Record<string, string>,
@@ -114,45 +125,55 @@ export const ReportConfigPanel: React.FC<ReportConfigPanelProps> = ({ selectedSt
     <div>
       <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-default)', marginBottom: '8px' }}>{title}</div>
       <div style={{ display: 'flex', flexDirection: 'column', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-card)', overflow: 'hidden' }}>
-        {list.map((s, i) => (
-          <div
-            key={s.key}
-            style={{
-              display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 10px',
-              borderBottom: i < list.length - 1 ? '1px solid var(--border-soft)' : 'none',
-              backgroundColor: s.enabled ? 'transparent' : 'var(--bg-surface-alt)',
-            }}
-          >
-            <Checkbox
-              label={labels[s.key] || s.key}
-              checked={s.enabled}
-              disabled={s.key === 'header'}
-              onChange={() => toggle(setter, s.key)}
-            />
-            <div style={{ marginLeft: 'auto', display: 'flex', gap: '2px' }}>
-              <button
-                type="button"
-                className="btn btn-secondary btn-xs"
-                style={{ padding: '2px 5px' }}
-                disabled={i === 0}
-                onClick={() => setter((prev) => move(prev, i, -1))}
-                aria-label={`Move ${labels[s.key] || s.key} up`}
-              >
-                <ChevronUp size={13} />
-              </button>
-              <button
-                type="button"
-                className="btn btn-secondary btn-xs"
-                style={{ padding: '2px 5px' }}
-                disabled={i === list.length - 1}
-                onClick={() => setter((prev) => move(prev, i, 1))}
-                aria-label={`Move ${labels[s.key] || s.key} down`}
-              >
-                <ChevronDown size={13} />
-              </button>
+        {list.map((s, i) => {
+          const isDragging = drag?.list === listId && drag.index === i;
+          return (
+            <div
+              key={s.key}
+              onDragOver={(e) => {
+                if (!drag || drag.list !== listId || drag.index === i || i === 0) return;
+                e.preventDefault();
+                setter((prev) => reorder(prev, drag.index, i));
+                setDrag({ list: listId, index: i });
+              }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 10px',
+                borderBottom: i < list.length - 1 ? '1px solid var(--border-soft)' : 'none',
+                backgroundColor: isDragging ? 'var(--bg-surface-hover, var(--bg-surface-alt))' : s.enabled ? 'transparent' : 'var(--bg-surface-alt)',
+                opacity: isDragging ? 0.6 : 1,
+              }}
+            >
+              {s.key === 'header' ? (
+                <span
+                  title="Header is always first"
+                  style={{ display: 'flex', alignItems: 'center', color: 'var(--text-faint)', opacity: 0.35, cursor: 'not-allowed' }}
+                >
+                  <GripVertical size={14} />
+                </span>
+              ) : (
+                <span
+                  draggable
+                  onDragStart={(e) => {
+                    setDrag({ list: listId, index: i });
+                    e.dataTransfer.effectAllowed = 'move';
+                  }}
+                  onDragEnd={() => setDrag(null)}
+                  title="Drag to reorder"
+                  aria-label={`Drag ${labels[s.key] || s.key} to reorder`}
+                  style={{ display: 'flex', alignItems: 'center', color: 'var(--text-faint)', cursor: 'grab', touchAction: 'none' }}
+                >
+                  <GripVertical size={14} />
+                </span>
+              )}
+              <Checkbox
+                label={labels[s.key] || s.key}
+                checked={s.enabled}
+                disabled={s.key === 'header'}
+                onChange={() => toggle(setter, s.key)}
+              />
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
@@ -180,10 +201,10 @@ export const ReportConfigPanel: React.FC<ReportConfigPanelProps> = ({ selectedSt
             </select>
           </div>
 
-          {renderList('Shift Summary', ss, setSs, SHIFT_SUMMARY_SECTION_LABELS)}
-          {renderList('Daily DSSR', dssr, setDssr, DSSR_SECTION_LABELS)}
+          {renderList('Shift Summary', 'ss', ss, setSs, SHIFT_SUMMARY_SECTION_LABELS)}
+          {renderList('Daily DSSR', 'dssr', dssr, setDssr, DSSR_SECTION_LABELS)}
           <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-            Toggle sections on/off and use the arrows to reorder them. “Header / Letterhead” is always first.
+            Toggle sections on/off and drag the handle to reorder them. “Header / Letterhead” is always first.
           </span>
         </div>
 
