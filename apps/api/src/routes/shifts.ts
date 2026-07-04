@@ -356,6 +356,7 @@ shiftsRouter.get('/status', async (c) => {
           attendantId: schema.sales.attendantId,
           paymentMethod: schema.sales.paymentMethod,
           total: sql<string>`COALESCE(SUM(${schema.sales.totalAmount}), 0)`,
+          nonCash: sql<string>`COALESCE(SUM(${schema.sales.nonCashAmount}), 0)`,
         })
         .from(schema.sales)
         .where(and(eq(schema.sales.shiftId, dbActiveShift.id), ne(schema.sales.saleType, 'Fuel')))
@@ -439,13 +440,19 @@ shiftsRouter.get('/status', async (c) => {
       const a = ensureAttr(r.attendantId);
       if (!a) continue;
       const amt = Number(r.total) || 0;
+      const nonCash = Number(r.nonCash) || 0;
       a.merchandiseTotal += amt;
-      if (r.paymentMethod === 'Cash') a.merchandiseCash += amt;
-      else if (r.paymentMethod === 'Card') a.merchandiseCard += amt;
+      if (r.paymentMethod === 'Cash') {
+        // Option B: a cash-recorded merch sale may have a non-cash (card/UPI)
+        // portion that went to the terminal — only the cash remainder hits the drawer.
+        a.merchandiseCash += amt - nonCash;
+        a.merchandiseCard += nonCash;
+      } else if (r.paymentMethod === 'Card') a.merchandiseCard += amt;
       else if (r.paymentMethod === 'UPI') a.merchandiseUpi += amt;
       else if (r.paymentMethod === 'Credit') a.merchandiseCredit += amt;
     }
-    for (const a of attributedMap.values()) a.expectedExtra = a.merchandiseTotal;
+    // Only the cash the attendant actually holds folds into their handover expected.
+    for (const a of attributedMap.values()) a.expectedExtra = a.merchandiseCash;
     const emptyAttr = { merchandiseCash: 0, merchandiseCard: 0, merchandiseUpi: 0, merchandiseCredit: 0, merchandiseTotal: 0, expectedExtra: 0 };
     const attributedFor = (userId: string | null | undefined) => (userId && attributedMap.get(userId)) || emptyAttr;
 

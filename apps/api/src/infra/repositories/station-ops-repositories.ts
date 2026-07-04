@@ -245,15 +245,24 @@ export class DrizzleShiftReconciliationReader implements ShiftReconciliationRead
       rows.filter((r) => r.paymentMethod === method).reduce((acc, r) => acc + Number(r.amount), 0);
 
     // Cash sales for the drawer = the cash attendants declared in their DU handovers
-    // (fuel cash is never a `sales` row — it's metered and declared at handover).
-    // Fall back to merchandise cash `sales` for legacy shifts with no handovers.
+    // (fuel cash is never a `sales` row — it's metered and declared at handover),
+    // PLUS merchandise cash from sellers who have NO handover (office/counter staff),
+    // whose cash isn't captured anywhere else. Attendants' own merch cash is already
+    // inside their handover cashHandedOver. Fall back to all merch cash when there
+    // are no handovers at all (legacy / handover-less shifts).
     const handoverCash = handovers.reduce((acc, h) => acc + Number(h.cashHandedOver ?? 0), 0);
-    const merchCashSales = sales
-      .filter((s) => s.paymentMethod === 'Cash')
-      .reduce((acc, s) => acc + Number(s.totalAmount), 0);
+    const handoverUserIds = new Set(handovers.map((h) => h.userId));
+    const cashSaleRows = sales.filter((s) => s.paymentMethod === 'Cash');
+    // Cash portion = total − non-cash (card/UPI) portion (Option B).
+    const cashPortion = (s: { totalAmount: string; nonCashAmount?: string | null }) =>
+      Number(s.totalAmount) - Number(s.nonCashAmount ?? 0);
+    const merchCashSales = cashSaleRows.reduce((acc, s) => acc + cashPortion(s), 0);
+    const nonHandoverMerchCash = cashSaleRows
+      .filter((s) => !(s.attendantId && handoverUserIds.has(s.attendantId)))
+      .reduce((acc, s) => acc + cashPortion(s), 0);
 
     return {
-      cashSales: handovers.length > 0 ? handoverCash : merchCashSales,
+      cashSales: handovers.length > 0 ? handoverCash + nonHandoverMerchCash : merchCashSales,
       cashCollections: sumBy(collections, 'Cash'),
       cardCollections: sumBy(collections, 'Card'),
       upiCollections: sumBy(collections, 'UPI'),

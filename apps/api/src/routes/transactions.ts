@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { and, desc, eq, gte, ilike, lte, ne, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, ilike, inArray, lte, ne, sql } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
 import {
   isAuthorizedForStation,
@@ -25,6 +25,7 @@ import {
   CreateSale,
   RecordStockCount,
   GenerateInvoice,
+  RecordMerchandiseHandover,
   type Result,
 } from '@pump/core';
 import { buildContext } from '../infra/context.js';
@@ -45,7 +46,7 @@ import {
 } from '../infra/repositories/purchasing-repositories.js';
 import { DrizzleExpenseRepository } from '../infra/repositories/finance-repositories.js';
 import { DrizzleStockMovementRepository, DrizzleStockVarianceRepository } from '../infra/repositories/inventory-repositories.js';
-import { DrizzleSaleRepository } from '../infra/repositories/retail-repositories.js';
+import { DrizzleSaleRepository, DrizzleMerchandiseHandoverRepository } from '../infra/repositories/retail-repositories.js';
 import { DrizzleInvoiceRepository, DrizzleDocumentSequenceRepository } from '../infra/repositories/invoicing-repositories.js';
 import { DrizzleProductRepository } from '../infra/repositories/product.repo.js';
 import { DrizzleStationRepository } from '../infra/repositories/setup-repositories.js';
@@ -946,6 +947,176 @@ transactionsRouter.get('/sales', async (c) => {
     )
     .orderBy(desc(schema.sales.createdAt));
   return c.json({ success: true, data: rows });
+});
+
+// ====================================================
+// MERCHANDISE HANDOVER (walk-in bulk, per employee) — Phase T4b
+// ====================================================
+
+// POST /transactions/shifts/:id/merchandise-handover — record/replace an
+// employee's itemized walk-in merchandise closing (a cash sale attributed to them).
+transactionsRouter.post('/shifts/:id/merchandise-handover', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  const shiftId = c.req.param('id');
+  const body = await c.req.json().catch(() => ({}));
+
+  const shiftRows = await db
+    .select({ stationId: schema.shifts.stationId })
+    .from(schema.shifts)
+    .where(and(eq(schema.shifts.id, shiftId), eq(schema.shifts.organizationId, user.organizationId)))
+    .limit(1);
+  if (!shiftRows[0]) return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Shift not found' } }, 404);
+  if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId: shiftRows[0].stationId })) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+  }
+
+  const result = await runInTransaction(db, (tx, events) =>
+    new RecordMerchandiseHandover({
+      sales: new DrizzleSaleRepository(tx),
+      handovers: new DrizzleMerchandiseHandoverRepository(tx),
+      stock: new DrizzleStockMovementRepository(tx),
+      products: new DrizzleProductRepository(tx),
+      shifts: new DrizzleShiftRepository(tx),
+      docNumbers: new TimestampDocumentNumberGenerator(),
+      events,
+    }).execute({ shiftId, attendantId: body.attendantId, lines: body.lines ?? [], nonCashAmount: body.nonCashAmount }, buildContext(user)),
+  );
+  return sendResult(c, result);
+});
+
+// GET /transactions/shifts/:id/merchandise-handovers — list per-employee handovers + items.
+transactionsRouter.get('/shifts/:id/merchandise-handovers', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  const shiftId = c.req.param('id');
+
+  const handovers = await db
+    .select({
+      id: schema.sales.id,
+      attendantId: schema.sales.attendantId,
+      attendantName: schema.users.fullName,
+      subtotalAmount: schema.sales.subtotalAmount,
+      taxAmount: schema.sales.taxAmount,
+      totalAmount: schema.sales.totalAmount,
+      nonCashAmount: schema.sales.nonCashAmount,
+      createdAt: schema.sales.createdAt,
+    })
+    .from(schema.sales)
+    .leftJoin(schema.users, eq(schema.users.id, schema.sales.attendantId))
+    .innerJoin(schema.businessDays, eq(schema.sales.businessDayId, schema.businessDays.id))
+    .where(
+      and(
+        eq(schema.sales.shiftId, shiftId),
+        eq(schema.sales.captureMechanism, 'MERCH_HANDOVER'),
+        eq(schema.businessDays.organizationId, user.organizationId),
+      ),
+    )
+    .orderBy(desc(schema.sales.createdAt));
+
+  const saleIds = handovers.map((h) => h.id);
+  let itemsBySale: Record<string, any[]> = {};
+  if (saleIds.length > 0) {
+    const items = await db
+      .select({
+        saleId: schema.saleItems.saleId,
+        productId: schema.saleItems.productId,
+        productName: schema.products.name,
+        quantity: schema.saleItems.quantity,
+        unitPrice: schema.saleItems.unitPrice,
+        lineTotal: schema.saleItems.lineTotal,
+      })
+      .from(schema.saleItems)
+      .leftJoin(schema.products, eq(schema.products.id, schema.saleItems.productId))
+      .where(inArray(schema.saleItems.saleId, saleIds));
+    itemsBySale = items.reduce((acc: Record<string, any[]>, it) => {
+      (acc[it.saleId] ||= []).push(it);
+      return acc;
+    }, {});
+  }
+
+  return c.json({ success: true, data: handovers.map((h) => ({ ...h, items: itemsBySale[h.id] ?? [] })) });
+});
+
+// GET /transactions/shifts/:id/merchandise-sales — the individual (quick-entry)
+// non-fuel "billed" sales for a shift: everything NOT recorded via the bulk
+// merchandise handover. Shown read-only inside the handover drawer so a
+// employee's full merchandise picture (bulk + billed) reconciles in one place.
+transactionsRouter.get('/shifts/:id/merchandise-sales', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  const shiftId = c.req.param('id');
+
+  const rows = await db
+    .select({
+      id: schema.sales.id,
+      documentNumber: schema.sales.documentNumber,
+      attendantId: schema.sales.attendantId,
+      attendantName: schema.users.fullName,
+      customerId: schema.sales.customerId,
+      customerName: schema.customers.name,
+      paymentMethod: schema.sales.paymentMethod,
+      totalAmount: schema.sales.totalAmount,
+      createdAt: schema.sales.createdAt,
+    })
+    .from(schema.sales)
+    .leftJoin(schema.users, eq(schema.users.id, schema.sales.attendantId))
+    .leftJoin(schema.customers, eq(schema.customers.id, schema.sales.customerId))
+    .innerJoin(schema.businessDays, eq(schema.sales.businessDayId, schema.businessDays.id))
+    .where(
+      and(
+        eq(schema.sales.shiftId, shiftId),
+        ne(schema.sales.saleType, 'Fuel'),
+        ne(schema.sales.captureMechanism, 'MERCH_HANDOVER'),
+        eq(schema.businessDays.organizationId, user.organizationId),
+      ),
+    )
+    .orderBy(desc(schema.sales.createdAt));
+
+  const saleIds = rows.map((r) => r.id);
+  let itemsBySale: Record<string, any[]> = {};
+  if (saleIds.length > 0) {
+    const items = await db
+      .select({
+        saleId: schema.saleItems.saleId,
+        productName: schema.products.name,
+        quantity: schema.saleItems.quantity,
+        lineTotal: schema.saleItems.lineTotal,
+      })
+      .from(schema.saleItems)
+      .leftJoin(schema.products, eq(schema.products.id, schema.saleItems.productId))
+      .where(inArray(schema.saleItems.saleId, saleIds));
+    itemsBySale = items.reduce((acc: Record<string, any[]>, it) => {
+      (acc[it.saleId] ||= []).push(it);
+      return acc;
+    }, {});
+  }
+
+  return c.json({ success: true, data: rows.map((r) => ({ ...r, items: itemsBySale[r.id] ?? [] })) });
+});
+
+// DELETE /transactions/merchandise-handovers/:saleId — remove a handover (shift must be OPEN).
+transactionsRouter.delete('/merchandise-handovers/:saleId', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  const saleId = c.req.param('saleId');
+
+  const rows = await db
+    .select({ shiftStatus: schema.shifts.status, orgId: schema.businessDays.organizationId, capture: schema.sales.captureMechanism })
+    .from(schema.sales)
+    .innerJoin(schema.shifts, eq(schema.shifts.id, schema.sales.shiftId))
+    .innerJoin(schema.businessDays, eq(schema.sales.businessDayId, schema.businessDays.id))
+    .where(eq(schema.sales.id, saleId))
+    .limit(1);
+  const row = rows[0];
+  if (!row || row.orgId !== user.organizationId || row.capture !== 'MERCH_HANDOVER') {
+    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Merchandise handover not found' } }, 404);
+  }
+  if (row.shiftStatus !== 'OPEN') {
+    return c.json({ success: false, error: { code: 'INVARIANT_VIOLATION', message: 'Cannot edit after the shift is closed' } }, 409);
+  }
+  await new DrizzleMerchandiseHandoverRepository(db).deleteHandoverSale(saleId);
+  return c.json({ success: true, data: { id: saleId } });
 });
 
 transactionsRouter.get('/shifts/:id/transactions', async (c) => {

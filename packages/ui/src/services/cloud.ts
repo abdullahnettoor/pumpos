@@ -661,6 +661,24 @@ export class CloudTransactionService {
     return request<any[]>(`/transactions/sales?${qs.toString()}`);
   }
 
+  /** Record/replace an employee's itemized walk-in merchandise handover for a shift. */
+  async recordMerchandiseHandover(shiftId: string, payload: { attendantId: string; lines: { productId: string; quantity: number }[]; nonCashAmount?: number }): Promise<any> {
+    return request<any>(`/transactions/shifts/${shiftId}/merchandise-handover`, { method: 'POST', body: JSON.stringify(payload) });
+  }
+
+  async getMerchandiseHandovers(shiftId: string): Promise<any[]> {
+    return request<any[]>(`/transactions/shifts/${shiftId}/merchandise-handovers`);
+  }
+
+  /** Individual (quick-entry) non-fuel "billed" sales for a shift — view-only in the handover drawer. */
+  async getMerchandiseSales(shiftId: string): Promise<any[]> {
+    return request<any[]>(`/transactions/shifts/${shiftId}/merchandise-sales`);
+  }
+
+  async deleteMerchandiseHandover(saleId: string): Promise<any> {
+    return request<any>(`/transactions/merchandise-handovers/${saleId}`, { method: 'DELETE' });
+  }
+
   async recordSupplierPayment(payload: { shiftId?: string; stationId?: string; transactionDate?: string; paidFrom?: 'SHIFT_CASH' | 'BANK' | 'OWNER'; supplierId: string; amount: number; notes?: string }): Promise<any> {
     return request<any>('/transactions/supplier-payments', {
       method: 'POST',

@@ -157,6 +157,7 @@ export class CreateSale implements UseCase<CreateSaleCommand, CreateSaleResult> 
       subtotalAmount: String(subtotal),
       taxAmount: String(taxTotal),
       totalAmount: String(total),
+      nonCashAmount: '0',
       notes: cmd.notes ?? null,
       createdAt: now,
       updatedAt: now,

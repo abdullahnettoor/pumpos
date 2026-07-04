@@ -10,6 +10,7 @@ import { ShiftHistoryTab } from './ShiftHistoryTab.js';
 import { CloseShiftWizard } from './CloseShiftWizard.js';
 import { ShiftCloseSuccess } from './ShiftCloseSuccess.js';
 import { AttendantHandoversDashboard } from './AttendantHandoversDashboard.js';
+import { MerchandiseHandoversPanel } from './MerchandiseHandoversPanel.js';
 import { NozzleReadingsGrid } from './NozzleReadingsGrid.js';
 import { ShiftTotalsSummary } from './ShiftTotalsSummary.js';
 import { OpenShiftForm } from './OpenShiftForm.js';
@@ -882,6 +883,9 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
           onRecordHandover={handleOpenHandoverDrawer}
         />
 
+        {/* 1b. Merchandise Handovers (walk-in bulk, per employee) */}
+        <MerchandiseHandoversPanel shiftId={activeShift.id} onChanged={loadShiftStatus} />
+
         {/* 2. Nozzle Readings Grid */}
         <NozzleReadingsGrid
           nozzleReadings={activeShift.nozzleReadings}
@@ -978,6 +982,21 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
             )}
             customers={handoverCreditCustomers}
             searchVehicles={(q: string) => transactionService.searchVehicles(q)}
+            merchandiseCash={
+              Number(
+                (activeShift.staffAssignments || []).find(
+                  (sa: any) => sa.userId === selectedHandoverAssignment.userId,
+                )?.attributed?.merchandiseCash ?? 0,
+              )
+            }
+            merchandiseNonCash={
+              (() => {
+                const a = (activeShift.staffAssignments || []).find(
+                  (sa: any) => sa.userId === selectedHandoverAssignment.userId,
+                )?.attributed;
+                return Number(a?.merchandiseCard ?? 0) + Number(a?.merchandiseUpi ?? 0);
+              })()
+            }
             creditSales={
               (activeShift.staffAssignments || []).find(
                 (sa: any) => sa.userId === selectedHandoverAssignment.userId && sa.duId === selectedHandoverAssignment.duId,

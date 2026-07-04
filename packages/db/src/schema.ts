@@ -340,6 +340,10 @@ export const sales = pgTable('sales', {
   subtotalAmount: numeric('subtotal_amount', { precision: 12, scale: 2 }).notNull(),
   taxAmount: numeric('tax_amount', { precision: 12, scale: 2 }).notNull(),
   totalAmount: numeric('total_amount', { precision: 12, scale: 2 }).notNull(),
+  // Portion of a cash-recorded sale that was actually paid by card/UPI (Option B):
+  // subtracted from the attendant's expected drawer cash; that money is on the
+  // terminal rail. Sale paymentMethod stays 'Cash'.
+  nonCashAmount: numeric('non_cash_amount', { precision: 12, scale: 2 }).default('0').notNull(),
   notes: varchar('notes', { length: 500 }),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),

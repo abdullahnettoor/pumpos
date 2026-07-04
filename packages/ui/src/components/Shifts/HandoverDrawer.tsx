@@ -39,6 +39,10 @@ interface HandoverDrawerProps {
   searchVehicles?: (q: string) => Promise<any[]>;
   /** Fuel-on-credit lines already recorded for this (attendant, DU). */
   creditSales?: any[];
+  /** Walk-in merchandise cash this attendant collected (folds into expected). */
+  merchandiseCash?: number;
+  /** Walk-in merchandise paid by card/UPI on a terminal (informational; not in cash expected). */
+  merchandiseNonCash?: number;
   /** Called after a credit line is added/voided so the parent can refetch status. */
   onCreditChanged?: () => void | Promise<void>;
   existingHandover: any;
@@ -58,6 +62,8 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
   customers = [],
   searchVehicles,
   creditSales = [],
+  merchandiseCash = 0,
+  merchandiseNonCash = 0,
   onCreditChanged,
   existingHandover,
   onSaveSuccess,
@@ -349,8 +355,13 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
   // so credit is NOT added to expected (that would double-count).
   const creditTotal = creditLines.reduce((sum, l) => sum + Number(l.amount || 0), 0);
   const totalDeclared = Number(formCash) + Number(effectiveCard) + Number(effectiveUpi) + creditTotal;
+  // Walk-in merchandise cash this attendant collected (net of any card/UPI
+  // portion) is part of what they hand over, so it's added to the expected side.
+  const merchandiseCashNum = Number(merchandiseCash) || 0;
+  const merchandiseNonCashNum = Number(merchandiseNonCash) || 0;
+  const expectedTotal = expectedSales + merchandiseCashNum;
   // Round to paise so floating-point dust (e.g. -1e-13) doesn't read as a shortage.
-  const variance = Math.round((totalDeclared - expectedSales) * 100) / 100 || 0;
+  const variance = Math.round((totalDeclared - expectedTotal) * 100) / 100 || 0;
 
   // Volume sanity: credit litres billed for a fuel must not exceed the litres
   // metered (and not testing) for that fuel at this DU. Reactive to the readings.
@@ -827,6 +838,26 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
             <span>Expected Fuel Sales Value:</span>
             <strong style={{ fontFamily: 'var(--font-mono)' }}>₹{expectedSales.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
           </div>
+          {(merchandiseCashNum > 0 || merchandiseNonCashNum > 0) && (
+            <>
+              {merchandiseCashNum > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: 'var(--text-muted)' }}>
+                  <span>+ Merchandise sold (cash):</span>
+                  <strong style={{ fontFamily: 'var(--font-mono)' }}>₹{merchandiseCashNum.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
+                </div>
+              )}
+              {merchandiseNonCashNum > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-faint)' }}>
+                  <span>Merchandise (card/UPI, on terminal):</span>
+                  <span style={{ fontFamily: 'var(--font-mono)' }}>₹{merchandiseNonCashNum.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                </div>
+              )}
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', fontWeight: 600 }}>
+                <span>Total Expected:</span>
+                <strong style={{ fontFamily: 'var(--font-mono)' }}>₹{expectedTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
+              </div>
+            </>
+          )}
           {creditTotal > 0 && (
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: 'var(--text-muted)' }}>
               <span>of which on credit (chits):</span>
