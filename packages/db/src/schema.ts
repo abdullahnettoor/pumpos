@@ -344,6 +344,10 @@ export const sales = pgTable('sales', {
   // subtracted from the attendant's expected drawer cash; that money is on the
   // terminal rail. Sale paymentMethod stays 'Cash'.
   nonCashAmount: numeric('non_cash_amount', { precision: 12, scale: 2 }).default('0').notNull(),
+  // Ad-hoc (unsaved) buyer details for a walk-in bill: { name, phone, gstin, stateCode }.
+  // Populated only when the sale is NOT linked to a saved customer; invoices read
+  // the bill-to from here when customerId is null.
+  buyerDetails: jsonb('buyer_details'),
   notes: varchar('notes', { length: 500 }),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),

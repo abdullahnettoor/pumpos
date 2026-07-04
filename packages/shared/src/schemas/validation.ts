@@ -431,15 +431,27 @@ export const purchaseEntryFormSchema = z.object({
 });
 export type PurchaseEntryFormValues = z.infer<typeof purchaseEntryFormSchema>;
 
-export const merchandiseSaleEntryFormSchema = z.object({
-  targetShiftId: z.string().optional().default(''),
+export const merchandiseSaleLineFormSchema = z.object({
   productId: z.string().min(1, 'Product is required'),
   quantity: z.coerce.number({ invalid_type_error: 'Quantity is required' }).positive('Quantity must be positive'),
   unitPrice: z.coerce.number({ invalid_type_error: 'Unit price is required' }).nonnegative('Unit price must be non-negative'),
+});
+export type MerchandiseSaleLineFormValues = z.infer<typeof merchandiseSaleLineFormSchema>;
+
+export const merchandiseSaleEntryFormSchema = z.object({
+  targetShiftId: z.string().optional().default(''),
   paymentMethod: z.enum(['Cash', 'Card', 'UPI', 'Credit']).default('Cash'),
   customerId: z.string().optional().default(''),
   attendantId: z.string().optional().default(''),
   notes: z.string().max(500).optional().default(''),
+  lines: z.array(merchandiseSaleLineFormSchema).min(1, 'Add at least one product'),
+  // Ad-hoc walk-in buyer bill-to (used only when no saved customer is selected).
+  buyerName: z.string().max(255).optional().default(''),
+  buyerPhone: z.string().max(50).optional().default(''),
+  buyerGstin: z.string().max(20).optional().default(''),
+  buyerStateCode: z.string().max(2).optional().default(''),
+  /** When true (and a buyer name is given), save/dedup the buyer into the registry. */
+  saveAsCustomer: z.boolean().optional().default(false),
 }).refine((data) => data.paymentMethod !== 'Credit' || !!data.customerId, {
   message: 'A customer account is required for credit sales',
   path: ['customerId'],

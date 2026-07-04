@@ -16,6 +16,8 @@ export interface MerchandiseHandoversPanelProps {
   shiftId: string;
   /** Called after a handover is recorded/deleted so the shift reconciliation refreshes. */
   onChanged?: () => void;
+  /** Bump to force a reload (e.g. after a quick-entry merchandise sale elsewhere). */
+  refreshKey?: number;
 }
 
 interface LineRow {
@@ -47,7 +49,7 @@ function lineTax(product: any, qty: number) {
  * seamless. Each handover is a cash sale attributed to the employee, so it flows
  * into their cash-handover reconciliation. Editable while the shift is open.
  */
-export const MerchandiseHandoversPanel: React.FC<MerchandiseHandoversPanelProps> = ({ shiftId, onChanged }) => {
+export const MerchandiseHandoversPanel: React.FC<MerchandiseHandoversPanelProps> = ({ shiftId, onChanged, refreshKey }) => {
   const toast = useToast();
   const confirm = useConfirm();
   const [handovers, setHandovers] = useState<any[]>([]);
@@ -84,7 +86,7 @@ export const MerchandiseHandoversPanel: React.FC<MerchandiseHandoversPanelProps>
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shiftId]);
+  }, [shiftId, refreshKey]);
 
   const ensureRefData = async () => {
     if (products.length === 0) {

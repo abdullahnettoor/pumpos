@@ -530,8 +530,44 @@ transactionsRouter.post('/supplier-payments', async (c) => {
 transactionsRouter.post('/sales', async (c) => {
   const user = c.var.user;
   const body = await c.req.json().catch(() => ({}));
-  const result = await runInTransaction(c.var.db, (tx, events) =>
-    new CreateSale({
+  const rawBuyer = body.buyer && typeof body.buyer === 'object' ? body.buyer : null;
+  const saveAsCustomer = !!body.saveAsCustomer;
+  const result = await runInTransaction(c.var.db, async (tx, events) => {
+    let customerId: string | null = body.customerId ?? null;
+    let buyerDetails: { name: string; phone: string | null; gstin: string | null; stateCode: string | null } | null = null;
+
+    // Ad-hoc walk-in buyer (no saved customer selected). Either save/dedup them
+    // into the customer registry (link customerId) or stash bill-to on the sale.
+    if (!customerId && rawBuyer && typeof rawBuyer.name === 'string' && rawBuyer.name.trim()) {
+      const name = rawBuyer.name.trim();
+      const phone = (typeof rawBuyer.phone === 'string' && rawBuyer.phone.trim()) || null;
+      const gstin = (typeof rawBuyer.gstin === 'string' && rawBuyer.gstin.trim()) || null;
+      const stateCode = (typeof rawBuyer.stateCode === 'string' && rawBuyer.stateCode.trim()) || null;
+      if (saveAsCustomer) {
+        const custRepo = new DrizzleCustomerRepository(tx);
+        const digits = (v: string | null) => (v ? v.replace(/\D/g, '') : '');
+        const existing = (await custRepo.listByOrganization(user.organizationId, false)).find((x) => {
+          const md = (x.metadata as Record<string, any>) || {};
+          if (gstin && md.gstin && String(md.gstin).toLowerCase() === gstin.toLowerCase()) return true;
+          if (phone && x.phone && digits(x.phone) === digits(phone)) return true;
+          return x.name.trim().toLowerCase() === name.toLowerCase();
+        });
+        if (existing) {
+          customerId = existing.id;
+        } else {
+          const created = await new CreateCustomer({ repository: custRepo, events }).execute(
+            { name, customerType: 'Regular', phone, metadata: { ...(gstin ? { gstin } : {}), ...(stateCode ? { stateCode } : {}) } },
+            buildContext(user),
+          );
+          if (!created.success) return created;
+          customerId = created.data.id;
+        }
+      } else {
+        buyerDetails = { name, phone, gstin, stateCode };
+      }
+    }
+
+    return new CreateSale({
       sales: new DrizzleSaleRepository(tx),
       stock: new DrizzleStockMovementRepository(tx),
       ledger: new DrizzleCustomerLedgerRepository(tx),
@@ -539,8 +575,8 @@ transactionsRouter.post('/sales', async (c) => {
       shifts: new DrizzleShiftRepository(tx),
       docNumbers,
       events,
-    }).execute(body, buildContext(user)),
-  );
+    }).execute({ ...body, customerId, buyerDetails }, buildContext(user));
+  });
   return sendResult(c, result);
 });
 
@@ -756,6 +792,7 @@ transactionsRouter.post('/sales/:id/invoice', async (c) => {
     .select({
       id: schema.sales.id,
       customerId: schema.sales.customerId,
+      buyerDetails: schema.sales.buyerDetails,
       businessDayId: schema.sales.businessDayId,
       stationId: schema.businessDays.stationId,
       businessDate: schema.businessDays.businessDate,
@@ -797,6 +834,10 @@ transactionsRouter.post('/sales/:id/invoice', async (c) => {
     const cust = await new DrizzleCustomerRepository(db).findById(sale.customerId);
     const md = ((cust?.metadata as Record<string, any>) || {});
     buyer = { customerId: sale.customerId, name: cust?.name ?? null, gstin: md.gstin ?? null, stateCode: md.stateCode ?? null };
+  } else if (sale.buyerDetails) {
+    // Ad-hoc walk-in buyer captured on the sale (not saved to the registry).
+    const bd = (sale.buyerDetails as Record<string, any>) || {};
+    buyer = { customerId: null, name: bd.name ?? null, gstin: bd.gstin ?? null, stateCode: bd.stateCode ?? null };
   }
   const station = await new DrizzleStationRepository(db).findById(sale.stationId);
   const legal = ((station?.settings as any)?.legal) || {};
@@ -1055,6 +1096,7 @@ transactionsRouter.get('/shifts/:id/merchandise-sales', async (c) => {
       attendantName: schema.users.fullName,
       customerId: schema.sales.customerId,
       customerName: schema.customers.name,
+      buyerDetails: schema.sales.buyerDetails,
       paymentMethod: schema.sales.paymentMethod,
       totalAmount: schema.sales.totalAmount,
       createdAt: schema.sales.createdAt,
@@ -1092,7 +1134,7 @@ transactionsRouter.get('/shifts/:id/merchandise-sales', async (c) => {
     }, {});
   }
 
-  return c.json({ success: true, data: rows.map((r) => ({ ...r, items: itemsBySale[r.id] ?? [] })) });
+  return c.json({ success: true, data: rows.map((r) => ({ ...r, customerName: r.customerName ?? ((r.buyerDetails as any)?.name ?? null), items: itemsBySale[r.id] ?? [] })) });
 });
 
 // DELETE /transactions/merchandise-handovers/:saleId — remove a handover (shift must be OPEN).

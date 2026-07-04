@@ -5,7 +5,7 @@ import type { ShiftRepository } from '../station-ops/shifts/index.js';
 import type { StockMovement, StockMovementRepository } from '../inventory/index.js';
 import type { CustomerLedgerRepository } from '../crm/collections/index.js';
 import type { CustomerRepository } from '../crm/customers/index.js';
-import type { Sale, SaleLine, SalePaymentMethod, SaleRepository, SaleType } from './ports.js';
+import type { Sale, SaleBuyerDetails, SaleLine, SalePaymentMethod, SaleRepository, SaleType } from './ports.js';
 
 export interface SaleLineInput {
   productId: string;
@@ -25,6 +25,8 @@ export interface CreateSaleCommand {
   vehicleId?: string | null;
   /** Operator who made the sale; defaults to the acting user when omitted. */
   attendantId?: string | null;
+  /** Ad-hoc buyer bill-to when the sale is not linked to a saved customer. */
+  buyerDetails?: SaleBuyerDetails | null;
   notes?: string;
 }
 
@@ -43,6 +45,14 @@ const schema = z.object({
   customerId: z.string().nullish(),
   vehicleId: z.string().nullish(),
   attendantId: z.string().nullish(),
+  buyerDetails: z
+    .object({
+      name: z.string().trim().min(1).max(255),
+      phone: z.string().max(50).nullish(),
+      gstin: z.string().max(20).nullish(),
+      stateCode: z.string().max(2).nullish(),
+    })
+    .nullish(),
   notes: z.string().max(500).optional(),
 });
 
@@ -158,6 +168,7 @@ export class CreateSale implements UseCase<CreateSaleCommand, CreateSaleResult> 
       taxAmount: String(taxTotal),
       totalAmount: String(total),
       nonCashAmount: '0',
+      buyerDetails: !cmd.customerId && cmd.buyerDetails ? cmd.buyerDetails : null,
       notes: cmd.notes ?? null,
       createdAt: now,
       updatedAt: now,

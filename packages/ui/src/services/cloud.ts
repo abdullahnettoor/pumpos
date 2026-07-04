@@ -694,6 +694,10 @@ export class CloudTransactionService {
     vehicleId?: string | null;
     attendantId?: string | null;
     notes?: string;
+    /** Ad-hoc walk-in buyer bill-to (used only when no saved customerId is set). */
+    buyer?: { name: string; phone?: string | null; gstin?: string | null; stateCode?: string | null } | null;
+    /** When true (with a buyer), save/dedup the buyer into the customer registry. */
+    saveAsCustomer?: boolean;
   }): Promise<any> {
     return request<any>('/transactions/sales', {
       method: 'POST',

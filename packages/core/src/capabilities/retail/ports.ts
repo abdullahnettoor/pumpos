@@ -2,6 +2,14 @@ export type SaleType = 'Fuel' | 'Product' | 'Mixed';
 export type SaleCaptureMechanism = 'POS' | 'READING' | 'MERCH_HANDOVER';
 export type SalePaymentMethod = 'Cash' | 'Card' | 'UPI' | 'Credit';
 
+/** Ad-hoc buyer bill-to for a walk-in sale not linked to a saved customer. */
+export interface SaleBuyerDetails {
+  name: string;
+  phone?: string | null;
+  gstin?: string | null;
+  stateCode?: string | null;
+}
+
 export interface SaleLine {
   id: string;
   saleId: string;
@@ -31,6 +39,8 @@ export interface Sale {
   totalAmount: string;
   /** Portion of a cash-recorded sale actually paid by card/UPI (Option B). */
   nonCashAmount?: string;
+  /** Ad-hoc (unsaved) buyer bill-to, present only when customerId is null. */
+  buyerDetails?: SaleBuyerDetails | null;
   notes: string | null;
   createdAt: string;
   updatedAt: string;

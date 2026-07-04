@@ -1,11 +1,14 @@
 import React, { useEffect } from 'react';
+import { useFieldArray } from 'react-hook-form';
 import { merchandiseSaleEntryFormSchema, type MerchandiseSaleEntryFormValues } from '@pump/shared';
 import { useZodForm } from '../../forms/useZodForm.js';
 import type { ShiftOption } from './ExpenseEntryForm.js';
 import { Field, TextInput, NumberInput, Select } from '../primitives/Field.js';
 import { Segmented } from '../primitives/Segmented.js';
 import { Combobox } from '../primitives/Combobox.js';
+import { Checkbox } from '../primitives/Toggle.js';
 import { inr, formatQty } from '../../utils/format.js';
+import { Plus, Trash2 } from 'lucide-react';
 
 export interface MerchandiseSaleEntryFormProps {
   shiftOptions: ShiftOption[];
@@ -25,14 +28,29 @@ export interface MerchandiseSaleEntryFormProps {
 
 const EMPTY_DEFAULTS: MerchandiseSaleEntryFormValues = {
   targetShiftId: '',
-  productId: '',
-  quantity: undefined as unknown as number,
-  unitPrice: undefined as unknown as number,
   paymentMethod: 'Cash',
   customerId: '',
   attendantId: '',
   notes: '',
+  lines: [{ productId: '', quantity: undefined as unknown as number, unitPrice: undefined as unknown as number }],
+  buyerName: '',
+  buyerPhone: '',
+  buyerGstin: '',
+  buyerStateCode: '',
+  saveAsCustomer: false,
 };
+
+/** Per-line tax breakdown from a product's config (inclusive-aware). */
+function lineTax(product: any, qty: number, price: number) {
+  const gross = qty * price;
+  const cat = product?.taxCategory || (product?.productType === 'FUEL' ? 'FUEL_VAT' : 'GST');
+  const rate = cat === 'GST' ? Number(product?.taxConfig?.gst_rate ?? 0) : cat === 'FUEL_VAT' ? Number(product?.taxConfig?.vat_rate ?? 0) : 0;
+  const inclusive = product?.taxConfig?.price_inclusive !== false;
+  const hasTax = rate > 0 && (cat === 'GST' || cat === 'FUEL_VAT');
+  if (hasTax && inclusive) { const taxable = gross / (1 + rate / 100); return { taxable, tax: gross - taxable, total: gross, hasTax }; }
+  if (hasTax) { const tax = gross * (rate / 100); return { taxable: gross, tax, total: gross + tax, hasTax }; }
+  return { taxable: gross, tax: 0, total: gross, hasTax };
+}
 
 /**
  * Cash/Card/UPI/Credit sale of a non-fuel merchandise product (lubes, oils,
@@ -53,9 +71,10 @@ export const MerchandiseSaleEntryForm: React.FC<MerchandiseSaleEntryFormProps> =
 }) => {
   const hasMultipleShiftOptions = shiftOptions.length > 1;
 
-  const { register, handleSubmit, reset, watch, setValue, formState: { errors } } = useZodForm<MerchandiseSaleEntryFormValues>(merchandiseSaleEntryFormSchema, {
+  const { register, handleSubmit, reset, watch, control, setValue, formState: { errors } } = useZodForm<MerchandiseSaleEntryFormValues>(merchandiseSaleEntryFormSchema, {
     defaultValues: { ...EMPTY_DEFAULTS, ...defaultValues },
   });
+  const { fields, append, remove } = useFieldArray({ control, name: 'lines' });
 
   const serializedDefaults = JSON.stringify(defaultValues ?? {});
   useEffect(() => {
@@ -63,38 +82,26 @@ export const MerchandiseSaleEntryForm: React.FC<MerchandiseSaleEntryFormProps> =
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [serializedDefaults]);
 
-  const productId = watch('productId');
   const paymentMethod = watch('paymentMethod');
   const customerId = watch('customerId');
-  const qtyNum = Number(watch('quantity')) || 0;
-  const priceNum = Number(watch('unitPrice')) || 0;
-  const total = qtyNum * priceNum;
   const isCredit = paymentMethod === 'Credit';
-  const selected = products.find((p) => p.id === productId);
-  const availableStock = stockByProduct && productId ? stockByProduct[productId] : undefined;
-  const oversell = availableStock != null && qtyNum > availableStock;
+  const watchedLines = watch('lines') || [];
 
-  // Tax breakdown preview. Retail merchandise is usually priced tax-inclusive
-  // (MRP): the tax is extracted from the price. B2B/pre-tax prices add tax on top.
-  const taxCat = selected?.taxCategory || (selected?.productType === 'FUEL' ? 'FUEL_VAT' : 'GST');
-  const taxRate = taxCat === 'GST' ? Number(selected?.taxConfig?.gst_rate ?? 0) : taxCat === 'FUEL_VAT' ? Number(selected?.taxConfig?.vat_rate ?? 0) : 0;
-  const inclusive = selected?.taxConfig?.price_inclusive !== false;
-  const hasTax = taxRate > 0 && (taxCat === 'GST' || taxCat === 'FUEL_VAT');
-  let taxableValue = total;
+  // Aggregate tax breakdown across all lines (each priced per its own config).
+  let taxableValue = 0;
   let taxValue = 0;
-  let grossTotal = total;
-  if (hasTax) {
-    if (inclusive) {
-      taxableValue = total / (1 + taxRate / 100);
-      taxValue = total - taxableValue;
-      grossTotal = total;
-    } else {
-      taxableValue = total;
-      taxValue = total * (taxRate / 100);
-      grossTotal = total + taxValue;
-    }
+  let grossTotal = 0;
+  for (const l of watchedLines) {
+    const p = products.find((x) => x.id === l?.productId);
+    const qty = Number(l?.quantity) || 0;
+    const price = Number(l?.unitPrice) || 0;
+    if (!p || qty <= 0) continue;
+    const t = lineTax(p, qty, price);
+    taxableValue += t.taxable;
+    taxValue += t.tax;
+    grossTotal += t.total;
   }
-  const taxLabel = taxCat === 'FUEL_VAT' ? 'VAT' : 'GST';
+  const hasTax = taxValue > 0;
 
   return (
     <form onSubmit={handleSubmit((values) => onSubmit(values))} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -120,44 +127,72 @@ export const MerchandiseSaleEntryForm: React.FC<MerchandiseSaleEntryFormProps> =
         </Field>
       )}
 
-      <Field label="Product" error={errors.productId?.message}>
-        {products.length === 0 ? (
-          <div style={{ fontSize: '12px', color: 'var(--brand-warning)', padding: '6px 0' }}>
-            No non-fuel products found. Add merchandise products in Station Overview → Products first.
+      {products.length === 0 ? (
+        <div style={{ fontSize: '12px', color: 'var(--brand-warning)', padding: '6px 0' }}>
+          No non-fuel products found. Add merchandise products in Station Overview → Products first.
+        </div>
+      ) : (
+        <div>
+          <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: '6px' }}>Items</label>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {fields.map((f, i) => {
+              const line = watchedLines[i];
+              const p = products.find((x) => x.id === line?.productId);
+              const qty = Number(line?.quantity) || 0;
+              const price = Number(line?.unitPrice) || 0;
+              const t = p && qty > 0 ? lineTax(p, qty, price) : null;
+              const stock = stockByProduct && line?.productId ? stockByProduct[line.productId] : undefined;
+              const oversell = stock != null && qty > stock;
+              return (
+                <div key={f.id} style={{ display: 'flex', flexDirection: 'column', gap: '6px', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', padding: '8px 10px' }}>
+                  <Combobox
+                    options={products.map((pr) => ({
+                      value: pr.id,
+                      label: `${pr.name}${pr.brand ? ` · ${pr.brand}` : ''} (${pr.code})`,
+                      sublabel: pr.sellingPrice != null ? `MRP ${inr(pr.sellingPrice)}` : (pr.unit ? String(pr.unit) : undefined),
+                    }))}
+                    value={line?.productId ?? ''}
+                    onChange={(v) => {
+                      setValue(`lines.${i}.productId` as const, v, { shouldValidate: true });
+                      const pr = products.find((x) => x.id === v);
+                      setValue(`lines.${i}.unitPrice` as const, (pr?.sellingPrice != null ? Number(pr.sellingPrice) : undefined) as unknown as number, { shouldValidate: true });
+                    }}
+                    placeholder="Select product…"
+                    searchPlaceholder="Search products…"
+                    invalid={!!errors.lines?.[i]?.productId}
+                    disabled={submitting}
+                  />
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <div style={{ flex: 1 }}>
+                      <NumberInput placeholder={`Qty${p?.unit ? ` (${p.unit})` : ''}`} disabled={submitting} invalid={!!errors.lines?.[i]?.quantity || oversell} {...register(`lines.${i}.quantity` as const)} />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <NumberInput placeholder="₹ Price" disabled={submitting} invalid={!!errors.lines?.[i]?.unitPrice} {...register(`lines.${i}.unitPrice` as const)} />
+                    </div>
+                    <button type="button" className="btn btn-secondary btn-sm" style={{ padding: '6px 8px', height: 34 }} disabled={submitting || fields.length <= 1} onClick={() => remove(i)} aria-label="Remove line"><Trash2 size={13} /></button>
+                  </div>
+                  {t && (
+                    <div style={{ fontSize: '10px', color: 'var(--text-faint)', paddingLeft: '2px' }}>
+                      {inr(t.taxable)}{t.hasTax ? ` + tax ${inr(t.tax)}` : ''} = {inr(t.total)}
+                    </div>
+                  )}
+                  {oversell && (
+                    <div style={{ fontSize: '11px', color: 'var(--brand-warning)', paddingLeft: '2px' }}>
+                      Only {formatQty(Number(stock))}{p?.unit ? ` ${p.unit}` : ''} on hand — stock will go negative.
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
-        ) : (
-          <Combobox
-            options={products.map((p) => ({
-              value: p.id,
-              label: `${p.name}${p.brand ? ` · ${p.brand}` : ''} (${p.code})`,
-              sublabel: p.unit ? String(p.unit) : undefined,
-            }))}
-            value={productId ?? ''}
-            onChange={(v) => {
-              setValue('productId', v, { shouldValidate: true });
-              const p = products.find((x) => x.id === v);
-              setValue('unitPrice', (p?.sellingPrice != null ? Number(p.sellingPrice) : undefined) as unknown as number);
-            }}
-            placeholder="Select product…"
-            searchPlaceholder="Search products…"
-            invalid={!!errors.productId}
-            disabled={submitting}
-          />
-        )}
-      </Field>
-
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-        <Field
-          label={`Quantity${selected?.unit ? ` (${selected.unit})` : ''}`}
-          error={errors.quantity?.message}
-          hint={availableStock != null ? `On hand: ${formatQty(availableStock)}${selected?.unit ? ` ${selected.unit}` : ''}` : undefined}
-        >
-          <NumberInput disabled={submitting} invalid={!!errors.quantity || oversell} {...register('quantity')} />
-        </Field>
-        <Field label="Unit Price (₹)" error={errors.unitPrice?.message}>
-          <NumberInput disabled={submitting} invalid={!!errors.unitPrice} {...register('unitPrice')} />
-        </Field>
-      </div>
+          <button type="button" className="btn btn-secondary btn-sm" style={{ marginTop: '8px', display: 'inline-flex', alignItems: 'center', gap: '6px' }} disabled={submitting} onClick={() => append({ productId: '', quantity: undefined as unknown as number, unitPrice: undefined as unknown as number })}>
+            <Plus size={13} /> Add item
+          </button>
+          {typeof errors.lines?.message === 'string' && (
+            <div style={{ fontSize: '11px', color: 'var(--brand-danger)', marginTop: '4px' }}>{errors.lines.message}</div>
+          )}
+        </div>
+      )}
 
       <Field label="Payment Method">
         <Segmented
@@ -192,6 +227,33 @@ export const MerchandiseSaleEntryForm: React.FC<MerchandiseSaleEntryFormProps> =
         />
       </Field>
 
+      {!isCredit && !customerId && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', padding: '10px 12px' }}>
+          <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Buyer details (optional)</span>
+          <span style={{ fontSize: '11px', color: 'var(--text-faint)', marginTop: '-6px' }}>For a walk-in not in your registry — used on the bill/invoice.</span>
+          <Field label="Name">
+            <TextInput placeholder="Buyer name" disabled={submitting} {...register('buyerName')} />
+          </Field>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <Field label="Phone">
+              <TextInput placeholder="Phone" disabled={submitting} {...register('buyerPhone')} />
+            </Field>
+            <Field label="GSTIN">
+              <TextInput placeholder="GSTIN" disabled={submitting} {...register('buyerGstin')} />
+            </Field>
+          </div>
+          <Field label="State Code">
+            <TextInput placeholder="e.g. 32" disabled={submitting} {...register('buyerStateCode')} />
+          </Field>
+          <Checkbox
+            label="Save as returning customer"
+            description="Adds them to your customer registry (deduped by phone/GSTIN) and links this sale."
+            disabled={submitting}
+            {...register('saveAsCustomer')}
+          />
+        </div>
+      )}
+
       <Field label="Notes">
         <TextInput placeholder="Optional reference" disabled={submitting} {...register('notes')} />
       </Field>
@@ -200,11 +262,11 @@ export const MerchandiseSaleEntryForm: React.FC<MerchandiseSaleEntryFormProps> =
         {hasTax && (
           <>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-muted)' }}>
-              <span>Taxable Value{inclusive ? ' (excl. tax)' : ''}</span>
+              <span>Taxable</span>
               <span style={{ fontFamily: 'var(--font-mono)' }}>{inr(taxableValue)}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-muted)' }}>
-              <span>{taxLabel} @ {taxRate}%{inclusive ? ' (included)' : ''}</span>
+              <span>Tax</span>
               <span style={{ fontFamily: 'var(--font-mono)' }}>{inr(taxValue)}</span>
             </div>
           </>
@@ -214,12 +276,6 @@ export const MerchandiseSaleEntryForm: React.FC<MerchandiseSaleEntryFormProps> =
           <strong style={{ fontFamily: 'var(--font-mono)', fontSize: '15px', color: 'var(--text-strong)' }}>{inr(grossTotal)}</strong>
         </div>
       </div>
-
-      {oversell && (
-        <div style={{ backgroundColor: 'var(--state-warning-bg)', color: 'var(--state-warning-fg)', padding: '8px 12px', borderRadius: 'var(--radius-input)', fontSize: '12px', border: '1px solid var(--border-soft)' }}>
-          Selling {formatQty(qtyNum)} but only {formatQty(Number(availableStock))} on hand — stock will go negative. Record a purchase or stock count to correct it.
-        </div>
-      )}
 
       <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
         <button

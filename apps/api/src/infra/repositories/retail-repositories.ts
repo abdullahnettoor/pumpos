@@ -21,6 +21,7 @@ export class DrizzleSaleRepository implements SaleRepository {
       taxAmount: sale.taxAmount,
       totalAmount: sale.totalAmount,
       nonCashAmount: sale.nonCashAmount ?? '0',
+      buyerDetails: sale.buyerDetails ?? null,
       notes: sale.notes,
       createdAt: new Date(sale.createdAt),
       updatedAt: new Date(sale.updatedAt),

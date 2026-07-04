@@ -136,6 +136,8 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   const [quickEntryError, setQuickEntryError] = useState<string | null>(null);
   const [targetShiftId, setTargetShiftId] = useState('');
   const [recentClosedShifts, setRecentClosedShifts] = useState<any[]>([]);
+  // Bumped after a quick-entry merchandise sale so the handovers panel reloads its billed list.
+  const [merchandiseRefreshKey, setMerchandiseRefreshKey] = useState(0);
 
   const [categories, setCategories] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
@@ -266,10 +268,13 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         setMerchandiseSellers(sellers);
         setMerchandiseDefaults({
           targetShiftId: data.activeShift.id,
-          productId: nonFuel?.[0]?.id ?? '',
-          unitPrice: (nonFuel?.[0]?.sellingPrice != null ? Number(nonFuel[0].sellingPrice) : undefined) as unknown as number,
           paymentMethod: 'Cash',
           attendantId: sellers[0]?.userId ?? '',
+          lines: [{
+            productId: nonFuel?.[0]?.id ?? '',
+            quantity: undefined as unknown as number,
+            unitPrice: (nonFuel?.[0]?.sellingPrice != null ? Number(nonFuel[0].sellingPrice) : undefined) as unknown as number,
+          }],
         });
       }
 
@@ -487,25 +492,38 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
       setQuickEntryError('A shift is required to record this entry.');
       return;
     }
-    const qtyNum = Number(values.quantity);
-    const priceNum = Number(values.unitPrice);
-    if (!Number.isFinite(qtyNum) || qtyNum <= 0 || !Number.isFinite(priceNum) || priceNum < 0) {
-      setQuickEntryError('Enter a valid quantity and unit price.');
+    const lines = (values.lines || [])
+      .filter((l) => l.productId && Number(l.quantity) > 0)
+      .map((l) => ({ productId: l.productId, quantity: Number(l.quantity), unitPrice: Number(l.unitPrice) || 0, tankId: null }));
+    if (lines.length === 0) {
+      setQuickEntryError('Add at least one product with a quantity.');
       return;
     }
     try {
       setQuickEntrySubmitting(true);
       setQuickEntryError(null);
+      const buyerName = (values.buyerName || '').trim();
+      const useBuyer = values.paymentMethod !== 'Credit' && !values.customerId && !!buyerName;
       await transactionService.recordSale({
         shiftId,
         paymentMethod: values.paymentMethod,
-        lines: [{ productId: values.productId, quantity: qtyNum, unitPrice: priceNum, tankId: null }],
-        customerId: values.paymentMethod === 'Credit' ? values.customerId : undefined,
+        lines,
+        customerId: values.paymentMethod === 'Credit' ? values.customerId : (values.customerId || undefined),
         attendantId: values.attendantId || undefined,
         notes: values.notes || undefined,
+        buyer: useBuyer
+          ? {
+              name: buyerName,
+              phone: (values.buyerPhone || '').trim() || null,
+              gstin: (values.buyerGstin || '').trim() || null,
+              stateCode: (values.buyerStateCode || '').trim() || null,
+            }
+          : undefined,
+        saveAsCustomer: useBuyer ? !!values.saveAsCustomer : undefined,
       });
       toast.success('Sale recorded.');
       closeQuickEntryDrawer();
+      setMerchandiseRefreshKey((k) => k + 1);
       await loadShiftStatus();
     } catch (err: any) {
       setQuickEntryError(err.message || 'Failed to record merchandise sale');
@@ -884,7 +902,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         />
 
         {/* 1b. Merchandise Handovers (walk-in bulk, per employee) */}
-        <MerchandiseHandoversPanel shiftId={activeShift.id} onChanged={loadShiftStatus} />
+        <MerchandiseHandoversPanel shiftId={activeShift.id} onChanged={loadShiftStatus} refreshKey={merchandiseRefreshKey} />
 
         {/* 2. Nozzle Readings Grid */}
         <NozzleReadingsGrid
