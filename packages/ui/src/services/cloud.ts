@@ -776,4 +776,9 @@ export class CloudFinanceService {
   async updateAccount(id: string, payload: { name?: string; metadata?: Record<string, unknown> | null; isActive?: boolean }): Promise<any> {
     return request<any>(`/finance/accounts/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
   }
+
+  /** Move money between two accounts (deposit / petty-cash float / bank↔bank). */
+  async recordTransfer(payload: { fromAccountId: string; toAccountId: string; amount: number; date?: string | null; notes?: string | null }): Promise<any> {
+    return request<any>('/finance/transfers', { method: 'POST', body: JSON.stringify(payload) });
+  }
 }

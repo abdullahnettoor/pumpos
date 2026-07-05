@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { type DbClient } from '@pump/db';
 import { canManageFinancialAccounts, isAuthorizedForStation, type Role } from '@pump/shared';
-import { CreateFinancialAccount, UpdateFinancialAccount, type Result } from '@pump/core';
+import { CreateFinancialAccount, UpdateFinancialAccount, RecordTransfer, type Result } from '@pump/core';
 import { buildContext } from '../infra/context.js';
 import { loadStationClock } from '../infra/station-clock.js';
 import { runInTransaction } from '../infra/transaction.js';
@@ -96,6 +96,22 @@ financeRouter.put('/accounts/:id', async (c) => {
       ledger: new DrizzleLedgerEntryRepository(tx),
       events,
     }).execute({ ...body, id: c.req.param('id') }, buildContext(user)),
+  );
+  return sendResult(c, result);
+});
+
+// POST /finance/transfers — move money between accounts (deposit / float / bank↔bank).
+financeRouter.post('/transfers', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  if (!canManageFinancialAccounts(user.role)) return forbidden(c);
+  const body = await c.req.json().catch(() => ({}));
+  const result = await runInTransaction(db, (tx, events) =>
+    new RecordTransfer({
+      accounts: new DrizzleFinancialAccountRepository(tx),
+      ledger: new DrizzleLedgerEntryRepository(tx),
+      events,
+    }).execute(body, buildContext(user)),
   );
   return sendResult(c, result);
 });

@@ -1,4 +1,4 @@
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
 import {
   accountTypeForPaidFrom,
@@ -176,5 +176,78 @@ export class LedgerPostingService {
       shiftId: txn.shiftId,
       notes: 'Supplier payment',
     });
+  }
+
+  // ---- FA3: shift-close sales posting -------------------------------------
+
+  /** Ledger source types produced by shift close (used for idempotent replace). */
+  private readonly SHIFT_CLOSE_SOURCES = ['SALE_CASH', 'SALE_CARD'] as const;
+
+  /** Remove any prior shift-close postings for a shift (idempotent re-close / reopen). */
+  async reverseShiftClose(shiftId: string): Promise<void> {
+    await this.db
+      .delete(schema.ledgerEntries)
+      .where(and(eq(schema.ledgerEntries.shiftId, shiftId), inArray(schema.ledgerEntries.sourceType, this.SHIFT_CLOSE_SOURCES as unknown as string[])));
+  }
+
+  /**
+   * Post a closed shift's sales money (FA3): cash-to-drawer → Cash in Hand,
+   * card/UPI (declared terminal batches) → Card/UPI Clearing. Credit is a
+   * receivable (customer ledger) and is not posted here. Idempotent: prior
+   * shift-close postings are replaced, so re-closing after a reopen is safe.
+   * Collections/expenses/payments are already posted live (FA2), so they are
+   * intentionally excluded to avoid double-counting.
+   */
+  async postShiftClose(
+    organizationId: string,
+    shift: { id: string; stationId: string; businessDayId: string },
+    recon: { cashSales?: number },
+  ): Promise<void> {
+    const meta = await this.businessDayMeta(shift.businessDayId);
+    const entryDate = meta?.businessDate ?? new Date().toISOString().slice(0, 10);
+
+    // Card/UPI captured this shift = the declared terminal batches on handovers.
+    const handovers = await this.db
+      .select({ card: schema.attendantHandovers.cardHandedOver, upi: schema.attendantHandovers.upiHandedOver })
+      .from(schema.attendantHandovers)
+      .where(eq(schema.attendantHandovers.shiftId, shift.id));
+    const cardUpi = handovers.reduce((acc, h) => acc + Number(h.card ?? 0) + Number(h.upi ?? 0), 0);
+    const cash = Number(recon.cashSales ?? 0);
+
+    await this.reverseShiftClose(shift.id);
+
+    if (cash > 0) {
+      const cashAccount = await this.ensureAccount(organizationId, shift.stationId, 'CASH_IN_HAND');
+      await this.postEntry({
+        organizationId,
+        stationId: shift.stationId,
+        accountId: cashAccount,
+        direction: 'in',
+        amount: String(cash),
+        entryDate,
+        sourceType: 'SALE_CASH',
+        sourceId: shift.id,
+        businessDayId: shift.businessDayId,
+        shiftId: shift.id,
+        notes: 'Shift cash sales',
+      });
+    }
+
+    if (cardUpi > 0) {
+      const clearing = await this.ensureAccount(organizationId, shift.stationId, 'MERCHANT_CLEARING');
+      await this.postEntry({
+        organizationId,
+        stationId: shift.stationId,
+        accountId: clearing,
+        direction: 'in',
+        amount: String(cardUpi),
+        entryDate,
+        sourceType: 'SALE_CARD',
+        sourceId: shift.id,
+        businessDayId: shift.businessDayId,
+        shiftId: shift.id,
+        notes: 'Shift card/UPI (terminal batch)',
+      });
+    }
   }
 }

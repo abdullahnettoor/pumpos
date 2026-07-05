@@ -28,6 +28,7 @@ import {
   DrizzleStockMovementWriter,
   DrizzleShiftSummaryWriter,
 } from '../infra/repositories/station-ops-repositories.js';
+import { LedgerPostingService } from '../infra/ledger-posting.js';
 
 type Variables = {
   db: DbClient;
@@ -760,8 +761,8 @@ shiftsRouter.post('/close', async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const command = { shiftId: body?.shiftId, ...(body?.payload ?? {}) };
   const db = c.var.db;
-  const result = await runInTransaction(db, (tx, events) =>
-    new CloseShift({
+  const result = await runInTransaction(db, async (tx, events) => {
+    const r = await new CloseShift({
       shifts: new DrizzleShiftRepository(tx),
       nozzles: new DrizzleNozzleRepository(tx),
       nozzleReadings: new DrizzleNozzleReadingRepository(tx),
@@ -770,8 +771,17 @@ shiftsRouter.post('/close', async (c) => {
       stockMovements: new DrizzleStockMovementWriter(tx),
       summaries: new DrizzleShiftSummaryWriter(tx),
       events,
-    }).execute(command, buildContext(user)),
-  );
+    }).execute(command, buildContext(user));
+    if (r.success) {
+      const snap = r.data.snapshot as any;
+      await new LedgerPostingService(tx).postShiftClose(
+        user.organizationId,
+        { id: r.data.shift.id, stationId: r.data.shift.stationId, businessDayId: r.data.shift.businessDayId },
+        { cashSales: Number(snap?.reconciliation?.cashSales ?? 0) },
+      );
+    }
+    return r;
+  });
   return sendResult(c, result);
 });
 
@@ -783,13 +793,16 @@ shiftsRouter.post('/reopen', async (c) => {
   }
   const body = await c.req.json().catch(() => ({}));
   const db = c.var.db;
-  const result = await runInTransaction(db, (tx, events) =>
-    new ReopenShift({
+  const result = await runInTransaction(db, async (tx, events) => {
+    const r = await new ReopenShift({
       shifts: new DrizzleShiftRepository(tx),
       summaries: new DrizzleShiftSummaryWriter(tx),
       events,
-    }).execute(body, buildContext(user)),
-  );
+    }).execute(body, buildContext(user));
+    // Roll back the shift-close money postings; they will be re-posted on re-close.
+    if (r.success && body?.shiftId) await new LedgerPostingService(tx).reverseShiftClose(body.shiftId);
+    return r;
+  });
   return sendResult(c, result);
 });
 

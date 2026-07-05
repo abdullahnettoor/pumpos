@@ -11,7 +11,7 @@ import { useFinancialAccounts, useAccountLedger, queryKeys } from '../../query/h
 import { CloudFinanceService } from '../../services/cloud.js';
 import { inr } from '../../utils/format.js';
 import { useQueryClient } from '@tanstack/react-query';
-import { Plus, Wallet, ArrowLeft } from 'lucide-react';
+import { Plus, Wallet, ArrowLeft, ArrowLeftRight } from 'lucide-react';
 
 const financeSvc = new CloudFinanceService();
 
@@ -72,6 +72,16 @@ export const AccountsPanel: React.FC<AccountsPanelProps> = ({ selectedStation })
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Transfer drawer state
+  const [transferOpen, setTransferOpen] = useState(false);
+  const [fromAccountId, setFromAccountId] = useState('');
+  const [toAccountId, setToAccountId] = useState('');
+  const [transferAmount, setTransferAmount] = useState('');
+  const [transferDate, setTransferDate] = useState('');
+  const [transferNotes, setTransferNotes] = useState('');
+  const [transferError, setTransferError] = useState<string | null>(null);
+  const [transferSubmitting, setTransferSubmitting] = useState(false);
+
   const selected = useMemo(() => (accounts || []).find((a: any) => a.id === selectedId) || null, [accounts, selectedId]);
   const { data: ledger, isLoading: ledgerLoading } = useAccountLedger(selectedId, { from: range.from, to: range.to });
 
@@ -85,6 +95,51 @@ export const AccountsPanel: React.FC<AccountsPanelProps> = ({ selectedStation })
     setIfsc('');
     setError(null);
     setDrawerOpen(true);
+  };
+
+  const openTransfer = () => {
+    const list = accounts || [];
+    setFromAccountId(list[0]?.id ?? '');
+    setToAccountId(list[1]?.id ?? '');
+    setTransferAmount('');
+    setTransferDate('');
+    setTransferNotes('');
+    setTransferError(null);
+    setTransferOpen(true);
+  };
+
+  const submitTransfer = async () => {
+    if (!fromAccountId || !toAccountId) {
+      setTransferError('Choose both accounts.');
+      return;
+    }
+    if (fromAccountId === toAccountId) {
+      setTransferError('From and To must be different accounts.');
+      return;
+    }
+    if (!(Number(transferAmount) > 0)) {
+      setTransferError('Enter an amount greater than zero.');
+      return;
+    }
+    setTransferSubmitting(true);
+    setTransferError(null);
+    try {
+      await financeSvc.recordTransfer({
+        fromAccountId,
+        toAccountId,
+        amount: Number(transferAmount),
+        date: transferDate || null,
+        notes: transferNotes || null,
+      });
+      setTransferOpen(false);
+      await qc.invalidateQueries({ queryKey: queryKeys.financialAccounts(stationId ?? '') });
+      await qc.invalidateQueries({ queryKey: ['account-ledger'] });
+      toast.success('Transfer recorded.');
+    } catch (err: any) {
+      setTransferError(err.message || 'Failed to record transfer.');
+    } finally {
+      setTransferSubmitting(false);
+    }
   };
 
   const submit = async () => {
@@ -176,9 +231,14 @@ export const AccountsPanel: React.FC<AccountsPanelProps> = ({ selectedStation })
       title="Accounts"
       subtitle="Cash, bank, petty cash and card/UPI clearing balances."
       actions={
-        <button className="btn btn-primary btn-md" onClick={openCreate} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-          <Plus size={14} /> New Account
-        </button>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button className="btn btn-secondary btn-md" onClick={openTransfer} disabled={(accounts || []).length < 2} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+            <ArrowLeftRight size={14} /> Transfer
+          </button>
+          <button className="btn btn-primary btn-md" onClick={openCreate} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+            <Plus size={14} /> New Account
+          </button>
+        </div>
       }
     >
       {isLoading ? (
@@ -260,6 +320,48 @@ export const AccountsPanel: React.FC<AccountsPanelProps> = ({ selectedStation })
           <div style={{ display: 'flex', gap: '8px' }}>
             <button className="btn btn-primary btn-md" style={{ flex: 1 }} disabled={submitting} onClick={submit}>{submitting ? 'Creating…' : 'Create Account'}</button>
             <button className="btn btn-secondary btn-md" disabled={submitting} onClick={() => setDrawerOpen(false)}>Cancel</button>
+          </div>
+        </div>
+      </Drawer>
+
+      <Drawer isOpen={transferOpen} onClose={() => setTransferOpen(false)} title="Transfer Money">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          {transferError && (
+            <div style={{ backgroundColor: 'var(--state-danger-bg)', color: 'var(--state-danger-fg)', padding: '10px 12px', borderRadius: 'var(--radius-input)', fontSize: '12px' }}>{transferError}</div>
+          )}
+          <Field label="From">
+            <Select value={fromAccountId} onChange={(e) => setFromAccountId(e.target.value)} disabled={transferSubmitting}>
+              <option value="">— Select account —</option>
+              {(accounts || []).map((a: any) => (
+                <option key={a.id} value={a.id}>{a.name} ({inr(a.balance)})</option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="To">
+            <Select value={toAccountId} onChange={(e) => setToAccountId(e.target.value)} disabled={transferSubmitting}>
+              <option value="">— Select account —</option>
+              {(accounts || []).map((a: any) => (
+                <option key={a.id} value={a.id}>{a.name} ({inr(a.balance)})</option>
+              ))}
+            </Select>
+          </Field>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <Field label="Amount (₹)">
+              <NumberInput placeholder="0" value={transferAmount} onChange={(e) => setTransferAmount(e.target.value)} disabled={transferSubmitting} />
+            </Field>
+            <Field label="Date">
+              <DateField value={transferDate} onChange={(e) => setTransferDate(e.target.value)} disabled={transferSubmitting} />
+            </Field>
+          </div>
+          <Field label="Notes">
+            <TextInput placeholder="e.g. Daily banking / office float" value={transferNotes} onChange={(e) => setTransferNotes(e.target.value)} disabled={transferSubmitting} />
+          </Field>
+          <span style={{ fontSize: '11px', color: 'var(--text-faint)' }}>
+            Records a paired out/in entry on both accounts (e.g. drawer → bank deposit, or a petty-cash float).
+          </span>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button className="btn btn-primary btn-md" style={{ flex: 1 }} disabled={transferSubmitting} onClick={submitTransfer}>{transferSubmitting ? 'Recording…' : 'Record Transfer'}</button>
+            <button className="btn btn-secondary btn-md" disabled={transferSubmitting} onClick={() => setTransferOpen(false)}>Cancel</button>
           </div>
         </div>
       </Drawer>

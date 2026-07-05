@@ -236,3 +236,108 @@ export class UpdateFinancialAccount implements UseCase<UpdateFinancialAccountCom
     return ok(updated);
   }
 }
+
+export interface RecordTransferCommand {
+  fromAccountId: string;
+  toAccountId: string;
+  amount: number | string;
+  date?: string | null;
+  notes?: string | null;
+}
+
+export interface TransferResult {
+  transferId: string;
+  fromAccountId: string;
+  toAccountId: string;
+  amount: string;
+  entryDate: string;
+}
+
+const transferSchema = z.object({
+  fromAccountId: z.string().min(1, 'fromAccountId is required'),
+  toAccountId: z.string().min(1, 'toAccountId is required'),
+  amount: z.coerce.number().positive('amount must be positive'),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date must be YYYY-MM-DD').nullish(),
+  notes: z.string().max(500).nullish(),
+});
+
+/**
+ * Move money between two accounts (cash deposit to bank, petty-cash float,
+ * bank↔bank …). Writes two linked ledger entries sharing a transferId — OUT of
+ * the source, IN to the destination — that net to zero. A cash/petty → bank move
+ * is tagged DEPOSIT, everything else TRANSFER. Run inside runInTransaction.
+ */
+export class RecordTransfer implements UseCase<RecordTransferCommand, TransferResult> {
+  constructor(private readonly deps: FinancialAccountDeps) {}
+
+  async execute(input: RecordTransferCommand, ctx: ExecutionContext): Promise<Result<TransferResult>> {
+    const p = transferSchema.safeParse(input);
+    if (!p.success) return err(validationError('Invalid RecordTransfer command', { issues: p.error.flatten() }));
+    const cmd = p.data;
+
+    if (cmd.fromAccountId === cmd.toAccountId) return err(validationError('Cannot transfer to the same account'));
+
+    const from = await this.deps.accounts.findById(cmd.fromAccountId);
+    if (!from || from.organizationId !== ctx.organizationId) return err(notFoundError('FinancialAccount', cmd.fromAccountId));
+    const to = await this.deps.accounts.findById(cmd.toAccountId);
+    if (!to || to.organizationId !== ctx.organizationId) return err(notFoundError('FinancialAccount', cmd.toAccountId));
+
+    const now = ctx.clock.now().toISOString();
+    const entryDate = cmd.date ?? resolveBusinessDate({ now: ctx.clock.now(), timeZone: ctx.timeZone, dayStartsAt: ctx.businessDayStartsAt });
+    const transferId = ctx.ids.newId();
+    const amount = String(cmd.amount);
+    const stationId = from.stationId ?? to.stationId ?? null;
+    const isDeposit = (from.accountType === 'CASH_IN_HAND' || from.accountType === 'PETTY_CASH') && to.accountType === 'BANK';
+    const sourceType: LedgerSourceType = isDeposit ? 'DEPOSIT' : 'TRANSFER';
+    const label = cmd.notes ?? `${isDeposit ? 'Deposit' : 'Transfer'} ${from.name} → ${to.name}`;
+
+    await this.deps.ledger.saveMany([
+      {
+        id: ctx.ids.newId(),
+        organizationId: ctx.organizationId,
+        stationId,
+        accountId: from.id,
+        direction: 'out',
+        amount,
+        entryDate,
+        sourceType,
+        sourceId: transferId,
+        transferId,
+        businessDayId: null,
+        shiftId: null,
+        reconciled: false,
+        notes: label,
+        createdAt: now,
+      },
+      {
+        id: ctx.ids.newId(),
+        organizationId: ctx.organizationId,
+        stationId,
+        accountId: to.id,
+        direction: 'in',
+        amount,
+        entryDate,
+        sourceType,
+        sourceId: transferId,
+        transferId,
+        businessDayId: null,
+        shiftId: null,
+        reconciled: false,
+        notes: label,
+        createdAt: now,
+      },
+    ]);
+
+    await this.deps.events.publish([
+      eventFromContext(ctx, {
+        eventType: BusinessEvents.LEDGER_ENTRY_POSTED,
+        aggregateType: 'LedgerTransfer',
+        aggregateId: transferId,
+        stationId: stationId ?? undefined,
+        payload: { transferId, fromAccountId: from.id, toAccountId: to.id, amount, sourceType },
+      }),
+    ]);
+
+    return ok({ transferId, fromAccountId: from.id, toAccountId: to.id, amount, entryDate });
+  }
+}
