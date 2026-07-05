@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { type DbClient } from '@pump/db';
 import { canManageFinancialAccounts, isAuthorizedForStation, type Role } from '@pump/shared';
-import { CreateFinancialAccount, UpdateFinancialAccount, RecordTransfer, type Result } from '@pump/core';
+import { CreateFinancialAccount, UpdateFinancialAccount, RecordTransfer, RecordSettlement, RecordLedgerAdjustment, type Result } from '@pump/core';
 import { buildContext } from '../infra/context.js';
 import { loadStationClock } from '../infra/station-clock.js';
 import { runInTransaction } from '../infra/transaction.js';
@@ -63,6 +63,20 @@ financeRouter.get('/accounts/:id/ledger', async (c) => {
   return c.json({ success: true, data });
 });
 
+// GET /finance/movements?stationId=&from=&to= — station-wide ledger movements
+// (backs the repriced Cash & Bank report).
+financeRouter.get('/movements', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  if (!canManageFinancialAccounts(user.role)) return forbidden(c);
+  const stationId = c.req.query('stationId');
+  if (!stationId) return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'stationId is required' } }, 400);
+  const from = c.req.query('from') || undefined;
+  const to = c.req.query('to') || undefined;
+  const rows = await new DrizzleFinancialAccountReader(db).stationMovements(user.organizationId, stationId, from, to);
+  return c.json({ success: true, data: rows });
+});
+
 // POST /finance/accounts — create a money account (seeds an OPENING entry).
 financeRouter.post('/accounts', async (c) => {
   const db = c.var.db;
@@ -112,6 +126,38 @@ financeRouter.post('/transfers', async (c) => {
       ledger: new DrizzleLedgerEntryRepository(tx),
       events,
     }).execute(body, buildContext(user)),
+  );
+  return sendResult(c, result);
+});
+
+// POST /finance/settlements — settle a card/UPI clearing batch to bank, net of MDR.
+financeRouter.post('/settlements', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  if (!canManageFinancialAccounts(user.role)) return forbidden(c);
+  const body = await c.req.json().catch(() => ({}));
+  const result = await runInTransaction(db, (tx, events) =>
+    new RecordSettlement({
+      accounts: new DrizzleFinancialAccountRepository(tx),
+      ledger: new DrizzleLedgerEntryRepository(tx),
+      events,
+    }).execute(body, buildContext(user)),
+  );
+  return sendResult(c, result);
+});
+
+// POST /finance/accounts/:id/entry — manual entry (bank charge / interest / adjustment).
+financeRouter.post('/accounts/:id/entry', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  if (!canManageFinancialAccounts(user.role)) return forbidden(c);
+  const body = await c.req.json().catch(() => ({}));
+  const result = await runInTransaction(db, (tx, events) =>
+    new RecordLedgerAdjustment({
+      accounts: new DrizzleFinancialAccountRepository(tx),
+      ledger: new DrizzleLedgerEntryRepository(tx),
+      events,
+    }).execute({ ...body, accountId: c.req.param('id') }, buildContext(user)),
   );
   return sendResult(c, result);
 });

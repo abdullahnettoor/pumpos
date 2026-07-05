@@ -83,6 +83,8 @@ export interface LedgerEntryRepository {
 
 const accountTypeEnum = z.enum(['CASH_IN_HAND', 'PETTY_CASH', 'BANK', 'MERCHANT_CLEARING', 'OWNER']);
 
+const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+
 export interface CreateFinancialAccountCommand {
   stationId?: string | null;
   accountType: FinancialAccountType;
@@ -339,5 +341,206 @@ export class RecordTransfer implements UseCase<RecordTransferCommand, TransferRe
     ]);
 
     return ok({ transferId, fromAccountId: from.id, toAccountId: to.id, amount, entryDate });
+  }
+}
+
+export interface RecordSettlementCommand {
+  clearingAccountId: string;
+  bankAccountId: string;
+  /** Gross card/UPI batch being settled (leaves the clearing account). */
+  grossAmount: number | string;
+  /** MDR / processing fee withheld by the acquirer (booked as a cost). */
+  feeAmount?: number | string;
+  date?: string | null;
+  notes?: string | null;
+}
+
+export interface SettlementResult {
+  settlementId: string;
+  gross: string;
+  fee: string;
+  net: string;
+  entryDate: string;
+}
+
+const settlementSchema = z.object({
+  clearingAccountId: z.string().min(1, 'clearingAccountId is required'),
+  bankAccountId: z.string().min(1, 'bankAccountId is required'),
+  grossAmount: z.coerce.number().positive('grossAmount must be positive'),
+  feeAmount: z.coerce.number().min(0).optional(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date must be YYYY-MM-DD').nullish(),
+  notes: z.string().max(500).nullish(),
+});
+
+/**
+ * Settle a card/UPI clearing batch to a bank account (FA5). The acquirer deposits
+ * the batch NET of MDR, so this posts: clearing OUT (net) → bank IN (net) as a
+ * linked transfer, plus clearing OUT (fee) as a BANK_CHARGE cost. Net result: the
+ * clearing balance drops by the full gross (net + fee), the bank rises by net, and
+ * the MDR is an explicit, queryable cost. Run inside runInTransaction.
+ */
+export class RecordSettlement implements UseCase<RecordSettlementCommand, SettlementResult> {
+  constructor(private readonly deps: FinancialAccountDeps) {}
+
+  async execute(input: RecordSettlementCommand, ctx: ExecutionContext): Promise<Result<SettlementResult>> {
+    const p = settlementSchema.safeParse(input);
+    if (!p.success) return err(validationError('Invalid RecordSettlement command', { issues: p.error.flatten() }));
+    const cmd = p.data;
+
+    if (cmd.clearingAccountId === cmd.bankAccountId) return err(validationError('Clearing and bank must be different accounts'));
+    const fee = cmd.feeAmount ?? 0;
+    if (fee > cmd.grossAmount) return err(validationError('Fee cannot exceed the gross amount'));
+
+    const clearing = await this.deps.accounts.findById(cmd.clearingAccountId);
+    if (!clearing || clearing.organizationId !== ctx.organizationId) return err(notFoundError('FinancialAccount', cmd.clearingAccountId));
+    const bank = await this.deps.accounts.findById(cmd.bankAccountId);
+    if (!bank || bank.organizationId !== ctx.organizationId) return err(notFoundError('FinancialAccount', cmd.bankAccountId));
+
+    const now = ctx.clock.now().toISOString();
+    const entryDate = cmd.date ?? resolveBusinessDate({ now: ctx.clock.now(), timeZone: ctx.timeZone, dayStartsAt: ctx.businessDayStartsAt });
+    const settlementId = ctx.ids.newId();
+    const net = round2(cmd.grossAmount - fee);
+    const stationId = clearing.stationId ?? bank.stationId ?? null;
+    const label = cmd.notes ?? `Settlement ${clearing.name} → ${bank.name}`;
+
+    const entries = [
+      {
+        id: ctx.ids.newId(),
+        organizationId: ctx.organizationId,
+        stationId,
+        accountId: clearing.id,
+        direction: 'out' as LedgerDirection,
+        amount: String(net),
+        entryDate,
+        sourceType: 'SETTLEMENT' as LedgerSourceType,
+        sourceId: settlementId,
+        transferId: settlementId,
+        businessDayId: null,
+        shiftId: null,
+        reconciled: false,
+        notes: label,
+        createdAt: now,
+      },
+      {
+        id: ctx.ids.newId(),
+        organizationId: ctx.organizationId,
+        stationId,
+        accountId: bank.id,
+        direction: 'in' as LedgerDirection,
+        amount: String(net),
+        entryDate,
+        sourceType: 'SETTLEMENT' as LedgerSourceType,
+        sourceId: settlementId,
+        transferId: settlementId,
+        businessDayId: null,
+        shiftId: null,
+        reconciled: false,
+        notes: label,
+        createdAt: now,
+      },
+    ];
+    if (fee > 0) {
+      entries.push({
+        id: ctx.ids.newId(),
+        organizationId: ctx.organizationId,
+        stationId,
+        accountId: clearing.id,
+        direction: 'out' as LedgerDirection,
+        amount: String(round2(fee)),
+        entryDate,
+        sourceType: 'BANK_CHARGE' as LedgerSourceType,
+        sourceId: settlementId,
+        transferId: settlementId,
+        businessDayId: null,
+        shiftId: null,
+        reconciled: false,
+        notes: `MDR / processing fee (${label})`,
+        createdAt: now,
+      });
+    }
+    await this.deps.ledger.saveMany(entries);
+
+    await this.deps.events.publish([
+      eventFromContext(ctx, {
+        eventType: BusinessEvents.LEDGER_ENTRY_POSTED,
+        aggregateType: 'MerchantSettlement',
+        aggregateId: settlementId,
+        stationId: stationId ?? undefined,
+        payload: { settlementId, clearingAccountId: clearing.id, bankAccountId: bank.id, gross: String(round2(cmd.grossAmount)), fee: String(round2(fee)), net: String(net) },
+      }),
+    ]);
+
+    return ok({ settlementId, gross: String(round2(cmd.grossAmount)), fee: String(round2(fee)), net: String(net), entryDate });
+  }
+}
+
+export interface RecordLedgerAdjustmentCommand {
+  accountId: string;
+  direction: LedgerDirection;
+  amount: number | string;
+  /** BANK_CHARGE for fees/charges, ADJUSTMENT for corrections/interest/opening fixes. */
+  sourceType?: 'BANK_CHARGE' | 'ADJUSTMENT';
+  date?: string | null;
+  notes?: string | null;
+}
+
+const adjustmentSchema = z.object({
+  accountId: z.string().min(1, 'accountId is required'),
+  direction: z.enum(['in', 'out']),
+  amount: z.coerce.number().positive('amount must be positive'),
+  sourceType: z.enum(['BANK_CHARGE', 'ADJUSTMENT']).optional(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date must be YYYY-MM-DD').nullish(),
+  notes: z.string().max(500).nullish(),
+});
+
+/**
+ * Post a single manual ledger entry against one account — bank charges/fees
+ * (out), interest (in), or a balance correction (ADJUSTMENT). This is the
+ * reconciliation MVP: record bank-originated items so the book balance matches
+ * the statement. Run inside runInTransaction.
+ */
+export class RecordLedgerAdjustment implements UseCase<RecordLedgerAdjustmentCommand, LedgerEntry> {
+  constructor(private readonly deps: FinancialAccountDeps) {}
+
+  async execute(input: RecordLedgerAdjustmentCommand, ctx: ExecutionContext): Promise<Result<LedgerEntry>> {
+    const p = adjustmentSchema.safeParse(input);
+    if (!p.success) return err(validationError('Invalid RecordLedgerAdjustment command', { issues: p.error.flatten() }));
+    const cmd = p.data;
+
+    const account = await this.deps.accounts.findById(cmd.accountId);
+    if (!account || account.organizationId !== ctx.organizationId) return err(notFoundError('FinancialAccount', cmd.accountId));
+
+    const now = ctx.clock.now().toISOString();
+    const entryDate = cmd.date ?? resolveBusinessDate({ now: ctx.clock.now(), timeZone: ctx.timeZone, dayStartsAt: ctx.businessDayStartsAt });
+    const entry: LedgerEntry = {
+      id: ctx.ids.newId(),
+      organizationId: ctx.organizationId,
+      stationId: account.stationId,
+      accountId: account.id,
+      direction: cmd.direction,
+      amount: String(round2(Number(cmd.amount))),
+      entryDate,
+      sourceType: cmd.sourceType ?? 'ADJUSTMENT',
+      sourceId: null,
+      transferId: null,
+      businessDayId: null,
+      shiftId: null,
+      reconciled: false,
+      notes: cmd.notes ?? null,
+      createdAt: now,
+    };
+    await this.deps.ledger.saveMany([entry]);
+
+    await this.deps.events.publish([
+      eventFromContext(ctx, {
+        eventType: BusinessEvents.LEDGER_ENTRY_POSTED,
+        aggregateType: 'LedgerEntry',
+        aggregateId: entry.id,
+        stationId: account.stationId ?? undefined,
+        payload: { accountId: account.id, direction: entry.direction, amount: entry.amount, sourceType: entry.sourceType },
+      }),
+    ]);
+
+    return ok(entry);
   }
 }

@@ -180,4 +180,38 @@ export class DrizzleFinancialAccountReader {
 
     return { account: toAccount(accRows[0]), periodOpeningBalance, entries: entryRows.map(toEntry) };
   }
+
+  /** Station-wide ledger movements in [from,to], joined with account type/name.
+   *  Backs the repriced Cash & Bank report (reads the persisted ledger). */
+  async stationMovements(
+    organizationId: string,
+    stationId: string,
+    from?: string,
+    to?: string,
+  ): Promise<Array<{ id: string; entryDate: string; accountId: string; accountType: string; accountName: string; direction: string; amount: string; sourceType: string; notes: string | null; createdAt: string }>> {
+    const conds = [
+      eq(schema.ledgerEntries.organizationId, organizationId),
+      eq(schema.ledgerEntries.stationId, stationId),
+    ];
+    if (from) conds.push(gte(schema.ledgerEntries.entryDate, from));
+    if (to) conds.push(lte(schema.ledgerEntries.entryDate, to));
+    const rows = await this.db
+      .select({
+        id: schema.ledgerEntries.id,
+        entryDate: schema.ledgerEntries.entryDate,
+        accountId: schema.ledgerEntries.accountId,
+        accountType: schema.financialAccounts.accountType,
+        accountName: schema.financialAccounts.name,
+        direction: schema.ledgerEntries.direction,
+        amount: schema.ledgerEntries.amount,
+        sourceType: schema.ledgerEntries.sourceType,
+        notes: schema.ledgerEntries.notes,
+        createdAt: schema.ledgerEntries.createdAt,
+      })
+      .from(schema.ledgerEntries)
+      .innerJoin(schema.financialAccounts, eq(schema.financialAccounts.id, schema.ledgerEntries.accountId))
+      .where(and(...conds))
+      .orderBy(schema.ledgerEntries.entryDate, schema.ledgerEntries.createdAt);
+    return rows.map((r) => ({ ...r, createdAt: r.createdAt.toISOString() }));
+  }
 }

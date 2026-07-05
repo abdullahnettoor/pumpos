@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { useMoneyMovements } from '../../query/hooks.js';
+import { useFinanceMovements } from '../../query/hooks.js';
 import { KpiCard } from '../primitives/KpiCard.js';
 import { DateRangeField, computeRange } from '../primitives/DateRangeField.js';
 import type { DateRange } from '../primitives/DateRangeField.js';
@@ -10,13 +10,32 @@ export interface CashBankLedgerProps {
   selectedStation: any | null;
 }
 
+const GROUP: Record<string, 'Cash' | 'Bank'> = {
+  CASH_IN_HAND: 'Cash',
+  PETTY_CASH: 'Cash',
+  BANK: 'Bank',
+};
+
+const SOURCE_LABEL: Record<string, string> = {
+  OPENING: 'Opening balance',
+  SALE_CASH: 'Cash sales',
+  SALE_CARD: 'Card/UPI sales',
+  COLLECTION: 'Collection',
+  EXPENSE: 'Expense',
+  SUPPLIER_PAYMENT: 'Supplier payment',
+  DEPOSIT: 'Deposit',
+  TRANSFER: 'Transfer',
+  SETTLEMENT: 'Settlement',
+  BANK_CHARGE: 'Bank charge',
+  ADJUSTMENT: 'Adjustment',
+};
+
 /**
- * Cash & Bank ledger (Phase L3): a "payments & receipts" statement of the
- * discretely recorded money movements (collections in, expenses out, supplier
- * payments out), classified by Cash vs Bank account. Excludes fuel/drawer sales
- * (reconciled in the DSSR) and owner-funded items, so it never double-counts the
- * authoritative shift/DSSR figures. Balance is period-relative (opening balances
- * are a future enhancement).
+ * Cash & Bank ledger (Phase L3, repriced in FA6): a period statement of the
+ * persisted money ledger, grouped Cash (cash-in-hand + petty cash) vs Bank. Now
+ * reads the authoritative `ledger_entries` (shift sales, collections, expenses,
+ * transfers, settlements, charges) — the live cash position, not a derived
+ * subset. Per-account statements + true opening balances live on the Accounts page.
  */
 export const CashBankLedger: React.FC<CashBankLedgerProps> = ({ selectedStation }) => {
   const s = (selectedStation as any)?.settings || {};
@@ -24,10 +43,22 @@ export const CashBankLedger: React.FC<CashBankLedgerProps> = ({ selectedStation 
   const [range, setRange] = useState<DateRange>(() => computeRange('this-month', clock));
   const [account, setAccount] = useState<'Cash' | 'Bank'>('Cash');
 
-  const { data: movements, isLoading, error } = useMoneyMovements({ stationId: selectedStation?.id, from: range.from, to: range.to });
+  const { data: movements, isLoading, error } = useFinanceMovements({ stationId: selectedStation?.id, from: range.from, to: range.to });
 
+  // Map ledger movements → display rows, newest-first, filtered to the group.
   const rows = useMemo(
-    () => (movements || []).filter((m: any) => m.account === account),
+    () =>
+      (movements || [])
+        .filter((m: any) => GROUP[m.accountType] === account)
+        .map((m: any) => ({
+          id: m.id,
+          date: m.entryDate,
+          label: m.accountName,
+          source: SOURCE_LABEL[m.sourceType] ?? m.sourceType,
+          direction: m.direction,
+          amount: Number(m.amount || 0),
+        }))
+        .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime()),
     [movements, account],
   );
 
@@ -78,7 +109,7 @@ export const CashBankLedger: React.FC<CashBankLedgerProps> = ({ selectedStation 
       </div>
 
       <div style={{ fontSize: '11px', color: 'var(--text-faint)' }}>
-        Recorded {account.toLowerCase()} receipts &amp; payments only — fuel/drawer reconciliation lives in the DSSR.
+        Live {account.toLowerCase()} movements from the money ledger (shift sales, collections, expenses, transfers &amp; settlements). Per-account statements &amp; opening balances are on the Accounts page.
       </div>
 
       <div className="card" style={{ overflow: 'hidden' }}>

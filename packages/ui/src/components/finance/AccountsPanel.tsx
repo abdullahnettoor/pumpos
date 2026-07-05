@@ -11,7 +11,7 @@ import { useFinancialAccounts, useAccountLedger, queryKeys } from '../../query/h
 import { CloudFinanceService } from '../../services/cloud.js';
 import { inr } from '../../utils/format.js';
 import { useQueryClient } from '@tanstack/react-query';
-import { Plus, Wallet, ArrowLeft, ArrowLeftRight } from 'lucide-react';
+import { Plus, Wallet, ArrowLeft, ArrowLeftRight, Banknote } from 'lucide-react';
 
 const financeSvc = new CloudFinanceService();
 
@@ -82,8 +82,118 @@ export const AccountsPanel: React.FC<AccountsPanelProps> = ({ selectedStation })
   const [transferError, setTransferError] = useState<string | null>(null);
   const [transferSubmitting, setTransferSubmitting] = useState(false);
 
+  // Settlement drawer state (clearing → bank, net of MDR)
+  const [settleOpen, setSettleOpen] = useState(false);
+  const [settleBankId, setSettleBankId] = useState('');
+  const [settleGross, setSettleGross] = useState('');
+  const [settleFee, setSettleFee] = useState('');
+  const [settleDate, setSettleDate] = useState('');
+  const [settleNotes, setSettleNotes] = useState('');
+  const [settleError, setSettleError] = useState<string | null>(null);
+  const [settleSubmitting, setSettleSubmitting] = useState(false);
+
+  // Manual entry drawer (bank charge / interest / adjustment)
+  const [entryOpen, setEntryOpen] = useState(false);
+  const [entryKind, setEntryKind] = useState<'CHARGE' | 'INTEREST' | 'ADJ_IN' | 'ADJ_OUT'>('CHARGE');
+  const [entryAmount, setEntryAmount] = useState('');
+  const [entryDate, setEntryDate] = useState('');
+  const [entryNotes, setEntryNotes] = useState('');
+  const [entryError, setEntryError] = useState<string | null>(null);
+  const [entrySubmitting, setEntrySubmitting] = useState(false);
+
   const selected = useMemo(() => (accounts || []).find((a: any) => a.id === selectedId) || null, [accounts, selectedId]);
   const { data: ledger, isLoading: ledgerLoading } = useAccountLedger(selectedId, { from: range.from, to: range.to });
+
+  const openSettle = () => {
+    const banks = (accounts || []).filter((a: any) => a.accountType === 'BANK');
+    setSettleBankId(banks[0]?.id ?? '');
+    setSettleGross(selected ? String(Number(selected.balance) || '') : '');
+    setSettleFee('');
+    setSettleDate('');
+    setSettleNotes('');
+    setSettleError(null);
+    setSettleOpen(true);
+  };
+
+  const submitSettle = async () => {
+    if (!selected) return;
+    if (!settleBankId) {
+      setSettleError('Choose the bank the batch settles into.');
+      return;
+    }
+    if (!(Number(settleGross) > 0)) {
+      setSettleError('Enter the gross batch amount.');
+      return;
+    }
+    if (Number(settleFee || 0) > Number(settleGross)) {
+      setSettleError('Fee cannot exceed the gross amount.');
+      return;
+    }
+    setSettleSubmitting(true);
+    setSettleError(null);
+    try {
+      await financeSvc.recordSettlement({
+        clearingAccountId: selected.id,
+        bankAccountId: settleBankId,
+        grossAmount: Number(settleGross),
+        feeAmount: Number(settleFee) || 0,
+        date: settleDate || null,
+        notes: settleNotes || null,
+      });
+      setSettleOpen(false);
+      await qc.invalidateQueries({ queryKey: queryKeys.financialAccounts(stationId ?? '') });
+      await qc.invalidateQueries({ queryKey: ['account-ledger'] });
+      toast.success('Settlement recorded.');
+    } catch (err: any) {
+      setSettleError(err.message || 'Failed to record settlement.');
+    } finally {
+      setSettleSubmitting(false);
+    }
+  };
+
+  const ENTRY_KIND: Record<string, { direction: 'in' | 'out'; sourceType: 'BANK_CHARGE' | 'ADJUSTMENT'; label: string }> = {
+    CHARGE: { direction: 'out', sourceType: 'BANK_CHARGE', label: 'Bank charge / fee' },
+    INTEREST: { direction: 'in', sourceType: 'ADJUSTMENT', label: 'Interest earned' },
+    ADJ_IN: { direction: 'in', sourceType: 'ADJUSTMENT', label: 'Adjustment (add)' },
+    ADJ_OUT: { direction: 'out', sourceType: 'ADJUSTMENT', label: 'Adjustment (deduct)' },
+  };
+
+  const openEntry = () => {
+    setEntryKind('CHARGE');
+    setEntryAmount('');
+    setEntryDate('');
+    setEntryNotes('');
+    setEntryError(null);
+    setEntryOpen(true);
+  };
+
+  const submitEntry = async () => {
+    if (!selected) return;
+    if (!(Number(entryAmount) > 0)) {
+      setEntryError('Enter an amount greater than zero.');
+      return;
+    }
+    setEntrySubmitting(true);
+    setEntryError(null);
+    try {
+      const kind = ENTRY_KIND[entryKind];
+      await financeSvc.recordAdjustment(selected.id, {
+        direction: kind.direction,
+        amount: Number(entryAmount),
+        sourceType: kind.sourceType,
+        date: entryDate || null,
+        notes: entryNotes || kind.label,
+      });
+      setEntryOpen(false);
+      await qc.invalidateQueries({ queryKey: queryKeys.financialAccounts(stationId ?? '') });
+      await qc.invalidateQueries({ queryKey: ['account-ledger'] });
+      toast.success('Entry recorded.');
+    } catch (err: any) {
+      setEntryError(err.message || 'Failed to record entry.');
+    } finally {
+      setEntrySubmitting(false);
+    }
+  };
 
   const openCreate = () => {
     setAccountType('BANK');
@@ -189,9 +299,19 @@ export const AccountsPanel: React.FC<AccountsPanelProps> = ({ selectedStation })
         title={selected.name}
         subtitle={`${TYPE_LABEL[selected.accountType as AccountType] ?? selected.accountType} · statement`}
         actions={
-          <button className="btn btn-secondary btn-md" onClick={() => setSelectedId(null)} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-            <ArrowLeft size={14} /> All accounts
-          </button>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            {selected.accountType === 'MERCHANT_CLEARING' && (
+              <button className="btn btn-primary btn-md" onClick={openSettle} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                <Banknote size={14} /> Settle to bank
+              </button>
+            )}
+            <button className="btn btn-secondary btn-md" onClick={openEntry} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+              <Plus size={14} /> Add entry
+            </button>
+            <button className="btn btn-secondary btn-md" onClick={() => setSelectedId(null)} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+              <ArrowLeft size={14} /> All accounts
+            </button>
+          </div>
         }
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -221,6 +341,81 @@ export const AccountsPanel: React.FC<AccountsPanelProps> = ({ selectedStation })
             })}
           />
         </div>
+
+        <Drawer isOpen={settleOpen} onClose={() => setSettleOpen(false)} title="Settle to Bank">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            {settleError && (
+              <div style={{ backgroundColor: 'var(--state-danger-bg)', color: 'var(--state-danger-fg)', padding: '10px 12px', borderRadius: 'var(--radius-input)', fontSize: '12px' }}>{settleError}</div>
+            )}
+            <Field label="Settle into (Bank)">
+              <Select value={settleBankId} onChange={(e) => setSettleBankId(e.target.value)} disabled={settleSubmitting}>
+                <option value="">— Select bank —</option>
+                {(accounts || []).filter((a: any) => a.accountType === 'BANK').map((a: any) => (
+                  <option key={a.id} value={a.id}>{a.name}</option>
+                ))}
+              </Select>
+            </Field>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <Field label="Gross Batch (₹)">
+                <NumberInput placeholder="0" value={settleGross} onChange={(e) => setSettleGross(e.target.value)} disabled={settleSubmitting} />
+              </Field>
+              <Field label="MDR / Fee (₹)">
+                <NumberInput placeholder="0" value={settleFee} onChange={(e) => setSettleFee(e.target.value)} disabled={settleSubmitting} />
+              </Field>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', backgroundColor: 'var(--bg-surface-alt)', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', padding: '10px 12px' }}>
+              <span style={{ fontWeight: 600, color: 'var(--text-muted)' }}>Net to bank</span>
+              <strong style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-strong)' }}>{inr(Math.max(0, (Number(settleGross) || 0) - (Number(settleFee) || 0)))}</strong>
+            </div>
+            <Field label="Date">
+              <DateField value={settleDate} onChange={(e) => setSettleDate(e.target.value)} disabled={settleSubmitting} />
+            </Field>
+            <Field label="Notes">
+              <TextInput placeholder="e.g. HDFC POS batch 05-Jul" value={settleNotes} onChange={(e) => setSettleNotes(e.target.value)} disabled={settleSubmitting} />
+            </Field>
+            <span style={{ fontSize: '11px', color: 'var(--text-faint)' }}>
+              Clearing drops by the gross; bank rises by the net; the fee is booked as a cost.
+            </span>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button className="btn btn-primary btn-md" style={{ flex: 1 }} disabled={settleSubmitting} onClick={submitSettle}>{settleSubmitting ? 'Recording…' : 'Record Settlement'}</button>
+              <button className="btn btn-secondary btn-md" disabled={settleSubmitting} onClick={() => setSettleOpen(false)}>Cancel</button>
+            </div>
+          </div>
+        </Drawer>
+
+        <Drawer isOpen={entryOpen} onClose={() => setEntryOpen(false)} title="Add Entry">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            {entryError && (
+              <div style={{ backgroundColor: 'var(--state-danger-bg)', color: 'var(--state-danger-fg)', padding: '10px 12px', borderRadius: 'var(--radius-input)', fontSize: '12px' }}>{entryError}</div>
+            )}
+            <Field label="Type">
+              <Select value={entryKind} onChange={(e) => setEntryKind(e.target.value as any)} disabled={entrySubmitting}>
+                <option value="CHARGE">Bank charge / fee (out)</option>
+                <option value="INTEREST">Interest earned (in)</option>
+                <option value="ADJ_IN">Adjustment — add (in)</option>
+                <option value="ADJ_OUT">Adjustment — deduct (out)</option>
+              </Select>
+            </Field>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <Field label="Amount (₹)">
+                <NumberInput placeholder="0" value={entryAmount} onChange={(e) => setEntryAmount(e.target.value)} disabled={entrySubmitting} />
+              </Field>
+              <Field label="Date">
+                <DateField value={entryDate} onChange={(e) => setEntryDate(e.target.value)} disabled={entrySubmitting} />
+              </Field>
+            </div>
+            <Field label="Notes">
+              <TextInput placeholder="e.g. Quarterly account maintenance fee" value={entryNotes} onChange={(e) => setEntryNotes(e.target.value)} disabled={entrySubmitting} />
+            </Field>
+            <span style={{ fontSize: '11px', color: 'var(--text-faint)' }}>
+              Record bank-originated items (charges, fees, interest) so your book balance matches the statement.
+            </span>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button className="btn btn-primary btn-md" style={{ flex: 1 }} disabled={entrySubmitting} onClick={submitEntry}>{entrySubmitting ? 'Recording…' : 'Add Entry'}</button>
+              <button className="btn btn-secondary btn-md" disabled={entrySubmitting} onClick={() => setEntryOpen(false)}>Cancel</button>
+            </div>
+          </div>
+        </Drawer>
       </PageLayout>
     );
   }

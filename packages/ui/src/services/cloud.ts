@@ -781,4 +781,22 @@ export class CloudFinanceService {
   async recordTransfer(payload: { fromAccountId: string; toAccountId: string; amount: number; date?: string | null; notes?: string | null }): Promise<any> {
     return request<any>('/finance/transfers', { method: 'POST', body: JSON.stringify(payload) });
   }
+
+  /** Settle a card/UPI clearing batch to a bank account, net of MDR fee. */
+  async recordSettlement(payload: { clearingAccountId: string; bankAccountId: string; grossAmount: number; feeAmount?: number; date?: string | null; notes?: string | null }): Promise<any> {
+    return request<any>('/finance/settlements', { method: 'POST', body: JSON.stringify(payload) });
+  }
+
+  /** Manual entry against one account: bank charge / interest / adjustment. */
+  async recordAdjustment(accountId: string, payload: { direction: 'in' | 'out'; amount: number; sourceType?: 'BANK_CHARGE' | 'ADJUSTMENT'; date?: string | null; notes?: string | null }): Promise<any> {
+    return request<any>(`/finance/accounts/${accountId}/entry`, { method: 'POST', body: JSON.stringify(payload) });
+  }
+
+  /** Station-wide ledger movements (backs the Cash & Bank report). */
+  async getMovements(params: { stationId: string; from?: string; to?: string }): Promise<any[]> {
+    const qs = new URLSearchParams({ stationId: params.stationId });
+    if (params.from) qs.set('from', params.from);
+    if (params.to) qs.set('to', params.to);
+    return request<any[]>(`/finance/movements?${qs.toString()}`);
+  }
 }

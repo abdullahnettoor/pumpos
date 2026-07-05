@@ -69,6 +69,7 @@ export const queryKeys = {
   sales: (stationId: string, from: string, to: string) => ['sales', stationId, from, to] as const,
   financialAccounts: (stationId: string) => ['financial-accounts', stationId] as const,
   accountLedger: (accountId: string, from: string, to: string) => ['account-ledger', accountId, from, to] as const,
+  financeMovements: (stationId: string, from: string, to: string) => ['finance-movements', stationId, from, to] as const,
 } as const;
 
 type Options<T> = Omit<UseQueryOptions<T, Error, T, readonly unknown[]>, 'queryKey' | 'queryFn'>;
@@ -189,6 +190,16 @@ export function useAccountLedger(accountId: string | null | undefined, params?: 
     queryKey: queryKeys.accountLedger(accountId ?? '', params?.from ?? '', params?.to ?? ''),
     queryFn: () => financeSvc.getAccountLedger(accountId!, params?.from, params?.to),
     enabled: !!accountId,
+    ...TIER.operational,
+    ...options,
+  });
+}
+
+export function useFinanceMovements(params: { stationId?: string | null; from?: string; to?: string }, options?: Options<any[]>) {
+  return useQuery({
+    queryKey: queryKeys.financeMovements(params.stationId ?? '', params.from ?? '', params.to ?? ''),
+    queryFn: () => financeSvc.getMovements({ stationId: params.stationId!, from: params.from, to: params.to }),
+    enabled: !!params.stationId,
     ...TIER.operational,
     ...options,
   });
