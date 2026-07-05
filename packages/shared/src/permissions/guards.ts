@@ -195,3 +195,12 @@ export function canManageUsers(role: Role): boolean {
 export function canExportReports(role: Role): boolean {
   return role === 'Owner' || role === 'Manager' || role === 'Accountant';
 }
+
+// ----------------------------------------------------
+// Financial Accounts (Phase F) — money accounts & ledger
+// ----------------------------------------------------
+
+/** Create/edit money accounts and view ledgers/balances. Owner, Manager, Accountant. */
+export function canManageFinancialAccounts(role: Role): boolean {
+  return role === 'Owner' || role === 'Manager' || role === 'Accountant';
+}

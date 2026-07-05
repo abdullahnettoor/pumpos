@@ -318,6 +318,50 @@ export const supplierTransactions = pgTable('supplier_transactions', {
 });
 
 // ----------------------------------------------------
+// FINANCIAL ACCOUNTS & MONEY LEDGER (Phase F, Layer A)
+// ----------------------------------------------------
+
+// A money store: where cash actually is (drawer, petty cash, bank, card/UPI
+// clearing, owner). station_id NULL = organization-shared (future multi-station).
+export const financialAccounts = pgTable('financial_accounts', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  organizationId: uuid('organization_id').references(() => organizations.id).notNull(),
+  stationId: uuid('station_id').references(() => stations.id),
+  // 'CASH_IN_HAND' | 'PETTY_CASH' | 'BANK' | 'MERCHANT_CLEARING' | 'OWNER'
+  accountType: varchar('account_type', { length: 20 }).notNull(),
+  name: varchar('name', { length: 150 }).notNull(),
+  openingBalance: numeric('opening_balance', { precision: 14, scale: 2 }).default('0').notNull(),
+  openingDate: varchar('opening_date', { length: 10 }), // YYYY-MM-DD
+  // BANK: {bankName, accountNoMasked, ifsc}; MERCHANT_CLEARING: {terminalId, mdrPct, settlesToAccountId}
+  metadata: jsonb('metadata'),
+  isActive: boolean('is_active').default(true).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+// Single-entry, signed money ledger. Balance = opening + Σin − Σout. A transfer
+// is two linked rows sharing transferId (out of A, in to B) that net to zero.
+export const ledgerEntries = pgTable('ledger_entries', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  organizationId: uuid('organization_id').references(() => organizations.id).notNull(),
+  stationId: uuid('station_id').references(() => stations.id),
+  accountId: uuid('account_id').references(() => financialAccounts.id).notNull(),
+  direction: varchar('direction', { length: 3 }).notNull(), // 'in' | 'out'
+  amount: numeric('amount', { precision: 14, scale: 2 }).notNull(),
+  entryDate: varchar('entry_date', { length: 10 }).notNull(), // YYYY-MM-DD business date
+  // 'OPENING'|'SALE_CASH'|'SALE_CARD'|'COLLECTION'|'EXPENSE'|'SUPPLIER_PAYMENT'
+  // |'DEPOSIT'|'TRANSFER'|'SETTLEMENT'|'BANK_CHARGE'|'ADJUSTMENT'
+  sourceType: varchar('source_type', { length: 30 }).notNull(),
+  sourceId: uuid('source_id'), // originating row (sale/expense/collection/…)
+  transferId: uuid('transfer_id'), // links the two rows of a transfer
+  businessDayId: uuid('business_day_id').references(() => businessDays.id),
+  shiftId: uuid('shift_id').references(() => shifts.id),
+  reconciled: boolean('reconciled').default(false).notNull(),
+  notes: varchar('notes', { length: 500 }),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+// ----------------------------------------------------
 // TRANSACTION & INVENTORY DOMAINS
 // ----------------------------------------------------
 

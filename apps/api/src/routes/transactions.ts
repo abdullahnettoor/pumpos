@@ -50,6 +50,7 @@ import { DrizzleSaleRepository, DrizzleMerchandiseHandoverRepository } from '../
 import { DrizzleInvoiceRepository, DrizzleDocumentSequenceRepository } from '../infra/repositories/invoicing-repositories.js';
 import { DrizzleProductRepository } from '../infra/repositories/product.repo.js';
 import { DrizzleStationRepository } from '../infra/repositories/setup-repositories.js';
+import { LedgerPostingService } from '../infra/ledger-posting.js';
 import {
   DrizzleShiftRepository,
   DrizzleBusinessDayRepository,
@@ -425,14 +426,16 @@ transactionsRouter.post('/expenses', async (c) => {
   const user = c.var.user;
   const body = await c.req.json().catch(() => ({}));
   const clock = await loadStationClock(c.var.db, body?.stationId);
-  const result = await runInTransaction(c.var.db, (tx, events) =>
-    new RecordExpense({
+  const result = await runInTransaction(c.var.db, async (tx, events) => {
+    const r = await new RecordExpense({
       expenses: new DrizzleExpenseRepository(tx),
       shifts: new DrizzleShiftRepository(tx),
       businessDays: new DrizzleBusinessDayRepository(tx),
       events,
-    }).execute(body, buildContext(user, { stationId: body?.stationId, ...clock })),
-  );
+    }).execute(body, buildContext(user, { stationId: body?.stationId, ...clock }));
+    if (r.success) await new LedgerPostingService(tx).postExpense(user.organizationId, r.data);
+    return r;
+  });
   return sendResult(c, result);
 });
 
@@ -454,8 +457,8 @@ transactionsRouter.post('/collections', async (c) => {
     );
     return sendResult(c, result);
   }
-  const result = await runInTransaction(c.var.db, (tx, events) =>
-    new RecordCollection({
+  const result = await runInTransaction(c.var.db, async (tx, events) => {
+    const r = await new RecordCollection({
       collections: new DrizzleCollectionRepository(tx),
       ledger: new DrizzleCustomerLedgerRepository(tx),
       customers: new DrizzleCustomerRepository(tx),
@@ -463,8 +466,10 @@ transactionsRouter.post('/collections', async (c) => {
       businessDays: new DrizzleBusinessDayRepository(tx),
       docNumbers,
       events,
-    }).execute(body, buildContext(user, { stationId: body?.stationId, ...clock })),
-  );
+    }).execute(body, buildContext(user, { stationId: body?.stationId, ...clock }));
+    if (r.success) await new LedgerPostingService(tx).postCollection(user.organizationId, r.data);
+    return r;
+  });
   return sendResult(c, result);
 });
 
@@ -515,15 +520,17 @@ transactionsRouter.post('/supplier-payments', async (c) => {
   }
   const body = await c.req.json().catch(() => ({}));
   const clock = await loadStationClock(c.var.db, body?.stationId);
-  const result = await runInTransaction(c.var.db, (tx, events) =>
-    new RecordSupplierPayment({
+  const result = await runInTransaction(c.var.db, async (tx, events) => {
+    const r = await new RecordSupplierPayment({
       supplierTxns: new DrizzleSupplierTransactionRepository(tx),
       suppliers: new DrizzleSupplierRepository(tx),
       shifts: new DrizzleShiftRepository(tx),
       businessDays: new DrizzleBusinessDayRepository(tx),
       events,
-    }).execute(body, buildContext(user, { stationId: body?.stationId, ...clock })),
-  );
+    }).execute(body, buildContext(user, { stationId: body?.stationId, ...clock }));
+    if (r.success) await new LedgerPostingService(tx).postSupplierPayment(user.organizationId, r.data);
+    return r;
+  });
   return sendResult(c, result);
 });
 

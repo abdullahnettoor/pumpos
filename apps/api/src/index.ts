@@ -10,6 +10,7 @@ import { productsRouter } from './routes/products.js';
 import { shiftsRouter } from './routes/shifts.js';
 import { transactionsRouter } from './routes/transactions.js';
 import { dssrRouter } from './routes/dssr.js';
+import { financeRouter } from './routes/finance.js';
 import { idempotency } from './infra/idempotency.js';
 
 
@@ -302,6 +303,7 @@ api.route('/setup', productsRouter);
 api.route('/shifts', shiftsRouter);
 api.route('/transactions', transactionsRouter);
 api.route('/dssr', dssrRouter);
+api.route('/finance', financeRouter);
 
 
 // Mount authenticated group

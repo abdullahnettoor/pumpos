@@ -746,3 +746,34 @@ export class CloudEventsService {
     return request<any[]>(`/activity${suffix}`);
   }
 }
+
+export class CloudFinanceService {
+  /** Money accounts with current balances (cash / petty / bank / clearing / owner). */
+  async listAccounts(stationId?: string | null): Promise<any[]> {
+    return request<any[]>(`/finance/accounts${stationId ? `?stationId=${stationId}` : ''}`);
+  }
+
+  /** Per-account statement: period-opening balance + entries in [from, to]. */
+  async getAccountLedger(accountId: string, from?: string, to?: string): Promise<any> {
+    const qs = new URLSearchParams();
+    if (from) qs.set('from', from);
+    if (to) qs.set('to', to);
+    const suffix = qs.toString() ? `?${qs.toString()}` : '';
+    return request<any>(`/finance/accounts/${accountId}/ledger${suffix}`);
+  }
+
+  async createAccount(payload: {
+    stationId?: string | null;
+    accountType: 'CASH_IN_HAND' | 'PETTY_CASH' | 'BANK' | 'MERCHANT_CLEARING' | 'OWNER';
+    name: string;
+    openingBalance?: number;
+    openingDate?: string | null;
+    metadata?: Record<string, unknown> | null;
+  }): Promise<any> {
+    return request<any>('/finance/accounts', { method: 'POST', body: JSON.stringify(payload) });
+  }
+
+  async updateAccount(id: string, payload: { name?: string; metadata?: Record<string, unknown> | null; isActive?: boolean }): Promise<any> {
+    return request<any>(`/finance/accounts/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+  }
+}

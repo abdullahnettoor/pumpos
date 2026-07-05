@@ -14,6 +14,7 @@ import {
   InventoryList,
   ReportsOverview,
   FuelPricingPanel,
+  AccountsPanel,
   DesignSystem,
   CloudStationService, 
   queryKeys,
@@ -220,6 +221,7 @@ export const App: React.FC = () => {
         { label: 'Purchases', path: '/purchases', roles: ['Owner', 'Manager', 'Accountant'] },
         { label: 'Inventory', path: '/inventory', roles: ['Owner', 'Manager', 'Accountant'] },
         { label: 'Fuel Pricing', path: '/pricing', roles: ['Owner', 'Manager'] },
+        { label: 'Accounts', path: '/accounts', roles: ['Owner', 'Manager', 'Accountant'] },
         { label: 'Customers', path: '/customers' },
         { label: 'Reports', path: '/reports', roles: ['Owner', 'Manager', 'Accountant'] },
         { label: 'Organization', path: '/organization', roles: ['Owner'] },
@@ -424,6 +426,8 @@ export const App: React.FC = () => {
         return <InventoryList selectedStation={selectedStation} />;
       case '/pricing':
         return <FuelPricingPanel selectedStation={selectedStation} />;
+      case '/accounts':
+        return <AccountsPanel selectedStation={selectedStation} />;
       case '/customers':
         return <CustomersList selectedStation={selectedStation} />;
       case '/reports':

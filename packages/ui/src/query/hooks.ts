@@ -12,6 +12,7 @@ import {
   CloudPricingService,
   CloudOrganizationService,
   CloudEventsService,
+  CloudFinanceService,
 } from '../services/cloud.js';
 
 /**
@@ -34,6 +35,7 @@ const templateSvc = new CloudShiftTemplateService();
 const pricingSvc = new CloudPricingService();
 const orgSvc = new CloudOrganizationService();
 const eventsSvc = new CloudEventsService();
+const financeSvc = new CloudFinanceService();
 
 export const queryKeys = {
   shiftStatus: (stationId: string, lite = false) => ['shift-status', stationId, lite] as const,
@@ -65,6 +67,8 @@ export const queryKeys = {
   moneyMovements: (stationId: string, from: string, to: string) => ['money-movements', stationId, from, to] as const,
   invoices: (stationId: string, from: string, to: string) => ['invoices', stationId, from, to] as const,
   sales: (stationId: string, from: string, to: string) => ['sales', stationId, from, to] as const,
+  financialAccounts: (stationId: string) => ['financial-accounts', stationId] as const,
+  accountLedger: (accountId: string, from: string, to: string) => ['account-ledger', accountId, from, to] as const,
 } as const;
 
 type Options<T> = Omit<UseQueryOptions<T, Error, T, readonly unknown[]>, 'queryKey' | 'queryFn'>;
@@ -166,6 +170,25 @@ export function useSales(params: { stationId?: string | null; from?: string; to?
     queryKey: queryKeys.sales(params.stationId ?? '', params.from ?? '', params.to ?? ''),
     queryFn: () => txService.getSales({ stationId: params.stationId!, from: params.from, to: params.to }),
     enabled: !!params.stationId,
+    ...TIER.operational,
+    ...options,
+  });
+}
+
+export function useFinancialAccounts(stationId: string | null | undefined, options?: Options<any[]>) {
+  return useQuery({
+    queryKey: queryKeys.financialAccounts(stationId ?? ''),
+    queryFn: () => financeSvc.listAccounts(stationId ?? undefined),
+    ...TIER.operational,
+    ...options,
+  });
+}
+
+export function useAccountLedger(accountId: string | null | undefined, params?: { from?: string; to?: string }, options?: Options<any>) {
+  return useQuery({
+    queryKey: queryKeys.accountLedger(accountId ?? '', params?.from ?? '', params?.to ?? ''),
+    queryFn: () => financeSvc.getAccountLedger(accountId!, params?.from, params?.to),
+    enabled: !!accountId,
     ...TIER.operational,
     ...options,
   });
