@@ -533,63 +533,14 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
           </div>
         </div>
 
-        {/* 2. Card / UPI collections */}
-        <div>
-          <h3 style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '10px' }}>
-            2. Card / UPI Collections
-          </h3>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-            {!hasTerminals && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-default)' }}>Card Swipe Total (₹)</label>
-                <input
-                  type="number"
-                  step="any"
-                  {...register('cardHandedOver')}
-                  style={{
-                    height: '32px',
-                    padding: '0 8px',
-                    border: '1px solid var(--border-strong)',
-                    borderRadius: 'var(--radius-input)',
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: '13px',
-                  }}
-                />
-                {errors.cardHandedOver && (
-                  <span style={{ color: 'var(--brand-danger)', fontSize: '10px' }}>
-                    {errors.cardHandedOver.message}
-                  </span>
-                )}
-              </div>
-            )}
-
-            {!hasTerminals && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-default)' }}>UPI QR Total (₹)</label>
-                <input
-                  type="number"
-                  step="any"
-                  {...register('upiHandedOver')}
-                  style={{
-                    height: '32px',
-                    padding: '0 8px',
-                    border: '1px solid var(--border-strong)',
-                    borderRadius: 'var(--radius-input)',
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: '13px',
-                  }}
-                />
-                {errors.upiHandedOver && (
-                  <span style={{ color: 'var(--brand-danger)', fontSize: '10px' }}>
-                    {errors.upiHandedOver.message}
-                  </span>
-                )}
-              </div>
-            )}
-          </div>
-
-          {hasTerminals && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '12px' }}>
+        {/* 2. Card / UPI collections — only when the station has POS terminals
+             (card/UPI can't be accepted without a machine). */}
+        {hasTerminals && (
+          <div>
+            <h3 style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '10px' }}>
+              2. Card / UPI Collections
+            </h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 POS Terminal Batches (Card / UPI per machine)
               </label>
@@ -647,8 +598,8 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
                 </strong>
               </div>
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* 3. Fuel-on-credit sales (credit chits) for this DU */}
         <div>

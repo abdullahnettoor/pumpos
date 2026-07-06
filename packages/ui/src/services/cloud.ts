@@ -190,6 +190,7 @@ export class CloudPaymentTerminalService implements IPaymentTerminalService {
     terminalCode?: string | null;
     supportsCard?: boolean;
     supportsUpi?: boolean;
+    clearingAccountId?: string | null;
   }): Promise<PaymentTerminal> {
     return request<PaymentTerminal>('/setup/payment-terminals', {
       method: 'POST',
@@ -199,7 +200,7 @@ export class CloudPaymentTerminalService implements IPaymentTerminalService {
 
   async updateTerminal(
     id: string,
-    data: Partial<{ label: string; provider: string | null; terminalCode: string | null; supportsCard: boolean; supportsUpi: boolean; isActive: boolean }>
+    data: Partial<{ label: string; provider: string | null; terminalCode: string | null; supportsCard: boolean; supportsUpi: boolean; isActive: boolean; clearingAccountId: string | null }>
   ): Promise<PaymentTerminal> {
     return request<PaymentTerminal>(`/setup/payment-terminals/${id}`, {
       method: 'PUT',

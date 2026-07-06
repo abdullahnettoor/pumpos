@@ -271,6 +271,7 @@ export interface PaymentTerminal {
   terminalCode: string | null;
   supportsCard: boolean;
   supportsUpi: boolean;
+  clearingAccountId?: string | null;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;

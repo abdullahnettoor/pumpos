@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import type { DbClient } from '@pump/db';
 import type { Role } from '@pump/shared';
+import { normalizeProvider } from '@pump/shared';
 import {
   RegisterPaymentTerminal,
   UpdatePaymentTerminal,
@@ -9,6 +10,7 @@ import {
 import { buildContext } from '../infra/context.js';
 import { createDispatcher } from '../infra/events.js';
 import { DrizzlePaymentTerminalRepository } from '../infra/repositories/payment-terminal.repo.js';
+import { AccountProvisioningService } from '../infra/account-provisioning.js';
 
 type Variables = {
   db: DbClient;
@@ -63,12 +65,21 @@ paymentTerminalsRouter.post('/payment-terminals', async (c) => {
   if (!canWrite(c, body?.stationId)) {
     return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Not permitted to manage terminals for this station' } }, 403);
   }
+  body.provider = normalizeProvider(body?.provider);
   const db = c.var.db;
   const useCase = new RegisterPaymentTerminal({
     repository: new DrizzlePaymentTerminalRepository(db),
     events: createDispatcher(db),
   });
   const result = await useCase.execute(body, buildContext(c.var.user, { stationId: body?.stationId }));
+  // Ensure the station's default money accounts exist and this terminal is linked
+  // to a Card/UPI clearing account: an explicitly chosen one, else auto by provider.
+  if (result.success) {
+    const prov = new AccountProvisioningService(db);
+    await prov.ensureStationDefaults(c.var.user.organizationId, result.data.stationId);
+    const clearingId = body?.clearingAccountId || (await prov.ensureClearingForProvider(c.var.user.organizationId, result.data.stationId, result.data.provider));
+    await prov.linkTerminal(result.data.id, clearingId);
+  }
   return sendResult(c, result);
 });
 
@@ -85,8 +96,15 @@ paymentTerminalsRouter.put('/payment-terminals/:id', async (c) => {
   if (!canWrite(c, existing.stationId)) {
     return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Not permitted to manage terminals for this station' } }, 403);
   }
+  if (body?.provider !== undefined) body.provider = normalizeProvider(body.provider);
   const useCase = new UpdatePaymentTerminal({ repository: repo, events: createDispatcher(db) });
   const result = await useCase.execute({ ...body, id }, buildContext(c.var.user, { stationId: existing.stationId }));
+  // Re-point the terminal's clearing account when provided ('' = auto by provider).
+  if (result.success && body?.clearingAccountId !== undefined) {
+    const prov = new AccountProvisioningService(db);
+    const clearingId = body.clearingAccountId || (await prov.ensureClearingForProvider(c.var.user.organizationId, existing.stationId, body?.provider ?? existing.provider));
+    await prov.linkTerminal(id, clearingId);
+  }
   return sendResult(c, result);
 });
 

@@ -29,8 +29,8 @@ export interface IProductService {
 
 export interface IPaymentTerminalService {
   listTerminals(stationId: string): Promise<PaymentTerminal[]>;
-  createTerminal(data: { stationId: string; label: string; provider?: string | null; terminalCode?: string | null; supportsCard?: boolean; supportsUpi?: boolean }): Promise<PaymentTerminal>;
-  updateTerminal(id: string, data: Partial<{ label: string; provider: string | null; terminalCode: string | null; supportsCard: boolean; supportsUpi: boolean; isActive: boolean }>): Promise<PaymentTerminal>;
+  createTerminal(data: { stationId: string; label: string; provider?: string | null; terminalCode?: string | null; supportsCard?: boolean; supportsUpi?: boolean; clearingAccountId?: string | null }): Promise<PaymentTerminal>;
+  updateTerminal(id: string, data: Partial<{ label: string; provider: string | null; terminalCode: string | null; supportsCard: boolean; supportsUpi: boolean; isActive: boolean; clearingAccountId: string | null }>): Promise<PaymentTerminal>;
   deleteTerminal(id: string): Promise<void>;
 }
 

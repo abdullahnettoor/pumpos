@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { CloudPaymentTerminalService } from '../../services/cloud.js';
+import { CloudPaymentTerminalService, CloudFinanceService } from '../../services/cloud.js';
 import { PaymentTerminal } from '@pump/shared';
 import { StatusBadge } from '../StatusBadge.js';
 import { Drawer } from '../Drawer.js';
 import { DataTable } from '../primitives/DataTable.js';
 import { Checkbox } from '../primitives/Toggle.js';
+import { ProviderField } from '../primitives/ProviderField.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import type { ColumnDef } from '@tanstack/react-table';
 
 const terminalService = new CloudPaymentTerminalService();
+const financeSvc = new CloudFinanceService();
 
 export interface PaymentTerminalsPanelProps {
   stationId: string;
@@ -30,7 +32,7 @@ const inputStyle: React.CSSProperties = {
   color: 'var(--text-strong)',
 };
 
-const buildTerminalColumns = (openEdit: (t: any) => void, toggleActive: (t: any) => void): ColumnDef<any, any>[] => [
+const buildTerminalColumns = (openEdit: (t: any) => void, toggleActive: (t: any) => void, clearingName: (id: string | null | undefined) => string): ColumnDef<any, any>[] => [
   { accessorKey: 'label', header: 'Label', cell: ({ getValue }) => <span style={{ color: 'var(--text-strong)', fontWeight: 500 }}>{getValue() as string}</span> },
   { accessorKey: 'provider', header: 'Provider', cell: ({ getValue }) => <span style={{ color: 'var(--text-default)' }}>{(getValue() as string) || '—'}</span> },
   { accessorKey: 'terminalCode', header: 'Terminal ID', cell: ({ getValue }) => <span style={{ color: 'var(--text-default)', fontFamily: 'var(--font-mono)' }}>{(getValue() as string) || '—'}</span> },
@@ -41,6 +43,11 @@ const buildTerminalColumns = (openEdit: (t: any) => void, toggleActive: (t: any)
       const t = row.original;
       return <span style={{ color: 'var(--text-default)' }}>{[t.supportsCard ? 'Card' : null, t.supportsUpi ? 'UPI' : null].filter(Boolean).join(' + ') || '—'}</span>;
     },
+  },
+  {
+    id: 'clearing',
+    header: 'Settles into',
+    cell: ({ row }) => <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>{clearingName(row.original.clearingAccountId)}</span>,
   },
   { accessorKey: 'isActive', header: 'Status', cell: ({ getValue }) => <StatusBadge status={getValue() ? 'Active' : 'Inactive'} type={getValue() ? 'success' : 'default'} /> },
   {
@@ -71,6 +78,8 @@ export const PaymentTerminalsPanel: React.FC<PaymentTerminalsPanelProps> = ({ st
   const [terminalCode, setTerminalCode] = useState('');
   const [supportsCard, setSupportsCard] = useState(true);
   const [supportsUpi, setSupportsUpi] = useState(true);
+  const [clearingAccountId, setClearingAccountId] = useState('');
+  const [clearingAccounts, setClearingAccounts] = useState<any[]>([]);
 
   useEffect(() => {
     loadData();
@@ -80,13 +89,22 @@ export const PaymentTerminalsPanel: React.FC<PaymentTerminalsPanelProps> = ({ st
     if (!stationId) return;
     try {
       setLoading(true);
-      const list = await terminalService.listTerminals(stationId);
+      const [list, accounts] = await Promise.all([
+        terminalService.listTerminals(stationId),
+        financeSvc.listAccounts(stationId).catch(() => []),
+      ]);
       setTerminals(list);
+      setClearingAccounts((accounts || []).filter((a: any) => a.accountType === 'MERCHANT_CLEARING'));
     } catch (err) {
       console.error('Failed to load payment terminals:', err);
     } finally {
       setLoading(false);
     }
+  };
+
+  const clearingName = (id: string | null | undefined) => {
+    if (!id) return 'Auto (by provider)';
+    return clearingAccounts.find((a) => a.id === id)?.name ?? 'Clearing account';
   };
 
   const resetForm = () => {
@@ -96,6 +114,7 @@ export const PaymentTerminalsPanel: React.FC<PaymentTerminalsPanelProps> = ({ st
     setTerminalCode('');
     setSupportsCard(true);
     setSupportsUpi(true);
+    setClearingAccountId('');
   };
 
   const openCreate = () => {
@@ -111,6 +130,7 @@ export const PaymentTerminalsPanel: React.FC<PaymentTerminalsPanelProps> = ({ st
     setTerminalCode(t.terminalCode || '');
     setSupportsCard(t.supportsCard);
     setSupportsUpi(t.supportsUpi);
+    setClearingAccountId((t as any).clearingAccountId || '');
     setIsFormOpen(true);
   };
 
@@ -125,6 +145,7 @@ export const PaymentTerminalsPanel: React.FC<PaymentTerminalsPanelProps> = ({ st
         terminalCode: terminalCode.trim() || null,
         supportsCard,
         supportsUpi,
+        clearingAccountId: clearingAccountId || null,
       };
       if (editingId) {
         await terminalService.updateTerminal(editingId, payload);
@@ -186,7 +207,7 @@ export const PaymentTerminalsPanel: React.FC<PaymentTerminalsPanelProps> = ({ st
       </div>
 
       <DataTable
-        columns={buildTerminalColumns(openEdit, toggleActive)}
+        columns={buildTerminalColumns(openEdit, toggleActive, clearingName)}
         data={terminals}
         emptyMessage="No payment terminals yet. Add your first PoS machine."
         getRowId={(r: any) => r.id}
@@ -214,14 +235,8 @@ export const PaymentTerminalsPanel: React.FC<PaymentTerminalsPanelProps> = ({ st
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label style={labelStyle}>Provider / Bank</label>
-            <input
-              type="text"
-              style={inputStyle}
-              placeholder="e.g. HDFC, ICICI, Pine Labs"
-              value={provider}
-              onChange={(e) => setProvider(e.target.value)}
-            />
+            <label style={labelStyle}>Provider / Acquirer</label>
+            <ProviderField key={editingId ?? 'new'} value={provider} onChange={setProvider} style={inputStyle} />
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -238,6 +253,19 @@ export const PaymentTerminalsPanel: React.FC<PaymentTerminalsPanelProps> = ({ st
           <div style={{ display: 'flex', gap: '20px' }}>
             <Checkbox label="Accepts Card" checked={supportsCard} onChange={(e) => setSupportsCard(e.target.checked)} />
             <Checkbox label="Accepts UPI" checked={supportsUpi} onChange={(e) => setSupportsUpi(e.target.checked)} />
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <label style={labelStyle}>Settles into (Card/UPI clearing account)</label>
+            <select style={inputStyle} value={clearingAccountId} onChange={(e) => setClearingAccountId(e.target.value)}>
+              <option value="">Auto — group by provider</option>
+              {clearingAccounts.map((a) => (
+                <option key={a.id} value={a.id}>{a.name}</option>
+              ))}
+            </select>
+            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+              Card/UPI from this machine settles into this account. Machines of the same acquirer (e.g. 4 Paytm) can share one — leave on Auto to group by provider.
+            </span>
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', borderTop: '1px solid var(--border-soft)', paddingTop: '16px' }}>

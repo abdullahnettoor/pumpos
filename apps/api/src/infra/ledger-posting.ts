@@ -8,6 +8,7 @@ import {
   type LedgerDirection,
   type LedgerSourceType,
 } from '@pump/core';
+import { AccountProvisioningService } from './account-provisioning.js';
 
 /**
  * Posts money movements onto the persisted ledger (Phase F, FA2). Called inside
@@ -205,14 +206,51 @@ export class LedgerPostingService {
   ): Promise<void> {
     const meta = await this.businessDayMeta(shift.businessDayId);
     const entryDate = meta?.businessDate ?? new Date().toISOString().slice(0, 10);
-
-    // Card/UPI captured this shift = the declared terminal batches on handovers.
-    const handovers = await this.db
-      .select({ card: schema.attendantHandovers.cardHandedOver, upi: schema.attendantHandovers.upiHandedOver })
-      .from(schema.attendantHandovers)
-      .where(eq(schema.attendantHandovers.shiftId, shift.id));
-    const cardUpi = handovers.reduce((acc, h) => acc + Number(h.card ?? 0) + Number(h.upi ?? 0), 0);
     const cash = Number(recon.cashSales ?? 0);
+
+    // Card/UPI is captured per terminal; route each terminal's batch to its
+    // acquirer's clearing account (many terminals of one acquirer → one account).
+    const termEntries = await this.db
+      .select({
+        card: schema.handoverTerminalEntries.cardAmount,
+        upi: schema.handoverTerminalEntries.upiAmount,
+        clearingAccountId: schema.paymentTerminals.clearingAccountId,
+        provider: schema.paymentTerminals.provider,
+      })
+      .from(schema.handoverTerminalEntries)
+      .innerJoin(schema.paymentTerminals, eq(schema.paymentTerminals.id, schema.handoverTerminalEntries.terminalId))
+      .where(eq(schema.handoverTerminalEntries.shiftId, shift.id));
+
+    const provisioner = new AccountProvisioningService(this.db);
+    const byClearing = new Map<string, number>();
+    for (const e of termEntries) {
+      const amt = Number(e.card ?? 0) + Number(e.upi ?? 0);
+      if (amt <= 0) continue;
+      const accountId = e.clearingAccountId ?? (await provisioner.ensureClearingForProvider(organizationId, shift.stationId, e.provider));
+      byClearing.set(accountId, (byClearing.get(accountId) ?? 0) + amt);
+    }
+
+    // Fallback: aggregate card/UPI declared on the handover without a per-terminal
+    // split (legacy / single-acquirer). Route to the station's clearing account.
+    if (byClearing.size === 0) {
+      const handovers = await this.db
+        .select({ card: schema.attendantHandovers.cardHandedOver, upi: schema.attendantHandovers.upiHandedOver })
+        .from(schema.attendantHandovers)
+        .where(eq(schema.attendantHandovers.shiftId, shift.id));
+      const cardUpi = handovers.reduce((acc, h) => acc + Number(h.card ?? 0) + Number(h.upi ?? 0), 0);
+      if (cardUpi > 0) {
+        // Card/UPI money implies a machine was used → create a clearing account if
+        // none exists yet (money-driven, not a pre-provisioned empty bucket).
+        const existing = await this.db
+          .select({ id: schema.financialAccounts.id })
+          .from(schema.financialAccounts)
+          .where(and(eq(schema.financialAccounts.organizationId, organizationId), eq(schema.financialAccounts.stationId, shift.stationId), eq(schema.financialAccounts.accountType, 'MERCHANT_CLEARING')))
+          .orderBy(schema.financialAccounts.createdAt)
+          .limit(1);
+        const accountId = existing[0]?.id ?? (await provisioner.ensureClearingForProvider(organizationId, shift.stationId, null));
+        byClearing.set(accountId, cardUpi);
+      }
+    }
 
     await this.reverseShiftClose(shift.id);
 
@@ -233,14 +271,13 @@ export class LedgerPostingService {
       });
     }
 
-    if (cardUpi > 0) {
-      const clearing = await this.ensureAccount(organizationId, shift.stationId, 'MERCHANT_CLEARING');
+    for (const [accountId, amount] of byClearing) {
       await this.postEntry({
         organizationId,
         stationId: shift.stationId,
-        accountId: clearing,
+        accountId,
         direction: 'in',
-        amount: String(cardUpi),
+        amount: String(amount),
         entryDate,
         sourceType: 'SALE_CARD',
         sourceId: shift.id,

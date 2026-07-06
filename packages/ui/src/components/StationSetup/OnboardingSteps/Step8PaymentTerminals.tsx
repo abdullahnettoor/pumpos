@@ -2,6 +2,7 @@ import React from 'react';
 import { OnboardingDraft, OnboardingPaymentTerminalDraft } from '@pump/shared';
 import { createPaymentTerminalDraft } from '../onboardingDraft.js';
 import { Checkbox } from '../../primitives/Toggle.js';
+import { ProviderField } from '../../primitives/ProviderField.js';
 
 interface Step8PaymentTerminalsProps {
   draft: OnboardingDraft;
@@ -88,12 +89,12 @@ export const Step8PaymentTerminals: React.FC<Step8PaymentTerminalsProps> = ({
                   />
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <label style={fieldLabelStyle}>Provider / Bank</label>
-                  <input
-                    style={inputStyle}
+                  <label style={fieldLabelStyle}>Provider / Acquirer</label>
+                  <ProviderField
+                    key={terminal.draftId}
                     value={terminal.provider}
-                    onChange={(e) => updateTerminal(terminal.draftId, { provider: e.target.value })}
-                    placeholder="e.g. HDFC, Pine Labs"
+                    onChange={(v) => updateTerminal(terminal.draftId, { provider: v })}
+                    style={inputStyle}
                   />
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>

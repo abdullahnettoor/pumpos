@@ -103,6 +103,9 @@ export const paymentTerminals = pgTable('payment_terminals', {
   terminalCode: varchar('terminal_code', { length: 100 }), // device TID
   supportsCard: boolean('supports_card').default(true).notNull(),
   supportsUpi: boolean('supports_upi').default(true).notNull(),
+  // The MERCHANT_CLEARING account this terminal settles into (Phase F). Many
+  // terminals of the same acquirer (e.g. 4 Paytm machines) share one account.
+  clearingAccountId: uuid('clearing_account_id'),
   isActive: boolean('is_active').default(true).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),

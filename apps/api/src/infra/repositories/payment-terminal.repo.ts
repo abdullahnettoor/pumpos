@@ -14,6 +14,7 @@ function toEntity(row: Row): PaymentTerminal {
     terminalCode: row.terminalCode,
     supportsCard: row.supportsCard,
     supportsUpi: row.supportsUpi,
+    clearingAccountId: (row as { clearingAccountId?: string | null }).clearingAccountId ?? null,
     isActive: row.isActive,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),

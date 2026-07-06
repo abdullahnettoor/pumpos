@@ -3,6 +3,8 @@ import { schema, type DbClient } from '@pump/db';
 import { conflictError, err, invariantViolation, ok } from '@pump/core';
 import type { OnboardingProvisioner, Result } from '@pump/core';
 import type { FinalizeOnboardingResult, OnboardingDraft } from '@pump/shared';
+import { normalizeProvider } from '@pump/shared';
+import { AccountProvisioningService } from './account-provisioning.js';
 
 /** Signals a provisioning failure to roll back the transaction with a typed reason. */
 class ProvisionFailure extends Error {
@@ -177,7 +179,7 @@ export class DrizzleOnboardingProvisioner implements OnboardingProvisioner {
               organizationId,
               stationId: newStation.id,
               label: terminal.label,
-              provider: terminal.provider?.trim() ? terminal.provider.trim() : null,
+              provider: normalizeProvider(terminal.provider),
               terminalCode: terminal.terminalCode?.trim() ? terminal.terminalCode.trim() : null,
               supportsCard: terminal.supportsCard,
               supportsUpi: terminal.supportsUpi,
@@ -186,6 +188,15 @@ export class DrizzleOnboardingProvisioner implements OnboardingProvisioner {
               updatedAt: new Date(),
             })),
           );
+        }
+
+        // Provision the station's default money accounts (Cash in Hand + Bank).
+        // Card/UPI clearing accounts are created per acquirer and linked to the
+        // terminals just created (none if the station registered no terminals).
+        const provisioner = new AccountProvisioningService(tx as unknown as DbClient);
+        await provisioner.ensureStationDefaults(organizationId, newStation.id);
+        if (paymentTerminals.length > 0) {
+          await provisioner.provisionTerminalClearing(organizationId, newStation.id);
         }
 
         const [readyStation] = await tx

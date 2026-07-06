@@ -10,6 +10,8 @@ export interface PaymentTerminal {
   terminalCode: string | null;
   supportsCard: boolean;
   supportsUpi: boolean;
+  /** The MERCHANT_CLEARING account this terminal settles into (Phase F). */
+  clearingAccountId?: string | null;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
