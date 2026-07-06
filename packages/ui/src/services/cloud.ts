@@ -585,6 +585,7 @@ export class CloudTransactionService {
     attendantId?: string | null;
     duId?: string | null;
     notes?: string;
+    accountId?: string | null;
   }): Promise<any> {
     return request<any>('/transactions/collections', {
       method: 'POST',
@@ -680,7 +681,7 @@ export class CloudTransactionService {
     return request<any>(`/transactions/merchandise-handovers/${saleId}`, { method: 'DELETE' });
   }
 
-  async recordSupplierPayment(payload: { shiftId?: string; stationId?: string; transactionDate?: string; paidFrom?: 'SHIFT_CASH' | 'BANK' | 'OWNER'; supplierId: string; amount: number; notes?: string }): Promise<any> {
+  async recordSupplierPayment(payload: { shiftId?: string; stationId?: string; transactionDate?: string; paidFrom?: 'SHIFT_CASH' | 'BANK' | 'OWNER'; supplierId: string; amount: number; notes?: string; accountId?: string | null }): Promise<any> {
     return request<any>('/transactions/supplier-payments', {
       method: 'POST',
       body: JSON.stringify(payload),

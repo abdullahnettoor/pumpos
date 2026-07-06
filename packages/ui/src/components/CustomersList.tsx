@@ -389,6 +389,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
         amount: Number(values.amount),
         paymentMethod: values.paymentMethod,
         notes: values.notes || undefined,
+        accountId: values.accountId || undefined,
       });
 
       closeCollectionDrawer();
@@ -1102,6 +1103,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
             showShiftHintWhenSingle={false}
             showDateField
             dateLabel="Collection Date"
+            stationId={selectedStation?.id}
             defaultValues={collectionDefaults}
             customers={customers}
             submitting={collectionSubmitting}

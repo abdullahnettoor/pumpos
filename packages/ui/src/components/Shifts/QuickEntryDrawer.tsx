@@ -110,6 +110,7 @@ export const QuickEntryDrawer: React.FC<QuickEntryDrawerProps> = (props) => {
             <CollectionEntryForm
               shiftOptions={shiftOptions}
               customers={props.customers}
+              stationId={props.stationId}
               defaultValues={props.collectionDefaults}
               submitting={submitting}
               error={error}

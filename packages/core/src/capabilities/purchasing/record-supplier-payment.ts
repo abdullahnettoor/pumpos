@@ -13,6 +13,7 @@ export interface RecordSupplierPaymentCommand {
   supplierId: string;
   amount: number | string;
   paidFrom?: SupplierPaidFrom;
+  affectsDrawer?: boolean;
   shiftId?: string;
   stationId?: string;
   notes?: string;
@@ -23,6 +24,7 @@ const schema = z.object({
   supplierId: z.string().min(1, 'supplierId is required'),
   amount: z.coerce.number().positive('amount must be positive'),
   paidFrom: z.enum(['SHIFT_CASH', 'BANK', 'OWNER']).optional(),
+  affectsDrawer: z.boolean().optional(),
   shiftId: z.string().min(1).optional(),
   stationId: z.string().min(1).optional(),
   notes: z.string().max(500).optional(),
@@ -54,7 +56,7 @@ export class RecordSupplierPayment implements UseCase<RecordSupplierPaymentComma
     if (!supplier || supplier.organizationId !== ctx.organizationId) return err(notFoundError('Supplier', cmd.supplierId));
 
     const paidFrom: SupplierPaidFrom = cmd.paidFrom ?? 'BANK';
-    const affectsDrawer = paidFrom === 'SHIFT_CASH';
+    const affectsDrawer = cmd.affectsDrawer ?? paidFrom === 'SHIFT_CASH';
 
     let businessDayId: string;
     let shiftId: string | null;

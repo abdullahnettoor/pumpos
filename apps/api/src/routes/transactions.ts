@@ -536,6 +536,20 @@ transactionsRouter.post('/supplier-payments', async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const clock = await loadStationClock(c.var.db, body?.stationId);
   const result = await runInTransaction(c.var.db, async (tx, events) => {
+    // Chosen pay-from account → derive paidFrom/affectsDrawer so drawer
+    // reconciliation stays correct (only the shift Cash-in-Hand affects it).
+    if (body?.accountId) {
+      const [acc] = await tx
+        .select({ t: schema.financialAccounts.accountType })
+        .from(schema.financialAccounts)
+        .where(and(eq(schema.financialAccounts.id, body.accountId), eq(schema.financialAccounts.organizationId, user.organizationId)))
+        .limit(1);
+      const t = acc?.t;
+      if (t === 'BANK') { body.paidFrom = 'BANK'; body.affectsDrawer = false; }
+      else if (t === 'OWNER') { body.paidFrom = 'OWNER'; body.affectsDrawer = false; }
+      else if (t === 'PETTY_CASH') { body.paidFrom = 'SHIFT_CASH'; body.affectsDrawer = false; }
+      else if (t === 'CASH_IN_HAND') { body.paidFrom = 'SHIFT_CASH'; }
+    }
     const r = await new RecordSupplierPayment({
       supplierTxns: new DrizzleSupplierTransactionRepository(tx),
       suppliers: new DrizzleSupplierRepository(tx),

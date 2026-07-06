@@ -378,6 +378,7 @@ export const supplierPaymentSchema = z.object({
   supplierId: z.string().uuid('Invalid supplier ID'),
   amount: z.number().positive('Payment amount must be positive'),
   notes: z.string().max(500).optional().nullable(),
+  accountId: z.string().optional().nullable(),
 });
 
 // ---------------------------------------------------------------------------
@@ -410,6 +411,8 @@ export const collectionEntryFormSchema = z.object({
   amount: z.coerce.number({ invalid_type_error: 'Amount is required' }).positive('Amount must be positive'),
   paymentMethod: z.enum(['Cash', 'Card', 'UPI', 'BankTransfer']).default('Cash'),
   notes: z.string().max(500).optional().default(''),
+  /** Bank account a non-cash collection lands in (empty = auto/default). */
+  accountId: z.string().optional().default(''),
 });
 export type CollectionEntryFormValues = z.infer<typeof collectionEntryFormSchema>;
 

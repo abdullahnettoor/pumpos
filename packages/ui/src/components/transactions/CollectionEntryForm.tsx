@@ -4,6 +4,7 @@ import { useZodForm } from '../../forms/useZodForm.js';
 import { Field, TextInput, NumberInput, Select, DateField } from '../primitives/Field.js';
 import { Segmented } from '../primitives/Segmented.js';
 import { Combobox } from '../primitives/Combobox.js';
+import { AccountSelect } from '../primitives/AccountSelect.js';
 
 export interface ShiftOption {
   id: string;
@@ -12,6 +13,8 @@ export interface ShiftOption {
 export interface CollectionEntryFormProps {
   shiftOptions: ShiftOption[];
   customers: any[];
+  /** Station whose bank accounts populate the deposit picker (non-cash). */
+  stationId?: string | null;
   defaultValues?: Partial<CollectionEntryFormValues>;
   submitting: boolean;
   error?: string | null;
@@ -40,11 +43,13 @@ const EMPTY_DEFAULTS: CollectionEntryFormValues = {
   amount: undefined as unknown as number,
   paymentMethod: 'Cash',
   notes: '',
+  accountId: '',
 };
 
 export const CollectionEntryForm: React.FC<CollectionEntryFormProps> = ({
   shiftOptions,
   customers,
+  stationId,
   defaultValues,
   submitting,
   error,
@@ -117,7 +122,7 @@ export const CollectionEntryForm: React.FC<CollectionEntryFormProps> = ({
               { value: 'BankTransfer', label: 'Bank' },
             ]}
             value={paymentMethod}
-            onChange={(v) => setValue('paymentMethod', v as typeof paymentMethod, { shouldValidate: true })}
+            onChange={(v) => { setValue('paymentMethod', v as typeof paymentMethod, { shouldValidate: true }); if (v === 'Cash') setValue('accountId', ''); }}
             disabled={submitting}
             aria-label={paymentMethodLabel}
           />
@@ -151,6 +156,12 @@ export const CollectionEntryForm: React.FC<CollectionEntryFormProps> = ({
       <Field label={amountLabel} error={errors.amount?.message}>
         <NumberInput placeholder={amountPlaceholder} disabled={submitting} invalid={!!errors.amount} {...register('amount')} />
       </Field>
+
+      {paymentMethod !== 'Cash' && (
+        <Field label="Deposit to (Bank)">
+          <AccountSelect stationId={stationId} value={watch('accountId') || ''} onChange={(v) => setValue('accountId', v, { shouldValidate: true })} types={['BANK']} disabled={submitting} autoLabel="Auto (default bank)" />
+        </Field>
+      )}
 
       <Field label={notesLabel}>
         <TextInput placeholder={notesPlaceholder} disabled={submitting} {...register('notes')} />

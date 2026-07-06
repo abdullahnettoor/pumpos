@@ -476,6 +476,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         amount: Number(values.amount),
         paymentMethod: values.paymentMethod,
         notes: values.notes || undefined,
+        accountId: values.accountId || undefined,
       });
       toast.success('Collection recorded.');
       closeQuickEntryDrawer();

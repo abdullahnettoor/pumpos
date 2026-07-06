@@ -11,6 +11,7 @@ import { Checkbox } from './primitives/Toggle.js';
 import { inr } from '../utils/format.js';
 import { Tabs } from './primitives/Tabs.js';
 import { PageLayout } from './primitives/PageLayout.js';
+import { AccountSelect } from './primitives/AccountSelect.js';
 import { useToast } from './primitives/ToastProvider.js';
 import type { ColumnDef } from '@tanstack/react-table';
 import { useForm } from 'react-hook-form';
@@ -248,6 +249,7 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, d
     handleSubmit: handleSubmitPay,
     reset: resetPay,
     setValue: setValuePay,
+    watch: watchPay,
     formState: { errors: payErrors }
   } = useForm({
     resolver: zodResolver(supplierPaymentSchema),
@@ -290,6 +292,7 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, d
         supplierId: data.supplierId,
         amount: Number(data.amount),
         notes: data.notes || undefined,
+        accountId: data.accountId || undefined,
       });
 
       resetPay({
@@ -1091,6 +1094,16 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, d
                         {payErrors.notes.message}
                       </span>
                     )}
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <label style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600 }}>Paid from</label>
+                    <AccountSelect
+                      stationId={stationId}
+                      value={(watchPay('accountId') as string) || ''}
+                      onChange={(v) => setValuePay('accountId', v)}
+                      disabled={paymentSubmitting}
+                    />
                   </div>
 
                   <button
