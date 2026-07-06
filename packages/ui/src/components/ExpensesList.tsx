@@ -95,7 +95,7 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({ selectedStation, def
     try {
       setSubmitting(true);
       setFormError(null);
-      await transactionService.recordExpense({ stationId: stationId ?? undefined, transactionDate: values.transactionDate || undefined, paidFrom: 'BANK', categoryId: values.categoryId, amount: Number(values.amount), description: values.description || undefined });
+      await transactionService.recordExpense({ stationId: stationId ?? undefined, transactionDate: values.transactionDate || undefined, paidFrom: 'BANK', categoryId: values.categoryId, amount: Number(values.amount), description: values.description || undefined, accountId: values.accountId || undefined });
       closeDrawer();
       invalidateOperational(stationId);
       toast.success('Expense recorded.');
@@ -194,6 +194,7 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({ selectedStation, def
         <ExpenseEntryForm
           shiftOptions={[]}
           categories={categories}
+          stationId={stationId}
           defaultValues={formDefaults}
           showDateField
           dateLabel="Expense Date"

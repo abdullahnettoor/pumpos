@@ -398,6 +398,8 @@ export const expenseEntryFormSchema = z.object({
   categoryId: z.string().min(1, 'Category is required'),
   amount: z.coerce.number({ invalid_type_error: 'Amount is required' }).positive('Amount must be positive'),
   description: z.string().max(255).optional().default(''),
+  /** Which money account it's paid from (empty = auto by context). */
+  accountId: z.string().optional().default(''),
 });
 export type ExpenseEntryFormValues = z.infer<typeof expenseEntryFormSchema>;
 

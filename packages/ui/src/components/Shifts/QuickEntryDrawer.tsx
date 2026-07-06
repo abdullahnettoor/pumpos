@@ -24,6 +24,8 @@ interface QuickEntryDrawerProps {
   shiftOptions: { id: string; label: string }[];
   targetShiftId: string;
   activeShiftTemplateName?: string;
+  /** Station whose money accounts populate the account pickers. */
+  stationId?: string | null;
 
   // Shared data sources
   categories: any[];
@@ -94,6 +96,7 @@ export const QuickEntryDrawer: React.FC<QuickEntryDrawerProps> = (props) => {
             <ExpenseEntryForm
               shiftOptions={shiftOptions}
               categories={props.categories}
+              stationId={props.stationId}
               defaultValues={props.expenseDefaults}
               submitting={submitting}
               error={error}

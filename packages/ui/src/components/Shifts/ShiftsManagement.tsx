@@ -448,6 +448,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         categoryId: values.categoryId,
         amount: Number(values.amount),
         description: values.description || undefined,
+        accountId: values.accountId || undefined,
       });
       toast.success('Expense recorded.');
       closeQuickEntryDrawer();
@@ -963,6 +964,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
           shiftOptions={shiftOptions}
           targetShiftId={targetShiftId}
           activeShiftTemplateName={data?.activeShift?.templateName}
+          stationId={selectedStation?.id}
           categories={categories}
           customers={customers}
           suppliers={suppliers}

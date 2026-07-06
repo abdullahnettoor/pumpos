@@ -76,6 +76,20 @@ export class LedgerPostingService {
     return created.id;
   }
 
+  /** Resolve the target account: an explicitly chosen one (validated to the org),
+   *  else the station's system account of the fallback type (created on demand). */
+  private async resolveTarget(organizationId: string, stationId: string, explicitId: string | null | undefined, fallbackType: FinancialAccountType): Promise<string> {
+    if (explicitId) {
+      const rows = await this.db
+        .select({ id: schema.financialAccounts.id })
+        .from(schema.financialAccounts)
+        .where(and(eq(schema.financialAccounts.id, explicitId), eq(schema.financialAccounts.organizationId, organizationId)))
+        .limit(1);
+      if (rows[0]) return rows[0].id;
+    }
+    return this.ensureAccount(organizationId, stationId, fallbackType);
+  }
+
   private async postEntry(params: {
     organizationId: string;
     stationId: string;
@@ -111,15 +125,15 @@ export class LedgerPostingService {
   async postCollection(
     organizationId: string,
     collection: { id: string; amount: string; paymentMethod: string; businessDayId: string; shiftId: string | null },
+    accountId?: string | null,
   ): Promise<void> {
     const meta = await this.businessDayMeta(collection.businessDayId);
     if (!meta) return;
-    const type = accountTypeForPaymentMethod(collection.paymentMethod);
-    const accountId = await this.ensureAccount(organizationId, meta.stationId, type);
+    const target = await this.resolveTarget(organizationId, meta.stationId, accountId, accountTypeForPaymentMethod(collection.paymentMethod));
     await this.postEntry({
       organizationId,
       stationId: meta.stationId,
-      accountId,
+      accountId: target,
       direction: 'in',
       amount: collection.amount,
       entryDate: meta.businessDate,
@@ -131,19 +145,19 @@ export class LedgerPostingService {
     });
   }
 
-  /** Expense → money OUT of drawer / bank / owner (by paidFrom). */
+  /** Expense → money OUT of drawer / petty / bank / owner (chosen account or by paidFrom). */
   async postExpense(
     organizationId: string,
     expense: { id: string; amount: string; paidFrom: string; businessDayId: string; shiftId: string | null },
+    accountId?: string | null,
   ): Promise<void> {
     const meta = await this.businessDayMeta(expense.businessDayId);
     if (!meta) return;
-    const type = accountTypeForPaidFrom(expense.paidFrom);
-    const accountId = await this.ensureAccount(organizationId, meta.stationId, type);
+    const target = await this.resolveTarget(organizationId, meta.stationId, accountId, accountTypeForPaidFrom(expense.paidFrom));
     await this.postEntry({
       organizationId,
       stationId: meta.stationId,
-      accountId,
+      accountId: target,
       direction: 'out',
       amount: expense.amount,
       entryDate: meta.businessDate,
@@ -155,19 +169,19 @@ export class LedgerPostingService {
     });
   }
 
-  /** Supplier payment → money OUT of drawer / bank / owner (by paidFrom). */
+  /** Supplier payment → money OUT of drawer / petty / bank / owner (chosen account or by paidFrom). */
   async postSupplierPayment(
     organizationId: string,
     txn: { id: string; amount: string; paidFrom: string; businessDayId: string; shiftId: string | null },
+    accountId?: string | null,
   ): Promise<void> {
     const meta = await this.businessDayMeta(txn.businessDayId);
     if (!meta) return;
-    const type = accountTypeForPaidFrom(txn.paidFrom);
-    const accountId = await this.ensureAccount(organizationId, meta.stationId, type);
+    const target = await this.resolveTarget(organizationId, meta.stationId, accountId, accountTypeForPaidFrom(txn.paidFrom));
     await this.postEntry({
       organizationId,
       stationId: meta.stationId,
-      accountId,
+      accountId: target,
       direction: 'out',
       amount: txn.amount,
       entryDate: meta.businessDate,

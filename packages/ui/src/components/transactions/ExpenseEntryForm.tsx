@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { expenseEntryFormSchema, type ExpenseEntryFormValues } from '@pump/shared';
 import { useZodForm } from '../../forms/useZodForm.js';
 import { Field, TextInput, NumberInput, Select, DateField } from '../primitives/Field.js';
+import { AccountSelect } from '../primitives/AccountSelect.js';
 
 export interface ShiftOption {
   id: string;
@@ -11,6 +12,8 @@ export interface ShiftOption {
 export interface ExpenseEntryFormProps {
   shiftOptions: ShiftOption[];
   categories: any[];
+  /** Station whose money accounts populate the "Paid from" picker. */
+  stationId?: string | null;
   defaultValues?: Partial<ExpenseEntryFormValues>;
   submitting: boolean;
   error?: string | null;
@@ -35,11 +38,13 @@ const EMPTY_DEFAULTS: ExpenseEntryFormValues = {
   categoryId: '',
   amount: undefined as unknown as number,
   description: '',
+  accountId: '',
 };
 
 export const ExpenseEntryForm: React.FC<ExpenseEntryFormProps> = ({
   shiftOptions,
   categories,
+  stationId,
   defaultValues,
   submitting,
   error,
@@ -58,7 +63,7 @@ export const ExpenseEntryForm: React.FC<ExpenseEntryFormProps> = ({
 }) => {
   const hasMultipleShiftOptions = shiftOptions.length > 1;
 
-  const { register, handleSubmit, reset, formState: { errors } } = useZodForm<ExpenseEntryFormValues>(expenseEntryFormSchema, {
+  const { register, handleSubmit, reset, watch, setValue, formState: { errors } } = useZodForm<ExpenseEntryFormValues>(expenseEntryFormSchema, {
     defaultValues: { ...EMPTY_DEFAULTS, ...defaultValues },
   });
 
@@ -115,6 +120,10 @@ export const ExpenseEntryForm: React.FC<ExpenseEntryFormProps> = ({
 
       <Field label={descriptionLabel}>
         <TextInput placeholder={descriptionPlaceholder} disabled={submitting} {...register('description')} />
+      </Field>
+
+      <Field label="Paid from">
+        <AccountSelect stationId={stationId} value={watch('accountId') || ''} onChange={(v) => setValue('accountId', v, { shouldValidate: true })} disabled={submitting} />
       </Field>
 
       {error && (

@@ -427,13 +427,28 @@ transactionsRouter.post('/expenses', async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const clock = await loadStationClock(c.var.db, body?.stationId);
   const result = await runInTransaction(c.var.db, async (tx, events) => {
+    // When a specific pay-from account is chosen, derive paidFrom/affectsDrawer
+    // from its type so drawer reconciliation stays correct (only the shift's
+    // Cash-in-Hand affects the drawer; petty cash / bank / owner do not).
+    if (body?.accountId) {
+      const [acc] = await tx
+        .select({ t: schema.financialAccounts.accountType })
+        .from(schema.financialAccounts)
+        .where(and(eq(schema.financialAccounts.id, body.accountId), eq(schema.financialAccounts.organizationId, user.organizationId)))
+        .limit(1);
+      const t = acc?.t;
+      if (t === 'BANK') { body.paidFrom = 'BANK'; body.affectsDrawer = false; }
+      else if (t === 'OWNER') { body.paidFrom = 'OWNER'; body.affectsDrawer = false; }
+      else if (t === 'PETTY_CASH') { body.paidFrom = 'SHIFT_CASH'; body.affectsDrawer = false; }
+      else if (t === 'CASH_IN_HAND') { body.paidFrom = 'SHIFT_CASH'; }
+    }
     const r = await new RecordExpense({
       expenses: new DrizzleExpenseRepository(tx),
       shifts: new DrizzleShiftRepository(tx),
       businessDays: new DrizzleBusinessDayRepository(tx),
       events,
     }).execute(body, buildContext(user, { stationId: body?.stationId, ...clock }));
-    if (r.success) await new LedgerPostingService(tx).postExpense(user.organizationId, r.data);
+    if (r.success) await new LedgerPostingService(tx).postExpense(user.organizationId, r.data, body?.accountId);
     return r;
   });
   return sendResult(c, result);
@@ -467,7 +482,7 @@ transactionsRouter.post('/collections', async (c) => {
       docNumbers,
       events,
     }).execute(body, buildContext(user, { stationId: body?.stationId, ...clock }));
-    if (r.success) await new LedgerPostingService(tx).postCollection(user.organizationId, r.data);
+    if (r.success) await new LedgerPostingService(tx).postCollection(user.organizationId, r.data, body?.accountId);
     return r;
   });
   return sendResult(c, result);
@@ -528,7 +543,7 @@ transactionsRouter.post('/supplier-payments', async (c) => {
       businessDays: new DrizzleBusinessDayRepository(tx),
       events,
     }).execute(body, buildContext(user, { stationId: body?.stationId, ...clock }));
-    if (r.success) await new LedgerPostingService(tx).postSupplierPayment(user.organizationId, r.data);
+    if (r.success) await new LedgerPostingService(tx).postSupplierPayment(user.organizationId, r.data, body?.accountId);
     return r;
   });
   return sendResult(c, result);

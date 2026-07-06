@@ -544,7 +544,7 @@ export class CloudTransactionService {
     return request<any[]>(`/transactions/money-movements?${qs.toString()}`);
   }
 
-  async recordExpense(payload: { shiftId?: string; stationId?: string; transactionDate?: string; paidFrom?: 'SHIFT_CASH' | 'BANK' | 'OWNER'; categoryId: string; amount: number; description?: string }): Promise<any> {
+  async recordExpense(payload: { shiftId?: string; stationId?: string; transactionDate?: string; paidFrom?: 'SHIFT_CASH' | 'BANK' | 'OWNER'; categoryId: string; amount: number; description?: string; accountId?: string | null }): Promise<any> {
     return request<any>('/transactions/expenses', {
       method: 'POST',
       body: JSON.stringify(payload),
