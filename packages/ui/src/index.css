@@ -639,22 +639,45 @@ select:disabled {
   font-weight: 600;
 }
 
-.shift-table-scroll-container {
+.shift-table-shell {
   position: relative;
+}
+
+.shift-table-scroll-container {
   overflow-x: auto;
   overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
 }
 
-.shift-table-scroll-container::after {
+.shift-table-shell::before,
+.shift-table-shell::after {
   content: '';
   position: absolute;
   top: 0;
-  right: 0;
-  width: 28px;
-  height: 100%;
+  bottom: 0;
+  width: 14px;
   pointer-events: none;
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0), var(--bg-surface));
+  opacity: 0;
+  transition: opacity 0.12s ease;
+  z-index: 3;
+}
+
+.shift-table-shell::before {
+  left: var(--sticky-shadow-left, 0px);
+  background: linear-gradient(90deg, rgba(43, 52, 45, 0.08), rgba(43, 52, 45, 0));
+}
+
+.shift-table-shell::after {
+  right: 0;
+  background: linear-gradient(270deg, rgba(43, 52, 45, 0.08), rgba(43, 52, 45, 0));
+}
+
+.shift-table-shell[data-shadow-left='true']::before {
+  opacity: 1;
+}
+
+.shift-table-shell[data-shadow-right='true']::after {
+  opacity: 1;
 }
 
 .shift-table th,

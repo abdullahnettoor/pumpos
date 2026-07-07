@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 interface NozzleReadingsGridProps {
   nozzleReadings: any[];
@@ -16,6 +16,44 @@ export const NozzleReadingsGrid: React.FC<NozzleReadingsGridProps> = ({
   closingReadings,
   staffAssignments,
 }) => {
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const [showLeftHint, setShowLeftHint] = useState(false);
+  const [showRightHint, setShowRightHint] = useState(false);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+
+    const updateHints = () => {
+      const maxScrollLeft = el.scrollWidth - el.clientWidth;
+      if (maxScrollLeft <= 1) {
+        setShowLeftHint(false);
+        setShowRightHint(false);
+        return;
+      }
+      setShowLeftHint(el.scrollLeft > 1);
+      setShowRightHint(el.scrollLeft < maxScrollLeft - 1);
+    };
+
+    updateHints();
+    el.addEventListener('scroll', updateHints, { passive: true });
+    window.addEventListener('resize', updateHints);
+
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(updateHints) : null;
+    if (observer) {
+      observer.observe(el);
+      if (el.firstElementChild instanceof HTMLElement) {
+        observer.observe(el.firstElementChild);
+      }
+    }
+
+    return () => {
+      el.removeEventListener('scroll', updateHints);
+      window.removeEventListener('resize', updateHints);
+      observer?.disconnect();
+    };
+  }, [nozzleReadings, closingReadings, staffAssignments]);
+
   return (
     <div className="card" style={{ overflow: 'hidden' }}>
       <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-soft)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -29,7 +67,16 @@ export const NozzleReadingsGrid: React.FC<NozzleReadingsGridProps> = ({
         </div>
       </div>
 
-      <div className="shift-table-scroll-container">
+      <div
+        className="shift-table-shell"
+        data-shadow-left={showLeftHint ? 'true' : 'false'}
+        data-shadow-right={showRightHint ? 'true' : 'false'}
+        style={{ '--sticky-shadow-left': '170px' } as React.CSSProperties}
+      >
+      <div
+        ref={scrollRef}
+        className="shift-table-scroll-container"
+      >
       <table className="shift-table" style={{ width: '100%', minWidth: '1140px', borderCollapse: 'collapse', fontSize: '13px' }}>
         <thead>
           <tr style={{ backgroundColor: 'var(--bg-surface-alt)', borderBottom: '1px solid var(--border-soft)', textAlign: 'left', color: 'var(--text-muted)' }}>
@@ -108,6 +155,7 @@ export const NozzleReadingsGrid: React.FC<NozzleReadingsGridProps> = ({
           })}
         </tbody>
       </table>
+      </div>
       </div>
     </div>
   );
