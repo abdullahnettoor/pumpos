@@ -80,8 +80,8 @@ export const NozzleReadingsGrid: React.FC<NozzleReadingsGridProps> = ({
       <table className="shift-table" style={{ width: '100%', minWidth: '1140px', borderCollapse: 'collapse', fontSize: '13px' }}>
         <thead>
           <tr style={{ backgroundColor: 'var(--bg-surface-alt)', borderBottom: '1px solid var(--border-soft)', textAlign: 'left', color: 'var(--text-muted)' }}>
-            <th style={{ padding: '10px 12px', fontWeight: 600, position: 'sticky', left: 0, zIndex: 2, backgroundColor: 'var(--bg-surface-alt)', minWidth: '80px' }}>Nozzle</th>
-            <th style={{ padding: '10px 12px', fontWeight: 600, position: 'sticky', left: 80, zIndex: 2, backgroundColor: 'var(--bg-surface-alt)', minWidth: '90px' }}>Dispenser</th>
+            <th style={{ padding: '10px 12px', fontWeight: 600, position: 'sticky', left: 0, zIndex: 2, backgroundColor: 'var(--bg-surface-alt)', width: '80px', minWidth: '80px' }}>Nozzle</th>
+            <th style={{ padding: '10px 12px', fontWeight: 600, position: 'sticky', left: 80, zIndex: 2, backgroundColor: 'var(--bg-surface-alt)', width: '90px', minWidth: '90px' }}>Dispenser</th>
             <th style={{ padding: '10px 20px', fontWeight: 600 }}>Staff</th>
             <th style={{ padding: '10px 20px', fontWeight: 600 }}>Product</th>
             <th style={{ padding: '10px 20px', fontWeight: 600 }}>Tank</th>
@@ -107,8 +107,8 @@ export const NozzleReadingsGrid: React.FC<NozzleReadingsGridProps> = ({
 
             return (
               <tr key={idx} style={{ borderBottom: '1px solid var(--border-soft)' }}>
-                <td style={{ padding: '12px 12px', fontWeight: 600, color: 'var(--text-strong)', position: 'sticky', left: 0, zIndex: 1, backgroundColor: 'var(--bg-surface)', minWidth: '80px' }}>{nr.nozzleName}</td>
-                <td style={{ padding: '12px 12px', color: 'var(--text-default)', position: 'sticky', left: 80, zIndex: 1, backgroundColor: 'var(--bg-surface)', minWidth: '90px' }}>{nr.duCode || nr.duName || 'N/A'}</td>
+                <td style={{ padding: '12px 12px', fontWeight: 600, color: 'var(--text-strong)', position: 'sticky', left: 0, zIndex: 1, backgroundColor: 'var(--bg-surface)', width: '80px', minWidth: '80px' }}>{nr.nozzleName}</td>
+                <td style={{ padding: '12px 12px', color: 'var(--text-default)', position: 'sticky', left: 80, zIndex: 1, backgroundColor: 'var(--bg-surface)', width: '90px', minWidth: '90px' }}>{nr.duCode || nr.duName || 'N/A'}</td>
                 <td style={{ padding: '12px 20px', color: 'var(--text-default)' }}>
                   <span style={{ 
                     fontSize: '11px',

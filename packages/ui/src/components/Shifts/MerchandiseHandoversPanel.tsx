@@ -259,11 +259,11 @@ export const MerchandiseHandoversPanel: React.FC<MerchandiseHandoversPanelProps>
         </button>
       </div>
 
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+      <table className="shift-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
         <thead>
-          <tr style={{ backgroundColor: 'var(--bg-surface-alt)', textAlign: 'left' }}>
+          <tr style={{ backgroundColor: 'var(--bg-surface-alt)', borderBottom: '1px solid var(--border-soft)', textAlign: 'left', color: 'var(--text-muted)' }}>
             {['Employee', 'Cash', 'Card/UPI', ...(hasCredit ? ['Credit'] : []), ''].map((h, i) => (
-              <th key={h || `sp${i}`} style={{ padding: '8px 16px', fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', textAlign: i >= 1 && h ? 'right' : 'left' }}>{h}</th>
+              <th key={h || `sp${i}`} style={{ padding: '10px 16px', fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', textAlign: i >= 1 && h ? 'right' : 'left' }}>{h}</th>
             ))}
           </tr>
         </thead>
@@ -277,15 +277,15 @@ export const MerchandiseHandoversPanel: React.FC<MerchandiseHandoversPanelProps>
               <tr
                 key={e.attendantId || '__none__'}
                 onClick={() => openForEmployee(e.attendantId)}
-                style={{ borderTop: '1px solid var(--border-soft)', cursor: e.attendantId ? 'pointer' : 'default' }}
+                style={{ borderBottom: '1px solid var(--border-soft)', cursor: e.attendantId ? 'pointer' : 'default' }}
               >
-                <td style={{ padding: '8px 16px', color: 'var(--text-strong)', fontWeight: 500 }}>{e.name}</td>
-                <td style={{ padding: '8px 16px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: e.cash ? 'var(--text-strong)' : 'var(--text-faint)' }}>{e.cash ? inr(e.cash) : '—'}</td>
-                <td style={{ padding: '8px 16px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: e.nonCash ? 'var(--text-strong)' : 'var(--text-faint)' }}>{e.nonCash ? inr(e.nonCash) : '—'}</td>
+                <td style={{ padding: '10px 16px', color: 'var(--text-strong)', fontWeight: 500 }}>{e.name}</td>
+                <td style={{ padding: '10px 16px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: e.cash ? 'var(--text-strong)' : 'var(--text-faint)' }}>{e.cash ? inr(e.cash) : '—'}</td>
+                <td style={{ padding: '10px 16px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: e.nonCash ? 'var(--text-strong)' : 'var(--text-faint)' }}>{e.nonCash ? inr(e.nonCash) : '—'}</td>
                 {hasCredit && (
-                  <td style={{ padding: '8px 16px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: e.credit ? 'var(--text-strong)' : 'var(--text-faint)' }}>{e.credit ? inr(e.credit) : '—'}</td>
+                  <td style={{ padding: '10px 16px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: e.credit ? 'var(--text-strong)' : 'var(--text-faint)' }}>{e.credit ? inr(e.credit) : '—'}</td>
                 )}
-                <td style={{ padding: '8px 16px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                <td style={{ padding: '10px 16px', textAlign: 'right', whiteSpace: 'nowrap' }}>
                   {e.attendantId && (
                     <button className="btn btn-secondary btn-sm" onClick={(ev) => { ev.stopPropagation(); openForEmployee(e.attendantId); }} style={{ padding: '3px 6px', marginRight: '4px' }} aria-label="Edit"><Pencil size={13} /></button>
                   )}

@@ -80,8 +80,8 @@ export const AttendantHandoversDashboard: React.FC<AttendantHandoversDashboardPr
       <table className="shift-table" style={{ width: '100%', minWidth: '1020px', borderCollapse: 'collapse', fontSize: '13px' }}>
         <thead>
           <tr style={{ backgroundColor: 'var(--bg-surface-alt)', borderBottom: '1px solid var(--border-soft)', textAlign: 'left', color: 'var(--text-muted)' }}>
-            <th style={{ padding: '10px 20px', fontWeight: 600, position: 'sticky', left: 0, zIndex: 2, backgroundColor: 'var(--bg-surface-alt)', minWidth: '170px' }}>Attendant</th>
-            <th style={{ padding: '10px 12px', fontWeight: 600, position: 'sticky', left: 170, zIndex: 2, backgroundColor: 'var(--bg-surface-alt)', minWidth: '90px' }}>Dispenser</th>
+            <th style={{ padding: '10px 20px', fontWeight: 600, position: 'sticky', left: 0, zIndex: 2, backgroundColor: 'var(--bg-surface-alt)', width: '170px', minWidth: '170px' }}>Attendant</th>
+            <th style={{ padding: '10px 12px', fontWeight: 600, position: 'sticky', left: 170, zIndex: 2, backgroundColor: 'var(--bg-surface-alt)', width: '90px', minWidth: '90px' }}>Dispenser</th>
             <th style={{ padding: '10px 20px', fontWeight: 600 }}>Handover Status</th>
             <th style={{ padding: '10px 20px', fontWeight: 600, textAlign: 'right' }}>Cash (₹)</th>
             <th style={{ padding: '10px 20px', fontWeight: 600, textAlign: 'right' }}>Card/UPI (₹)</th>
@@ -101,10 +101,10 @@ export const AttendantHandoversDashboard: React.FC<AttendantHandoversDashboardPr
 
               return (
                 <tr key={idx} style={{ borderBottom: '1px solid var(--border-soft)' }}>
-                  <td style={{ padding: '12px 20px', fontWeight: 600, color: 'var(--text-strong)', position: 'sticky', left: 0, zIndex: 1, backgroundColor: 'var(--bg-surface)', minWidth: '170px' }}>
+                  <td style={{ padding: '12px 20px', fontWeight: 600, color: 'var(--text-strong)', position: 'sticky', left: 0, zIndex: 1, backgroundColor: 'var(--bg-surface)', width: '170px', minWidth: '170px' }}>
                     {sa.userName}
                   </td>
-                  <td style={{ padding: '12px 12px', color: 'var(--text-default)', position: 'sticky', left: 170, zIndex: 1, backgroundColor: 'var(--bg-surface)', minWidth: '90px' }}>
+                  <td style={{ padding: '12px 12px', color: 'var(--text-default)', position: 'sticky', left: 170, zIndex: 1, backgroundColor: 'var(--bg-surface)', width: '90px', minWidth: '90px' }}>
                     {sa.duCode || sa.duName}
                   </td>
                   <td style={{ padding: '12px 20px' }}>
