@@ -5,6 +5,7 @@ export * from './components/Drawer.js';
 export { ErrorBoundary } from './components/ErrorBoundary.js';
 export { Login } from './components/Auth/Login.js';
 export { OnboardingWizard } from './components/StationSetup/OnboardingWizard.js';
+export { clearStoredOnboardingDraft } from './components/StationSetup/onboardingDraft.js';
 export { StationOverview } from './components/StationSetup/StationOverview.js';
 export { OrganizationOverview } from './components/Organization/OrganizationOverview.js';export { FuelPricingPanel } from './components/StationSetup/FuelPricingPanel.js';
 export { DashboardOverview } from './components/Dashboard/DashboardOverview.js';

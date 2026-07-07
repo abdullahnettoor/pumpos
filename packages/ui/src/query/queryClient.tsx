@@ -12,6 +12,19 @@ const PERSIST_PREFIXES = new Set([
 ]);
 const CACHE_BUSTER = 'v2';
 
+/** localStorage key the persisted static/semi cache is written to. */
+export const PERSISTED_QUERY_CACHE_KEY = 'pumpos-rq-cache';
+
+/**
+ * Wipe the persisted query cache from localStorage. Call on logout / user switch
+ * so one user's cached stations/products/customers never bleed into the next
+ * session (which otherwise surfaces stale data and "station not found" errors).
+ */
+export function clearPersistedQueryCache() {
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  window.localStorage.removeItem(PERSISTED_QUERY_CACHE_KEY);
+}
+
 /**
  * Shared QueryClient factory. App shells (web, desktop) create one client and
  * wrap their tree in {@link QueryProvider}; all data hooks in @pump/ui read from
@@ -48,7 +61,7 @@ let fallbackClient: QueryClient | null = null;
  */
 function enablePersistence(client: QueryClient) {
   if (typeof window === 'undefined' || !window.localStorage) return;
-  const persister = createSyncStoragePersister({ storage: window.localStorage, key: 'pumpos-rq-cache' });
+  const persister = createSyncStoragePersister({ storage: window.localStorage, key: PERSISTED_QUERY_CACHE_KEY });
   persistQueryClient({
     queryClient: client as any,
     persister,

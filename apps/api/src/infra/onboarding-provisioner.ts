@@ -3,7 +3,7 @@ import { schema, type DbClient } from '@pump/db';
 import { conflictError, err, invariantViolation, ok } from '@pump/core';
 import type { OnboardingProvisioner, Result } from '@pump/core';
 import type { FinalizeOnboardingResult, OnboardingDraft } from '@pump/shared';
-import { normalizeProvider } from '@pump/shared';
+import { normalizeProvider, resolveBusinessDate } from '@pump/shared';
 import { AccountProvisioningService } from './account-provisioning.js';
 
 /** Signals a provisioning failure to roll back the transaction with a typed reason. */
@@ -26,7 +26,7 @@ export class DrizzleOnboardingProvisioner implements OnboardingProvisioner {
     actorId: string | null;
     draft: OnboardingDraft;
   }): Promise<Result<FinalizeOnboardingResult>> {
-    const { organizationId, draft } = input;
+    const { organizationId, actorId, draft } = input;
     try {
       const result = await this.db.transaction(async (tx) => {
         const existingStation = await tx
@@ -146,6 +146,44 @@ export class DrizzleOnboardingProvisioner implements OnboardingProvisioner {
           });
         }
 
+        // Seed opening fuel stock. Tank quantity is derived purely from
+        // stock_movements, so opening stock must be a real movement — not just a
+        // stashed figure. Anchor it to the station's first business day (opened
+        // lazily for the onboarding date), matching the "a day opens when the
+        // first entry lands" rule. Skip entirely when there is nothing to seed.
+        if (pendingOpeningStockSeed.length > 0 && actorId) {
+          const businessDate = resolveBusinessDate({
+            now: new Date(),
+            timeZone: draft.station.timezone,
+            dayStartsAt: draft.businessRules.businessDayStartsAt,
+          });
+          const [openingDay] = await tx
+            .insert(schema.businessDays)
+            .values({
+              organizationId,
+              stationId: newStation.id,
+              businessDate,
+              status: 'OPEN',
+              openedBy: actorId,
+              openedAt: new Date(),
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            })
+            .returning();
+          await tx.insert(schema.stockMovements).values(
+            pendingOpeningStockSeed.map((seed) => ({
+              businessDayId: openingDay.id,
+              productId: seed.productId,
+              tankId: seed.tankId,
+              movementType: 'OpeningBalance',
+              quantity: String(seed.quantity),
+              referenceType: 'ONBOARDING',
+              notes: 'Opening stock',
+              createdAt: new Date(),
+            })),
+          );
+        }
+
         const activeFuelProducts = draft.products.filter((p) => p.isActive);
         if (activeFuelProducts.length > 0) {
           await tx.insert(schema.fuelPrices).values(
@@ -205,7 +243,7 @@ export class DrizzleOnboardingProvisioner implements OnboardingProvisioner {
             onboardingStatus: 'READY_FOR_OPERATIONS',
             settings: {
               ...(newStation.settings as Record<string, unknown>),
-              pending_opening_stock_seed: pendingOpeningStockSeed,
+              pending_opening_stock_seed: [],
             },
             updatedAt: new Date(),
           })

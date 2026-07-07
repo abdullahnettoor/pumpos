@@ -16,6 +16,7 @@ export type LedgerSourceType =
   | 'TRANSFER'
   | 'SETTLEMENT'
   | 'BANK_CHARGE'
+  | 'INTEREST'
   | 'ADJUSTMENT';
 
 export interface FinancialAccount {
@@ -79,6 +80,8 @@ export function accountTypeForPaidFrom(paidFrom: string): FinancialAccountType {
 
 export interface LedgerEntryRepository {
   saveMany(entries: LedgerEntry[]): Promise<void>;
+  /** Remove all entries of a given source type for one account (used to rewrite the OPENING entry). */
+  deleteByAccountAndSource(accountId: string, sourceType: LedgerSourceType): Promise<void>;
 }
 
 const accountTypeEnum = z.enum(['CASH_IN_HAND', 'PETTY_CASH', 'BANK', 'MERCHANT_CLEARING', 'OWNER']);
@@ -101,6 +104,12 @@ export interface UpdateFinancialAccountCommand {
   isActive?: boolean;
 }
 
+export interface SetOpeningBalanceCommand {
+  id: string;
+  openingBalance: number | string;
+  openingDate?: string | null;
+}
+
 const createSchema = z.object({
   stationId: z.string().nullish(),
   accountType: accountTypeEnum,
@@ -115,6 +124,12 @@ const updateSchema = z.object({
   name: z.string().trim().min(1).max(150).optional(),
   metadata: z.record(z.any()).nullish(),
   isActive: z.boolean().optional(),
+});
+
+const setOpeningSchema = z.object({
+  id: z.string().min(1),
+  openingBalance: z.coerce.number(),
+  openingDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'openingDate must be YYYY-MM-DD').nullish(),
 });
 
 export interface FinancialAccountDeps {
@@ -232,6 +247,78 @@ export class UpdateFinancialAccount implements UseCase<UpdateFinancialAccountCom
         aggregateId: updated.id,
         stationId: updated.stationId ?? undefined,
         payload: { accountId: updated.id },
+      }),
+    ]);
+
+    return ok(updated);
+  }
+}
+
+/**
+ * Set (or correct) an account's opening balance at any time. Rewrites the single
+ * immutable OPENING ledger entry — deletes any existing OPENING entry for the
+ * account and re-seeds one at the given amount/date (none when zero) — and keeps
+ * the stored `openingBalance`/`openingDate` in sync so balances reconcile from
+ * that date. Later sales/expenses/etc. are untouched. Run inside runInTransaction.
+ */
+export class SetOpeningBalance implements UseCase<SetOpeningBalanceCommand, FinancialAccount> {
+  constructor(private readonly deps: FinancialAccountDeps) {}
+
+  async execute(input: SetOpeningBalanceCommand, ctx: ExecutionContext): Promise<Result<FinancialAccount>> {
+    const p = setOpeningSchema.safeParse(input);
+    if (!p.success) return err(validationError('Invalid SetOpeningBalance command', { issues: p.error.flatten() }));
+    const cmd = p.data;
+
+    const existing = await this.deps.accounts.findById(cmd.id);
+    if (!existing) return err(notFoundError('FinancialAccount', cmd.id));
+    if (existing.organizationId !== ctx.organizationId) return err(forbiddenError('Account belongs to another organization'));
+
+    const now = ctx.clock.now().toISOString();
+    const opening = round2(Number(cmd.openingBalance));
+    const openingDate =
+      cmd.openingDate ??
+      existing.openingDate ??
+      resolveBusinessDate({ now: ctx.clock.now(), timeZone: ctx.timeZone, dayStartsAt: ctx.businessDayStartsAt });
+
+    const updated: FinancialAccount = {
+      ...existing,
+      openingBalance: String(opening),
+      openingDate,
+      updatedAt: now,
+    };
+    await this.deps.accounts.save(updated);
+
+    // Rewrite the OPENING ledger entry: drop the old one, seed a fresh one when non-zero.
+    await this.deps.ledger.deleteByAccountAndSource(existing.id, 'OPENING');
+    if (opening !== 0) {
+      await this.deps.ledger.saveMany([
+        {
+          id: ctx.ids.newId(),
+          organizationId: ctx.organizationId,
+          stationId: existing.stationId,
+          accountId: existing.id,
+          direction: opening >= 0 ? 'in' : 'out',
+          amount: String(Math.abs(opening)),
+          entryDate: openingDate,
+          sourceType: 'OPENING',
+          sourceId: existing.id,
+          transferId: null,
+          businessDayId: null,
+          shiftId: null,
+          reconciled: false,
+          notes: 'Opening balance',
+          createdAt: now,
+        },
+      ]);
+    }
+
+    await this.deps.events.publish([
+      eventFromContext(ctx, {
+        eventType: BusinessEvents.FINANCIAL_ACCOUNT_UPDATED,
+        aggregateType: 'FinancialAccount',
+        aggregateId: existing.id,
+        stationId: existing.stationId ?? undefined,
+        payload: { accountId: existing.id, openingBalance: updated.openingBalance, openingDate },
       }),
     ]);
 
@@ -478,8 +565,8 @@ export interface RecordLedgerAdjustmentCommand {
   accountId: string;
   direction: LedgerDirection;
   amount: number | string;
-  /** BANK_CHARGE for fees/charges, ADJUSTMENT for corrections/interest/opening fixes. */
-  sourceType?: 'BANK_CHARGE' | 'ADJUSTMENT';
+  /** BANK_CHARGE for fees/charges, INTEREST for interest paid/earned, ADJUSTMENT for corrections. */
+  sourceType?: 'BANK_CHARGE' | 'INTEREST' | 'ADJUSTMENT';
   date?: string | null;
   notes?: string | null;
 }
@@ -488,7 +575,7 @@ const adjustmentSchema = z.object({
   accountId: z.string().min(1, 'accountId is required'),
   direction: z.enum(['in', 'out']),
   amount: z.coerce.number().positive('amount must be positive'),
-  sourceType: z.enum(['BANK_CHARGE', 'ADJUSTMENT']).optional(),
+  sourceType: z.enum(['BANK_CHARGE', 'INTEREST', 'ADJUSTMENT']).optional(),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date must be YYYY-MM-DD').nullish(),
   notes: z.string().max(500).nullish(),
 });

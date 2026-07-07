@@ -222,31 +222,32 @@ export class LedgerPostingService {
     const entryDate = meta?.businessDate ?? new Date().toISOString().slice(0, 10);
     const cash = Number(recon.cashSales ?? 0);
 
-    // Card/UPI is captured per terminal; route each terminal's batch to its
-    // acquirer's clearing account (many terminals of one acquirer → one account).
+    // Card/UPI is captured per terminal; post ONE ledger entry per machine to
+    // its acquirer's clearing account, so each machine's batch is visible.
     const termEntries = await this.db
       .select({
         card: schema.handoverTerminalEntries.cardAmount,
         upi: schema.handoverTerminalEntries.upiAmount,
         clearingAccountId: schema.paymentTerminals.clearingAccountId,
         provider: schema.paymentTerminals.provider,
+        label: schema.paymentTerminals.label,
       })
       .from(schema.handoverTerminalEntries)
       .innerJoin(schema.paymentTerminals, eq(schema.paymentTerminals.id, schema.handoverTerminalEntries.terminalId))
       .where(eq(schema.handoverTerminalEntries.shiftId, shift.id));
 
     const provisioner = new AccountProvisioningService(this.db);
-    const byClearing = new Map<string, number>();
+    const cardPosts: Array<{ accountId: string; amount: number; note: string }> = [];
     for (const e of termEntries) {
       const amt = Number(e.card ?? 0) + Number(e.upi ?? 0);
       if (amt <= 0) continue;
       const accountId = e.clearingAccountId ?? (await provisioner.ensureClearingForProvider(organizationId, shift.stationId, e.provider));
-      byClearing.set(accountId, (byClearing.get(accountId) ?? 0) + amt);
+      cardPosts.push({ accountId, amount: amt, note: `Shift card/UPI · ${e.label || 'terminal'}` });
     }
 
     // Fallback: aggregate card/UPI declared on the handover without a per-terminal
     // split (legacy / single-acquirer). Route to the station's clearing account.
-    if (byClearing.size === 0) {
+    if (cardPosts.length === 0) {
       const handovers = await this.db
         .select({ card: schema.attendantHandovers.cardHandedOver, upi: schema.attendantHandovers.upiHandedOver })
         .from(schema.attendantHandovers)
@@ -262,7 +263,7 @@ export class LedgerPostingService {
           .orderBy(schema.financialAccounts.createdAt)
           .limit(1);
         const accountId = existing[0]?.id ?? (await provisioner.ensureClearingForProvider(organizationId, shift.stationId, null));
-        byClearing.set(accountId, cardUpi);
+        cardPosts.push({ accountId, amount: cardUpi, note: 'Shift card/UPI (terminal batch)' });
       }
     }
 
@@ -285,19 +286,19 @@ export class LedgerPostingService {
       });
     }
 
-    for (const [accountId, amount] of byClearing) {
+    for (const p of cardPosts) {
       await this.postEntry({
         organizationId,
         stationId: shift.stationId,
-        accountId,
+        accountId: p.accountId,
         direction: 'in',
-        amount: String(amount),
+        amount: String(p.amount),
         entryDate,
         sourceType: 'SALE_CARD',
         sourceId: shift.id,
         businessDayId: shift.businessDayId,
         shiftId: shift.id,
-        notes: 'Shift card/UPI (terminal batch)',
+        notes: p.note,
       });
     }
   }

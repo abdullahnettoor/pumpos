@@ -779,6 +779,11 @@ export class CloudFinanceService {
     return request<any>(`/finance/accounts/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
   }
 
+  /** Set / correct an account's opening balance at any time (rewrites the OPENING entry). */
+  async setOpeningBalance(id: string, payload: { openingBalance: number; openingDate?: string | null }): Promise<any> {
+    return request<any>(`/finance/accounts/${id}/opening`, { method: 'PUT', body: JSON.stringify(payload) });
+  }
+
   /** Move money between two accounts (deposit / petty-cash float / bank↔bank). */
   async recordTransfer(payload: { fromAccountId: string; toAccountId: string; amount: number; date?: string | null; notes?: string | null }): Promise<any> {
     return request<any>('/finance/transfers', { method: 'POST', body: JSON.stringify(payload) });
@@ -790,7 +795,7 @@ export class CloudFinanceService {
   }
 
   /** Manual entry against one account: bank charge / interest / adjustment. */
-  async recordAdjustment(accountId: string, payload: { direction: 'in' | 'out'; amount: number; sourceType?: 'BANK_CHARGE' | 'ADJUSTMENT'; date?: string | null; notes?: string | null }): Promise<any> {
+  async recordAdjustment(accountId: string, payload: { direction: 'in' | 'out'; amount: number; sourceType?: 'BANK_CHARGE' | 'INTEREST' | 'ADJUSTMENT'; date?: string | null; notes?: string | null }): Promise<any> {
     return request<any>(`/finance/accounts/${accountId}/entry`, { method: 'POST', body: JSON.stringify(payload) });
   }
 

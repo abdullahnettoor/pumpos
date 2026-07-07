@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { type DbClient } from '@pump/db';
 import { canManageFinancialAccounts, isAuthorizedForStation, type Role } from '@pump/shared';
-import { CreateFinancialAccount, UpdateFinancialAccount, RecordTransfer, RecordSettlement, RecordLedgerAdjustment, type Result } from '@pump/core';
+import { CreateFinancialAccount, UpdateFinancialAccount, SetOpeningBalance, RecordTransfer, RecordSettlement, RecordLedgerAdjustment, type Result } from '@pump/core';
 import { buildContext } from '../infra/context.js';
 import { loadStationClock } from '../infra/station-clock.js';
 import { runInTransaction } from '../infra/transaction.js';
@@ -106,6 +106,22 @@ financeRouter.put('/accounts/:id', async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const result = await runInTransaction(db, (tx, events) =>
     new UpdateFinancialAccount({
+      accounts: new DrizzleFinancialAccountRepository(tx),
+      ledger: new DrizzleLedgerEntryRepository(tx),
+      events,
+    }).execute({ ...body, id: c.req.param('id') }, buildContext(user)),
+  );
+  return sendResult(c, result);
+});
+
+// PUT /finance/accounts/:id/opening — set/correct the opening balance at any time.
+financeRouter.put('/accounts/:id/opening', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  if (!canManageFinancialAccounts(user.role)) return forbidden(c);
+  const body = await c.req.json().catch(() => ({}));
+  const result = await runInTransaction(db, (tx, events) =>
+    new SetOpeningBalance({
       accounts: new DrizzleFinancialAccountRepository(tx),
       ledger: new DrizzleLedgerEntryRepository(tx),
       events,

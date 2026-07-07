@@ -20,11 +20,36 @@ export const Step8PaymentTerminals: React.FC<Step8PaymentTerminalsProps> = ({
   inputStyle,
 }) => {
   const terminals = draft.paymentTerminals ?? [];
+  const [quickProvider, setQuickProvider] = React.useState('');
+  const [quickCount, setQuickCount] = React.useState(2);
 
   const addTerminal = () => {
     const next = createPaymentTerminalDraft();
     next.label = `Terminal ${terminals.length + 1}`;
     updateDraft((prev) => ({ ...prev, paymentTerminals: [...(prev.paymentTerminals ?? []), next] }));
+  };
+
+  // Bulk-create several machines from the same provider in one go — labelled
+  // "<Provider> POS <n>", continuing the numbering if that provider already has
+  // terminals. Common for stations with a bank of identical acquirer devices.
+  const quickAdd = () => {
+    const provider = quickProvider.trim();
+    const count = Math.max(1, Math.min(50, Math.floor(quickCount) || 1));
+    updateDraft((prev) => {
+      const existing = prev.paymentTerminals ?? [];
+      const sameProviderCount = existing.filter(
+        (t) => (t.provider || '').trim().toLowerCase() === provider.toLowerCase(),
+      ).length;
+      const additions: OnboardingPaymentTerminalDraft[] = [];
+      for (let i = 0; i < count; i++) {
+        const n = sameProviderCount + i + 1;
+        const draftTerminal = createPaymentTerminalDraft();
+        draftTerminal.provider = provider;
+        draftTerminal.label = provider ? `${provider} POS ${n}` : `Terminal ${existing.length + i + 1}`;
+        additions.push(draftTerminal);
+      }
+      return { ...prev, paymentTerminals: [...existing, ...additions] };
+    });
   };
 
   const updateTerminal = (draftId: string, patch: Partial<OnboardingPaymentTerminalDraft>) => {
@@ -54,6 +79,42 @@ export const Step8PaymentTerminals: React.FC<Step8PaymentTerminalsProps> = ({
         <button type="button" className="btn btn-primary btn-sm" onClick={addTerminal}>
           Add Terminal
         </button>
+      </div>
+
+      {/* Quick fill: create N identical machines from one provider at once. */}
+      <div style={{ ...panelStyle, gap: '12px' }}>
+        <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          Quick add
+        </span>
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: '220px', flex: 1 }}>
+            <label style={fieldLabelStyle}>Provider / Acquirer</label>
+            <ProviderField value={quickProvider} onChange={setQuickProvider} style={inputStyle} />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', width: '120px' }}>
+            <label style={fieldLabelStyle}>No. of machines</label>
+            <input
+              type="number"
+              min={1}
+              max={50}
+              style={inputStyle}
+              value={quickCount}
+              onChange={(e) => setQuickCount(Number(e.target.value))}
+            />
+          </div>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={quickAdd}
+            disabled={!quickProvider.trim() || quickCount < 1}
+            style={{ height: '32px' }}
+          >
+            Add {Math.max(1, Math.min(50, Math.floor(quickCount) || 1))} machine{Math.max(1, Math.min(50, Math.floor(quickCount) || 1)) > 1 ? 's' : ''}
+          </button>
+        </div>
+        <span style={{ fontSize: '11px', color: 'var(--text-faint)' }}>
+          Creates machines labelled "{quickProvider.trim() || 'Provider'} POS 1", "…POS 2" — you can rename or set each TID below.
+        </span>
       </div>
 
       {terminals.length === 0 ? (

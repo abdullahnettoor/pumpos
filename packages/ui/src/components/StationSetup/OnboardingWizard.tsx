@@ -259,12 +259,13 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     const msTank = msTanks[0] || draft.tanks[0];
     const hsdTank = hsdTanks[0] || draft.tanks[1] || draft.tanks[0];
 
+    const nozzleBase = draft.nozzles.length;
     const nozzle1: OnboardingNozzleDraft = {
       draftId: createDraftId(),
       dispenserDraftId: dispenserId,
       tankDraftId: msTank?.draftId || '',
       productDraftId: msProduct?.draftId || '',
-      name: 'N1',
+      name: `N${nozzleBase + 1}`,
       openingReading: 0,
     };
 
@@ -273,7 +274,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
       dispenserDraftId: dispenserId,
       tankDraftId: hsdTank?.draftId || '',
       productDraftId: hsdProduct?.draftId || '',
-      name: 'N2',
+      name: `N${nozzleBase + 2}`,
       openingReading: 0,
     };
 
@@ -308,13 +309,14 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     const hsdTank1 = hsdTanks[0] || draft.tanks[1] || draft.tanks[0];
     const hsdTank2 = hsdTanks[1] || hsdTanks[0] || draft.tanks[1] || draft.tanks[0];
 
+    const nozzleBase = draft.nozzles.length;
     const nozzles: OnboardingNozzleDraft[] = [
       {
         draftId: createDraftId(),
         dispenserDraftId: dispenserId,
         tankDraftId: msTank1?.draftId || '',
         productDraftId: msProduct?.draftId || '',
-        name: 'N1',
+        name: `N${nozzleBase + 1}`,
         openingReading: 0,
       },
       {
@@ -322,7 +324,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
         dispenserDraftId: dispenserId,
         tankDraftId: msTank2?.draftId || '',
         productDraftId: msProduct?.draftId || '',
-        name: 'N2',
+        name: `N${nozzleBase + 2}`,
         openingReading: 0,
       },
       {
@@ -330,7 +332,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
         dispenserDraftId: dispenserId,
         tankDraftId: hsdTank1?.draftId || '',
         productDraftId: hsdProduct?.draftId || '',
-        name: 'N3',
+        name: `N${nozzleBase + 3}`,
         openingReading: 0,
       },
       {
@@ -338,7 +340,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
         dispenserDraftId: dispenserId,
         tankDraftId: hsdTank2?.draftId || '',
         productDraftId: hsdProduct?.draftId || '',
-        name: 'N4',
+        name: `N${nozzleBase + 4}`,
         openingReading: 0,
       },
     ];

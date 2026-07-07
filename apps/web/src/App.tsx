@@ -20,6 +20,8 @@ import {
   queryKeys,
   setApiBaseUrl,
   setAuthToken, 
+  clearPersistedQueryCache,
+  clearStoredOnboardingDraft,
   supabase 
 } from '@pump/ui';
 import { Station } from '@pump/shared';
@@ -127,6 +129,14 @@ export const App: React.FC = () => {
         return;
       }
 
+      // Account switch within the same tab: purge the previous user's cached
+      // (and persisted) data so their stations/products never bleed through.
+      if (lastUserIdRef.current && lastUserIdRef.current !== currentSession.user.id) {
+        qc.clear();
+        clearPersistedQueryCache();
+        clearStoredOnboardingDraft();
+      }
+
       lastUserIdRef.current = currentSession.user.id;
       setSelectedStation(null);
       setStations([]);
@@ -180,6 +190,11 @@ export const App: React.FC = () => {
       setUserName('');
       setLoading(false);
       setCurrentPath('/login');
+      // Wipe all cached + persisted data so the next user starts from a clean
+      // slate (prevents cross-user data bleed and stale "station not found").
+      qc.clear();
+      clearPersistedQueryCache();
+      clearStoredOnboardingDraft();
     }
   };
 

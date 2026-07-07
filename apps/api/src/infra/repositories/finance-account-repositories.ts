@@ -81,6 +81,8 @@ export class DrizzleFinancialAccountRepository implements FinancialAccountReposi
         target: schema.financialAccounts.id,
         set: {
           name: a.name,
+          openingBalance: a.openingBalance,
+          openingDate: a.openingDate,
           metadata: a.metadata,
           isActive: a.isActive,
           updatedAt: new Date(a.updatedAt),
@@ -113,6 +115,12 @@ export class DrizzleLedgerEntryRepository implements LedgerEntryRepository {
         createdAt: new Date(e.createdAt),
       })),
     );
+  }
+
+  async deleteByAccountAndSource(accountId: string, sourceType: LedgerEntry['sourceType']): Promise<void> {
+    await this.db
+      .delete(schema.ledgerEntries)
+      .where(and(eq(schema.ledgerEntries.accountId, accountId), eq(schema.ledgerEntries.sourceType, sourceType)));
   }
 }
 
