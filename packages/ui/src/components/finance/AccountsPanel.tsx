@@ -93,21 +93,14 @@ export const AccountsPanel: React.FC<AccountsPanelProps> = ({ selectedStation })
   const [settleError, setSettleError] = useState<string | null>(null);
   const [settleSubmitting, setSettleSubmitting] = useState(false);
 
-  // Manual entry drawer (bank charge / interest / adjustment)
+  // Manual entry drawer (bank charge / interest / adjustment / opening balance)
   const [entryOpen, setEntryOpen] = useState(false);
-  const [entryKind, setEntryKind] = useState<'CHARGE' | 'INTEREST_PAID' | 'INTEREST_EARNED' | 'ADJ_IN' | 'ADJ_OUT'>('CHARGE');
+  const [entryKind, setEntryKind] = useState<'CHARGE' | 'INTEREST_PAID' | 'INTEREST_EARNED' | 'ADJ_IN' | 'ADJ_OUT' | 'OPENING'>('CHARGE');
   const [entryAmount, setEntryAmount] = useState('');
   const [entryDate, setEntryDate] = useState('');
   const [entryNotes, setEntryNotes] = useState('');
   const [entryError, setEntryError] = useState<string | null>(null);
   const [entrySubmitting, setEntrySubmitting] = useState(false);
-
-  // Opening-balance drawer (set / correct at any time)
-  const [openingOpen, setOpeningOpen] = useState(false);
-  const [openingAmount, setOpeningAmount] = useState('');
-  const [openingAsOf, setOpeningAsOf] = useState('');
-  const [openingError, setOpeningError] = useState<string | null>(null);
-  const [openingSubmitting, setOpeningSubmitting] = useState(false);
 
   const selected = useMemo(() => (accounts || []).find((a: any) => a.id === selectedId) || null, [accounts, selectedId]);
   const { data: ledger, isLoading: ledgerLoading } = useAccountLedger(selectedId, { from: range.from, to: range.to });
@@ -176,8 +169,43 @@ export const AccountsPanel: React.FC<AccountsPanelProps> = ({ selectedStation })
     setEntryOpen(true);
   };
 
+  // Switching to "Set opening balance" prefills the account's current opening figure/date.
+  const changeEntryKind = (kind: typeof entryKind) => {
+    setEntryKind(kind);
+    setEntryError(null);
+    if (kind === 'OPENING') {
+      setEntryAmount(selected ? String(Number(selected.openingBalance) || '') : '');
+      setEntryDate(selected?.openingDate || '');
+    }
+  };
+
   const submitEntry = async () => {
     if (!selected) return;
+
+    // Opening balance is a special entry: it rewrites the account's OPENING
+    // ledger entry (0 and negative allowed — negative = overdrawn OD account).
+    if (entryKind === 'OPENING') {
+      const opening = Number(entryAmount);
+      if (!Number.isFinite(opening)) {
+        setEntryError('Enter a valid opening balance (0 is allowed).');
+        return;
+      }
+      setEntrySubmitting(true);
+      setEntryError(null);
+      try {
+        await financeSvc.setOpeningBalance(selected.id, { openingBalance: opening, openingDate: entryDate || null });
+        setEntryOpen(false);
+        await qc.invalidateQueries({ queryKey: queryKeys.financialAccounts(stationId ?? '') });
+        await qc.invalidateQueries({ queryKey: ['account-ledger'] });
+        toast.success('Opening balance updated.');
+      } catch (err: any) {
+        setEntryError(err.message || 'Failed to update opening balance.');
+      } finally {
+        setEntrySubmitting(false);
+      }
+      return;
+    }
+
     if (!(Number(entryAmount) > 0)) {
       setEntryError('Enter an amount greater than zero.');
       return;
@@ -201,38 +229,6 @@ export const AccountsPanel: React.FC<AccountsPanelProps> = ({ selectedStation })
       setEntryError(err.message || 'Failed to record entry.');
     } finally {
       setEntrySubmitting(false);
-    }
-  };
-
-  const openOpening = () => {
-    setOpeningAmount(selected ? String(Number(selected.openingBalance) || '') : '');
-    setOpeningAsOf(selected?.openingDate || '');
-    setOpeningError(null);
-    setOpeningOpen(true);
-  };
-
-  const submitOpening = async () => {
-    if (!selected) return;
-    const amount = Number(openingAmount);
-    if (!Number.isFinite(amount)) {
-      setOpeningError('Enter a valid opening balance (0 is allowed).');
-      return;
-    }
-    setOpeningSubmitting(true);
-    setOpeningError(null);
-    try {
-      await financeSvc.setOpeningBalance(selected.id, {
-        openingBalance: amount,
-        openingDate: openingAsOf || null,
-      });
-      setOpeningOpen(false);
-      await qc.invalidateQueries({ queryKey: queryKeys.financialAccounts(stationId ?? '') });
-      await qc.invalidateQueries({ queryKey: ['account-ledger'] });
-      toast.success('Opening balance updated.');
-    } catch (err: any) {
-      setOpeningError(err.message || 'Failed to update opening balance.');
-    } finally {
-      setOpeningSubmitting(false);
     }
   };
 
@@ -349,9 +345,6 @@ export const AccountsPanel: React.FC<AccountsPanelProps> = ({ selectedStation })
             <button className="btn btn-secondary btn-md" onClick={openEntry} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
               <Plus size={14} /> Add entry
             </button>
-            <button className="btn btn-secondary btn-md" onClick={openOpening} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-              <Wallet size={14} /> Opening balance
-            </button>
             <button className="btn btn-secondary btn-md" onClick={() => setSelectedId(null)} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
               <ArrowLeft size={14} /> All accounts
             </button>
@@ -433,54 +426,38 @@ export const AccountsPanel: React.FC<AccountsPanelProps> = ({ selectedStation })
               <div style={{ backgroundColor: 'var(--state-danger-bg)', color: 'var(--state-danger-fg)', padding: '10px 12px', borderRadius: 'var(--radius-input)', fontSize: '12px' }}>{entryError}</div>
             )}
             <Field label="Type">
-              <Select value={entryKind} onChange={(e) => setEntryKind(e.target.value as any)} disabled={entrySubmitting}>
+              <Select value={entryKind} onChange={(e) => changeEntryKind(e.target.value as any)} disabled={entrySubmitting}>
                 <option value="CHARGE">Bank charge / fee (out)</option>
                 <option value="INTEREST_PAID">Interest paid — e.g. OD (out)</option>
                 <option value="INTEREST_EARNED">Interest earned (in)</option>
                 <option value="ADJ_IN">Adjustment — add (in)</option>
                 <option value="ADJ_OUT">Adjustment — deduct (out)</option>
+                <option value="OPENING">Set opening balance</option>
               </Select>
             </Field>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              <Field label="Amount (₹)">
+              <Field label={entryKind === 'OPENING' ? 'Opening balance (₹)' : 'Amount (₹)'}>
                 <NumberInput placeholder="0" value={entryAmount} onChange={(e) => setEntryAmount(e.target.value)} disabled={entrySubmitting} />
               </Field>
-              <Field label="Date">
+              <Field label={entryKind === 'OPENING' ? 'As of' : 'Date'}>
                 <DateField value={entryDate} onChange={(e) => setEntryDate(e.target.value)} disabled={entrySubmitting} />
               </Field>
             </div>
-            <Field label="Notes">
-              <TextInput placeholder="e.g. Quarterly account maintenance fee" value={entryNotes} onChange={(e) => setEntryNotes(e.target.value)} disabled={entrySubmitting} />
-            </Field>
-            <span style={{ fontSize: '11px', color: 'var(--text-faint)' }}>
-              Record bank-originated items (charges, fees, interest) so your book balance matches the statement.
-            </span>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button className="btn btn-primary btn-md" style={{ flex: 1 }} disabled={entrySubmitting} onClick={submitEntry}>{entrySubmitting ? 'Recording…' : 'Add Entry'}</button>
-              <button className="btn btn-secondary btn-md" disabled={entrySubmitting} onClick={() => setEntryOpen(false)}>Cancel</button>
-            </div>
-          </div>
-        </Drawer>
-
-        <Drawer isOpen={openingOpen} onClose={() => setOpeningOpen(false)} title="Opening Balance">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-            {openingError && (
-              <div style={{ backgroundColor: 'var(--state-danger-bg)', color: 'var(--state-danger-fg)', padding: '10px 12px', borderRadius: 'var(--radius-input)', fontSize: '12px' }}>{openingError}</div>
+            {entryKind !== 'OPENING' && (
+              <Field label="Notes">
+                <TextInput placeholder="e.g. Quarterly account maintenance fee" value={entryNotes} onChange={(e) => setEntryNotes(e.target.value)} disabled={entrySubmitting} />
+              </Field>
             )}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              <Field label="Opening Balance (₹)">
-                <NumberInput placeholder="0" value={openingAmount} onChange={(e) => setOpeningAmount(e.target.value)} disabled={openingSubmitting} />
-              </Field>
-              <Field label="As of">
-                <DateField value={openingAsOf} onChange={(e) => setOpeningAsOf(e.target.value)} disabled={openingSubmitting} />
-              </Field>
-            </div>
             <span style={{ fontSize: '11px', color: 'var(--text-faint)' }}>
-              Sets the balance the account started with (use a negative amount for an overdrawn OD account). This rewrites the opening entry only — later movements are untouched.
+              {entryKind === 'OPENING'
+                ? 'Sets the balance the account started with (negative = overdrawn OD account). Rewrites the opening entry only — later movements are untouched.'
+                : 'Record bank-originated items (charges, fees, interest) so your book balance matches the statement.'}
             </span>
             <div style={{ display: 'flex', gap: '8px' }}>
-              <button className="btn btn-primary btn-md" style={{ flex: 1 }} disabled={openingSubmitting} onClick={submitOpening}>{openingSubmitting ? 'Saving…' : 'Save Opening Balance'}</button>
-              <button className="btn btn-secondary btn-md" disabled={openingSubmitting} onClick={() => setOpeningOpen(false)}>Cancel</button>
+              <button className="btn btn-primary btn-md" style={{ flex: 1 }} disabled={entrySubmitting} onClick={submitEntry}>
+                {entrySubmitting ? 'Saving…' : entryKind === 'OPENING' ? 'Save Opening Balance' : 'Add Entry'}
+              </button>
+              <button className="btn btn-secondary btn-md" disabled={entrySubmitting} onClick={() => setEntryOpen(false)}>Cancel</button>
             </div>
           </div>
         </Drawer>
@@ -578,7 +555,7 @@ export const AccountsPanel: React.FC<AccountsPanelProps> = ({ selectedStation })
             </Field>
           </div>
           <span style={{ fontSize: '11px', color: 'var(--text-faint)' }}>
-            The opening balance seeds the ledger. You can set or correct it later from the account's Opening balance action.
+            The opening balance seeds the ledger. You can set or correct it later from the account's Add entry drawer.
           </span>
           <div style={{ display: 'flex', gap: '8px' }}>
             <button className="btn btn-primary btn-md" style={{ flex: 1 }} disabled={submitting} onClick={submit}>{submitting ? 'Creating…' : 'Create Account'}</button>

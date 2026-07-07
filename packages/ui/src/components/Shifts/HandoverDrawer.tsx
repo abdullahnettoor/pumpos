@@ -126,33 +126,37 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
       setValue(`nozzleTesting.${nz.nozzleId}`, 0); // Default testing volume to 0
     });
 
-    // Initialize per-terminal POS batch maps (pre-fill from existing entries).
+    // Initialize per-terminal POS batch maps for THIS DU's terminals only
+    // (pre-fill from existing entries). Shift-wide / other-DU machines are not
+    // shown to the attendant.
     const existingEntries: any[] = existingHandover?.terminalEntries ?? [];
-    terminals.forEach((t: any) => {
-      const prior = existingEntries.find((e) => e.terminalId === t.terminalId);
-      setValue(`terminalCard.${t.terminalId}`, Number(prior?.cardAmount ?? 0));
-      setValue(`terminalUpi.${t.terminalId}`, Number(prior?.upiAmount ?? 0));
-    });
-  }, [isOpen, existingHandover, nozzles, terminals, setValue]);
+    terminals
+      .filter((t: any) => t.duId === duId)
+      .forEach((t: any) => {
+        const prior = existingEntries.find((e) => e.terminalId === t.terminalId);
+        setValue(`terminalCard.${t.terminalId}`, Number(prior?.cardAmount ?? 0));
+        setValue(`terminalUpi.${t.terminalId}`, Number(prior?.upiAmount ?? 0));
+      });
+  }, [isOpen, existingHandover, nozzles, terminals, duId, setValue]);
 
   // Watch form values reactively for live expected sales and variance computations
   const formValues = watch();
   const formNozzleReadings = formValues.nozzleReadings || {};
   const formNozzleTesting = formValues.nozzleTesting || {};
   const formCash = formValues.cashHandedOver || 0;
-  const formCard = formValues.cardHandedOver || 0;
-  const formUpi = formValues.upiHandedOver || 0;
   const formCredit = formValues.creditHandedOver || 0;
 
-  // Per-terminal POS capture: when terminals are linked to this DU, the card/UPI
-  // aggregates are derived from the per-terminal batches (single source of truth).
-  const hasTerminals = terminals && terminals.length > 0;
+  // POS terminals assigned to THIS DU (shift-wide / other-DU machines are not
+  // shown to the attendant). When present, card/UPI aggregates are derived from
+  // the per-terminal batches (single source of truth).
+  const duTerminals = terminals.filter((t: any) => t.duId === duId);
+  const hasTerminals = duTerminals.length > 0;
   const formTerminalCard = formValues.terminalCard || {};
   const formTerminalUpi = formValues.terminalUpi || {};
-  const terminalCardTotal = terminals.reduce((sum: number, t: any) => sum + Number(formTerminalCard[t.terminalId] || 0), 0);
-  const terminalUpiTotal = terminals.reduce((sum: number, t: any) => sum + Number(formTerminalUpi[t.terminalId] || 0), 0);
-  const effectiveCard = hasTerminals ? terminalCardTotal : Number(formCard);
-  const effectiveUpi = hasTerminals ? terminalUpiTotal : Number(formUpi);
+  const terminalCardTotal = duTerminals.reduce((sum: number, t: any) => sum + Number(formTerminalCard[t.terminalId] || 0), 0);
+  const terminalUpiTotal = duTerminals.reduce((sum: number, t: any) => sum + Number(formTerminalUpi[t.terminalId] || 0), 0);
+  const effectiveCard = terminalCardTotal;
+  const effectiveUpi = terminalUpiTotal;
 
   // ---- Fuel-on-credit (credit chits) declared for this (attendant, DU) ----
   const [creditLines, setCreditLines] = useState<any[]>([]);
@@ -410,7 +414,7 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
         varianceAmount: variance,
         nozzleReadings: nozzleReadingsPayload,
         terminalEntries: hasTerminals
-          ? terminals.map((t: any) => ({
+          ? duTerminals.map((t: any) => ({
               terminalId: t.terminalId,
               duId: t.duId ?? null,
               cardAmount: Number(values.terminalCard?.[t.terminalId] ?? 0),
@@ -533,8 +537,10 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
           </div>
         </div>
 
-        {/* 2. Card / UPI collections — only when the station has POS terminals
-             (card/UPI can't be accepted without a machine). */}
+        {/* 2. Card / UPI collections — only the POS terminals assigned to THIS
+             DU are shown (an attendant isn't aware of machines that weren't
+             handed to them; shift-wide / other-DU machines are reconciled at
+             shift close). */}
         {hasTerminals && (
           <div>
             <h3 style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '10px' }}>
@@ -544,7 +550,7 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
               <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 POS Terminal Batches (Card / UPI per machine)
               </label>
-              {terminals.map((t: any) => {
+              {duTerminals.map((t: any) => {
                 const both = t.supportsCard && t.supportsUpi;
                 return (
                   <div
@@ -561,7 +567,6 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
                   >
                     <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-strong)' }}>
                       {t.label}
-                      {!t.duId && <span style={{ color: 'var(--text-faint)', fontWeight: 500 }}> · shift-wide</span>}
                       {t.provider && <span style={{ color: 'var(--text-faint)', fontWeight: 500 }}> · {t.provider}</span>}
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: both ? '1fr 1fr' : '1fr', gap: '8px' }}>
