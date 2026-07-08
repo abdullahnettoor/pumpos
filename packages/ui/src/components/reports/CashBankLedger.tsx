@@ -43,7 +43,16 @@ export const CashBankLedger: React.FC<CashBankLedgerProps> = ({ selectedStation 
   const [range, setRange] = useState<DateRange>(() => computeRange('this-month', clock));
   const [account, setAccount] = useState<'Cash' | 'Bank'>('Cash');
 
-  const { data: movements, isLoading, error } = useFinanceMovements({ stationId: selectedStation?.id, from: range.from, to: range.to });
+  const { data, isLoading, error } = useFinanceMovements({ stationId: selectedStation?.id, from: range.from, to: range.to });
+  const movements = data?.movements;
+
+  // Opening balance carried from before the range: Σ(in − out) for the selected
+  // group's account types, dated before range.from (computed server-side).
+  const openingBalance = useMemo(() => {
+    return (data?.openings || [])
+      .filter((o: any) => GROUP[o.accountType] === account)
+      .reduce((acc: number, o: any) => acc + Number(o.opening || 0), 0);
+  }, [data, account]);
 
   // Map ledger movements → display rows, newest-first, filtered to the group.
   const rows = useMemo(
@@ -69,13 +78,14 @@ export const CashBankLedger: React.FC<CashBankLedgerProps> = ({ selectedStation 
       if (m.direction === 'in') moneyIn += Number(m.amount || 0);
       else moneyOut += Number(m.amount || 0);
     }
-    return { moneyIn, moneyOut, net: moneyIn - moneyOut };
-  }, [rows]);
+    return { moneyIn, moneyOut, net: moneyIn - moneyOut, closing: openingBalance + moneyIn - moneyOut };
+  }, [rows, openingBalance]);
 
-  // Running balance computed oldest→newest, displayed newest-first.
+  // Running balance computed oldest→newest starting from the carried opening,
+  // displayed newest-first.
   const withBalance = useMemo(() => {
     const asc = [...rows].reverse();
-    let bal = 0;
+    let bal = openingBalance;
     const map = new Map<string, number>();
     asc.forEach((m, i) => {
       bal += m.direction === 'in' ? Number(m.amount || 0) : -Number(m.amount || 0);
@@ -86,7 +96,7 @@ export const CashBankLedger: React.FC<CashBankLedgerProps> = ({ selectedStation 
       idx -= 1;
       return { ...m, runningBalance: map.get(`${m.id}-${idx}`) ?? 0 };
     });
-  }, [rows]);
+  }, [rows, openingBalance]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -103,13 +113,14 @@ export const CashBankLedger: React.FC<CashBankLedgerProps> = ({ selectedStation 
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px' }}>
+        <KpiCard label="Opening Balance" value={inr(openingBalance)} tone={openingBalance < 0 ? 'danger' : 'default'} />
         <KpiCard label="Money In" value={inr(totals.moneyIn)} tone="success" />
         <KpiCard label="Money Out" value={inr(totals.moneyOut)} tone="danger" />
-        <KpiCard label="Net Movement" value={inr(totals.net)} tone={totals.net < 0 ? 'danger' : 'default'} />
+        <KpiCard label="Closing Balance" value={inr(totals.closing)} tone={totals.closing < 0 ? 'danger' : 'default'} />
       </div>
 
       <div style={{ fontSize: '11px', color: 'var(--text-faint)' }}>
-        Live {account.toLowerCase()} movements from the money ledger (shift sales, collections, expenses, transfers &amp; settlements). Per-account statements &amp; opening balances are on the Accounts page.
+        Live {account.toLowerCase()} movements from the money ledger (shift sales, collections, expenses, transfers &amp; settlements). Opening balance carries the closing position from before the selected range; closing = opening + in − out.
       </div>
 
       <div className="card" style={{ overflow: 'hidden' }}>
@@ -129,16 +140,23 @@ export const CashBankLedger: React.FC<CashBankLedgerProps> = ({ selectedStation 
             ) : withBalance.length === 0 ? (
               <tr><td colSpan={6} style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)' }}>No {account.toLowerCase()} movements in this range.</td></tr>
             ) : (
-              withBalance.map((m: any) => (
-                <tr key={m.id} style={{ borderTop: '1px solid var(--border-soft)' }}>
-                  <td style={{ padding: '8px 12px', whiteSpace: 'nowrap', color: 'var(--text-default)' }}>{m.date ? new Date(m.date).toLocaleDateString(undefined, { dateStyle: 'medium' }) : '—'}</td>
-                  <td style={{ padding: '8px 12px', color: 'var(--text-strong)' }}>{m.label}</td>
-                  <td style={{ padding: '8px 12px', fontSize: '12px', color: 'var(--text-muted)' }}>{m.source}</td>
-                  <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--state-success-fg)' }}>{m.direction === 'in' ? inr(m.amount) : ''}</td>
-                  <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--state-danger-fg)' }}>{m.direction === 'out' ? inr(m.amount) : ''}</td>
-                  <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--text-strong)' }}>{inr(m.runningBalance)}</td>
+              <>
+                {withBalance.map((m: any) => (
+                  <tr key={m.id} style={{ borderTop: '1px solid var(--border-soft)' }}>
+                    <td style={{ padding: '8px 12px', whiteSpace: 'nowrap', color: 'var(--text-default)' }}>{m.date ? new Date(m.date).toLocaleDateString(undefined, { dateStyle: 'medium' }) : '—'}</td>
+                    <td style={{ padding: '8px 12px', color: 'var(--text-strong)' }}>{m.label}</td>
+                    <td style={{ padding: '8px 12px', fontSize: '12px', color: 'var(--text-muted)' }}>{m.source}</td>
+                    <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--state-success-fg)' }}>{m.direction === 'in' ? inr(m.amount) : ''}</td>
+                    <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--state-danger-fg)' }}>{m.direction === 'out' ? inr(m.amount) : ''}</td>
+                    <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--text-strong)' }}>{inr(m.runningBalance)}</td>
+                  </tr>
+                ))}
+                <tr style={{ borderTop: '1px solid var(--border-soft)', backgroundColor: 'var(--bg-surface-alt)' }}>
+                  <td style={{ padding: '8px 12px', whiteSpace: 'nowrap', color: 'var(--text-muted)', fontStyle: 'italic' }}>—</td>
+                  <td style={{ padding: '8px 12px', color: 'var(--text-muted)', fontStyle: 'italic' }} colSpan={4}>Opening balance (carried from before {range.from})</td>
+                  <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--text-muted)' }}>{inr(openingBalance)}</td>
                 </tr>
-              ))
+              </>
             )}
           </tbody>
         </table>

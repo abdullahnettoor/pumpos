@@ -132,7 +132,7 @@ const REGISTRY: Record<EntityType, LedgerSource> = {
     kpiDebitLabel: 'Received',
     kpiCreditLabel: 'Paid Out',
     emptyText: 'No cash movements in the selected range.',
-    caption: 'Recorded cash receipts & payments only — fuel/drawer reconciliation lives in the DSSR. Balance is period-relative.',
+    caption: 'Recorded cash receipts & payments only — fuel/drawer reconciliation lives in the DSSR. Opening balance is carried from before the range.',
     balanceTone: (net) => (net < 0 ? 'danger' : 'default'),
     resolve: (tx) => moneyResolve(tx),
   },
@@ -144,7 +144,7 @@ const REGISTRY: Record<EntityType, LedgerSource> = {
     kpiDebitLabel: 'Received',
     kpiCreditLabel: 'Paid Out',
     emptyText: 'No bank movements in the selected range.',
-    caption: 'Recorded bank/card/UPI receipts & payments. Balance is period-relative (no opening balance yet).',
+    caption: 'Recorded bank/card/UPI receipts & payments. Opening balance is carried from before the range.',
     balanceTone: (net) => (net < 0 ? 'danger' : 'default'),
     resolve: (tx) => moneyResolve(tx),
   },
@@ -234,13 +234,31 @@ export const UnifiedLedger: React.FC<UnifiedLedgerProps> = ({ selectedStation })
 
   const resolvedCfg = committed ? REGISTRY[committed.type] : cfg;
 
-  // Raw entries for the committed type (money rows filtered by account + date; the
-  // party ledgers come pre-filtered by id, then clamped to the committed range).
-  const { entries, loading, error } = useMemo(() => {
-    if (!committed) return { entries: [] as any[], loading: false, error: null as string | null };
+  // Raw entries for the committed type (money rows filtered by account + date;
+  // the party ledgers come all-time, then filtered to the committed range) plus
+  // the opening balance carried from before the range so the running balance is
+  // period-accurate instead of restarting at zero.
+  const { entries, openingBalance, loading, error } = useMemo(() => {
+    if (!committed) return { entries: [] as any[], openingBalance: 0, loading: false, error: null as string | null };
+    const resolve = REGISTRY[committed.type].resolve;
+    // Opening for a party ledger = Σ(debit − credit) over rows dated before the
+    // range start, using the same resolver as the running balance so they agree.
+    // TODO (ledger scaling): party ledgers fetch ALL-TIME rows and we compute the
+    // opening + clamp here. When histories grow large, move this to the backend
+    // (from/to + periodOpeningBalance) — see the matching TODO on the
+    // /customers/:id/ledger and /suppliers/:id/ledger endpoints — and delete
+    // partyOpening + clampByDate.
+    const partyOpening = (all: any[]) =>
+      (all || [])
+        .filter((tx) => (tx.businessDate || '').slice(0, 10) < committed.from)
+        .reduce((acc, tx) => {
+          const r = resolve(tx);
+          return acc + (r.direction === 'debit' ? r.amount : -r.amount);
+        }, 0);
     if (committed.type === 'customer') {
       return {
         entries: clampByDate(customerLedger.data || [], committed.from, committed.to),
+        openingBalance: partyOpening(customerLedger.data || []),
         loading: customerLedger.isLoading,
         error: customerLedger.error ? 'Failed to load ledger.' : null,
       };
@@ -248,19 +266,25 @@ export const UnifiedLedger: React.FC<UnifiedLedgerProps> = ({ selectedStation })
     if (committed.type === 'supplier') {
       return {
         entries: clampByDate(supplierLedger.data || [], committed.from, committed.to),
+        openingBalance: partyOpening(supplierLedger.data || []),
         loading: supplierLedger.isLoading,
         error: supplierLedger.error ? 'Failed to load ledger.' : null,
       };
     }
     const account = REGISTRY[committed.type].moneyAccount;
+    // Money openings come from the backend as raw signed net (in − out). Cash/Bank
+    // resolve in→debit so the debit-positive opening is that value directly; Owner
+    // flips (out→debit), so its opening is negated.
+    const rawOpening = Number((money.data?.openings || []).find((o: any) => o.account === account)?.opening ?? 0);
     return {
-      entries: (money.data || []).filter((m: any) => m.account === account),
+      entries: (money.data?.movements || []).filter((m: any) => m.account === account),
+      openingBalance: committed.type === 'owner' ? -rawOpening : rawOpening,
       loading: money.isLoading,
       error: money.error ? 'Failed to load movements.' : null,
     };
   }, [committed, customerLedger.data, customerLedger.isLoading, customerLedger.error, supplierLedger.data, supplierLedger.isLoading, supplierLedger.error, money.data, money.isLoading, money.error]);
 
-  const computed = useMemo(() => computeLedgerRows(entries, resolvedCfg.resolve), [entries, resolvedCfg]);
+  const computed = useMemo(() => computeLedgerRows(entries, resolvedCfg.resolve, openingBalance), [entries, resolvedCfg, openingBalance]);
   const totals = { debit: computed.totalDebit, credit: computed.totalCredit, net: computed.closingBalance };
 
   const [downloading, setDownloading] = useState(false);
@@ -385,6 +409,7 @@ export const UnifiedLedger: React.FC<UnifiedLedgerProps> = ({ selectedStation })
           <LedgerView
             entries={entries}
             resolve={resolvedCfg.resolve}
+            openingBalance={openingBalance}
             debitLabel={resolvedCfg.kpiDebitLabel}
             creditLabel={resolvedCfg.kpiCreditLabel}
             balanceLabel={resolvedCfg.balanceLabel}

@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { and, desc, eq, gte, ilike, inArray, lte, ne, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, ilike, inArray, lt, lte, ne, sql } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
 import {
   isAuthorizedForStation,
@@ -166,6 +166,12 @@ transactionsRouter.get('/suppliers/:id/ledger', async (c) => {
   if (!supplier || supplier.organizationId !== user.organizationId) {
     return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Supplier not found' } }, 404);
   }
+  // TODO (ledger scaling): this returns the supplier's ALL-TIME transactions and
+  // the client computes the period opening + in-range rows. Bounded per single
+  // supplier, so fine for now. When a supplier's history grows large, mirror the
+  // account-statement pattern: accept from/to, return
+  // { periodOpeningBalance: Σ(debit − credit) WHERE businessDate < from, entries: in-range only }
+  // and drop the client-side clampByDate/opening computation in UnifiedLedger.
   const list = await db
     .select({
       id: schema.supplierTransactions.id,
@@ -256,6 +262,12 @@ transactionsRouter.get('/customers/:id/ledger', async (c) => {
   if (!customer || customer.organizationId !== user.organizationId) {
     return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Customer not found' } }, 404);
   }
+  // TODO (ledger scaling): this returns the customer's ALL-TIME transactions and
+  // the client computes the period opening + in-range rows. Bounded per single
+  // customer, so fine for now. When a customer's history grows large, mirror the
+  // account-statement pattern: accept from/to, return
+  // { periodOpeningBalance: Σ(debit − credit) WHERE businessDate < from, entries: in-range only }
+  // and drop the client-side clampByDate/opening computation in UnifiedLedger.
   const list = await db
     .select({
       id: schema.customerTransactions.id,
@@ -805,7 +817,47 @@ transactionsRouter.get('/money-movements', async (c) => {
   }
 
   movements.sort((a, b) => (b.date || '').localeCompare(a.date || '') || String(b.createdAt).localeCompare(String(a.createdAt)));
-  return c.json({ success: true, data: movements });
+
+  // Per-account opening balance = signed net (collections in − expenses/payments
+  // out) for business days strictly before `from`, so the ledger's running
+  // balance carries the historical opening instead of restarting at zero.
+  // Only computed when a range start is given.
+  const openings: Array<{ account: 'Cash' | 'Bank' | 'Owner'; opening: number }> = [];
+  if (from) {
+    const priorConds = [
+      eq(schema.businessDays.stationId, stationId),
+      eq(schema.businessDays.organizationId, user.organizationId),
+      lt(schema.businessDays.businessDate, from),
+    ];
+    const [priorCollections, priorExpenses, priorPayments] = await Promise.all([
+      db
+        .select({ paymentMethod: schema.collections.paymentMethod, total: sql<string>`COALESCE(SUM(${schema.collections.amount}), 0)` })
+        .from(schema.collections)
+        .innerJoin(schema.businessDays, eq(schema.collections.businessDayId, schema.businessDays.id))
+        .where(and(...priorConds))
+        .groupBy(schema.collections.paymentMethod),
+      db
+        .select({ paidFrom: schema.expenses.paidFrom, total: sql<string>`COALESCE(SUM(${schema.expenses.amount}), 0)` })
+        .from(schema.expenses)
+        .innerJoin(schema.businessDays, eq(schema.expenses.businessDayId, schema.businessDays.id))
+        .where(and(ne(schema.expenses.status, 'VOIDED'), ...priorConds))
+        .groupBy(schema.expenses.paidFrom),
+      db
+        .select({ paidFrom: schema.supplierTransactions.paidFrom, total: sql<string>`COALESCE(SUM(${schema.supplierTransactions.amount}), 0)` })
+        .from(schema.supplierTransactions)
+        .innerJoin(schema.businessDays, eq(schema.supplierTransactions.businessDayId, schema.businessDays.id))
+        .where(and(eq(schema.supplierTransactions.transactionType, 'Payment'), ...priorConds))
+        .groupBy(schema.supplierTransactions.paidFrom),
+    ]);
+
+    const openMap: Record<'Cash' | 'Bank' | 'Owner', number> = { Cash: 0, Bank: 0, Owner: 0 };
+    for (const r of priorCollections) openMap[r.paymentMethod === 'Cash' ? 'Cash' : 'Bank'] += Number(r.total);
+    for (const r of priorExpenses) openMap[accountForPaidFrom(r.paidFrom)] -= Number(r.total);
+    for (const r of priorPayments) openMap[accountForPaidFrom(r.paidFrom)] -= Number(r.total);
+    (['Cash', 'Bank', 'Owner'] as const).forEach((account) => openings.push({ account, opening: openMap[account] }));
+  }
+
+  return c.json({ success: true, data: { movements, openings } });
 });
 
 // ====================================================

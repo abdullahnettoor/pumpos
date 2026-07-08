@@ -73,8 +73,8 @@ financeRouter.get('/movements', async (c) => {
   if (!stationId) return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'stationId is required' } }, 400);
   const from = c.req.query('from') || undefined;
   const to = c.req.query('to') || undefined;
-  const rows = await new DrizzleFinancialAccountReader(db).stationMovements(user.organizationId, stationId, from, to);
-  return c.json({ success: true, data: rows });
+  const data = await new DrizzleFinancialAccountReader(db).stationMovements(user.organizationId, stationId, from, to);
+  return c.json({ success: true, data });
 });
 
 // POST /finance/accounts — create a money account (seeds an OPENING entry).

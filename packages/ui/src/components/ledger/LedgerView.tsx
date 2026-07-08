@@ -148,6 +148,14 @@ export const LedgerView: React.FC<LedgerViewProps> = ({
               </tr>
             );
           })}
+          {openingBalance !== 0 && (
+            <tr style={{ borderBottom: '1px solid var(--border-soft)', backgroundColor: 'var(--bg-surface-alt)' }}>
+              <td style={{ padding: '8px 12px', color: 'var(--text-muted)', fontStyle: 'italic' }} colSpan={4}>Opening balance (carried forward)</td>
+              <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 600, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>
+                {inr(openingBalance)}
+              </td>
+            </tr>
+          )}
         </tbody>
         <tfoot>
           <tr style={{ backgroundColor: 'var(--bg-surface-alt)', borderTop: '1px solid var(--border-strong)' }}>

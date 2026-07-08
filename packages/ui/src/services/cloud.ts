@@ -537,11 +537,11 @@ export class CloudTransactionService {
     return request<any[]>('/transactions/collections');
   }
 
-  async getMoneyMovements(params: { stationId: string; from?: string; to?: string }): Promise<any[]> {
+  async getMoneyMovements(params: { stationId: string; from?: string; to?: string }): Promise<{ movements: any[]; openings: { account: string; opening: number }[] }> {
     const qs = new URLSearchParams({ stationId: params.stationId });
     if (params.from) qs.set('from', params.from);
     if (params.to) qs.set('to', params.to);
-    return request<any[]>(`/transactions/money-movements?${qs.toString()}`);
+    return request<{ movements: any[]; openings: { account: string; opening: number }[] }>(`/transactions/money-movements?${qs.toString()}`);
   }
 
   async recordExpense(payload: { shiftId?: string; stationId?: string; transactionDate?: string; paidFrom?: 'SHIFT_CASH' | 'BANK' | 'OWNER'; categoryId: string; amount: number; description?: string; accountId?: string | null }): Promise<any> {
@@ -800,10 +800,10 @@ export class CloudFinanceService {
   }
 
   /** Station-wide ledger movements (backs the Cash & Bank report). */
-  async getMovements(params: { stationId: string; from?: string; to?: string }): Promise<any[]> {
+  async getMovements(params: { stationId: string; from?: string; to?: string }): Promise<{ movements: any[]; openings: { accountType: string; opening: string }[] }> {
     const qs = new URLSearchParams({ stationId: params.stationId });
     if (params.from) qs.set('from', params.from);
     if (params.to) qs.set('to', params.to);
-    return request<any[]>(`/finance/movements?${qs.toString()}`);
+    return request<{ movements: any[]; openings: { accountType: string; opening: string }[] }>(`/finance/movements?${qs.toString()}`);
   }
 }

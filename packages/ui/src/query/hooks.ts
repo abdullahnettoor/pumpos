@@ -146,7 +146,7 @@ export function useEvents(params?: { stationId?: string; type?: string; limit?: 
   });
 }
 
-export function useMoneyMovements(params: { stationId?: string | null; from?: string; to?: string }, options?: Options<any[]>) {
+export function useMoneyMovements(params: { stationId?: string | null; from?: string; to?: string }, options?: Options<any>) {
   return useQuery({
     queryKey: queryKeys.moneyMovements(params.stationId ?? '', params.from ?? '', params.to ?? ''),
     queryFn: () => txService.getMoneyMovements({ stationId: params.stationId!, from: params.from, to: params.to }),
@@ -195,7 +195,7 @@ export function useAccountLedger(accountId: string | null | undefined, params?: 
   });
 }
 
-export function useFinanceMovements(params: { stationId?: string | null; from?: string; to?: string }, options?: Options<any[]>) {
+export function useFinanceMovements(params: { stationId?: string | null; from?: string; to?: string }, options?: Options<any>) {
   return useQuery({
     queryKey: queryKeys.financeMovements(params.stationId ?? '', params.from ?? '', params.to ?? ''),
     queryFn: () => financeSvc.getMovements({ stationId: params.stationId!, from: params.from, to: params.to }),

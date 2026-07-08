@@ -189,20 +189,47 @@ export class DrizzleFinancialAccountReader {
     return { account: toAccount(accRows[0]), periodOpeningBalance, entries: entryRows.map(toEntry) };
   }
 
-  /** Station-wide ledger movements in [from,to], joined with account type/name.
-   *  Backs the repriced Cash & Bank report (reads the persisted ledger). */
+  /** Station-wide ledger movements in [from,to], joined with account type/name,
+   *  plus per-account-type opening balances (Σ signed in−out for entries dated
+   *  before `from`). Backs the repriced Cash & Bank report so its running
+   *  balance carries the historical opening instead of starting at zero. */
   async stationMovements(
     organizationId: string,
     stationId: string,
     from?: string,
     to?: string,
-  ): Promise<Array<{ id: string; entryDate: string; accountId: string; accountType: string; accountName: string; direction: string; amount: string; sourceType: string; notes: string | null; createdAt: string }>> {
+  ): Promise<{
+    movements: Array<{ id: string; entryDate: string; accountId: string; accountType: string; accountName: string; direction: string; amount: string; sourceType: string; notes: string | null; createdAt: string }>;
+    openings: Array<{ accountType: string; opening: string }>;
+  }> {
     const conds = [
       eq(schema.ledgerEntries.organizationId, organizationId),
       eq(schema.ledgerEntries.stationId, stationId),
     ];
     if (from) conds.push(gte(schema.ledgerEntries.entryDate, from));
     if (to) conds.push(lte(schema.ledgerEntries.entryDate, to));
+
+    // Per-account-type opening balance = Σ(in − out) for entries strictly before
+    // the range start. One grouped aggregate; index-supported by
+    // ledger_entries_org_station_date_idx (org, station, entry_date).
+    let openings: Array<{ accountType: string; opening: string }> = [];
+    if (from) {
+      const openRows = await this.db
+        .select({
+          accountType: schema.financialAccounts.accountType,
+          opening: sql<string>`COALESCE(SUM(CASE WHEN ${schema.ledgerEntries.direction} = 'in' THEN ${schema.ledgerEntries.amount} ELSE -${schema.ledgerEntries.amount} END), 0)`,
+        })
+        .from(schema.ledgerEntries)
+        .innerJoin(schema.financialAccounts, eq(schema.financialAccounts.id, schema.ledgerEntries.accountId))
+        .where(and(
+          eq(schema.ledgerEntries.organizationId, organizationId),
+          eq(schema.ledgerEntries.stationId, stationId),
+          sql`${schema.ledgerEntries.entryDate} < ${from}`,
+        ))
+        .groupBy(schema.financialAccounts.accountType);
+      openings = openRows.map((r) => ({ accountType: r.accountType, opening: String(r.opening ?? '0') }));
+    }
+
     const rows = await this.db
       .select({
         id: schema.ledgerEntries.id,
@@ -220,6 +247,6 @@ export class DrizzleFinancialAccountReader {
       .innerJoin(schema.financialAccounts, eq(schema.financialAccounts.id, schema.ledgerEntries.accountId))
       .where(and(...conds))
       .orderBy(schema.ledgerEntries.entryDate, schema.ledgerEntries.createdAt);
-    return rows.map((r) => ({ ...r, createdAt: r.createdAt.toISOString() }));
+    return { movements: rows.map((r) => ({ ...r, createdAt: r.createdAt.toISOString() })), openings };
   }
 }
