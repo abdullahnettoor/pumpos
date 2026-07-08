@@ -176,6 +176,13 @@ export class CloudProductService implements IProductService {
       body: JSON.stringify({ isActive: false }),
     });
   }
+
+  async importProducts(products: any[], stationId?: string): Promise<{ total: number; createdCount: number; created: { id: string; code: string }[]; failed: { code?: string; name?: string; error: string }[] }> {
+    return request('/setup/products/import', {
+      method: 'POST',
+      body: JSON.stringify({ products, stationId }),
+    });
+  }
 }
 
 export class CloudPaymentTerminalService implements IPaymentTerminalService {

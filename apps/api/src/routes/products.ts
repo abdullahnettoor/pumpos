@@ -66,6 +66,42 @@ productsRouter.post('/products', async (c) => {
   return sendResult(c, result);
 });
 
+// POST /api/setup/products/import — bulk create products from a (frontend-validated)
+// CSV import. Each row is created in its OWN transaction so one bad row (e.g. a
+// duplicate-code race) never rolls back the others; a per-row result summary is
+// returned. Rows are expected pre-validated by the UI.
+productsRouter.post('/products/import', async (c) => {
+  if (!canManageProduct(c.var.user.role)) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions to import products' } }, 403);
+  }
+  const body = await c.req.json().catch(() => ({}));
+  const rows: any[] = Array.isArray(body?.products) ? body.products : [];
+  if (rows.length === 0) {
+    return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'No products to import' } }, 400);
+  }
+  if (rows.length > 2000) {
+    return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Import is limited to 2000 rows at a time' } }, 400);
+  }
+  const db = c.var.db;
+  const stationId = body?.stationId ?? undefined;
+  const stationClock = stationId ? await loadStationClock(db, stationId) : {};
+  const created: Array<{ id: string; code: string }> = [];
+  const failed: Array<{ code?: string; name?: string; error: string }> = [];
+  for (const row of rows) {
+    const result = await runInTransaction(db, (tx, events) =>
+      new CreateProduct({
+        repository: new DrizzleProductRepository(tx),
+        stock: new DrizzleStockMovementRepository(tx),
+        businessDays: new DrizzleBusinessDayRepository(tx),
+        events,
+      }).execute({ ...row, stationId }, buildContext(c.var.user, { stationId, ...stationClock })),
+    );
+    if (result.success) created.push({ id: result.data.id, code: result.data.code });
+    else failed.push({ code: row?.code, name: row?.name, error: result.error.message });
+  }
+  return c.json({ success: true, data: { total: rows.length, createdCount: created.length, created, failed } });
+});
+
 // PUT /api/setup/products/:id
 productsRouter.put('/products/:id', async (c) => {
   if (!canManageProduct(c.var.user.role)) {

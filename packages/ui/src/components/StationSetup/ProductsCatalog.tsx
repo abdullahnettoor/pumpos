@@ -5,6 +5,7 @@ import { queryKeys, TIER } from '../../query/hooks.js';
 import { Product, PRODUCT_UNITS } from '@pump/shared';
 import { StatusBadge } from '../StatusBadge.js';
 import { Drawer } from '../Drawer.js';
+import { ProductImportDrawer } from './ProductImportDrawer.js';
 import { DataTable } from '../primitives/DataTable.js';
 import { Checkbox } from '../primitives/Toggle.js';
 import { useToast } from '../primitives/ToastProvider.js';
@@ -61,6 +62,7 @@ export const ProductsCatalog: React.FC<{ selectedStation?: any | null }> = ({ se
   const [loading, setLoading] = useState(true);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [isImportOpen, setIsImportOpen] = useState(false);
   const [isCodeEdited, setIsCodeEdited] = useState(false);
   const [filterType, setFilterType] = useState('');
   const [filterText, setFilterText] = useState('');
@@ -323,25 +325,43 @@ export const ProductsCatalog: React.FC<{ selectedStation?: any | null }> = ({ se
           <p style={{ color: 'var(--text-muted)', fontSize: '12px' }}>Manage fuels, lubricants, shop inventory, or services.</p>
         </div>
         {!isFormOpen && (
-          <button
-            onClick={() => {
-              resetForm();
-              setIsFormOpen(true);
-            }}
-            style={{
-              height: '32px',
-              padding: '0 12px',
-              backgroundColor: 'var(--brand-primary)',
-              color: '#ffffff',
-              border: 'none',
-              borderRadius: 'var(--radius-button)',
-              fontWeight: 600,
-              fontSize: '13px',
-              cursor: 'pointer',
-            }}
-          >
-            + Add Product
-          </button>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              onClick={() => setIsImportOpen(true)}
+              style={{
+                height: '32px',
+                padding: '0 12px',
+                backgroundColor: 'var(--bg-surface)',
+                color: 'var(--text-default)',
+                border: '1px solid var(--border-strong)',
+                borderRadius: 'var(--radius-button)',
+                fontWeight: 600,
+                fontSize: '13px',
+                cursor: 'pointer',
+              }}
+            >
+              Import CSV
+            </button>
+            <button
+              onClick={() => {
+                resetForm();
+                setIsFormOpen(true);
+              }}
+              style={{
+                height: '32px',
+                padding: '0 12px',
+                backgroundColor: 'var(--brand-primary)',
+                color: '#ffffff',
+                border: 'none',
+                borderRadius: 'var(--radius-button)',
+                fontWeight: 600,
+                fontSize: '13px',
+                cursor: 'pointer',
+              }}
+            >
+              + Add Product
+            </button>
+          </div>
         )}
       </div>
       {/* Product Creation/Edit Drawer */}
@@ -686,6 +706,14 @@ export const ProductsCatalog: React.FC<{ selectedStation?: any | null }> = ({ se
         })}
         emptyMessage="No products added to the catalogue yet."
         getRowId={(r: any) => r.id}
+      />
+
+      <ProductImportDrawer
+        isOpen={isImportOpen}
+        onClose={() => setIsImportOpen(false)}
+        existingProducts={products}
+        selectedStation={selectedStation}
+        onImported={() => loadProducts(true)}
       />
     </div>
   );
