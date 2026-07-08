@@ -491,7 +491,7 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
               />
             )}
 
-            {activeTab === 'products' && <ProductsCatalog />}
+            {activeTab === 'products' && <ProductsCatalog selectedStation={selectedStation} />}
             {activeTab === 'tanks' && <TanksGrid stationId={selectedStation.id} />}
             {activeTab === 'dispensers' && <DispensersList stationId={selectedStation.id} />}
             {activeTab === 'terminals' && <PaymentTerminalsPanel stationId={selectedStation.id} />}

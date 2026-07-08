@@ -135,6 +135,10 @@ export const products = pgTable('products', {
   brand: varchar('brand', { length: 150 }),
   category: varchar('category', { length: 100 }),
   sellingPrice: numeric('selling_price', { precision: 12, scale: 2 }),
+  // Rolling weighted-average landed cost per unit (pre-tax for GST items where
+  // input tax is creditable; tax-inclusive for fuel/VAT). Recomputed on each
+  // purchase; seeded from opening cost at onboarding. Drives COGS / margin.
+  costBasis: numeric('cost_basis', { precision: 14, scale: 4 }).default('0'),
   taxConfig: jsonb('tax_config').default({ gst_rate: 18, hsn_code: '' }).notNull(),
   isActive: boolean('is_active').default(true).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),

@@ -27,6 +27,10 @@ class InMemoryProductRepo implements ProductRepository {
   async listByOrganization(orgId: string) {
     return this.rows.filter((r) => r.organizationId === orgId);
   }
+  async updateCostBasis(productId: string, costBasis: string) {
+    const r = this.rows.find((x) => x.id === productId);
+    if (r) r.costBasis = costBasis;
+  }
 }
 
 function makeContext(): ExecutionContext {
@@ -80,6 +84,49 @@ describe('CreateProduct', () => {
     const second = await useCase.execute(cmd, ctx);
     expect(second.success).toBe(false);
     if (!second.success) expect(second.error.code).toBe('CONFLICT');
+  });
+
+  it('posts an OpeningBalance movement for merchandise when opening stock is provided', async () => {
+    const repo = new InMemoryProductRepo();
+    const movements: any[] = [];
+    const stock: any = {
+      save: async (m: any) => { movements.push(m); },
+      saveMany: async () => {},
+      currentQuantityForTank: async () => 0,
+      currentQuantityForProduct: async () => 0,
+    };
+    const businessDays: any = {
+      findById: async () => null,
+      save: async () => {},
+      findOpenByStation: async () => null,
+      // Pretend a day already exists so ensureBusinessDayForDate returns it.
+      findByStationAndDate: async () => ({ id: 'bd-1', organizationId: 'org-1', stationId: 'st-1', businessDate: '2026-01-01', status: 'OPEN', openedBy: 'u', openedAt: '', closedBy: null, closedAt: null, createdAt: '', updatedAt: '' }),
+    };
+    const useCase = new CreateProduct({ repository: repo, events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }), stock, businessDays });
+    const result = await useCase.execute(
+      { name: 'Engine Oil', code: 'LUB-EO', productType: 'LUBRICANT', unit: 'pc', openingStock: 20, stationId: 'st-1' },
+      makeContext(),
+    );
+    expect(result.success).toBe(true);
+    expect(movements).toHaveLength(1);
+    expect(movements[0].movementType).toBe('OpeningBalance');
+    expect(movements[0].quantity).toBe('20');
+    expect(movements[0].tankId).toBeNull();
+    expect(movements[0].businessDayId).toBe('bd-1');
+  });
+
+  it('does not post opening stock for fuel products', async () => {
+    const repo = new InMemoryProductRepo();
+    const movements: any[] = [];
+    const stock: any = { save: async (m: any) => { movements.push(m); }, saveMany: async () => {}, currentQuantityForTank: async () => 0, currentQuantityForProduct: async () => 0 };
+    const businessDays: any = { findById: async () => null, save: async () => {}, findOpenByStation: async () => null, findByStationAndDate: async () => ({ id: 'bd-1', organizationId: 'org-1', stationId: 'st-1', businessDate: '2026-01-01', status: 'OPEN', openedBy: 'u', openedAt: '', closedBy: null, closedAt: null, createdAt: '', updatedAt: '' }) };
+    const useCase = new CreateProduct({ repository: repo, events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }), stock, businessDays });
+    const result = await useCase.execute(
+      { name: 'Petrol', code: 'FUEL-MS', productType: 'FUEL', unit: 'L', openingStock: 5000, stationId: 'st-1' },
+      makeContext(),
+    );
+    expect(result.success).toBe(true);
+    expect(movements).toHaveLength(0); // fuel opening stock is seeded via tanks, not here
   });
 });
 

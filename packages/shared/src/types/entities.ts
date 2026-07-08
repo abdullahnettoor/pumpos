@@ -130,6 +130,8 @@ export interface OnboardingTankDraft {
   productDraftId: string;
   capacity: number;
   openingQuantity: number;
+  /** Landed purchase rate per unit for the opening stock; seeds cost_basis. */
+  openingCostRate?: number;
 }
 
 export interface OnboardingDispenserDraft {
@@ -291,6 +293,8 @@ export interface Product {
   brand?: string | null;
   category?: string | null;
   sellingPrice?: string | number | null;
+  /** Rolling weighted-average landed cost per unit; drives COGS / margin. */
+  costBasis?: string | number | null;
   taxConfig: {
     gst_rate?: number;
     vat_rate?: number;

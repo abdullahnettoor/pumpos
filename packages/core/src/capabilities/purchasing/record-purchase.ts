@@ -89,6 +89,7 @@ export interface RecordPurchaseResult {
 }
 
 const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+const round4 = (n: number) => Math.round((n + Number.EPSILON) * 10000) / 10000;
 const numOrNull = (n: number | null | undefined): string | null => (n == null ? null : String(n));
 
 /**
@@ -146,6 +147,10 @@ export class RecordPurchase implements UseCase<RecordPurchaseCommand, RecordPurc
     const items: PurchaseItem[] = [];
     const movements: StockMovement[] = [];
     const headerTotals = { taxable: 0, cgst: 0, sgst: 0, igst: 0, vat: 0, cess: 0, grand: 0 };
+    // Per-product accumulator for the weighted-average cost recompute (FB1).
+    // Keyed by productId; value = current cost basis + purchased qty & pre-tax
+    // value across this invoice's lines (a product may span multiple lines).
+    const costAgg = new Map<string, { oldCost: number; qty: number; value: number }>();
 
     for (const line of rawLines) {
       const product = await this.deps.products.findById(line.productId);
@@ -154,6 +159,14 @@ export class RecordPurchase implements UseCase<RecordPurchaseCommand, RecordPurc
       const quantity = Number(line.quantity);
       const unitPrice = Number(line.unitPrice);
       const taxableAmount = round2(quantity * unitPrice);
+
+      // Accumulate cost-basis inputs. unitPrice is the per-unit landed cost:
+      // pre-tax for GST items (input tax is creditable), tax-inclusive for fuel
+      // (VAT is baked into the entered price). Both are the correct cost basis.
+      const agg = costAgg.get(line.productId) ?? { oldCost: Number(product.costBasis ?? 0), qty: 0, value: 0 };
+      agg.qty += quantity;
+      agg.value += quantity * unitPrice;
+      costAgg.set(line.productId, agg);
 
       const gstRate = product.taxConfig?.gst_rate ?? null;
       const vatRate = product.taxConfig?.vat_rate ?? null;
@@ -257,6 +270,20 @@ export class RecordPurchase implements UseCase<RecordPurchaseCommand, RecordPurc
     };
     await this.deps.purchases.save(purchase);
     await this.deps.purchaseItems.saveMany(items);
+
+    // Recompute each product's rolling weighted-average cost BEFORE persisting the
+    // new stock movements, so on-hand quantity reflects the pre-purchase state:
+    //   newCost = (onHandQty × oldCost + Σ purchased value) / (onHandQty + purchased qty)
+    // A negative on-hand (oversold) is floored to 0 so it can't distort the blend;
+    // when the resulting quantity is 0 we keep the prior cost. (FB1 → COGS.)
+    for (const [productId, agg] of costAgg) {
+      const onHand = await this.deps.stock.currentQuantityForProduct(ctx.organizationId, productId);
+      const baseQty = Math.max(onHand, 0);
+      const newQty = baseQty + agg.qty;
+      const newCost = newQty > 0 ? (baseQty * agg.oldCost + agg.value) / newQty : agg.oldCost;
+      await this.deps.products.updateCostBasis(productId, String(round4(newCost)));
+    }
+
     await this.deps.stock.saveMany(movements);
 
     const payable: SupplierTransaction = {

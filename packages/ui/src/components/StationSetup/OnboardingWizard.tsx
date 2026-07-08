@@ -473,6 +473,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
           productDraftId,
           capacity,
           openingQuantity: 0,
+          openingCostRate: 0,
         },
       ],
     }));

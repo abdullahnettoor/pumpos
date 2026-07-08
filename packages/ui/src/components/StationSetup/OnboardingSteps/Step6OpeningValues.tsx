@@ -34,6 +34,15 @@ export const Step6OpeningValues: React.FC<Step6OpeningValuesProps> = ({
     }));
   };
 
+  const handleTankCostChange = (tankDraftId: string, val: number) => {
+    updateDraft((prev) => ({
+      ...prev,
+      tanks: prev.tanks.map((item) =>
+        item.draftId === tankDraftId ? { ...item, openingCostRate: val } : item
+      ),
+    }));
+  };
+
   const handleNozzleReadingChange = (nozzleDraftId: string, val: number) => {
     updateDraft((prev) => ({
       ...prev,
@@ -128,6 +137,19 @@ export const Step6OpeningValues: React.FC<Step6OpeningValuesProps> = ({
                       onChange={(e) => handleTankStockChange(tank.draftId, Number(e.target.value))}
                       style={{ ...inputStyle, width: '100%', height: '30px' }}
                     />
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Purchase Rate (₹/L) — landed cost</span>
+                    <input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      placeholder="e.g. 88.50"
+                      value={tank.openingCostRate ?? 0}
+                      onChange={(e) => handleTankCostChange(tank.draftId, Number(e.target.value))}
+                      style={{ ...inputStyle, width: '100%', height: '30px' }}
+                    />
+                    <span style={{ fontSize: '9px', color: 'var(--text-faint)' }}>Seeds cost basis for margin. Leave 0 if unknown.</span>
                   </div>
                 </div>
               );

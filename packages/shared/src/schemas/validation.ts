@@ -296,6 +296,7 @@ export const onboardingTankDraftSchema = z.object({
   productDraftId: z.string().min(1, 'Fuel product is required'),
   capacity: z.number().positive('Tank capacity must be positive'),
   openingQuantity: z.number().nonnegative('Opening quantity must be non-negative'),
+  openingCostRate: z.number().nonnegative('Opening cost rate must be non-negative').optional(),
 });
 
 export const onboardingDispenserDraftSchema = z.object({

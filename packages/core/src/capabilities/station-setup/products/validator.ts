@@ -28,6 +28,9 @@ const createSchema = z.object({
   brand: z.string().trim().max(150).nullish(),
   category: z.string().trim().max(100).nullish(),
   sellingPrice: z.coerce.number().nonnegative().nullish(),
+  costBasis: z.coerce.number().nonnegative().nullish(),
+  openingStock: z.coerce.number().nonnegative().nullish(),
+  stationId: z.string().min(1).nullish(),
   taxConfig: taxConfigSchema,
 });
 

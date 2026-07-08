@@ -13,6 +13,8 @@ class ProvisionFailure extends Error {
   }
 }
 
+const round4 = (n: number) => Math.round((n + Number.EPSILON) * 10000) / 10000;
+
 /**
  * Drizzle adapter for the onboarding provisioning port. Performs all station
  * setup inserts atomically in one transaction and maps draft-local ids to real
@@ -64,7 +66,22 @@ export class DrizzleOnboardingProvisioner implements OnboardingProvisioner {
           .returning();
 
         const productIdMap = new Map<string, string>();
+        // Opening cost basis per fuel product = weighted average of its tanks'
+        // (opening qty × landed rate) ÷ Σ opening qty. Built from tanks (which
+        // reference productDraftId) so it's available when inserting products.
+        const openingCostByProductDraft = new Map<string, { qty: number; value: number }>();
+        for (const tank of draft.tanks) {
+          const rate = tank.openingCostRate ?? 0;
+          if (tank.openingQuantity > 0 && rate > 0) {
+            const agg = openingCostByProductDraft.get(tank.productDraftId) ?? { qty: 0, value: 0 };
+            agg.qty += tank.openingQuantity;
+            agg.value += tank.openingQuantity * rate;
+            openingCostByProductDraft.set(tank.productDraftId, agg);
+          }
+        }
         for (const product of draft.products) {
+          const openCost = openingCostByProductDraft.get(product.draftId);
+          const costBasis = openCost && openCost.qty > 0 ? String(round4(openCost.value / openCost.qty)) : '0';
           const [createdProduct] = await tx
             .insert(schema.products)
             .values({
@@ -78,6 +95,7 @@ export class DrizzleOnboardingProvisioner implements OnboardingProvisioner {
               isTaxable: product.isTaxable,
               unit: product.unit,
               taxConfig: product.taxConfig,
+              costBasis,
               isActive: product.isActive,
               createdAt: new Date(),
               updatedAt: new Date(),

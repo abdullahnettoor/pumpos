@@ -16,6 +16,8 @@ export interface Product {
   brand: string | null;
   category: string | null;
   sellingPrice: string | null;
+  /** Rolling weighted-average landed cost per unit; drives COGS / margin. */
+  costBasis: string | null;
   taxConfig: ProductTaxConfig;
   isActive: boolean;
   createdAt: string;
@@ -25,6 +27,8 @@ export interface Product {
 export interface ProductRepository extends Repository<Product> {
   existsByCode(organizationId: string, code: string, excludeId?: string): Promise<boolean>;
   listByOrganization(organizationId: string): Promise<Product[]>;
+  /** Set the rolling weighted-average cost basis for a product (FB1). */
+  updateCostBasis(productId: string, costBasis: string): Promise<void>;
 }
 
 /** Default inventory engine for a product type when not explicitly chosen. */

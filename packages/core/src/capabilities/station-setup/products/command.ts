@@ -21,6 +21,12 @@ export interface CreateProductCommand {
   brand?: string | null;
   category?: string | null;
   sellingPrice?: string | number | null;
+  /** Opening weighted-average cost per unit (seeds cost_basis at onboarding). */
+  costBasis?: string | number | null;
+  /** Opening stock quantity for merchandise (ITEM); posts an OpeningBalance movement. */
+  openingStock?: string | number | null;
+  /** Station to anchor the opening-stock movement's business day. */
+  stationId?: string | null;
   taxConfig?: ProductTaxConfig;
 }
 

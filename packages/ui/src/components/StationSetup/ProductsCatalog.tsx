@@ -53,7 +53,7 @@ const buildProductColumns = (startEdit: (p: any) => void, archive: (id: string) 
   },
 ];
 
-export const ProductsCatalog: React.FC = () => {
+export const ProductsCatalog: React.FC<{ selectedStation?: any | null }> = ({ selectedStation }) => {
   const qc = useQueryClient();
   const toast = useToast();
   const confirm = useConfirm();
@@ -75,6 +75,8 @@ export const ProductsCatalog: React.FC = () => {
   const [unit, setUnit] = useState('L');
   const [brand, setBrand] = useState('');
   const [sellingPrice, setSellingPrice] = useState('');
+  const [costPrice, setCostPrice] = useState('');
+  const [openingStock, setOpeningStock] = useState('');
   const [gstRate, setGstRate] = useState(18);
   const [hsnCode, setHsnCode] = useState('');
   const [vatRate, setVatRate] = useState(0);
@@ -151,7 +153,7 @@ export const ProductsCatalog: React.FC = () => {
   const handleCreateOrUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const payload = {
+      const payload: any = {
         name,
         code: code.toUpperCase(),
         productType,
@@ -173,6 +175,15 @@ export const ProductsCatalog: React.FC = () => {
       if (editingProduct) {
         await productService.updateProduct(editingProduct.id, payload);
       } else {
+        // Opening cost basis is only seeded at creation; thereafter it is
+        // maintained as a rolling weighted-average from purchases (FB1).
+        if (costPrice !== '') payload.costBasis = Number(costPrice);
+        // Opening stock (merchandise/ITEM only) posts an OpeningBalance movement
+        // server-side, anchored to the selected station's business day.
+        if (openingStock !== '' && Number(openingStock) > 0 && inventoryType === 'ITEM') {
+          payload.openingStock = Number(openingStock);
+          payload.stationId = selectedStation?.id ?? undefined;
+        }
         await productService.createProduct(payload);
       }
 
@@ -196,6 +207,7 @@ export const ProductsCatalog: React.FC = () => {
     setUnit(p.unit);
     setBrand((p as any).brand ?? '');
     setSellingPrice((p as any).sellingPrice != null ? String((p as any).sellingPrice) : '');
+    setCostPrice((p as any).costBasis != null && Number((p as any).costBasis) > 0 ? String((p as any).costBasis) : '');
     setGstRate(p.taxConfig?.gst_rate || 18);
     setHsnCode(p.taxConfig?.hsn_code || '');
     setPriceInclusive(p.taxConfig?.price_inclusive !== false);
@@ -226,6 +238,8 @@ export const ProductsCatalog: React.FC = () => {
     setUnit('L');
     setBrand('');
     setSellingPrice('');
+    setCostPrice('');
+    setOpeningStock('');
     setGstRate(18);
     setHsnCode('');
     setPriceInclusive(true);
@@ -472,6 +486,49 @@ export const ProductsCatalog: React.FC = () => {
               style={{ height: '32px', padding: '0 8px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', fontSize: '13px', fontFamily: 'var(--font-mono)' }}
             />
           </div>
+
+          {productType !== 'FUEL' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
+                Cost Price ex-GST (₹){editingProduct ? ' — maintained by purchases' : ' — opening cost'}
+              </label>
+              <input
+                type="number"
+                step="any"
+                value={costPrice}
+                onChange={(e) => setCostPrice(e.target.value)}
+                placeholder="Opening pre-tax cost per unit — seeds margin"
+                disabled={!!editingProduct}
+                style={{ height: '32px', padding: '0 8px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', fontSize: '13px', fontFamily: 'var(--font-mono)', opacity: editingProduct ? 0.6 : 1 }}
+              />
+              <span style={{ fontSize: '10px', color: 'var(--text-faint)' }}>
+                {editingProduct
+                  ? 'Cost basis updates automatically as a weighted-average from purchases.'
+                  : 'Enter the pre-tax (ex-GST) purchase cost — input GST is creditable, not a cost. Leave blank if unknown.'}
+              </span>
+            </div>
+          )}
+
+          {productType !== 'FUEL' && !editingProduct && inventoryType === 'ITEM' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Opening Stock ({unit || 'units'})</label>
+              <input
+                type="number"
+                step="any"
+                min={0}
+                value={openingStock}
+                onChange={(e) => setOpeningStock(e.target.value)}
+                placeholder="Quantity on hand at start"
+                disabled={!selectedStation}
+                style={{ height: '32px', padding: '0 8px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', fontSize: '13px', fontFamily: 'var(--font-mono)' }}
+              />
+              <span style={{ fontSize: '10px', color: 'var(--text-faint)' }}>
+                {selectedStation
+                  ? 'Posts an opening balance to inventory for this station. Leave blank if none.'
+                  : 'Select a station to record opening stock.'}
+              </span>
+            </div>
+          )}
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', margin: '4px 0' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>

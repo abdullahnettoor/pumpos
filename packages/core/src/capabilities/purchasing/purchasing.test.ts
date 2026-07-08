@@ -30,10 +30,11 @@ class SupplierTxnRepo implements SupplierTransactionRepository {
 }
 class StockRepo implements StockMovementRepository {
   readonly movements: StockMovement[] = [];
+  constructor(private readonly onHand = 0) {}
   async save(m: StockMovement) { this.movements.push(m); }
   async saveMany(m: StockMovement[]) { this.movements.push(...m); }
   async currentQuantityForTank() { return 0; }
-  async currentQuantityForProduct() { return 0; }
+  async currentQuantityForProduct() { return this.onHand; }
 }
 class SupplierRepo implements SupplierRepository {
   constructor(readonly rows: Supplier[]) {}
@@ -48,6 +49,7 @@ class ProductRepo implements ProductRepository {
   async save() {}
   async existsByCode() { return false; }
   async listByOrganization() { return this.rows; }
+  async updateCostBasis(productId: string, costBasis: string) { const r = this.rows.find((x) => x.id === productId); if (r) r.costBasis = costBasis; }
 }
 class StationRepo implements StationRepository {
   constructor(readonly rows: Station[]) {}
@@ -83,10 +85,10 @@ function supplier(): Supplier {
   return { id: 'sup-1', organizationId: 'org-1', stationId: null, name: 'IOCL', phone: null, metadata: null, isActive: true, createdAt: '', updatedAt: '' };
 }
 function fuelProduct(): Product {
-  return { id: 'petrol-1', organizationId: 'org-1', name: 'Petrol', code: 'MS', productType: 'FUEL', inventoryType: 'BULK', stockTracked: true, isTaxable: false, taxCategory: 'FUEL_VAT', unit: 'Liters', brand: null, category: null, sellingPrice: null, taxConfig: {}, isActive: true, createdAt: '', updatedAt: '' };
+  return { id: 'petrol-1', organizationId: 'org-1', name: 'Petrol', code: 'MS', productType: 'FUEL', inventoryType: 'BULK', stockTracked: true, isTaxable: false, taxCategory: 'FUEL_VAT', unit: 'Liters', brand: null, category: null, sellingPrice: null, costBasis: '0', taxConfig: {}, isActive: true, createdAt: '', updatedAt: '' };
 }
 function lubeProduct(): Product {
-  return { id: 'lube-1', organizationId: 'org-1', name: 'Engine Oil', code: 'EO', productType: 'LUBRICANT', inventoryType: 'ITEM', stockTracked: true, isTaxable: true, taxCategory: 'GST', unit: 'Litre', brand: null, category: null, sellingPrice: null, taxConfig: { gst_rate: 18 }, isActive: true, createdAt: '', updatedAt: '' };
+  return { id: 'lube-1', organizationId: 'org-1', name: 'Engine Oil', code: 'EO', productType: 'LUBRICANT', inventoryType: 'ITEM', stockTracked: true, isTaxable: true, taxCategory: 'GST', unit: 'Litre', brand: null, category: null, sellingPrice: null, costBasis: '0', taxConfig: { gst_rate: 18 }, isActive: true, createdAt: '', updatedAt: '' };
 }
 function station(): Station {
   return { id: 'st-1', organizationId: 'org-1', name: 'St', code: 'ST', address: null, phone: null, settings: {}, onboardingStatus: 'READY_FOR_OPERATIONS', isActive: true, createdAt: '', updatedAt: '' };
@@ -125,6 +127,39 @@ describe('RecordPurchase', () => {
     expect(supplierTxns.rows[0].transactionType).toBe('Purchase');
     expect(supplierTxns.rows[0].affectsDrawer).toBe(false);
     expect(store.events.map((e) => e.eventType)).toContain(BusinessEvents.GOODS_RECEIVED);
+  });
+
+  it('updates the product cost basis as a weighted average of existing stock and the purchase', async () => {
+    const products = new ProductRepo([{ ...fuelProduct(), costBasis: '88' }]);
+    const stock = new StockRepo(10000); // 10,000 L already on hand @ ₹88
+    const result = await new RecordPurchase({
+      purchases: new PurchaseRepo(), stock, supplierTxns: new SupplierTxnRepo(),
+      suppliers: new SupplierRepo([supplier()]), shifts: new ShiftRepo([]), businessDays: new BdRepo([bday()]),
+      purchaseItems: new PurchaseItemRepo(), products, stations: new StationRepo([station()]),
+      docNumbers, events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
+    }).execute(
+      // Buy 5,000 L @ ₹90.50 → (10000·88 + 5000·90.50) / 15000 = 88.8333
+      { supplierId: 'sup-1', productId: 'petrol-1', quantity: 5000, unitPrice: 90.5, stationId: 'st-1', tankAllocations: [{ tankId: 'tank-1', quantity: 5000 }] },
+      ctx(),
+    );
+    expect(result.success).toBe(true);
+    expect(products.rows[0].costBasis).toBe('88.8333');
+  });
+
+  it('sets cost basis to the purchase price when there is no prior stock', async () => {
+    const products = new ProductRepo([{ ...fuelProduct(), costBasis: '0' }]);
+    const stock = new StockRepo(0);
+    const result = await new RecordPurchase({
+      purchases: new PurchaseRepo(), stock, supplierTxns: new SupplierTxnRepo(),
+      suppliers: new SupplierRepo([supplier()]), shifts: new ShiftRepo([]), businessDays: new BdRepo([bday()]),
+      purchaseItems: new PurchaseItemRepo(), products, stations: new StationRepo([station()]),
+      docNumbers, events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
+    }).execute(
+      { supplierId: 'sup-1', productId: 'petrol-1', quantity: 5000, unitPrice: 90.5, stationId: 'st-1', tankAllocations: [{ tankId: 'tank-1', quantity: 5000 }] },
+      ctx(),
+    );
+    expect(result.success).toBe(true);
+    expect(products.rows[0].costBasis).toBe('90.5');
   });
 
   it('rejects tank allocations that do not sum to the quantity', async () => {

@@ -19,6 +19,7 @@ function toEntity(row: Row): Product {
     brand: row.brand ?? null,
     category: row.category ?? null,
     sellingPrice: row.sellingPrice ?? null,
+    costBasis: row.costBasis ?? null,
     taxConfig: (row.taxConfig ?? {}) as Product['taxConfig'],
     isActive: row.isActive,
     createdAt: row.createdAt.toISOString(),
@@ -55,6 +56,7 @@ export class DrizzleProductRepository implements ProductRepository {
         brand: p.brand,
         category: p.category,
         sellingPrice: p.sellingPrice,
+        costBasis: p.costBasis ?? '0',
         taxConfig: p.taxConfig,
         isActive: p.isActive,
         createdAt: new Date(p.createdAt),
@@ -95,5 +97,12 @@ export class DrizzleProductRepository implements ProductRepository {
       .from(schema.products)
       .where(eq(schema.products.organizationId, organizationId));
     return rows.map(toEntity);
+  }
+
+  async updateCostBasis(productId: string, costBasis: string): Promise<void> {
+    await this.db
+      .update(schema.products)
+      .set({ costBasis, updatedAt: new Date() })
+      .where(eq(schema.products.id, productId));
   }
 }

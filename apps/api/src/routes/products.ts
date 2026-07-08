@@ -5,6 +5,10 @@ import { CreateProduct, UpdateProduct, type Result } from '@pump/core';
 import { buildContext } from '../infra/context.js';
 import { createDispatcher } from '../infra/events.js';
 import { DrizzleProductRepository } from '../infra/repositories/product.repo.js';
+import { DrizzleStockMovementRepository } from '../infra/repositories/inventory-repositories.js';
+import { DrizzleBusinessDayRepository } from '../infra/repositories/station-ops-repositories.js';
+import { loadStationClock } from '../infra/station-clock.js';
+import { runInTransaction } from '../infra/transaction.js';
 
 type Variables = {
   db: DbClient;
@@ -47,11 +51,18 @@ productsRouter.post('/products', async (c) => {
   }
   const body = await c.req.json().catch(() => ({}));
   const db = c.var.db;
-  const useCase = new CreateProduct({
-    repository: new DrizzleProductRepository(db),
-    events: createDispatcher(db),
-  });
-  const result = await useCase.execute(body, buildContext(c.var.user));
+  // Run in a transaction so the product row and any opening-stock movement commit
+  // atomically. Load the station clock so opening stock resolves to the correct
+  // business day (timezone / day-start aware) when a stationId is supplied.
+  const stationClock = body?.stationId ? await loadStationClock(db, body.stationId) : {};
+  const result = await runInTransaction(db, (tx, events) =>
+    new CreateProduct({
+      repository: new DrizzleProductRepository(tx),
+      stock: new DrizzleStockMovementRepository(tx),
+      businessDays: new DrizzleBusinessDayRepository(tx),
+      events,
+    }).execute(body, buildContext(c.var.user, { stationId: body?.stationId, ...stationClock })),
+  );
   return sendResult(c, result);
 });
 
