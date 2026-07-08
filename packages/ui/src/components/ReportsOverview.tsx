@@ -9,9 +9,10 @@ import { ExpenseRegister } from './reports/ExpenseRegister.js';
 import { CashBankLedger } from './reports/CashBankLedger.js';
 import { UnifiedLedger } from './reports/UnifiedLedger.js';
 import { InvoicesPanel } from './reports/InvoicesPanel.js';
+import { ProfitLossView } from './reports/ProfitLossView.js';
 import { inr } from '../utils/format.js';
 import { resolveBusinessDate } from '@pump/shared';
-import { Calendar, RefreshCw, Play, Zap, Receipt, Wallet, BookOpen, FileText } from 'lucide-react';
+import { Calendar, RefreshCw, Play, Zap, Receipt, Wallet, BookOpen, FileText, TrendingUp } from 'lucide-react';
 
 const shiftService = new CloudShiftService();
 
@@ -20,7 +21,7 @@ interface ReportsOverviewProps {
   userRole: 'Owner' | 'Manager' | 'Accountant' | 'Staff';
 }
 
-type ReportsTab = 'daily-dssr' | 'ledger' | 'invoices' | 'expense-register' | 'cash-bank';
+type ReportsTab = 'daily-dssr' | 'pnl' | 'ledger' | 'invoices' | 'expense-register' | 'cash-bank';
 
 export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
   selectedStation,
@@ -129,6 +130,7 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
           onChange={(id) => setActiveTab(id as ReportsTab)}
           tabs={[
             { id: 'daily-dssr', label: 'Daily DSSR', icon: <Zap size={13} /> },
+            ...(userRole === 'Owner' ? [{ id: 'pnl', label: 'Profit & Loss', icon: <TrendingUp size={13} /> }] : []),
             { id: 'ledger', label: 'Ledger', icon: <BookOpen size={13} /> },
             { id: 'invoices', label: 'Invoices', icon: <FileText size={13} /> },
             { id: 'cash-bank', label: 'Cash & Bank', icon: <Wallet size={13} /> },
@@ -330,6 +332,8 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
       )}
 
       {activeTab === 'ledger' && <UnifiedLedger selectedStation={selectedStation} />}
+
+      {activeTab === 'pnl' && userRole === 'Owner' && <ProfitLossView selectedStation={selectedStation} />}
 
       {activeTab === 'invoices' && <InvoicesPanel selectedStation={selectedStation} userRole={userRole} />}
 

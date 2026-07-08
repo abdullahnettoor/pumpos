@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { CloudShiftService } from '../../services/cloud.js';
 import {
   useShiftStatus, useInvalidateOperational, useInventoryStatus, useInventoryItems, usePricing, useProducts,
-  useExpenses, usePurchases, useCollections, useCustomers, useSuppliers, useShiftSummaries,
+  useExpenses, usePurchases, useCollections, useCustomers, useSuppliers, useShiftSummaries, useDailyDssrPreview,
 } from '../../query/hooks.js';
 import { StatusBadge } from '../StatusBadge.js';
 import { LoadingSpinner } from '../LoadingSpinner.js';
@@ -42,6 +42,12 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   const { data: customers } = useCustomers(true, { enabled: canSeeFinancials });
   const { data: suppliers } = useSuppliers(true, { enabled: canSeeFinancials });
   const { data: shiftSummaries } = useShiftSummaries(selectedStation?.id, { enabled: canSeeFinancials });
+  const isOwner = userRole === 'Owner';
+  // Live "Today's P&L" for the owner — recomputed on demand (no snapshot written).
+  const pnlSettings: any = (selectedStation as any)?.settings || {};
+  const pnlTodayBiz = resolveBusinessDate({ timeZone: pnlSettings.timezone, dayStartsAt: pnlSettings.business_day_starts_at });
+  const { data: pnlPreview } = useDailyDssrPreview(selectedStation?.id, pnlTodayBiz, { enabled: isOwner && !!selectedStation?.id } as any);
+  const livePnl = (pnlPreview as any)?.snapshotData?.pnl || null;
   const invalidateOperational = useInvalidateOperational();
   const confirm = useConfirm();
   const toast = useToast();
@@ -408,6 +414,20 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Live Today's P&L — Owner only */}
+      {isOwner && livePnl && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', gap: '8px', alignItems: 'center' }}>
+            Today&apos;s P&amp;L <span style={{ fontSize: '9px', color: 'var(--brand-warning)', border: '1px solid var(--brand-warning)', borderRadius: '4px', padding: '0 5px', fontWeight: 700 }}>LIVE</span>
+          </span>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px' }}>
+            <KpiCard label="Revenue Today" value={inr(Number(livePnl.revenue || 0))} tone="default" />
+            <KpiCard label="Gross Margin Today" value={inr(Number(livePnl.grossMargin || 0))} tone="success" />
+            <KpiCard label="Net Profit Today" value={inr(Number(livePnl.netProfit || 0))} tone={Number(livePnl.netProfit || 0) < 0 ? 'danger' : 'success'} sub="After COGS & expenses" />
+          </div>
+        </div>
+      )}
 
       {/* Financial rollup — Owner / Manager / Accountant only */}
       {canSeeFinancials && (
