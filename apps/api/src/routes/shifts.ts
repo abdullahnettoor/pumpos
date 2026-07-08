@@ -104,7 +104,7 @@ async function projectShiftSummary(
       .leftJoin(schema.products, eq(schema.products.id, schema.nozzles.productId))
       .where(eq(schema.nozzleReadings.shiftId, shift.id)),
     db
-      .select({ h: schema.attendantHandovers, userName: schema.users.fullName, duName: schema.dispenserUnits.name })
+      .select({ h: schema.attendantHandovers, userName: schema.users.fullName, duName: schema.dispenserUnits.name, duCode: schema.dispenserUnits.code })
       .from(schema.attendantHandovers)
       .leftJoin(schema.users, eq(schema.users.id, schema.attendantHandovers.userId))
       .leftJoin(schema.dispenserUnits, eq(schema.dispenserUnits.id, schema.attendantHandovers.duId))
@@ -175,10 +175,10 @@ async function projectShiftSummary(
   const totalNetVolumeSold = nozzleReadings.reduce((a, r) => a + r.netVolume, 0) || Number(snap.totalNetVolume ?? 0);
   const totalVolumeSold = nozzleReadings.reduce((a, r) => a + r.volumeSold, 0) || Number(snap.totalVolume ?? 0);
 
-  const handovers = hoRows.map(({ h, userName, duName }) => ({
+  const handovers = hoRows.map(({ h, userName, duName, duCode }) => ({
     ...h,
     attendantName: userName ?? 'Unknown',
-    duCode: duName ?? '',
+    duCode: duCode ?? duName ?? '',
     terminalEntries: teRows
       .filter(({ e }) => e.handoverId === h.id)
       .map(({ e, label, provider }) => ({ ...e, terminalLabel: label ?? 'Unknown', provider: provider ?? null })),

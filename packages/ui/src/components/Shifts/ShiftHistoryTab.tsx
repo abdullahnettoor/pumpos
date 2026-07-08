@@ -133,7 +133,8 @@ export const ShiftHistoryTab: React.FC<ShiftHistoryTabProps> = ({
       )}
 
       <div className="card" style={{ overflow: 'hidden' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+        <div className="shift-table-scroll-container">
+        <table className="shift-table" style={{ width: '100%', minWidth: '920px', borderCollapse: 'collapse', fontSize: '13px' }}>
           <thead>
             <tr
               style={{
@@ -160,6 +161,8 @@ export const ShiftHistoryTab: React.FC<ShiftHistoryTabProps> = ({
                 const variance = Number(data.cashVariance || 0);
                 const expected = Number(data.expectedCash || 0);
                 const actual = Number(data.closingCash || 0);
+                const statusLabel = d.shiftStatus || data.shiftStatus || 'CLOSED';
+                const statusType = statusLabel === 'LOCKED' ? 'default' : statusLabel === 'CLOSED' ? 'success' : 'warning';
                 const date = new Date(d.generatedAt).toLocaleString('en-IN', {
                   day: '2-digit',
                   month: 'short',
@@ -190,8 +193,8 @@ export const ShiftHistoryTab: React.FC<ShiftHistoryTabProps> = ({
                     </td>
                     <td style={{ padding: '12px 16px' }}>
                       <StatusBadge
-                        status={d.shiftStatus}
-                        type={d.shiftStatus === 'LOCKED' ? 'default' : 'success'}
+                        status={statusLabel}
+                        type={statusType}
                       />
                     </td>
                     <td style={{ padding: '12px 16px', color: 'var(--text-default)' }}>
@@ -215,7 +218,7 @@ export const ShiftHistoryTab: React.FC<ShiftHistoryTabProps> = ({
                       {variance > 0 ? '+' : ''}
                       ₹{variance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                     </td>
-                    <td style={{ padding: '6px 16px', textAlign: 'center' }}>
+                    <td style={{ padding: '12px 16px', textAlign: 'center' }}>
                       <button
                         className="btn btn-secondary btn-sm"
                         onClick={() => setActiveSummary(d)}
@@ -245,6 +248,7 @@ export const ShiftHistoryTab: React.FC<ShiftHistoryTabProps> = ({
             )}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   );

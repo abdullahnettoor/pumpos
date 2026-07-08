@@ -219,14 +219,14 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
         fontSize: '13px'
       }}>
         <thead>
-          <tr style={{ borderBottom: '2px solid var(--border-strong)', textAlign: 'left', color: 'var(--text-muted)' }}>
-            <th style={{ padding: '8px 12px', fontWeight: 600 }}>Nozzle</th>
-            <th style={{ padding: '8px 12px', fontWeight: 600 }}>Product</th>
-            <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Opening Rd</th>
-            <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Closing Rd</th>
-            <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Gross Vol</th>
-            <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Testing</th>
-            <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Net Sold</th>
+          <tr style={{ backgroundColor: 'var(--bg-surface-alt)', borderBottom: '1px solid var(--border-soft)', textAlign: 'left', color: 'var(--text-muted)' }}>
+            <th style={{ padding: '10px 16px', fontWeight: 600 }}>Nozzle</th>
+            <th style={{ padding: '10px 16px', fontWeight: 600 }}>Product</th>
+            <th style={{ padding: '10px 16px', fontWeight: 600, textAlign: 'right' }}>Opening Rd</th>
+            <th style={{ padding: '10px 16px', fontWeight: 600, textAlign: 'right' }}>Closing Rd</th>
+            <th style={{ padding: '10px 16px', fontWeight: 600, textAlign: 'right' }}>Gross Vol</th>
+            <th style={{ padding: '10px 16px', fontWeight: 600, textAlign: 'right' }}>Testing</th>
+            <th style={{ padding: '10px 16px', fontWeight: 600, textAlign: 'right' }}>Net Sold</th>
           </tr>
         </thead>
         <tbody>
@@ -236,25 +236,25 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
             const net = nr.netVolume != null ? Number(nr.netVolume) : gross - testing;
             return (
             <tr key={idx} style={{ borderBottom: '1px solid var(--border-soft)' }}>
-              <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--text-strong)' }}>{nr.nozzleName}</td>
-              <td style={{ padding: '10px 12px', color: 'var(--text-default)' }}>{nr.productName} ({nr.productCode})</td>
-              <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{Number(nr.openingReading).toFixed(3)}</td>
-              <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{Number(nr.closingReading).toFixed(3)}</td>
-              <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{gross.toFixed(3)}</td>
-              <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: testing > 0 ? 'var(--color-warning, #b45309)' : 'var(--text-muted)' }}>{testing.toFixed(3)}</td>
-              <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, color: 'var(--text-strong)', fontFamily: 'var(--font-mono)' }}>{net.toFixed(3)} L</td>
+              <td style={{ padding: '12px 16px', fontWeight: 600, color: 'var(--text-strong)' }}>{nr.nozzleName}</td>
+              <td style={{ padding: '12px 16px', color: 'var(--text-default)' }}>{nr.productName} ({nr.productCode})</td>
+              <td style={{ padding: '12px 16px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{Number(nr.openingReading).toFixed(3)}</td>
+              <td style={{ padding: '12px 16px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{Number(nr.closingReading).toFixed(3)}</td>
+              <td style={{ padding: '12px 16px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{gross.toFixed(3)}</td>
+              <td style={{ padding: '12px 16px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: testing > 0 ? 'var(--color-warning, #b45309)' : 'var(--text-muted)' }}>{testing.toFixed(3)}</td>
+              <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 600, color: 'var(--text-strong)', fontFamily: 'var(--font-mono)' }}>{net.toFixed(3)} L</td>
             </tr>
             );
           })}
           <tr style={{ borderTop: '2px solid var(--border-strong)', backgroundColor: 'var(--bg-surface-alt)', fontWeight: 700 }}>
-            <td colSpan={4} style={{ padding: '10px 12px', textTransform: 'uppercase', fontSize: '11px', color: 'var(--text-muted)' }}>Total (Gross / Testing / Net)</td>
-            <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+            <td colSpan={4} style={{ padding: '12px 16px', textTransform: 'uppercase', fontSize: '11px', color: 'var(--text-muted)' }}>Total (Gross / Testing / Net)</td>
+            <td style={{ padding: '12px 16px', textAlign: 'right', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
               {Number(totalVolumeSold).toFixed(3)}
             </td>
-            <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+            <td style={{ padding: '12px 16px', textAlign: 'right', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
               {Number(totalTestingVolume).toFixed(3)}
             </td>
-            <td style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--text-strong)', fontFamily: 'var(--font-mono)', fontSize: '14px' }}>
+            <td style={{ padding: '12px 16px', textAlign: 'right', color: 'var(--text-strong)', fontFamily: 'var(--font-mono)', fontSize: '14px' }}>
               {Number(totalNetVolumeSold || (Number(totalVolumeSold) - Number(totalTestingVolume))).toFixed(3)} L
             </td>
           </tr>
@@ -274,15 +274,15 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
             fontSize: '13px'
           }}>
             <thead>
-              <tr style={{ borderBottom: '2px solid var(--border-strong)', textAlign: 'left', color: 'var(--text-muted)' }}>
-                <th style={{ padding: '8px 12px', fontWeight: 600 }}>Attendant</th>
-                <th style={{ padding: '8px 12px', fontWeight: 600 }}>Dispenser</th>
-                <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Testing (L)</th>
-                <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Cash (₹)</th>
-                <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Card/UPI (₹)</th>
-                <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Credit Chits (₹)</th>
-                <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Expected Sales (₹)</th>
-                <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Variance (₹)</th>
+              <tr style={{ backgroundColor: 'var(--bg-surface-alt)', borderBottom: '1px solid var(--border-soft)', textAlign: 'left', color: 'var(--text-muted)' }}>
+                <th style={{ padding: '10px 16px', fontWeight: 600 }}>Attendant</th>
+                <th style={{ padding: '10px 16px', fontWeight: 600 }}>Dispenser</th>
+                <th style={{ padding: '10px 16px', fontWeight: 600, textAlign: 'right' }}>Testing (L)</th>
+                <th style={{ padding: '10px 16px', fontWeight: 600, textAlign: 'right' }}>Cash (₹)</th>
+                <th style={{ padding: '10px 16px', fontWeight: 600, textAlign: 'right' }}>Card/UPI (₹)</th>
+                <th style={{ padding: '10px 16px', fontWeight: 600, textAlign: 'right' }}>Credit Chits (₹)</th>
+                <th style={{ padding: '10px 16px', fontWeight: 600, textAlign: 'right' }}>Expected Sales (₹)</th>
+                <th style={{ padding: '10px 16px', fontWeight: 600, textAlign: 'right' }}>Variance (₹)</th>
               </tr>
             </thead>
             <tbody>
@@ -303,14 +303,14 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
 
                 return (
                   <tr key={idx} style={{ borderBottom: '1px solid var(--border-soft)' }}>
-                    <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--text-strong)' }}>{h.attendantName}</td>
-                    <td style={{ padding: '10px 12px', color: 'var(--text-default)' }}>{h.duCode}</td>
-                    <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: Number(h.testingVolume || 0) > 0 ? 'var(--brand-warning)' : 'var(--text-muted)' }}>{Number(h.testingVolume || 0).toFixed(3)}</td>
-                    <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>₹{cash.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                    <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>₹{cardUpi.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                    <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>₹{credit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                    <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>₹{expected.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                    <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, color: varColor, fontFamily: 'var(--font-mono)' }}>
+                    <td style={{ padding: '12px 16px', fontWeight: 600, color: 'var(--text-strong)' }}>{h.attendantName}</td>
+                    <td style={{ padding: '12px 16px', color: 'var(--text-default)' }}>{h.duCode}</td>
+                    <td style={{ padding: '12px 16px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: Number(h.testingVolume || 0) > 0 ? 'var(--brand-warning)' : 'var(--text-muted)' }}>{Number(h.testingVolume || 0).toFixed(3)}</td>
+                    <td style={{ padding: '12px 16px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>₹{cash.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                    <td style={{ padding: '12px 16px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>₹{cardUpi.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                    <td style={{ padding: '12px 16px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>₹{credit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                    <td style={{ padding: '12px 16px', textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>₹{expected.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                    <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 600, color: varColor, fontFamily: 'var(--font-mono)' }}>
                       {variance > 0 ? '+' : ''}₹{variance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                     </td>
                   </tr>
@@ -334,12 +334,12 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
             fontSize: '13px'
           }}>
             <thead>
-              <tr style={{ borderBottom: '2px solid var(--border-strong)', textAlign: 'left', color: 'var(--text-muted)' }}>
-                <th style={{ padding: '8px 12px', fontWeight: 600 }}>Terminal</th>
-                <th style={{ padding: '8px 12px', fontWeight: 600 }}>Handled By</th>
-                <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Card (₹)</th>
-                <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>UPI (₹)</th>
-                <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Total (₹)</th>
+              <tr style={{ backgroundColor: 'var(--bg-surface-alt)', borderBottom: '1px solid var(--border-soft)', textAlign: 'left', color: 'var(--text-muted)' }}>
+                <th style={{ padding: '10px 16px', fontWeight: 600 }}>Terminal</th>
+                <th style={{ padding: '10px 16px', fontWeight: 600 }}>Handled By</th>
+                <th style={{ padding: '10px 16px', fontWeight: 600, textAlign: 'right' }}>Card (₹)</th>
+                <th style={{ padding: '10px 16px', fontWeight: 600, textAlign: 'right' }}>UPI (₹)</th>
+                <th style={{ padding: '10px 16px', fontWeight: 600, textAlign: 'right' }}>Total (₹)</th>
               </tr>
             </thead>
             <tbody>
@@ -349,11 +349,11 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
                 const contributors = (t.entries || []).filter((e: any) => Number(e.card || 0) > 0 || Number(e.upi || 0) > 0);
                 return (
                   <tr key={idx} style={{ borderBottom: '1px solid var(--border-soft)', verticalAlign: 'top' }}>
-                    <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--text-strong)' }}>
+                    <td style={{ padding: '12px 16px', fontWeight: 600, color: 'var(--text-strong)' }}>
                       {t.terminalLabel}
                       {t.provider && <span style={{ display: 'block', fontSize: '11px', color: 'var(--text-faint)', fontWeight: 500 }}>{t.provider}</span>}
                     </td>
-                    <td style={{ padding: '10px 12px', color: 'var(--text-default)', fontSize: '12px' }}>
+                    <td style={{ padding: '12px 16px', color: 'var(--text-default)', fontSize: '12px' }}>
                       {contributors.length > 0 ? (
                         contributors.map((e: any, i: number) => (
                           <div key={i} style={{ marginBottom: i < contributors.length - 1 ? '4px' : 0 }}>
@@ -367,21 +367,21 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
                         <span style={{ color: 'var(--text-faint)' }}>—</span>
                       )}
                     </td>
-                    <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>₹{card.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                    <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>₹{upi.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                    <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, color: 'var(--text-strong)', fontFamily: 'var(--font-mono)' }}>₹{(card + upi).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                    <td style={{ padding: '12px 16px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>₹{card.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                    <td style={{ padding: '12px 16px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>₹{upi.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                    <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 600, color: 'var(--text-strong)', fontFamily: 'var(--font-mono)' }}>₹{(card + upi).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                   </tr>
                 );
               })}
               <tr style={{ borderTop: '2px solid var(--border-strong)', backgroundColor: 'var(--bg-surface-alt)', fontWeight: 700 }}>
-                <td colSpan={2} style={{ padding: '10px 12px', textTransform: 'uppercase', fontSize: '11px', color: 'var(--text-muted)' }}>POS Totals</td>
-                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--text-strong)' }}>
+                <td colSpan={2} style={{ padding: '12px 16px', textTransform: 'uppercase', fontSize: '11px', color: 'var(--text-muted)' }}>POS Totals</td>
+                <td style={{ padding: '12px 16px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--text-strong)' }}>
                   ₹{terminalBreakdown.reduce((s: number, t: any) => s + Number(t.card || 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                 </td>
-                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--text-strong)' }}>
+                <td style={{ padding: '12px 16px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--text-strong)' }}>
                   ₹{terminalBreakdown.reduce((s: number, t: any) => s + Number(t.upi || 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                 </td>
-                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--text-strong)', fontSize: '14px' }}>
+                <td style={{ padding: '12px 16px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--text-strong)', fontSize: '14px' }}>
                   ₹{terminalBreakdown.reduce((s: number, t: any) => s + Number(t.card || 0) + Number(t.upi || 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                 </td>
               </tr>
@@ -398,29 +398,29 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
           </h3>
           <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '32px', fontSize: '13px' }}>
             <thead>
-              <tr style={{ borderBottom: '2px solid var(--border-strong)', textAlign: 'left', color: 'var(--text-muted)' }}>
-                <th style={{ padding: '8px 12px', fontWeight: 600 }}>Customer</th>
-                <th style={{ padding: '8px 12px', fontWeight: 600 }}>Vehicle</th>
-                <th style={{ padding: '8px 12px', fontWeight: 600 }}>Product</th>
-                <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Qty (L)</th>
-                <th style={{ padding: '8px 12px', fontWeight: 600 }}>Notes</th>
-                <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Amount (₹)</th>
+              <tr style={{ backgroundColor: 'var(--bg-surface-alt)', borderBottom: '1px solid var(--border-soft)', textAlign: 'left', color: 'var(--text-muted)' }}>
+                <th style={{ padding: '10px 16px', fontWeight: 600 }}>Customer</th>
+                <th style={{ padding: '10px 16px', fontWeight: 600 }}>Vehicle</th>
+                <th style={{ padding: '10px 16px', fontWeight: 600 }}>Product</th>
+                <th style={{ padding: '10px 16px', fontWeight: 600, textAlign: 'right' }}>Qty (L)</th>
+                <th style={{ padding: '10px 16px', fontWeight: 600 }}>Notes</th>
+                <th style={{ padding: '10px 16px', fontWeight: 600, textAlign: 'right' }}>Amount (₹)</th>
               </tr>
             </thead>
             <tbody>
               {creditSales.map((r: any, idx: number) => (
                 <tr key={r.id || idx} style={{ borderBottom: '1px solid var(--border-soft)' }}>
-                  <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--text-strong)' }}>{r.customerName || 'Customer'}</td>
-                  <td style={{ padding: '10px 12px', color: 'var(--text-default)', fontFamily: 'var(--font-mono)' }}>{r.vehicleNumber || '—'}</td>
-                  <td style={{ padding: '10px 12px', color: 'var(--text-default)' }}>{r.productName || '—'}</td>
-                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{r.quantity != null ? Number(r.quantity).toLocaleString('en-IN', { minimumFractionDigits: 3 }) : '—'}</td>
-                  <td style={{ padding: '10px 12px', color: 'var(--text-faint)', fontSize: '12px' }}>{r.notes || '—'}</td>
-                  <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, fontFamily: 'var(--font-mono)' }}>₹{Number(r.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                  <td style={{ padding: '12px 16px', fontWeight: 600, color: 'var(--text-strong)' }}>{r.customerName || 'Customer'}</td>
+                  <td style={{ padding: '12px 16px', color: 'var(--text-default)', fontFamily: 'var(--font-mono)' }}>{r.vehicleNumber || '—'}</td>
+                  <td style={{ padding: '12px 16px', color: 'var(--text-default)' }}>{r.productName || '—'}</td>
+                  <td style={{ padding: '12px 16px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{r.quantity != null ? Number(r.quantity).toLocaleString('en-IN', { minimumFractionDigits: 3 }) : '—'}</td>
+                  <td style={{ padding: '12px 16px', color: 'var(--text-faint)', fontSize: '12px' }}>{r.notes || '—'}</td>
+                  <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 600, fontFamily: 'var(--font-mono)' }}>₹{Number(r.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                 </tr>
               ))}
               <tr style={{ borderTop: '2px solid var(--border-strong)', backgroundColor: 'var(--bg-surface-alt)', fontWeight: 700 }}>
-                <td colSpan={5} style={{ padding: '10px 12px', textTransform: 'uppercase', fontSize: '11px', color: 'var(--text-muted)' }}>Total Credit Sales</td>
-                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--text-strong)', fontSize: '14px' }}>
+                <td colSpan={5} style={{ padding: '12px 16px', textTransform: 'uppercase', fontSize: '11px', color: 'var(--text-muted)' }}>Total Credit Sales</td>
+                <td style={{ padding: '12px 16px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--text-strong)', fontSize: '14px' }}>
                   ₹{(Number(creditSalesTotal) || creditSales.reduce((s: number, r: any) => s + Number(r.amount || 0), 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                 </td>
               </tr>
@@ -442,20 +442,20 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
             fontSize: '13px'
           }}>
             <thead>
-              <tr style={{ borderBottom: '2px solid var(--border-strong)', textAlign: 'left', color: 'var(--text-muted)' }}>
-                <th style={{ padding: '8px 12px', fontWeight: 600 }}>Tank</th>
-                <th style={{ padding: '8px 12px', fontWeight: 600 }}>Product</th>
-                <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Tank Capacity</th>
-                <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Physical Actual Stock</th>
+              <tr style={{ backgroundColor: 'var(--bg-surface-alt)', borderBottom: '1px solid var(--border-soft)', textAlign: 'left', color: 'var(--text-muted)' }}>
+                <th style={{ padding: '10px 16px', fontWeight: 600 }}>Tank</th>
+                <th style={{ padding: '10px 16px', fontWeight: 600 }}>Product</th>
+                <th style={{ padding: '10px 16px', fontWeight: 600, textAlign: 'right' }}>Tank Capacity</th>
+                <th style={{ padding: '10px 16px', fontWeight: 600, textAlign: 'right' }}>Physical Actual Stock</th>
               </tr>
             </thead>
             <tbody>
               {dipReadings.map((dr: any, idx: number) => (
                 <tr key={idx} style={{ borderBottom: '1px solid var(--border-soft)' }}>
-                  <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--text-strong)' }}>{dr.tankName}</td>
-                  <td style={{ padding: '10px 12px', color: 'var(--text-default)' }}>{dr.productName} ({dr.productCode})</td>
-                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{Number(dr.capacity).toLocaleString('en-IN')} L</td>
-                  <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, color: 'var(--text-strong)', fontFamily: 'var(--font-mono)' }}>{Number(dr.actualQuantity).toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} L</td>
+                  <td style={{ padding: '12px 16px', fontWeight: 600, color: 'var(--text-strong)' }}>{dr.tankName}</td>
+                  <td style={{ padding: '12px 16px', color: 'var(--text-default)' }}>{dr.productName} ({dr.productCode})</td>
+                  <td style={{ padding: '12px 16px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{Number(dr.capacity).toLocaleString('en-IN')} L</td>
+                  <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 600, color: 'var(--text-strong)', fontFamily: 'var(--font-mono)' }}>{Number(dr.actualQuantity).toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} L</td>
                 </tr>
               ))}
             </tbody>
@@ -476,12 +476,12 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
             fontSize: '13px'
           }}>
             <thead>
-              <tr style={{ borderBottom: '2px solid var(--border-strong)', textAlign: 'left', color: 'var(--text-muted)' }}>
-                <th style={{ padding: '8px 12px', fontWeight: 600 }}>Product</th>
-                <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Expected Stock</th>
-                <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Physical Actual</th>
-                <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Variance</th>
-                <th style={{ padding: '8px 12px', fontWeight: 600 }}>Status</th>
+              <tr style={{ backgroundColor: 'var(--bg-surface-alt)', borderBottom: '1px solid var(--border-soft)', textAlign: 'left', color: 'var(--text-muted)' }}>
+                <th style={{ padding: '10px 16px', fontWeight: 600 }}>Product</th>
+                <th style={{ padding: '10px 16px', fontWeight: 600, textAlign: 'right' }}>Expected Stock</th>
+                <th style={{ padding: '10px 16px', fontWeight: 600, textAlign: 'right' }}>Physical Actual</th>
+                <th style={{ padding: '10px 16px', fontWeight: 600, textAlign: 'right' }}>Variance</th>
+                <th style={{ padding: '10px 16px', fontWeight: 600 }}>Status</th>
               </tr>
             </thead>
             <tbody>
@@ -497,13 +497,13 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
 
                 return (
                   <tr key={idx} style={{ borderBottom: '1px solid var(--border-soft)' }}>
-                    <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--text-strong)' }}>{sv.productName} ({sv.productCode})</td>
-                    <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{Number(sv.expectedQuantity).toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} L</td>
-                    <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{Number(sv.actualQuantity).toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} L</td>
-                    <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, color: diffColor, fontFamily: 'var(--font-mono)' }}>
+                    <td style={{ padding: '12px 16px', fontWeight: 600, color: 'var(--text-strong)' }}>{sv.productName} ({sv.productCode})</td>
+                    <td style={{ padding: '12px 16px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{Number(sv.expectedQuantity).toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} L</td>
+                    <td style={{ padding: '12px 16px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{Number(sv.actualQuantity).toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} L</td>
+                    <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 600, color: diffColor, fontFamily: 'var(--font-mono)' }}>
                       {diff > 0 ? '+' : ''}{diff.toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} L
                     </td>
-                    <td style={{ padding: '10px 12px', fontSize: '11px' }}>
+                    <td style={{ padding: '12px 16px', fontSize: '11px' }}>
                       {isSevere ? (
                         <span style={{ color: 'var(--state-warning-fg)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                           <AlertTriangle size={12} /> Discrepancy (&gt;0.5%)

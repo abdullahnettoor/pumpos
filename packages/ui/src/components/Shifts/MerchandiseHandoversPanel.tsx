@@ -263,7 +263,7 @@ export const MerchandiseHandoversPanel: React.FC<MerchandiseHandoversPanelProps>
         <thead>
           <tr style={{ backgroundColor: 'var(--bg-surface-alt)', borderBottom: '1px solid var(--border-soft)', textAlign: 'left', color: 'var(--text-muted)' }}>
             {['Employee', 'Cash', 'Card/UPI', ...(hasCredit ? ['Credit'] : []), ''].map((h, i) => (
-              <th key={h || `sp${i}`} style={{ padding: '10px 16px', fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', textAlign: i >= 1 && h ? 'right' : 'left' }}>{h}</th>
+              <th key={h || `sp${i}`} style={{ padding: '10px 16px', fontWeight: 600, color: 'var(--text-muted)', textAlign: i >= 1 && h ? 'right' : 'left' }}>{h}</th>
             ))}
           </tr>
         </thead>
