@@ -42,6 +42,12 @@ export interface DssrSale {
   totalAmount: number;
 }
 
+/** Merchandise sale line item, for COGS = Σ qty × product cost basis. */
+export interface DssrSaleItem {
+  productId: string;
+  quantity: number;
+}
+
 /** Customer-ledger credit sale (receivable) created during the business day. */
 export interface DssrCreditSale {
   customerType: string;
@@ -72,8 +78,10 @@ export interface DssrSourceData {
   sales: DssrSale[];
   creditSales: DssrCreditSale[];
   stockVariances: DssrStockVariance[];
-  /** productId → { name, code } for enriching fuel roll-up + nozzle rows. */
-  products: Record<string, { name: string; code: string }>;
+  /** Merchandise sale line items (productId + qty) for merchandise COGS. */
+  saleItems: DssrSaleItem[];
+  /** productId → { name, code, costBasis } for fuel roll-up + COGS. */
+  products: Record<string, { name: string; code: string; costBasis: number }>;
   /** nozzleId → nozzle name. */
   nozzles: Record<string, string>;
 }

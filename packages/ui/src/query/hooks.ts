@@ -52,6 +52,7 @@ export const queryKeys = {
   inventoryMovements: (stationId: string) => ['inventory-movements', stationId] as const,
   inventoryVariances: (stationId: string) => ['inventory-variances', stationId] as const,
   dssr: (stationId: string, date: string) => ['dssr', stationId, date] as const,
+  dssrPreview: (stationId: string, date: string) => ['dssr-preview', stationId, date] as const,
   dssrRange: (stationId: string, from: string, to: string) => ['dssr-range', stationId, from, to] as const,
   expenseCategories: () => ['expense-categories'] as const,
   products: () => ['products'] as const,
@@ -325,6 +326,17 @@ export function useDailyDssr(stationId: string | null | undefined, date: string,
     queryKey: queryKeys.dssr(stationId ?? '', date),
     queryFn: () => shiftService.getDailyDssr(stationId!, date),
     enabled: !!stationId && !!date,
+    ...options,
+  });
+}
+
+// Live (non-persisted) DSSR/P&L for the open day — recomputed on demand.
+export function useDailyDssrPreview(stationId: string | null | undefined, date: string, options?: Options<any>) {
+  return useQuery({
+    queryKey: queryKeys.dssrPreview(stationId ?? '', date),
+    queryFn: () => shiftService.getDailyDssrPreview(stationId!, date),
+    enabled: !!stationId && !!date,
+    ...TIER.operational,
     ...options,
   });
 }

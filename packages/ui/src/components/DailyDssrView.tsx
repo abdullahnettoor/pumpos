@@ -40,6 +40,7 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
   const normalCredit = Number(credit.normalCredit || 0);
   const fleetCredit = Number(credit.fleetCredit || 0);
   const totalExpenses = Number(expenses.total || 0);
+  const pnl = snapshot.pnl || {};
   const inr = (n: number) => `₹${n.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
 
   return (
@@ -166,6 +167,45 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
           </ul>
         </div>
       )}
+
+      <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
+        Profitability (P&amp;L)
+      </h3>
+      <div
+        style={{
+          border: '1px solid var(--border-strong)',
+          borderRadius: 'var(--radius-input)',
+          display: 'flex',
+          flexDirection: 'column',
+          fontSize: '13px',
+          overflow: 'hidden',
+          marginBottom: '8px',
+        }}
+      >
+        {([
+          { label: 'Revenue — Fuel', value: inr(Number(pnl.revenueFuel || 0)) },
+          { label: 'Revenue — Merchandise', value: inr(Number(pnl.revenueMerch || 0)) },
+          { label: 'Total Revenue', value: inr(Number(pnl.revenue || 0)), strong: true },
+          { label: 'COGS — Fuel', value: `(${inr(Number(pnl.cogsFuel || 0))})`, color: 'var(--brand-warning)' },
+          { label: 'COGS — Merchandise', value: `(${inr(Number(pnl.cogsMerch || 0))})`, color: 'var(--brand-warning)' },
+          { label: 'Gross Margin', value: inr(Number(pnl.grossMargin || 0)), strong: true },
+          { label: 'Operating Expenses', value: `(${inr(Number(pnl.expenses ?? totalExpenses))})`, color: 'var(--brand-warning)' },
+        ] as Array<{ label: string; value: string; color?: string; strong?: boolean }>).map((r, i) => (
+          <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '11px 16px', borderBottom: '1px solid var(--border-soft)', backgroundColor: r.strong ? 'var(--bg-surface-alt)' : 'transparent' }}>
+            <span style={{ fontWeight: r.strong ? 700 : 400 }}>{r.label}</span>
+            <span style={{ fontWeight: r.strong ? 700 : 600, fontFamily: 'var(--font-mono)', color: r.color || 'var(--text-default)' }}>{r.value}</span>
+          </div>
+        ))}
+        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '13px 16px', backgroundColor: 'var(--bg-surface-alt)' }}>
+          <span style={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.02em' }}>Net Profit</span>
+          <span style={{ fontWeight: 700, fontFamily: 'var(--font-mono)', fontSize: '15px', color: Number(pnl.netProfit || 0) < 0 ? 'var(--state-danger-fg)' : 'var(--state-success-fg)' }}>
+            {inr(Number(pnl.netProfit || 0))}
+          </span>
+        </div>
+      </div>
+      <p style={{ fontSize: '10px', color: 'var(--text-faint)', marginBottom: '24px' }}>
+        COGS uses each product&apos;s weighted-average cost at day close. Fuel VAT is output tax (excluded from cost); merchandise cost is pre-tax.
+      </p>
 
       <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
         Financial Summary

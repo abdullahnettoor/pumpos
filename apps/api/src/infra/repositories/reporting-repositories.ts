@@ -121,6 +121,13 @@ export class DrizzleDssrDataReader implements DssrDataReader {
       .from(schema.sales)
       .where(eq(schema.sales.businessDayId, businessDayId));
 
+    // Merchandise sale line items (productId + qty) for merchandise COGS.
+    const saleItemRows = await this.db
+      .select({ productId: schema.saleItems.productId, quantity: schema.saleItems.quantity })
+      .from(schema.saleItems)
+      .innerJoin(schema.sales, eq(schema.sales.id, schema.saleItems.saleId))
+      .where(eq(schema.sales.businessDayId, businessDayId));
+
     // Credit receivables created today, with customer type (normal vs fleet).
     const creditSaleRows = await this.db
       .select({ customerType: schema.customers.customerType, amount: schema.customerTransactions.amount })
@@ -150,10 +157,10 @@ export class DrizzleDssrDataReader implements DssrDataReader {
       .leftJoin(schema.products, eq(schema.products.id, schema.stockVariances.productId))
       .where(eq(schema.stockVariances.businessDayId, businessDayId));
 
-    // Reference lookups for enriching the fuel roll-up with names.
+    // Reference lookups for enriching the fuel roll-up with names + cost basis.
     const productRows = organizationId
       ? await this.db
-          .select({ id: schema.products.id, name: schema.products.name, code: schema.products.code })
+          .select({ id: schema.products.id, name: schema.products.name, code: schema.products.code, costBasis: schema.products.costBasis })
           .from(schema.products)
           .where(eq(schema.products.organizationId, organizationId))
       : [];
@@ -164,8 +171,8 @@ export class DrizzleDssrDataReader implements DssrDataReader {
           .where(eq(schema.nozzles.stationId, stationId))
       : [];
 
-    const products: Record<string, { name: string; code: string }> = {};
-    for (const p of productRows) products[p.id] = { name: p.name, code: p.code ?? '' };
+    const products: Record<string, { name: string; code: string; costBasis: number }> = {};
+    for (const p of productRows) products[p.id] = { name: p.name, code: p.code ?? '', costBasis: Number(p.costBasis ?? 0) };
     const nozzles: Record<string, string> = {};
     for (const n of nozzleRows) nozzles[n.id] = n.name;
 
@@ -192,6 +199,7 @@ export class DrizzleDssrDataReader implements DssrDataReader {
         varianceQuantity: Number(r.varianceQuantity),
         reason: r.reason ?? null,
       })),
+      saleItems: saleItemRows.map((r) => ({ productId: r.productId, quantity: Number(r.quantity) })),
       products,
       nozzles,
     };

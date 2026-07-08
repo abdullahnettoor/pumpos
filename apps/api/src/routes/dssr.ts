@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { and, desc, eq, gte, lte } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
 import { isAuthorizedForStation, canExportReports, type Role } from '@pump/shared';
-import { GenerateDssr, type Result } from '@pump/core';
+import { GenerateDssr, composeDssr, type Result } from '@pump/core';
 import { buildContext } from '../infra/context.js';
 import { runInTransaction } from '../infra/transaction.js';
 import {
@@ -100,6 +100,48 @@ dssrRouter.get('/daily', async (c) => {
   }
   const snapshot = await new DrizzleDssrSnapshotRepository(db).findByStationDate(user.organizationId, stationId, date);
   return c.json({ success: true, data: snapshot });
+});
+
+// GET /api/dssr/daily/preview?stationId=&date= — LIVE (non-persisted) DSSR/P&L
+// for the given business day, composed from current data. Used for the open
+// day's "Today's P&L" so it reflects sales as they happen without writing a
+// snapshot (snapshots stay reserved for day close / explicit generation).
+dssrRouter.get('/daily/preview', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  const stationId = c.req.query('stationId');
+  const date = c.req.query('date');
+  if (!stationId || !date) {
+    return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Missing stationId or date' } }, 400);
+  }
+  if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId })) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+  }
+  const [bd] = await db
+    .select({ id: schema.businessDays.id, status: schema.businessDays.status })
+    .from(schema.businessDays)
+    .where(
+      and(
+        eq(schema.businessDays.organizationId, user.organizationId),
+        eq(schema.businessDays.stationId, stationId),
+        eq(schema.businessDays.businessDate, date),
+      ),
+    )
+    .limit(1);
+  // No business day yet (no activity) → return null; the UI shows an empty state.
+  if (!bd) return c.json({ success: true, data: null });
+  const source = await new DrizzleDssrDataReader(db).readBusinessDay(bd.id);
+  const snapshotData = {
+    generatedAt: new Date().toISOString(),
+    businessDayId: bd.id,
+    businessDate: date,
+    stationId,
+    organizationId: user.organizationId,
+    status: bd.status,
+    live: true,
+    ...composeDssr(source),
+  };
+  return c.json({ success: true, data: { businessDate: date, generatedAt: snapshotData.generatedAt, live: true, snapshotData } });
 });
 
 // GET /api/dssr/daily/range?stationId=&from=&to=

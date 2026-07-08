@@ -414,6 +414,10 @@ export class CloudShiftService {
     return request<any>(`/dssr/daily?stationId=${stationId}&date=${date}`);
   }
 
+  async getDailyDssrPreview(stationId: string, date: string): Promise<any> {
+    return request<any>(`/dssr/daily/preview?stationId=${stationId}&date=${date}`);
+  }
+
   async getDailyDssrRange(stationId: string, from: string, to: string): Promise<any[]> {
     const data = await request<any[]>(`/dssr/daily/range?stationId=${stationId}&from=${from}&to=${to}`);
     return data || [];
