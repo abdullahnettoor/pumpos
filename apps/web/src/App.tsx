@@ -95,7 +95,7 @@ export const App: React.FC = () => {
   const [session, setSession] = useState<any>(null);
   const [userRole, setUserRole] = useState<'Owner' | 'Manager' | 'Accountant' | 'Staff' | null>(null);
   const [userName, setUserName] = useState<string>('');
-  const [profileError, setProfileError] = useState<string | null>(null);
+  const [profileError, setProfileError] = useState<{ message: string; code?: string; status?: number } | null>(null);
   const lastUserIdRef = useRef<string | null>(null);
   const resolvedRef = useRef(false);
   const qc = useQueryClient();
@@ -172,7 +172,11 @@ export const App: React.FC = () => {
         }
       } catch (err: any) {
         console.error('Failed to resolve backend profile:', err);
-        setProfileError(err.message || 'Verification failed. Profile not found.');
+        setProfileError({
+          message: err?.message || 'Verification failed. Profile not found.',
+          code: err?.code,
+          status: err?.status,
+        });
         setUserRole(null);
         resolvedRef.current = false;
         lastUserIdRef.current = null;
@@ -257,13 +261,22 @@ export const App: React.FC = () => {
 
     // 2. If login was successful but user is not mapped in database yet
     if (profileError) {
+      const msg = profileError.message.toLowerCase();
       const isNetworkError =
-        profileError.toLowerCase().includes('failed to fetch') ||
-        profileError.toLowerCase().includes('load failed') ||
-        profileError.toLowerCase().includes('networkerror') ||
-        profileError.toLowerCase().includes('connection refused') ||
-        profileError.toLowerCase().includes('econnrefused') ||
-        profileError.toLowerCase().includes('err_connection_refused');
+        profileError.code === 'NETWORK' ||
+        msg.includes('network error') ||
+        msg.includes('failed to fetch') ||
+        msg.includes('load failed') ||
+        msg.includes('networkerror') ||
+        msg.includes('connection refused') ||
+        msg.includes('econnrefused') ||
+        msg.includes('err_connection_refused');
+      const isProfileMissing =
+        !isNetworkError &&
+        (profileError.code === 'FORBIDDEN' ||
+          profileError.status === 403 ||
+          msg.includes('profile inactive') ||
+          msg.includes('profile not found'));
 
       return (
         <div style={{
@@ -290,7 +303,11 @@ export const App: React.FC = () => {
             textAlign: 'center'
           }}>
             <h2 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-strong)' }}>
-              {isNetworkError ? 'API Server Connection Failed' : 'User Profile Connection Error'}
+              {isNetworkError
+                ? 'API Server Connection Failed'
+                : isProfileMissing
+                  ? 'User Profile Connection Error'
+                  : 'Sign-in Failed'}
             </h2>
             <div style={{ 
               backgroundColor: 'var(--state-danger-bg)', 
@@ -302,13 +319,13 @@ export const App: React.FC = () => {
               lineHeight: '1.4',
               fontFamily: 'var(--font-mono)'
             }}>
-              {profileError}
+              {profileError.message}
             </div>
             {isNetworkError ? (
               <p style={{ color: 'var(--text-muted)', fontSize: '13px', lineHeight: '1.5' }}>
                 The frontend app is unable to connect to the backend API at <strong>{import.meta.env.VITE_API_URL ?? 'http://localhost:8787'}</strong>. Please verify the API server is reachable.
               </p>
-            ) : (
+            ) : isProfileMissing ? (
               <>
                 <p style={{ color: 'var(--text-muted)', fontSize: '13px', lineHeight: '1.5' }}>
                   Your Supabase Auth account is active, but your profile has not been linked to the public schema database yet. Please provide your administrator with the UID below to map your roles:
@@ -326,6 +343,10 @@ export const App: React.FC = () => {
                   {session?.user?.id}
                 </div>
               </>
+            ) : (
+              <p style={{ color: 'var(--text-muted)', fontSize: '13px', lineHeight: '1.5' }}>
+                Something went wrong while verifying your session. Try signing out and back in.
+              </p>
             )}
             <button
               onClick={handleLogout}

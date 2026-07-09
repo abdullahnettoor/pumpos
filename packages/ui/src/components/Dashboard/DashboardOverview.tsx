@@ -48,6 +48,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   const pnlTodayBiz = resolveBusinessDate({ timeZone: pnlSettings.timezone, dayStartsAt: pnlSettings.business_day_starts_at });
   const { data: pnlPreview } = useDailyDssrPreview(selectedStation?.id, pnlTodayBiz, { enabled: isOwner && !!selectedStation?.id } as any);
   const livePnl = (pnlPreview as any)?.snapshotData?.pnl || null;
+  const pnlShiftsClosed = Number((pnlPreview as any)?.snapshotData?.shiftsIncluded || 0);
   const invalidateOperational = useInvalidateOperational();
   const confirm = useConfirm();
   const toast = useToast();
@@ -425,6 +426,12 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
             <KpiCard label="Revenue Today" value={inr(Number(livePnl.revenue || 0))} tone="default" />
             <KpiCard label="Gross Margin Today" value={inr(Number(livePnl.grossMargin || 0))} tone="success" />
             <KpiCard label="Net Profit Today" value={inr(Number(livePnl.netProfit || 0))} tone={Number(livePnl.netProfit || 0) < 0 ? 'danger' : 'success'} sub="After COGS & expenses" />
+          </div>
+          <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+            Provisional — {pnlShiftsClosed} shift{pnlShiftsClosed === 1 ? '' : 's'} closed today + live merchandise &amp; expenses.
+            {activeShift
+              ? " The open shift's fuel is added when it closes."
+              : ' Fuel is counted as each shift closes.'}
           </div>
         </div>
       )}

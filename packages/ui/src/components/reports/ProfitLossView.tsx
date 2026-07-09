@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { useDailyDssrRange, useDailyDssrPreview } from '../../query/hooks.js';
+import { useDailyDssrRange, useDailyDssrPreview, useShiftStatus } from '../../query/hooks.js';
 import { KpiCard } from '../primitives/KpiCard.js';
 import { DateRangeField, computeRange } from '../primitives/DateRangeField.js';
 import type { DateRange } from '../primitives/DateRangeField.js';
@@ -61,6 +61,11 @@ export const ProfitLossView: React.FC<ProfitLossViewProps> = ({ selectedStation 
     todayBiz,
     { enabled: !!selectedStation?.id && todayInRange } as any,
   );
+  // Shift status → whether an open shift's fuel is still pending (Option 1 context).
+  const { data: shiftStatus } = useShiftStatus(selectedStation?.id, true, { enabled: !!selectedStation?.id && todayInRange } as any);
+  const hasOpenShift = !!(shiftStatus as any)?.activeShift;
+  const closedShiftsToday = Number((preview as any)?.snapshotData?.shiftsIncluded || 0);
+  const liveAsOf = (preview as any)?.generatedAt ? new Date((preview as any).generatedAt).toLocaleTimeString('en-IN') : null;
 
   const loading = loadingRange || (todayInRange && loadingPreview);
 
@@ -109,6 +114,21 @@ export const ProfitLossView: React.FC<ProfitLossViewProps> = ({ selectedStation 
         <KpiCard label="Operating Expenses" value={inr(totals.expenses)} tone="danger" />
         <KpiCard label="Net Profit" value={inr(totals.netProfit)} tone={totals.netProfit < 0 ? 'danger' : 'success'} />
       </div>
+
+      {/* Live "as-of" context (Option 1): explain what the open day includes so
+          fuel reading 0/partial before shift close is never mistaken for a bug. */}
+      {todayInRange && (
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', padding: '10px 12px', backgroundColor: 'var(--state-warning-bg)', color: 'var(--state-warning-fg)', borderRadius: 'var(--radius-input)', fontSize: '12px', border: '1px solid var(--border-soft)' }}>
+          <span style={{ fontWeight: 700 }}>Live</span>
+          <span>
+            Today ({todayBiz}) is provisional{liveAsOf ? `, as of ${liveAsOf}` : ''}. It includes{' '}
+            <strong>{closedShiftsToday} closed shift{closedShiftsToday === 1 ? '' : 's'}</strong> plus live merchandise, collections &amp; expenses.
+            {hasOpenShift
+              ? " Fuel from the currently open shift isn't counted until it closes (nozzle readings are taken at close)."
+              : ' Fuel for a shift is counted once that shift closes.'}
+          </span>
+        </div>
+      )}
 
       {loading ? (
         <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)' }}>Loading…</div>
