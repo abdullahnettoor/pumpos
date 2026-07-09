@@ -178,7 +178,7 @@ export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
               Physical counted safe cash (float + deposited)
             </label>
             <input
-              type="number"
+              type="number" min="0"
               value={closingCash}
               onChange={(e) => onClosingCashChange(Number(e.target.value))}
               className="close-wizard-input close-wizard-input--num"
@@ -270,7 +270,7 @@ export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <input
-                        type="number"
+                        type="number" min="0"
                         step="0.1"
                         placeholder="Actual"
                         value={dipReadings[tank.id] ?? ''}

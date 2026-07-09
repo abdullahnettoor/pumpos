@@ -319,7 +319,7 @@ export const PurchaseEntryForm: React.FC<PurchaseEntryFormProps> = ({
                       <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
                         {tank.name}{tank.capacity ? ` (Cap: ${Number(tank.capacity).toLocaleString('en-IN')}L)` : ''}
                       </span>
-                      <input type="number" placeholder="0.00" disabled={submitting}
+                      <input type="number" min="0" placeholder="0.00" disabled={submitting}
                         value={alloc[tank.id] || ''}
                         onChange={(e) => setAllocations((prev) => ({ ...prev, [field.id]: { ...(prev[field.id] || {}), [tank.id]: e.target.value } }))}
                         style={{ height: '28px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', padding: '0 8px', textAlign: 'right', fontSize: '12px' }} />

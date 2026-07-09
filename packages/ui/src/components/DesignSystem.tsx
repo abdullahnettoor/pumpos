@@ -474,7 +474,7 @@ const OverlaysPanel: React.FC = () => {
           </div>
           <div>
             <label className="field-label">Amount</label>
-            <input className="input" type="number" defaultValue={1200} style={{ fontFamily: 'var(--font-mono)', textAlign: 'right' }} />
+            <input className="input" type="number" min="0" defaultValue={1200} style={{ fontFamily: 'var(--font-mono)', textAlign: 'right' }} />
           </div>
           <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
             The body scrolls, the header carries a close button, and the footer stays pinned. Press Esc or click the backdrop to dismiss.

@@ -1054,7 +1054,7 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, d
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                     <label style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600 }}>Payment Amount (₹)</label>
                     <input
-                      type="number"
+                      type="number" min="0"
                       placeholder="0.00"
                       {...registerPay('amount', { valueAsNumber: true })}
                       disabled={paymentSubmitting}

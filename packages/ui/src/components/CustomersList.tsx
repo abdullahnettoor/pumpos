@@ -866,7 +866,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
               <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Credit Limit (₹)</label>
               <input
-                type="number"
+                type="number" min="0"
                 placeholder="e.g. 50000"
                 {...registerCust('creditLimit', { valueAsNumber: true })}
                 disabled={drawerSubmitting}

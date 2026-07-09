@@ -197,7 +197,7 @@ export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-strong)' }}>Petrol Tank (MS):</span>
                 <input
-                  type="number"
+                  type="number" min="0"
                   placeholder="Liters"
                   value={quickPetrolCapacity}
                   onChange={(e) => setQuickPetrolCapacity(e.target.value)}
@@ -237,7 +237,7 @@ export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-strong)' }}>Diesel Tank (HSD):</span>
                 <input
-                  type="number"
+                  type="number" min="0"
                   placeholder="Liters"
                   value={quickDieselCapacity}
                   onChange={(e) => setQuickDieselCapacity(e.target.value)}
@@ -328,7 +328,7 @@ export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Capacity (Liters) *</label>
             <input
-              type="number"
+              type="number" min="0"
               style={{
                 height: '32px',
                 padding: '0 8px',

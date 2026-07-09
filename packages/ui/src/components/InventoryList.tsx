@@ -316,7 +316,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation })
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <label className="field-label">Actual Counted Quantity</label>
-            <input className="input" type="number" step="any" value={countActual} onChange={(e) => setCountActual(e.target.value)} placeholder="Measured quantity" required style={{ fontFamily: 'var(--font-mono)' }} />
+            <input className="input" type="number" min="0" step="any" value={countActual} onChange={(e) => setCountActual(e.target.value)} placeholder="Measured quantity" required style={{ fontFamily: 'var(--font-mono)' }} />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <label className="field-label">Reason (optional)</label>

@@ -62,7 +62,7 @@ export const Step4Tanks: React.FC<Step4TanksProps> = ({
               <div key={product.draftId} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-strong)' }}>{product.name}</span>
                 <input
-                  type="number"
+                  type="number" min="0"
                   placeholder="Capacity (L)"
                   defaultValue={20000}
                   style={{ ...inputStyle, width: '110px', height: '28px', fontSize: '12px' }}

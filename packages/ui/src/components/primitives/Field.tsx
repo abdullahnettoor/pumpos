@@ -64,15 +64,19 @@ export const DateField = React.forwardRef<HTMLInputElement, TextInputProps>(
 );
 DateField.displayName = 'DateField';
 
-export interface NumberInputProps extends TextInputProps {}
+export interface NumberInputProps extends TextInputProps {
+  /** When true (default), sets `min="0"` unless caller overrides. */
+  nonNegative?: boolean;
+}
 
 export const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
-  ({ invalid, className, ...props }, ref) => (
+  ({ invalid, className, nonNegative = true, min, ...props }, ref) => (
     <input
       ref={ref}
       type="number"
       inputMode="decimal"
       step="any"
+      min={min ?? (nonNegative ? 0 : undefined)}
       className={cx('input', 'input-numeric', invalid && 'input-invalid', className)}
       {...props}
     />
@@ -82,7 +86,7 @@ NumberInput.displayName = 'NumberInput';
 
 /** Numeric input with a ₹ affordance; keeps figures right-aligned and mono. */
 export const MoneyInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
-  ({ invalid, className, style, ...props }, ref) => (
+  ({ invalid, className, style, nonNegative = true, min, ...props }, ref) => (
     <div style={{ position: 'relative' }}>
       <span
         aria-hidden="true"
@@ -104,6 +108,7 @@ export const MoneyInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
         type="number"
         inputMode="decimal"
         step="any"
+        min={min ?? (nonNegative ? 0 : undefined)}
         className={cx('input', 'input-numeric', invalid && 'input-invalid', className)}
         style={{ paddingLeft: 22, ...style }}
         {...props}

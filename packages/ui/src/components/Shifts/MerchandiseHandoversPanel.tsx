@@ -340,6 +340,7 @@ export const MerchandiseHandoversPanel: React.FC<MerchandiseHandoversPanelProps>
                 const p = productById[r.productId];
                 const qty = Number(r.quantity) || 0;
                 const t = p && qty > 0 ? lineTax(p, qty) : null;
+                const mrp = p?.sellingPrice != null ? Number(p.sellingPrice) : null;
                 return (
                   <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: '6px', padding: '10px', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', backgroundColor: 'var(--bg-surface)' }}>
                     <Combobox
@@ -348,19 +349,41 @@ export const MerchandiseHandoversPanel: React.FC<MerchandiseHandoversPanelProps>
                       onChange={(v) => setRows((prev) => prev.map((x, j) => (j === i ? { ...x, productId: v } : x)))}
                       placeholder="Select product…"
                     />
-                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                      <div style={{ flex: 1 }}>
-                        <NumberInput placeholder="Qty" min="0" value={r.quantity} onChange={(e) => setRows((prev) => prev.map((x, j) => (j === i ? { ...x, quantity: e.target.value } : x)))} />
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '8px', alignItems: 'end' }}>
+                      <div>
+                        <label style={{ fontSize: '10px', color: 'var(--text-muted)', display: 'block', marginBottom: '2px' }}>Qty</label>
+                        <NumberInput placeholder="0" value={r.quantity} onChange={(e) => setRows((prev) => prev.map((x, j) => (j === i ? { ...x, quantity: e.target.value } : x)))} />
                       </div>
-                      {t ? (
-                        <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
-                          {inr(t.taxable)} + tax {inr(t.tax)} = <strong style={{ color: 'var(--text-strong)' }}>{inr(t.total)}</strong>
+                      <div>
+                        <label style={{ fontSize: '10px', color: 'var(--text-muted)', display: 'block', marginBottom: '2px' }}>MRP</label>
+                        <div
+                          style={{
+                            height: '32px',
+                            padding: '0 10px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'flex-end',
+                            border: '1px dashed var(--border-strong)',
+                            borderRadius: 'var(--radius-input)',
+                            fontFamily: 'var(--font-mono)',
+                            fontSize: '13px',
+                            color: mrp != null ? 'var(--text-strong)' : 'var(--text-faint)',
+                            backgroundColor: 'var(--bg-surface-alt)',
+                          }}
+                          title="Unit selling price (from product master)"
+                        >
+                          {mrp != null ? inr(mrp) : '—'}
                         </div>
-                      ) : (
-                        <div style={{ flex: 1 }} />
-                      )}
+                      </div>
                       <button type="button" className="btn btn-secondary btn-sm" style={{ padding: '6px 8px', height: 32 }} onClick={() => setRows((prev) => (prev.length > 1 ? prev.filter((_, j) => j !== i) : prev))} aria-label="Remove line"><Trash2 size={13} /></button>
                     </div>
+                    {t && (
+                      <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', display: 'flex', justifyContent: 'flex-end', gap: '8px', flexWrap: 'wrap' }}>
+                        <span>{inr(t.taxable)} + tax {inr(t.tax)}</span>
+                        <span>=</span>
+                        <strong style={{ color: 'var(--text-strong)' }}>{inr(t.total)}</strong>
+                      </div>
+                    )}
                   </div>
                 );
               })}

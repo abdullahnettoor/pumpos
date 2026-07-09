@@ -482,7 +482,7 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
                         <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                           <label style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Reading (Liters)</label>
                           <input
-                            type="number"
+                            type="number" min="0"
                             value={nozzle.currentReading}
                             onChange={(e) => handleNozzleReadingChange(idx, parseFloat(e.target.value) || 0)}
                             style={{

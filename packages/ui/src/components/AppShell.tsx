@@ -279,7 +279,7 @@ export const AppShell: React.FC<AppShellProps> = ({
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  padding: '8px var(--space-3)',
+                  padding: collapsed ? '8px 0' : '8px var(--space-3)',
                   borderRadius: 'var(--radius-button)',
                   border: 'none',
                   backgroundColor: isActive ? 'var(--state-info-bg)' : 'transparent',
@@ -289,7 +289,8 @@ export const AppShell: React.FC<AppShellProps> = ({
                   fontSize: '13px',
                   textAlign: 'left',
                   width: '100%',
-                  gap: '12px',
+                  gap: collapsed ? 0 : '12px',
+                  justifyContent: collapsed ? 'center' : 'flex-start',
                   transition: 'background-color 0.1s, color 0.1s',
                 }}
                 onMouseEnter={(e) => {

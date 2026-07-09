@@ -497,7 +497,7 @@ export const ProductsCatalog: React.FC<{ selectedStation?: any | null }> = ({ se
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Selling Price (₹){productType === 'FUEL' ? ' — fuel uses price schedule' : ''}</label>
             <input
-              type="number"
+              type="number" min="0"
               step="any"
               value={sellingPrice}
               onChange={(e) => setSellingPrice(e.target.value)}
@@ -513,7 +513,7 @@ export const ProductsCatalog: React.FC<{ selectedStation?: any | null }> = ({ se
                 Cost Price ex-GST (₹){editingProduct ? ' — maintained by purchases' : ' — opening cost'}
               </label>
               <input
-                type="number"
+                type="number" min="0"
                 step="any"
                 value={costPrice}
                 onChange={(e) => setCostPrice(e.target.value)}
@@ -584,7 +584,7 @@ export const ProductsCatalog: React.FC<{ selectedStation?: any | null }> = ({ se
                   {taxCategory === 'GST' ? 'GST Rate (%)' : 'VAT Rate (%)'}
                 </label>
                 <input
-                  type="number"
+                  type="number" min="0"
                   style={{
                     height: '32px',
                     padding: '0 8px',

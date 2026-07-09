@@ -247,7 +247,7 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
                       <div className="form-group">
                         <label className="form-label">Shift Grace Period (Minutes)</label>
                         <input
-                          type="number"
+                          type="number" min="0"
                           className="form-input mono-num"
                           value={graceMinutes}
                           onChange={(e) => setGraceMinutes(parseInt(e.target.value))}
