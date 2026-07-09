@@ -83,9 +83,9 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
             Most Recent Closed Shift Snapshot
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '10px', fontSize: '12px', color: 'var(--text-muted)' }}>
-            <span>Shift ID: <strong style={{ color: 'var(--text-default)', fontFamily: 'var(--font-mono)' }}>{lastShiftSummary.shiftId?.slice(0, 8) || '—'}</strong></span>
-            <span>Template: <strong style={{ color: 'var(--text-default)' }}>{lastShiftSummary.templateName || '—'}</strong></span>
-            <span>Closed At: <strong style={{ color: 'var(--text-default)' }}>{lastShiftSummary.closedAt ? new Date(lastShiftSummary.closedAt).toLocaleString('en-IN') : '—'}</strong></span>
+            <span>Shift ID: <strong style={{ color: 'var(--text-default)', fontFamily: 'var(--font-mono)' }}>{lastShiftSummary.shiftId?.slice(0, 8) || lastShiftSummary.snapshotData?.shiftId?.slice(0, 8) || '—'}</strong></span>
+            <span>Template: <strong style={{ color: 'var(--text-default)' }}>{lastShiftSummary.snapshotData?.templateName || lastShiftSummary.templateName || '—'}</strong></span>
+            <span>Closed At: <strong style={{ color: 'var(--text-default)' }}>{(lastShiftSummary.snapshotData?.closedAt || lastShiftSummary.closedAt) ? new Date(lastShiftSummary.snapshotData?.closedAt || lastShiftSummary.closedAt).toLocaleString('en-IN') : '—'}</strong></span>
           </div>
         </div>
       )}
@@ -152,6 +152,7 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
             </label>
             <input
               type="number"
+              min="0"
               value={openingCash}
               onChange={(e) => onOpeningCashChange(Number(e.target.value))}
               required
@@ -185,7 +186,7 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
                 return (
                   <div key={du.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
                     <span style={{ fontSize: '13px', color: 'var(--text-default)' }}>
-                      <Fuel size={13} style={{ marginRight: '6px', verticalAlign: 'middle', display: 'inline' }} /> Dispenser <strong>{du.name}</strong>
+                      <Fuel size={13} style={{ marginRight: '6px', verticalAlign: 'middle', display: 'inline' }} /> Dispenser <strong>{du.code || du.name}</strong>
                     </span>
                     <select
                       value={assigned?.userId ?? ''}
@@ -253,7 +254,7 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
                       <option value="">-- Shift-wide (any pump) --</option>
                       {dispensers && dispensers.map((du: any) => (
                         <option key={du.id} value={du.id}>
-                          Dispenser {du.name}
+                          Dispenser {du.code || du.name}
                         </option>
                       ))}
                     </select>
@@ -294,6 +295,7 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
                     <input
                       type="number"
                       step="0.001"
+                      min="0"
                       value={initial?.openingReading ?? 0}
                       onChange={(e) => onInitialReadingChange(nz.id, Number(e.target.value))}
                       style={{

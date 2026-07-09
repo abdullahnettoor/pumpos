@@ -489,30 +489,36 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
                   <input
                     type="number"
                     step="0.001"
+                    min={nz.opening}
                     required
                     {...register(`nozzleReadings.${nz.nozzleId}`)}
                     style={{
                       width: '100%',
                       height: '28px',
                       padding: '0 6px',
-                      border: '1px solid var(--border-strong)',
+                      border: `1px solid ${nz.closing < nz.opening ? 'var(--brand-danger)' : 'var(--border-strong)'}`,
                       borderRadius: 'var(--radius-input)',
                       fontFamily: 'var(--font-mono)',
                       fontSize: '12px',
                       textAlign: 'right',
                     }}
                   />
-                  {errors.nozzleReadings?.[nz.nozzleId] && (
-                    <span style={{ color: 'var(--brand-danger)', fontSize: '9px', display: 'block', marginTop: '2px' }}>
-                      Err
+                  {nz.closing < nz.opening ? (
+                    <span style={{ color: 'var(--brand-danger)', fontSize: '10px', display: 'block', marginTop: '2px' }}>
+                      Must be ≥ {nz.opening.toFixed(3)}
                     </span>
-                  )}
+                  ) : errors.nozzleReadings?.[nz.nozzleId] ? (
+                    <span style={{ color: 'var(--brand-danger)', fontSize: '10px', display: 'block', marginTop: '2px' }}>
+                      {errors.nozzleReadings[nz.nozzleId]?.message || 'Invalid'}
+                    </span>
+                  ) : null}
                 </div>
                 <div>
                   <label style={{ fontSize: '10px', color: 'var(--text-muted)', display: 'block', marginBottom: '2px' }}>Testing (L)</label>
                   <input
                     type="number"
                     step="0.1"
+                    min="0"
                     required
                     {...register(`nozzleTesting.${nz.nozzleId}`)}
                     style={{
@@ -527,8 +533,8 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
                     }}
                   />
                   {errors.nozzleTesting?.[nz.nozzleId] && (
-                    <span style={{ color: 'var(--brand-danger)', fontSize: '9px', display: 'block', marginTop: '2px' }}>
-                      Err
+                    <span style={{ color: 'var(--brand-danger)', fontSize: '10px', display: 'block', marginTop: '2px' }}>
+                      {errors.nozzleTesting[nz.nozzleId]?.message || 'Invalid'}
                     </span>
                   )}
                 </div>
@@ -576,6 +582,7 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
                           <input
                             type="number"
                             step="any"
+                            min="0"
                             {...register(`terminalCard.${t.terminalId}`)}
                             style={{ height: '30px', padding: '0 8px', border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-input)', fontFamily: 'var(--font-mono)', fontSize: '12px', textAlign: 'right' }}
                           />
@@ -587,6 +594,7 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
                           <input
                             type="number"
                             step="any"
+                            min="0"
                             {...register(`terminalUpi.${t.terminalId}`)}
                             style={{ height: '30px', padding: '0 8px', border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-input)', fontFamily: 'var(--font-mono)', fontSize: '12px', textAlign: 'right' }}
                           />
@@ -709,11 +717,11 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
                       <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Qty (L){ccPrice ? ` · ₹${ccPrice}/L` : ''}</label>
-                      <input type="number" step="0.001" value={ccQty} onChange={(e) => handleCcQtyChange(e.target.value)} disabled={ccBusy} style={{ height: '30px', padding: '0 6px', width: '100%', minWidth: 0, border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-input)', fontFamily: 'var(--font-mono)', fontSize: '12px', textAlign: 'right' }} />
+                      <input type="number" step="0.001" min="0" value={ccQty} onChange={(e) => handleCcQtyChange(e.target.value)} disabled={ccBusy} style={{ height: '30px', padding: '0 6px', width: '100%', minWidth: 0, border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-input)', fontFamily: 'var(--font-mono)', fontSize: '12px', textAlign: 'right' }} />
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
                       <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Amount (₹)</label>
-                      <input type="number" step="0.01" value={ccAmount} onChange={(e) => handleCcAmountChange(e.target.value)} disabled={ccBusy} style={{ height: '30px', padding: '0 6px', width: '100%', minWidth: 0, border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-input)', fontFamily: 'var(--font-mono)', fontSize: '12px', textAlign: 'right', fontWeight: 600 }} />
+                      <input type="number" step="0.01" min="0" value={ccAmount} onChange={(e) => handleCcAmountChange(e.target.value)} disabled={ccBusy} style={{ height: '30px', padding: '0 6px', width: '100%', minWidth: 0, border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-input)', fontFamily: 'var(--font-mono)', fontSize: '12px', textAlign: 'right', fontWeight: 600 }} />
                     </div>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
@@ -749,6 +757,7 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
               <input
                 type="number"
                 step="any"
+                min="0"
                 {...register('cashHandedOver')}
                 style={{ height: '32px', padding: '0 8px', width: '100%', minWidth: 0, border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-input)', fontFamily: 'var(--font-mono)', fontSize: '13px' }}
               />
@@ -845,10 +854,15 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
         </div>
 
         {/* Action Buttons */}
+        {calculatedNozzles.some((n) => n.closing < n.opening) && (
+          <div style={{ backgroundColor: 'var(--state-danger-bg)', color: 'var(--state-danger-fg)', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', padding: '8px 10px', fontSize: '11px' }}>
+            One or more closing readings are below their opening reading. Fix the highlighted fields before saving.
+          </div>
+        )}
         <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
           <button
             type="submit"
-            disabled={submitting}
+            disabled={submitting || calculatedNozzles.some((n) => n.closing < n.opening)}
             style={{
               flex: 1,
               height: '36px',
@@ -858,8 +872,8 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
               borderRadius: 'var(--radius-button)',
               fontWeight: 600,
               fontSize: '13px',
-              cursor: 'pointer',
-              opacity: submitting ? 0.6 : 1,
+              cursor: submitting || calculatedNozzles.some((n) => n.closing < n.opening) ? 'not-allowed' : 'pointer',
+              opacity: submitting || calculatedNozzles.some((n) => n.closing < n.opening) ? 0.6 : 1,
             }}
           >
             {submitting ? 'Saving...' : 'Save Handover & Readings'}

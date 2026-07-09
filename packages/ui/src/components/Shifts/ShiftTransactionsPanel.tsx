@@ -328,6 +328,8 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
                 <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Amount (₹)</label>
                 <input
                   type="number"
+                  min="0"
+                  step="0.01"
                   placeholder="0.00"
                   value={expenseAmount}
                   onChange={(e) => setExpenseAmount(e.target.value)}
@@ -435,6 +437,8 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
                   <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Volume (Liters)</label>
                   <input
                     type="number"
+                    min="0"
+                    step="0.001"
                     placeholder="0.00"
                     value={purchaseQuantity}
                     onChange={(e) => setPurchaseQuantity(e.target.value)}
@@ -453,6 +457,8 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
                   <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Price per Liter (₹)</label>
                   <input
                     type="number"
+                    min="0"
+                    step="0.01"
                     placeholder="0.00"
                     value={purchaseUnitPrice}
                     onChange={(e) => setPurchaseUnitPrice(e.target.value)}
@@ -587,6 +593,8 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
                 <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Amount (₹)</label>
                 <input
                   type="number"
+                  min="0"
+                  step="0.01"
                   placeholder="0.00"
                   value={collectionAmount}
                   onChange={(e) => setCollectionAmount(e.target.value)}

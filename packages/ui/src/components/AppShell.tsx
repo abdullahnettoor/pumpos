@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { LogOut } from 'lucide-react';
 import { SyncIndicator } from './SyncIndicator.js';
 import { Station } from '@pump/shared';
 
@@ -316,7 +317,7 @@ export const AppShell: React.FC<AppShellProps> = ({
         {/* User context footer */}
         <div
           style={{
-            padding: 'var(--space-3) var(--space-4)',
+            padding: collapsed ? 'var(--space-3) var(--space-2)' : 'var(--space-3) var(--space-4)',
             borderTop: '1px solid var(--border-soft)',
             display: 'flex',
             flexDirection: 'column',
@@ -334,22 +335,28 @@ export const AppShell: React.FC<AppShellProps> = ({
           )}
           <button
             onClick={onLogout}
+            title={collapsed ? 'Logout' : undefined}
+            aria-label="Logout"
             style={{
-              padding: '6px var(--space-3)',
+              padding: collapsed ? '6px' : '6px var(--space-3)',
               borderRadius: 'var(--radius-button)',
               border: '1px solid var(--border-soft)',
               backgroundColor: 'var(--bg-surface)',
               color: 'var(--text-default)',
               cursor: 'pointer',
               fontWeight: 500,
-              fontSize: '11px',
+              fontSize: '12px',
               width: '100%',
-              textAlign: collapsed ? 'center' : 'left',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: collapsed ? 'center' : 'flex-start',
+              gap: '8px',
             }}
             onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--bg-surface-alt)')}
             onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'var(--bg-surface)')}
           >
-            {collapsed ? 'Exit' : 'Logout'}
+            <LogOut size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+            {!collapsed && <span>Logout</span>}
           </button>
         </div>
       </aside>

@@ -341,20 +341,26 @@ export const MerchandiseHandoversPanel: React.FC<MerchandiseHandoversPanelProps>
                 const qty = Number(r.quantity) || 0;
                 const t = p && qty > 0 ? lineTax(p, qty) : null;
                 return (
-                  <div key={i} style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
-                    <div style={{ flex: 1 }}>
-                      <Combobox
-                        options={products.map((pr) => ({ value: pr.id, label: `${pr.name}${pr.brand ? ` · ${pr.brand}` : ''}`, sublabel: pr.sellingPrice != null ? `MRP ${inr(pr.sellingPrice)}` : 'No price set' }))}
-                        value={r.productId}
-                        onChange={(v) => setRows((prev) => prev.map((x, j) => (j === i ? { ...x, productId: v } : x)))}
-                        placeholder="Select product…"
-                      />
-                      {t && <div style={{ fontSize: '10px', color: 'var(--text-faint)', marginTop: '2px' }}>{inr(t.taxable)} + tax {inr(t.tax)} = {inr(t.total)}</div>}
+                  <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: '6px', padding: '10px', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', backgroundColor: 'var(--bg-surface)' }}>
+                    <Combobox
+                      options={products.map((pr) => ({ value: pr.id, label: `${pr.name}${pr.brand ? ` · ${pr.brand}` : ''}`, sublabel: pr.sellingPrice != null ? `MRP ${inr(pr.sellingPrice)}` : 'No price set' }))}
+                      value={r.productId}
+                      onChange={(v) => setRows((prev) => prev.map((x, j) => (j === i ? { ...x, productId: v } : x)))}
+                      placeholder="Select product…"
+                    />
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <div style={{ flex: 1 }}>
+                        <NumberInput placeholder="Qty" min="0" value={r.quantity} onChange={(e) => setRows((prev) => prev.map((x, j) => (j === i ? { ...x, quantity: e.target.value } : x)))} />
+                      </div>
+                      {t ? (
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
+                          {inr(t.taxable)} + tax {inr(t.tax)} = <strong style={{ color: 'var(--text-strong)' }}>{inr(t.total)}</strong>
+                        </div>
+                      ) : (
+                        <div style={{ flex: 1 }} />
+                      )}
+                      <button type="button" className="btn btn-secondary btn-sm" style={{ padding: '6px 8px', height: 32 }} onClick={() => setRows((prev) => (prev.length > 1 ? prev.filter((_, j) => j !== i) : prev))} aria-label="Remove line"><Trash2 size={13} /></button>
                     </div>
-                    <div style={{ width: 76 }}>
-                      <NumberInput placeholder="Qty" value={r.quantity} onChange={(e) => setRows((prev) => prev.map((x, j) => (j === i ? { ...x, quantity: e.target.value } : x)))} />
-                    </div>
-                    <button type="button" className="btn btn-secondary btn-sm" style={{ padding: '6px 8px', height: 32 }} onClick={() => setRows((prev) => (prev.length > 1 ? prev.filter((_, j) => j !== i) : prev))} aria-label="Remove line"><Trash2 size={13} /></button>
                   </div>
                 );
               })}
@@ -366,7 +372,7 @@ export const MerchandiseHandoversPanel: React.FC<MerchandiseHandoversPanelProps>
 
           <div>
             <label className="field-label">Paid by card/UPI — non-cash (₹)</label>
-            <NumberInput placeholder="0" value={nonCash} onChange={(e) => setNonCash(e.target.value)} />
+            <NumberInput placeholder="0" min="0" value={nonCash} onChange={(e) => setNonCash(e.target.value)} />
             <span style={{ fontSize: '11px', color: 'var(--text-faint)' }}>
               Portion of this sale paid by card/UPI on a terminal. It's subtracted from the cash the employee hands over (the card money is in the terminal batch). Leave 0 if all cash.
             </span>
