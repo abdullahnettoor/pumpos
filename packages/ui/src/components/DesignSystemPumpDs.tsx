@@ -8,6 +8,12 @@ import {
   KpiTile,
   KpiStrip,
   Button,
+  PageHeader,
+  Panel,
+  EmptyState,
+  MeterRow,
+  BreakdownBar,
+  Sparkline,
   type PumpStatus,
   type ChipTone,
   type ChipVariant,
@@ -17,7 +23,7 @@ import {
   type ButtonVariant,
   type ButtonSize,
 } from '../pump-ds/index.js';
-import { Fuel, User, Building2, Truck, Info, ShieldCheck, Plus, Download, Trash2, Play, ArrowRight } from 'lucide-react';
+import { Fuel, User, Building2, Truck, Info, ShieldCheck, Plus, Download, Trash2, Play, ArrowRight, Inbox, Droplet, TrendingUp } from 'lucide-react';
 
 /**
  * pump-ds showcase — the real design system living surface. Each pump-ds
@@ -389,6 +395,101 @@ const StatusInContext: React.FC = () => (
   </div>
 );
 
+// ---------------- Dashboard building blocks ----------------
+
+const DashboardBlocks: React.FC = () => (
+  <div className="space-y-6">
+    {/* PageHeader */}
+    <div>
+      <div className="mb-2.5 font-mono text-[10px] uppercase tracking-wider text-ink-faint">PageHeader · title + subtitle + actions + meta</div>
+      <div className="rounded-card border border-border-soft bg-surface p-4">
+        <PageHeader
+          title="Dashboard"
+          subtitle="New Test Station · business day 10 Jul"
+          meta={<><StatusChip status="open" size="xs" /><Chip tone="neutral" size="xs">Manager</Chip></>}
+          actions={<><Button variant="secondary" size="sm" leftIcon={<Download />}>Export</Button><Button variant="primary" size="sm" leftIcon={<Plus />}>New</Button></>}
+        />
+      </div>
+    </div>
+
+    {/* Panel */}
+    <div>
+      <div className="mb-2.5 font-mono text-[10px] uppercase tracking-wider text-ink-faint">Panel · titled surface (header + body + footer)</div>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <Panel title="Tank levels" icon={<Droplet />} action={<Button variant="ghost" size="xs">View all</Button>}>
+          <div className="space-y-3">
+            <MeterRow label="Tank 1" sublabel="XP-95" value={7200} max={9000} valueLabel="7,200 / 9,000 L" />
+            <MeterRow label="Tank 2" sublabel="HSD" value={320} max={9000} valueLabel="320 / 9,000 L" />
+            <MeterRow label="Tank 3" sublabel="MS-9" value={1150} max={9000} valueLabel="1,150 / 9,000 L" />
+          </div>
+        </Panel>
+        <Panel title="Collections today" action={<span className="font-mono text-[12px] font-semibold text-ink-strong">₹3,68,540</span>} footer={<span className="text-[11px] text-ink-muted">Cash reconciled at shift close.</span>}>
+          <BreakdownBar
+            formatValue={(n) => `₹${n.toLocaleString('en-IN')}`}
+            segments={[
+              { label: 'Cash', value: 184260, tone: 'success' },
+              { label: 'UPI', value: 92140, tone: 'info' },
+              { label: 'Card', value: 46820, tone: 'brand' },
+              { label: 'Credit', value: 45320, tone: 'warning' },
+            ]}
+          />
+        </Panel>
+      </div>
+    </div>
+
+    {/* MeterRow tones */}
+    <div>
+      <div className="mb-2.5 font-mono text-[10px] uppercase tracking-wider text-ink-faint">MeterRow · auto-tone (critical &lt;5% · low &lt;15% · else brand)</div>
+      <div className="space-y-3 rounded-card border border-border-soft bg-surface p-4">
+        <MeterRow label="Healthy" value={7200} max={9000} valueLabel="80%" />
+        <MeterRow label="Running low" value={1080} max={9000} valueLabel="12%" />
+        <MeterRow label="Critical" value={270} max={9000} valueLabel="3%" />
+      </div>
+    </div>
+
+    {/* Sparkline */}
+    <div>
+      <div className="mb-2.5 font-mono text-[10px] uppercase tracking-wider text-ink-faint">Sparkline · dependency-free trend (line + optional area fill)</div>
+      <div className="flex flex-wrap items-center gap-6 rounded-card border border-border-soft bg-surface p-4">
+        {([
+          { tone: 'brand' as DotTone, label: 'Sales 7d', data: [42, 48, 45, 61, 58, 72, 69] },
+          { tone: 'success' as DotTone, label: 'Volume 7d', data: [30, 32, 31, 38, 40, 44, 47], fill: true },
+          { tone: 'danger' as DotTone, label: 'Outstanding', data: [90, 88, 91, 85, 80, 78, 74] },
+        ]).map((s) => (
+          <div key={s.label} className="flex items-center gap-3">
+            <Sparkline data={s.data} tone={s.tone} fill={s.fill} aria-label={s.label} />
+            <div>
+              <div className="text-[12px] font-medium text-ink-strong">{s.label}</div>
+              <div className="flex items-center gap-1 text-[11px] text-ink-muted"><TrendingUp className="size-3" /> trend</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+
+    {/* EmptyState */}
+    <div>
+      <div className="mb-2.5 font-mono text-[10px] uppercase tracking-wider text-ink-faint">EmptyState · compact (inline) + default (block)</div>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <EmptyState
+          compact
+          icon={<Inbox />}
+          title="No credit sales this shift"
+          description="Fleet charges appear here as vehicles fuel up."
+          action={<Button variant="secondary" size="xs">Record</Button>}
+        />
+        <div className="rounded-card border border-border-soft bg-surface">
+          <EmptyState
+            icon={<Inbox />}
+            title="All clear"
+            description="Nothing needs your attention right now. Variance, low stock, and overdue accounts will surface here."
+          />
+        </div>
+      </div>
+    </div>
+  </div>
+);
+
 // ---------------- root ----------------
 
 export const DesignSystemPumpDsPanel: React.FC = () => (
@@ -456,6 +557,13 @@ export const DesignSystemPumpDsPanel: React.FC = () => (
       description="Real placements: drawer footer (one primary + one ghost escape), destructive confirm (danger primary + safe secondary), and a toolbar (xs ghost + icon-only cluster). One primary action per surface — never two competing primaries."
     >
       <ButtonInContext />
+    </Group>
+
+    <Group
+      title="Dashboard building blocks"
+      description="The reusable primitives behind the dashboard reframe: PageHeader, Panel, MeterRow (tank gauges), BreakdownBar (collections split), Sparkline (dependency-free trends), and EmptyState. All app-wide, not dashboard-only."
+    >
+      <DashboardBlocks />
     </Group>
 
     <Group
