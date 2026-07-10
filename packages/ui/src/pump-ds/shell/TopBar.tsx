@@ -1,4 +1,4 @@
-import React, { type ReactNode } from 'react';
+import React, { forwardRef, type ReactNode } from 'react';
 import { Menu as MenuIcon, Search, Bell, ChevronDown, Command as CommandIcon, Fuel } from 'lucide-react';
 import { cn } from '../lib/cn.js';
 import { Button } from '../button/index.js';
@@ -77,18 +77,23 @@ export interface TopBarProps {
   className?: string;
 }
 
-const IconBtn: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement> & { badge?: number }> = ({ className, children, badge, ...props }) => (
-  <button
-    className={cn('relative inline-flex size-8 items-center justify-center rounded-button text-ink-muted transition-colors hover:bg-surface-alt hover:text-ink-strong', className)}
-    {...props}
-  >
-    {children}
-    {badge != null && badge > 0 && (
-      <span className="absolute right-1 top-1 inline-flex min-w-[14px] items-center justify-center rounded-full bg-danger-fg px-1 text-[9px] font-bold leading-[14px] text-white">
-        {badge > 9 ? '9+' : badge}
-      </span>
-    )}
-  </button>
+const IconBtn = forwardRef<HTMLButtonElement, React.ButtonHTMLAttributes<HTMLButtonElement> & { badge?: number }>(
+  function IconBtn({ className, children, badge, ...props }, ref) {
+    return (
+      <button
+        ref={ref}
+        className={cn('relative inline-flex size-8 items-center justify-center rounded-button text-ink-muted transition-colors hover:bg-surface-alt hover:text-ink-strong', className)}
+        {...props}
+      >
+        {children}
+        {badge != null && badge > 0 && (
+          <span className="absolute right-1 top-1 inline-flex min-w-[14px] items-center justify-center rounded-full bg-danger-fg px-1 text-[9px] font-bold leading-[14px] text-white">
+            {badge > 9 ? '9+' : badge}
+          </span>
+        )}
+      </button>
+    );
+  },
 );
 
 export const TopBar: React.FC<TopBarProps> = ({

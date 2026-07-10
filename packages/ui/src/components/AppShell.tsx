@@ -209,6 +209,7 @@ export const AppShell: React.FC<AppShellProps> = ({
   selectedStation = null,
   environmentTag = null,
 }) => {
+  // Sidebar expanded by default; the top-bar hamburger collapses it to an icon rail.
   const [collapsed, setCollapsed] = useState(false);
 
   const visibleNavItems = navItems.filter(

@@ -1,19 +1,23 @@
 import React, { useState } from 'react';
 import { CloudShiftService } from '../../services/cloud.js';
 import {
-  useShiftStatus, useInvalidateOperational, useInventoryStatus, useInventoryItems, usePricing, useProducts,
+  useShiftStatus, useInvalidateOperational, useInventoryStatus, usePricing, useProducts,
   useExpenses, usePurchases, useCollections, useCustomers, useSuppliers, useShiftSummaries, useDailyDssrPreview,
 } from '../../query/hooks.js';
-import { StatusBadge } from '../StatusBadge.js';
-import { LoadingSpinner } from '../LoadingSpinner.js';
+import { useStationAlerts } from '../../query/useStationAlerts.js';
 import { SkeletonGrid } from '../primitives/Skeleton.js';
-import { KpiStrip, KpiTile, Button } from '../../pump-ds/index.js';
-import { Banner } from '../primitives/Banner.js';
+import {
+  KpiStrip, KpiTile, Button, PageHeader, Panel, EmptyState, MeterRow, StatusChip, Chip,
+} from '../../pump-ds/index.js';
+import { cn } from '../../pump-ds/lib/cn.js';
 import { inr, formatQty } from '../../utils/format.js';
 import { useConfirm } from '../primitives/ConfirmDialog.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import { Station, resolveBusinessDate } from '@pump/shared';
-import { Play, Plus, FileText, Unlock, AlertTriangle, Lock, Droplet } from 'lucide-react';
+import {
+  Play, Plus, FileText, Unlock, AlertTriangle, Lock, Droplet, ClipboardList,
+  CircleCheckBig, ChevronRight, TriangleAlert, Clock,
+} from 'lucide-react';
 
 const shiftService = new CloudShiftService();
 
@@ -35,7 +39,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   const { data: tanks } = useInventoryStatus(selectedStation?.id);
   const { data: prices } = usePricing(selectedStation?.id);
   const { data: products } = useProducts();
-  const { data: inventoryItems } = useInventoryItems(selectedStation?.id, { enabled: canSeeFinancials });
+  const stationAlerts = useStationAlerts(selectedStation?.id, canSeeFinancials);
   const { data: expenses } = useExpenses({ enabled: canSeeFinancials });
   const { data: purchases } = usePurchases({ enabled: canSeeFinancials });
   const { data: collections } = useCollections({ enabled: canSeeFinancials });
@@ -86,13 +90,8 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
 
   if (loading) {
     return (
-      <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '24px', fontFamily: 'var(--font-sans)' }}>
-        <div>
-          <h1 style={{ fontSize: '20px', fontWeight: 600, color: 'var(--text-strong)' }}>Welcome back, {userName}</h1>
-          <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '2px' }}>
-            Station Control Center: <strong style={{ color: 'var(--text-default)' }}>{selectedStation.name}</strong> ({selectedStation.code})
-          </p>
-        </div>
+      <div className="animate-fade-in flex flex-col gap-5">
+        <PageHeader title="Dashboard" subtitle={`${selectedStation.name} · ${selectedStation.code}`} />
         <SkeletonGrid count={3} />
       </div>
     );
@@ -165,239 +164,204 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
     (cp: any) => fuelProductIds.size === 0 || fuelProductIds.has(cp.productId),
   );
 
-  // Dashboard alerts (extensible). Low-stock warnings differ for fuel (% of
-  // tank capacity) vs merchandise (out-of-stock / oversold). Gated to roles that
-  // can act on inventory; each carries an action to the stock page.
-  // Thresholds are sensible defaults — make them station-configurable later.
-  type DashAlert = { id: string; severity: 'danger' | 'warning'; message: string; actionLabel: string; path: string };
-  const alerts: DashAlert[] = [];
-  if (canSeeFinancials) {
-    tankRows.forEach((t) => {
-      const cap = Number(t.capacity) || 0;
-      const vol = Number(t.currentVolume) || 0;
-      if (!cap) return;
-      const pct = (vol / cap) * 100;
-      if (pct < 5) {
-        alerts.push({ id: `tank-${t.id}`, severity: 'danger', message: `${t.name} (${t.productName}) critically low — ${pct.toFixed(0)}% · ${formatQty(vol, 0)} L`, actionLabel: 'View Stock', path: '/inventory' });
-      } else if (pct < 15) {
-        alerts.push({ id: `tank-${t.id}`, severity: 'warning', message: `${t.name} (${t.productName}) running low — ${pct.toFixed(0)}% · ${formatQty(vol, 0)} L`, actionLabel: 'View Stock', path: '/inventory' });
-      }
-    });
-    (inventoryItems || []).forEach((i: any) => {
-      const q = Number(i.quantity) || 0;
-      // Negative stock is a genuine anomaly (a sale recorded beyond on-hand).
-      // Plain zero is NOT flagged — many products are simply not stocked.
-      if (q < 0) {
-        alerts.push({ id: `item-${i.productId}`, severity: 'danger', message: `${i.name} oversold — ${formatQty(q)} ${i.unit ?? ''}`.trim(), actionLabel: 'View Stock', path: '/inventory' });
-      }
-    });
-    alerts.sort((a, b) => (a.severity === b.severity ? 0 : a.severity === 'danger' ? -1 : 1));
-  }
+  // Prioritized "needs attention" list: shared station alerts (stock / oversold,
+  // same source as the top-bar bell) + today's cash variance.
+  type Exception = { id: string; tone: 'danger' | 'warning' | 'info'; title: string; meta?: string; onAction?: () => void };
+  const exceptions: Exception[] = [
+    ...stationAlerts.map((a) => ({
+      id: a.id, tone: a.severity, title: a.title, meta: a.meta,
+      onAction: a.actionPath ? () => onNavigate(a.actionPath!) : undefined,
+    })),
+    ...(canSeeFinancials && Math.abs(todayCashVariance) > 100
+      ? [{
+          id: 'variance', tone: 'danger' as const,
+          title: 'Cash variance today',
+          meta: `${inr(todayCashVariance)} across ${todayShifts.length} shift${todayShifts.length === 1 ? '' : 's'}`,
+          onAction: () => onNavigate('/shifts'),
+        }]
+      : []),
+  ];
 
   return (
-    <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '24px', fontFamily: 'var(--font-sans)' }}>
-      {/* Top Welcome Panel */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <h1 style={{ fontSize: '20px', fontWeight: 600, color: 'var(--text-strong)' }}>
-            Welcome back, {userName}
-          </h1>
-          <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '2px' }}>
-            Station Control Center: <strong style={{ color: 'var(--text-default)' }}>{selectedStation.name}</strong> ({selectedStation.code})
-          </p>
-        </div>
-      </div>
+    <div className="animate-fade-in flex flex-col gap-5">
+      <PageHeader
+        title="Dashboard"
+        subtitle={`${selectedStation.name} · ${selectedStation.code}`}
+        meta={
+          <>
+            <StatusChip status={activeShift ? 'open' : 'closed'} size="xs" label={activeShift ? 'Shift open' : 'No active shift'} />
+            <Chip tone="neutral" size="xs">Business day {todayBiz}</Chip>
+          </>
+        }
+      />
 
-      {/* Alerts — role-gated actionable warnings (low stock, etc.) */}
-      {alerts.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          {alerts.map((a) => (
-            <Banner key={a.id} severity={a.severity} actionLabel={a.actionLabel} onAction={() => onNavigate(a.path)}>
-              {a.message}
-            </Banner>
-          ))}
-        </div>
+      {/* Needs attention — shared station alerts + variance (financial roles) */}
+      {/* Needs attention — collapsible; compact by default so many alerts
+          never dominate the page. Expand to work through the list. */}
+      {canSeeFinancials && (
+        exceptions.length === 0 ? (
+          <EmptyState
+            compact
+            icon={<CircleCheckBig />}
+            title="All clear"
+            description="No variance, low stock, or oversold items right now."
+          />
+        ) : (
+          <Panel
+            title="Needs attention"
+            icon={<AlertTriangle />}
+            action={
+              <Chip tone={exceptions.some((e) => e.tone === 'danger') ? 'danger' : 'warning'} size="xs">
+                {exceptions.length} to review
+              </Chip>
+            }
+            collapsible
+            defaultCollapsed
+            flush
+          >
+            <ul className="max-h-[280px] divide-y divide-border-soft overflow-y-auto">
+              {exceptions.map((e) => {
+                const bg = e.tone === 'danger' ? 'bg-danger-bg text-danger-fg' : e.tone === 'warning' ? 'bg-warning-bg text-warning-fg' : 'bg-info-bg text-info-fg';
+                return (
+                  <li key={e.id}>
+                    <button onClick={e.onAction} className="flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-surface-alt">
+                      <span className={cn('inline-flex size-6 shrink-0 items-center justify-center rounded-md [&_svg]:size-3.5', bg)} aria-hidden="true">
+                        {e.tone === 'info' ? <Clock /> : <TriangleAlert />}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-[13px] font-medium text-ink-strong">{e.title}</span>
+                        {e.meta && <span className="block truncate text-[11.5px] text-ink-muted">{e.meta}</span>}
+                      </span>
+                      {e.onAction && <ChevronRight className="size-4 shrink-0 text-ink-faint" />}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </Panel>
+        )
       )}
 
-      {/* Main Grid: Launch Surfaces */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' }}>
-        
-        {/* Active Shift Card */}
-        <div className="card card-default" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', minHeight: '180px' }}>
-          <div>
-            <div className="flex justify-between items-center">
-              <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                Shift Operations
-              </span>
-              {activeShift ? (
-                <StatusBadge status="ACTIVE" type="success" />
-              ) : (
-                <StatusBadge status="NO ACTIVE SHIFT" type="warning" />
-              )}
-            </div>
-
-            {activeShift ? (
-              <div style={{ marginTop: '16px' }}>
-                <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-strong)' }}>
-                  {activeShift.templateName} Shift
-                </h3>
-                <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '4px' }}>
-                  Opened by {activeShift.openedByName} at {new Date(activeShift.openedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </p>
-                <div style={{ display: 'flex', gap: '16px', marginTop: '12px', fontSize: '13px' }}>
-                  <span>Opening Cash: <strong>{inr(activeShift.openingCash)}</strong></span>
-                </div>
-              </div>
-            ) : (
-              <div style={{ marginTop: '16px' }}>
-                <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-default)' }}>
-                  Ready to Record Operations
-                </h3>
-                <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '4px' }}>
-                  Start a new shift template to record nozzle readings and assign staff.
-                </p>
-              </div>
-            )}
-          </div>
-
-          <div style={{ marginTop: '20px' }}>
-            {activeShift ? (
-              <Button variant="primary" size="md" fullWidth leftIcon={<Play />} onClick={() => onNavigate('/shifts')}>
-                Resume Shift Workspace
-              </Button>
+      {/* Shift operations + latest DSSR */}
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+        {/* Active shift */}
+        <Panel
+          title="Shift operations"
+          icon={<ClipboardList />}
+          action={<StatusChip status={activeShift ? 'open' : 'closed'} size="xs" label={activeShift ? 'Active' : 'None'} />}
+          footer={
+            activeShift ? (
+              <Button variant="primary" size="sm" fullWidth leftIcon={<Play />} onClick={() => onNavigate('/shifts')}>Resume shift workspace</Button>
             ) : (
               <Button
                 variant={isAccountant ? 'secondary' : 'primary'}
-                size="md"
+                size="sm"
                 fullWidth
                 leftIcon={isAccountant ? <Lock /> : <Plus />}
                 disabled={isAccountant}
                 onClick={() => onNavigate('/shifts')}
               >
-                {isAccountant ? 'Accountants Cannot Open Shifts' : 'Open Shift'}
+                {isAccountant ? 'Accountants cannot open shifts' : 'Open shift'}
               </Button>
-            )}
-          </div>
-        </div>
+            )
+          }
+        >
+          {activeShift ? (
+            <div>
+              <div className="text-[15px] font-semibold text-ink-strong">{activeShift.templateName} Shift</div>
+              <div className="mt-0.5 text-[12.5px] text-ink-muted">
+                Opened by {activeShift.openedByName} · {new Date(activeShift.openedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </div>
+              <div className="mt-3 text-[13px] text-ink-default">
+                Opening cash <span className="font-mono font-semibold text-ink-strong">{inr(activeShift.openingCash)}</span>
+              </div>
+            </div>
+          ) : (
+            <div>
+              <div className="text-[14px] font-semibold text-ink-strong">Ready to record operations</div>
+              <div className="mt-0.5 text-[12.5px] text-ink-muted">Start a shift to record nozzle readings and assign staff.</div>
+            </div>
+          )}
+        </Panel>
 
-        {/* Latest DSSR Output Card — financial, non-Staff only */}
+        {/* Latest DSSR — financial roles */}
         {canSeeFinancials && (
-        <div className="card card-default" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', minHeight: '180px' }}>
-          <div>
-            <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              Authoritative Outputs (DSSR)
-            </span>
-
-            {lastShift ? (
-              <div style={{ marginTop: '16px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                  <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-strong)' }}>
-                    Last {lastShift.templateName} Shift
-                  </h3>
-                  <StatusBadge status={lastShift.status} type={lastShift.status === 'LOCKED' ? 'default' : 'warning'} />
+          <Panel
+            title="Latest DSSR"
+            icon={<FileText />}
+            action={lastShift ? <StatusChip status={lastShift.status === 'LOCKED' ? 'locked' : 'closed'} size="xs" /> : undefined}
+            footer={
+              lastShift ? (
+                <div className="flex gap-2">
+                  <Button variant="secondary" size="sm" leftIcon={<FileText />} className="flex-1" onClick={() => onNavigate('/shifts')}>View last DSSR</Button>
+                  {canReopenLastShift && (
+                    <Button variant="danger" size="sm" leftIcon={<Unlock />} loading={isReopening} className="flex-1" onClick={() => handleReopen(lastShift.id)}>Reopen</Button>
+                  )}
                 </div>
-                <p style={{ color: 'var(--text-muted)', fontSize: '12px', marginTop: '4px' }}>
-                  Closed at: {new Date(lastShift.closedAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
-                </p>
-
+              ) : undefined
+            }
+          >
+            {lastShift ? (
+              <div>
+                <div className="text-[14px] font-semibold text-ink-strong">Last {lastShift.templateName} shift</div>
+                <div className="mt-0.5 text-[12px] text-ink-muted">
+                  Closed {new Date(lastShift.closedAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
+                </div>
                 {lastDssr && (
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px', marginTop: '12px', fontSize: '12px', color: 'var(--text-default)' }}>
-                    <div>Total Fuel Sold: <strong>{Number(lastDssr.snapshotData.totalVolumeSold).toFixed(2)} L</strong></div>
-                    <div>Closing Cash: <strong>{inr(lastDssr.snapshotData.closingCash)}</strong></div>
+                  <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-[12.5px]">
+                    <div className="text-ink-muted">Fuel sold<span className="mt-0.5 block font-mono font-semibold text-ink-strong">{Number(lastDssr.snapshotData.totalVolumeSold).toFixed(2)} L</span></div>
+                    <div className="text-ink-muted">Closing cash<span className="mt-0.5 block font-mono font-semibold text-ink-strong">{inr(lastDssr.snapshotData.closingCash)}</span></div>
                   </div>
                 )}
               </div>
             ) : (
-              <div style={{ marginTop: '16px' }}>
-                <h3 style={{ fontSize: '14px', color: 'var(--text-muted)', fontWeight: 600 }}>
-                  No historical reports yet
-                </h3>
-                <p style={{ color: 'var(--text-muted)', fontSize: '12px', marginTop: '4px' }}>
-                  Complete a shift closure to automatically compile the Daily Sales Summary Record.
-                </p>
-              </div>
+              <EmptyState compact icon={<FileText />} title="No reports yet" description="Close a shift to compile its DSSR." />
             )}
-          </div>
-
-          <div style={{ marginTop: '20px', display: 'flex', gap: '8px' }}>
-            {lastShift && (
-              <>
-                <Button variant="secondary" size="sm" leftIcon={<FileText />} style={{ flex: 1 }} onClick={() => onNavigate('/shifts')}>
-                  View Last DSSR
-                </Button>
-
-                {canReopenLastShift && (
-                  <Button
-                    variant="danger"
-                    size="sm"
-                    leftIcon={<Unlock />}
-                    loading={isReopening}
-                    style={{ flex: 1 }}
-                    onClick={() => handleReopen(lastShift.id)}
-                  >
-                    Reopen
-                  </Button>
-                )}
-              </>
-            )}
-          </div>
-        </div>
+          </Panel>
         )}
-
       </div>
 
-      {/* Fuel prices + tank levels (visible to all roles) */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' }}>
-        {/* Tank levels */}
-        <div className="card card-default" style={{ padding: '16px' }}>
-          <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            Tank Levels
-          </span>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '14px' }}>
-            {tankRows.length === 0 ? (
-              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>No tank data yet.</span>
-            ) : tankRows.map((tank) => {
-              const cap = Number(tank.capacity) || 0;
-              const vol = Number(tank.currentVolume) || 0;
-              const pct = cap ? Math.min(100, Math.max(0, (vol / cap) * 100)) : 0;
-              const low = pct < 15;
-              return (
-                <div key={tank.id}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '3px' }}>
-                    <span style={{ color: 'var(--text-strong)', fontWeight: 500 }}>
-                      {tank.name} <span style={{ color: 'var(--text-faint)' }}>· {tank.productName}</span>
-                    </span>
-                    <span style={{ fontFamily: 'var(--font-mono)', color: low ? 'var(--brand-danger)' : 'var(--text-muted)' }}>
-                      {formatQty(vol, 0)} / {formatQty(cap, 0)} L
-                    </span>
-                  </div>
-                  <div style={{ height: '6px', background: 'var(--bg-surface-alt)', borderRadius: '3px', overflow: 'hidden' }}>
-                    <div style={{ width: `${pct}%`, height: '100%', background: low ? 'var(--brand-danger)' : 'var(--brand-primary)' }} />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
+      {/* Tank levels + fuel prices (all roles) */}
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+        <Panel title="Tank levels" icon={<Droplet />}>
+          {tankRows.length === 0 ? (
+            <EmptyState compact icon={<Droplet />} title="No tank data yet" />
+          ) : (
+            <div className="space-y-3.5">
+              {tankRows.map((tank) => {
+                const cap = Number(tank.capacity) || 0;
+                const vol = Number(tank.currentVolume) || 0;
+                return (
+                  <MeterRow
+                    key={tank.id}
+                    label={tank.name}
+                    sublabel={tank.productName}
+                    value={vol}
+                    max={cap}
+                    valueLabel={`${formatQty(vol, 0)} / ${formatQty(cap, 0)} L`}
+                  />
+                );
+              })}
+            </div>
+          )}
+        </Panel>
 
-        {/* Current fuel prices */}
-        <div className="card card-default" style={{ padding: '16px' }}>
-          <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            Current Fuel Prices
-          </span>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '14px' }}>
-            {priceRows.length === 0 ? (
-              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>No pricing set.</span>
-            ) : priceRows.map((cp) => (
-              <div key={cp.productId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', background: 'var(--bg-surface-alt)', borderRadius: 'var(--radius-input)' }}>
-                <span style={{ fontSize: '13px', color: 'var(--text-strong)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <Droplet size={13} style={{ color: 'var(--brand-secondary)' }} /> {cp.productName}
-                </span>
-                <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--text-strong)' }}>{inr(cp.price)}/L</span>
-              </div>
-            ))}
-          </div>
-        </div>
+        <Panel title="Current fuel prices" icon={<Droplet />}>
+          {priceRows.length === 0 ? (
+            <EmptyState compact icon={<Droplet />} title="No pricing set" />
+          ) : (
+            <div className="space-y-2">
+              {priceRows.map((cp) => (
+                <div key={cp.productId} className="flex items-center justify-between rounded-input bg-surface-alt px-2.5 py-2">
+                  <span className="flex items-center gap-1.5 text-[13px] text-ink-strong">
+                    <Droplet className="size-3.5 text-brand-secondary" /> {cp.productName}
+                  </span>
+                  <span className="font-mono text-[13px] font-semibold text-ink-strong">{inr(cp.price)}/L</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </Panel>
       </div>
 
       {/* Live Today's P&L — Owner only */}

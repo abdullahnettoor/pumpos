@@ -10,9 +10,10 @@ import {
   type QuickCreateAction, type UserMenuAction, type SyncStatus,
 } from '../pump-ds/index.js';
 import {
-  useShiftStatus, useCustomers, useSuppliers, useProducts, useInventoryStatus, useInventoryItems,
+  useShiftStatus, useCustomers, useSuppliers, useProducts,
 } from '../query/hooks.js';
-import { inr, formatQty } from '../utils/format.js';
+import { useStationAlerts } from '../query/useStationAlerts.js';
+import { inr } from '../utils/format.js';
 
 /**
  * AppTopBar — the data container that wires the pure pump-ds `TopBar` +
@@ -72,8 +73,7 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
   const { data: customers } = useCustomers(true, { enabled: canSeeFinancials } as any);
   const { data: suppliers } = useSuppliers(true, { enabled: canSeeFinancials } as any);
   const { data: products } = useProducts();
-  const { data: tanks } = useInventoryStatus(stationId, { enabled: canSeeFinancials } as any);
-  const { data: inventoryItems } = useInventoryItems(stationId, { enabled: canSeeFinancials } as any);
+  const stationAlerts = useStationAlerts(stationId, canSeeFinancials);
 
   // --- business day ---
   const settings: any = (selectedStation as any)?.settings || {};
@@ -98,36 +98,24 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
     { id: 'logout', label: 'Log out', icon: <LogOut />, tone: 'danger', onSelect: onLogout },
   ];
 
-  // --- notifications (derived; see TODO to share with dashboard) ---
+  // --- notifications: shared station alerts (stock/oversold) + sync state ---
   const notifications: NotificationItem[] = useMemo(() => {
-    const list: NotificationItem[] = [];
-    if (canSeeFinancials) {
-      (tanks || []).forEach((t: any) => {
-        const cap = Number(t.capacity) || 0;
-        const vol = Number(t.currentVolume) || 0;
-        if (!cap) return;
-        const pct = (vol / cap) * 100;
-        if (pct < 5) {
-          list.push({ id: `tank-${t.id}`, tone: 'danger', icon: <TriangleAlert />, title: `${t.name} critically low`, meta: `${t.productName} · ${pct.toFixed(0)}% · ${formatQty(vol, 0)} L`, actionLabel: 'Stock', onAction: () => onNavigate('/inventory') });
-        } else if (pct < 15) {
-          list.push({ id: `tank-${t.id}`, tone: 'warning', icon: <TriangleAlert />, title: `${t.name} running low`, meta: `${t.productName} · ${pct.toFixed(0)}% · ${formatQty(vol, 0)} L`, actionLabel: 'Stock', onAction: () => onNavigate('/inventory') });
-        }
-      });
-      (inventoryItems || []).forEach((i: any) => {
-        if (Number(i.quantity) < 0) {
-          list.push({ id: `item-${i.productId}`, tone: 'danger', icon: <TriangleAlert />, title: `${i.name} oversold`, meta: `${formatQty(Number(i.quantity))} ${i.unit ?? ''}`.trim(), actionLabel: 'Stock', onAction: () => onNavigate('/inventory') });
-        }
-      });
-    }
+    const list: NotificationItem[] = stationAlerts.map((a) => ({
+      id: a.id,
+      tone: a.severity,
+      icon: <TriangleAlert />,
+      title: a.title,
+      meta: a.meta,
+      actionLabel: a.actionLabel,
+      onAction: a.actionPath ? () => onNavigate(a.actionPath!) : undefined,
+    }));
     if (syncStatus === 'failed') {
       list.push({ id: 'sync', tone: 'danger', icon: <TriangleAlert />, title: 'Sync failed', meta: pendingSyncCount > 0 ? `${pendingSyncCount} events not synced` : 'Retry to reconcile', actionLabel: 'Retry', onAction: () => {} });
     } else if (syncStatus === 'pending' && pendingSyncCount > 0) {
-      list.push({ id: 'sync', tone: 'info', icon: <Clock />, title: `${pendingSyncCount} events pending sync`, meta: 'Retrying automatically', actionLabel: '', onAction: () => {} });
+      list.push({ id: 'sync', tone: 'info', icon: <Clock />, title: `${pendingSyncCount} events pending sync`, meta: 'Retrying automatically', onAction: () => {} });
     }
-    // Danger first, then warning, then info.
-    const rank = { danger: 0, warning: 1, info: 2 } as const;
-    return list.sort((a, b) => rank[a.tone] - rank[b.tone]);
-  }, [tanks, inventoryItems, syncStatus, pendingSyncCount, canSeeFinancials, onNavigate]);
+    return list;
+  }, [stationAlerts, syncStatus, pendingSyncCount, onNavigate]);
 
   // --- command palette groups ---
   const commandGroups: CommandGroup[] = useMemo(() => {
