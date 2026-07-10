@@ -7,7 +7,7 @@ import {
 import { StatusBadge } from '../StatusBadge.js';
 import { LoadingSpinner } from '../LoadingSpinner.js';
 import { SkeletonGrid } from '../primitives/Skeleton.js';
-import { KpiStrip, KpiTile } from '../../pump-ds/index.js';
+import { KpiStrip, KpiTile, Button } from '../../pump-ds/index.js';
 import { Banner } from '../primitives/Banner.js';
 import { inr, formatQty } from '../../utils/format.js';
 import { useConfirm } from '../primitives/ConfirmDialog.js';
@@ -262,30 +262,20 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
 
           <div style={{ marginTop: '20px' }}>
             {activeShift ? (
-              <button
-                className="btn btn-primary btn-md"
-                style={{ width: '100%' }}
-                onClick={() => onNavigate('/shifts')}
-              >
-                <Play size={13} /> Resume Shift Workspace
-              </button>
+              <Button variant="primary" size="md" fullWidth leftIcon={<Play />} onClick={() => onNavigate('/shifts')}>
+                Resume Shift Workspace
+              </Button>
             ) : (
-              <button
-                className={`btn ${isAccountant ? 'btn-secondary' : 'btn-primary'} btn-md`}
-                style={{ width: '100%' }}
-                onClick={() => onNavigate('/shifts')}
+              <Button
+                variant={isAccountant ? 'secondary' : 'primary'}
+                size="md"
+                fullWidth
+                leftIcon={isAccountant ? <Lock /> : <Plus />}
                 disabled={isAccountant}
+                onClick={() => onNavigate('/shifts')}
               >
-                {isAccountant ? (
-                  <>
-                    <Lock size={13} style={{ marginRight: '6px' }} /> Accountants Cannot Open Shifts
-                  </>
-                ) : (
-                  <>
-                    <Plus size={13} style={{ marginRight: '6px' }} /> Open Shift
-                  </>
-                )}
-              </button>
+                {isAccountant ? 'Accountants Cannot Open Shifts' : 'Open Shift'}
+              </Button>
             )}
           </div>
         </div>
@@ -332,27 +322,21 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
           <div style={{ marginTop: '20px', display: 'flex', gap: '8px' }}>
             {lastShift && (
               <>
-                <button
-                  className="btn btn-secondary btn-sm"
-                  style={{ flex: 1 }}
-                  onClick={() => onNavigate('/shifts')}
-                >
-                  <FileText size={13} /> View Last DSSR
-                </button>
+                <Button variant="secondary" size="sm" leftIcon={<FileText />} style={{ flex: 1 }} onClick={() => onNavigate('/shifts')}>
+                  View Last DSSR
+                </Button>
 
                 {canReopenLastShift && (
-                  <button
-                    className="btn btn-danger btn-sm"
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    leftIcon={<Unlock />}
+                    loading={isReopening}
                     style={{ flex: 1 }}
                     onClick={() => handleReopen(lastShift.id)}
-                    disabled={isReopening}
                   >
-                    {isReopening ? 'Reopening...' : (
-                      <>
-                        <Unlock size={13} style={{ marginRight: '6px' }} /> Reopen
-                      </>
-                    )}
-                  </button>
+                    Reopen
+                  </Button>
                 )}
               </>
             )}
