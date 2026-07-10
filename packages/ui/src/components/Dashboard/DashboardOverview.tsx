@@ -7,7 +7,7 @@ import {
 import { StatusBadge } from '../StatusBadge.js';
 import { LoadingSpinner } from '../LoadingSpinner.js';
 import { SkeletonGrid } from '../primitives/Skeleton.js';
-import { KpiCard } from '../primitives/KpiCard.js';
+import { KpiStrip, KpiTile } from '../../pump-ds/index.js';
 import { Banner } from '../primitives/Banner.js';
 import { inr, formatQty } from '../../utils/format.js';
 import { useConfirm } from '../primitives/ConfirmDialog.js';
@@ -422,11 +422,17 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
           <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', gap: '8px', alignItems: 'center' }}>
             Today&apos;s P&amp;L <span style={{ fontSize: '9px', color: 'var(--brand-warning)', border: '1px solid var(--brand-warning)', borderRadius: '4px', padding: '0 5px', fontWeight: 700 }}>LIVE</span>
           </span>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px' }}>
-            <KpiCard label="Revenue Today" value={inr(Number(livePnl.revenue || 0))} tone="default" />
-            <KpiCard label="Gross Margin Today" value={inr(Number(livePnl.grossMargin || 0))} tone="success" />
-            <KpiCard label="Net Profit Today" value={inr(Number(livePnl.netProfit || 0))} tone={Number(livePnl.netProfit || 0) < 0 ? 'danger' : 'success'} sub="After COGS & expenses" />
-          </div>
+          <KpiStrip columns={3}>
+            <KpiTile dot="brand" label="Revenue Today" value={inr(Number(livePnl.revenue || 0))} />
+            <KpiTile dot="success" valueTone="success" label="Gross Margin Today" value={inr(Number(livePnl.grossMargin || 0))} />
+            <KpiTile
+              dot={Number(livePnl.netProfit || 0) < 0 ? 'danger' : 'success'}
+              valueTone={Number(livePnl.netProfit || 0) < 0 ? 'danger' : 'success'}
+              label="Net Profit Today"
+              value={inr(Number(livePnl.netProfit || 0))}
+              hint="After COGS & expenses"
+            />
+          </KpiStrip>
           <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
             Provisional — {pnlShiftsClosed} shift{pnlShiftsClosed === 1 ? '' : 's'} closed today + live merchandise &amp; expenses.
             {activeShift
@@ -442,14 +448,14 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
           <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
             Today's Financials
           </span>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px' }}>
-            <KpiCard label="Fuel Sales Today" value={inr(todayFuelSales)} sub={`${formatQty(todayVolume)} L · closed shifts`} tone="success" />
-            <KpiCard label="Collections Today" value={inr(todayCollections)} />
-            <KpiCard label="Expenses Today" value={inr(todayExpenses)} tone="danger" />
-            <KpiCard label="Purchases Today" value={inr(todayPurchases)} />
-            <KpiCard label="Receivables" value={inr(receivables)} tone="warning" sub="Customer dues" />
-            <KpiCard label="Payables" value={inr(payables)} sub="Supplier dues" />
-          </div>
+          <KpiStrip>
+            <KpiTile dot="success" valueTone="success" label="Fuel Sales Today" value={inr(todayFuelSales)} hint={`${formatQty(todayVolume)} L · closed shifts`} />
+            <KpiTile dot="brand" label="Collections Today" value={inr(todayCollections)} />
+            <KpiTile dot="danger" valueTone="danger" label="Expenses Today" value={inr(todayExpenses)} />
+            <KpiTile dot="brand" label="Purchases Today" value={inr(todayPurchases)} />
+            <KpiTile dot="warning" valueTone="warning" label="Receivables" value={inr(receivables)} hint="Customer dues" />
+            <KpiTile dot="neutral" label="Payables" value={inr(payables)} hint="Supplier dues" />
+          </KpiStrip>
           <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
             Today ({todayBiz}): {todayShifts.length} shift{todayShifts.length === 1 ? '' : 's'} closed
             {todayShifts.length > 0 && <> · net cash variance <strong style={{ fontFamily: 'var(--font-mono)', color: Math.abs(todayCashVariance) > 100 ? 'var(--brand-danger)' : 'var(--text-default)' }}>{inr(todayCashVariance)}</strong></>}

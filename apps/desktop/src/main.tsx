@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import App from './App.js';
 import { QueryProvider, createQueryClient, ErrorBoundary, setPdfSaver, ConfirmProvider, ToastProvider } from '@pump/ui';
 import '@pump/ui/src/index.css';
+import '@pump/ui/src/pump-ds/tailwind.css';
 
 // Desktop: WKWebView (mac) / WebView2 (win) block browser file downloads, so
 // route generated PDF bytes through Tauri's native save dialog + filesystem.

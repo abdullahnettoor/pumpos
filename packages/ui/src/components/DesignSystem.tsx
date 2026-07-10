@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
+import { Activity, ClipboardList, Receipt, Users, Warehouse, FileText, Building2, Fuel, Settings, ShieldCheck } from 'lucide-react';
 import { PageLayout } from './primitives/PageLayout.js';
 import { Tabs } from './primitives/Tabs.js';
 import { KpiCard } from './primitives/KpiCard.js';
@@ -17,6 +18,8 @@ import { Banner } from './primitives/Banner.js';
 import { Drawer } from './Drawer.js';
 import { StatusBadge } from './StatusBadge.js';
 import { inr, formatMoney, formatQty } from '../utils/format.js';
+import { DesignSystemV2Panel } from './DesignSystemV2.js';
+import { DesignSystemPumpDsPanel } from './DesignSystemPumpDs.js';
 
 /**
  * Living design-system reference. Mounted only in local development (see the
@@ -392,6 +395,8 @@ const InputsPanel: React.FC = () => {
 
 const ComponentsPanel: React.FC = () => {
   const [tab, setTab] = useState('overview');
+  const [underlineTab, setUnderlineTab] = useState('transactions');
+  const [cardTab, setCardTab] = useState('general');
   return (
     <div>
       <Section title="Status badges" description="Compact status pills. Pick the type that matches meaning.">
@@ -415,21 +420,87 @@ const ComponentsPanel: React.FC = () => {
         </div>
       </Section>
 
-      <Section title="Tabs" description="The shared Tabs primitive — keyboard accessible, roving focus. Use for all in-page tab strips.">
-        <Card>
-          <Tabs
-            tabs={[
-              { id: 'overview', label: 'Overview' },
-              { id: 'details', label: 'Details', badge: 3 },
-              { id: 'history', label: 'History' },
-              { id: 'locked', label: 'Locked', disabled: true },
-            ]}
-            activeId={tab}
-            onChange={setTab}
-            aria-label="Design system demo tabs"
-          />
-          <div style={{ padding: 'var(--space-3)', fontSize: '13px', color: 'var(--text-muted)' }}>Active panel: <strong>{tab}</strong></div>
-        </Card>
+      <Section title="Tabs" description="The shared Tabs primitive — keyboard accessible, roving focus. Three visual variants share the same a11y contract, plus icon / tag / count support on every tab.">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+          <div>
+            <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+              variant: pill · default (historical PumpOS look, brand-tinted active label)
+            </div>
+            <Card>
+              <Tabs
+                tabs={[
+                  { id: 'overview', label: 'Overview', icon: <Activity /> },
+                  { id: 'details', label: 'Details', icon: <ClipboardList />, badge: 3 },
+                  { id: 'history', label: 'History', icon: <FileText />, tag: { label: 'NEW', tone: 'success' } },
+                  { id: 'locked', label: 'Locked', icon: <ShieldCheck />, disabled: true },
+                ]}
+                activeId={tab}
+                onChange={setTab}
+                aria-label="Design system demo tabs (pill)"
+              />
+              <div style={{ padding: 'var(--space-3)', fontSize: '13px', color: 'var(--text-muted)' }}>Active panel: <strong>{tab}</strong></div>
+            </Card>
+          </div>
+
+          <div>
+            <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+              variant: underline · operator-panel look (Cloudflare / HPE dashboards, ink label, 3px accent)
+            </div>
+            <Card>
+              <Tabs
+                variant="underline"
+                tabs={[
+                  { id: 'summary', label: 'Summary', icon: <Activity /> },
+                  { id: 'shifts', label: 'Shifts', icon: <ClipboardList />, badge: 4, tone: 'success' },
+                  { id: 'transactions', label: 'Transactions', icon: <Receipt />, badge: 128 },
+                  { id: 'credit', label: 'Credit', icon: <Users />, badge: 2, tone: 'warning' },
+                  { id: 'expenses', label: 'Expenses', badge: 12 },
+                  { id: 'inventory', label: 'Inventory', icon: <Warehouse />, tag: { label: 'BETA', tone: 'warning' } },
+                  { id: 'dssr', label: 'DSSR', icon: <FileText /> },
+                  { id: 'audit', label: 'Audit log' },
+                  { id: 'archived', label: 'Archived', disabled: true },
+                ]}
+                activeId={underlineTab}
+                onChange={setUnderlineTab}
+                aria-label="Design system demo tabs (underline)"
+              />
+              <div style={{ padding: 'var(--space-3)', fontSize: '13px', color: 'var(--text-muted)' }}>Active panel: <strong>{underlineTab}</strong></div>
+            </Card>
+          </div>
+
+          <div>
+            <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+              variant: card · folder-tab look (settings / setup / wizards — the active tab is a raised section)
+            </div>
+            <div style={{ background: 'var(--bg-canvas)', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-card)', padding: 'var(--space-4)' }}>
+              <Tabs
+                variant="card"
+                tabs={[
+                  { id: 'general', label: 'General', icon: <Settings /> },
+                  { id: 'org', label: 'Organization', icon: <Building2 /> },
+                  { id: 'fuel', label: 'Fuel & Pricing', icon: <Fuel />, tag: { label: 'PRO', tone: 'brand' } },
+                  { id: 'users', label: 'Users', icon: <Users />, badge: 6 },
+                  { id: 'billing', label: 'Billing', icon: <Receipt />, badge: 2, tone: 'danger' },
+                  { id: 'audit', label: 'Audit', icon: <ShieldCheck />, disabled: true },
+                ]}
+                activeId={cardTab}
+                onChange={setCardTab}
+                aria-label="Design system demo tabs (card)"
+              />
+              <div style={{
+                background: 'var(--bg-surface)',
+                border: '1px solid var(--border-soft)',
+                borderTop: 'none',
+                borderRadius: '0 0 var(--radius-card) var(--radius-card)',
+                padding: 'var(--space-5)',
+                fontSize: 13,
+                color: 'var(--text-muted)',
+              }}>
+                Active section: <strong style={{ color: 'var(--text-strong)' }}>{cardTab}</strong>. Card variant is for settings / setup wizards where each tab is a self-contained section. The active tab visually merges with this panel.
+              </div>
+            </div>
+          </div>
+        </div>
       </Section>
 
       <Section title="Data table" description="Dense sortable table (TanStack Table) with built-in loading / empty / error states. Click a header to sort. Use for all operational lists instead of hand-rolled tables.">
@@ -658,6 +729,8 @@ const TABS = [
   { id: 'overlays', label: 'Overlays' },
   { id: 'feedback', label: 'Feedback' },
   { id: 'data', label: 'Data & Money' },
+  { id: 'v2', label: 'v2 · Compact' },
+  { id: 'pump-ds', label: 'pump-ds' },
 ];
 
 export const DesignSystem: React.FC = () => {
@@ -675,6 +748,8 @@ export const DesignSystem: React.FC = () => {
       {active === 'overlays' && <OverlaysPanel />}
       {active === 'feedback' && <FeedbackPanel />}
       {active === 'data' && <DataMoneyPanel />}
+      {active === 'v2' && <DesignSystemV2Panel />}
+      {active === 'pump-ds' && <DesignSystemPumpDsPanel />}
     </PageLayout>
   );
 };

@@ -1323,3 +1323,882 @@ select:disabled {
     margin: 12mm;
   }
 }
+
+
+/* =========================================================================
+ * Tabs primitive (canonical) — see packages/ui/src/components/primitives/Tabs.tsx.
+ * Three visual variants (`pill`, `underline`, `card`) share the same
+ * keyboard + ARIA contract; only the paint layer differs. Icons, count pills
+ * and text tags are supported in every variant.
+ * ========================================================================= */
+
+.pump-tabs {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  box-shadow: inset 0 -1px 0 var(--border-soft);
+  /* Hide the horizontal scroll rail; keyboard nav is still available. */
+  scrollbar-width: none;
+}
+
+.pump-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.pump-tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 120ms ease, border-color 120ms ease, background-color 120ms ease;
+}
+
+.pump-tab:hover:not(:disabled):not(.pump-tab--active) {
+  color: var(--text-strong);
+}
+
+.pump-tab:disabled {
+  color: var(--text-faint);
+  cursor: not-allowed;
+}
+
+.pump-tab:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: -2px;
+  border-radius: 4px;
+}
+
+/* Icon slot — normalizes size + vertical alignment for lucide / svg glyphs. */
+.pump-tab__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pump-tab__icon > svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 1.75;
+}
+
+/* Size — applies to all variants. */
+.pump-tabs--md .pump-tab { padding: 10px 16px; font-size: 13px; }
+.pump-tabs--sm .pump-tab { padding: 7px 12px;  font-size: 12px; }
+
+/* ---- Variant: pill (default, historical PumpOS look) ------------------- */
+.pump-tabs--pill .pump-tab--active {
+  color: var(--brand-primary);
+  border-bottom-color: var(--brand-primary);
+  font-weight: 600;
+}
+
+/* ---- Variant: underline (Cloudflare / HPE operator-panel look) --------- */
+.pump-tabs--underline .pump-tab {
+  color: var(--text-default);
+  /* Thicker underline; sits below the container's inset baseline so the
+   * transparent bar of inactive tabs doesn't clip the baseline rule. */
+  border-bottom-width: 3px;
+  padding-bottom: calc(var(--_pt-pb, 10px) - 1px);
+}
+
+.pump-tabs--underline.pump-tabs--md .pump-tab { padding: 12px 14px 11px; --_pt-pb: 12px; }
+.pump-tabs--underline.pump-tabs--sm .pump-tab { padding: 9px 10px 8px;   --_pt-pb: 9px; }
+
+.pump-tabs--underline .pump-tab:hover:not(:disabled):not(.pump-tab--active) {
+  color: var(--text-strong);
+}
+
+.pump-tabs--underline .pump-tab--active {
+  color: var(--text-strong);
+  border-bottom-color: var(--brand-primary);
+  font-weight: 600;
+  /* Slight rounded top on the underline bar. */
+  border-top-left-radius: 2px;
+  border-top-right-radius: 2px;
+}
+
+/* ---- Variant: card (folder-tab / settings-wizard look) ---------------- */
+.pump-tabs--card {
+  gap: 2px;
+  padding: 0 4px;
+}
+
+.pump-tabs--card .pump-tab {
+  color: var(--text-muted);
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  /* Nudge the tab downward so the transparent 1px at the bottom of the
+   * active card overlaps the container's inset baseline, visually
+   * merging with the panel below. */
+  margin-bottom: -1px;
+  padding-bottom: calc(var(--_ct-pb, 10px) + 1px);
+}
+
+.pump-tabs--card.pump-tabs--md .pump-tab { padding: 10px 16px 11px; --_ct-pb: 10px; }
+.pump-tabs--card.pump-tabs--sm .pump-tab { padding: 7px 12px 8px;   --_ct-pb: 7px; }
+
+.pump-tabs--card .pump-tab:hover:not(:disabled):not(.pump-tab--active) {
+  color: var(--text-strong);
+  background: var(--bg-surface-alt);
+  border-radius: 8px 8px 0 0;
+}
+
+.pump-tabs--card .pump-tab--active {
+  color: var(--text-strong);
+  background: var(--bg-surface);
+  border-color: var(--border-soft);
+  font-weight: 600;
+}
+
+/* ---- Numeric count badge (all variants, tone-aware) ------------------- */
+.pump-tab__count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--bg-surface-alt);
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+/* Active count pill inherits the tab's tone. */
+.pump-tab__count--active.pump-tab__count--brand    { background: var(--brand-primary);    color: #fff; }
+.pump-tab__count--active.pump-tab__count--info     { background: var(--state-info-fg);    color: #fff; }
+.pump-tab__count--active.pump-tab__count--success  { background: var(--state-success-fg); color: #fff; }
+.pump-tab__count--active.pump-tab__count--warning  { background: var(--state-warning-fg); color: #fff; }
+.pump-tab__count--active.pump-tab__count--danger   { background: var(--state-danger-fg);  color: #fff; }
+.pump-tab__count--active.pump-tab__count--neutral  { background: var(--text-strong);      color: #fff; }
+
+/* ---- Text tag ("NEW" / "BETA" / "PRO", tone-aware) --------------------- */
+.pump-tab__tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 15px;
+  padding: 0 5px;
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1;
+}
+
+.pump-tab__tag--brand    { background: color-mix(in oklab, var(--brand-primary) 12%, transparent); color: var(--brand-primary); }
+.pump-tab__tag--info     { background: var(--state-info-bg);    color: var(--state-info-fg); }
+.pump-tab__tag--success  { background: var(--state-success-bg); color: var(--state-success-fg); }
+.pump-tab__tag--warning  { background: var(--state-warning-bg); color: var(--state-warning-fg); }
+.pump-tab__tag--danger   { background: var(--state-danger-bg);  color: var(--state-danger-fg); }
+.pump-tab__tag--neutral  { background: var(--bg-surface-alt);   color: var(--text-muted); }
+
+
+/* =========================================================================
+ * Design System v2 (sandbox) — scoped under .ds-v2. See
+ * packages/ui/src/components/DesignSystemV2.tsx. Do not use these classes in
+ * product screens yet; this is the aesthetic study surface.
+ * ========================================================================= */
+/*
+ * DesignSystem v2 — compact, sleek primitives inspired by Beste UI's pieces,
+ * re-tokenized to PumpOS's Calm Industrial Precision palette. Everything is
+ * scoped under `.ds-v2` so nothing leaks into the app until we promote it.
+ *
+ * Rules obeyed here (see PRODUCT.md anti-references):
+ *  - No decorative gradients, glare, or 3D transforms.
+ *  - Motion is state-conveying only, ≤200ms, honors prefers-reduced-motion.
+ *  - Colors: only --brand-* / --state-* / --text-* / --bg-* / --border-*.
+ *  - Radii capped at 12px on cards (chips can be pill).
+ */
+
+.ds-v2 {
+  color: var(--text-default);
+  font-family: var(--font-sans);
+}
+
+.ds-v2 * {
+  box-sizing: border-box;
+}
+
+/* ==================== Section frame ==================== */
+
+.ds-v2-section {
+  margin-bottom: var(--space-8);
+}
+
+.ds-v2-section__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.ds-v2-section__title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-strong);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.ds-v2-section__desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  max-width: 520px;
+  line-height: 1.5;
+}
+
+.ds-v2-section__note {
+  font-size: 11px;
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+}
+
+/* ==================== Base surface ==================== */
+
+.ds-v2-surface {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.ds-v2-surface--flush {
+  border-radius: 12px;
+}
+
+/* Two-column layout for before/after or paired examples. */
+.ds-v2-pair {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-4);
+}
+
+@media (min-width: 900px) {
+  .ds-v2-pair {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.ds-v2-pair__caption {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 6px;
+}
+
+/* ==================== KPI strip (compact) ==================== */
+
+/*
+ * Auto-wrapping cell grid. The 1px `gap` renders as clean dividers on both
+ * axes because the container background is `--border-soft` and each cell
+ * paints `--bg-surface`. This handles wrap naturally: cells that reflow onto
+ * a second row still get top + left dividers automatically, and no
+ * `:last-child` / `:last-of-row` gymnastics are needed.
+ */
+.ds-v2-kpi-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1px;
+  background: var(--border-soft);
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.ds-v2-kpi {
+  padding: 12px 14px;
+  background: var(--bg-surface);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.ds-v2-kpi__label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.ds-v2-kpi__value {
+  font-family: var(--font-mono);
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-strong);
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+}
+
+.ds-v2-kpi__foot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* ==================== Trend delta badge ==================== */
+
+.ds-v2-delta {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 18px;
+  padding: 0 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 4px;
+  line-height: 1;
+}
+
+.ds-v2-delta--up {
+  background: var(--state-success-bg);
+  color: var(--state-success-fg);
+}
+
+.ds-v2-delta--down {
+  background: var(--state-danger-bg);
+  color: var(--state-danger-fg);
+}
+
+.ds-v2-delta--flat {
+  background: var(--bg-surface-alt);
+  color: var(--text-muted);
+}
+
+.ds-v2-delta__arrow {
+  font-size: 9px;
+  transform: translateY(-0.5px);
+}
+
+/* ==================== Tone dots (status prefix) ==================== */
+
+.ds-v2-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.ds-v2-dot--success { background: var(--state-success-fg); }
+.ds-v2-dot--warning { background: var(--state-warning-fg); }
+.ds-v2-dot--danger  { background: var(--state-danger-fg); }
+.ds-v2-dot--info    { background: var(--state-info-fg); }
+.ds-v2-dot--neutral { background: var(--text-faint); }
+.ds-v2-dot--brand   { background: var(--brand-primary); }
+
+/* Pulsing variant for live sync / active states. */
+.ds-v2-dot--pulse {
+  position: relative;
+}
+.ds-v2-dot--pulse::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 999px;
+  background: inherit;
+  opacity: 0.35;
+  animation: ds-v2-pulse 1.6s ease-out infinite;
+}
+
+@keyframes ds-v2-pulse {
+  0%   { transform: scale(0.6); opacity: 0.45; }
+  70%  { transform: scale(1.6); opacity: 0; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ds-v2-dot--pulse::after { animation: none; opacity: 0; }
+}
+
+/* ==================== Status chips ==================== */
+
+.ds-v2-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-default);
+  background: var(--bg-surface-alt);
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.ds-v2-chip--success { background: var(--state-success-bg); color: var(--state-success-fg); }
+.ds-v2-chip--warning { background: var(--state-warning-bg); color: var(--state-warning-fg); }
+.ds-v2-chip--danger  { background: var(--state-danger-bg);  color: var(--state-danger-fg); }
+.ds-v2-chip--info    { background: var(--state-info-bg);    color: var(--state-info-fg); }
+.ds-v2-chip--neutral { background: var(--bg-surface-alt);   color: var(--text-muted); }
+
+.ds-v2-chip--outline {
+  background: transparent;
+  border-color: var(--border-strong);
+  color: var(--text-default);
+}
+
+.ds-v2-chip__mono {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: -0.02em;
+}
+
+/* ==================== Compact list rows ==================== */
+
+.ds-v2-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.ds-v2-row {
+  display: grid;
+  grid-template-columns: 12px 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-soft);
+  font-size: 13px;
+  color: var(--text-default);
+  cursor: default;
+  transition: background-color 100ms ease;
+}
+
+.ds-v2-row:last-child { border-bottom: none; }
+
+.ds-v2-row:hover { background: var(--bg-surface-alt); }
+
+.ds-v2-row__dot {
+  justify-self: center;
+}
+
+.ds-v2-row__body {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.ds-v2-row__title {
+  font-weight: 500;
+  color: var(--text-strong);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ds-v2-row__sub {
+  font-size: 11px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ds-v2-row__meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  text-align: right;
+}
+
+.ds-v2-row__value {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-strong);
+  letter-spacing: -0.01em;
+}
+
+.ds-v2-row__hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+/* ==================== Toolbar / filter bar ==================== */
+
+.ds-v2-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  flex-wrap: wrap;
+}
+
+.ds-v2-toolbar__group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ds-v2-toolbar__divider {
+  width: 1px;
+  height: 20px;
+  background: var(--border-soft);
+  margin: 0 4px;
+}
+
+.ds-v2-toolbar__search {
+  position: relative;
+  flex: 1;
+  min-width: 180px;
+}
+
+.ds-v2-toolbar__search input {
+  width: 100%;
+  height: 28px;
+  padding: 0 10px 0 26px;
+  border: 1px solid var(--border-soft);
+  background: var(--bg-canvas);
+  border-radius: 6px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: var(--text-strong);
+  outline: none;
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+
+.ds-v2-toolbar__search input::placeholder {
+  color: var(--text-muted);
+}
+
+.ds-v2-toolbar__search input:focus {
+  border-color: var(--brand-primary);
+  background: var(--bg-surface);
+  box-shadow: 0 0 0 2px rgba(31, 106, 83, 0.12);
+}
+
+.ds-v2-toolbar__search svg {
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+/* Segmented control (compact) */
+.ds-v2-seg {
+  display: inline-flex;
+  padding: 2px;
+  background: var(--bg-surface-alt);
+  border: 1px solid var(--border-soft);
+  border-radius: 7px;
+  gap: 1px;
+}
+
+.ds-v2-seg__opt {
+  height: 22px;
+  padding: 0 8px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+  font-size: 11.5px;
+  font-weight: 500;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: color 100ms ease, background-color 100ms ease;
+}
+
+.ds-v2-seg__opt:hover { color: var(--text-strong); }
+
+.ds-v2-seg__opt--on {
+  background: var(--bg-surface);
+  color: var(--text-strong);
+  box-shadow: 0 1px 0 rgba(24, 32, 26, 0.04), 0 0 0 1px var(--border-soft);
+}
+
+/* Filter chip (removable) */
+.ds-v2-fchip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 6px 0 8px;
+  border-radius: 999px;
+  background: var(--state-info-bg);
+  color: var(--state-info-fg);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.ds-v2-fchip__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+  color: currentColor;
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 100ms ease, background-color 100ms ease;
+}
+
+.ds-v2-fchip__close:hover {
+  opacity: 1;
+  background: rgba(46, 94, 136, 0.15);
+}
+
+/* ==================== Dense data table ==================== */
+
+.ds-v2-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  overflow: hidden;
+  font-size: 12.5px;
+}
+
+.ds-v2-table th,
+.ds-v2-table td {
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border-soft);
+  vertical-align: middle;
+}
+
+.ds-v2-table th {
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  background: var(--bg-surface-alt);
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.ds-v2-table td {
+  color: var(--text-default);
+}
+
+.ds-v2-table tr:last-child td { border-bottom: none; }
+
+.ds-v2-table tr:hover td { background: var(--bg-surface-alt); }
+
+.ds-v2-table__num {
+  font-family: var(--font-mono);
+  text-align: right;
+  color: var(--text-strong);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+.ds-v2-table__id {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* ==================== Keyboard shortcut pill ==================== */
+
+.ds-v2-shortcut {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-default);
+}
+
+.ds-v2-shortcut__label { color: var(--text-muted); }
+
+.ds-v2-kbd-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.ds-v2-kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--text-strong);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-strong);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  line-height: 1;
+}
+
+.ds-v2-kbd-plus {
+  font-size: 10px;
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+}
+
+/* ==================== Version / snapshot pill ==================== */
+
+.ds-v2-version {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 8px 0 6px;
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  background: var(--bg-surface);
+  font-size: 11px;
+  color: var(--text-default);
+}
+
+.ds-v2-version__tag {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--text-strong);
+  padding: 1px 4px;
+  background: var(--bg-surface-alt);
+  border-radius: 3px;
+  letter-spacing: -0.02em;
+}
+
+.ds-v2-version__meta {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+}
+
+/* ==================== Sync pulse indicator ==================== */
+
+.ds-v2-sync {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 26px;
+  padding: 0 10px 0 8px;
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  background: var(--bg-surface);
+  font-size: 11.5px;
+  color: var(--text-default);
+}
+
+.ds-v2-sync__label { font-weight: 500; color: var(--text-strong); }
+
+.ds-v2-sync__meta {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+}
+
+/* ==================== Inline empty state ==================== */
+
+.ds-v2-empty {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 10px;
+  background: var(--bg-canvas);
+}
+
+.ds-v2-empty__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-soft);
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.ds-v2-empty__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.ds-v2-empty__title {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-strong);
+  margin-bottom: 2px;
+}
+
+.ds-v2-empty__desc {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.ds-v2-empty__action {
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-surface);
+  color: var(--text-strong);
+  font-size: 11.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 100ms ease;
+}
+
+.ds-v2-empty__action:hover { background: var(--bg-surface-alt); }
+
+/* ==================== Utility ==================== */
+
+.ds-v2-hstack {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ds-v2-vstack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}

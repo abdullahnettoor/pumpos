@@ -1,12 +1,32 @@
 import React, { useRef } from 'react';
 
+/**
+ * Tone used by the numeric count pill and the text `tag` on a tab.
+ * Falls through to the same `--state-*-bg` / `--state-*-fg` pairing used
+ * across the rest of the design system.
+ */
+export type TabTone = 'brand' | 'info' | 'success' | 'warning' | 'danger' | 'neutral';
+
+export interface TabTag {
+  /** Short text like "NEW", "BETA", "PRO". Kept uppercase visually. */
+  label: string;
+  tone?: TabTone;
+}
+
 export interface TabItem {
   id: string;
   label: string;
-  /** Optional leading icon (e.g. a lucide element sized ~13px). */
+  /** Leading icon (usually a lucide element sized ~14px). Rendered inline. */
   icon?: React.ReactNode;
-  /** Optional trailing adornment (count pill, status badge, etc.). */
+  /**
+   * Numeric badge → renders as a small count pill (uses `--tone`).
+   * ReactNode → rendered as-is (advanced / custom badges).
+   */
   badge?: React.ReactNode;
+  /** Short caps tag next to the label — "NEW" / "BETA" / "PRO" style. */
+  tag?: TabTag;
+  /** Overrides the tone used by the count pill AND the tag. Default `brand`. */
+  tone?: TabTone;
   disabled?: boolean;
 }
 
@@ -16,17 +36,40 @@ export interface TabsProps {
   onChange: (id: string) => void;
   /** Visual size. `sm` is used for in-panel/secondary tab strips. */
   size?: 'md' | 'sm';
+  /**
+   * Visual style. All variants share the same keyboard behavior, ARIA roles,
+   * and roving focus contract; only the paint layer changes.
+   *
+   * - `pill` (default): the historical PumpOS look — brand-tinted active
+   *   label with a 2px brand underline. Zero regression for existing sites.
+   * - `underline`: operator-panel look (Cloudflare / HPE dashboards). Ink
+   *   label, 3px brand underline with a rounded top, tighter chrome.
+   *   For dense section rails on data-heavy screens.
+   * - `card`: folder-tab look — the active tab is a raised surface with
+   *   rounded top corners that visually merges with the panel below. For
+   *   settings / setup / wizard surfaces where each tab is a "section".
+   */
+  variant?: 'pill' | 'underline' | 'card';
   className?: string;
   style?: React.CSSProperties;
   'aria-label'?: string;
 }
 
 /**
- * Accessible, consistent tab strip. Replaces the bespoke `borderBottom` button
- * rows each screen used to hand-roll. Controlled: the parent owns `activeId`.
- * Keyboard: ←/→ move between enabled tabs, Home/End jump to first/last.
+ * Accessible, consistent tab strip. Controlled: the parent owns `activeId`.
+ * Keyboard: ←/→ move between enabled tabs, Home/End jump to first/last;
+ * inactive tabs get `tabIndex={-1}` so Tab lands on the active one only.
  */
-export const Tabs: React.FC<TabsProps> = ({ tabs, activeId, onChange, size = 'md', className, style, ...rest }) => {
+export const Tabs: React.FC<TabsProps> = ({
+  tabs,
+  activeId,
+  onChange,
+  size = 'md',
+  variant = 'pill',
+  className,
+  style,
+  ...rest
+}) => {
   const refs = useRef<Record<string, HTMLButtonElement | null>>({});
   const enabled = tabs.filter((t) => !t.disabled);
 
@@ -49,19 +92,24 @@ export const Tabs: React.FC<TabsProps> = ({ tabs, activeId, onChange, size = 'md
     if (target) focusAndSelect(target.id);
   };
 
-  const padding = size === 'sm' ? '7px 12px' : '10px 16px';
-  const fontSize = size === 'sm' ? '12px' : '13px';
+  const rootClass = [
+    'pump-tabs',
+    `pump-tabs--${variant}`,
+    `pump-tabs--${size}`,
+    className,
+  ].filter(Boolean).join(' ');
 
   return (
     <div
       role="tablist"
       aria-label={rest['aria-label']}
       onKeyDown={handleKeyDown}
-      className={className}
-      style={{ display: 'flex', gap: '4px', boxShadow: 'inset 0 -1px 0 var(--border-soft)', overflowX: 'auto', overflowY: 'hidden', ...style }}
+      className={rootClass}
+      style={style}
     >
       {tabs.map((tab) => {
         const active = tab.id === activeId;
+        const tone: TabTone = tab.tone ?? 'brand';
         return (
           <button
             key={tab.id}
@@ -72,40 +120,21 @@ export const Tabs: React.FC<TabsProps> = ({ tabs, activeId, onChange, size = 'md
             tabIndex={active ? 0 : -1}
             disabled={tab.disabled}
             onClick={() => !tab.disabled && onChange(tab.id)}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding,
-              fontSize,
-              fontWeight: active ? 600 : 500,
-              whiteSpace: 'nowrap',
-              background: 'transparent',
-              border: 'none',
-              borderBottom: active ? '2px solid var(--brand-primary)' : '2px solid transparent',
-              color: tab.disabled ? 'var(--text-faint)' : active ? 'var(--brand-primary)' : 'var(--text-muted)',
-              cursor: tab.disabled ? 'not-allowed' : 'pointer',
-              transition: 'color 0.15s ease, border-color 0.15s ease',
-            }}
+            className={`pump-tab${active ? ' pump-tab--active' : ''}`}
           >
-            {tab.icon}
-            {tab.label}
+            {tab.icon && <span className="pump-tab__icon" aria-hidden="true">{tab.icon}</span>}
+            <span className="pump-tab__label">{tab.label}</span>
+            {tab.tag && (
+              <span
+                className={`pump-tab__tag pump-tab__tag--${tab.tag.tone ?? tone}`}
+                aria-label={tab.tag.label}
+              >
+                {tab.tag.label}
+              </span>
+            )}
             {typeof tab.badge === 'number' ? (
               <span
-                style={{
-                  fontSize: '10px',
-                  fontWeight: 700,
-                  minWidth: '16px',
-                  height: '16px',
-                  padding: '0 5px',
-                  borderRadius: '999px',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  lineHeight: 1,
-                  backgroundColor: active ? 'var(--brand-primary)' : 'var(--bg-surface-alt)',
-                  color: active ? '#fff' : 'var(--text-muted)',
-                }}
+                className={`pump-tab__count pump-tab__count--${tone}${active ? ' pump-tab__count--active' : ''}`}
               >
                 {tab.badge}
               </span>
@@ -118,3 +147,5 @@ export const Tabs: React.FC<TabsProps> = ({ tabs, activeId, onChange, size = 'md
     </div>
   );
 };
+
+
