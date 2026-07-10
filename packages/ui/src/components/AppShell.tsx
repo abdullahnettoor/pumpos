@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { LogOut } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
 import { AppTopBar } from './AppTopBar.js';
+import { cn } from '../pump-ds/lib/cn.js';
 import { Station } from '@pump/shared';
 
 export interface NavItem {
@@ -183,6 +183,19 @@ const getIconSvg = (label: string) => {
   }
 };
 
+/**
+ * Sidebar section grouping. Items are matched to sections by `path`; order
+ * within a section follows the `paths` order here. Anything unmatched falls
+ * into a trailing group. Sections with no visible items are dropped.
+ */
+const NAV_GROUPS: { heading: string; paths: string[] }[] = [
+  { heading: 'Operations', paths: ['/dashboard', '/shifts', '/inventory'] },
+  { heading: 'Sales & CRM', paths: ['/customers'] },
+  { heading: 'Purchasing', paths: ['/purchases', '/expenses'] },
+  { heading: 'Finance', paths: ['/accounts', '/reports'] },
+  { heading: 'Setup', paths: ['/setup/station', '/pricing', '/organization'] },
+];
+
 export const AppShell: React.FC<AppShellProps> = ({
   children,
   navItems,
@@ -202,11 +215,31 @@ export const AppShell: React.FC<AppShellProps> = ({
     (item) => !item.roles || item.roles.includes(userRole)
   );
 
+  // Bucket the flat nav list into ordered sections. Items not mapped to any
+  // section fall into a trailing group (unlabelled when it's the ONLY group,
+  // e.g. onboarding mode; "More" otherwise, e.g. the dev Design System link).
+  const groupedNav = useMemo(() => {
+    const used = new Set<string>();
+    const groups = NAV_GROUPS.map((g) => ({
+      heading: g.heading,
+      items: g.paths
+        .map((p) => visibleNavItems.find((n) => n.path === p))
+        .filter((n): n is NavItem => Boolean(n)),
+    })).filter((g) => g.items.length > 0);
+    groups.forEach((g) => g.items.forEach((it) => used.add(it.path)));
+    const rest = visibleNavItems.filter((n) => !used.has(n.path));
+    if (rest.length) {
+      groups.push({ heading: rest.length === visibleNavItems.length ? '' : 'More', items: rest });
+    }
+    return groups;
+  }, [visibleNavItems]);
+
   return (
     <div
       className="app-shell"
       style={{
         display: 'flex',
+        flexDirection: 'column',
         height: '100vh',
         width: '100vw',
         backgroundColor: 'var(--bg-canvas)',
@@ -215,196 +248,102 @@ export const AppShell: React.FC<AppShellProps> = ({
         overflow: 'hidden',
       }}
     >
-      {/* Sidebar Rail */}
-      <aside
-        className="no-print"
-        style={{
-          width: collapsed ? '72px' : '220px',
-          backgroundColor: 'var(--bg-surface-alt)',
-          borderRight: '1px solid var(--border-soft)',
-          display: 'flex',
-          flexDirection: 'column',
-          transition: 'width 0.15s cubic-bezier(0.4, 0, 0.2, 1)',
-          flexShrink: 0,
-        }}
-      >
-        {/* Brand/Logo Section */}
-        <div
-          style={{
-            height: '56px',
-            display: 'flex',
-            alignItems: 'center',
-            padding: '0 var(--space-4)',
-            borderBottom: '1px solid var(--border-soft)',
-            justifyContent: collapsed ? 'center' : 'space-between',
-          }}
-        >
-          {!collapsed && (
-            <span style={{ fontSize: '15px', fontWeight: 700, color: 'var(--brand-primary)', fontFamily: 'var(--font-sans)', letterSpacing: '-0.01em' }}>
-              PumpOS
-            </span>
-          )}
-          <button
-            onClick={() => setCollapsed(!collapsed)}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: 'var(--text-muted)',
-              cursor: 'pointer',
-              padding: '4px',
-              borderRadius: '4px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--border-soft)')}
-            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-          >
-            {collapsed ? (
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
-            ) : (
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
-            )}
-          </button>
-        </div>
+      {/* Full-width top bar (pump-ds): hamburger + brand · business day · search · + New · notifications · sync · user */}
+      <div className="no-print" style={{ flexShrink: 0 }}>
+        <AppTopBar
+          selectedStation={selectedStation}
+          navItems={navItems}
+          userRole={(userRole as 'Owner' | 'Manager' | 'Accountant' | 'Staff') || 'Staff'}
+          userName={userName}
+          syncStatus={syncStatus}
+          pendingSyncCount={pendingSyncCount}
+          onNavigate={onNavigate}
+          onLogout={onLogout}
+          onToggleSidebar={() => setCollapsed((c) => !c)}
+        />
+      </div>
 
-        {/* Navigation links */}
-        <nav style={{ flex: 1, padding: 'var(--space-3) var(--space-2)', display: 'flex', flexDirection: 'column', gap: '2px' }}>
-          {visibleNavItems.map((item) => {
-            const isActive = currentPath === item.path;
-            return (
-              <button
-                key={item.path}
-                onClick={() => onNavigate(item.path)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  padding: collapsed ? '8px 0' : '8px var(--space-3)',
-                  borderRadius: 'var(--radius-button)',
-                  border: 'none',
-                  backgroundColor: isActive ? 'var(--state-info-bg)' : 'transparent',
-                  color: isActive ? 'var(--state-info-fg)' : 'var(--text-default)',
-                  cursor: 'pointer',
-                  fontWeight: isActive ? 600 : 500,
-                  fontSize: '13px',
-                  textAlign: 'left',
-                  width: '100%',
-                  gap: collapsed ? 0 : '12px',
-                  justifyContent: collapsed ? 'center' : 'flex-start',
-                  transition: 'background-color 0.1s, color 0.1s',
-                }}
-                onMouseEnter={(e) => {
-                  if (!isActive) {
-                    e.currentTarget.style.backgroundColor = 'var(--border-soft)';
-                    e.currentTarget.style.color = 'var(--text-strong)';
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (!isActive) {
-                    e.currentTarget.style.backgroundColor = 'transparent';
-                    e.currentTarget.style.color = 'var(--text-default)';
-                  }
-                }}
-              >
-                <span style={{ display: 'flex', alignItems: 'center', color: isActive ? 'var(--state-info-fg)' : 'var(--text-muted)' }}>
-                  {getIconSvg(item.label)}
-                </span>
-                {!collapsed && <span>{item.label}</span>}
-              </button>
-            );
-          })}
-        </nav>
-
-        {/* User context footer */}
-        <div
+      {/* Body: sidebar rail + content canvas */}
+      <div style={{ display: 'flex', flex: 1, minHeight: 0, position: 'relative' }}>
+        {/* Sidebar Rail */}
+        <aside
+          className="no-print"
           style={{
-            padding: collapsed ? 'var(--space-3) var(--space-2)' : 'var(--space-3) var(--space-4)',
-            borderTop: '1px solid var(--border-soft)',
+            width: collapsed ? '72px' : '220px',
+            backgroundColor: 'var(--bg-surface-alt)',
+            borderRight: '1px solid var(--border-soft)',
             display: 'flex',
             flexDirection: 'column',
-            gap: '8px',
-            backgroundColor: 'var(--bg-surface)',
+            transition: 'width 0.15s cubic-bezier(0.4, 0, 0.2, 1)',
+            flexShrink: 0,
           }}
         >
-          {!collapsed && (
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-strong)' }}>{userName}</span>
-              <span style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700, fontFamily: 'var(--font-mono)' }}>
-                {userRole}
-              </span>
+        {/* Navigation links — grouped, collapsible-friendly */}
+        <nav className="flex-1 overflow-y-auto px-2 py-3">
+          {groupedNav.map((group, gi) => (
+            <div key={group.heading || `grp-${gi}`} className={gi > 0 ? 'mt-4' : ''}>
+              {!collapsed && group.heading && (
+                <div className="px-2 pb-1.5 font-mono text-[10px] font-medium uppercase tracking-wider text-ink-faint">
+                  {group.heading}
+                </div>
+              )}
+              {collapsed && gi > 0 && <div className="mx-2 mb-2 h-px bg-border-soft" />}
+              <div className="flex flex-col gap-0.5">
+                {group.items.map((item) => {
+                  const isActive = currentPath === item.path;
+                  return (
+                    <button
+                      key={item.path}
+                      onClick={() => onNavigate(item.path)}
+                      title={collapsed ? item.label : undefined}
+                      className={cn(
+                        'flex w-full items-center rounded-button text-[13px] transition-colors',
+                        collapsed ? 'justify-center px-0 py-2' : 'gap-3 px-3 py-2',
+                        isActive
+                          ? 'bg-info-bg font-semibold text-info-fg'
+                          : 'font-medium text-ink-default hover:bg-surface-alt hover:text-ink-strong',
+                      )}
+                    >
+                      <span className={cn('flex items-center', isActive ? 'text-info-fg' : 'text-ink-muted')}>
+                        {getIconSvg(item.label)}
+                      </span>
+                      {!collapsed && <span className="truncate">{item.label}</span>}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          )}
-          <button
-            onClick={onLogout}
-            title={collapsed ? 'Logout' : undefined}
-            aria-label="Logout"
-            style={{
-              padding: collapsed ? '6px' : '6px var(--space-3)',
-              borderRadius: 'var(--radius-button)',
-              border: '1px solid var(--border-soft)',
-              backgroundColor: 'var(--bg-surface)',
-              color: 'var(--text-default)',
-              cursor: 'pointer',
-              fontWeight: 500,
-              fontSize: '12px',
-              width: '100%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: collapsed ? 'center' : 'flex-start',
-              gap: '8px',
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--bg-surface-alt)')}
-            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'var(--bg-surface)')}
-          >
-            <LogOut size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
-            {!collapsed && <span>Logout</span>}
-          </button>
-        </div>
+          ))}
+        </nav>
       </aside>
 
-      {/* Main canvas area */}
-      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0, position: 'relative' }}>
-        {environmentTag ? (
-          <div
-            style={{
-              position: 'absolute',
-              top: '12px',
-              right: '16px',
-              zIndex: 20,
-              height: '22px',
-              display: 'inline-flex',
-              alignItems: 'center',
-              padding: '0 8px',
-              borderRadius: '999px',
-              border: '1px solid rgba(250, 204, 21, 0.45)',
-              backgroundColor: 'rgba(250, 204, 21, 0.14)',
-              color: '#854d0e',
-              fontSize: '10px',
-              fontWeight: 700,
-              letterSpacing: '0.08em',
-              textTransform: 'uppercase',
-              pointerEvents: 'none',
-            }}
-          >
-            {environmentTag}
-          </div>
-        ) : null}
-        {/* Top bar (pump-ds): business day · search (⌘K) · + New · notifications · sync · user */}
-        <div className="no-print" style={{ flexShrink: 0 }}>
-          <AppTopBar
-            selectedStation={selectedStation}
-            navItems={navItems}
-            userRole={(userRole as 'Owner' | 'Manager' | 'Accountant' | 'Staff') || 'Staff'}
-            userName={userName}
-            syncStatus={syncStatus}
-            pendingSyncCount={pendingSyncCount}
-            onNavigate={onNavigate}
-            onLogout={onLogout}
-          />
-        </div>
-
-        {/* Content body layout */}
+        {/* Content canvas */}
         <main className="app-shell__main" style={{ flex: 1, overflowY: 'auto', padding: 'var(--space-6)', position: 'relative' }}>
+          {environmentTag ? (
+            <div
+              style={{
+                position: 'absolute',
+                top: '12px',
+                right: '16px',
+                zIndex: 20,
+                height: '22px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                padding: '0 8px',
+                borderRadius: '999px',
+                border: '1px solid rgba(250, 204, 21, 0.45)',
+                backgroundColor: 'rgba(250, 204, 21, 0.14)',
+                color: '#854d0e',
+                fontSize: '10px',
+                fontWeight: 700,
+                letterSpacing: '0.08em',
+                textTransform: 'uppercase',
+                pointerEvents: 'none',
+              }}
+            >
+              {environmentTag}
+            </div>
+          ) : null}
           {children}
         </main>
       </div>

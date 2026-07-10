@@ -198,6 +198,7 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
     <>
       <TopBar
         onToggleSidebar={onToggleSidebar}
+        brand="PumpOS"
         businessDate={businessDate}
         businessDayStatus={businessDayStatus}
         onBusinessDay={() => onNavigate('/dashboard')}

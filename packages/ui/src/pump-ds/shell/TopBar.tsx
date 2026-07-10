@@ -48,6 +48,9 @@ export interface UserMenuAction {
 export interface TopBarProps {
   onToggleSidebar?: () => void;
 
+  /** Brand mark rendered at the far left (next to the sidebar toggle). */
+  brand?: ReactNode;
+
   businessDate: string;
   businessDayStatus: 'open' | 'closed';
   onBusinessDay?: () => void;
@@ -90,6 +93,7 @@ const IconBtn: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement> & { badge?
 
 export const TopBar: React.FC<TopBarProps> = ({
   onToggleSidebar,
+  brand,
   businessDate,
   businessDayStatus,
   onBusinessDay,
@@ -114,6 +118,10 @@ export const TopBar: React.FC<TopBarProps> = ({
         <IconBtn onClick={onToggleSidebar} aria-label="Toggle sidebar">
           <MenuIcon className="size-[18px]" />
         </IconBtn>
+      )}
+
+      {brand && (
+        <div className="select-none pl-0.5 pr-1 text-[15px] font-bold tracking-[-0.01em] text-brand">{brand}</div>
       )}
 
       <BusinessDayChip date={businessDate} status={businessDayStatus} onClick={onBusinessDay} />
