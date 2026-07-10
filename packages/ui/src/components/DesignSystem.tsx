@@ -20,6 +20,7 @@ import { StatusBadge } from './StatusBadge.js';
 import { inr, formatMoney, formatQty } from '../utils/format.js';
 import { DesignSystemV2Panel } from './DesignSystemV2.js';
 import { DesignSystemPumpDsPanel } from './DesignSystemPumpDs.js';
+import { DesignSystemShellProtoPanel } from './DesignSystemShellProto.js';
 
 /**
  * Living design-system reference. Mounted only in local development (see the
@@ -731,6 +732,7 @@ const TABS = [
   { id: 'data', label: 'Data & Money' },
   { id: 'v2', label: 'v2 · Compact' },
   { id: 'pump-ds', label: 'pump-ds' },
+  { id: 'shell-proto', label: 'Shell · proto' },
 ];
 
 export const DesignSystem: React.FC = () => {
@@ -750,6 +752,7 @@ export const DesignSystem: React.FC = () => {
       {active === 'data' && <DataMoneyPanel />}
       {active === 'v2' && <DesignSystemV2Panel />}
       {active === 'pump-ds' && <DesignSystemPumpDsPanel />}
+      {active === 'shell-proto' && <DesignSystemShellProtoPanel />}
     </PageLayout>
   );
 };

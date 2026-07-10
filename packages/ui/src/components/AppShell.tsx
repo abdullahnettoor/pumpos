@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { LogOut } from 'lucide-react';
-import { SyncIndicator } from './SyncIndicator.js';
+import { AppTopBar } from './AppTopBar.js';
 import { Station } from '@pump/shared';
 
 export interface NavItem {
@@ -389,29 +389,19 @@ export const AppShell: React.FC<AppShellProps> = ({
             {environmentTag}
           </div>
         ) : null}
-        {/* Top Header details */}
-        <header
-          className="no-print"
-          style={{
-            height: '56px',
-            backgroundColor: 'var(--bg-surface)',
-            borderBottom: '1px solid var(--border-soft)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '0 var(--space-6)',
-            flexShrink: 0,
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-            <span style={{ fontSize: '14px', color: 'var(--text-strong)', fontWeight: 600 }}>
-              {selectedStation ? selectedStation.name : 'Workspace Setup'}
-            </span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <SyncIndicator status={syncStatus} pendingCount={pendingSyncCount} />
-          </div>
-        </header>
+        {/* Top bar (pump-ds): business day · search (⌘K) · + New · notifications · sync · user */}
+        <div className="no-print" style={{ flexShrink: 0 }}>
+          <AppTopBar
+            selectedStation={selectedStation}
+            navItems={navItems}
+            userRole={(userRole as 'Owner' | 'Manager' | 'Accountant' | 'Staff') || 'Staff'}
+            userName={userName}
+            syncStatus={syncStatus}
+            pendingSyncCount={pendingSyncCount}
+            onNavigate={onNavigate}
+            onLogout={onLogout}
+          />
+        </div>
 
         {/* Content body layout */}
         <main className="app-shell__main" style={{ flex: 1, overflowY: 'auto', padding: 'var(--space-6)', position: 'relative' }}>

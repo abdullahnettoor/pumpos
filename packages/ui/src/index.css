@@ -68,6 +68,28 @@
   padding: 0;
 }
 
+/*
+ * Control reset (Preflight gap).
+ * We deliberately exclude Tailwind's Preflight globally because it also resets
+ * heading/list/line-height and breaks legacy screen spacing (see
+ * packages/ui/src/pump-ds/tailwind.css). But Preflight ALSO zeroes the
+ * browser's default form-control border + normalizes fonts — dropping those
+ * makes any Tailwind-styled <button>/<input> that doesn't set its own border
+ * show the UA default ~2px control border (looks like a stray dark ring).
+ *
+ * These rules restore only the SAFE, spacing-neutral parts of Preflight:
+ * no margins, no line-height, no heading changes — so the legacy spacing fix
+ * stands. Class-level borders (.btn-*, .input, pump-ds `border-*`) all have
+ * higher specificity and still win.
+ */
+button, input, optgroup, select, textarea {
+  border: 0 solid;
+}
+button {
+  background-color: transparent;
+  background-image: none;
+}
+
 body {
   background-color: var(--bg-canvas);
   color: var(--text-default);
