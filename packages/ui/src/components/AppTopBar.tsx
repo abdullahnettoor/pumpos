@@ -1,10 +1,11 @@
 import React, { useMemo } from 'react';
 import {
-  Receipt, Wallet, ShoppingCart, CreditCard, Users, Truck, Package, FileText,
+  Receipt, Wallet, ShoppingCart, ShoppingBag, CreditCard, Users, Truck, Package, FileText,
   ArrowUpRight, LogOut, TriangleAlert, Clock, LayoutDashboard,
 } from 'lucide-react';
 import { resolveBusinessDate, type Station } from '@pump/shared';
 import type { NavIntent } from './AppShell.js';
+import { openQuickEntry } from '../quick-entry/store.js';
 import {
   TopBar, CommandPalette, useCommandPalette,
   type CommandGroup, type CommandItem, type NotificationItem,
@@ -85,14 +86,15 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
   // --- quick create ---
   const quickCreate: QuickCreateAction[] = useMemo(() => {
     const items: QuickCreateAction[] = [
-      { id: 'expense', label: 'Expense', icon: <Receipt />, shortcut: 'E', onSelect: () => onNavigate('/expenses', { open: 'new-expense' }) },
-      { id: 'collection', label: 'Collection', icon: <Wallet />, onSelect: () => onNavigate('/customers', { open: 'new-collection' }) },
-      { id: 'purchase', label: 'Purchase', icon: <ShoppingCart />, onSelect: () => onNavigate('/purchases') },
+      { id: 'expense', label: 'Expense', icon: <Receipt />, shortcut: 'E', onSelect: () => openQuickEntry('expense') },
+      { id: 'collection', label: 'Collection', icon: <Wallet />, onSelect: () => openQuickEntry('collection') },
+      { id: 'merchandise-sale', label: 'Merchandise sale', icon: <ShoppingBag />, onSelect: () => openQuickEntry('merchandise-sale') },
+      { id: 'purchase', label: 'Purchase', icon: <ShoppingCart />, onSelect: () => openQuickEntry('purchase') },
       { id: 'supplier-payment', label: 'Supplier payment', icon: <Wallet />, onSelect: () => onNavigate('/purchases', { open: 'supplier-payment' }) },
       { id: 'credit', label: 'Credit sale', icon: <CreditCard />, onSelect: () => onNavigate('/shifts') },
       { id: 'customer', label: 'Customer', icon: <Users />, onSelect: () => onNavigate('/customers', { open: 'new-customer' }) },
     ];
-    return userRole === 'Staff' ? items.filter((i) => i.id === 'expense' || i.id === 'credit') : items;
+    return userRole === 'Staff' ? items.filter((i) => i.id === 'expense' || i.id === 'collection' || i.id === 'merchandise-sale' || i.id === 'credit') : items;
   }, [onNavigate, userRole]);
 
   // --- user menu ---

@@ -16,6 +16,7 @@ import {
   FuelPricingPanel,
   AccountsPanel,
   DesignSystem,
+  QuickEntryHost,
   CloudStationService, 
   queryKeys,
   setApiBaseUrl,
@@ -561,6 +562,7 @@ export const App: React.FC = () => {
       environmentTag={environmentTag}
     >
       {renderContent()}
+      <QuickEntryHost selectedStation={selectedStation} />
     </AppShell>
   );
 };

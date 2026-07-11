@@ -31,6 +31,8 @@ export interface CollectionEntryFormProps {
   walkInOptionLabel?: string;
   customerLabel?: string;
   customerOptionLabel?: (customer: any) => string;
+  /** Collections are receivable payments — require a customer (no walk-in). */
+  requireCustomer?: boolean;
   showShiftHintWhenSingle?: boolean;
   showDateField?: boolean;
   dateLabel?: string;
@@ -66,13 +68,14 @@ export const CollectionEntryForm: React.FC<CollectionEntryFormProps> = ({
   walkInOptionLabel = 'Walk-in / Not Linked',
   customerLabel = 'Customer Account (Optional for Walk-in)',
   customerOptionLabel,
+  requireCustomer = false,
   showShiftHintWhenSingle = true,
   showDateField = false,
   dateLabel = 'Collection Date',
 }) => {
   const hasMultipleShiftOptions = shiftOptions.length > 1;
 
-  const { register, handleSubmit, reset, watch, setValue, formState: { errors } } = useZodForm<CollectionEntryFormValues>(collectionEntryFormSchema, {
+  const { register, handleSubmit, reset, watch, setValue, setError, clearErrors, formState: { errors } } = useZodForm<CollectionEntryFormValues>(collectionEntryFormSchema, {
     defaultValues: { ...EMPTY_DEFAULTS, ...defaultValues },
   });
 
@@ -86,7 +89,13 @@ export const CollectionEntryForm: React.FC<CollectionEntryFormProps> = ({
   const customerId = watch('customerId');
 
   return (
-    <form onSubmit={handleSubmit((values) => onSubmit(values))} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+    <form onSubmit={handleSubmit((values) => {
+      if (requireCustomer && !values.customerId) {
+        setError('customerId', { type: 'manual', message: 'Select a customer for this collection.' });
+        return;
+      }
+      return onSubmit(values);
+    })} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
       {showDateField && (
         <Field label={dateLabel}>
           <DateField disabled={submitting} {...register('transactionDate')} />
@@ -136,18 +145,18 @@ export const CollectionEntryForm: React.FC<CollectionEntryFormProps> = ({
         )}
       </Field>
 
-      <Field label={customerLabel}>
+      <Field label={requireCustomer ? 'Customer Account' : customerLabel} error={errors.customerId?.message as string | undefined}>
         <Combobox
           options={[
-            { value: '', label: walkInOptionLabel },
+            ...(requireCustomer ? [] : [{ value: '', label: walkInOptionLabel }]),
             ...customers.map((customer) => ({
               value: customer.id,
               label: customerOptionLabel ? customerOptionLabel(customer) : customer.name,
             })),
           ]}
           value={customerId ?? ''}
-          onChange={(v) => setValue('customerId', v, { shouldValidate: true })}
-          placeholder={walkInOptionLabel}
+          onChange={(v) => { setValue('customerId', v, { shouldValidate: true }); if (v) clearErrors('customerId'); }}
+          placeholder={requireCustomer ? 'Select a customer…' : walkInOptionLabel}
           searchPlaceholder="Search customers…"
           disabled={submitting}
         />

@@ -146,11 +146,17 @@ export const MerchandiseSaleEntryForm: React.FC<MerchandiseSaleEntryFormProps> =
               return (
                 <div key={f.id} style={{ display: 'flex', flexDirection: 'column', gap: '6px', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', padding: '8px 10px' }}>
                   <Combobox
-                    options={products.map((pr) => ({
-                      value: pr.id,
-                      label: `${pr.name}${pr.brand ? ` · ${pr.brand}` : ''} (${pr.code})`,
-                      sublabel: pr.sellingPrice != null ? `MRP ${inr(pr.sellingPrice)}` : (pr.unit ? String(pr.unit) : undefined),
-                    }))}
+                    options={products.map((pr) => {
+                      const onHand = stockByProduct ? stockByProduct[pr.id] : undefined;
+                      const bits: string[] = [];
+                      if (pr.sellingPrice != null) bits.push(`MRP ${inr(pr.sellingPrice)}`);
+                      if (onHand != null) bits.push(`${formatQty(Number(onHand))}${pr.unit ? ` ${pr.unit}` : ''} on hand`);
+                      return {
+                        value: pr.id,
+                        label: `${pr.name}${pr.brand ? ` · ${pr.brand}` : ''} (${pr.code})`,
+                        sublabel: bits.length ? bits.join(' · ') : (pr.unit ? String(pr.unit) : undefined),
+                      };
+                    })}
                     value={line?.productId ?? ''}
                     onChange={(v) => {
                       setValue(`lines.${i}.productId` as const, v, { shouldValidate: true });
