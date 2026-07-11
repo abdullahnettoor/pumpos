@@ -2,7 +2,7 @@ import React from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
 import { User, Edit, Trash2 } from 'lucide-react';
 import { inr } from '../../utils/format.js';
-import { Chip, StatusChip } from '../../pump-ds/index.js';
+import { Chip, StatusChip, DateText } from '../../pump-ds/index.js';
 
 /**
  * Column builders for the Customers screen tables. These are pure functions
@@ -126,11 +126,7 @@ export const buildCollectionColumns = (): ColumnDef<any, any>[] => [
   {
     accessorKey: 'businessDate',
     header: 'Date',
-    cell: ({ row }) => {
-      const c = row.original;
-      const d = c.businessDate ? new Date(c.businessDate) : (c.createdAt ? new Date(c.createdAt) : null);
-      return <span style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '12px' }}>{d ? d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' }) : '-'}</span>;
-    },
+    cell: ({ row }) => <DateText value={row.original.businessDate ?? row.original.createdAt} />,
   },
   {
     accessorKey: 'customerName',
@@ -161,11 +157,7 @@ export const buildCreditSaleColumns = (): ColumnDef<any, any>[] => [
   {
     accessorKey: 'businessDate',
     header: 'Date',
-    cell: ({ row }) => {
-      const s = row.original;
-      const d = s.businessDate ? new Date(s.businessDate) : (s.createdAt ? new Date(s.createdAt) : null);
-      return <span style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '12px' }}>{d ? d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' }) : '-'}</span>;
-    },
+    cell: ({ row }) => <DateText value={row.original.businessDate ?? row.original.createdAt} />,
   },
   {
     accessorKey: 'customerName',
@@ -236,7 +228,7 @@ export const buildVehicleColumns = (openEdit: (v: any) => void, onDelete: (v: an
   {
     accessorKey: 'updatedAt',
     header: 'Updated',
-    cell: ({ getValue }) => <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>{getValue() ? new Date(getValue() as string).toLocaleDateString('en-IN') : '-'}</span>,
+    cell: ({ getValue }) => <DateText value={getValue() as string} tone="muted" />,
   },
   {
     id: 'actions',

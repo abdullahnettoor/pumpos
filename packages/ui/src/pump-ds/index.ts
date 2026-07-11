@@ -20,6 +20,7 @@ export * from './page-header/index.js';
 export * from './panel/index.js';
 export * from './empty-state/index.js';
 export * from './input/index.js';
+export * from './date/index.js';
 export * from './meter/index.js';
 export * from './breakdown/index.js';
 export * from './sparkline/index.js';

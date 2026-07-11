@@ -3,7 +3,7 @@ import { Plus, Edit, Wallet } from 'lucide-react';
 import { Drawer } from '../Drawer.js';
 import { LedgerView } from '../ledger/LedgerView.js';
 import { Button } from '../../pump-ds/index.js';
-import { inr } from '../../utils/format.js';
+import { inr, formatDate, formatTime } from '../../utils/format.js';
 import { useCustomerLedger } from '../../query/hooks.js';
 import { TopupDrawer } from './TopupDrawer.js';
 
@@ -123,10 +123,8 @@ export const StatementDrawer: React.FC<StatementDrawerProps> = ({ customer, stat
                   return {
                     id: tx.id,
                     date: tx.createdAt,
-                    dateLabel: tx.businessDate
-                      ? new Date(tx.businessDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' })
-                      : new Date(tx.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' }),
-                    subLabel: new Date(tx.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
+                    dateLabel: formatDate(tx.businessDate ?? tx.createdAt, { compact: true }),
+                    subLabel: formatTime(tx.createdAt),
                     type,
                     typeColor,
                     notes: tx.notes,

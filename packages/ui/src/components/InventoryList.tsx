@@ -8,7 +8,7 @@ import { Drawer } from './Drawer.js';
 import { Field, NumberInput, TextInput, Select } from './primitives/Field.js';
 import { CloudTransactionService } from '../services/cloud.js';
 import { useInventoryStatus, useInventoryItems, useInventoryMovements, useInventoryVariances } from '../query/hooks.js';
-import { Panel, Button, KpiStrip, KpiTile, StatusChip, Chip, MeterRow, EmptyState } from '../pump-ds/index.js';
+import { Panel, Button, KpiStrip, KpiTile, StatusChip, Chip, MeterRow, EmptyState, DateText } from '../pump-ds/index.js';
 import { tankPct, classifyTank } from '../utils/stock.js';
 import type { NavIntent } from './AppShell.js';
 
@@ -23,8 +23,6 @@ interface InventoryListProps {
 type TabType = 'tanks' | 'items' | 'movements' | 'variances';
 
 const fmtL = (n: number) => `${Number(n).toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} L`;
-const fmtDate = (s?: string) =>
-  s ? new Date(s).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 
 const SearchBox: React.FC<{ value: string; onChange: (v: string) => void; placeholder?: string }> = ({ value, onChange, placeholder }) => (
   <div style={{ position: 'relative' }}>
@@ -34,7 +32,7 @@ const SearchBox: React.FC<{ value: string; onChange: (v: string) => void; placeh
 );
 
 const movementColumns: ColumnDef<any, any>[] = [
-  { accessorKey: 'businessDate', header: 'Business Day', cell: ({ getValue }) => <span style={{ color: 'var(--text-muted)' }}>{fmtDate(getValue())}</span> },
+  { accessorKey: 'businessDate', header: 'Business Day', cell: ({ getValue }) => <DateText value={getValue() as string} tone="muted" /> },
   { accessorKey: 'productName', header: 'Product', cell: ({ row }) => <span style={{ fontWeight: 500, color: 'var(--text-strong)' }}>{row.original.productName}</span> },
   {
     accessorKey: 'movementType',
@@ -65,7 +63,7 @@ const movementColumns: ColumnDef<any, any>[] = [
 ];
 
 const varianceColumns: ColumnDef<any, any>[] = [
-  { accessorKey: 'businessDate', header: 'Business Day', cell: ({ getValue }) => <span style={{ color: 'var(--text-muted)' }}>{fmtDate(getValue())}</span> },
+  { accessorKey: 'businessDate', header: 'Business Day', cell: ({ getValue }) => <DateText value={getValue() as string} tone="muted" /> },
   { accessorKey: 'productName', header: 'Product', cell: ({ row }) => <span style={{ fontWeight: 500, color: 'var(--text-strong)' }}>{row.original.productName}</span> },
   { accessorKey: 'expectedQuantity', header: 'Expected', cell: ({ row }) => <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>{Number(row.original.expectedQuantity).toLocaleString('en-IN', { maximumFractionDigits: 3 })} {row.original.productUnit ?? 'L'}</span> },
   { accessorKey: 'actualQuantity', header: 'Actual', cell: ({ row }) => <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-strong)' }}>{Number(row.original.actualQuantity).toLocaleString('en-IN', { maximumFractionDigits: 3 })} {row.original.productUnit ?? 'L'}</span> },

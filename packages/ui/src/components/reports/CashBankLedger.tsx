@@ -5,6 +5,7 @@ import { DateRangeField, computeRange } from '../primitives/DateRangeField.js';
 import type { DateRange } from '../primitives/DateRangeField.js';
 import { Segmented } from '../primitives/Segmented.js';
 import { inr } from '../../utils/format.js';
+import { DateText } from '../../pump-ds/index.js';
 
 export interface CashBankLedgerProps {
   selectedStation: any | null;
@@ -143,7 +144,7 @@ export const CashBankLedger: React.FC<CashBankLedgerProps> = ({ selectedStation 
               <>
                 {withBalance.map((m: any) => (
                   <tr key={m.id} style={{ borderTop: '1px solid var(--border-soft)' }}>
-                    <td style={{ padding: '8px 12px', whiteSpace: 'nowrap', color: 'var(--text-default)' }}>{m.date ? new Date(m.date).toLocaleDateString(undefined, { dateStyle: 'medium' }) : '—'}</td>
+                    <td style={{ padding: '8px 12px', whiteSpace: 'nowrap', color: 'var(--text-default)' }}><DateText value={m.date} tone="muted" /></td>
                     <td style={{ padding: '8px 12px', color: 'var(--text-strong)' }}>{m.label}</td>
                     <td style={{ padding: '8px 12px', fontSize: '12px', color: 'var(--text-muted)' }}>{m.source}</td>
                     <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--state-success-fg)' }}>{m.direction === 'in' ? inr(m.amount) : ''}</td>

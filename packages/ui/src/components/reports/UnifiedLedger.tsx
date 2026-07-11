@@ -14,7 +14,7 @@ import type { KpiTone } from '../primitives/KpiCard.js';
 import { Combobox } from '../primitives/Combobox.js';
 import { DateRangeField, computeRange } from '../primitives/DateRangeField.js';
 import type { DateRange } from '../primitives/DateRangeField.js';
-import { inr } from '../../utils/format.js';
+import { inr, formatDate } from '../../utils/format.js';
 import { Download } from 'lucide-react';
 
 export interface UnifiedLedgerProps {
@@ -39,8 +39,7 @@ const TYPE_LABEL: Record<EntityType, string> = {
   owner: 'Owner',
 };
 
-const fmtDate = (v: any) =>
-  v ? new Date(v).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' }) : '—';
+const fmtDate = (v: any) => formatDate(v, { compact: true });
 
 // Build the PDF "Particulars" cell: always keep the transaction type, and append
 // any free-text note. Money rows whose note already starts with the type (e.g.

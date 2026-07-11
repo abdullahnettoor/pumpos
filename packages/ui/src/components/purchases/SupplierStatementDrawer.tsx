@@ -3,7 +3,7 @@ import { Edit, Wallet, ShoppingCart } from 'lucide-react';
 import { Drawer } from '../Drawer.js';
 import { LedgerView } from '../ledger/LedgerView.js';
 import { Button } from '../../pump-ds/index.js';
-import { inr } from '../../utils/format.js';
+import { inr, formatDate, formatTime } from '../../utils/format.js';
 import { useSupplierLedger } from '../../query/hooks.js';
 import { SupplierPaymentDrawer } from './SupplierPaymentDrawer.js';
 
@@ -82,10 +82,8 @@ export const SupplierStatementDrawer: React.FC<SupplierStatementDrawerProps> = (
                   return {
                     id: tx.id,
                     date: tx.createdAt,
-                    dateLabel: tx.businessDate
-                      ? new Date(tx.businessDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' })
-                      : new Date(tx.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' }),
-                    subLabel: new Date(tx.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
+                    dateLabel: formatDate(tx.businessDate ?? tx.createdAt, { compact: true }),
+                    subLabel: formatTime(tx.createdAt),
                     type,
                     typeColor: type === 'Purchase' ? 'var(--brand-warning)' : 'var(--state-success-fg)',
                     notes: tx.notes,

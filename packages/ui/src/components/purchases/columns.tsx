@@ -1,8 +1,8 @@
 import React from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
-import { Calendar, Building, Edit } from 'lucide-react';
+import { Building, Edit } from 'lucide-react';
 import { inr } from '../../utils/format.js';
-import { StatusChip } from '../../pump-ds/index.js';
+import { StatusChip, DateText } from '../../pump-ds/index.js';
 
 /** Column builders for the Purchases screen tables (extracted from PurchasesList). */
 
@@ -10,15 +10,7 @@ export const purchaseColumns: ColumnDef<any, any>[] = [
   {
     accessorKey: 'businessDate',
     header: 'Date',
-    cell: ({ row }) => {
-      const d = row.original.businessDate ?? row.original.shiftDate;
-      return (
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: 'var(--text-default)' }}>
-          <Calendar size={13} style={{ color: 'var(--text-muted)' }} />
-          {d ? new Date(d).toLocaleDateString(undefined, { dateStyle: 'medium' }) : '—'}
-        </span>
-      );
-    },
+    cell: ({ row }) => <DateText value={row.original.businessDate ?? row.original.shiftDate} />,
   },
   { accessorKey: 'supplierName', header: 'Supplier', cell: ({ getValue }) => <span style={{ fontWeight: 600, color: 'var(--text-strong)' }}>{(getValue() as string) || '—'}</span> },
   {

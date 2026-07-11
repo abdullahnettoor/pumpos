@@ -9,6 +9,7 @@ import type { DateRange } from '../primitives/DateRangeField.js';
 import { paperFromStation } from '../../services/reports/reportConfig.js';
 import { letterheadFromStation } from '../../services/reports/letterhead.js';
 import { inr } from '../../utils/format.js';
+import { DateText } from '../../pump-ds/index.js';
 import { FileText, Download } from 'lucide-react';
 
 const txService = new CloudTransactionService();
@@ -107,7 +108,7 @@ export const InvoicesPanel: React.FC<InvoicesPanelProps> = ({ selectedStation, u
             ) : (
               rows.map((r: any) => (
                 <tr key={r.id} style={{ borderTop: '1px solid var(--border-soft)' }}>
-                  <td style={{ padding: '8px 12px', whiteSpace: 'nowrap' }}>{r.businessDate ? new Date(r.businessDate).toLocaleDateString(undefined, { dateStyle: 'medium' }) : '—'}</td>
+                  <td style={{ padding: '8px 12px', whiteSpace: 'nowrap' }}><DateText value={r.businessDate} tone="muted" /></td>
                   <td style={{ padding: '8px 12px', color: 'var(--text-strong)' }}>{r.customerName || <span style={{ color: 'var(--text-faint)' }}>Walk-in</span>}</td>
                   <td style={{ padding: '8px 12px', fontSize: '12px', color: 'var(--text-muted)' }}>{r.documentNumber || r.saleType}</td>
                   <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--text-strong)' }}>{inr(r.totalAmount)}</td>

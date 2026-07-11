@@ -10,7 +10,7 @@ import { inr } from '../utils/format.js';
 import { Tabs } from './primitives/Tabs.js';
 import { PageLayout } from './primitives/PageLayout.js';
 import { useToast } from './primitives/ToastProvider.js';
-import { Panel, Button, KpiStrip, KpiTile, EmptyState } from '../pump-ds/index.js';
+import { Panel, Button, KpiStrip, KpiTile, EmptyState, DateText } from '../pump-ds/index.js';
 import { resolveBusinessDate, type PurchaseEntryFormValues } from '@pump/shared';
 import type { NavIntent } from './AppShell.js';
 import { purchaseColumns, buildSupplierColumns } from './purchases/columns.js';
@@ -457,7 +457,7 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, d
                   <tbody>
                     {gstRows.map((r) => (
                       <tr key={r.id} style={{ borderBottom: '1px solid var(--border-soft)' }}>
-                        <td style={{ padding: '8px 10px', whiteSpace: 'nowrap', color: 'var(--text-default)' }}>{r.businessDate ? new Date(r.businessDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' }) : '—'}</td>
+                        <td style={{ padding: '8px 10px', whiteSpace: 'nowrap', color: 'var(--text-default)' }}><DateText value={r.businessDate} variant="compact" tone="muted" /></td>
                         <td style={{ padding: '8px 10px', color: 'var(--text-strong)', fontWeight: 600 }}>
                           {r.supplierName}
                           {r.supplierGstin && <div style={{ fontSize: '10px', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontWeight: 400 }}>{r.supplierGstin}</div>}
@@ -525,7 +525,7 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, d
               </div>
               <div>
                 <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Date</span>
-                <strong style={{ color: 'var(--text-strong)' }}>{detailPurchase.businessDate ? new Date(detailPurchase.businessDate).toLocaleDateString(undefined, { dateStyle: 'medium' }) : '—'}</strong>
+                <strong style={{ color: 'var(--text-strong)' }}><DateText value={detailPurchase.businessDate} tone="strong" /></strong>
               </div>
               <div>
                 <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Reference</span>
