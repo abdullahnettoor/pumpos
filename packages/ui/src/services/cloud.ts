@@ -583,6 +583,8 @@ export class CloudTransactionService {
       unitPrice: number;
       tankAllocations?: { tankId: string; quantity: number }[];
     }[];
+    /** Optional immediate payment recorded atomically with the purchase. */
+    payment?: { amount: number; accountId?: string | null; notes?: string };
   }): Promise<any> {
     return request<any>('/transactions/purchases', {
       method: 'POST',

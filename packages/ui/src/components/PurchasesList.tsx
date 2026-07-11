@@ -341,7 +341,7 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, d
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statusQ.data, suppliersActiveQ.data, productsQ.data]);
 
-  const handleAddPurchase = async (values: PurchaseEntryFormValues) => {
+  const handleAddPurchase = async (values: PurchaseEntryFormValues, payment?: { amount: number; accountId?: string | null }) => {
     setFormError(null);
     if (!values.supplierId || values.lines.length === 0) return;
 
@@ -359,11 +359,12 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, d
           unitPrice: Number(l.unitPrice),
           tankAllocations: l.tankAllocations && l.tankAllocations.length > 0 ? l.tankAllocations : undefined,
         })),
+        payment: payment && payment.amount > 0 ? { amount: payment.amount, accountId: payment.accountId ?? null } : undefined,
       });
 
       closePurchaseDrawer();
       invalidateOperational(stationId);
-      toast.success('Purchase recorded.');
+      toast.success(payment && payment.amount > 0 ? 'Purchase recorded with payment.' : 'Purchase recorded.');
     } catch (err: any) {
       setFormError(err.message || 'Failed to record supplier purchase');
     } finally {
@@ -642,6 +643,8 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, d
             suppliers={suppliers}
             products={products}
             tanks={tanks}
+            stationId={stationId}
+            enablePayment
             submitting={submitting}
             error={formError}
             onCancel={closePurchaseDrawer}

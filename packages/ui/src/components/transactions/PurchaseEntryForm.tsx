@@ -5,6 +5,8 @@ import { useZodForm } from '../../forms/useZodForm.js';
 import { inr } from '../../utils/format.js';
 import { Field, TextInput, NumberInput, Select, DateField } from '../primitives/Field.js';
 import { Combobox } from '../primitives/Combobox.js';
+import { AccountSelect } from '../primitives/AccountSelect.js';
+import { Checkbox } from '../primitives/Toggle.js';
 
 export interface ShiftOption {
   id: string;
@@ -23,7 +25,11 @@ export interface PurchaseEntryFormProps {
   /** Inter-state supply (supplier state ≠ station state) → IGST instead of CGST+SGST. */
   interState?: boolean;
   onCancel: () => void;
-  onSubmit: (values: PurchaseEntryFormValues) => void | Promise<void>;
+  onSubmit: (values: PurchaseEntryFormValues, payment?: { amount: number; accountId?: string | null }) => void | Promise<void>;
+  /** Station for the pay-from account picker (required when enablePayment). */
+  stationId?: string | null;
+  /** Show the optional "record payment now" section. */
+  enablePayment?: boolean;
   submitLabel?: string;
   submittingLabel?: string;
   invoiceLabel?: string;
@@ -67,6 +73,8 @@ export const PurchaseEntryForm: React.FC<PurchaseEntryFormProps> = ({
   showShiftHintWhenSingle = true,
   showDateField = false,
   dateLabel = 'Purchase Date',
+  stationId,
+  enablePayment = false,
 }) => {
   const hasMultipleShiftOptions = shiftOptions.length > 1;
 
@@ -82,12 +90,23 @@ export const PurchaseEntryForm: React.FC<PurchaseEntryFormProps> = ({
   // Keyed by field-array row id.
   const [lineTotals, setLineTotals] = useState<Record<string, string>>({});
 
+  // Product-catalogue filter for the line pickers (fuel is the common case).
+  const [productKind, setProductKind] = useState<'FUEL' | 'OTHER'>('FUEL');
+  // Optional "pay now" state (only used when enablePayment).
+  const [recordPayment, setRecordPayment] = useState(false);
+  const [paymentAccountId, setPaymentAccountId] = useState('');
+  const [paymentAmount, setPaymentAmount] = useState('');
+
   const serializedDefaults = JSON.stringify(defaultValues ?? {});
   useEffect(() => {
     reset({ ...EMPTY_DEFAULTS, ...defaultValues });
     setAllocations({});
     setLineTotals({});
     setAllocError(null);
+    setProductKind('FUEL');
+    setRecordPayment(false);
+    setPaymentAccountId('');
+    setPaymentAmount('');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [serializedDefaults]);
 
@@ -149,6 +168,9 @@ export const PurchaseEntryForm: React.FC<PurchaseEntryFormProps> = ({
   }
   const grandTotal = taxableTotal + gstTotal + cessTotal;
 
+  // Products offered in the line pickers, filtered by the fuel/other toggle.
+  const visibleProducts = products.filter((p: any) => (productKind === 'FUEL' ? p.productType === 'FUEL' : p.productType !== 'FUEL'));
+
   const submit = (values: PurchaseEntryFormValues) => {
     setAllocError(null);
     const lines = values.lines.map((ln, i) => {
@@ -176,7 +198,10 @@ export const PurchaseEntryForm: React.FC<PurchaseEntryFormProps> = ({
       }
       return { ...ln, unitPrice, tankAllocations };
     });
-    return onSubmit({ ...values, lines });
+    const payment = enablePayment && recordPayment && Number(paymentAmount) > 0
+      ? { amount: Number(paymentAmount), accountId: paymentAccountId || null }
+      : undefined;
+    return onSubmit({ ...values, lines }, payment);
   };
 
   return (
@@ -227,10 +252,22 @@ export const PurchaseEntryForm: React.FC<PurchaseEntryFormProps> = ({
       <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <label style={labelStyle}>Line Items</label>
-          <button type="button" className="btn btn-secondary btn-sm" disabled={submitting}
-            onClick={() => append({ productId: '', quantity: undefined as unknown as number, unitPrice: undefined as unknown as number })}>
-            + Add line
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{ display: 'inline-flex', border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-input)', overflow: 'hidden' }} role="group" aria-label="Product type filter">
+              {(['FUEL', 'OTHER'] as const).map((k) => (
+                <button key={k} type="button" disabled={submitting} onClick={() => setProductKind(k)}
+                  style={{ padding: '4px 10px', fontSize: '11px', fontWeight: 600, border: 'none', cursor: 'pointer',
+                    background: productKind === k ? 'var(--brand-primary)' : 'var(--bg-surface)',
+                    color: productKind === k ? '#fff' : 'var(--text-muted)' }}>
+                  {k === 'FUEL' ? 'Fuel' : 'Other'}
+                </button>
+              ))}
+            </div>
+            <button type="button" className="btn btn-secondary btn-sm" disabled={submitting}
+              onClick={() => append({ productId: '', quantity: undefined as unknown as number, unitPrice: undefined as unknown as number })}>
+              + Add line
+            </button>
+          </div>
         </div>
 
         {fields.map((field, i) => {
@@ -258,7 +295,7 @@ export const PurchaseEntryForm: React.FC<PurchaseEntryFormProps> = ({
                   <Combobox
                     options={[
                       { value: '', label: '-- Select --' },
-                      ...products.map((p) => ({
+                      ...visibleProducts.map((p: any) => ({
                         value: p.id,
                         label: `${p.name}${p.brand ? ` · ${p.brand}` : ''}${p.code ? ` (${p.code})` : ''}`,
                       })),
@@ -352,6 +389,36 @@ export const PurchaseEntryForm: React.FC<PurchaseEntryFormProps> = ({
           <span>Invoice Total</span><span>{inr(grandTotal)}</span>
         </div>
       </div>
+
+      {enablePayment && (
+        <div style={{ border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: '10px', backgroundColor: 'var(--bg-surface-alt)' }}>
+          <Checkbox
+            label="Record payment now"
+            checked={recordPayment}
+            disabled={submitting}
+            onChange={(e) => {
+              const on = e.target.checked;
+              setRecordPayment(on);
+              if (on && !paymentAmount) setPaymentAmount(grandTotal > 0 ? grandTotal.toFixed(2) : '');
+            }}
+          />
+          {recordPayment && (
+            <>
+              <Field label="Pay from account">
+                <AccountSelect stationId={stationId} value={paymentAccountId} onChange={setPaymentAccountId} disabled={submitting} />
+              </Field>
+              <Field label="Amount paid (₹)">
+                <NumberInput value={paymentAmount} onChange={(e) => setPaymentAmount(e.target.value)} disabled={submitting} />
+              </Field>
+              {Number(paymentAmount) > 0 && grandTotal > 0 && Number(paymentAmount) < grandTotal && (
+                <span style={{ fontSize: '11px', color: 'var(--brand-warning)', fontFamily: 'var(--font-mono)' }}>
+                  Partial — {inr(grandTotal - Number(paymentAmount))} will remain outstanding.
+                </span>
+              )}
+            </>
+          )}
+        </div>
+      )}
 
       <Field label={invoiceLabel}>
         <TextInput placeholder={invoicePlaceholder} disabled={submitting} {...register('invoiceNumber')} />

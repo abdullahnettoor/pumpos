@@ -558,8 +558,9 @@ transactionsRouter.post('/purchases', async (c) => {
   }
   const body = await c.req.json().catch(() => ({}));
   const clock = await loadStationClock(c.var.db, body?.stationId);
-  const result = await runInTransaction(c.var.db, (tx, events) =>
-    new RecordPurchase({
+  const result = await runInTransaction(c.var.db, async (tx, events) => {
+    const ctx = buildContext(user, { stationId: body?.stationId, ...clock });
+    const r = await new RecordPurchase({
       purchases: new DrizzlePurchaseRepository(tx),
       purchaseItems: new DrizzlePurchaseItemRepository(tx),
       stock: new DrizzleStockMovementRepository(tx),
@@ -571,8 +572,46 @@ transactionsRouter.post('/purchases', async (c) => {
       businessDays: new DrizzleBusinessDayRepository(tx),
       docNumbers,
       events,
-    }).execute(body, buildContext(user, { stationId: body?.stationId, ...clock })),
-  );
+    }).execute(body, ctx);
+
+    // Optional "pay now" — record a supplier payment atomically with the
+    // purchase (partial allowed). Same funding-account → paidFrom derivation as
+    // the standalone /supplier-payments route; both commit or roll back together.
+    if (r.success && body?.payment && Number(body.payment.amount) > 0) {
+      const accountId = body.payment.accountId || undefined;
+      const paymentBody: any = {
+        supplierId: body.supplierId,
+        amount: Number(body.payment.amount),
+        stationId: body?.stationId,
+        transactionDate: body?.transactionDate,
+        shiftId: body?.shiftId,
+        notes: body?.payment?.notes,
+      };
+      if (accountId) {
+        const [acc] = await tx
+          .select({ t: schema.financialAccounts.accountType })
+          .from(schema.financialAccounts)
+          .where(and(eq(schema.financialAccounts.id, accountId), eq(schema.financialAccounts.organizationId, user.organizationId)))
+          .limit(1);
+        const t = acc?.t;
+        if (t === 'BANK') { paymentBody.paidFrom = 'BANK'; paymentBody.affectsDrawer = false; }
+        else if (t === 'OWNER') { paymentBody.paidFrom = 'OWNER'; paymentBody.affectsDrawer = false; }
+        else if (t === 'PETTY_CASH') { paymentBody.paidFrom = 'SHIFT_CASH'; paymentBody.affectsDrawer = false; }
+        else if (t === 'CASH_IN_HAND') { paymentBody.paidFrom = 'SHIFT_CASH'; }
+      }
+      const pr = await new RecordSupplierPayment({
+        supplierTxns: new DrizzleSupplierTransactionRepository(tx),
+        suppliers: new DrizzleSupplierRepository(tx),
+        shifts: new DrizzleShiftRepository(tx),
+        businessDays: new DrizzleBusinessDayRepository(tx),
+        events,
+      }).execute(paymentBody, ctx);
+      if (!pr.success) return pr; // roll the whole purchase back
+      await new LedgerPostingService(tx).postSupplierPayment(user.organizationId, pr.data, accountId);
+    }
+
+    return r;
+  });
   return sendResult(c, result);
 });
 
