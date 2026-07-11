@@ -21,6 +21,9 @@ export interface NavIntent {
   focusCustomerId?: string;
   /** Focus a specific supplier (opens their statement drawer). */
   focusSupplierId?: string;
+  /** Focus a specific inventory tab + entity (tank card / merchandise row). */
+  focusInventoryTab?: 'tanks' | 'items';
+  focusInventoryId?: string;
   /** Open a drawer immediately on arrival at the destination page. */
   open?: 'customer-statement' | 'new-customer' | 'new-collection' | 'supplier-statement' | 'supplier-payment';
 }

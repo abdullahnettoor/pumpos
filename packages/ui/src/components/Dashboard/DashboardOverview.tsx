@@ -14,6 +14,7 @@ import { inr, formatQty } from '../../utils/format.js';
 import { useConfirm } from '../primitives/ConfirmDialog.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import { Station, resolveBusinessDate } from '@pump/shared';
+import type { NavIntent } from '../AppShell.js';
 import {
   Play, Plus, FileText, Unlock, AlertTriangle, Lock, Droplet, ClipboardList,
   CircleCheckBig, ChevronRight, TriangleAlert, Clock,
@@ -25,7 +26,7 @@ interface DashboardOverviewProps {
   selectedStation: Station | null;
   userRole: 'Owner' | 'Manager' | 'Accountant' | 'Staff';
   userName: string;
-  onNavigate: (path: string) => void;
+  onNavigate: (path: string, intent?: NavIntent) => void;
 }
 
 export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
@@ -170,7 +171,9 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   const exceptions: Exception[] = [
     ...stationAlerts.map((a) => ({
       id: a.id, tone: a.severity, title: a.title, meta: a.meta,
-      onAction: a.actionPath ? () => onNavigate(a.actionPath!) : undefined,
+      onAction: a.actionPath
+        ? () => onNavigate(a.actionPath!, a.actionTab ? { focusInventoryTab: a.actionTab, focusInventoryId: a.actionEntityId } : undefined)
+        : undefined,
     })),
     ...(canSeeFinancials && Math.abs(todayCashVariance) > 100
       ? [{

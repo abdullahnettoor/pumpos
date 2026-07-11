@@ -21,6 +21,8 @@ export interface DataTableProps<T> {
   initialSorting?: SortingState;
   /** Drop the outer border / radius / surface so it sits flush inside a Panel. */
   bare?: boolean;
+  /** Highlight (and scroll into view) the row whose id matches. Used by deep-links. */
+  highlightRowId?: string | null;
 }
 
 /**
@@ -38,8 +40,10 @@ export function DataTable<T>({
   getRowId,
   initialSorting,
   bare = false,
+  highlightRowId,
 }: DataTableProps<T>) {
   const [sorting, setSorting] = React.useState<SortingState>(initialSorting ?? []);
+  const scrolledToRef = React.useRef<string | null>(null);
 
   const table = useReactTable({
     data: data ?? [],
@@ -122,19 +126,34 @@ export function DataTable<T>({
           ))}
         </thead>
         <tbody>
-          {table.getRowModel().rows.map((row) => (
-            <tr
-              key={row.id}
-              onClick={onRowClick ? () => onRowClick(row.original) : undefined}
-              style={{ borderBottom: '1px solid var(--border-soft)', cursor: onRowClick ? 'pointer' : 'default' }}
-            >
-              {row.getVisibleCells().map((cell) => (
-                <td key={cell.id} style={{ padding: '9px 12px', color: 'var(--text-default)', verticalAlign: 'middle' }}>
-                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                </td>
-              ))}
-            </tr>
-          ))}
+          {table.getRowModel().rows.map((row) => {
+            const isHighlighted = highlightRowId != null && row.id === highlightRowId;
+            return (
+              <tr
+                key={row.id}
+                onClick={onRowClick ? () => onRowClick(row.original) : undefined}
+                ref={(el) => {
+                  if (el && isHighlighted && scrolledToRef.current !== row.id) {
+                    scrolledToRef.current = row.id;
+                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  }
+                }}
+                style={{
+                  borderBottom: '1px solid var(--border-soft)',
+                  cursor: onRowClick ? 'pointer' : 'default',
+                  backgroundColor: isHighlighted ? 'var(--state-info-bg)' : undefined,
+                  boxShadow: isHighlighted ? 'inset 2px 0 0 var(--state-info-fg)' : undefined,
+                  transition: 'background-color 0.4s ease',
+                }}
+              >
+                {row.getVisibleCells().map((cell) => (
+                  <td key={cell.id} style={{ padding: '9px 12px', color: 'var(--text-default)', verticalAlign: 'middle' }}>
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                  </td>
+                ))}
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>

@@ -404,7 +404,7 @@ const App: React.FC = () => {
             selectedStation={selectedStation}
             userRole={userRole || 'Staff'}
             userName={userName}
-            onNavigate={setCurrentPath}
+            onNavigate={navigate}
           />
         );
       
@@ -436,7 +436,13 @@ const App: React.FC = () => {
           />
         );
       case '/inventory':
-        return <InventoryList selectedStation={selectedStation} />;
+        return (
+          <InventoryList
+            selectedStation={selectedStation}
+            intent={navIntent}
+            onIntentConsumed={() => setNavIntent(null)}
+          />
+        );
       case '/pricing':
         return <FuelPricingPanel selectedStation={selectedStation} />;
       case '/accounts':

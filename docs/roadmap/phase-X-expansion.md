@@ -17,5 +17,14 @@
 ## X5 — Hardware / POS integrations
 - Dispenser/ATG/forecourt controller feeds → nozzle readings/dips; printer/cash-drawer; POS pass-through. Keep nozzle-derived sales authoritative.
 
+## X6 — Merchandise reorder points (low-stock alerts)
+- **Why:** today merchandise only alerts when `quantity < 0` (oversold). There is no proactive low-stock warning for non-fuel items — operators find out only after overselling. Fuel tanks already warn by % of capacity (`packages/ui/src/utils/stock.ts`).
+- **Scope:**
+  - Add an optional `reorderLevel` (numeric, per product/unit) to products — column or `metadata` JSONB; surface it in the product create/edit form (Station → Products).
+  - In `useStationAlerts` (marked `TODO (C)`), raise a `warning` `stock` alert when `0 <= quantity <= reorderLevel`, deep-linking to the Merchandise tab (`actionTab: 'items'`) like oversold does.
+  - Add a "Low Stock" KPI tile + an "At/Below reorder" chip in the merchandise On-Hand column (alongside existing Out of stock / Oversold chips).
+  - Optional: default reorder level per product type; per-station override in `stations.settings`.
+- **Non-goals:** automated PO generation — that layers on later (purchasing).
+
 ## Cross-cutting
 - Custom roles/permissions (enterprise), custom expense categories, multi-station consolidation, audit/event explorer UI.

@@ -109,7 +109,9 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
       title: a.title,
       meta: a.meta,
       actionLabel: a.actionLabel,
-      onAction: a.actionPath ? () => onNavigate(a.actionPath!) : undefined,
+      onAction: a.actionPath
+        ? () => onNavigate(a.actionPath!, a.actionTab ? { focusInventoryTab: a.actionTab, focusInventoryId: a.actionEntityId } : undefined)
+        : undefined,
     }));
     if (syncStatus === 'failed') {
       list.push({ id: 'sync', tone: 'danger', icon: <TriangleAlert />, title: 'Sync failed', meta: pendingSyncCount > 0 ? `${pendingSyncCount} events not synced` : 'Retry to reconcile', actionLabel: 'Retry', onAction: () => {} });

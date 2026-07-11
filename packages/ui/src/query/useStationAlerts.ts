@@ -1,6 +1,7 @@
 import React from 'react';
 import { useInventoryStatus, useInventoryItems } from './hooks.js';
 import { formatQty } from '../utils/format.js';
+import { tankPct, classifyTank } from '../utils/stock.js';
 
 /**
  * useStationAlerts — the single source of "things needing attention" derived
@@ -24,6 +25,9 @@ export interface StationAlert {
   meta?: string;
   actionLabel?: string;
   actionPath?: string;
+  /** Inventory tab + entity to focus when the alert is actioned (deep-link). */
+  actionTab?: 'tanks' | 'items';
+  actionEntityId?: string;
 }
 
 const SEV_RANK: Record<AlertSeverity, number> = { danger: 0, warning: 1, info: 2 };
@@ -43,22 +47,17 @@ export function useStationAlerts(
       const cap = Number(t.capacity) || 0;
       const vol = Number(t.currentVolume) || 0;
       if (!cap) return;
-      const pct = (vol / cap) * 100;
-      if (pct < 5) {
-        list.push({
-          id: `tank-${t.id}`, severity: 'danger', category: 'stock',
-          title: `${t.name} critically low`,
-          meta: `${t.productName} · ${pct.toFixed(0)}% · ${formatQty(vol, 0)} L`,
-          actionLabel: 'Stock', actionPath: '/inventory',
-        });
-      } else if (pct < 15) {
-        list.push({
-          id: `tank-${t.id}`, severity: 'warning', category: 'stock',
-          title: `${t.name} running low`,
-          meta: `${t.productName} · ${pct.toFixed(0)}% · ${formatQty(vol, 0)} L`,
-          actionLabel: 'Stock', actionPath: '/inventory',
-        });
-      }
+      const pct = tankPct(vol, cap);
+      const level = classifyTank(pct);
+      if (level === 'ok') return;
+      list.push({
+        id: `tank-${t.id}`,
+        severity: level === 'critical' ? 'danger' : 'warning',
+        category: 'stock',
+        title: level === 'critical' ? `${t.name} critically low` : `${t.name} running low`,
+        meta: `${t.productName} · ${pct.toFixed(0)}% · ${formatQty(vol, 0)} L`,
+        actionLabel: 'Stock', actionPath: '/inventory', actionTab: 'tanks', actionEntityId: t.id,
+      });
     });
 
     (items || []).forEach((i: any) => {
@@ -67,9 +66,13 @@ export function useStationAlerts(
           id: `item-${i.productId}`, severity: 'danger', category: 'oversold',
           title: `${i.name} oversold`,
           meta: `${formatQty(Number(i.quantity))} ${i.unit ?? ''}`.trim(),
-          actionLabel: 'Stock', actionPath: '/inventory',
+          actionLabel: 'Stock', actionPath: '/inventory', actionTab: 'items', actionEntityId: i.productId,
         });
       }
+      // TODO (C — merchandise reorder points): once products carry an optional
+      // `reorderLevel`, raise a 'warning' low-stock alert here when
+      // 0 <= quantity <= reorderLevel (category 'stock', actionTab 'items').
+      // See docs/roadmap/phase-X-expansion.md.
     });
 
     return list.sort((a, b) => SEV_RANK[a.severity] - SEV_RANK[b.severity]);
