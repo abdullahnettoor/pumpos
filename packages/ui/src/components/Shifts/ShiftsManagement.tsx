@@ -13,13 +13,14 @@ import { AttendantHandoversDashboard } from './AttendantHandoversDashboard.js';
 import { MerchandiseHandoversPanel } from './MerchandiseHandoversPanel.js';
 import { NozzleReadingsGrid } from './NozzleReadingsGrid.js';
 import { ShiftTotalsSummary } from './ShiftTotalsSummary.js';
+import { BusinessDayTab } from './BusinessDayTab.js';
 import { OpenShiftForm } from './OpenShiftForm.js';
 import { Tabs } from '../primitives/Tabs.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import { useShiftStatus, useShiftTransactions, useInvalidateOperational, queryKeys, TIER } from '../../query/hooks.js';
 import { openQuickEntry, useQuickEntry, type QuickEntryType } from '../../quick-entry/store.js';
 import { Station, resolveBusinessDate } from '@pump/shared';
-import { FileText, User, Lock, AlertTriangle, Check, Fuel, Info, Play, History, Clock3 } from 'lucide-react';
+import { FileText, User, Lock, AlertTriangle, Check, Fuel, Info, Play, History, Clock3, CalendarRange } from 'lucide-react';
 import { LoadingSpinner } from '../LoadingSpinner.js';
 
 const shiftService = new CloudShiftService();
@@ -79,7 +80,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   const [viewingShiftSummary, setViewingShiftSummary] = useState(false);
 
   // Shift Tab Sub-Navigation
-  const [shiftSubTab, setShiftSubTab] = useState<'today' | 'history'>('today');
+  const [shiftSubTab, setShiftSubTab] = useState<'today' | 'business-day' | 'history'>('today');
   const [viewHistoryShiftId, setViewHistoryShiftId] = useState<string | null>(null);
 
   // Open Shift Form States
@@ -465,7 +466,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
       aria-label="Shift views"
       className="no-print"
       activeId={shiftSubTab}
-      onChange={(id) => setShiftSubTab(id as 'today' | 'history')}
+      onChange={(id) => setShiftSubTab(id as 'today' | 'business-day' | 'history')}
       tabs={[
         {
           id: 'today',
@@ -488,10 +489,24 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
             </span>
           ) : undefined,
         },
+        { id: 'business-day', label: 'Business Day', icon: <CalendarRange size={13} /> },
         { id: 'history', label: 'History', icon: <History size={13} /> },
       ]}
     />
   );
+
+  // Sub-tab: Business Day (read-only day cockpit)
+  if (shiftSubTab === 'business-day') {
+    return (
+      <div
+        className="animate-fade-in"
+        style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontFamily: 'var(--font-sans)' }}
+      >
+        {renderShiftSubTabs()}
+        <BusinessDayTab selectedStation={selectedStation} />
+      </div>
+    );
+  }
 
   // Sub-tab: History
   if (shiftSubTab === 'history') {
