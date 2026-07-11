@@ -22,7 +22,7 @@ export interface NavIntent {
   /** Focus a specific supplier (opens their statement drawer). */
   focusSupplierId?: string;
   /** Open a drawer immediately on arrival at the destination page. */
-  open?: 'customer-statement' | 'new-customer' | 'new-collection' | 'supplier-statement';
+  open?: 'customer-statement' | 'new-customer' | 'new-collection' | 'supplier-statement' | 'supplier-payment';
 }
 
 export interface AppShellProps {

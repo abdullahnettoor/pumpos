@@ -21,6 +21,20 @@ export const purchaseColumns: ColumnDef<any, any>[] = [
     },
   },
   { accessorKey: 'supplierName', header: 'Supplier', cell: ({ getValue }) => <span style={{ fontWeight: 600, color: 'var(--text-strong)' }}>{(getValue() as string) || '—'}</span> },
+  {
+    accessorKey: 'itemsSummary',
+    header: 'Items',
+    cell: ({ row }) => {
+      const s = row.original.itemsSummary as string | null;
+      const n = Number(row.original.itemCount || 0);
+      if (!s) return <span style={{ color: 'var(--text-faint)' }}>—</span>;
+      return (
+        <span title={s} style={{ display: 'inline-block', maxWidth: '220px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', verticalAlign: 'middle', color: 'var(--text-default)', fontSize: '12px' }}>
+          {s}{n > 1 ? <span style={{ color: 'var(--text-muted)' }}> · {n} lines</span> : null}
+        </span>
+      );
+    },
+  },
   { accessorKey: 'documentNumber', header: 'Reference', cell: ({ getValue }) => <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-default)' }}>{(getValue() as string) || '—'}</span> },
   { accessorKey: 'invoiceNumber', header: 'Invoice', cell: ({ getValue }) => <span style={{ color: 'var(--text-strong)' }}>{(getValue() as string) || '--'}</span> },
   { accessorKey: 'notes', header: 'Notes', cell: ({ getValue }) => <span style={{ color: 'var(--text-muted)' }}>{(getValue() as string) || '--'}</span> },

@@ -732,13 +732,24 @@ transactionsRouter.get('/purchases', async (c) => {
       purchase: schema.purchases,
       businessDate: schema.businessDays.businessDate,
       supplierName: schema.suppliers.name,
+      // Comma-joined distinct product names on the invoice — a quick "what was
+      // bought" hint for the list, without fetching each purchase's line items.
+      itemsSummary: sql<string | null>`(
+        SELECT string_agg(DISTINCT pr.name, ', ')
+        FROM purchase_items pi
+        LEFT JOIN products pr ON pr.id = pi.product_id
+        WHERE pi.purchase_id = ${schema.purchases.id}
+      )`,
+      itemCount: sql<number>`(
+        SELECT COUNT(*)::int FROM purchase_items pi WHERE pi.purchase_id = ${schema.purchases.id}
+      )`,
     })
     .from(schema.purchases)
     .innerJoin(schema.businessDays, eq(schema.purchases.businessDayId, schema.businessDays.id))
     .leftJoin(schema.suppliers, eq(schema.purchases.supplierId, schema.suppliers.id))
     .where(eq(schema.businessDays.organizationId, user.organizationId))
     .orderBy(desc(schema.purchases.createdAt));
-  return c.json({ success: true, data: rows.map((r) => ({ ...r.purchase, businessDate: r.businessDate, supplierName: r.supplierName ?? 'Unknown Supplier' })) });
+  return c.json({ success: true, data: rows.map((r) => ({ ...r.purchase, businessDate: r.businessDate, supplierName: r.supplierName ?? 'Unknown Supplier', itemsSummary: r.itemsSummary, itemCount: Number(r.itemCount || 0) })) });
 });
 
 transactionsRouter.get('/purchases/:id/items', async (c) => {

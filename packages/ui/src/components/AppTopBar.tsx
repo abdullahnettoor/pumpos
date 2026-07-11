@@ -88,6 +88,7 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
       { id: 'expense', label: 'Expense', icon: <Receipt />, shortcut: 'E', onSelect: () => onNavigate('/expenses') },
       { id: 'collection', label: 'Collection', icon: <Wallet />, onSelect: () => onNavigate('/customers', { open: 'new-collection' }) },
       { id: 'purchase', label: 'Purchase', icon: <ShoppingCart />, onSelect: () => onNavigate('/purchases') },
+      { id: 'supplier-payment', label: 'Supplier payment', icon: <Wallet />, onSelect: () => onNavigate('/purchases', { open: 'supplier-payment' }) },
       { id: 'credit', label: 'Credit sale', icon: <CreditCard />, onSelect: () => onNavigate('/shifts') },
       { id: 'customer', label: 'Customer', icon: <Users />, onSelect: () => onNavigate('/customers', { open: 'new-customer' }) },
     ];

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { CloudTransactionService } from '../services/cloud.js';
 import { usePurchases, useShiftStatus, useSuppliers, useProducts, useTanks, useInvalidateOperational } from '../query/hooks.js';
-import { Plus, ShoppingCart, Info, Settings, Percent, Search, HelpCircle } from 'lucide-react';
+import { Plus, ShoppingCart, Info, Building2, Percent, Search, HelpCircle, Wallet } from 'lucide-react';
 import { LoadingSpinner } from './LoadingSpinner.js';
 import { Drawer } from './Drawer.js';
 import { PurchaseEntryForm } from './transactions/PurchaseEntryForm.js';
@@ -16,6 +16,7 @@ import type { NavIntent } from './AppShell.js';
 import { purchaseColumns, buildSupplierColumns } from './purchases/columns.js';
 import { SupplierFormDrawer } from './purchases/SupplierFormDrawer.js';
 import { SupplierStatementDrawer } from './purchases/SupplierStatementDrawer.js';
+import { SupplierPaymentDrawer } from './purchases/SupplierPaymentDrawer.js';
 
 const transactionService = new CloudTransactionService();
 
@@ -193,6 +194,7 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, d
   const [isSupplierDrawerOpen, setIsSupplierDrawerOpen] = useState(false);
   const [editingSupplier, setEditingSupplier] = useState<any | null>(null);
   const [statementSupplier, setStatementSupplier] = useState<any | null>(null);
+  const [isPaymentDrawerOpen, setIsPaymentDrawerOpen] = useState(false);
   const openCreateSupplier = () => { setEditingSupplier(null); setIsSupplierDrawerOpen(true); };
   const openEditSupplier = (sup: any) => { setEditingSupplier(sup); setIsSupplierDrawerOpen(true); };
 
@@ -258,6 +260,7 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, d
         setStatementSupplier(sup);
       }
     }
+    if (intent.open === 'supplier-payment') setIsPaymentDrawerOpen(true);
     onIntentConsumed?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [intent, allSuppliers, suppliersAllQ.isLoading]);
@@ -297,10 +300,16 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, d
       actions={
         <>
           {activeTab === 'transactions' && (
-            <Button variant="primary" size="sm" leftIcon={<Plus />} onClick={() => openPurchaseDrawer()}>Add Purchase</Button>
+            <>
+              <Button variant="secondary" size="sm" leftIcon={<Wallet />} onClick={() => setIsPaymentDrawerOpen(true)}>Record Payment</Button>
+              <Button variant="primary" size="sm" leftIcon={<Plus />} onClick={() => openPurchaseDrawer()}>Add Purchase</Button>
+            </>
           )}
           {activeTab === 'registry' && (
-            <Button variant="primary" size="sm" leftIcon={<Plus />} onClick={openCreateSupplier}>Add Supplier</Button>
+            <>
+              <Button variant="secondary" size="sm" leftIcon={<Wallet />} onClick={() => setIsPaymentDrawerOpen(true)}>Record Payment</Button>
+              <Button variant="primary" size="sm" leftIcon={<Plus />} onClick={openCreateSupplier}>Add Supplier</Button>
+            </>
           )}
         </>
       }
@@ -312,7 +321,7 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, d
           onChange={(id) => setActiveTab(id as TabType)}
           tabs={[
             { id: 'transactions', label: 'Intakes & Drops', icon: <ShoppingCart size={15} /> },
-            { id: 'registry', label: 'Supplier Registry', icon: <Settings size={15} /> },
+            { id: 'registry', label: 'Supplier Registry', icon: <Building2 size={15} /> },
             { id: 'gst', label: 'GST / ITC', icon: <Percent size={15} /> },
           ]}
         />
@@ -602,6 +611,14 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, d
         onClose={() => setStatementSupplier(null)}
         onEdit={(sup) => { setStatementSupplier(null); openEditSupplier(sup); }}
         onNewPurchase={(sup) => { setStatementSupplier(null); openPurchaseDrawer(sup.id); }}
+      />
+
+      <SupplierPaymentDrawer
+        isOpen={isPaymentDrawerOpen}
+        suppliers={allSuppliers}
+        stationId={stationId}
+        onClose={() => setIsPaymentDrawerOpen(false)}
+        onDone={() => invalidateOperational(stationId)}
       />
     </PageLayout>
   );
