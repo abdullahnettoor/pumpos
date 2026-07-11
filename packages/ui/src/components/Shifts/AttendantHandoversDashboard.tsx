@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { StatusBadge } from '../StatusBadge.js';
+import { Panel, Button, Chip } from '../../pump-ds/index.js';
 import { inr } from '../../utils/format.js';
 interface AttendantHandoversDashboardProps {
   staffAssignments: any[];
@@ -56,17 +56,7 @@ export const AttendantHandoversDashboard: React.FC<AttendantHandoversDashboardPr
   }, [staffAssignments, handovers]);
 
   return (
-    <div className="card" style={{ overflow: 'hidden' }}>
-      <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-soft)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)' }}>
-            Attendant Handovers Dashboard
-          </h3>
-          <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
-            Record dispenser nozzle closing readings, cash, card, UPI collections and credit chits per assigned attendant.
-          </p>
-        </div>
-      </div>
+    <Panel flush title="Attendant handovers">
       <div
         className="shift-table-shell"
         data-shadow-left={showLeftHint ? 'true' : 'false'}
@@ -108,10 +98,7 @@ export const AttendantHandoversDashboard: React.FC<AttendantHandoversDashboardPr
                     {sa.duCode || sa.duName}
                   </td>
                   <td style={{ padding: '12px 20px' }}>
-                    <StatusBadge
-                      status={isRecorded ? 'RECORDED' : 'PENDING'}
-                      type={isRecorded ? 'success' : 'warning'}
-                    />
+                    {isRecorded ? <Chip tone="success" size="xs">Recorded</Chip> : <Chip tone="warning" size="xs">Pending</Chip>}
                   </td>
                   <td style={{ padding: '12px 20px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>
                     {isRecorded ? `₹${Number(handoverRecord.cashHandedOver).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '—'}
@@ -154,13 +141,9 @@ export const AttendantHandoversDashboard: React.FC<AttendantHandoversDashboardPr
                     ) : '—'}
                   </td>
                   <td style={{ padding: '8px 20px', textAlign: 'center' }}>
-                    <button
-                      type="button"
-                      className={isRecorded ? "btn btn-secondary btn-sm" : "btn btn-primary btn-sm"}
-                      onClick={() => onRecordHandover(sa)}
-                    >
+                    <Button type="button" variant={isRecorded ? 'secondary' : 'primary'} size="sm" onClick={() => onRecordHandover(sa)}>
                       {isRecorded ? 'Edit Handover' : 'Record Handover'}
-                    </button>
+                    </Button>
                   </td>
                 </tr>
               );
@@ -176,6 +159,6 @@ export const AttendantHandoversDashboard: React.FC<AttendantHandoversDashboardPr
       </table>
       </div>
       </div>
-    </div>
+    </Panel>
   );
 };

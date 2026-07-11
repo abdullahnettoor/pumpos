@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Drawer } from '../Drawer.js';
 import { Combobox } from '../primitives/Combobox.js';
 import { Select, NumberInput } from '../primitives/Field.js';
+import { Panel, Button } from '../../pump-ds/index.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import { useConfirm } from '../primitives/ConfirmDialog.js';
 import { CloudTransactionService, CloudProductService, CloudUserAssignmentService } from '../../services/cloud.js';
@@ -245,20 +246,15 @@ export const MerchandiseHandoversPanel: React.FC<MerchandiseHandoversPanelProps>
   const colCount = hasCredit ? 5 : 4;
 
   return (
-    <div className="card" style={{ overflow: 'hidden' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', borderBottom: '1px solid var(--border-soft)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Package size={16} style={{ color: 'var(--text-muted)' }} />
-          <div>
-            <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)', margin: 0 }}>Merchandise Handovers</h3>
-            <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: 0 }}>Walk-in non-fuel sales tallied per employee. Folds into their cash handover.</p>
-          </div>
-        </div>
-        <button className="btn btn-primary btn-sm" onClick={openNew} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <Plus size={13} /> Record Closing
-        </button>
-      </div>
-
+    <Panel
+      flush
+      title={<span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Package size={16} style={{ color: 'var(--text-muted)' }} /> Merchandise handovers</span>}
+      action={
+        <Button variant="primary" size="sm" leftIcon={<Plus size={13} />} onClick={openNew}>
+          Record Closing
+        </Button>
+      }
+    >
       <table className="shift-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
         <thead>
           <tr style={{ backgroundColor: 'var(--bg-surface-alt)', borderBottom: '1px solid var(--border-soft)', textAlign: 'left', color: 'var(--text-muted)' }}>
@@ -287,10 +283,10 @@ export const MerchandiseHandoversPanel: React.FC<MerchandiseHandoversPanelProps>
                 )}
                 <td style={{ padding: '10px 16px', textAlign: 'right', whiteSpace: 'nowrap' }}>
                   {e.attendantId && (
-                    <button className="btn btn-secondary btn-sm" onClick={(ev) => { ev.stopPropagation(); openForEmployee(e.attendantId); }} style={{ padding: '3px 6px', marginRight: '4px' }} aria-label="Edit"><Pencil size={13} /></button>
+                    <Button variant="secondary" size="xs" iconOnly aria-label="Edit" onClick={(ev) => { ev.stopPropagation(); openForEmployee(e.attendantId); }} style={{ marginRight: '4px' }}><Pencil size={13} /></Button>
                   )}
                   {e.handover && (
-                    <button className="btn btn-secondary btn-sm" onClick={(ev) => { ev.stopPropagation(); remove(e.handover); }} style={{ padding: '3px 6px' }} aria-label="Remove"><Trash2 size={13} /></button>
+                    <Button variant="secondary" size="xs" iconOnly aria-label="Remove" onClick={(ev) => { ev.stopPropagation(); remove(e.handover); }}><Trash2 size={13} /></Button>
                   )}
                 </td>
               </tr>
@@ -375,7 +371,7 @@ export const MerchandiseHandoversPanel: React.FC<MerchandiseHandoversPanelProps>
                           {mrp != null ? inr(mrp) : '—'}
                         </div>
                       </div>
-                      <button type="button" className="btn btn-secondary btn-sm" style={{ padding: '6px 8px', height: 32 }} onClick={() => setRows((prev) => (prev.length > 1 ? prev.filter((_, j) => j !== i) : prev))} aria-label="Remove line"><Trash2 size={13} /></button>
+                      <Button type="button" variant="secondary" size="sm" iconOnly aria-label="Remove line" style={{ height: 32 }} onClick={() => setRows((prev) => (prev.length > 1 ? prev.filter((_, j) => j !== i) : prev))}><Trash2 size={13} /></Button>
                     </div>
                     {t && (
                       <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', display: 'flex', justifyContent: 'flex-end', gap: '8px', flexWrap: 'wrap' }}>
@@ -388,9 +384,9 @@ export const MerchandiseHandoversPanel: React.FC<MerchandiseHandoversPanelProps>
                 );
               })}
             </div>
-            <button type="button" className="btn btn-secondary btn-sm" style={{ marginTop: '8px', display: 'inline-flex', alignItems: 'center', gap: '6px' }} onClick={() => setRows((prev) => [...prev, { productId: '', quantity: '' }])}>
-              <Plus size={13} /> Add item
-            </button>
+            <Button type="button" variant="secondary" size="sm" leftIcon={<Plus size={13} />} style={{ marginTop: '8px' }} onClick={() => setRows((prev) => [...prev, { productId: '', quantity: '' }])}>
+              Add item
+            </Button>
           </div>
 
           <div>
@@ -433,11 +429,11 @@ export const MerchandiseHandoversPanel: React.FC<MerchandiseHandoversPanelProps>
           )}
 
           <div style={{ display: 'flex', gap: '8px' }}>
-            <button className="btn btn-primary btn-md" style={{ flex: 1 }} disabled={submitting} onClick={submit}>{submitting ? 'Saving…' : editingId ? 'Update Handover' : 'Record Handover'}</button>
-            <button className="btn btn-secondary btn-md" disabled={submitting} onClick={() => setDrawerOpen(false)}>Cancel</button>
+            <Button variant="primary" size="md" style={{ flex: 1 }} loading={submitting} onClick={submit}>{editingId ? 'Update Handover' : 'Record Handover'}</Button>
+            <Button variant="secondary" size="md" disabled={submitting} onClick={() => setDrawerOpen(false)}>Cancel</Button>
           </div>
         </div>
       </Drawer>
-    </div>
+    </Panel>
   );
 };

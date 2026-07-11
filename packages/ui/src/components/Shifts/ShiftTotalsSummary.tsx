@@ -1,5 +1,6 @@
 import React from 'react';
 import { inr } from '../../utils/format.js';
+import { KpiStrip, KpiTile } from '../../pump-ds/index.js';
 
 interface ShiftTotals {
   cashExpenses: number;
@@ -32,81 +33,18 @@ export const ShiftTotalsSummary: React.FC<ShiftTotalsSummaryProps> = ({
   handoverCount,
 }) => {
   return (
-    <div style={{
-      backgroundColor: 'var(--bg-surface)',
-      border: '1px solid var(--border-soft)',
-      borderRadius: 'var(--radius-card)',
-      padding: '20px',
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '16px',
-      marginTop: '8px',
-      marginBottom: '8px'
-    }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '4px' }}>
       <div>
-        <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)' }}>
-          Operational Summary (Current Shift)
-        </h3>
-        <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
-          Real-time summary of transactions logged via sidebar modules for this active shift.
-        </p>
+        <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)' }}>Operational summary</h3>
+        <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>Real-time totals for the current shift.</p>
       </div>
-
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
-        gap: '16px'
-      }}>
-        <div style={{ padding: '12px', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', backgroundColor: 'var(--bg-canvas)' }}>
-          <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', fontWeight: 600 }}>Petty Expenses</span>
-          <strong style={{ fontSize: '15px', color: 'var(--brand-danger)', fontFamily: 'var(--font-mono)' }}>
-            {inr(shiftTotals.cashExpenses)}
-          </strong>
-          <span style={{ fontSize: '10px', color: 'var(--text-faint)', display: 'block', marginTop: '2px' }}>
-            {shiftTotals.expenseCount} items recorded
-          </span>
-        </div>
-
-        <div style={{ padding: '12px', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', backgroundColor: 'var(--bg-canvas)' }}>
-          <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', fontWeight: 600 }}>Cash Handed Over</span>
-          <strong style={{ fontSize: '15px', color: 'var(--state-success-fg)', fontFamily: 'var(--font-mono)' }}>
-            {inr(cashCollections)}
-          </strong>
-          <span style={{ fontSize: '10px', color: 'var(--text-faint)', display: 'block', marginTop: '2px' }}>
-            {handoverCount} handovers received
-          </span>
-        </div>
-
-        <div style={{ padding: '12px', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', backgroundColor: 'var(--bg-canvas)' }}>
-          <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', fontWeight: 600 }}>Card & UPI Handover</span>
-          <strong style={{ fontSize: '15px', color: 'var(--text-strong)', fontFamily: 'var(--font-mono)' }}>
-            {inr(cardCollections + upiCollections)}
-          </strong>
-          <span style={{ fontSize: '10px', color: 'var(--text-faint)', display: 'block', marginTop: '2px' }}>
-            Card: {inr(cardCollections)} • UPI: {inr(upiCollections)}
-          </span>
-        </div>
-
-        <div style={{ padding: '12px', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', backgroundColor: 'var(--bg-canvas)' }}>
-          <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', fontWeight: 600 }}>Credit Fleet Chits</span>
-          <strong style={{ fontSize: '15px', color: 'var(--brand-warning)', fontFamily: 'var(--font-mono)' }}>
-            {inr(creditSales)}
-          </strong>
-          <span style={{ fontSize: '10px', color: 'var(--text-faint)', display: 'block', marginTop: '2px' }}>
-            Logged Bills: {inr(shiftTotals.creditSales)}
-          </span>
-        </div>
-
-        <div style={{ padding: '12px', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', backgroundColor: 'var(--bg-canvas)' }}>
-          <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', fontWeight: 600 }}>Supplier Purchases</span>
-          <strong style={{ fontSize: '15px', color: 'var(--brand-secondary)', fontFamily: 'var(--font-mono)' }}>
-            {inr(shiftTotals.purchaseTotal)}
-          </strong>
-          <span style={{ fontSize: '10px', color: 'var(--text-faint)', display: 'block', marginTop: '2px' }}>
-            {shiftTotals.purchaseCount} drops recorded
-          </span>
-        </div>
-      </div>
+      <KpiStrip columns="auto">
+        <KpiTile dot="danger" valueTone="danger" label="Petty Expenses" value={inr(shiftTotals.cashExpenses)} hint={`${shiftTotals.expenseCount} ${shiftTotals.expenseCount === 1 ? 'item' : 'items'}`} />
+        <KpiTile dot="success" valueTone="success" label="Cash Handed Over" value={inr(cashCollections)} hint={`${handoverCount} ${handoverCount === 1 ? 'handover' : 'handovers'}`} />
+        <KpiTile dot="info" label="Card & UPI Handover" value={inr(cardCollections + upiCollections)} hint={`Card ${inr(cardCollections)} · UPI ${inr(upiCollections)}`} />
+        <KpiTile dot="warning" valueTone="warning" label="Credit Fleet Chits" value={inr(creditSales)} hint={`Logged ${inr(shiftTotals.creditSales)}`} />
+        <KpiTile dot="brand" label="Supplier Purchases" value={inr(shiftTotals.purchaseTotal)} hint={`${shiftTotals.purchaseCount} ${shiftTotals.purchaseCount === 1 ? 'drop' : 'drops'}`} />
+      </KpiStrip>
     </div>
   );
 };

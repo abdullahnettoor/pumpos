@@ -1,7 +1,7 @@
 import React from 'react';
 import { inr } from '../../utils/format.js';
 import { Clock3, FileText, Fuel, Receipt, ShoppingCart, Wallet } from 'lucide-react';
-import { StatusBadge } from '../StatusBadge.js';
+import { Button, StatusChip, Chip } from '../../pump-ds/index.js';
 
 type QuickAction = {
   key: string;
@@ -86,10 +86,7 @@ export const ShiftControlBar: React.FC<ShiftControlBarProps> = ({
     <div className="shift-control-bar card animate-fade-in">
       <div className="shift-control-bar__inline">
         <div className="shift-control-bar__cluster shift-control-bar__identity">
-          <StatusBadge
-            status={isPreparingClose ? 'CLOSING' : 'OPEN'}
-            type={isPreparingClose ? 'warning' : 'success'}
-          />
+          {isPreparingClose ? <Chip tone="warning" size="sm">Closing</Chip> : <StatusChip status="open" size="sm" />}
           <strong style={{ fontSize: '13px', color: 'var(--text-strong)' }}>
             {activeShift.templateName}
           </strong>
@@ -106,19 +103,20 @@ export const ShiftControlBar: React.FC<ShiftControlBarProps> = ({
 
         <div className="shift-control-bar__cluster shift-control-bar__actions">
           {quickActions.map((action) => (
-            <button
+            <Button
               key={action.key}
-              className="btn btn-secondary btn-sm shift-control-bar__action-btn"
+              variant="secondary"
+              size="sm"
+              leftIcon={iconForKey(action.key)}
               onClick={action.onClick}
               disabled={action.disabled}
               title={action.hotkey ? `${action.label} (press ${action.hotkey})` : action.label}
             >
-              {iconForKey(action.key)}
-              <span>{action.label}</span>
+              {action.label}
               {action.hotkey && (
                 <kbd className="shift-control-bar__hotkey">{action.hotkey}</kbd>
               )}
-            </button>
+            </Button>
           ))}
         </div>
 
@@ -142,21 +140,11 @@ export const ShiftControlBar: React.FC<ShiftControlBarProps> = ({
 
         <div className="shift-control-bar__cluster shift-control-bar__close">
           {onViewLastShiftSummary && (
-            <button
-              className="btn btn-ghost btn-sm"
-              onClick={onViewLastShiftSummary}
-              title="Last Shift Summary"
-            >
-              <FileText size={13} />
-            </button>
+            <Button variant="ghost" size="sm" iconOnly leftIcon={<FileText />} onClick={onViewLastShiftSummary} title="Last shift summary" aria-label="Last shift summary" />
           )}
-          <button
-            className={closePromoted ? 'btn btn-primary btn-sm' : 'btn btn-secondary btn-sm'}
-            onClick={onCloseShiftClick}
-            title={closePromoted ? 'Ready to close' : 'Begin close review'}
-          >
+          <Button variant={closePromoted ? 'primary' : 'secondary'} size="sm" onClick={onCloseShiftClick} title={closePromoted ? 'Ready to close' : 'Begin close review'}>
             {isPreparingClose ? 'Continue Close' : 'Begin Close →'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

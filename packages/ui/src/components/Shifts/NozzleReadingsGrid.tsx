@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { Panel } from '../../pump-ds/index.js';
 
 interface NozzleReadingsGridProps {
   nozzleReadings: any[];
@@ -55,18 +56,7 @@ export const NozzleReadingsGrid: React.FC<NozzleReadingsGridProps> = ({
   }, [nozzleReadings, closingReadings, staffAssignments]);
 
   return (
-    <div className="card" style={{ overflow: 'hidden' }}>
-      <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-soft)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)' }}>
-            Nozzle Readings Grid
-          </h3>
-          <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
-            Summary of nozzle closing readings and volume sold compiled from recorded attendant handovers.
-          </p>
-        </div>
-      </div>
-
+    <Panel flush title="Nozzle readings">
       <div
         className="shift-table-shell"
         data-shadow-left={showLeftHint ? 'true' : 'false'}
@@ -157,6 +147,6 @@ export const NozzleReadingsGrid: React.FC<NozzleReadingsGridProps> = ({
       </table>
       </div>
       </div>
-    </div>
+    </Panel>
   );
 };
