@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { 
   AppShell, 
@@ -60,6 +60,11 @@ const isLocalDev = (() => {
 
 const App: React.FC = () => {
   const [currentPath, setCurrentPath] = useState('/dashboard');
+  const [navIntent, setNavIntent] = useState<import('@pump/ui').NavIntent | null>(null);
+  const navigate = useCallback((path: string, intent?: import('@pump/ui').NavIntent) => {
+    setCurrentPath(path);
+    setNavIntent(intent ?? null);
+  }, []);
   const [syncStatus, setSyncStatus] = useState<'online' | 'offline' | 'synced' | 'pending' | 'failed'>(
     typeof navigator !== 'undefined' && navigator.onLine === false ? 'offline' : 'online',
   );
@@ -431,7 +436,13 @@ const App: React.FC = () => {
       case '/accounts':
         return <AccountsPanel selectedStation={selectedStation} />;
       case '/customers':
-        return <CustomersList selectedStation={selectedStation} />;
+        return (
+          <CustomersList
+            selectedStation={selectedStation}
+            intent={navIntent}
+            onIntentConsumed={() => setNavIntent(null)}
+          />
+        );
       case '/reports':
         return (
           <ReportsOverview
@@ -481,7 +492,7 @@ const App: React.FC = () => {
     <AppShell
       navItems={navItemsWithDev}
       currentPath={currentPath}
-      onNavigate={setCurrentPath}
+      onNavigate={navigate}
       userRole={userRole || 'Staff'}
       userName={userName}
       syncStatus={syncStatus}

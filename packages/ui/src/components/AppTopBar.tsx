@@ -4,6 +4,7 @@ import {
   ArrowUpRight, LogOut, TriangleAlert, Clock, LayoutDashboard,
 } from 'lucide-react';
 import { resolveBusinessDate, type Station } from '@pump/shared';
+import type { NavIntent } from './AppShell.js';
 import {
   TopBar, CommandPalette, useCommandPalette,
   type CommandGroup, type CommandItem, type NotificationItem,
@@ -34,7 +35,7 @@ export interface AppTopBarProps {
   userName: string;
   syncStatus: SyncStatus;
   pendingSyncCount?: number;
-  onNavigate: (path: string) => void;
+  onNavigate: (path: string, intent?: NavIntent) => void;
   onLogout: () => void;
   onToggleSidebar?: () => void;
 }
@@ -85,10 +86,10 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
   const quickCreate: QuickCreateAction[] = useMemo(() => {
     const items: QuickCreateAction[] = [
       { id: 'expense', label: 'Expense', icon: <Receipt />, shortcut: 'E', onSelect: () => onNavigate('/expenses') },
-      { id: 'collection', label: 'Collection', icon: <Wallet />, onSelect: () => onNavigate('/customers') },
+      { id: 'collection', label: 'Collection', icon: <Wallet />, onSelect: () => onNavigate('/customers', { open: 'new-collection' }) },
       { id: 'purchase', label: 'Purchase', icon: <ShoppingCart />, onSelect: () => onNavigate('/purchases') },
       { id: 'credit', label: 'Credit sale', icon: <CreditCard />, onSelect: () => onNavigate('/shifts') },
-      { id: 'customer', label: 'Customer', icon: <Users />, onSelect: () => onNavigate('/customers') },
+      { id: 'customer', label: 'Customer', icon: <Users />, onSelect: () => onNavigate('/customers', { open: 'new-customer' }) },
     ];
     return userRole === 'Staff' ? items.filter((i) => i.id === 'expense' || i.id === 'credit') : items;
   }, [onNavigate, userRole]);
@@ -129,21 +130,26 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
       })),
     });
 
-    // Customers (top by outstanding)
+    // Customers (top by outstanding). Selecting one deep-links to the
+    // registry and opens that customer's statement drawer.
     if (canSeeFinancials && (customers || []).length) {
       const rows = [...(customers as any[])]
-        .sort((a, b) => Number(b.balance || 0) - Number(a.balance || 0))
+        .sort((a, b) => Number(b.currentBalance || 0) - Number(a.currentBalance || 0))
         .slice(0, 40);
       groups.push({
         heading: 'Customers',
-        items: rows.map<CommandItem>((c) => ({
-          id: `cust-${c.id}`,
-          label: c.name,
-          icon: <Users />,
-          meta: Number(c.balance || 0) > 0 ? `${c.code ?? ''} · ${inr(c.balance)} due`.trim() : (c.code ?? ''),
-          keywords: [c.code, c.phone, c.gstin].filter(Boolean),
-          onSelect: () => onNavigate('/customers'),
-        })),
+        items: rows.map<CommandItem>((c) => {
+          const bal = Number(c.currentBalance || 0);
+          const meta = bal > 0 ? `${inr(bal)} due` : (c.customerType ?? '');
+          return {
+            id: `cust-${c.id}`,
+            label: c.name,
+            icon: <Users />,
+            meta,
+            keywords: [c.phone, c.fleetCode, c.metadata?.gstin, c.metadata?.tradeName].filter(Boolean),
+            onSelect: () => onNavigate('/customers', { focusCustomerId: c.id, open: 'customer-statement' }),
+          };
+        }),
       });
     }
 

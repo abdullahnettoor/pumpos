@@ -325,6 +325,42 @@ transactionsRouter.get('/customers/:id/vehicles', async (c) => {
   return c.json({ success: true, data: rows });
 });
 
+// GET /transactions/vehicles?activeOnly=  — all vehicles across the org, each
+// with its owning customer + default product. Backs the Customers → Vehicles
+// tab's "show all" view (filter client-side by customer / registration).
+transactionsRouter.get('/vehicles', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  const activeOnly = c.req.query('activeOnly') === 'true';
+  const rows = await db
+    .select({
+      id: schema.customerVehicles.id,
+      organizationId: schema.customerVehicles.organizationId,
+      customerId: schema.customerVehicles.customerId,
+      customerName: schema.customers.name,
+      customerType: schema.customers.customerType,
+      registrationNumber: schema.customerVehicles.registrationNumber,
+      vehicleType: schema.customerVehicles.vehicleType,
+      defaultProductId: schema.customerVehicles.defaultProductId,
+      defaultProductName: schema.products.name,
+      defaultProductCode: schema.products.code,
+      isActive: schema.customerVehicles.isActive,
+      createdAt: schema.customerVehicles.createdAt,
+      updatedAt: schema.customerVehicles.updatedAt,
+    })
+    .from(schema.customerVehicles)
+    .innerJoin(schema.customers, eq(schema.customerVehicles.customerId, schema.customers.id))
+    .leftJoin(schema.products, eq(schema.customerVehicles.defaultProductId, schema.products.id))
+    .where(
+      and(
+        eq(schema.customerVehicles.organizationId, user.organizationId),
+        ...(activeOnly ? [eq(schema.customerVehicles.isActive, true)] : []),
+      ),
+    )
+    .orderBy(desc(schema.customerVehicles.updatedAt));
+  return c.json({ success: true, data: rows });
+});
+
 transactionsRouter.post('/customers/:id/vehicles', async (c) => {
   const user = c.var.user;
   if (!canManageCustomers(user.role)) {
@@ -742,6 +778,44 @@ transactionsRouter.get('/collections', async (c) => {
     .where(eq(schema.businessDays.organizationId, user.organizationId))
     .orderBy(desc(schema.collections.createdAt));
   return c.json({ success: true, data: rows.map((r) => ({ ...r.collection, businessDate: r.businessDate, customerName: r.customerName ?? 'Walk-in Customer' })) });
+});
+
+// GET /transactions/credit-sales — org-wide credit-sale ledger debits (fuel-on-
+// credit + merchandise on credit), each with customer / product / vehicle. Backs
+// the Customers → Sales tab. Credit sales are receivables (never touch the drawer).
+transactionsRouter.get('/credit-sales', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  const rows = await db
+    .select({
+      id: schema.customerTransactions.id,
+      customerId: schema.customerTransactions.customerId,
+      customerName: schema.customers.name,
+      customerType: schema.customers.customerType,
+      amount: schema.customerTransactions.amount,
+      quantity: schema.customerTransactions.quantity,
+      unitPrice: schema.customerTransactions.unitPrice,
+      notes: schema.customerTransactions.notes,
+      shiftId: schema.customerTransactions.shiftId,
+      createdAt: schema.customerTransactions.createdAt,
+      businessDate: schema.businessDays.businessDate,
+      productName: schema.products.name,
+      productCode: schema.products.code,
+      vehicleReg: schema.customerVehicles.registrationNumber,
+    })
+    .from(schema.customerTransactions)
+    .innerJoin(schema.businessDays, eq(schema.customerTransactions.businessDayId, schema.businessDays.id))
+    .leftJoin(schema.customers, eq(schema.customerTransactions.customerId, schema.customers.id))
+    .leftJoin(schema.products, eq(schema.customerTransactions.productId, schema.products.id))
+    .leftJoin(schema.customerVehicles, eq(schema.customerTransactions.vehicleId, schema.customerVehicles.id))
+    .where(
+      and(
+        eq(schema.businessDays.organizationId, user.organizationId),
+        eq(schema.customerTransactions.transactionType, 'Credit Sale'),
+      ),
+    )
+    .orderBy(desc(schema.customerTransactions.createdAt));
+  return c.json({ success: true, data: rows.map((r) => ({ ...r, customerName: r.customerName ?? 'Unknown Customer' })) });
 });
 
 // GET /transactions/money-movements?stationId=&from=&to=

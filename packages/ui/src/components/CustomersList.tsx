@@ -1,37 +1,46 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { CloudTransactionService } from '../services/cloud.js';
-import { useCustomers, useShiftStatus, useProducts, useInvalidateOperational } from '../query/hooks.js';
-import { User, ShieldAlert, CreditCard, DollarSign, Plus, Info, Edit, Check, Settings, Scale, Truck, Trash2 } from 'lucide-react';
+import { useCustomers, useShiftStatus, useProducts, useInvalidateOperational, useCollections, useCreditSales, useAllVehicles } from '../query/hooks.js';
+import { User, Users, CreditCard, Plus, Edit, Truck, Trash2, Search, Wallet, HelpCircle } from 'lucide-react';
 import { LoadingSpinner } from './LoadingSpinner.js';
 import { Drawer } from './Drawer.js';
 import { CollectionEntryForm } from './transactions/CollectionEntryForm.js';
 import { LedgerView } from './ledger/LedgerView.js';
 import { DataTable } from './primitives/DataTable.js';
+import { Combobox } from './primitives/Combobox.js';
 import { Checkbox } from './primitives/Toggle.js';
+import { Field, TextInput, MoneyInput, Textarea, Select } from './primitives/Field.js';
 import { inr } from '../utils/format.js';
 import { Tabs } from './primitives/Tabs.js';
 import { PageLayout } from './primitives/PageLayout.js';
 import { useConfirm } from './primitives/ConfirmDialog.js';
 import { useToast } from './primitives/ToastProvider.js';
+import { Panel, Button, StatusChip, Chip, KpiStrip, KpiTile, EmptyState } from '../pump-ds/index.js';
+import type { NavIntent } from './AppShell.js';
 import type { ColumnDef } from '@tanstack/react-table';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { customerCreateSchema, type CollectionEntryFormValues } from '@pump/shared';
+import { customerCreateSchema, resolveBusinessDate, type CollectionEntryFormValues } from '@pump/shared';
 
 const transactionService = new CloudTransactionService();
 
 interface CustomersListProps {
   selectedStation: any | null;
   defaultShiftId?: string;
+  /** Optional deep-link intent (focus a customer, open a drawer). */
+  intent?: NavIntent | null;
+  /** Called once the intent has been handled so the parent can clear it. */
+  onIntentConsumed?: () => void;
 }
 
-type TabType = 'transactions' | 'registry' | 'vehicles';
+type TabType = 'transactions' | 'sales' | 'registry' | 'vehicles';
 
-const chip = (text: string, bg: string, fg: string) => (
-  <span style={{ fontSize: '11px', fontWeight: 600, backgroundColor: bg, color: fg, padding: '2px 8px', borderRadius: 'var(--radius-chip)' }}>{text}</span>
-);
+/** Account-type chip tone. */
+const typeTone = (t: string): 'info' | 'warning' | 'neutral' => (t === 'Fleet' ? 'info' : t === 'Credit' ? 'warning' : 'neutral');
 
-const buildCustomerColumns = (openLedger: (c: any) => void, openEdit: (c: any) => void): ColumnDef<any, any>[] => [
+const buildCustomerColumns = (openLedger: (c: any) => void, openEdit: (c: any) => void, showPrepaid: boolean): ColumnDef<any, any>[] => {
+  const cols: ColumnDef<any, any>[] = [
   {
     accessorKey: 'name',
     header: 'Customer Name',
@@ -41,9 +50,9 @@ const buildCustomerColumns = (openLedger: (c: any) => void, openEdit: (c: any) =
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <User size={14} style={{ color: 'var(--text-muted)' }} />
           <div>
-            <button type="button" onClick={() => openLedger(c)} style={{ background: 'none', border: 'none', padding: 0, color: 'var(--brand-primary)', fontWeight: 600, textAlign: 'left', cursor: 'pointer', textDecoration: 'underline' }}>{c.name}</button>
+            <button type="button" onClick={() => openLedger(c)} style={{ background: 'none', border: 'none', padding: 0, color: 'var(--brand-primary)', fontWeight: 600, textAlign: 'left', cursor: 'pointer' }}>{c.name}</button>
             {c.metadata?.tradeName && <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 400 }}>{c.metadata.tradeName}</div>}
-            {c.metadata?.gstin && <div style={{ fontSize: '10px', color: 'var(--primary)', fontFamily: 'var(--font-mono)', fontWeight: 500, marginTop: '2px' }}>GSTIN: {c.metadata.gstin}</div>}
+            {c.metadata?.gstin && <div style={{ fontSize: '10px', color: 'var(--text-faint)', fontFamily: 'var(--font-mono)', fontWeight: 500, marginTop: '2px' }}>GSTIN {c.metadata.gstin}</div>}
           </div>
         </div>
       );
@@ -52,55 +61,61 @@ const buildCustomerColumns = (openLedger: (c: any) => void, openEdit: (c: any) =
   {
     accessorKey: 'customerType',
     header: 'Account Type',
-    cell: ({ getValue }) => {
-      const t = getValue() as string;
-      return chip(
-        t,
-        t === 'Fleet' ? 'var(--state-info-bg)' : t === 'Credit' ? 'var(--state-warning-bg)' : 'var(--bg-surface-alt)',
-        t === 'Fleet' ? 'var(--state-info-fg)' : t === 'Credit' ? 'var(--state-warning-fg)' : 'var(--text-strong)',
+    cell: ({ row }) => {
+      const c = row.original;
+      const t = c.customerType as string;
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '2px' }}>
+          <Chip tone={typeTone(t)} size="xs">{t}</Chip>
+          {t === 'Fleet' && c.fleetCode && <span style={{ fontSize: '10px', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{c.fleetCode}</span>}
+        </div>
       );
     },
   },
-  { accessorKey: 'phone', header: 'Phone', cell: ({ getValue }) => <span style={{ color: 'var(--text-muted)' }}>{(getValue() as string) || '-'}</span> },
+  { accessorKey: 'phone', header: 'Phone', cell: ({ getValue }) => <span style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '12px' }}>{(getValue() as string) || '—'}</span> },
   {
     accessorKey: 'creditLimit',
     header: 'Credit Limit',
     cell: ({ row }) => {
       const limit = Number(row.original.creditLimit || 0);
       const balance = Number(row.original.currentBalance || 0);
-      if (limit <= 0) return <span style={{ color: 'var(--text-muted)' }}>N/A</span>;
+      if (limit <= 0) return <span style={{ color: 'var(--text-faint)' }}>—</span>;
+      const pct = Math.min(100, (balance / limit) * 100);
+      const barColor = balance > limit ? 'var(--brand-danger)' : balance >= limit * 0.75 ? 'var(--brand-warning)' : 'var(--brand-primary)';
       return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          <span style={{ fontFamily: 'var(--font-mono)' }}>{inr(limit)}</span>
-          <div style={{ width: '80px', height: '4px', backgroundColor: 'var(--border-soft)', borderRadius: '2px', overflow: 'hidden' }}>
-            <div style={{ width: `${Math.min(100, (balance / limit) * 100)}%`, height: '100%', backgroundColor: balance > limit ? 'var(--brand-danger)' : balance >= limit * 0.75 ? 'var(--brand-warning)' : 'var(--brand-primary)' }} />
+        <div style={{ width: '110px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '12px' }}>{inr(limit)}</span>
+          <div style={{ height: '6px', width: '100%', backgroundColor: 'var(--bg-surface-alt)', borderRadius: '999px', overflow: 'hidden' }}>
+            <div style={{ width: `${pct}%`, height: '100%', backgroundColor: barColor, borderRadius: '999px' }} />
           </div>
         </div>
       );
     },
   },
-  {
-    accessorKey: 'isPrepaid',
-    header: 'Prepaid Mode',
-    cell: ({ getValue }) => (getValue() ? chip('Enabled', 'var(--state-info-bg)', 'var(--state-info-fg)') : chip('Disabled', 'var(--bg-surface-alt)', 'var(--text-muted)')),
-  },
-  {
-    accessorKey: 'prepaidBalance',
-    header: 'Prepaid Balance',
-    cell: ({ row }) => {
-      const c = row.original;
-      return <span style={{ fontWeight: 700, color: c.isPrepaid ? 'var(--state-success-fg)' : 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{inr(c.prepaidBalance || 0)}</span>;
-    },
-  },
-  { accessorKey: 'fleetCode', header: 'Fleet Code', cell: ({ getValue }) => <span style={{ color: 'var(--text-muted)' }}>{(getValue() as string) || '-'}</span> },
-  {
-    accessorKey: 'isActive',
-    header: 'Status',
-    cell: ({ getValue }) => (getValue() ? chip('Active', 'var(--state-success-bg)', 'var(--state-success-fg)') : chip('Suspended', 'var(--state-danger-bg)', 'var(--state-danger-fg)')),
-  },
+  ];
+
+  if (showPrepaid) {
+    cols.push(
+      {
+        accessorKey: 'isPrepaid',
+        header: 'Prepaid',
+        cell: ({ getValue }) => (getValue() ? <Chip tone="info" size="xs">Enabled</Chip> : <span style={{ color: 'var(--text-faint)' }}>—</span>),
+      },
+      {
+        accessorKey: 'prepaidBalance',
+        header: 'Prepaid Balance',
+        cell: ({ row }) => {
+          const c = row.original;
+          return <span style={{ fontWeight: 700, color: c.isPrepaid ? 'var(--state-success-fg)' : 'var(--text-faint)', fontFamily: 'var(--font-mono)' }}>{inr(c.prepaidBalance || 0)}</span>;
+        },
+      },
+    );
+  }
+
+  cols.push(
   {
     accessorKey: 'currentBalance',
-    header: 'Outstanding Balance',
+    header: 'Outstanding',
     cell: ({ row }) => {
       const limit = Number(row.original.creditLimit || 0);
       const balance = Number(row.original.currentBalance || 0);
@@ -109,17 +124,163 @@ const buildCustomerColumns = (openLedger: (c: any) => void, openEdit: (c: any) =
     },
   },
   {
+    accessorKey: 'isActive',
+    header: 'Status',
+    cell: ({ getValue }) => <StatusChip status={getValue() ? 'active' : 'inactive'} size="xs" label={getValue() ? 'Active' : 'Suspended'} />,
+  },
+  {
     id: 'actions',
     header: '',
     cell: ({ row }) => (
-      <button onClick={() => openEdit(row.original)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '4px' }}>
+      <button onClick={() => openEdit(row.original)} title="Edit customer" style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '4px' }}>
         <Edit size={14} />
       </button>
     ),
   },
+  );
+
+  return cols;
+};
+
+/** Payment-method chip tone. */
+const methodTone = (m: string): 'brand' | 'info' | 'warning' | 'neutral' =>
+  m === 'UPI' ? 'brand' : m === 'Card' || m === 'BankTransfer' ? 'info' : m === 'Credit' ? 'warning' : 'neutral';
+
+const methodLabel = (m: string): string => (m === 'BankTransfer' ? 'Bank' : m);
+
+const buildCollectionColumns = (): ColumnDef<any, any>[] => [
+  {
+    accessorKey: 'businessDate',
+    header: 'Date',
+    cell: ({ row }) => {
+      const c = row.original;
+      const d = c.businessDate ? new Date(c.businessDate) : (c.createdAt ? new Date(c.createdAt) : null);
+      return <span style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '12px' }}>{d ? d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' }) : '-'}</span>;
+    },
+  },
+  {
+    accessorKey: 'customerName',
+    header: 'Customer',
+    cell: ({ getValue }) => <span style={{ fontWeight: 600, color: 'var(--text-strong)' }}>{(getValue() as string) || 'Walk-in Customer'}</span>,
+  },
+  {
+    accessorKey: 'paymentMethod',
+    header: 'Method',
+    cell: ({ getValue }) => {
+      const m = (getValue() as string) || '';
+      return m ? <Chip tone={methodTone(m)} size="xs">{methodLabel(m)}</Chip> : <span style={{ color: 'var(--text-muted)' }}>-</span>;
+    },
+  },
+  {
+    accessorKey: 'notes',
+    header: 'Notes',
+    cell: ({ getValue }) => <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>{(getValue() as string) || '-'}</span>,
+  },
+  {
+    accessorKey: 'amount',
+    header: 'Amount',
+    cell: ({ getValue }) => <span style={{ fontWeight: 700, color: 'var(--state-success-fg)', fontFamily: 'var(--font-mono)' }}>{inr(Number(getValue() || 0))}</span>,
+  },
 ];
 
-export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, defaultShiftId }) => {
+const buildCreditSaleColumns = (): ColumnDef<any, any>[] => [
+  {
+    accessorKey: 'businessDate',
+    header: 'Date',
+    cell: ({ row }) => {
+      const s = row.original;
+      const d = s.businessDate ? new Date(s.businessDate) : (s.createdAt ? new Date(s.createdAt) : null);
+      return <span style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '12px' }}>{d ? d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' }) : '-'}</span>;
+    },
+  },
+  {
+    accessorKey: 'customerName',
+    header: 'Customer',
+    cell: ({ getValue }) => <span style={{ fontWeight: 600, color: 'var(--text-strong)' }}>{(getValue() as string) || 'Unknown'}</span>,
+  },
+  {
+    accessorKey: 'productName',
+    header: 'Product',
+    cell: ({ getValue }) => <span style={{ color: 'var(--text-default)' }}>{(getValue() as string) || 'Merchandise'}</span>,
+  },
+  {
+    accessorKey: 'vehicleReg',
+    header: 'Vehicle',
+    cell: ({ getValue }) => {
+      const r = getValue() as string;
+      return r ? <span style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--text-muted)' }}>{r}</span> : <span style={{ color: 'var(--text-faint)' }}>—</span>;
+    },
+  },
+  {
+    accessorKey: 'quantity',
+    header: 'Qty',
+    cell: ({ getValue }) => {
+      const q = getValue();
+      return q ? <span style={{ fontFamily: 'var(--font-mono)', fontSize: '12px' }}>{Number(q).toLocaleString('en-IN')} L</span> : <span style={{ color: 'var(--text-faint)' }}>—</span>;
+    },
+  },
+  {
+    accessorKey: 'amount',
+    header: 'Amount',
+    cell: ({ getValue }) => <span style={{ fontWeight: 700, color: 'var(--brand-warning)', fontFamily: 'var(--font-mono)' }}>{inr(Number(getValue() || 0))}</span>,
+  },
+];
+
+const buildVehicleColumns = (openEdit: (v: any) => void, onDelete: (v: any) => void): ColumnDef<any, any>[] => [
+  {
+    accessorKey: 'registrationNumber',
+    header: 'Registration No.',
+    cell: ({ getValue }) => <span style={{ fontWeight: 600, color: 'var(--text-strong)', fontFamily: 'var(--font-mono)' }}>{getValue() as string}</span>,
+  },
+  {
+    accessorKey: 'customerName',
+    header: 'Customer',
+    cell: ({ row }) => {
+      const v = row.original;
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '2px' }}>
+          <span style={{ color: 'var(--text-strong)', fontWeight: 500 }}>{v.customerName || '—'}</span>
+          {v.customerType && <Chip tone={typeTone(v.customerType)} size="xs">{v.customerType}</Chip>}
+        </div>
+      );
+    },
+  },
+  { accessorKey: 'vehicleType', header: 'Vehicle Type', cell: ({ getValue }) => <span style={{ color: 'var(--text-default)' }}>{(getValue() as string) || '-'}</span> },
+  {
+    id: 'defaultProduct',
+    header: 'Default Product',
+    cell: ({ row }) => {
+      const v = row.original;
+      return <span style={{ color: 'var(--text-default)' }}>{v.defaultProductName ? `${v.defaultProductName} (${v.defaultProductCode || ''})` : '-'}</span>;
+    },
+  },
+  {
+    accessorKey: 'isActive',
+    header: 'Status',
+    cell: ({ getValue }) => <StatusChip status={getValue() ? 'active' : 'inactive'} size="xs" />,
+  },
+  {
+    accessorKey: 'updatedAt',
+    header: 'Updated',
+    cell: ({ getValue }) => <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>{getValue() ? new Date(getValue() as string).toLocaleDateString('en-IN') : '-'}</span>,
+  },
+  {
+    id: 'actions',
+    header: '',
+    cell: ({ row }) => (
+      <div style={{ display: 'flex', gap: '2px' }}>
+        <button onClick={() => openEdit(row.original)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '4px' }} title="Edit vehicle">
+          <Edit size={14} />
+        </button>
+        <button onClick={() => onDelete(row.original)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--brand-danger)', padding: '4px' }} title="Delete vehicle">
+          <Trash2 size={14} />
+        </button>
+      </div>
+    ),
+  },
+];
+
+export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, defaultShiftId, intent, onIntentConsumed }) => {
   const [activeTab, setActiveTab] = useState<TabType>('transactions');
 
   const stationId = selectedStation?.id ?? null;
@@ -127,15 +288,76 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
   const customersAllQ = useCustomers(false);
   const statusQ = useShiftStatus(stationId, true);
   const productsQ = useProducts();
+  const collectionsQ = useCollections();
+  const creditSalesQ = useCreditSales();
+  const vehiclesQ = useAllVehicles(false);
   const invalidateOperational = useInvalidateOperational();
+  const qc = useQueryClient();
   const confirm = useConfirm();
   const toast = useToast();
 
   const customers = customersActiveQ.data ?? [];
   const allCustomers = customersAllQ.data ?? [];
+  const allCollections = collectionsQ.data ?? [];
+  const anyPrepaid = allCustomers.some((c: any) => c.isPrepaid);
   const activeShift = statusQ.data?.activeShift ?? null;
   const recentClosedShifts: any[] = statusQ.data?.recentClosedShifts ?? [];
   const fuelProducts = (productsQ.data ?? []).filter((p: any) => p.productType === 'FUEL' && p.isActive);
+
+  // Business date (station-timezone aware) used to bucket "today" collections.
+  const stationSettings: any = (selectedStation as any)?.settings || {};
+  const todayIso = resolveBusinessDate({ timeZone: stationSettings.timezone, dayStartsAt: stationSettings.business_day_starts_at });
+  const monthPrefix = todayIso.slice(0, 7);
+
+  // Collections ledger filters
+  const [collectionSearch, setCollectionSearch] = useState('');
+  const [collectionMethod, setCollectionMethod] = useState<string>('all');
+
+  const collectionKpis = useMemo(() => {
+    let today = 0, month = 0, todayCount = 0;
+    const todayCustomers = new Set<string>();
+    for (const c of allCollections) {
+      const amt = Number(c.amount || 0);
+      const bd: string = c.businessDate || '';
+      if (bd === todayIso) { today += amt; todayCount += 1; if (c.customerId) todayCustomers.add(c.customerId); }
+      if (bd.startsWith(monthPrefix)) month += amt;
+    }
+    return { today, month, todayCount, todayCustomers: todayCustomers.size };
+  }, [allCollections, todayIso, monthPrefix]);
+
+  const filteredCollections = useMemo(() => {
+    const q = collectionSearch.trim().toLowerCase();
+    return allCollections.filter((c: any) => {
+      if (collectionMethod !== 'all' && c.paymentMethod !== collectionMethod) return false;
+      if (q && !((c.customerName || '').toLowerCase().includes(q) || (c.notes || '').toLowerCase().includes(q))) return false;
+      return true;
+    });
+  }, [allCollections, collectionSearch, collectionMethod]);
+
+  // Credit-sales ledger
+  const allCreditSales = creditSalesQ.data ?? [];
+  const [salesSearch, setSalesSearch] = useState('');
+  const salesKpis = useMemo(() => {
+    let today = 0, month = 0, todayCount = 0;
+    const custs = new Set<string>();
+    for (const s of allCreditSales) {
+      const amt = Number(s.amount || 0);
+      const bd: string = s.businessDate || '';
+      if (bd === todayIso) { today += amt; todayCount += 1; }
+      if (bd.startsWith(monthPrefix)) month += amt;
+      if (s.customerId) custs.add(s.customerId);
+    }
+    return { today, month, todayCount, customers: custs.size };
+  }, [allCreditSales, todayIso, monthPrefix]);
+  const filteredCreditSales = useMemo(() => {
+    const q = salesSearch.trim().toLowerCase();
+    if (!q) return allCreditSales;
+    return allCreditSales.filter((s: any) =>
+      (s.customerName || '').toLowerCase().includes(q) ||
+      (s.vehicleReg || '').toLowerCase().includes(q) ||
+      (s.productName || '').toLowerCase().includes(q) ||
+      (s.notes || '').toLowerCase().includes(q));
+  }, [allCreditSales, salesSearch]);
 
   const loading = customersActiveQ.isLoading || statusQ.isLoading;
   const error = (customersActiveQ.error || statusQ.error) as Error | null;
@@ -181,8 +403,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
 
   // Vehicles tab state
   const [vehicleCustomerId, setVehicleCustomerId] = useState('');
-  const [vehicles, setVehicles] = useState<any[]>([]);
-  const [loadingVehicles, setLoadingVehicles] = useState(false);
+  const [vehicleSearch, setVehicleSearch] = useState('');
   const [vehicleError, setVehicleError] = useState<string | null>(null);
   const [isVehicleDrawerOpen, setIsVehicleDrawerOpen] = useState(false);
   const [editingVehicle, setEditingVehicle] = useState<any | null>(null);
@@ -194,6 +415,18 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
     isActive: true,
   });
   const [vehicleSubmitting, setVehicleSubmitting] = useState(false);
+
+  const allVehicles = vehiclesQ.data ?? [];
+  const loadingVehicles = vehiclesQ.isLoading;
+  const filteredVehicles = useMemo(() => {
+    const q = vehicleSearch.trim().toLowerCase();
+    if (!q) return allVehicles;
+    return allVehicles.filter((v: any) =>
+      (v.registrationNumber || '').toLowerCase().includes(q) ||
+      (v.customerName || '').toLowerCase().includes(q) ||
+      (v.vehicleType || '').toLowerCase().includes(q));
+  }, [allVehicles, vehicleSearch]);
+  const invalidateVehicles = () => qc.invalidateQueries({ queryKey: ['vehicles'] });
 
   const resolvePreferredShiftId = (active: any | null, closedList: any[]) => {
     if (defaultShiftId) {
@@ -216,12 +449,12 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
     return '';
   };
 
-  const resetCollectionForm = () => {
+  const resetCollectionForm = (customerId?: string) => {
     const preferredShiftId = resolvePreferredShiftId(activeShift, recentClosedShifts);
     setCollectionDefaults({
       targetShiftId: preferredShiftId,
       transactionDate: new Date().toISOString().slice(0, 10),
-      customerId: customers[0]?.id || '',
+      customerId: customerId || customers[0]?.id || '',
       amount: undefined as unknown as number,
       paymentMethod: 'Cash',
       notes: '',
@@ -230,8 +463,8 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
     setFormError(null);
   };
 
-  const openCollectionDrawer = () => {
-    resetCollectionForm();
+  const openCollectionDrawer = (customerId?: string) => {
+    resetCollectionForm(customerId);
     setIsCollectionDrawerOpen(true);
   };
 
@@ -269,36 +502,12 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
 
   const custType = watchCust('customerType');
 
-  useEffect(() => {
-    if (activeTab === 'vehicles' && vehicleCustomerId) {
-      loadVehicles(vehicleCustomerId);
-    }
-  }, [activeTab, vehicleCustomerId]);
-
   // Initialise default selections from query data once it loads.
   useEffect(() => {
     const eligible = allCustomers.filter((c: any) => c.customerType === 'Credit' || c.customerType === 'Fleet');
     setVehicleCustomerId((prev) => prev || eligible[0]?.id || '');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customersAllQ.data]);
-
-  const loadVehicles = async (customerId: string) => {
-    if (!customerId) {
-      setVehicles([]);
-      return;
-    }
-
-    try {
-      setLoadingVehicles(true);
-      setVehicleError(null);
-      const list = await transactionService.getCustomerVehicles(customerId, false);
-      setVehicles(list || []);
-    } catch (err: any) {
-      setVehicleError(err.message || 'Failed to load vehicles');
-    } finally {
-      setLoadingVehicles(false);
-    }
-  };
 
   const openCreateVehicleDrawer = () => {
     setEditingVehicle(null);
@@ -351,7 +560,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
       }
 
       setIsVehicleDrawerOpen(false);
-      await loadVehicles(vehicleForm.customerId);
+      invalidateVehicles();
       toast.success(editingVehicle ? 'Vehicle updated.' : 'Vehicle added.');
     } catch (err: any) {
       setVehicleError(err.message || 'Failed to save vehicle');
@@ -367,7 +576,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
 
     try {
       await transactionService.deleteCustomerVehicle(vehicle.id);
-      await loadVehicles(vehicle.customerId);
+      invalidateVehicles();
       toast.success('Vehicle deleted.');
     } catch (err: any) {
       setVehicleError(err.message || 'Failed to delete vehicle');
@@ -513,6 +722,30 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
     }
   };
 
+  // --- deep-link intent (from global search / quick-create) ---
+  const handledIntentRef = useRef<NavIntent | null>(null);
+  useEffect(() => {
+    if (!intent || handledIntentRef.current === intent) return;
+    // For a focus intent, wait until the customer list has loaded.
+    if (intent.focusCustomerId && customersAllQ.isLoading) return;
+    handledIntentRef.current = intent;
+
+    if (intent.open === 'new-customer') {
+      openCreateDrawer();
+    } else if (intent.open === 'new-collection') {
+      openCollectionDrawer();
+    }
+    if (intent.focusCustomerId) {
+      const cust = allCustomers.find((c: any) => c.id === intent.focusCustomerId);
+      if (cust) {
+        setActiveTab('registry');
+        void openLedgerDrawer(cust);
+      }
+    }
+    onIntentConsumed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [intent, allCustomers, customersAllQ.isLoading]);
+
   if (!selectedStation) {
     return (
       <div style={{ color: 'var(--text-muted)', padding: '24px', fontFamily: 'var(--font-sans)' }}>
@@ -540,19 +773,13 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
       actions={
         <>
           {activeTab === 'transactions' && (
-            <button onClick={() => openCollectionDrawer()} className="btn btn-primary btn-md">
-              <Plus size={14} /> Add Collection
-            </button>
+            <Button variant="primary" size="sm" leftIcon={<Plus />} onClick={() => openCollectionDrawer()}>Add Collection</Button>
           )}
           {activeTab === 'registry' && (
-            <button onClick={openCreateDrawer} className="btn btn-primary btn-md">
-              <Plus size={14} /> Add Customer
-            </button>
+            <Button variant="primary" size="sm" leftIcon={<Plus />} onClick={openCreateDrawer}>Add Customer</Button>
           )}
           {activeTab === 'vehicles' && (
-            <button onClick={openCreateVehicleDrawer} disabled={!vehicleCustomerId} className="btn btn-primary btn-md">
-              <Plus size={14} /> Add Vehicle
-            </button>
+            <Button variant="primary" size="sm" leftIcon={<Plus />} disabled={!allCustomers.some((c: any) => c.customerType === 'Credit' || c.customerType === 'Fleet')} onClick={openCreateVehicleDrawer}>Add Vehicle</Button>
           )}
         </>
       }
@@ -562,8 +789,9 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
           activeId={activeTab}
           onChange={(id) => setActiveTab(id as TabType)}
           tabs={[
-            { id: 'transactions', label: 'Shift Collections & Sales', icon: <CreditCard size={15} /> },
-            { id: 'registry', label: 'Customer Registry', icon: <Settings size={15} /> },
+            { id: 'transactions', label: 'Collections', icon: <Wallet size={15} /> },
+            { id: 'sales', label: 'Credit Sales', icon: <CreditCard size={15} /> },
+            { id: 'registry', label: 'Customer Registry', icon: <Users size={15} /> },
             { id: 'vehicles', label: 'Vehicles', icon: <Truck size={15} /> },
           ]}
         />
@@ -573,85 +801,141 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
       <div>
         {activeTab === 'transactions' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {activeShift || recentClosedShifts.length > 0 ? (
-              <div style={{
-                backgroundColor: 'var(--state-info-bg)',
-                color: 'var(--state-info-fg)',
-                padding: '12px 14px',
-                borderRadius: 'var(--radius-card)',
-                fontSize: '12px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                border: '1px solid var(--border-soft)'
-              }}>
-                <Info size={14} />
-                <span>
-                  Collections will post to{' '}
-                  <strong>
-                    {resolvePreferredShiftId(activeShift, recentClosedShifts) === activeShift?.id
-                      ? `${activeShift?.templateName} (Active)`
-                      : recentClosedShifts.find((shift) => shift.id === resolvePreferredShiftId(activeShift, recentClosedShifts))?.templateName ?? 'selected shift'}
-                  </strong>
-                  {defaultShiftId === resolvePreferredShiftId(activeShift, recentClosedShifts) ? ' from the current context.' : '.'}
-                </span>
-              </div>
-            ) : (
-              <div style={{
-                backgroundColor: 'var(--state-warning-bg)',
-                color: 'var(--state-warning-fg)',
-                padding: '16px',
-                borderRadius: 'var(--radius-card)',
-                fontSize: '13px',
-                border: '1px solid var(--border-soft)',
-                lineHeight: '1.5'
-              }}>
-                <span style={{ fontWeight: 700, display: 'block', marginBottom: '4px' }}>Shift Gated Action</span>
-                Collections and credit fleet sales must be logged during an active shift. Please open a shift first.
-              </div>
-            )}
+            {/* KPI strip — today & month collections at a glance */}
+            <KpiStrip columns={4}>
+              <KpiTile dot="brand" label="Collected Today" value={inr(collectionKpis.today)} hint={`${collectionKpis.todayCount} ${collectionKpis.todayCount === 1 ? 'entry' : 'entries'}`} />
+              <KpiTile dot="success" valueTone="success" label="Collected This Month" value={inr(collectionKpis.month)} />
+              <KpiTile dot="info" label="Customers Paid Today" value={String(collectionKpis.todayCustomers)} />
+              <KpiTile dot="warning" valueTone="warning" label="Total Receivables" value={inr(customers.reduce((s: number, c: any) => s + Number(c.currentBalance || 0), 0))} hint="Outstanding dues" />
+            </KpiStrip>
 
-            <div style={{
-              backgroundColor: 'var(--bg-surface)',
-              border: '1px solid var(--border-soft)',
-              borderRadius: 'var(--radius-card)',
-              overflow: 'hidden'
-            }}>
-              <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-soft)' }}>
-                <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)' }}>
-                  Active Credit Accounts Summary
-                </h3>
-              </div>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-                <thead>
-                  <tr style={{ backgroundColor: 'var(--bg-surface-alt)', borderBottom: '1px solid var(--border-soft)', textAlign: 'left', color: 'var(--text-muted)' }}>
-                    <th style={{ padding: '10px 20px', fontWeight: 600 }}>Customer</th>
-                    <th style={{ padding: '10px 20px', fontWeight: 600 }}>Type</th>
-                    <th style={{ padding: '10px 20px', fontWeight: 600, textAlign: 'right' }}>Outstanding Balance</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {customers.map((c, idx) => {
-                    const balance = Number(c.currentBalance || 0);
-                    return (
-                      <tr key={idx} style={{ borderBottom: '1px solid var(--border-soft)' }}>
-                        <td style={{ padding: '12px 20px', fontWeight: 600, color: 'var(--text-strong)' }}>{c.name}</td>
-                        <td style={{ padding: '12px 20px', color: 'var(--text-default)' }}>{c.customerType}</td>
-                        <td style={{ padding: '12px 20px', textAlign: 'right', fontWeight: 700, color: balance > 0 ? 'var(--brand-warning)' : 'var(--state-success-fg)', fontFamily: 'var(--font-mono)' }}>
-                          {inr(balance)}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+            {/* Collections ledger */}
+            <Panel
+              flush
+              title="Collections"
+              action={
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{ position: 'relative' }}>
+                    <Search size={13} style={{ position: 'absolute', left: '8px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                    <input
+                      value={collectionSearch}
+                      onChange={(e) => setCollectionSearch(e.target.value)}
+                      placeholder="Search customer / note…"
+                      style={{ height: '28px', padding: '0 8px 0 26px', width: '200px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', fontSize: '12px', background: 'var(--bg-surface)' }}
+                    />
+                  </div>
+                  <select
+                    value={collectionMethod}
+                    onChange={(e) => setCollectionMethod(e.target.value)}
+                    style={{ height: '28px', padding: '0 6px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', fontSize: '12px', background: 'var(--bg-surface)' }}
+                  >
+                    <option value="all">All methods</option>
+                    <option value="Cash">Cash</option>
+                    <option value="Card">Card</option>
+                    <option value="UPI">UPI</option>
+                    <option value="BankTransfer">Bank</option>
+                  </select>
+                  <span aria-hidden="true" style={{ width: '1px', height: '18px', background: 'var(--border-soft)', margin: '0 2px' }} />
+                  <button
+                    type="button"
+                    aria-label="Where do collections post?"
+                    title={
+                      activeShift || recentClosedShifts.length > 0
+                        ? `New collections post to ${
+                            resolvePreferredShiftId(activeShift, recentClosedShifts) === activeShift?.id
+                              ? `${activeShift?.templateName} (active shift)`
+                              : recentClosedShifts.find((s) => s.id === resolvePreferredShiftId(activeShift, recentClosedShifts))?.templateName ?? 'the selected shift'
+                          }. Cash collections touch the drawer; card / UPI / bank do not.`
+                        : 'Open a shift to record collections — cash collections are reconciled against the drawer.'
+                    }
+                    style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', height: '28px', width: '28px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', background: 'var(--bg-surface)', color: 'var(--text-muted)', cursor: 'help' }}
+                  >
+                    <HelpCircle size={14} />
+                  </button>
+                </div>
+              }
+            >
+              {collectionsQ.isLoading ? (
+                <div style={{ padding: '16px' }}><LoadingSpinner text="Loading collections…" /></div>
+              ) : filteredCollections.length === 0 ? (
+                <div style={{ padding: '12px' }}>
+                  <EmptyState
+                    compact
+                    icon={<Wallet />}
+                    title={allCollections.length === 0 ? 'No collections yet' : 'No matching collections'}
+                    description={allCollections.length === 0 ? 'Record a collection to see it here.' : 'Try clearing the search or method filter.'}
+                  />
+                </div>
+              ) : (
+                <DataTable
+                  bare
+                  columns={buildCollectionColumns()}
+                  data={filteredCollections}
+                  emptyMessage="No collections."
+                  getRowId={(r: any) => r.id}
+                />
+              )}
+            </Panel>
+          </div>
+        )}
+
+        {activeTab === 'sales' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <KpiStrip columns={4}>
+              <KpiTile dot="warning" valueTone="warning" label="Credit Issued Today" value={inr(salesKpis.today)} hint={`${salesKpis.todayCount} ${salesKpis.todayCount === 1 ? 'sale' : 'sales'}`} />
+              <KpiTile dot="brand" label="Credit This Month" value={inr(salesKpis.month)} />
+              <KpiTile dot="info" label="Customers on Credit" value={String(salesKpis.customers)} />
+              <KpiTile dot="warning" valueTone="warning" label="Total Receivables" value={inr(customers.reduce((s: number, c: any) => s + Number(c.currentBalance || 0), 0))} hint="Outstanding dues" />
+            </KpiStrip>
+
+            <Panel
+              flush
+              title="Credit sales"
+              action={
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{ position: 'relative' }}>
+                    <Search size={13} style={{ position: 'absolute', left: '8px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                    <input
+                      value={salesSearch}
+                      onChange={(e) => setSalesSearch(e.target.value)}
+                      placeholder="Search customer / vehicle / product…"
+                      style={{ height: '28px', padding: '0 8px 0 26px', width: '260px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', fontSize: '12px', background: 'var(--bg-surface)' }}
+                    />
+                  </div>
+                  <span aria-hidden="true" style={{ width: '1px', height: '18px', background: 'var(--border-soft)', margin: '0 2px' }} />
+                  <button type="button" aria-label="About credit sales" title="Credit sales are receivables — fuel-on-credit and merchandise on credit. They never touch the drawer; record them from the shift handover." style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', height: '28px', width: '28px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', background: 'var(--bg-surface)', color: 'var(--text-muted)', cursor: 'help' }}>
+                    <HelpCircle size={14} />
+                  </button>
+                </div>
+              }
+            >
+              {creditSalesQ.isLoading ? (
+                <div style={{ padding: '16px' }}><LoadingSpinner text="Loading credit sales…" /></div>
+              ) : filteredCreditSales.length === 0 ? (
+                <div style={{ padding: '12px' }}>
+                  <EmptyState
+                    compact
+                    icon={<CreditCard />}
+                    title={allCreditSales.length === 0 ? 'No credit sales yet' : 'No matching credit sales'}
+                    description={allCreditSales.length === 0 ? 'Fuel-on-credit and merchandise-on-credit sales appear here.' : 'Try a different search term.'}
+                  />
+                </div>
+              ) : (
+                <DataTable
+                  bare
+                  columns={buildCreditSaleColumns()}
+                  data={filteredCreditSales}
+                  emptyMessage="No credit sales."
+                  getRowId={(r: any) => r.id}
+                />
+              )}
+            </Panel>
           </div>
         )}
 
         {activeTab === 'registry' && (
           <DataTable
-            columns={buildCustomerColumns(openLedgerDrawer, openEditDrawer)}
+            columns={buildCustomerColumns(openLedgerDrawer, openEditDrawer, anyPrepaid)}
             data={allCustomers}
             emptyMessage="No customers registered."
             getRowId={(r: any) => r.id}
@@ -660,115 +944,52 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
 
         {activeTab === 'vehicles' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end' }}>
-              <div style={{ flex: 1 }}>
-                <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>
-                  Credit/Fleet Customer
-                </label>
-                <select
-                  value={vehicleCustomerId}
-                  onChange={(e) => setVehicleCustomerId(e.target.value)}
-                  style={{
-                    width: '100%',
-                    height: '32px',
-                    padding: '0 8px',
-                    borderRadius: 'var(--radius-input)',
-                    border: '1px solid var(--border-strong)',
-                    fontSize: '13px',
-                  }}
-                >
-                  {allCustomers
-                    .filter((c) => c.customerType === 'Credit' || c.customerType === 'Fleet')
-                    .map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name} ({c.customerType})
-                      </option>
-                    ))}
-                </select>
-              </div>
-            </div>
-
             {vehicleError && (
               <div style={{ padding: '12px', backgroundColor: 'var(--state-danger-bg)', color: 'var(--state-danger-fg)', borderRadius: 'var(--radius-card)', fontSize: '12px' }}>
                 {vehicleError}
               </div>
             )}
 
-            {!vehicleCustomerId ? (
-              <div style={{ padding: '16px', backgroundColor: 'var(--state-warning-bg)', color: 'var(--state-warning-fg)', borderRadius: 'var(--radius-card)', fontSize: '13px' }}>
-                No Credit/Fleet customer found. Create a Credit or Fleet customer first.
-              </div>
-            ) : loadingVehicles ? (
+            {loadingVehicles ? (
               <LoadingSpinner text="Loading vehicles..." />
             ) : (
-              <div style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-card)', overflow: 'hidden' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left' }}>
-                  <thead>
-                    <tr style={{ backgroundColor: 'var(--bg-surface-alt)', borderBottom: '1px solid var(--border-soft)', color: 'var(--text-muted)' }}>
-                      <th style={{ padding: '12px 20px', fontWeight: 600 }}>Registration No.</th>
-                      <th style={{ padding: '12px 20px', fontWeight: 600 }}>Vehicle Type</th>
-                      <th style={{ padding: '12px 20px', fontWeight: 600 }}>Default Product</th>
-                      <th style={{ padding: '12px 20px', fontWeight: 600 }}>Status</th>
-                      <th style={{ padding: '12px 20px', fontWeight: 600 }}>Updated</th>
-                      <th style={{ padding: '12px 20px', fontWeight: 600, textAlign: 'center' }}>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {vehicles.length === 0 ? (
-                      <tr>
-                        <td colSpan={6} style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)' }}>
-                          No vehicles registered for this customer.
-                        </td>
-                      </tr>
-                    ) : (
-                      vehicles.map((v) => (
-                        <tr key={v.id} style={{ borderBottom: '1px solid var(--border-soft)' }}>
-                          <td style={{ padding: '12px 20px', fontWeight: 600, color: 'var(--text-strong)', fontFamily: 'var(--font-mono)' }}>
-                            {v.registrationNumber}
-                          </td>
-                          <td style={{ padding: '12px 20px', color: 'var(--text-default)' }}>{v.vehicleType}</td>
-                          <td style={{ padding: '12px 20px', color: 'var(--text-default)' }}>
-                            {v.defaultProductName ? `${v.defaultProductName} (${v.defaultProductCode || ''})` : '-'}
-                          </td>
-                          <td style={{ padding: '12px 20px' }}>
-                            <span
-                              style={{
-                                fontSize: '11px',
-                                fontWeight: 600,
-                                backgroundColor: v.isActive ? 'var(--state-success-bg)' : 'var(--state-danger-bg)',
-                                color: v.isActive ? 'var(--state-success-fg)' : 'var(--state-danger-fg)',
-                                padding: '2px 8px',
-                                borderRadius: 'var(--radius-chip)',
-                              }}
-                            >
-                              {v.isActive ? 'Active' : 'Inactive'}
-                            </span>
-                          </td>
-                          <td style={{ padding: '12px 20px', color: 'var(--text-muted)' }}>
-                            {new Date(v.updatedAt).toLocaleDateString('en-IN')}
-                          </td>
-                          <td style={{ padding: '12px 20px', textAlign: 'center' }}>
-                            <button
-                              onClick={() => openEditVehicleDrawer(v)}
-                              style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '4px' }}
-                              title="Edit Vehicle"
-                            >
-                              <Edit size={14} />
-                            </button>
-                            <button
-                              onClick={() => onDeleteVehicle(v)}
-                              style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--brand-danger)', padding: '4px' }}
-                              title="Delete Vehicle"
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
+              <Panel
+                flush
+                title="Vehicles"
+                action={
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div style={{ position: 'relative' }}>
+                      <Search size={13} style={{ position: 'absolute', left: '8px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                      <input
+                        value={vehicleSearch}
+                        onChange={(e) => setVehicleSearch(e.target.value)}
+                        placeholder="Search registration / customer…"
+                        style={{ height: '28px', padding: '0 8px 0 26px', width: '240px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', fontSize: '12px', background: 'var(--bg-surface)' }}
+                      />
+                    </div>
+                    <Chip tone="neutral" size="xs">{filteredVehicles.length}</Chip>
+                  </div>
+                }
+              >
+                {filteredVehicles.length === 0 ? (
+                  <div style={{ padding: '12px' }}>
+                    <EmptyState
+                      compact
+                      icon={<Truck />}
+                      title={allVehicles.length === 0 ? 'No vehicles' : 'No matching vehicles'}
+                      description={allVehicles.length === 0 ? 'Register a vehicle against a Credit or Fleet customer to see it here.' : 'Try a different search term.'}
+                    />
+                  </div>
+                ) : (
+                  <DataTable
+                    bare
+                    columns={buildVehicleColumns(openEditVehicleDrawer, onDeleteVehicle)}
+                    data={filteredVehicles}
+                    emptyMessage="No vehicles registered."
+                    getRowId={(r: any) => r.id}
+                  />
+                )}
+              </Panel>
             )}
           </div>
         )}
@@ -794,256 +1015,66 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
             </div>
           )}
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Customer Name *</label>
-            <input
-              type="text"
-              placeholder="e.g. KSRTC Depo, John Doe"
-              {...registerCust('name')}
-              disabled={drawerSubmitting}
-              style={{
-                height: '32px',
-                padding: '0 8px',
-                borderRadius: 'var(--radius-input)',
-                border: '1px solid var(--border-strong)',
-                fontSize: '13px',
-              }}
-            />
-            {custErrors.name && (
-              <span style={{ color: 'var(--state-danger-fg)', fontSize: '11px' }}>
-                {custErrors.name.message}
-              </span>
-            )}
-          </div>
+          <Field label="Customer Name" required error={custErrors.name?.message}>
+            <TextInput placeholder="e.g. KSRTC Depot, John Doe" {...registerCust('name')} disabled={drawerSubmitting} invalid={!!custErrors.name} />
+          </Field>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Phone Number</label>
-            <input
-              type="text"
-              placeholder="e.g. +91 9900..."
-              {...registerCust('phone')}
-              disabled={drawerSubmitting}
-              style={{
-                height: '32px',
-                padding: '0 8px',
-                borderRadius: 'var(--radius-input)',
-                border: '1px solid var(--border-strong)',
-                fontSize: '13px',
-              }}
-            />
-            {custErrors.phone && (
-              <span style={{ color: 'var(--state-danger-fg)', fontSize: '11px' }}>
-                {custErrors.phone.message}
-              </span>
-            )}
-          </div>
+          <Field label="Phone Number" error={custErrors.phone?.message}>
+            <TextInput placeholder="e.g. +91 9900…" {...registerCust('phone')} disabled={drawerSubmitting} invalid={!!custErrors.phone} />
+          </Field>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Account Type *</label>
-            <select
-              {...registerCust('customerType')}
-              disabled={drawerSubmitting}
-              style={{
-                height: '32px',
-                padding: '0 8px',
-                borderRadius: 'var(--radius-input)',
-                border: '1px solid var(--border-strong)',
-                fontSize: '13px',
-              }}
-            >
+          <Field label="Account Type" required error={custErrors.customerType?.message}>
+            <Select {...registerCust('customerType')} disabled={drawerSubmitting} invalid={!!custErrors.customerType}>
               <option value="Regular">Regular (Cash/Card/UPI walk-in)</option>
               <option value="Credit">Credit (Standard outstanding account)</option>
               <option value="Fleet">Fleet (Requires fleet code authorization)</option>
-            </select>
-            {custErrors.customerType && (
-              <span style={{ color: 'var(--state-danger-fg)', fontSize: '11px' }}>
-                {custErrors.customerType.message}
-              </span>
-            )}
-          </div>
+            </Select>
+          </Field>
 
           {(custType === 'Credit' || custType === 'Fleet') && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Credit Limit (₹)</label>
-              <input
-                type="number" min="0"
-                placeholder="e.g. 50000"
-                {...registerCust('creditLimit', { valueAsNumber: true })}
-                disabled={drawerSubmitting}
-                style={{
-                  height: '32px',
-                  padding: '0 8px',
-                  borderRadius: 'var(--radius-input)',
-                  border: '1px solid var(--border-strong)',
-                  fontSize: '13px',
-                }}
-              />
-              {custErrors.creditLimit && (
-                <span style={{ color: 'var(--state-danger-fg)', fontSize: '11px' }}>
-                  {custErrors.creditLimit.message}
-                </span>
-              )}
-            </div>
+            <Field label="Credit Limit" error={custErrors.creditLimit?.message}>
+              <MoneyInput placeholder="50000" {...registerCust('creditLimit', { valueAsNumber: true })} disabled={drawerSubmitting} invalid={!!custErrors.creditLimit} />
+            </Field>
           )}
 
           {custType === 'Fleet' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Fleet Code / Card Reference</label>
-              <input
-                type="text"
-                placeholder="e.g. FL-9923"
-                {...registerCust('fleetCode')}
-                disabled={drawerSubmitting}
-                style={{
-                  height: '32px',
-                  padding: '0 8px',
-                  borderRadius: 'var(--radius-input)',
-                  border: '1px solid var(--border-strong)',
-                  fontSize: '13px',
-                }}
-              />
-              {custErrors.fleetCode && (
-                <span style={{ color: 'var(--state-danger-fg)', fontSize: '11px' }}>
-                  {custErrors.fleetCode.message}
-                </span>
-              )}
-            </div>
+            <Field label="Fleet Code / Card Reference" error={custErrors.fleetCode?.message}>
+              <TextInput placeholder="e.g. FL-9923" {...registerCust('fleetCode')} disabled={drawerSubmitting} invalid={!!custErrors.fleetCode} />
+            </Field>
           )}
 
-          <div style={{
-            borderTop: '1px solid var(--border-soft)',
-            paddingTop: '12px',
-            marginTop: '4px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '12px'
-          }}>
-            <h4 style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-strong)', margin: 0 }}>
-              GST & Tax Registration (Optional B2B)
+          <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: '12px', marginTop: '4px' }}>
+            <h4 style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-strong)', margin: '0 0 12px' }}>
+              GST &amp; Tax Registration (Optional B2B)
             </h4>
-            
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)' }}>GSTIN</label>
-                <input
-                  type="text"
-                  placeholder="15-digit GSTIN"
-                  {...registerCust('metadata.gstin', {
-                    onChange: (e) => setValueCust('metadata.gstin', e.target.value.toUpperCase())
-                  })}
-                  disabled={drawerSubmitting}
-                  style={{
-                    height: '32px',
-                    padding: '0 8px',
-                    borderRadius: 'var(--radius-input)',
-                    border: '1px solid var(--border-strong)',
-                    fontSize: '13px',
-                  }}
-                />
-                {custErrors.metadata?.gstin && (
-                  <span style={{ color: 'var(--state-danger-fg)', fontSize: '11px' }}>
-                    {custErrors.metadata.gstin.message}
-                  </span>
-                )}
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)' }}>State Code (place of supply)</label>
-                <input
-                  type="text"
-                  placeholder="e.g. 29"
-                  maxLength={2}
-                  {...registerCust('metadata.stateCode')}
-                  disabled={drawerSubmitting}
-                  style={{
-                    height: '32px',
-                    padding: '0 8px',
-                    borderRadius: 'var(--radius-input)',
-                    border: '1px solid var(--border-strong)',
-                    fontSize: '13px',
-                  }}
-                />
-              </div>
-              
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)' }}>PAN</label>
-                <input
-                  type="text"
-                  placeholder="10-digit PAN"
-                  {...registerCust('metadata.pan', {
-                    onChange: (e) => setValueCust('metadata.pan', e.target.value.toUpperCase())
-                  })}
-                  disabled={drawerSubmitting}
-                  style={{
-                    height: '32px',
-                    padding: '0 8px',
-                    borderRadius: 'var(--radius-input)',
-                    border: '1px solid var(--border-strong)',
-                    fontSize: '13px',
-                  }}
-                />
-                {custErrors.metadata?.pan && (
-                  <span style={{ color: 'var(--state-danger-fg)', fontSize: '11px' }}>
-                    {custErrors.metadata.pan.message}
-                  </span>
-                )}
-              </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 12px' }}>
+              <Field label="GSTIN" error={custErrors.metadata?.gstin?.message}>
+                <TextInput placeholder="15-digit GSTIN" {...registerCust('metadata.gstin', { onChange: (e) => setValueCust('metadata.gstin', e.target.value.toUpperCase()) })} disabled={drawerSubmitting} invalid={!!custErrors.metadata?.gstin} />
+              </Field>
+              <Field label="State Code">
+                <TextInput placeholder="e.g. 29" maxLength={2} {...registerCust('metadata.stateCode')} disabled={drawerSubmitting} />
+              </Field>
+              <Field label="PAN" error={custErrors.metadata?.pan?.message}>
+                <TextInput placeholder="10-digit PAN" {...registerCust('metadata.pan', { onChange: (e) => setValueCust('metadata.pan', e.target.value.toUpperCase()) })} disabled={drawerSubmitting} invalid={!!custErrors.metadata?.pan} />
+              </Field>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)' }}>Trade Name</label>
-              <input
-                type="text"
-                placeholder="Business Trade Name"
-                {...registerCust('metadata.tradeName')}
-                disabled={drawerSubmitting}
-                style={{
-                  height: '32px',
-                  padding: '0 8px',
-                  borderRadius: 'var(--radius-input)',
-                  border: '1px solid var(--border-strong)',
-                  fontSize: '13px',
-                }}
-              />
-              {custErrors.metadata?.tradeName && (
-                <span style={{ color: 'var(--state-danger-fg)', fontSize: '11px' }}>
-                  {custErrors.metadata.tradeName.message}
-                </span>
-              )}
-            </div>
+            <Field label="Trade Name" error={custErrors.metadata?.tradeName?.message}>
+              <TextInput placeholder="Business Trade Name" {...registerCust('metadata.tradeName')} disabled={drawerSubmitting} invalid={!!custErrors.metadata?.tradeName} />
+            </Field>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)' }}>Billing Address</label>
-              <textarea
-                placeholder="Full Billing Address"
-                {...registerCust('metadata.billingAddress')}
-                disabled={drawerSubmitting}
-                rows={2}
-                style={{
-                  padding: '6px 8px',
-                  borderRadius: 'var(--radius-input)',
-                  border: '1px solid var(--border-strong)',
-                  fontSize: '13px',
-                  resize: 'vertical',
-                  fontFamily: 'inherit'
-                }}
-              />
-              {custErrors.metadata?.billingAddress && (
-                <span style={{ color: 'var(--state-danger-fg)', fontSize: '11px' }}>
-                  {custErrors.metadata.billingAddress.message}
-                </span>
-              )}
-            </div>
+            <Field label="Billing Address" error={custErrors.metadata?.billingAddress?.message}>
+              <Textarea placeholder="Full Billing Address" rows={2} {...registerCust('metadata.billingAddress')} disabled={drawerSubmitting} invalid={!!custErrors.metadata?.billingAddress} />
+            </Field>
           </div>
 
-          <div style={{ marginTop: '4px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '4px' }}>
             <Checkbox
               label="Enable Prepaid Wallet Mode"
               {...registerCust('isPrepaid')}
               disabled={drawerSubmitting}
             />
-          </div>
-
-          <div style={{ marginTop: '4px' }}>
             <Checkbox
               label="Account Active (Clear for operational logging)"
               {...registerCust('isActive')}
@@ -1051,43 +1082,9 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
             />
           </div>
 
-          <div style={{ display: 'flex', gap: '12px', marginTop: '12px' }}>
-            <button
-              type="submit"
-              disabled={drawerSubmitting}
-              style={{
-                flex: 1,
-                height: '32px',
-                backgroundColor: 'var(--brand-primary)',
-                color: 'white',
-                border: 'none',
-                borderRadius: 'var(--radius-button)',
-                fontWeight: 600,
-                fontSize: '13px',
-                cursor: 'pointer',
-              }}
-            >
-              {drawerSubmitting ? 'Saving...' : 'Save Customer'}
-            </button>
-            
-            <button
-              type="button"
-              onClick={() => setIsDrawerOpen(false)}
-              disabled={drawerSubmitting}
-              style={{
-                flex: 1,
-                height: '32px',
-                backgroundColor: 'var(--bg-surface-alt)',
-                color: 'var(--text-default)',
-                border: '1px solid var(--border-strong)',
-                borderRadius: 'var(--radius-button)',
-                fontWeight: 600,
-                fontSize: '13px',
-                cursor: 'pointer',
-              }}
-            >
-              Cancel
-            </button>
+          <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
+            <Button type="submit" variant="primary" fullWidth loading={drawerSubmitting}>Save Customer</Button>
+            <Button type="button" variant="secondary" fullWidth disabled={drawerSubmitting} onClick={() => setIsDrawerOpen(false)}>Cancel</Button>
           </div>
         </form>
       </Drawer>
@@ -1128,6 +1125,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
         isOpen={selectedLedgerCustomer !== null}
         onClose={() => setSelectedLedgerCustomer(null)}
         title="Customer Account Statement"
+        widthVariant="wide"
       >
         {selectedLedgerCustomer && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', fontFamily: 'var(--font-sans)' }}>
@@ -1205,12 +1203,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
                   <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
                     Top-up prepaid wallet for this customer.
                   </div>
-                  <button
-                    className="btn btn-secondary btn-sm"
-                    onClick={openTopupDrawer}
-                  >
-                    <Plus size={12} /> Top Up
-                  </button>
+                  <Button variant="secondary" size="sm" leftIcon={<Plus />} onClick={openTopupDrawer}>Top Up</Button>
                 </div>
               )}
 
@@ -1245,8 +1238,10 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
                   return {
                     id: tx.id,
                     date: tx.createdAt,
-                    dateLabel: new Date(tx.shiftDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' }),
-                    subLabel: tx.shiftName,
+                    dateLabel: tx.businessDate
+                      ? new Date(tx.businessDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' })
+                      : new Date(tx.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' }),
+                    subLabel: new Date(tx.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
                     type,
                     typeColor,
                     notes: tx.notes,
@@ -1257,23 +1252,10 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
               />
             </div>
 
-            <button
-              onClick={() => setSelectedLedgerCustomer(null)}
-              style={{
-                height: '32px',
-                width: '100%',
-                backgroundColor: 'var(--bg-surface-alt)',
-                color: 'var(--text-default)',
-                border: '1px solid var(--border-strong)',
-                borderRadius: 'var(--radius-button)',
-                fontWeight: 600,
-                fontSize: '13px',
-                cursor: 'pointer',
-                marginTop: '8px'
-              }}
-            >
-              Close Statement
-            </button>
+            <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
+              <Button variant="secondary" size="sm" leftIcon={<Edit />} onClick={() => { const c = selectedLedgerCustomer; setSelectedLedgerCustomer(null); openEditDrawer(c); }}>Edit profile</Button>
+              <Button variant="secondary" size="sm" leftIcon={<Wallet />} onClick={() => { const c = selectedLedgerCustomer; setSelectedLedgerCustomer(null); openCollectionDrawer(c.id); }}>Record collection</Button>
+            </div>
           </div>
         )}
       </Drawer>
@@ -1290,84 +1272,26 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
             </div>
           )}
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Amount (₹) *</label>
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={topupAmount}
-              onChange={(e) => setTopupAmount(e.target.value)}
-              disabled={topupSubmitting}
-              placeholder="0.00"
-              style={{ height: '32px', padding: '0 8px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', fontSize: '13px' }}
-            />
-          </div>
+          <Field label="Amount" required>
+            <MoneyInput value={topupAmount} onChange={(e) => setTopupAmount(e.target.value)} disabled={topupSubmitting} placeholder="0.00" step="0.01" />
+          </Field>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Payment Method *</label>
-            <select
-              value={topupPaymentMethod}
-              onChange={(e) => setTopupPaymentMethod(e.target.value as any)}
-              disabled={topupSubmitting}
-              style={{ height: '32px', padding: '0 8px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', fontSize: '13px' }}
-            >
+          <Field label="Payment Method" required>
+            <Select value={topupPaymentMethod} onChange={(e) => setTopupPaymentMethod(e.target.value as any)} disabled={topupSubmitting}>
               <option value="Cash">Cash</option>
               <option value="Card">Card</option>
               <option value="UPI">UPI</option>
               <option value="BankTransfer">Bank Transfer</option>
-            </select>
-          </div>
+            </Select>
+          </Field>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Notes</label>
-            <textarea
-              rows={2}
-              value={topupNotes}
-              onChange={(e) => setTopupNotes(e.target.value)}
-              disabled={topupSubmitting}
-              placeholder="Optional reference or remark"
-              style={{ padding: '6px 8px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', fontSize: '13px', fontFamily: 'inherit', resize: 'vertical' }}
-            />
-          </div>
+          <Field label="Notes">
+            <Textarea rows={2} value={topupNotes} onChange={(e) => setTopupNotes(e.target.value)} disabled={topupSubmitting} placeholder="Optional reference or remark" />
+          </Field>
 
-          <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
-            <button
-              type="submit"
-              disabled={topupSubmitting || !topupAmount}
-              style={{
-                flex: 1,
-                height: '32px',
-                backgroundColor: 'var(--brand-primary)',
-                color: 'white',
-                border: 'none',
-                borderRadius: 'var(--radius-button)',
-                fontWeight: 600,
-                fontSize: '13px',
-                cursor: 'pointer',
-              }}
-            >
-              {topupSubmitting ? 'Recording...' : 'Record Top-Up'}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setIsTopupDrawerOpen(false)}
-              disabled={topupSubmitting}
-              style={{
-                flex: 1,
-                height: '32px',
-                backgroundColor: 'var(--bg-surface-alt)',
-                color: 'var(--text-default)',
-                border: '1px solid var(--border-strong)',
-                borderRadius: 'var(--radius-button)',
-                fontWeight: 600,
-                fontSize: '13px',
-                cursor: 'pointer',
-              }}
-            >
-              Cancel
-            </button>
+          <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
+            <Button type="submit" variant="primary" fullWidth loading={topupSubmitting} disabled={!topupAmount}>Record Top-Up</Button>
+            <Button type="button" variant="secondary" fullWidth disabled={topupSubmitting} onClick={() => setIsTopupDrawerOpen(false)}>Cancel</Button>
           </div>
         </form>
       </Drawer>
@@ -1385,56 +1309,42 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
           )}
 
           {!editingVehicle && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Customer *</label>
-              <select
+            <Field label="Customer" required>
+              <Combobox
+                options={allCustomers
+                  .filter((c: any) => c.customerType === 'Credit' || c.customerType === 'Fleet')
+                  .map((c: any) => ({ value: c.id, label: `${c.name} (${c.customerType})` }))}
                 value={vehicleForm.customerId}
-                onChange={(e) => setVehicleForm((prev) => ({ ...prev, customerId: e.target.value }))}
-                disabled={vehicleSubmitting}
-                style={{ height: '32px', padding: '0 8px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', fontSize: '13px' }}
-              >
-                {allCustomers
-                  .filter((c) => c.customerType === 'Credit' || c.customerType === 'Fleet')
-                  .map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name} ({c.customerType})
-                    </option>
-                  ))}
-              </select>
-            </div>
+                onChange={(value) => setVehicleForm((prev) => ({ ...prev, customerId: value }))}
+                placeholder="Select customer…"
+                searchPlaceholder="Search customers…"
+              />
+            </Field>
           )}
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Registration Number *</label>
-            <input
-              type="text"
+          <Field label="Registration Number" required>
+            <TextInput
               value={vehicleForm.registrationNumber}
               onChange={(e) => setVehicleForm((prev) => ({ ...prev, registrationNumber: e.target.value.toUpperCase() }))}
               disabled={vehicleSubmitting}
               placeholder="e.g. KL07AB1234"
-              style={{ height: '32px', padding: '0 8px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', fontSize: '13px' }}
             />
-          </div>
+          </Field>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Vehicle Type *</label>
-            <input
-              type="text"
+          <Field label="Vehicle Type" required>
+            <TextInput
               value={vehicleForm.vehicleType}
               onChange={(e) => setVehicleForm((prev) => ({ ...prev, vehicleType: e.target.value }))}
               disabled={vehicleSubmitting}
               placeholder="e.g. Truck, Bus"
-              style={{ height: '32px', padding: '0 8px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', fontSize: '13px' }}
             />
-          </div>
+          </Field>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Default Fuel Product</label>
-            <select
+          <Field label="Default Fuel Product">
+            <Select
               value={vehicleForm.defaultProductId}
               onChange={(e) => setVehicleForm((prev) => ({ ...prev, defaultProductId: e.target.value }))}
               disabled={vehicleSubmitting}
-              style={{ height: '32px', padding: '0 8px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', fontSize: '13px' }}
             >
               <option value="">-- Select Product --</option>
               {fuelProducts.map((p) => (
@@ -1442,8 +1352,8 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
                   {p.name} ({p.code})
                 </option>
               ))}
-            </select>
-          </div>
+            </Select>
+          </Field>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Checkbox
@@ -1454,43 +1364,9 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
             />
           </div>
 
-          <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
-            <button
-              type="submit"
-              disabled={vehicleSubmitting}
-              style={{
-                flex: 1,
-                height: '32px',
-                backgroundColor: 'var(--brand-primary)',
-                color: 'white',
-                border: 'none',
-                borderRadius: 'var(--radius-button)',
-                fontWeight: 600,
-                fontSize: '13px',
-                cursor: 'pointer',
-              }}
-            >
-              {vehicleSubmitting ? 'Saving...' : 'Save Vehicle'}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setIsVehicleDrawerOpen(false)}
-              disabled={vehicleSubmitting}
-              style={{
-                flex: 1,
-                height: '32px',
-                backgroundColor: 'var(--bg-surface-alt)',
-                color: 'var(--text-default)',
-                border: '1px solid var(--border-strong)',
-                borderRadius: 'var(--radius-button)',
-                fontWeight: 600,
-                fontSize: '13px',
-                cursor: 'pointer',
-              }}
-            >
-              Cancel
-            </button>
+          <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
+            <Button type="submit" variant="primary" fullWidth loading={vehicleSubmitting}>Save Vehicle</Button>
+            <Button type="button" variant="secondary" fullWidth disabled={vehicleSubmitting} onClick={() => setIsVehicleDrawerOpen(false)}>Cancel</Button>
           </div>
         </form>
       </Drawer>

@@ -548,6 +548,14 @@ export class CloudTransactionService {
     return request<any[]>('/transactions/collections');
   }
 
+  async getCreditSales(): Promise<any[]> {
+    return request<any[]>('/transactions/credit-sales');
+  }
+
+  async getAllVehicles(activeOnly = false): Promise<any[]> {
+    return request<any[]>(`/transactions/vehicles${activeOnly ? '?activeOnly=true' : ''}`);
+  }
+
   async getMoneyMovements(params: { stationId: string; from?: string; to?: string }): Promise<{ movements: any[]; openings: { account: string; opening: number }[] }> {
     const qs = new URLSearchParams({ stationId: params.stationId });
     if (params.from) qs.set('from', params.from);

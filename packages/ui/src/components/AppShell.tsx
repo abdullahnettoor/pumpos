@@ -10,11 +10,24 @@ export interface NavItem {
   roles?: string[];
 }
 
+/**
+ * Optional intent passed alongside a navigation. Lets one screen (or the
+ * command palette / quick-create) deep-link into another and have it open a
+ * specific drawer or focus an entity on arrival. Screens consume the intent
+ * once on mount/update and are expected to ignore stale intents.
+ */
+export interface NavIntent {
+  /** Focus a specific customer (opens their statement drawer). */
+  focusCustomerId?: string;
+  /** Open a drawer immediately on arrival at the destination page. */
+  open?: 'customer-statement' | 'new-customer' | 'new-collection';
+}
+
 export interface AppShellProps {
   children: React.ReactNode;
   navItems: NavItem[];
   currentPath: string;
-  onNavigate: (path: string) => void;
+  onNavigate: (path: string, intent?: NavIntent) => void;
   userRole: string;
   userName: string;
   syncStatus: 'online' | 'offline' | 'synced' | 'pending' | 'failed';
@@ -124,8 +137,8 @@ const getIconSvg = (label: string) => {
     case 'customers':
       return (
         <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-          <polyline points="22 4 12 14.01 9 11.01" />
+          <circle cx="12" cy="8" r="5" />
+          <path d="M20 21a8 8 0 0 0-16 0" />
         </svg>
       );
     case 'inventory':

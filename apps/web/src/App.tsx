@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { 
   AppShell, 
@@ -24,6 +24,7 @@ import {
   clearStoredOnboardingDraft,
   supabase 
 } from '@pump/ui';
+import type { NavIntent } from '@pump/ui';
 import { Station } from '@pump/shared';
 
 const resolveApiUrl = (): string | undefined => {
@@ -71,6 +72,14 @@ const isLocalDev = (() => {
 
 export const App: React.FC = () => {
   const [currentPath, setCurrentPath] = useState('/dashboard');
+  // Optional deep-link intent carried alongside a navigation (e.g. open a
+  // customer's statement from global search / quick-create). Consumed once by
+  // the destination screen, then cleared.
+  const [navIntent, setNavIntent] = useState<NavIntent | null>(null);
+  const navigate = useCallback((path: string, intent?: NavIntent) => {
+    setCurrentPath(path);
+    setNavIntent(intent ?? null);
+  }, []);
   const [syncStatus, setSyncStatus] = useState<'online' | 'offline' | 'synced' | 'pending' | 'failed'>(
     typeof navigator !== 'undefined' && navigator.onLine === false ? 'offline' : 'online',
   );
@@ -465,7 +474,13 @@ export const App: React.FC = () => {
       case '/accounts':
         return <AccountsPanel selectedStation={selectedStation} />;
       case '/customers':
-        return <CustomersList selectedStation={selectedStation} />;
+        return (
+          <CustomersList
+            selectedStation={selectedStation}
+            intent={navIntent}
+            onIntentConsumed={() => setNavIntent(null)}
+          />
+        );
       case '/reports':
         return (
           <ReportsOverview
@@ -515,7 +530,7 @@ export const App: React.FC = () => {
     <AppShell
       navItems={navItemsWithDev}
       currentPath={currentPath}
-      onNavigate={setCurrentPath}
+      onNavigate={navigate}
       userRole={userRole || 'Staff'}
       userName={userName}
       syncStatus={syncStatus}

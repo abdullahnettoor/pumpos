@@ -19,6 +19,8 @@ export interface DataTableProps<T> {
   /** Stable row key extractor; defaults to the row index. */
   getRowId?: (row: T, index: number) => string;
   initialSorting?: SortingState;
+  /** Drop the outer border / radius / surface so it sits flush inside a Panel. */
+  bare?: boolean;
 }
 
 /**
@@ -35,6 +37,7 @@ export function DataTable<T>({
   onRowClick,
   getRowId,
   initialSorting,
+  bare = false,
 }: DataTableProps<T>) {
   const [sorting, setSorting] = React.useState<SortingState>(initialSorting ?? []);
 
@@ -48,12 +51,14 @@ export function DataTable<T>({
     getRowId,
   });
 
-  const wrap: React.CSSProperties = {
-    backgroundColor: 'var(--bg-surface)',
-    border: '1px solid var(--border-soft)',
-    borderRadius: 'var(--radius-card)',
-    overflow: 'hidden',
-  };
+  const wrap: React.CSSProperties = bare
+    ? { backgroundColor: 'transparent', overflow: 'hidden' }
+    : {
+        backgroundColor: 'var(--bg-surface)',
+        border: '1px solid var(--border-soft)',
+        borderRadius: 'var(--radius-card)',
+        overflow: 'hidden',
+      };
   const stateBox: React.CSSProperties = {
     padding: 'var(--space-8)',
     textAlign: 'center',

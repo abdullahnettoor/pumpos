@@ -43,6 +43,8 @@ export const queryKeys = {
   expenses: () => ['expenses'] as const,
   purchases: () => ['purchases'] as const,
   collections: () => ['collections'] as const,
+  creditSales: () => ['credit-sales'] as const,
+  vehicles: (activeOnly = false) => ['vehicles', activeOnly] as const,
   customers: (activeOnly = true) => ['customers', activeOnly] as const,
   suppliers: (activeOnly = true) => ['suppliers', activeOnly] as const,
   customerLedger: (customerId: string) => ['customer-ledger', customerId] as const,
@@ -247,6 +249,14 @@ export function usePurchases(options?: Options<any[]>) {
 
 export function useCollections(options?: Options<any[]>) {
   return useQuery({ queryKey: queryKeys.collections(), queryFn: () => txService.getCollections(), ...TIER.operational, ...options });
+}
+
+export function useCreditSales(options?: Options<any[]>) {
+  return useQuery({ queryKey: queryKeys.creditSales(), queryFn: () => txService.getCreditSales(), ...TIER.operational, ...options });
+}
+
+export function useAllVehicles(activeOnly = false, options?: Options<any[]>) {
+  return useQuery({ queryKey: queryKeys.vehicles(activeOnly), queryFn: () => txService.getAllVehicles(activeOnly), ...TIER.semi, ...options });
 }
 
 export function useCustomers(activeOnly = true, options?: Options<any[]>) {
