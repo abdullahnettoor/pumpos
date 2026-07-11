@@ -539,7 +539,7 @@ shiftsRouter.get('/status', async (c) => {
     const template = lastTemplateRows[0];
     const closedByName = lastClosedByRows[0]?.fullName ?? 'System';
     const summary = lastSummaryRows[0];
-    if (currentStatus === 'CLOSED' && gracePeriodExpiresAt && canReopenShift(user.role)) canReopenLastShift = true;
+    if (currentStatus === 'CLOSED' && gracePeriodExpiresAt && canReopenShift(user.role) && !dbActiveShift) canReopenLastShift = true;
     lastShift = { ...dbLastShift, status: currentStatus, lockedAt, templateName: template?.name ?? 'Custom', closedByName };
     lastDssr = summary ? { ...summary, snapshotData: await projectShiftSummary(db, dbLastShift, summary.snapshotData) } : null;
   }

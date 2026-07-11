@@ -1,6 +1,6 @@
 import React from 'react';
 import { inr } from '../../utils/format.js';
-import { Clock3, FileText, Fuel, Receipt, ShoppingCart, Wallet } from 'lucide-react';
+import { Clock3, FileText, Fuel, Receipt, ShoppingBag, ShoppingCart, Wallet } from 'lucide-react';
 import { Button, StatusChip, Chip } from '../../pump-ds/index.js';
 
 type QuickAction = {
@@ -57,6 +57,8 @@ const iconForKey = (key: string) => {
       return <Wallet size={12} />;
     case 'credit-sale':
       return <Fuel size={12} />;
+    case 'merchandise-sale':
+      return <ShoppingBag size={12} />;
     case 'purchase':
       return <ShoppingCart size={12} />;
     default:
@@ -76,8 +78,6 @@ export const ShiftControlBar: React.FC<ShiftControlBarProps> = ({
 }) => {
   const elapsed = formatElapsed(activeShift.openedAt);
   const openedAtShort = formatTime(activeShift.openedAt);
-  const collectionsTotal =
-    shiftTotals.cashCollections + shiftTotals.cardCollections + shiftTotals.upiCollections;
   const allHandoversDone =
     handoversAssigned > 0 && handoversCompleted >= handoversAssigned;
   const closePromoted = allHandoversDone || isPreparingClose;
@@ -121,18 +121,6 @@ export const ShiftControlBar: React.FC<ShiftControlBarProps> = ({
         </div>
 
         <div className="shift-control-bar__cluster shift-control-bar__kpis">
-          <span>
-            Coll{' '}
-            <strong className="font-mono">
-              {inr(collectionsTotal)}
-            </strong>
-          </span>
-          <span>
-            Exp{' '}
-            <strong className="font-mono">
-              {inr(shiftTotals.cashExpenses)}
-            </strong>
-          </span>
           <span>
             Hand <strong>{handoversCompleted}/{handoversAssigned}</strong>
           </span>

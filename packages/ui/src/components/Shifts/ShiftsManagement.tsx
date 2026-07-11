@@ -1,7 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { inr } from '../../utils/format.js';
-import { CloudProductService, CloudShiftService, CloudTankService, CloudTransactionService, CloudUserAssignmentService } from '../../services/cloud.js';
+import { CloudShiftService, CloudTransactionService } from '../../services/cloud.js';
 import { StatusBadge } from '../StatusBadge.js';
 import { ShiftSummaryView } from './ShiftSummaryView.js';
 import { HandoverDrawer } from './HandoverDrawer.js';
@@ -14,27 +14,16 @@ import { MerchandiseHandoversPanel } from './MerchandiseHandoversPanel.js';
 import { NozzleReadingsGrid } from './NozzleReadingsGrid.js';
 import { ShiftTotalsSummary } from './ShiftTotalsSummary.js';
 import { OpenShiftForm } from './OpenShiftForm.js';
-import { QuickEntryDrawer } from './QuickEntryDrawer.js';
 import { Tabs } from '../primitives/Tabs.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import { useShiftStatus, useInvalidateOperational, queryKeys, TIER } from '../../query/hooks.js';
+import { openQuickEntry, useQuickEntry, type QuickEntryType } from '../../quick-entry/store.js';
 import { Station, resolveBusinessDate } from '@pump/shared';
-import type {
-  ExpenseEntryFormValues,
-  CollectionEntryFormValues,
-  PurchaseEntryFormValues,
-  MerchandiseSaleEntryFormValues,
-} from '@pump/shared';
 import { FileText, User, Lock, AlertTriangle, Check, Fuel, Info, Play, History, Clock3 } from 'lucide-react';
 import { LoadingSpinner } from '../LoadingSpinner.js';
 
 const shiftService = new CloudShiftService();
 const transactionService = new CloudTransactionService();
-const productService = new CloudProductService();
-const tankService = new CloudTankService();
-const userService = new CloudUserAssignmentService();
-
-type QuickEntryType = 'expense' | 'collection' | 'purchase' | 'merchandise-sale';
 
 interface ShiftsManagementProps {
   selectedStation: Station | null;
@@ -128,41 +117,10 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     purchaseTotal: 0,
   });
 
-  // Quick Entry Drawer states (local to Shift Management)
-  const [quickEntryOpen, setQuickEntryOpen] = useState(false);
-  const [quickEntryType, setQuickEntryType] = useState<QuickEntryType | null>(null);
-  const [quickEntryLoading, setQuickEntryLoading] = useState(false);
-  const [quickEntrySubmitting, setQuickEntrySubmitting] = useState(false);
-  const [quickEntryError, setQuickEntryError] = useState<string | null>(null);
-  const [targetShiftId, setTargetShiftId] = useState('');
-  const [recentClosedShifts, setRecentClosedShifts] = useState<any[]>([]);
-  // Bumped after a quick-entry merchandise sale so the handovers panel reloads its billed list.
-  const [merchandiseRefreshKey, setMerchandiseRefreshKey] = useState(0);
-
-  const [categories, setCategories] = useState<any[]>([]);
-  const [customers, setCustomers] = useState<any[]>([]);
-  const [suppliers, setSuppliers] = useState<any[]>([]);
-  const [products, setProducts] = useState<any[]>([]);
-  const [tanks, setTanks] = useState<any[]>([]);
-
-  const [expenseDefaults, setExpenseDefaults] = useState<Partial<ExpenseEntryFormValues>>({});
-  const [collectionDefaults, setCollectionDefaults] = useState<Partial<CollectionEntryFormValues>>({});
-  const [purchaseDefaults, setPurchaseDefaults] = useState<Partial<PurchaseEntryFormValues>>({});
-  const [merchandiseDefaults, setMerchandiseDefaults] = useState<Partial<MerchandiseSaleEntryFormValues>>({});
-
-  const [saleStock, setSaleStock] = useState<Record<string, number>>({});
-  // Merchandise can be sold by ANY station user (incl. office staff not on a DU/shift).
-  const [merchandiseSellers, setMerchandiseSellers] = useState<{ userId: string; userName: string }[]>([]);
-
-  // Attendants (operators) assigned to the active shift, for sale attribution.
-  const shiftAttendants = useMemo(() => {
-    const assignments = (statusQ.data?.activeShift?.staffAssignments as any[]) || [];
-    const seen = new Map<string, string>();
-    for (const a of assignments) {
-      if (a.userId && !seen.has(a.userId)) seen.set(a.userId, a.userName || 'Attendant');
-    }
-    return Array.from(seen.entries()).map(([userId, userName]) => ({ userId, userName }));
-  }, [statusQ.data]);
+  // Quick entry is handled by the global QuickEntryHost (mounted at the app shell).
+  // The control-bar actions just open it via the store; submission + cache
+  // invalidation live in the host.
+  const qe = useQuickEntry();
 
   const loadShiftTotals = async (shiftId: string) => {
     try {
@@ -204,116 +162,6 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     } catch (err) {
       console.error('Failed to load shift totals', err);
     }
-  };
-
-  const resetQuickEntryForms = () => {
-    setExpenseDefaults({});
-    setCollectionDefaults({});
-    setPurchaseDefaults({});
-    setMerchandiseDefaults({});
-  };
-
-  const closeQuickEntryDrawer = () => {
-    setQuickEntryOpen(false);
-    setQuickEntryType(null);
-    setQuickEntryError(null);
-    setQuickEntrySubmitting(false);
-    resetQuickEntryForms();
-  };
-
-  const loadQuickEntryLookups = async (type: QuickEntryType) => {
-    if (!selectedStation || !data?.activeShift?.id) {
-      return;
-    }
-
-    try {
-      setQuickEntryLoading(true);
-      setQuickEntryError(null);
-
-      const shiftStatus = await shiftService.getShiftStatus(selectedStation.id, true);
-      const closedList = shiftStatus.recentClosedShifts || [];
-      setRecentClosedShifts(closedList);
-      setTargetShiftId(data.activeShift.id);
-
-      if (type === 'expense') {
-        const expenseCategories = await qc.ensureQueryData({ queryKey: queryKeys.expenseCategories(), queryFn: () => transactionService.getExpenseCategories(), staleTime: TIER.semi.staleTime });
-        setCategories(expenseCategories || []);
-        setExpenseDefaults({ targetShiftId: data.activeShift.id, categoryId: expenseCategories?.[0]?.id ?? '' });
-      }
-
-      if (type === 'collection') {
-        const activeCustomers = await qc.ensureQueryData({ queryKey: queryKeys.customers(true), queryFn: () => transactionService.getCustomers(true), staleTime: TIER.semi.staleTime });
-        setCustomers(activeCustomers || []);
-        setCollectionDefaults({ targetShiftId: data.activeShift.id, customerId: activeCustomers?.[0]?.id ?? '', paymentMethod: 'Cash' });
-      }
-
-      if (type === 'merchandise-sale') {
-        const [productList, activeCustomers, items] = await Promise.all([
-          qc.ensureQueryData({ queryKey: queryKeys.products(), queryFn: () => productService.listProducts(), staleTime: TIER.semi.staleTime }),
-          qc.ensureQueryData({ queryKey: queryKeys.customers(true), queryFn: () => transactionService.getCustomers(true), staleTime: TIER.semi.staleTime }),
-          transactionService.getInventoryItems(selectedStation.id).catch(() => []),
-        ]);
-        const nonFuel = (productList || []).filter((p: any) => p.productType !== 'FUEL');
-        setProducts(nonFuel);
-        setCustomers(activeCustomers || []);
-        const stockMap: Record<string, number> = {};
-        (items || []).forEach((i: any) => { stockMap[i.productId] = Number(i.quantity); });
-        setSaleStock(stockMap);
-        // Merchandise sellers = all active station users (office staff included),
-        // not just DU/shift-assigned attendants.
-        const users = await qc.ensureQueryData({ queryKey: queryKeys.users(), queryFn: () => userService.listUsers(), staleTime: TIER.static.staleTime }).catch(() => []);
-        const sellers = (users || [])
-          .filter((u: any) => (u.status ? u.status === 'ACTIVE' : true))
-          .map((u: any) => ({ userId: u.id, userName: u.fullName || u.email || 'User' }));
-        setMerchandiseSellers(sellers);
-        setMerchandiseDefaults({
-          targetShiftId: data.activeShift.id,
-          paymentMethod: 'Cash',
-          attendantId: sellers[0]?.userId ?? '',
-          lines: [{
-            productId: nonFuel?.[0]?.id ?? '',
-            quantity: undefined as unknown as number,
-            unitPrice: (nonFuel?.[0]?.sellingPrice != null ? Number(nonFuel[0].sellingPrice) : undefined) as unknown as number,
-          }],
-        });
-      }
-
-      if (type === 'purchase') {
-        const [activeSuppliers, productList, tankList] = await Promise.all([
-          qc.ensureQueryData({ queryKey: queryKeys.suppliers(true), queryFn: () => transactionService.getSuppliers(true), staleTime: TIER.semi.staleTime }),
-          qc.ensureQueryData({ queryKey: queryKeys.products(), queryFn: () => productService.listProducts(), staleTime: TIER.semi.staleTime }),
-          qc.ensureQueryData({ queryKey: queryKeys.tanks(selectedStation.id), queryFn: () => tankService.listTanks(selectedStation.id), staleTime: TIER.static.staleTime }),
-        ]);
-
-        setSuppliers(activeSuppliers || []);
-        setProducts(productList || []);
-        setTanks(tankList || []);
-        setPurchaseDefaults({
-          targetShiftId: data.activeShift.id,
-          supplierId: activeSuppliers?.[0]?.id ?? '',
-          lines: [{ productId: productList?.[0]?.id ?? '', quantity: undefined as unknown as number, unitPrice: undefined as unknown as number }],
-        });
-      }
-    } catch (err: any) {
-      setQuickEntryError(err.message || 'Failed to load quick-entry data');
-    } finally {
-      setQuickEntryLoading(false);
-    }
-  };
-
-  const openQuickEntryDrawer = async (type: QuickEntryType) => {
-    if (!data?.activeShift?.id) {
-      return;
-    }
-
-    // Minimize close wizard if open — preserves draft state, user can resume via "Continue Close"
-    if (closeWizardOpen) {
-      setCloseWizardOpen(false);
-    }
-
-    setQuickEntryType(type);
-    setQuickEntryOpen(true);
-    await loadQuickEntryLookups(type);
   };
 
   const openingCashNum = data?.activeShift ? Number(data.activeShift.openingCash) : 0;
@@ -378,21 +226,17 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     }
   }
 
-  const triggerExpenseDrawer = () => {
-    void openQuickEntryDrawer('expense');
+  // Quick entry opens the global QuickEntryHost. Minimize the close wizard first if
+  // it's open (preserves its draft — the user can resume via "Continue Close").
+  const launchQuickEntry = (type: QuickEntryType) => {
+    if (closeWizardOpen) setCloseWizardOpen(false);
+    openQuickEntry(type);
   };
 
-  const triggerCollectionDrawer = () => {
-    void openQuickEntryDrawer('collection');
-  };
-
-  const triggerPurchaseDrawer = () => {
-    void openQuickEntryDrawer('purchase');
-  };
-
-  const triggerMerchandiseSaleDrawer = () => {
-    void openQuickEntryDrawer('merchandise-sale');
-  };
+  const triggerExpenseDrawer = () => launchQuickEntry('expense');
+  const triggerCollectionDrawer = () => launchQuickEntry('collection');
+  const triggerPurchaseDrawer = () => launchQuickEntry('purchase');
+  const triggerMerchandiseSaleDrawer = () => launchQuickEntry('merchandise-sale');
 
   const quickEntryActions = [
     { key: 'expense', label: 'Add Expense', onClick: triggerExpenseDrawer, hotkey: 'E' },
@@ -406,7 +250,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     if (!data?.activeShift?.id) return;
     if (shiftSubTab !== 'today') return;
     if (viewingShiftSummary || viewHistoryShiftId) return;
-    if (closeWizardOpen || quickEntryOpen || handoverDrawerOpen) return;
+    if (closeWizardOpen || qe.open || handoverDrawerOpen) return;
 
     const handler = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
@@ -423,149 +267,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [data?.activeShift?.id, shiftSubTab, viewingShiftSummary, viewHistoryShiftId, closeWizardOpen, quickEntryOpen, handoverDrawerOpen]);
-
-  const shiftOptions = [
-    ...(data?.activeShift ? [{ id: data.activeShift.id, label: `Active: ${data.activeShift.templateName} (Open)` }] : []),
-    ...recentClosedShifts.map((shift) => ({
-      id: shift.id,
-      label: `Closed: ${shift.templateName} (${new Date(shift.closedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })})`,
-    })),
-  ];
-
-  const handleExpenseSubmit = async (values: ExpenseEntryFormValues) => {
-    const shiftId = values.targetShiftId || targetShiftId;
-    if (!shiftId) {
-      setQuickEntryError('A shift is required to record this entry.');
-      return;
-    }
-
-    try {
-      setQuickEntrySubmitting(true);
-      setQuickEntryError(null);
-      await transactionService.recordExpense({
-        shiftId,
-        categoryId: values.categoryId,
-        amount: Number(values.amount),
-        description: values.description || undefined,
-        accountId: values.accountId || undefined,
-      });
-      toast.success('Expense recorded.');
-      closeQuickEntryDrawer();
-      await loadShiftStatus();
-    } catch (err: any) {
-      setQuickEntryError(err.message || 'Failed to record expense');
-    } finally {
-      setQuickEntrySubmitting(false);
-    }
-  };
-
-  const handleCollectionSubmit = async (values: CollectionEntryFormValues) => {
-    const shiftId = values.targetShiftId || targetShiftId;
-    if (!shiftId) {
-      setQuickEntryError('A shift is required to record this entry.');
-      return;
-    }
-
-    try {
-      setQuickEntrySubmitting(true);
-      setQuickEntryError(null);
-      await transactionService.recordCollection({
-        shiftId,
-        customerId: values.customerId || undefined,
-        amount: Number(values.amount),
-        paymentMethod: values.paymentMethod,
-        notes: values.notes || undefined,
-        accountId: values.accountId || undefined,
-      });
-      toast.success('Collection recorded.');
-      closeQuickEntryDrawer();
-      await loadShiftStatus();
-    } catch (err: any) {
-      setQuickEntryError(err.message || 'Failed to record collection');
-    } finally {
-      setQuickEntrySubmitting(false);
-    }
-  };
-
-  const handleMerchandiseSaleSubmit = async (values: MerchandiseSaleEntryFormValues) => {
-    const shiftId = values.targetShiftId || targetShiftId;
-    if (!shiftId) {
-      setQuickEntryError('A shift is required to record this entry.');
-      return;
-    }
-    const lines = (values.lines || [])
-      .filter((l) => l.productId && Number(l.quantity) > 0)
-      .map((l) => ({ productId: l.productId, quantity: Number(l.quantity), unitPrice: Number(l.unitPrice) || 0, tankId: null }));
-    if (lines.length === 0) {
-      setQuickEntryError('Add at least one product with a quantity.');
-      return;
-    }
-    try {
-      setQuickEntrySubmitting(true);
-      setQuickEntryError(null);
-      const buyerName = (values.buyerName || '').trim();
-      const useBuyer = values.paymentMethod !== 'Credit' && !values.customerId && !!buyerName;
-      await transactionService.recordSale({
-        shiftId,
-        paymentMethod: values.paymentMethod,
-        lines,
-        customerId: values.paymentMethod === 'Credit' ? values.customerId : (values.customerId || undefined),
-        attendantId: values.attendantId || undefined,
-        notes: values.notes || undefined,
-        buyer: useBuyer
-          ? {
-              name: buyerName,
-              phone: (values.buyerPhone || '').trim() || null,
-              gstin: (values.buyerGstin || '').trim() || null,
-              stateCode: (values.buyerStateCode || '').trim() || null,
-            }
-          : undefined,
-        saveAsCustomer: useBuyer ? !!values.saveAsCustomer : undefined,
-      });
-      toast.success('Sale recorded.');
-      closeQuickEntryDrawer();
-      setMerchandiseRefreshKey((k) => k + 1);
-      await loadShiftStatus();
-    } catch (err: any) {
-      setQuickEntryError(err.message || 'Failed to record merchandise sale');
-    } finally {
-      setQuickEntrySubmitting(false);
-    }
-  };
-
-  const handlePurchaseSubmit = async (values: PurchaseEntryFormValues) => {
-    const shiftId = values.targetShiftId || targetShiftId;
-    if (!shiftId || !values.supplierId || values.lines.length === 0) {
-      return;
-    }
-
-    try {
-      setQuickEntrySubmitting(true);
-      setQuickEntryError(null);
-
-      await transactionService.recordPurchase({
-        shiftId,
-        supplierId: values.supplierId,
-        invoiceNumber: values.invoiceNumber || undefined,
-        notes: values.notes || undefined,
-        lines: values.lines.map((l) => ({
-          productId: l.productId,
-          quantity: Number(l.quantity),
-          unitPrice: Number(l.unitPrice),
-          tankAllocations: l.tankAllocations && l.tankAllocations.length > 0 ? l.tankAllocations : undefined,
-        })),
-      });
-      toast.success('Purchase recorded.');
-      closeQuickEntryDrawer();
-      await loadShiftStatus();
-    } catch (err: any) {
-      setQuickEntryError(err.message || 'Failed to record purchase');
-    } finally {
-      setQuickEntrySubmitting(false);
-    }
-  };
-
+  }, [data?.activeShift?.id, shiftSubTab, viewingShiftSummary, viewHistoryShiftId, closeWizardOpen, qe.open, handoverDrawerOpen]);
 
   // Initialise the open/close-form state whenever the cached shift status
   // changes (mount + after a mutation invalidates the cache).
@@ -905,7 +607,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         />
 
         {/* 1b. Merchandise Handovers (walk-in bulk, per employee) */}
-        <MerchandiseHandoversPanel shiftId={activeShift.id} onChanged={loadShiftStatus} refreshKey={merchandiseRefreshKey} />
+        <MerchandiseHandoversPanel shiftId={activeShift.id} onChanged={loadShiftStatus} />
 
         {/* 2. Nozzle Readings Grid */}
         <NozzleReadingsGrid
@@ -953,35 +655,6 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
           onConfirmWarningsChange={setConfirmWarningsChecked}
           isClosing={isClosing}
           onConfirmClose={() => handleCloseShift()}
-        />
-
-        {/* Quick Entry Drawer */}
-        <QuickEntryDrawer
-          isOpen={quickEntryOpen}
-          onClose={closeQuickEntryDrawer}
-          quickEntryType={quickEntryType}
-          loading={quickEntryLoading}
-          submitting={quickEntrySubmitting}
-          error={quickEntryError}
-          shiftOptions={shiftOptions}
-          targetShiftId={targetShiftId}
-          activeShiftTemplateName={data?.activeShift?.templateName}
-          stationId={selectedStation?.id}
-          categories={categories}
-          customers={customers}
-          suppliers={suppliers}
-          products={products}
-          tanks={tanks}
-          attendants={merchandiseSellers}
-          stockByProduct={saleStock}
-          expenseDefaults={expenseDefaults}
-          collectionDefaults={collectionDefaults}
-          purchaseDefaults={purchaseDefaults}
-          merchandiseDefaults={merchandiseDefaults}
-          onExpenseSubmit={handleExpenseSubmit}
-          onCollectionSubmit={handleCollectionSubmit}
-          onPurchaseSubmit={handlePurchaseSubmit}
-          onMerchandiseSaleSubmit={handleMerchandiseSaleSubmit}
         />
 
         {selectedHandoverAssignment && (

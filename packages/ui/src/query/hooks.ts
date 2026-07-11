@@ -40,6 +40,8 @@ const financeSvc = new CloudFinanceService();
 export const queryKeys = {
   shiftStatus: (stationId: string, lite = false) => ['shift-status', stationId, lite] as const,
   shiftSummaries: (stationId: string) => ['shift-summaries', stationId] as const,
+  merchandiseHandovers: (shiftId: string) => ['merchandise-handovers', shiftId] as const,
+  merchandiseSales: (shiftId: string) => ['merchandise-sales', shiftId] as const,
   expenses: () => ['expenses'] as const,
   purchases: () => ['purchases'] as const,
   collections: () => ['collections'] as const,
@@ -164,6 +166,26 @@ export function useInvoices(params: { stationId?: string | null; from?: string; 
     queryKey: queryKeys.invoices(params.stationId ?? '', params.from ?? '', params.to ?? ''),
     queryFn: () => txService.getInvoices({ stationId: params.stationId ?? undefined, from: params.from, to: params.to }),
     enabled: !!params.stationId,
+    ...TIER.operational,
+    ...options,
+  });
+}
+
+export function useMerchandiseHandovers(shiftId: string | null | undefined, options?: Options<any[]>) {
+  return useQuery({
+    queryKey: queryKeys.merchandiseHandovers(shiftId ?? ''),
+    queryFn: () => txService.getMerchandiseHandovers(shiftId!),
+    enabled: !!shiftId,
+    ...TIER.operational,
+    ...options,
+  });
+}
+
+export function useMerchandiseSales(shiftId: string | null | undefined, options?: Options<any[]>) {
+  return useQuery({
+    queryKey: queryKeys.merchandiseSales(shiftId ?? ''),
+    queryFn: () => txService.getMerchandiseSales(shiftId!).catch(() => []),
+    enabled: !!shiftId,
     ...TIER.operational,
     ...options,
   });
@@ -370,6 +392,8 @@ export function useInvalidateOperational() {
   return (stationId?: string | null) => {
     qc.invalidateQueries({ queryKey: ['shift-status'] });
     qc.invalidateQueries({ queryKey: ['shift-summaries'] });
+    qc.invalidateQueries({ queryKey: ['merchandise-handovers'] });
+    qc.invalidateQueries({ queryKey: ['merchandise-sales'] });
     qc.invalidateQueries({ queryKey: ['expenses'] });
     qc.invalidateQueries({ queryKey: ['purchases'] });
     qc.invalidateQueries({ queryKey: ['collections'] });

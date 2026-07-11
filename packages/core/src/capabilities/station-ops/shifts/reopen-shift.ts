@@ -23,6 +23,14 @@ export class ReopenShift implements UseCase<ReopenShiftCommand, Shift> {
     if (shift.status === 'OPEN') return err(invariantViolation('Shift is already open', { shiftId: shift.id }));
     if (shift.status === 'LOCKED') return err(invariantViolation('Locked shifts cannot be reopened', { shiftId: shift.id }));
 
+    // MVP lock: a closed shift cannot be reopened once a later shift has been
+    // opened at the station (another OPEN shift would mean overlapping drawer
+    // accountability). Close the current shift first, then reopen.
+    const openShift = await this.deps.shifts.findOpenByStation(shift.organizationId, shift.stationId);
+    if (openShift && openShift.id !== shift.id) {
+      return err(invariantViolation('Cannot reopen: another shift is currently open at this station. Close it first.', { shiftId: shift.id, openShiftId: openShift.id }));
+    }
+
     const nowIso = ctx.clock.now().toISOString();
     const reopened: Shift = {
       ...shift,

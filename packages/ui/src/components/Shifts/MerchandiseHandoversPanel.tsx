@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Drawer } from '../Drawer.js';
 import { Combobox } from '../primitives/Combobox.js';
 import { Select, NumberInput } from '../primitives/Field.js';
@@ -6,8 +7,9 @@ import { Panel, Button } from '../../pump-ds/index.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import { useConfirm } from '../primitives/ConfirmDialog.js';
 import { CloudTransactionService, CloudProductService, CloudUserAssignmentService } from '../../services/cloud.js';
+import { useMerchandiseHandovers, useMerchandiseSales, queryKeys } from '../../query/hooks.js';
 import { inr } from '../../utils/format.js';
-import { Package, Plus, Trash2, Pencil } from 'lucide-react';
+import { Plus, Trash2, Pencil } from 'lucide-react';
 
 const txService = new CloudTransactionService();
 const productService = new CloudProductService();
@@ -17,8 +19,6 @@ export interface MerchandiseHandoversPanelProps {
   shiftId: string;
   /** Called after a handover is recorded/deleted so the shift reconciliation refreshes. */
   onChanged?: () => void;
-  /** Bump to force a reload (e.g. after a quick-entry merchandise sale elsewhere). */
-  refreshKey?: number;
 }
 
 interface LineRow {
@@ -50,11 +50,15 @@ function lineTax(product: any, qty: number) {
  * seamless. Each handover is a cash sale attributed to the employee, so it flows
  * into their cash-handover reconciliation. Editable while the shift is open.
  */
-export const MerchandiseHandoversPanel: React.FC<MerchandiseHandoversPanelProps> = ({ shiftId, onChanged, refreshKey }) => {
+export const MerchandiseHandoversPanel: React.FC<MerchandiseHandoversPanelProps> = ({ shiftId, onChanged }) => {
   const toast = useToast();
   const confirm = useConfirm();
-  const [handovers, setHandovers] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
+  const qc = useQueryClient();
+  const handoversQ = useMerchandiseHandovers(shiftId);
+  const billedQ = useMerchandiseSales(shiftId);
+  const handovers = handoversQ.data ?? [];
+  const billed = billedQ.data ?? [];
+  const loading = handoversQ.isLoading || billedQ.isLoading;
   const [products, setProducts] = useState<any[]>([]);
   const [sellers, setSellers] = useState<{ userId: string; userName: string }[]>([]);
 
@@ -65,29 +69,11 @@ export const MerchandiseHandoversPanel: React.FC<MerchandiseHandoversPanelProps>
   const [nonCash, setNonCash] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [billed, setBilled] = useState<any[]>([]);
 
-  const load = async () => {
-    if (!shiftId) return;
-    setLoading(true);
-    try {
-      const [ho, bs] = await Promise.all([
-        txService.getMerchandiseHandovers(shiftId),
-        txService.getMerchandiseSales(shiftId).catch(() => []),
-      ]);
-      setHandovers(ho);
-      setBilled(bs || []);
-    } catch {
-      /* non-fatal */
-    } finally {
-      setLoading(false);
-    }
+  const reload = () => {
+    qc.invalidateQueries({ queryKey: queryKeys.merchandiseHandovers(shiftId) });
+    qc.invalidateQueries({ queryKey: queryKeys.merchandiseSales(shiftId) });
   };
-
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shiftId, refreshKey]);
 
   const ensureRefData = async () => {
     if (products.length === 0) {
@@ -174,7 +160,7 @@ export const MerchandiseHandoversPanel: React.FC<MerchandiseHandoversPanelProps>
     try {
       await txService.recordMerchandiseHandover(shiftId, { attendantId, lines, nonCashAmount: nonCashNum });
       setDrawerOpen(false);
-      await load();
+      reload();
       onChanged?.();
       toast.success('Merchandise handover recorded.');
     } catch (err: any) {
@@ -188,7 +174,7 @@ export const MerchandiseHandoversPanel: React.FC<MerchandiseHandoversPanelProps>
     if (!(await confirm({ title: 'Remove merchandise handover?', message: `Delete ${h.attendantName || 'this employee'}'s merchandise closing and restore stock?`, danger: true, confirmLabel: 'Remove' }))) return;
     try {
       await txService.deleteMerchandiseHandover(h.id);
-      await load();
+      reload();
       onChanged?.();
       toast.success('Merchandise handover removed.');
     } catch (err: any) {
@@ -248,7 +234,7 @@ export const MerchandiseHandoversPanel: React.FC<MerchandiseHandoversPanelProps>
   return (
     <Panel
       flush
-      title={<span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Package size={16} style={{ color: 'var(--text-muted)' }} /> Merchandise handovers</span>}
+      title="Merchandise handovers"
       action={
         <Button variant="primary" size="sm" leftIcon={<Plus size={13} />} onClick={openNew}>
           Record Closing
