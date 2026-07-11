@@ -7,6 +7,7 @@ import {
   canManageSuppliers,
   canArchiveParty,
   canRecordPurchase,
+  canManageExpenseCategory,
   type Role,
 } from '@pump/shared';
 import {
@@ -464,6 +465,81 @@ transactionsRouter.get('/expense-categories', async (c) => {
     list = await db.select().from(schema.expenseCategories).where(eq(schema.expenseCategories.organizationId, user.organizationId));
   }
   return c.json({ success: true, data: list });
+});
+
+// Create a custom expense category (org-scoped, deduped by name).
+transactionsRouter.post('/expense-categories', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  if (!canManageExpenseCategory(user.role)) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } }, 403);
+  }
+  const body = await c.req.json().catch(() => ({}));
+  const name = String(body?.name ?? '').trim();
+  if (!name) {
+    return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Category name is required' } }, 400);
+  }
+  if (name.length > 100) {
+    return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Category name is too long (max 100)' } }, 400);
+  }
+  const [dupe] = await db
+    .select({ id: schema.expenseCategories.id })
+    .from(schema.expenseCategories)
+    .where(and(eq(schema.expenseCategories.organizationId, user.organizationId), ilike(schema.expenseCategories.name, name)))
+    .limit(1);
+  if (dupe) {
+    return c.json({ success: false, error: { code: 'CONFLICT', message: 'A category with this name already exists' } }, 409);
+  }
+  const [created] = await db
+    .insert(schema.expenseCategories)
+    .values({ organizationId: user.organizationId, name, isSystem: false })
+    .returning();
+  return c.json({ success: true, data: created });
+});
+
+// Rename a custom expense category. System (seeded) categories are read-only.
+// TODO (archive): add an `is_active` column + PATCH to soft-delete categories
+// (expenses reference categoryId, so hard delete isn't safe). Deferred for now.
+transactionsRouter.put('/expense-categories/:id', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  if (!canManageExpenseCategory(user.role)) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } }, 403);
+  }
+  const id = c.req.param('id');
+  const body = await c.req.json().catch(() => ({}));
+  const name = String(body?.name ?? '').trim();
+  if (!name) {
+    return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Category name is required' } }, 400);
+  }
+  if (name.length > 100) {
+    return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Category name is too long (max 100)' } }, 400);
+  }
+  const [existing] = await db
+    .select()
+    .from(schema.expenseCategories)
+    .where(and(eq(schema.expenseCategories.id, id), eq(schema.expenseCategories.organizationId, user.organizationId)))
+    .limit(1);
+  if (!existing) {
+    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Category not found' } }, 404);
+  }
+  if (existing.isSystem) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'System categories cannot be renamed' } }, 403);
+  }
+  const [dupe] = await db
+    .select({ id: schema.expenseCategories.id })
+    .from(schema.expenseCategories)
+    .where(and(eq(schema.expenseCategories.organizationId, user.organizationId), ilike(schema.expenseCategories.name, name), ne(schema.expenseCategories.id, id)))
+    .limit(1);
+  if (dupe) {
+    return c.json({ success: false, error: { code: 'CONFLICT', message: 'A category with this name already exists' } }, 409);
+  }
+  const [updated] = await db
+    .update(schema.expenseCategories)
+    .set({ name })
+    .where(and(eq(schema.expenseCategories.id, id), eq(schema.expenseCategories.organizationId, user.organizationId)))
+    .returning();
+  return c.json({ success: true, data: updated });
 });
 
 // ====================================================

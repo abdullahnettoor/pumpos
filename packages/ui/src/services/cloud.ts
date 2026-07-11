@@ -433,6 +433,20 @@ export class CloudTransactionService {
     return request<any>('/transactions/expense-categories');
   }
 
+  async createExpenseCategory(payload: { name: string }): Promise<any> {
+    return request<any>('/transactions/expense-categories', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async updateExpenseCategory(id: string, payload: { name: string }): Promise<any> {
+    return request<any>(`/transactions/expense-categories/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+  }
+
   async getSuppliers(activeOnly: boolean = true): Promise<any> {
     return request<any>(`/transactions/suppliers?activeOnly=${activeOnly}`);
   }

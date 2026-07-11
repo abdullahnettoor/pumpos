@@ -25,7 +25,7 @@ export interface NavIntent {
   focusInventoryTab?: 'tanks' | 'items';
   focusInventoryId?: string;
   /** Open a drawer immediately on arrival at the destination page. */
-  open?: 'customer-statement' | 'new-customer' | 'new-collection' | 'supplier-statement' | 'supplier-payment';
+  open?: 'customer-statement' | 'new-customer' | 'new-collection' | 'supplier-statement' | 'supplier-payment' | 'new-expense';
 }
 
 export interface AppShellProps {

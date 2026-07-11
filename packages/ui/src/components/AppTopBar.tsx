@@ -85,7 +85,7 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
   // --- quick create ---
   const quickCreate: QuickCreateAction[] = useMemo(() => {
     const items: QuickCreateAction[] = [
-      { id: 'expense', label: 'Expense', icon: <Receipt />, shortcut: 'E', onSelect: () => onNavigate('/expenses') },
+      { id: 'expense', label: 'Expense', icon: <Receipt />, shortcut: 'E', onSelect: () => onNavigate('/expenses', { open: 'new-expense' }) },
       { id: 'collection', label: 'Collection', icon: <Wallet />, onSelect: () => onNavigate('/customers', { open: 'new-collection' }) },
       { id: 'purchase', label: 'Purchase', icon: <ShoppingCart />, onSelect: () => onNavigate('/purchases') },
       { id: 'supplier-payment', label: 'Supplier payment', icon: <Wallet />, onSelect: () => onNavigate('/purchases', { open: 'supplier-payment' }) },

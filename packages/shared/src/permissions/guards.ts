@@ -204,3 +204,12 @@ export function canExportReports(role: Role): boolean {
 export function canManageFinancialAccounts(role: Role): boolean {
   return role === 'Owner' || role === 'Manager' || role === 'Accountant';
 }
+
+// ----------------------------------------------------
+// Expense categories (master data)
+// ----------------------------------------------------
+
+/** Create/rename expense categories. Owner, Manager, Accountant (not Staff). */
+export function canManageExpenseCategory(role: Role): boolean {
+  return role === 'Owner' || role === 'Manager' || role === 'Accountant';
+}

@@ -464,7 +464,14 @@ export const App: React.FC = () => {
           />
         );
       case '/expenses':
-        return <ExpensesList selectedStation={selectedStation} />;
+        return (
+          <ExpensesList
+            selectedStation={selectedStation}
+            userRole={userRole || 'Staff'}
+            intent={navIntent}
+            onIntentConsumed={() => setNavIntent(null)}
+          />
+        );
       case '/purchases':
         return (
           <PurchasesList
