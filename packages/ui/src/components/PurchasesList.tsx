@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { CloudTransactionService } from '../services/cloud.js';
 import { usePurchases, useShiftStatus, useSuppliers, useProducts, useTanks, useInvalidateOperational } from '../query/hooks.js';
-import { Calendar, Plus, ShoppingCart, Info, Settings, Edit, Truck, Building, Percent } from 'lucide-react';
+import { Calendar, Plus, ShoppingCart, Info, Settings, Edit, Truck, Building, Percent, Search, HelpCircle } from 'lucide-react';
 import { LoadingSpinner } from './LoadingSpinner.js';
 import { Drawer } from './Drawer.js';
 import { PurchaseEntryForm } from './transactions/PurchaseEntryForm.js';
@@ -13,16 +13,22 @@ import { Tabs } from './primitives/Tabs.js';
 import { PageLayout } from './primitives/PageLayout.js';
 import { AccountSelect } from './primitives/AccountSelect.js';
 import { useToast } from './primitives/ToastProvider.js';
+import { Panel, Button, StatusChip, Chip, KpiStrip, KpiTile, EmptyState } from '../pump-ds/index.js';
 import type { ColumnDef } from '@tanstack/react-table';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { supplierPaymentSchema, type PurchaseEntryFormValues } from '@pump/shared';
+import { supplierPaymentSchema, resolveBusinessDate, type PurchaseEntryFormValues } from '@pump/shared';
+import type { NavIntent } from './AppShell.js';
 
 const transactionService = new CloudTransactionService();
 
 interface PurchasesListProps {
   selectedStation: any | null;
   defaultShiftId?: string;
+  /** Optional deep-link intent (focus a supplier). */
+  intent?: NavIntent | null;
+  /** Called once the intent has been handled so the parent can clear it. */
+  onIntentConsumed?: () => void;
 }
 
 type TabType = 'transactions' | 'registry' | 'gst';
@@ -62,22 +68,19 @@ const buildSupplierColumns = (openLedger: (s: any) => void, openEdit: (s: any) =
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <Building size={14} style={{ color: 'var(--text-muted)' }} />
           <div>
-            <button type="button" onClick={() => openLedger(sup)} style={{ background: 'none', border: 'none', padding: 0, color: 'var(--brand-primary)', fontWeight: 600, textAlign: 'left', cursor: 'pointer', textDecoration: 'underline' }}>{sup.name}</button>
+            <button type="button" onClick={() => openLedger(sup)} style={{ background: 'none', border: 'none', padding: 0, color: 'var(--brand-primary)', fontWeight: 600, textAlign: 'left', cursor: 'pointer' }}>{sup.name}</button>
             {sup.metadata?.tradeName && <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 400 }}>{sup.metadata.tradeName}</div>}
-            {sup.metadata?.gstin && <div style={{ fontSize: '10px', color: 'var(--primary)', fontFamily: 'var(--font-mono)', fontWeight: 500, marginTop: '2px' }}>GSTIN: {sup.metadata.gstin}</div>}
+            {sup.metadata?.gstin && <div style={{ fontSize: '10px', color: 'var(--text-faint)', fontFamily: 'var(--font-mono)', fontWeight: 500, marginTop: '2px' }}>GSTIN {sup.metadata.gstin}</div>}
           </div>
         </div>
       );
     },
   },
-  { accessorKey: 'phone', header: 'Phone', cell: ({ getValue }) => <span style={{ color: 'var(--text-muted)' }}>{(getValue() as string) || '-'}</span> },
+  { accessorKey: 'phone', header: 'Phone', cell: ({ getValue }) => <span style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '12px' }}>{(getValue() as string) || '—'}</span> },
   {
     accessorKey: 'isActive',
     header: 'Status',
-    cell: ({ getValue }) => {
-      const active = getValue() as boolean;
-      return <span style={{ fontSize: '11px', fontWeight: 600, backgroundColor: active ? 'var(--state-success-bg)' : 'var(--state-danger-bg)', color: active ? 'var(--state-success-fg)' : 'var(--state-danger-fg)', padding: '2px 8px', borderRadius: 'var(--radius-chip)' }}>{active ? 'Active' : 'Suspended'}</span>;
-    },
+    cell: ({ getValue }) => <StatusChip status={getValue() ? 'active' : 'inactive'} size="xs" label={getValue() ? 'Active' : 'Suspended'} />,
   },
   {
     accessorKey: 'currentBalance',
@@ -98,7 +101,7 @@ const buildSupplierColumns = (openLedger: (s: any) => void, openEdit: (s: any) =
   },
 ];
 
-export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, defaultShiftId }) => {
+export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, defaultShiftId, intent, onIntentConsumed }) => {
   const [activeTab, setActiveTab] = useState<TabType>('transactions');
 
   const stationId = selectedStation?.id ?? null;
@@ -121,6 +124,32 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, d
 
   const loading = purchasesQ.isLoading || statusQ.isLoading || suppliersActiveQ.isLoading || productsQ.isLoading;
   const error = (purchasesQ.error || statusQ.error || suppliersActiveQ.error) as Error | null;
+
+  // Business-date bucketing for purchase KPIs + a purchases search filter.
+  const stationSettings: any = (selectedStation as any)?.settings || {};
+  const todayIso = resolveBusinessDate({ timeZone: stationSettings.timezone, dayStartsAt: stationSettings.business_day_starts_at });
+  const monthPrefix = todayIso.slice(0, 7);
+  const [purchaseSearch, setPurchaseSearch] = useState('');
+  const purchaseKpis = useMemo(() => {
+    let today = 0, month = 0, todayCount = 0;
+    for (const p of purchases) {
+      const amt = Number(p.amount || 0);
+      const bd: string = p.businessDate || '';
+      if (bd === todayIso) { today += amt; todayCount += 1; }
+      if (bd.startsWith(monthPrefix)) month += amt;
+    }
+    const payables = allSuppliers.reduce((s: number, x: any) => s + Math.max(0, Number(x.currentBalance || 0)), 0);
+    return { today, month, todayCount, payables };
+  }, [purchases, allSuppliers, todayIso, monthPrefix]);
+  const filteredPurchases = useMemo(() => {
+    const q = purchaseSearch.trim().toLowerCase();
+    if (!q) return purchases;
+    return purchases.filter((p: any) =>
+      (p.supplierName || '').toLowerCase().includes(q) ||
+      (p.invoiceNumber || '').toLowerCase().includes(q) ||
+      (p.documentNumber || '').toLowerCase().includes(q) ||
+      (p.notes || '').toLowerCase().includes(q));
+  }, [purchases, purchaseSearch]);
 
   const [purchaseDefaults, setPurchaseDefaults] = useState<Partial<PurchaseEntryFormValues>>({});
 
@@ -436,6 +465,23 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, d
     }
   };
 
+  // --- deep-link intent (from global search) ---
+  const handledIntentRef = useRef<NavIntent | null>(null);
+  useEffect(() => {
+    if (!intent || handledIntentRef.current === intent) return;
+    if (intent.focusSupplierId && suppliersAllQ.isLoading) return;
+    handledIntentRef.current = intent;
+    if (intent.focusSupplierId) {
+      const sup = allSuppliers.find((s: any) => s.id === intent.focusSupplierId);
+      if (sup) {
+        setActiveTab('registry');
+        void openLedgerDrawer(sup);
+      }
+    }
+    onIntentConsumed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [intent, allSuppliers, suppliersAllQ.isLoading]);
+
   if (!selectedStation) {
     return (
       <div style={{ color: 'var(--text-muted)', padding: '24px', fontFamily: 'var(--font-sans)' }}>
@@ -471,14 +517,10 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, d
       actions={
         <>
           {activeTab === 'transactions' && (
-            <button onClick={() => openPurchaseDrawer()} className="btn btn-primary btn-md">
-              <Plus size={14} /> Add Purchase
-            </button>
+            <Button variant="primary" size="sm" leftIcon={<Plus />} onClick={() => openPurchaseDrawer()}>Add Purchase</Button>
           )}
           {activeTab === 'registry' && (
-            <button onClick={openCreateDrawer} className="btn btn-primary btn-md">
-              <Plus size={14} /> Add Supplier
-            </button>
+            <Button variant="primary" size="sm" leftIcon={<Plus />} onClick={openCreateDrawer}>Add Supplier</Button>
           )}
         </>
       }
@@ -500,35 +542,56 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, d
       <div>
         {activeTab === 'transactions' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div style={{
-              backgroundColor: 'var(--state-info-bg)',
-              color: 'var(--state-info-fg)',
-              padding: '12px 14px',
-              borderRadius: 'var(--radius-card)',
-              fontSize: '12px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              border: '1px solid var(--border-soft)'
-            }}>
-              <Info size={14} />
-              <span>Purchases post to the selected date — no open shift required. Each raises a supplier payable; record the payment separately.</span>
-            </div>
+            <KpiStrip columns={4}>
+              <KpiTile dot="brand" label="Purchased Today" value={inr(purchaseKpis.today)} hint={`${purchaseKpis.todayCount} ${purchaseKpis.todayCount === 1 ? 'invoice' : 'invoices'}`} />
+              <KpiTile dot="info" label="Purchased This Month" value={inr(purchaseKpis.month)} />
+              <KpiTile dot="warning" valueTone="warning" label="Total Payables" value={inr(purchaseKpis.payables)} hint="Supplier dues" />
+              <KpiTile dot="neutral" label="Suppliers" value={String(allSuppliers.length)} />
+            </KpiStrip>
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)' }}>Purchase Records</h3>
-              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Total Invoices: <strong>{purchases.length}</strong></span>
-            </div>
-            <DataTable
-              columns={purchaseColumns}
-              data={purchases}
-              isLoading={loading}
-              error={error}
-              emptyMessage="No purchases logged yet."
-              getRowId={(r: any) => r.documentNumber || r.id}
-              initialSorting={[{ id: 'businessDate', desc: true }]}
-              onRowClick={(r: any) => openPurchaseDetail(r)}
-            />
+            <Panel
+              flush
+              title="Purchases"
+              action={
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{ position: 'relative' }}>
+                    <Search size={13} style={{ position: 'absolute', left: '8px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                    <input
+                      value={purchaseSearch}
+                      onChange={(e) => setPurchaseSearch(e.target.value)}
+                      placeholder="Search supplier / invoice…"
+                      style={{ height: '28px', padding: '0 8px 0 26px', width: '220px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', fontSize: '12px', background: 'var(--bg-surface)' }}
+                    />
+                  </div>
+                  <button type="button" aria-label="About purchases" title="Purchases post to the selected date — no open shift required. Each raises a supplier payable; pay immediately via 'Record payment now' in the purchase form, or later from the supplier statement." style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', height: '28px', width: '22px', marginLeft: '2px', border: 'none', background: 'transparent', color: 'var(--text-faint)', cursor: 'help' }}>
+                    <HelpCircle size={15} />
+                  </button>
+                </div>
+              }
+            >
+              {loading ? (
+                <div style={{ padding: '16px' }}><LoadingSpinner text="Loading purchases…" /></div>
+              ) : filteredPurchases.length === 0 ? (
+                <div style={{ padding: '12px' }}>
+                  <EmptyState
+                    compact
+                    icon={<ShoppingCart />}
+                    title={purchases.length === 0 ? 'No purchases yet' : 'No matching purchases'}
+                    description={purchases.length === 0 ? 'Record a purchase to see it here.' : 'Try a different search term.'}
+                  />
+                </div>
+              ) : (
+                <DataTable
+                  bare
+                  columns={purchaseColumns}
+                  data={filteredPurchases}
+                  emptyMessage="No purchases logged yet."
+                  getRowId={(r: any) => r.documentNumber || r.id}
+                  initialSorting={[{ id: 'businessDate', desc: true }]}
+                  onRowClick={(r: any) => openPurchaseDetail(r)}
+                />
+              )}
+            </Panel>
           </div>
         )}
 

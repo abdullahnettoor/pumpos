@@ -153,14 +153,25 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
       });
     }
 
-    // Suppliers
+    // Suppliers (top by outstanding). Selecting one deep-links to the supplier
+    // registry and opens that supplier's statement drawer.
     if (canSeeFinancials && (suppliers || []).length) {
-      const rows = [...(suppliers as any[])].slice(0, 30);
+      const rows = [...(suppliers as any[])]
+        .sort((a, b) => Number(b.currentBalance || 0) - Number(a.currentBalance || 0))
+        .slice(0, 40);
       groups.push({
         heading: 'Suppliers',
-        items: rows.map<CommandItem>((s) => ({
-          id: `sup-${s.id}`, label: s.name, icon: <Truck />, meta: s.code ?? '', keywords: [s.code, s.phone].filter(Boolean), onSelect: () => onNavigate('/purchases'),
-        })),
+        items: rows.map<CommandItem>((s) => {
+          const bal = Number(s.currentBalance || 0);
+          return {
+            id: `sup-${s.id}`,
+            label: s.name,
+            icon: <Truck />,
+            meta: bal > 0 ? `${inr(bal)} due` : '',
+            keywords: [s.phone, s.metadata?.gstin, s.metadata?.tradeName].filter(Boolean),
+            onSelect: () => onNavigate('/purchases', { focusSupplierId: s.id, open: 'supplier-statement' }),
+          };
+        }),
       });
     }
 

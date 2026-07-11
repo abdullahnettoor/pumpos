@@ -428,7 +428,13 @@ const App: React.FC = () => {
       case '/expenses':
         return <ExpensesList selectedStation={selectedStation} />;
       case '/purchases':
-        return <PurchasesList selectedStation={selectedStation} />;
+        return (
+          <PurchasesList
+            selectedStation={selectedStation}
+            intent={navIntent}
+            onIntentConsumed={() => setNavIntent(null)}
+          />
+        );
       case '/inventory':
         return <InventoryList selectedStation={selectedStation} />;
       case '/pricing':

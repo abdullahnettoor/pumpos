@@ -19,8 +19,10 @@ export interface NavItem {
 export interface NavIntent {
   /** Focus a specific customer (opens their statement drawer). */
   focusCustomerId?: string;
+  /** Focus a specific supplier (opens their statement drawer). */
+  focusSupplierId?: string;
   /** Open a drawer immediately on arrival at the destination page. */
-  open?: 'customer-statement' | 'new-customer' | 'new-collection';
+  open?: 'customer-statement' | 'new-customer' | 'new-collection' | 'supplier-statement';
 }
 
 export interface AppShellProps {
