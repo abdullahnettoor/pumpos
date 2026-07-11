@@ -1,5 +1,7 @@
 import React from 'react';
-import { FileText, Fuel, Info, Play, CreditCard } from 'lucide-react';
+import { FileText, Info, Play } from 'lucide-react';
+import { Panel, Button, DateText } from '../../pump-ds/index.js';
+import { Field, Select, NumberInput, DateField } from '../primitives/Field.js';
 
 interface OpenShiftFormProps {
   lastShiftSummary: any;
@@ -25,6 +27,8 @@ interface OpenShiftFormProps {
   onSubmit: (e: React.FormEvent) => void;
   onViewLastShiftSummary: () => void;
 }
+
+const sectionNote: React.CSSProperties = { fontSize: '12px', color: 'var(--text-muted)', marginBottom: '12px' };
 
 /**
  * Idle-state form for opening a new operational shift: template + opening cash float,
@@ -56,279 +60,120 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
   onViewLastShiftSummary,
 }) => {
   return (
-    <>
-      {/* Workspace Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
         <div>
-          <h1 style={{ fontSize: '20px', fontWeight: 600, color: 'var(--text-strong)' }}>
-            No Active Operational Shift
-          </h1>
+          <h1 style={{ fontSize: '20px', fontWeight: 600, color: 'var(--text-strong)' }}>No active shift</h1>
           <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '2px' }}>
-            Open a shift template to enable nozzle readings entry and daily cash reconciliation.
+            Open a shift template to enable nozzle readings and daily cash reconciliation.
           </p>
         </div>
         {lastShiftSummary && (
-          <button
-            className="btn btn-secondary btn-sm"
-            onClick={onViewLastShiftSummary}
-          >
-            <FileText size={13} /> View Last Shift Summary
-          </button>
+          <Button variant="secondary" size="sm" leftIcon={<FileText />} onClick={onViewLastShiftSummary}>
+            Last shift summary
+          </Button>
         )}
       </div>
 
       {lastShiftSummary && (
-        <div className="card" style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-strong)' }}>
-            Most Recent Closed Shift Snapshot
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '10px', fontSize: '12px', color: 'var(--text-muted)' }}>
+        <Panel title="Most recent closed shift">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px', fontSize: '12px', color: 'var(--text-muted)' }}>
             <span>Shift ID: <strong style={{ color: 'var(--text-default)', fontFamily: 'var(--font-mono)' }}>{lastShiftSummary.shiftId?.slice(0, 8) || lastShiftSummary.snapshotData?.shiftId?.slice(0, 8) || '—'}</strong></span>
             <span>Template: <strong style={{ color: 'var(--text-default)' }}>{lastShiftSummary.snapshotData?.templateName || lastShiftSummary.templateName || '—'}</strong></span>
-            <span>Closed At: <strong style={{ color: 'var(--text-default)' }}>{(lastShiftSummary.snapshotData?.closedAt || lastShiftSummary.closedAt) ? new Date(lastShiftSummary.snapshotData?.closedAt || lastShiftSummary.closedAt).toLocaleString('en-IN') : '—'}</strong></span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>Closed: <DateText value={lastShiftSummary.snapshotData?.closedAt || lastShiftSummary.closedAt} variant="datetime" tone="strong" /></span>
           </div>
-        </div>
+        </Panel>
       )}
 
-      {/* Main Open Shift Form */}
-      <form onSubmit={onSubmit} className="card card-default" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-        {/* Shift details row */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '20px' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-default)' }}>
-              Select Shift Template:
-            </label>
-            <select
-              value={selectedTemplateId}
-              onChange={(e) => onTemplateChange(e.target.value)}
-              required
-              style={{
-                height: '32px',
-                padding: '0 10px',
-                border: '1px solid var(--border-strong)',
-                borderRadius: 'var(--radius-input)',
-                fontSize: '13px',
-                color: 'var(--text-strong)',
-                backgroundColor: 'var(--bg-surface)'
-              }}
-            >
-              {templates && templates.map((t: any) => (
-                <option key={t.id} value={t.id}>
-                  {t.name} ({t.startTime} - {t.endTime})
-                </option>
-              ))}
-            </select>
+      {/* Main open-shift form */}
+      <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <Panel title="Shift details">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
+            <Field label="Shift template">
+              <Select value={selectedTemplateId} onChange={(e) => onTemplateChange(e.target.value)} required>
+                {templates && templates.map((t: any) => (
+                  <option key={t.id} value={t.id}>{t.name} ({t.startTime} - {t.endTime})</option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Business date" hint="defaults to today; back-date for an earlier day">
+              <DateField value={businessDate} max={new Date().toISOString().slice(0, 10)} onChange={(e) => onBusinessDateChange(e.target.value)} required />
+            </Field>
+            <Field label="Opening cash float (₹)">
+              <NumberInput min="0" value={openingCash} onChange={(e) => onOpeningCashChange(Number(e.target.value))} required />
+            </Field>
           </div>
+        </Panel>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-default)' }}>
-              Business Date:
-            </label>
-            <input
-              type="date"
-              value={businessDate}
-              max={new Date().toISOString().slice(0, 10)}
-              onChange={(e) => onBusinessDateChange(e.target.value)}
-              required
-              style={{
-                height: '30px',
-                padding: '0 10px',
-                border: '1px solid var(--border-strong)',
-                borderRadius: 'var(--radius-input)',
-                fontFamily: 'var(--font-mono)',
-                fontSize: '13px',
-                color: 'var(--text-strong)',
-                backgroundColor: 'var(--bg-surface)'
-              }}
-            />
-            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-              Defaults to today. Back-date if opening for an earlier day.
-            </span>
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-default)' }}>
-              Opening Cash Float Amount (₹):
-            </label>
-            <input
-              type="number"
-              min="0"
-              value={openingCash}
-              onChange={(e) => onOpeningCashChange(Number(e.target.value))}
-              required
-              style={{
-                height: '30px',
-                padding: '0 10px',
-                border: '1px solid var(--border-strong)',
-                borderRadius: 'var(--radius-input)',
-                fontFamily: 'var(--font-mono)',
-                fontSize: '13px'
-              }}
-            />
-          </div>
-        </div>
-
-        {/* Optional Staff Assignment sub-form */}
         {dispensers && dispensers.length > 0 && (
-          <div style={{
-            borderTop: '1px solid var(--border-soft)',
-            paddingTop: '16px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '12px'
-          }}>
-            <h3 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-strong)' }}>
-              Staff Assignment to Dispenser Units (Optional)
-            </h3>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '16px' }}>
+          <Panel title="Staff assignment">
+            <p style={sectionNote}>Assign attendants to dispenser units (optional).</p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '14px' }}>
               {dispensers.map((du: any) => {
                 const assigned = staffAssignments.find((a) => a.duId === du.id);
                 return (
-                  <div key={du.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
-                    <span style={{ fontSize: '13px', color: 'var(--text-default)' }}>
-                      <Fuel size={13} style={{ marginRight: '6px', verticalAlign: 'middle', display: 'inline' }} /> Dispenser <strong>{du.code || du.name}</strong>
-                    </span>
-                    <select
-                      value={assigned?.userId ?? ''}
-                      onChange={(e) => onStaffAssignmentChange(du.id, e.target.value)}
-                      style={{
-                        height: '28px',
-                        padding: '0 8px',
-                        border: '1px solid var(--border-strong)',
-                        borderRadius: 'var(--radius-input)',
-                        fontSize: '12px',
-                        color: 'var(--text-strong)'
-                      }}
-                    >
-                      <option value="">-- Unassigned --</option>
+                  <Field key={du.id} label={`Dispenser ${du.code || du.name}`}>
+                    <Select value={assigned?.userId ?? ''} onChange={(e) => onStaffAssignmentChange(du.id, e.target.value)}>
+                      <option value="">— Unassigned —</option>
                       {staff && staff.map((u: any) => (
-                        <option key={u.id} value={u.id}>
-                          {u.fullName} {!u.email ? ' (Attendant)' : ''}
-                        </option>
+                        <option key={u.id} value={u.id}>{u.fullName}{!u.email ? ' (Attendant)' : ''}</option>
                       ))}
-                    </select>
-                  </div>
+                    </Select>
+                  </Field>
                 );
               })}
             </div>
-          </div>
+          </Panel>
         )}
 
-        {/* Optional Payment Terminal (POS) assignment to dispenser units */}
         {terminals && terminals.length > 0 && (
-          <div style={{
-            borderTop: '1px solid var(--border-soft)',
-            paddingTop: '16px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '12px'
-          }}>
-            <h3 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-strong)' }}>
-              Payment Terminal (POS) Assignment (Optional)
-            </h3>
-            <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '-6px' }}>
-              Assign each POS machine to a dispenser so attendants can declare its card/UPI batch at handover. Leave as shift-wide if a terminal is shared across pumps.
-            </p>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '16px' }}>
+          <Panel title="Payment terminals (POS)">
+            <p style={sectionNote}>Assign each POS to a dispenser so attendants can declare its card/UPI batch at handover; leave shift-wide if shared across pumps.</p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '14px' }}>
               {terminals.map((term: any) => {
                 const assigned = terminalAssignments.find((t) => t.terminalId === term.id);
                 const rails = [term.supportsCard ? 'Card' : null, term.supportsUpi ? 'UPI' : null].filter(Boolean).join(' + ');
                 return (
-                  <div key={term.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
-                    <span style={{ fontSize: '13px', color: 'var(--text-default)' }}>
-                      <CreditCard size={13} style={{ marginRight: '6px', verticalAlign: 'middle', display: 'inline' }} /> <strong>{term.label}</strong>
-                      {rails && <span style={{ color: 'var(--text-faint)', fontSize: '11px', marginLeft: '4px' }}>({rails})</span>}
-                    </span>
-                    <select
-                      value={assigned?.duId ?? ''}
-                      onChange={(e) => onTerminalAssignmentChange(term.id, e.target.value)}
-                      style={{
-                        height: '28px',
-                        padding: '0 8px',
-                        border: '1px solid var(--border-strong)',
-                        borderRadius: 'var(--radius-input)',
-                        fontSize: '12px',
-                        color: 'var(--text-strong)'
-                      }}
-                    >
-                      <option value="">-- Shift-wide (any pump) --</option>
+                  <Field key={term.id} label={`${term.label}${rails ? ` (${rails})` : ''}`}>
+                    <Select value={assigned?.duId ?? ''} onChange={(e) => onTerminalAssignmentChange(term.id, e.target.value)}>
+                      <option value="">— Shift-wide (any pump) —</option>
                       {dispensers && dispensers.map((du: any) => (
-                        <option key={du.id} value={du.id}>
-                          Dispenser {du.code || du.name}
-                        </option>
+                        <option key={du.id} value={du.id}>Dispenser {du.code || du.name}</option>
                       ))}
-                    </select>
-                  </div>
+                    </Select>
+                  </Field>
                 );
               })}
             </div>
-          </div>
+          </Panel>
         )}
 
-        {/* Manual Nozzle Readings override only for first-time / no-history runs */}
         {!lastShift && nozzles && nozzles.length > 0 && (
-          <div style={{
-            borderTop: '1px solid var(--border-soft)',
-            paddingTop: '16px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '12px'
-          }}>
-            <div style={{
-              backgroundColor: 'var(--bg-surface-alt)',
-              padding: '12px',
-              borderRadius: 'var(--radius-input)',
-              fontSize: '12px',
-              color: 'var(--text-muted)',
-              border: '1px solid var(--border-soft)'
-            }}>
-              <Info size={14} style={{ color: 'var(--brand-primary)', marginRight: '6px', verticalAlign: 'middle', display: 'inline' }} /> <strong>First Operational Shift:</strong> Since there is no previous shift history for this station, please specify the initial opening readings for all nozzles.
+          <Panel title="Opening nozzle readings">
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', backgroundColor: 'var(--state-info-bg)', color: 'var(--state-info-fg)', padding: '10px 12px', borderRadius: 'var(--radius-input)', fontSize: '12px', marginBottom: '12px' }}>
+              <Info size={14} style={{ flexShrink: 0, marginTop: '1px' }} />
+              <span><strong>First operational shift:</strong> no previous history for this station, so enter the initial opening readings for all nozzles.</span>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px' }}>
               {nozzles.map((nz: any) => {
                 const initial = initialReadings.find((r) => r.nozzleId === nz.id);
                 return (
-                  <div key={nz.id} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <label style={{ fontSize: '12px', color: 'var(--text-default)' }}>
-                      Nozzle {nz.name} ({nz.productCode})
-                    </label>
-                    <input
-                      type="number"
-                      step="0.001"
-                      min="0"
-                      value={initial?.openingReading ?? 0}
-                      onChange={(e) => onInitialReadingChange(nz.id, Number(e.target.value))}
-                      style={{
-                        height: '26px',
-                        padding: '0 8px',
-                        border: '1px solid var(--border-strong)',
-                        borderRadius: 'var(--radius-input)',
-                        fontFamily: 'var(--font-mono)',
-                        fontSize: '12px'
-                      }}
-                    />
-                  </div>
+                  <Field key={nz.id} label={`Nozzle ${nz.name} (${nz.productCode})`}>
+                    <NumberInput step="0.001" min="0" value={initial?.openingReading ?? 0} onChange={(e) => onInitialReadingChange(nz.id, Number(e.target.value))} />
+                  </Field>
                 );
               })}
             </div>
-          </div>
+          </Panel>
         )}
 
-        {/* Submit */}
-        <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: '16px', display: 'flex', justifyContent: 'flex-end' }}>
-          <button
-            type="submit"
-            className="btn btn-primary btn-md"
-            disabled={isOpening}
-          >
-            {isOpening ? 'Opening Shift...' : (
-              <>
-                <Play size={13} style={{ fill: 'currentColor', marginRight: '6px' }} /> Start Shift Operations
-              </>
-            )}
-          </button>
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <Button type="submit" variant="primary" size="md" loading={isOpening} leftIcon={<Play style={{ fill: 'currentColor' }} />}>
+            Start Shift Operations
+          </Button>
         </div>
       </form>
-    </>
+    </div>
   );
 };
