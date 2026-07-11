@@ -3,6 +3,8 @@ import { ArrowLeft, Printer, Download, AlertTriangle } from 'lucide-react';
 import { exportReactPdf } from '../services/exportPdf.js';
 import { DEFAULT_DSSR_CONFIG, paperFromStation } from '../services/reports/reportConfig.js';
 import { letterheadFromStation } from '../services/reports/letterhead.js';
+import { Button } from '../pump-ds/index.js';
+import { formatDateTime } from '../utils/format.js';
 
 interface DailyDssrViewProps {
   dailyDssr: any;
@@ -56,24 +58,26 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
           paddingBottom: '16px',
         }}
       >
-        <button className="btn btn-secondary btn-sm" onClick={onBack}>
-          <ArrowLeft size={13} /> Back to Reports
-        </button>
+        <Button variant="secondary" size="sm" leftIcon={<ArrowLeft />} onClick={onBack}>
+          Back to Reports
+        </Button>
 
-        <button className="btn btn-secondary btn-sm" onClick={async () => {
-          const [{ exportReactPdf }, doc] = await Promise.all([
-            import('../services/exportPdf.js'),
-            import('../services/reports/dssrDoc.js'),
-          ]);
-          const sections = station?.settings?.report_config?.dssr?.length ? station.settings.report_config.dssr : DEFAULT_DSSR_CONFIG.sections;
-          const config = { ...DEFAULT_DSSR_CONFIG, sections: sections as any, stationName: station?.name, letterhead: letterheadFromStation(station), paper: paperFromStation(station) };
-          await exportReactPdf(React.createElement(doc.DssrDoc, { dssr: dailyDssr, config }), `Daily_DSSR_${dailyDssr?.businessDate || ''}`);
-        }}>
-          <Download size={13} /> Save PDF
-        </button>
-        <button className="btn btn-secondary btn-sm" onClick={() => window.print()}>
-          <Printer size={13} /> Print Daily DSSR
-        </button>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <Button variant="secondary" size="sm" leftIcon={<Download />} onClick={async () => {
+            const [{ exportReactPdf }, doc] = await Promise.all([
+              import('../services/exportPdf.js'),
+              import('../services/reports/dssrDoc.js'),
+            ]);
+            const sections = station?.settings?.report_config?.dssr?.length ? station.settings.report_config.dssr : DEFAULT_DSSR_CONFIG.sections;
+            const config = { ...DEFAULT_DSSR_CONFIG, sections: sections as any, stationName: station?.name, letterhead: letterheadFromStation(station), paper: paperFromStation(station) };
+            await exportReactPdf(React.createElement(doc.DssrDoc, { dssr: dailyDssr, config }), `Daily_DSSR_${dailyDssr?.businessDate || ''}`);
+          }}>
+            Save PDF
+          </Button>
+          <Button variant="secondary" size="sm" leftIcon={<Printer />} onClick={() => window.print()}>
+            Print Daily DSSR
+          </Button>
+        </div>
       </div>
 
       <div style={{ textAlign: 'center', marginBottom: '28px' }}>
@@ -89,7 +93,7 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
           Daily Sales Summary Record
         </h2>
         <p style={{ color: 'var(--text-muted)', fontSize: '12px', marginTop: '4px' }}>
-          Business Date {dailyDssr.businessDate} • Generated {new Date(dailyDssr.generatedAt).toLocaleString('en-IN')}
+          Business Date {dailyDssr.businessDate} • Generated {formatDateTime(dailyDssr.generatedAt)}
         </p>
       </div>
 

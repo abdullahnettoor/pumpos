@@ -1,11 +1,11 @@
 import React, { useMemo, useState } from 'react';
 import { useFinanceMovements } from '../../query/hooks.js';
-import { KpiCard } from '../primitives/KpiCard.js';
-import { DateRangeField, computeRange } from '../primitives/DateRangeField.js';
+import { computeRange } from '../primitives/DateRangeField.js';
 import type { DateRange } from '../primitives/DateRangeField.js';
 import { Segmented } from '../primitives/Segmented.js';
 import { inr } from '../../utils/format.js';
-import { DateText } from '../../pump-ds/index.js';
+import { KpiStrip, KpiTile, Panel, DateText } from '../../pump-ds/index.js';
+import { ReportRangeBar } from './ReportRangeBar.js';
 
 export interface CashBankLedgerProps {
   selectedStation: any | null;
@@ -101,30 +101,34 @@ export const CashBankLedger: React.FC<CashBankLedgerProps> = ({ selectedStation 
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-      <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end', flexWrap: 'wrap', justifyContent: 'space-between' }}>
-        <DateRangeField value={range} onChange={setRange} clock={clock} />
-        <div style={{ minWidth: 200 }}>
-          <Segmented
-            options={[{ value: 'Cash', label: 'Cash' }, { value: 'Bank', label: 'Bank' }]}
-            value={account}
-            onChange={(v) => setAccount(v as 'Cash' | 'Bank')}
-            aria-label="Account"
-          />
-        </div>
-      </div>
+      <ReportRangeBar
+        value={range}
+        onChange={setRange}
+        clock={clock}
+        actions={
+          <div style={{ minWidth: 200 }}>
+            <Segmented
+              options={[{ value: 'Cash', label: 'Cash' }, { value: 'Bank', label: 'Bank' }]}
+              value={account}
+              onChange={(v) => setAccount(v as 'Cash' | 'Bank')}
+              aria-label="Account"
+            />
+          </div>
+        }
+      />
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px' }}>
-        <KpiCard label="Opening Balance" value={inr(openingBalance)} tone={openingBalance < 0 ? 'danger' : 'default'} />
-        <KpiCard label="Money In" value={inr(totals.moneyIn)} tone="success" />
-        <KpiCard label="Money Out" value={inr(totals.moneyOut)} tone="danger" />
-        <KpiCard label="Closing Balance" value={inr(totals.closing)} tone={totals.closing < 0 ? 'danger' : 'default'} />
-      </div>
+      <KpiStrip columns="auto">
+        <KpiTile dot={openingBalance < 0 ? 'danger' : 'brand'} valueTone={openingBalance < 0 ? 'danger' : undefined} label="Opening Balance" value={inr(openingBalance)} />
+        <KpiTile dot="success" valueTone="success" label="Money In" value={inr(totals.moneyIn)} />
+        <KpiTile dot="danger" valueTone="danger" label="Money Out" value={inr(totals.moneyOut)} />
+        <KpiTile dot={totals.closing < 0 ? 'danger' : 'brand'} valueTone={totals.closing < 0 ? 'danger' : undefined} label="Closing Balance" value={inr(totals.closing)} />
+      </KpiStrip>
 
       <div style={{ fontSize: '11px', color: 'var(--text-faint)' }}>
         Live {account.toLowerCase()} movements from the money ledger (shift sales, collections, expenses, transfers &amp; settlements). Opening balance carries the closing position from before the selected range; closing = opening + in − out.
       </div>
 
-      <div className="card" style={{ overflow: 'hidden' }}>
+      <Panel flush title={`${account} ledger`}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
           <thead>
             <tr style={{ backgroundColor: 'var(--bg-surface-alt)', textAlign: 'left' }}>
@@ -161,7 +165,7 @@ export const CashBankLedger: React.FC<CashBankLedgerProps> = ({ selectedStation 
             )}
           </tbody>
         </table>
-      </div>
+      </Panel>
     </div>
   );
 };

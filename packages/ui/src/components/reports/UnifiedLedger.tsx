@@ -9,13 +9,13 @@ import {
 import { LedgerView } from '../ledger/LedgerView.js';
 import { computeLedgerRows } from '../ledger/LedgerView.js';
 import type { LedgerResolved } from '../ledger/LedgerView.js';
-import { KpiCard } from '../primitives/KpiCard.js';
 import type { KpiTone } from '../primitives/KpiCard.js';
 import { Combobox } from '../primitives/Combobox.js';
 import { DateRangeField, computeRange } from '../primitives/DateRangeField.js';
 import type { DateRange } from '../primitives/DateRangeField.js';
 import { inr, formatDate } from '../../utils/format.js';
-import { Download } from 'lucide-react';
+import { KpiStrip, KpiTile, Panel, Button, EmptyState } from '../../pump-ds/index.js';
+import { BookOpen, Download } from 'lucide-react';
 
 export interface UnifiedLedgerProps {
   selectedStation: any | null;
@@ -337,44 +337,44 @@ export const UnifiedLedger: React.FC<UnifiedLedgerProps> = ({ selectedStation })
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
       {/* Query bar */}
-      <div className="card" style={{ padding: '16px', display: 'flex', gap: '12px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
-        <div style={{ minWidth: 180 }}>
-          <label className="field-label">Ledger</label>
-          <Combobox
-            options={TYPE_OPTIONS}
-            value={type}
-            onChange={(v) => {
-              setType(v as EntityType);
-              setEntityId('');
-            }}
-            placeholder="Select ledger…"
-          />
-        </div>
-
-        {needsEntity && (
-          <div style={{ minWidth: 240, flex: 1, maxWidth: 320 }}>
-            <label className="field-label">{type === 'customer' ? 'Customer' : 'Supplier'}</label>
+      <Panel>
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+          <div style={{ minWidth: 180 }}>
+            <label className="field-label">Ledger</label>
             <Combobox
-              options={entityOptions}
-              value={entityId}
-              onChange={setEntityId}
-              placeholder={`Select ${type}…`}
-              emptyMessage={`No ${type}s found`}
+              options={TYPE_OPTIONS}
+              value={type}
+              onChange={(v) => {
+                setType(v as EntityType);
+                setEntityId('');
+              }}
+              placeholder="Select ledger…"
             />
           </div>
-        )}
 
-        <DateRangeField value={range} onChange={setRange} clock={clock} />
+          {needsEntity && (
+            <div style={{ minWidth: 240, flex: 1, maxWidth: 320 }}>
+              <label className="field-label">{type === 'customer' ? 'Customer' : 'Supplier'}</label>
+              <Combobox
+                options={entityOptions}
+                value={entityId}
+                onChange={setEntityId}
+                placeholder={`Select ${type}…`}
+                emptyMessage={`No ${type}s found`}
+              />
+            </div>
+          )}
 
-        <button className="btn btn-primary btn-sm" onClick={submit} disabled={!canSubmit} style={{ height: '32px' }}>
-          View Ledger
-        </button>
-      </div>
+          <DateRangeField value={range} onChange={setRange} clock={clock} size="sm" />
+
+          <Button variant="primary" size="sm" onClick={submit} disabled={!canSubmit}>
+            View Ledger
+          </Button>
+        </div>
+      </Panel>
 
       {!committed ? (
-        <div style={{ padding: '32px', border: '1px dashed var(--border-soft)', borderRadius: 'var(--radius-card)', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>
-          Pick an entity and period, then <strong>View Ledger</strong> to load the statement.
-        </div>
+        <EmptyState compact icon={<BookOpen />} title="Select a ledger" description="Pick an entity and period, then View Ledger to load the statement." />
       ) : (
         <>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', justifyContent: 'space-between' }}>
@@ -386,22 +386,19 @@ export const UnifiedLedger: React.FC<UnifiedLedgerProps> = ({ selectedStation })
                 {fmtDate(committed.from)} — {fmtDate(committed.to)}
               </span>
             </div>
-            <button
-              className="btn btn-secondary btn-sm"
-              onClick={downloadPdf}
-              disabled={downloading || loading || computed.rows.length === 0}
-              style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-            >
-              <Download size={13} />
-              {downloading ? 'Preparing…' : 'Download PDF'}
-            </button>
+            <Button variant="secondary" size="sm" leftIcon={<Download />} onClick={downloadPdf} loading={downloading} disabled={loading || computed.rows.length === 0}>
+              Download PDF
+            </Button>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px' }}>
-            <KpiCard label={resolvedCfg.kpiDebitLabel} value={inr(totals.debit)} tone="default" />
-            <KpiCard label={resolvedCfg.kpiCreditLabel} value={inr(totals.credit)} tone="default" />
-            <KpiCard label={resolvedCfg.balanceLabel} value={inr(totals.net)} tone={resolvedCfg.balanceTone(totals.net)} />
-          </div>
+          <KpiStrip columns="auto">
+            <KpiTile dot="neutral" label={resolvedCfg.kpiDebitLabel} value={inr(totals.debit)} />
+            <KpiTile dot="neutral" label={resolvedCfg.kpiCreditLabel} value={inr(totals.credit)} />
+            {(() => {
+              const bt = resolvedCfg.balanceTone(totals.net);
+              return <KpiTile dot={bt === 'default' ? 'brand' : (bt as any)} valueTone={bt === 'default' ? undefined : (bt as any)} label={resolvedCfg.balanceLabel} value={inr(totals.net)} />;
+            })()}
+          </KpiStrip>
 
           <div style={{ fontSize: '11px', color: 'var(--text-faint)' }}>{resolvedCfg.caption}</div>
 

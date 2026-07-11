@@ -1,15 +1,17 @@
 import React, { useMemo, useState } from 'react';
+import type { ColumnDef } from '@tanstack/react-table';
 import { useSales, useInvoices, queryKeys } from '../../query/hooks.js';
 import { useQueryClient } from '@tanstack/react-query';
 import { CloudTransactionService } from '../../services/cloud.js';
 import { useToast } from '../primitives/ToastProvider.js';
-import { KpiCard } from '../primitives/KpiCard.js';
-import { DateRangeField, computeRange } from '../primitives/DateRangeField.js';
+import { DataTable } from '../primitives/DataTable.js';
+import { computeRange } from '../primitives/DateRangeField.js';
 import type { DateRange } from '../primitives/DateRangeField.js';
 import { paperFromStation } from '../../services/reports/reportConfig.js';
 import { letterheadFromStation } from '../../services/reports/letterhead.js';
 import { inr } from '../../utils/format.js';
-import { DateText } from '../../pump-ds/index.js';
+import { KpiStrip, KpiTile, Panel, Button, EmptyState, DateText } from '../../pump-ds/index.js';
+import { ReportRangeBar } from './ReportRangeBar.js';
 import { FileText, Download } from 'lucide-react';
 
 const txService = new CloudTransactionService();
@@ -75,63 +77,59 @@ export const InvoicesPanel: React.FC<InvoicesPanelProps> = ({ selectedStation, u
     }
   };
 
+  const columns = useMemo<ColumnDef<any, any>[]>(() => [
+    { accessorKey: 'businessDate', header: 'Date', cell: ({ getValue }) => <DateText value={getValue() as string} tone="muted" /> },
+    { accessorKey: 'customerName', header: 'Customer', cell: ({ getValue }) => (getValue() ? <span style={{ color: 'var(--text-strong)' }}>{getValue() as string}</span> : <span style={{ color: 'var(--text-faint)' }}>Walk-in</span>) },
+    { id: 'sale', header: 'Sale', cell: ({ row }) => <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{row.original.documentNumber || row.original.saleType}</span> },
+    { accessorKey: 'totalAmount', header: 'Amount', cell: ({ getValue }) => <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-strong)' }}>{inr(getValue())}</span> },
+    { accessorKey: 'invoiceNumber', header: 'Invoice', cell: ({ getValue }) => <span style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: getValue() ? 'var(--state-success-fg)' : 'var(--text-faint)' }}>{(getValue() as string) || '—'}</span> },
+    {
+      id: 'action',
+      header: '',
+      cell: ({ row }) => {
+        const r = row.original;
+        return (
+          <Button variant="secondary" size="xs" leftIcon={r.invoiceNumber ? <Download /> : <FileText />} loading={busyId === r.id} disabled={busyId === r.id || (!canIssue && !r.invoiceNumber)} onClick={() => handleInvoice(r.id)}>
+            {r.invoiceNumber ? 'PDF' : 'Issue'}
+          </Button>
+        );
+      },
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [busyId, canIssue, range.from, range.to]);
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-      <DateRangeField value={range} onChange={setRange} clock={clock} />
+      <ReportRangeBar
+        value={range}
+        onChange={setRange}
+        clock={clock}
+        note="Non-fuel sales only — fuel is VAT (outside GST). Issuing assigns a gapless GST invoice number and downloads the PDF."
+      />
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px' }}>
-        <KpiCard label="Merchandise Sales" value={inr(kpis.total)} />
-        <KpiCard label="Invoiced" value={kpis.invoiced} tone="success" />
-        <KpiCard label="Not Invoiced" value={kpis.pending} tone={kpis.pending > 0 ? 'warning' : 'default'} />
-      </div>
+      <KpiStrip columns="auto">
+        <KpiTile dot="brand" label="Merchandise Sales" value={inr(kpis.total)} />
+        <KpiTile dot="success" valueTone="success" label="Invoiced" value={String(kpis.invoiced)} />
+        <KpiTile dot={kpis.pending > 0 ? 'warning' : 'success'} valueTone={kpis.pending > 0 ? 'warning' : undefined} label="Not Invoiced" value={String(kpis.pending)} />
+      </KpiStrip>
 
-      <div style={{ fontSize: '11px', color: 'var(--text-faint)' }}>
-        Non-fuel sales only — fuel is VAT (outside GST). Issuing assigns a gapless GST invoice number and downloads the PDF.
-      </div>
-
-      <div className="card" style={{ overflow: 'hidden' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-          <thead>
-            <tr style={{ backgroundColor: 'var(--bg-surface-alt)', textAlign: 'left' }}>
-              {['Date', 'Customer', 'Sale', 'Amount', 'Invoice', ''].map((h, i) => (
-                <th key={h} style={{ padding: '8px 12px', fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', textAlign: i === 3 ? 'right' : 'left' }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {isLoading ? (
-              <tr><td colSpan={6} style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)' }}>Loading…</td></tr>
-            ) : error ? (
-              <tr><td colSpan={6} style={{ padding: '24px', textAlign: 'center', color: 'var(--state-danger-fg)' }}>Failed to load sales.</td></tr>
-            ) : rows.length === 0 ? (
-              <tr><td colSpan={6} style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)' }}>No merchandise sales in this range.</td></tr>
-            ) : (
-              rows.map((r: any) => (
-                <tr key={r.id} style={{ borderTop: '1px solid var(--border-soft)' }}>
-                  <td style={{ padding: '8px 12px', whiteSpace: 'nowrap' }}><DateText value={r.businessDate} tone="muted" /></td>
-                  <td style={{ padding: '8px 12px', color: 'var(--text-strong)' }}>{r.customerName || <span style={{ color: 'var(--text-faint)' }}>Walk-in</span>}</td>
-                  <td style={{ padding: '8px 12px', fontSize: '12px', color: 'var(--text-muted)' }}>{r.documentNumber || r.saleType}</td>
-                  <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--text-strong)' }}>{inr(r.totalAmount)}</td>
-                  <td style={{ padding: '8px 12px', fontFamily: 'var(--font-mono)', fontSize: '12px', color: r.invoiceNumber ? 'var(--state-success-fg)' : 'var(--text-faint)' }}>
-                    {r.invoiceNumber || '—'}
-                  </td>
-                  <td style={{ padding: '8px 12px', textAlign: 'right' }}>
-                    <button
-                      className="btn btn-secondary btn-sm"
-                      disabled={busyId === r.id || (!canIssue && !r.invoiceNumber)}
-                      onClick={() => handleInvoice(r.id)}
-                      style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-                    >
-                      {r.invoiceNumber ? <Download size={13} /> : <FileText size={13} />}
-                      {busyId === r.id ? '…' : r.invoiceNumber ? 'PDF' : 'Issue'}
-                    </button>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+      <Panel flush title="Merchandise invoices">
+        {isLoading ? (
+          <div style={{ padding: '16px' }}><EmptyState compact icon={<FileText />} title="Loading…" description="Fetching merchandise sales." /></div>
+        ) : rows.length === 0 ? (
+          <div style={{ padding: '12px' }}><EmptyState compact icon={<FileText />} title="No merchandise sales" description="No merchandise sales in this date range." /></div>
+        ) : (
+          <DataTable
+            bare
+            columns={columns}
+            data={rows}
+            error={error as Error | null}
+            emptyMessage="No merchandise sales in this range."
+            getRowId={(r: any) => r.id}
+            initialSorting={[{ id: 'businessDate', desc: true }]}
+          />
+        )}
+      </Panel>
     </div>
   );
 };

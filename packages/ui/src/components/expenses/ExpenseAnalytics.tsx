@@ -85,7 +85,7 @@ export const ExpenseAnalytics: React.FC<ExpenseAnalyticsProps> = ({ selectedStat
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-      <DateRangeField value={range} onChange={setRange} clock={clock} />
+      <DateRangeField value={range} onChange={setRange} clock={clock} size="sm" />
 
       <KpiStrip columns="auto">
         <KpiTile dot="danger" valueTone="danger" label="Total Expenses" value={inr(total)} hint={`${range.from} → ${range.to}`} />

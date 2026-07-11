@@ -1,9 +1,12 @@
-import React, { useEffect, useState } from 'react';
+import React, { useMemo, useState } from 'react';
+import type { ColumnDef } from '@tanstack/react-table';
 import { CloudShiftService } from '../services/cloud.js';
+import { useDailyDssrRange } from '../query/hooks.js';
+import { useQueryClient } from '@tanstack/react-query';
 import { DailyDssrView } from './DailyDssrView.js';
-import { LoadingSpinner } from './LoadingSpinner.js';
 import { PageLayout } from './primitives/PageLayout.js';
 import { Tabs } from './primitives/Tabs.js';
+import { DataTable } from './primitives/DataTable.js';
 import { DateField } from './primitives/Field.js';
 import { ExpenseRegister } from './reports/ExpenseRegister.js';
 import { CashBankLedger } from './reports/CashBankLedger.js';
@@ -12,9 +15,17 @@ import { InvoicesPanel } from './reports/InvoicesPanel.js';
 import { ProfitLossView } from './reports/ProfitLossView.js';
 import { inr } from '../utils/format.js';
 import { resolveBusinessDate } from '@pump/shared';
-import { Calendar, RefreshCw, Play, Zap, Receipt, Wallet, BookOpen, FileText, TrendingUp } from 'lucide-react';
+import { Panel, Button, KpiStrip, KpiTile, EmptyState, DateText } from '../pump-ds/index.js';
+import { Play, Zap, Receipt, Wallet, BookOpen, FileText, TrendingUp } from 'lucide-react';
 
 const shiftService = new CloudShiftService();
+
+const dssrColumns: ColumnDef<any, any>[] = [
+  { accessorKey: 'businessDate', header: 'Business Date', cell: ({ getValue }) => <DateText value={getValue() as string} /> },
+  { id: 'shifts', header: 'Shifts', cell: ({ row }) => <span style={{ color: 'var(--text-default)' }}>{Number(row.original.snapshotData?.shiftsIncluded || 0)}</span> },
+  { id: 'volume', header: 'Net Volume Sold', cell: ({ row }) => <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-default)' }}>{Number(row.original.snapshotData?.totalVolumeSold || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} L</span> },
+  { id: 'collections', header: 'Cash Collected', cell: ({ row }) => <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--state-success-fg)' }}>{inr(row.original.snapshotData?.totalCashCollections || 0)}</span> },
+];
 
 interface ReportsOverviewProps {
   selectedStation: any | null;
@@ -27,55 +38,52 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
   selectedStation,
   userRole,
 }) => {
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const qc = useQueryClient();
+  const stationId = selectedStation?.id ?? null;
+  const s = (selectedStation as any)?.settings || {};
+  const clock = { timeZone: s.timezone, dayStartsAt: s.business_day_starts_at };
+
   const [activeTab, setActiveTab] = useState<ReportsTab>('daily-dssr');
-
-  // Daily DSSR states
-  const [dailyDssrList, setDailyDssrList] = useState<any[]>([]);
   const [activeDailyDssr, setActiveDailyDssr] = useState<any | null>(null);
-  const [selectedDate, setSelectedDate] = useState<string>(() => {
-    const s = (selectedStation as any)?.settings || {};
-    return resolveBusinessDate({ timeZone: s.timezone, dayStartsAt: s.business_day_starts_at });
-  });
+  const [selectedDate, setSelectedDate] = useState<string>(() =>
+    resolveBusinessDate({ timeZone: clock.timeZone, dayStartsAt: clock.dayStartsAt }),
+  );
   const [generatingDailyDssr, setGeneratingDailyDssr] = useState(false);
+  const [generateError, setGenerateError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (selectedStation && activeTab === 'daily-dssr') {
-      loadDailyDssrs();
+  // Rolling 30-day window for the DSSR list, anchored to the station's business date.
+  const { from, to } = useMemo(() => {
+    const toD = resolveBusinessDate({ timeZone: clock.timeZone, dayStartsAt: clock.dayStartsAt });
+    const d = new Date(`${toD}T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() - 30);
+    return { from: d.toISOString().split('T')[0], to: toD };
+  }, [clock.timeZone, clock.dayStartsAt]);
+
+  const dssrQ = useDailyDssrRange(stationId, from, to, { enabled: !!stationId && activeTab === 'daily-dssr' } as any);
+  const dssrList = dssrQ.data ?? [];
+
+  const kpis = useMemo(() => {
+    let volume = 0;
+    let cash = 0;
+    for (const d of dssrList) {
+      const x = (d as any).snapshotData || {};
+      volume += Number(x.totalVolumeSold || 0);
+      cash += Number(x.totalCashCollections || 0);
     }
-  }, [selectedStation, activeTab]);
-
-  const loadDailyDssrs = async () => {
-    if (!selectedStation) return;
-    try {
-      setLoading(true);
-      setError(null);
-      const s = (selectedStation as any).settings || {};
-      const to = resolveBusinessDate({ timeZone: s.timezone, dayStartsAt: s.business_day_starts_at });
-      const fromD = new Date(`${to}T00:00:00Z`);
-      fromD.setUTCDate(fromD.getUTCDate() - 30);
-      const from = fromD.toISOString().split('T')[0];
-
-      const list = await shiftService.getDailyDssrRange(selectedStation.id, from, to);
-      setDailyDssrList(list);
-    } catch (err: any) {
-      setError(err.message || 'Failed to load daily DSSR reports');
-    } finally {
-      setLoading(false);
-    }
-  };
+    return { count: dssrList.length, volume, cash };
+  }, [dssrList]);
 
   const handleGenerateDailyDssr = async () => {
     if (!selectedStation || !selectedDate) return;
     try {
       setGeneratingDailyDssr(true);
-      setError(null);
+      setGenerateError(null);
       const result = await shiftService.generateDailyDssr(selectedStation.id, selectedDate);
+      // The list is a cached query — invalidate so the new snapshot appears.
+      qc.invalidateQueries({ queryKey: ['dssr-range'] });
       setActiveDailyDssr(result);
-      await loadDailyDssrs();
     } catch (err: any) {
-      setError(err.message || 'Failed to generate daily DSSR');
+      setGenerateError(err.message || 'Failed to generate daily DSSR');
     } finally {
       setGeneratingDailyDssr(false);
     }
@@ -89,20 +97,13 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
     );
   }
 
-  if (loading && dailyDssrList.length === 0 && activeTab === 'daily-dssr') {
-    return <LoadingSpinner text="Retrieving reports..." />;
-  }
-
   if (activeDailyDssr) {
     return (
       <div className="animate-fade-in">
         <DailyDssrView
           dailyDssr={activeDailyDssr}
           station={selectedStation}
-          onBack={() => {
-            setActiveDailyDssr(null);
-            loadDailyDssrs();
-          }}
+          onBack={() => setActiveDailyDssr(null)}
         />
       </div>
     );
@@ -111,18 +112,7 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
   return (
     <PageLayout
       title="Reports"
-      subtitle="Daily sales summaries and registers. Per-shift summaries are in the Shift tab → History."
-      actions={activeTab === 'daily-dssr' ? (
-        <button
-          className="btn btn-secondary btn-sm"
-          onClick={loadDailyDssrs}
-          disabled={loading}
-          style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-        >
-          <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
-          Refresh
-        </button>
-      ) : undefined}
+      subtitle="Daily sales summaries, profit & loss, ledgers, and tax registers."
       toolbar={
         <Tabs
           variant="underline"
@@ -141,194 +131,49 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
       }
     >
 
-      {error && (
-        <div
-          style={{
-            padding: '12px 16px',
-            backgroundColor: 'var(--state-danger-bg)',
-            color: 'var(--state-danger-fg)',
-            borderRadius: 'var(--radius-card)',
-            fontSize: '13px',
-          }}
-        >
-          <strong>Error:</strong> {error}
-        </div>
-      )}
-
       {/* Daily DSSR Tab */}
       {activeTab === 'daily-dssr' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {/* Generate Controls */}
-          <div
-            className="card"
-            style={{ padding: '16px', display: 'flex', gap: '12px', alignItems: 'flex-end' }}
-          >
-            <div style={{ flex: 1, maxWidth: '260px' }}>
-              <label
-                style={{
-                  display: 'block',
-                  fontSize: '11px',
-                  fontWeight: 600,
-                  color: 'var(--text-muted)',
-                  marginBottom: '6px',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.04em',
-                }}
-              >
-                Business Date
-              </label>
-              <DateField
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-              />
+          <KpiStrip columns="auto">
+            <KpiTile dot="brand" label="Generated DSSRs" value={String(kpis.count)} hint="last 30 days" />
+            <KpiTile dot="info" label="Net Volume Sold" value={`${kpis.volume.toLocaleString('en-IN', { maximumFractionDigits: 0 })} L`} hint="period" />
+            <KpiTile dot="success" label="Cash Collected" value={inr(kpis.cash)} hint="period" />
+          </KpiStrip>
+
+          <Panel title="Generate a daily snapshot">
+            <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+              <div style={{ maxWidth: '220px' }}>
+                <label className="field-label">Business Date</label>
+                <DateField value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} />
+              </div>
+              <Button variant="primary" size="sm" leftIcon={<Play style={{ fill: 'currentColor' }} />} loading={generatingDailyDssr} disabled={!selectedDate} onClick={handleGenerateDailyDssr}>
+                Generate DSSR
+              </Button>
             </div>
-            <button
-              className="btn btn-primary btn-sm"
-              onClick={handleGenerateDailyDssr}
-              disabled={generatingDailyDssr || !selectedDate}
-              style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-            >
-              <Play size={13} style={{ fill: 'currentColor' }} />
-              {generatingDailyDssr ? 'Generating...' : 'Generate DSSR'}
-            </button>
-          </div>
-
-          {/* Daily DSSR List */}
-          <div className="card" style={{ overflow: 'hidden' }}>
-            {dailyDssrList.length > 0 ? (
-              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                {dailyDssrList.map((d) => {
-                  const data = d.snapshotData || {};
-
-                  return (
-                    <div
-                      key={d.id}
-                      onClick={() => setActiveDailyDssr(d)}
-                      style={{
-                        padding: '14px 18px',
-                        borderBottom: '1px solid var(--border-soft)',
-                        cursor: 'pointer',
-                        transition: 'background-color 0.15s ease',
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: 'grid',
-                          gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
-                          gap: '16px',
-                        }}
-                      >
-                        <div>
-                          <span
-                            style={{
-                              fontSize: '11px',
-                              color: 'var(--text-muted)',
-                              display: 'block',
-                              fontWeight: 600,
-                              marginBottom: '4px',
-                            }}
-                          >
-                            BUSINESS DATE
-                          </span>
-                          <strong style={{ fontSize: '14px', color: 'var(--text-strong)' }}>
-                            <Calendar size={12} style={{ display: 'inline', marginRight: '6px', verticalAlign: 'middle' }} />
-                            {d.businessDate}
-                          </strong>
-                        </div>
-                        <div>
-                          <span
-                            style={{
-                              fontSize: '11px',
-                              color: 'var(--text-muted)',
-                              display: 'block',
-                              fontWeight: 600,
-                              marginBottom: '4px',
-                            }}
-                          >
-                            SHIFTS INCLUDED
-                          </span>
-                          <strong style={{ fontSize: '14px', color: 'var(--text-strong)' }}>
-                            {data.shiftsIncluded || 0}
-                          </strong>
-                        </div>
-                        <div>
-                          <span
-                            style={{
-                              fontSize: '11px',
-                              color: 'var(--text-muted)',
-                              display: 'block',
-                              fontWeight: 600,
-                              marginBottom: '4px',
-                            }}
-                          >
-                            TOTAL VOLUME SOLD
-                          </span>
-                          <strong
-                            style={{
-                              fontSize: '14px',
-                              color: 'var(--text-strong)',
-                              fontFamily: 'var(--font-mono)',
-                            }}
-                          >
-                            {Number(data.totalVolumeSold || 0).toFixed(2)} L
-                          </strong>
-                        </div>
-                        <div>
-                          <span
-                            style={{
-                              fontSize: '11px',
-                              color: 'var(--text-muted)',
-                              display: 'block',
-                              fontWeight: 600,
-                              marginBottom: '4px',
-                            }}
-                          >
-                            TOTAL COLLECTIONS
-                          </span>
-                          <strong
-                            style={{
-                              fontSize: '14px',
-                              color: 'var(--state-success-fg)',
-                              fontFamily: 'var(--font-mono)',
-                            }}
-                          >
-                            {inr(data.totalCashCollections || 0)}
-                          </strong>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div
-                style={{
-                  padding: '40px 20px',
-                  textAlign: 'center',
-                  color: 'var(--text-muted)',
-                }}
-              >
-                <div
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    gap: '12px',
-                  }}
-                >
-                  <Zap size={32} style={{ color: 'var(--text-faint)' }} />
-                  <div>
-                    <h4 style={{ fontWeight: 600, color: 'var(--text-strong)' }}>
-                      No Daily DSSR Reports
-                    </h4>
-                    <p style={{ fontSize: '12px', marginTop: '4px' }}>
-                      Generate a daily snapshot or select a date above to get started.
-                    </p>
-                  </div>
-                </div>
-              </div>
+            {generateError && (
+              <div style={{ marginTop: '10px', padding: '8px 12px', backgroundColor: 'var(--state-danger-bg)', color: 'var(--state-danger-fg)', borderRadius: 'var(--radius-input)', fontSize: '12px' }}>{generateError}</div>
             )}
-          </div>
+          </Panel>
+
+
+          <Panel flush title="Recent DSSRs">
+            {dssrQ.isLoading ? (
+              <div style={{ padding: '16px' }}><EmptyState compact icon={<Zap />} title="Loading…" description="Fetching recent daily snapshots." /></div>
+            ) : dssrList.length === 0 ? (
+              <div style={{ padding: '12px' }}><EmptyState compact icon={<Zap />} title="No daily DSSR reports" description="Generate a daily snapshot above to get started." /></div>
+            ) : (
+              <DataTable
+                bare
+                columns={dssrColumns}
+                data={dssrList}
+                error={dssrQ.error as Error | null}
+                emptyMessage="No daily DSSR reports."
+                getRowId={(r: any) => r.id}
+                onRowClick={(r: any) => setActiveDailyDssr(r)}
+                initialSorting={[{ id: 'businessDate', desc: true }]}
+              />
+            )}
+          </Panel>
         </div>
       )}
 
