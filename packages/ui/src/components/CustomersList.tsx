@@ -275,6 +275,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
       }
       toolbar={
         <Tabs
+          variant="underline"
           aria-label="Customers"
           activeId={activeTab}
           onChange={(id) => setActiveTab(id as TabType)}

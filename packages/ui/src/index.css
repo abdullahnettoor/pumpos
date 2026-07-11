@@ -1424,6 +1424,13 @@ select:disabled {
 }
 
 /* ---- Variant: underline (Cloudflare / HPE operator-panel look) --------- */
+/* Span the full width of the toolbar so the baseline rule runs edge-to-edge
+ * (GitHub / Stripe style); the tabs themselves stay left-aligned at their
+ * natural width since they don't flex-grow. */
+.pump-tabs--underline {
+  width: 100%;
+}
+
 .pump-tabs--underline .pump-tab {
   color: var(--text-default);
   /* Thicker underline; sits below the container's inset baseline so the

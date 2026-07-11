@@ -270,6 +270,7 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
         </div>
 
         <Tabs
+          variant="underline"
           aria-label="Shift transactions"
           activeId={activeTab}
           onChange={(id) => setActiveTab(id as 'expenses' | 'purchases' | 'collections')}

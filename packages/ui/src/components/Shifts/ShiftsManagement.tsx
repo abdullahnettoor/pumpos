@@ -777,6 +777,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
 
   const renderShiftSubTabs = () => (
     <Tabs
+      variant="underline"
       aria-label="Shift views"
       className="no-print"
       activeId={shiftSubTab}

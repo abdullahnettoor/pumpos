@@ -193,8 +193,8 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation })
         }
         toolbar={
           <Tabs
+            variant="underline"
             aria-label="Inventory views"
-            style={{ width: '100%' }}
             activeId={activeTab}
             onChange={(id) => setActiveTab(id as TabType)}
             tabs={[

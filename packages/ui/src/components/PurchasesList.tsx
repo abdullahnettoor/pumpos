@@ -483,6 +483,7 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, d
       }
       toolbar={
         <Tabs
+          variant="underline"
           aria-label="Purchases"
           activeId={activeTab}
           onChange={(id) => setActiveTab(id as TabType)}

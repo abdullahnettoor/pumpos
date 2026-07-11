@@ -46,6 +46,7 @@ export const OrganizationOverview: React.FC<OrganizationOverviewProps> = ({
       subtitle="Manage your stations and team across the organization."
       toolbar={
         <Tabs
+          variant="underline"
           aria-label="Organization"
           activeId={tab}
           onChange={(id) => setTab(id as 'stations' | 'team' | 'activity' | 'profile')}

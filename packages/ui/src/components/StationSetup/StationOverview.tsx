@@ -180,6 +180,7 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
           
           {/* Tabs bar */}
           <Tabs
+            variant="underline"
             aria-label="Station setup"
             activeId={activeTab}
             onChange={(id) => setActiveTab(id as any)}

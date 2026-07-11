@@ -125,6 +125,7 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
       ) : undefined}
       toolbar={
         <Tabs
+          variant="underline"
           aria-label="Reports"
           activeId={activeTab}
           onChange={(id) => setActiveTab(id as ReportsTab)}
