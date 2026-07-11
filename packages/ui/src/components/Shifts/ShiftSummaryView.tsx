@@ -3,6 +3,7 @@ import { CloudShiftService } from '../../services/cloud.js';
 import { DEFAULT_SHIFT_SUMMARY_CONFIG, paperFromStation } from '../../services/reports/reportConfig.js';
 import { letterheadFromStation } from '../../services/reports/letterhead.js';
 import { StatusBadge } from '../StatusBadge.js';
+import { Button } from '../../pump-ds/index.js';
 import { ArrowLeft, Printer, Download, Unlock, AlertTriangle } from 'lucide-react';
 import { ShiftTransactionsPanel } from './ShiftTransactionsPanel.js';
 import { useConfirm } from '../primitives/ConfirmDialog.js';
@@ -100,16 +101,15 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
     <div ref={printRef} className="card card-comfortable print-area" style={{ maxWidth: '800px', margin: '0 auto' }}>
       {/* Header controls */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', borderBottom: '1px solid var(--border-soft)', paddingBottom: '16px' }} className="no-print">
-        <button
-          className="btn btn-secondary btn-sm"
-          onClick={onBack}
-        >
-          <ArrowLeft size={13} /> Back to Workspace
-        </button>
+        <Button variant="secondary" size="sm" leftIcon={<ArrowLeft size={13} />} onClick={onBack}>
+          Back to Workspace
+        </Button>
 
         <div style={{ display: 'flex', gap: '8px' }}>
-          <button
-            className="btn btn-secondary btn-sm"
+          <Button
+            variant="secondary"
+            size="sm"
+            leftIcon={<Download size={13} />}
             onClick={async () => {
               const [{ exportReactPdf }, doc] = await Promise.all([
                 import('../../services/exportPdf.js'),
@@ -120,27 +120,22 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
               await exportReactPdf(React.createElement(doc.ShiftSummaryDoc, { snapshot: snapshotData, config }), `Shift_Summary_${String(shiftId).slice(0, 8)}`);
             }}
           >
-            <Download size={13} /> Save PDF
-          </button>
-          <button
-            className="btn btn-secondary btn-sm"
-            onClick={() => window.print()}
-          >
-            <Printer size={13} /> Print Shift Summary
-          </button>
+            Save PDF
+          </Button>
+          <Button variant="secondary" size="sm" leftIcon={<Printer size={13} />} onClick={() => window.print()}>
+            Print Shift Summary
+          </Button>
 
           {canReopen && (
-            <button
-              className="btn btn-danger btn-sm"
+            <Button
+              variant="danger"
+              size="sm"
+              leftIcon={<Unlock size={13} />}
               onClick={handleReopen}
-              disabled={reopening}
+              loading={reopening}
             >
-              {reopening ? 'Reopening...' : (
-                <>
-                  <Unlock size={13} style={{ marginRight: '6px' }} /> Reopen Shift
-                </>
-              )}
-            </button>
+              {reopening ? 'Reopening…' : 'Reopen Shift'}
+            </Button>
           )}
         </div>
       </div>
