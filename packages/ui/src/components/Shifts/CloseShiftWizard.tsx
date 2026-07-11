@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Drawer } from '../Drawer.js';
 import { Checkbox } from '../primitives/Toggle.js';
+import { Button } from '../../pump-ds/index.js';
 import { inr } from '../../utils/format.js';
 import { AlertTriangle, Check, ChevronLeft, ChevronRight, Lock, Wallet, Droplet, FileText } from 'lucide-react';
 
@@ -108,31 +109,35 @@ export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
 
   const footer = (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', width: '100%' }}>
-      <button
-        type="button"
-        className="btn btn-secondary btn-sm"
+      <Button
+        variant="secondary"
+        size="sm"
+        leftIcon={<ChevronLeft size={13} />}
         onClick={step === 1 ? onClose : goBack}
       >
-        <ChevronLeft size={13} /> {step === 1 ? 'Cancel' : 'Back'}
-      </button>
+        {step === 1 ? 'Cancel' : 'Back'}
+      </Button>
 
       {step < 4 ? (
-        <button
-          type="button"
-          className="btn btn-primary btn-sm"
+        <Button
+          variant="primary"
+          size="sm"
+          rightIcon={<ChevronRight size={13} />}
           onClick={goNext}
         >
-          Next <ChevronRight size={13} />
-        </button>
+          Next
+        </Button>
       ) : (
-        <button
-          type="button"
-          className={canSubmit ? 'btn btn-primary btn-sm' : 'btn btn-secondary btn-sm'}
+        <Button
+          variant={canSubmit ? 'primary' : 'secondary'}
+          size="sm"
+          leftIcon={<Lock size={13} />}
           onClick={onConfirmClose}
-          disabled={!canSubmit || isClosing}
+          disabled={!canSubmit}
+          loading={isClosing}
         >
-          <Lock size={13} /> {isClosing ? 'Closing Shift…' : 'Close Shift'}
-        </button>
+          {isClosing ? 'Closing Shift…' : 'Close Shift'}
+        </Button>
       )}
     </div>
   );

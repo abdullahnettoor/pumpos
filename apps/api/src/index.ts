@@ -16,6 +16,43 @@ import { idempotency } from './infra/idempotency.js';
 
 const keyCache = new Map<string, CryptoKey>();
 
+// --- Auth cache (per-isolate) --------------------------------------------
+// Cloudflare Workers reuse isolates across many requests, so a module-level
+// Map behaves as a warm per-isolate LRU. This eliminates the 2 DB round-trips
+// (users + userStationAssignments) that would otherwise fire on every
+// authenticated request — the single biggest source of Hyperdrive queries.
+// TTL is deliberately short (60s) so role / assignment changes propagate
+// promptly without any explicit invalidation.
+type CachedAuthUser = {
+  id: string;
+  email: string | null;
+  fullName: string | null;
+  organizationId: string;
+  role: Role;
+  assignedStationIds: string[];
+};
+const AUTH_CACHE_TTL_MS = 60_000;
+const AUTH_CACHE_MAX = 500;
+const authCache = new Map<string, { user: CachedAuthUser; expiresAt: number }>();
+
+function getCachedAuthUser(authId: string): CachedAuthUser | null {
+  const entry = authCache.get(authId);
+  if (!entry) return null;
+  if (Date.now() > entry.expiresAt) {
+    authCache.delete(authId);
+    return null;
+  }
+  return entry.user;
+}
+
+function setCachedAuthUser(authId: string, user: CachedAuthUser): void {
+  authCache.set(authId, { user, expiresAt: Date.now() + AUTH_CACHE_TTL_MS });
+  if (authCache.size > AUTH_CACHE_MAX) {
+    const firstKey = authCache.keys().next().value;
+    if (firstKey !== undefined) authCache.delete(firstKey);
+  }
+}
+
 type Bindings = {
   HYPERDRIVE: Hyperdrive;
   SUPABASE_JWT_SECRET: string;
@@ -179,7 +216,11 @@ api.use('*', async (c, next) => {
     }
     const authId = payload.sub; // UUID from supabase auth.users
 
-    // Resolve user from DB
+    // Serve from the per-isolate auth cache when warm — skips the 2 DB
+    // round-trips (users + userStationAssignments) that would otherwise fire
+    // on every authenticated request.
+    let cachedUser = getCachedAuthUser(authId);
+    if (!cachedUser) {
     const dbUser = await db.query.users.findFirst({
       where: eq(schema.users.authUserId, authId),
     });
@@ -188,17 +229,23 @@ api.use('*', async (c, next) => {
       return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'User profile inactive or not found' } }, 403);
     }
 
-    // Resolve assignments
-    const assigns = await db.select().from(schema.userStationAssignments).where(eq(schema.userStationAssignments.userId, dbUser.id));
+      const assigns = await db
+        .select()
+        .from(schema.userStationAssignments)
+        .where(eq(schema.userStationAssignments.userId, dbUser.id));
 
-    c.set('user', {
+      cachedUser = {
       id: dbUser.id,
       email: dbUser.email,
       fullName: dbUser.fullName ?? null,
       organizationId: dbUser.organizationId,
       role: dbUser.role as Role,
-      assignedStationIds: assigns.map(a => a.stationId),
-    });
+        assignedStationIds: assigns.map((a) => a.stationId),
+      };
+      setCachedAuthUser(authId, cachedUser);
+    }
+
+    c.set('user', cachedUser);
 
     await next();
   } catch (err: any) {

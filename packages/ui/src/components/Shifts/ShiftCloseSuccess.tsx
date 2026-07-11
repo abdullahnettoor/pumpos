@@ -1,5 +1,6 @@
 import React from 'react';
 import { Check, Play, FileText } from 'lucide-react';
+import { Button } from '../../pump-ds/index.js';
 import { inr } from '../../utils/format.js';
 
 export interface ShiftCloseResult {
@@ -52,15 +53,15 @@ export const ShiftCloseSuccess: React.FC<ShiftCloseSuccessProps> = ({ result, on
       </div>
 
       <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
-        <button className="btn btn-primary btn-md" onClick={onStartNext}>
-          <Play size={13} style={{ fill: 'currentColor', marginRight: '6px' }} /> Start Next Shift
-        </button>
-        <button className="btn btn-secondary btn-md" onClick={onViewSummary}>
-          <FileText size={13} style={{ marginRight: '6px' }} /> View Compiled Shift Summary
-        </button>
-        <button className="btn btn-secondary btn-md" onClick={onBack}>
+        <Button variant="primary" size="md" leftIcon={<Play size={13} style={{ fill: 'currentColor' }} />} onClick={onStartNext}>
+          Start Next Shift
+        </Button>
+        <Button variant="secondary" size="md" leftIcon={<FileText size={13} />} onClick={onViewSummary}>
+          View Compiled Shift Summary
+        </Button>
+        <Button variant="secondary" size="md" onClick={onBack}>
           Back to Workspace
-        </button>
+        </Button>
       </div>
     </div>
   );

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { inr } from '../../utils/format.js';
 import { CloudShiftService, CloudTransactionService } from '../../services/cloud.js';
@@ -16,7 +16,7 @@ import { ShiftTotalsSummary } from './ShiftTotalsSummary.js';
 import { OpenShiftForm } from './OpenShiftForm.js';
 import { Tabs } from '../primitives/Tabs.js';
 import { useToast } from '../primitives/ToastProvider.js';
-import { useShiftStatus, useInvalidateOperational, queryKeys, TIER } from '../../query/hooks.js';
+import { useShiftStatus, useShiftTransactions, useInvalidateOperational, queryKeys, TIER } from '../../query/hooks.js';
 import { openQuickEntry, useQuickEntry, type QuickEntryType } from '../../quick-entry/store.js';
 import { Station, resolveBusinessDate } from '@pump/shared';
 import { FileText, User, Lock, AlertTriangle, Check, Fuel, Info, Play, History, Clock3 } from 'lucide-react';
@@ -24,6 +24,36 @@ import { LoadingSpinner } from '../LoadingSpinner.js';
 
 const shiftService = new CloudShiftService();
 const transactionService = new CloudTransactionService();
+
+interface ShiftTotals {
+  cashCollections: number;
+  cashExpenses: number;
+  cardCollections: number;
+  upiCollections: number;
+  creditSales: number;
+  expenseCount: number;
+  purchaseCount: number;
+  purchaseTotal: number;
+}
+
+/** Derive the live shift totals from a shift-transactions payload (pure). */
+function computeShiftTotals(txs: any): ShiftTotals {
+  const collections = txs?.collections ?? [];
+  const expenses = txs?.expenses ?? [];
+  const purchases = txs?.purchases ?? [];
+  const byMethod = (method: string) =>
+    collections.filter((c: any) => c.paymentMethod === method).reduce((sum: number, c: any) => sum + Number(c.amount), 0);
+  return {
+    cashCollections: byMethod('Cash'),
+    cardCollections: byMethod('Card'),
+    upiCollections: byMethod('UPI'),
+    creditSales: (txs?.creditSales ?? []).reduce((sum: number, r: any) => sum + Number(r.amount), 0),
+    cashExpenses: expenses.reduce((sum: number, e: any) => sum + Number(e.amount), 0),
+    expenseCount: expenses.length,
+    purchaseCount: purchases.length,
+    purchaseTotal: purchases.reduce((sum: number, p: any) => sum + Number(p.amount), 0),
+  };
+}
 
 interface ShiftsManagementProps {
   selectedStation: Station | null;
@@ -106,63 +136,16 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     }
   };
 
-  const [shiftTotals, setShiftTotals] = useState({
-    cashCollections: 0,
-    cashExpenses: 0,
-    cardCollections: 0,
-    upiCollections: 0,
-    creditSales: 0,
-    expenseCount: 0,
-    purchaseCount: 0,
-    purchaseTotal: 0,
-  });
-
   // Quick entry is handled by the global QuickEntryHost (mounted at the app shell).
   // The control-bar actions just open it via the store; submission + cache
   // invalidation live in the host.
   const qe = useQuickEntry();
 
-  const loadShiftTotals = async (shiftId: string) => {
-    try {
-      const txs = await transactionService.getShiftTransactions(shiftId);
-      
-      const cashCollections = txs.collections
-        .filter((c: any) => c.paymentMethod === 'Cash')
-        .reduce((sum: number, c: any) => sum + Number(c.amount), 0);
-      
-      const cardCollections = txs.collections
-        .filter((c: any) => c.paymentMethod === 'Card')
-        .reduce((sum: number, c: any) => sum + Number(c.amount), 0);
-      
-      const upiCollections = txs.collections
-        .filter((c: any) => c.paymentMethod === 'UPI')
-        .reduce((sum: number, c: any) => sum + Number(c.amount), 0);
-      
-      const creditSales = (txs.creditSales || [])
-        .reduce((sum: number, r: any) => sum + Number(r.amount), 0);
-
-      const cashExpenses = txs.expenses
-        .reduce((sum: number, e: any) => sum + Number(e.amount), 0);
-      
-      const expenseCount = txs.expenses.length;
-      
-      const purchaseCount = txs.purchases.length;
-      const purchaseTotal = txs.purchases.reduce((sum: number, p: any) => sum + Number(p.amount), 0);
-      
-      setShiftTotals({
-        cashCollections,
-        cashExpenses,
-        cardCollections,
-        upiCollections,
-        creditSales,
-        expenseCount,
-        purchaseCount,
-        purchaseTotal,
-      });
-    } catch (err) {
-      console.error('Failed to load shift totals', err);
-    }
-  };
+  // Live shift totals derive from a cached query so any operational mutation
+  // (quick entry via the global host, handovers, etc.) refreshes them via
+  // invalidateOperational — no manual reload wiring.
+  const shiftTxQ = useShiftTransactions(data?.activeShift?.id ?? null);
+  const shiftTotals = useMemo(() => computeShiftTotals(shiftTxQ.data), [shiftTxQ.data]);
 
   const openingCashNum = data?.activeShift ? Number(data.activeShift.openingCash) : 0;
   const handovers = data?.activeShift?.handovers || [];
@@ -298,7 +281,6 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
           readingsMap[nr.nozzleId] = Number(nr.closingReading);
         });
         setClosingReadings(readingsMap);
-        loadShiftTotals(statusData.activeShift.id);
         // Tank status for physical dip entry at close time.
         transactionService
           .getInventoryStatus(selectedStation.id)

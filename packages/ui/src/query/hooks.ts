@@ -40,6 +40,7 @@ const financeSvc = new CloudFinanceService();
 export const queryKeys = {
   shiftStatus: (stationId: string, lite = false) => ['shift-status', stationId, lite] as const,
   shiftSummaries: (stationId: string) => ['shift-summaries', stationId] as const,
+  shiftTransactions: (shiftId: string) => ['shift-transactions', shiftId] as const,
   merchandiseHandovers: (shiftId: string) => ['merchandise-handovers', shiftId] as const,
   merchandiseSales: (shiftId: string) => ['merchandise-sales', shiftId] as const,
   expenses: () => ['expenses'] as const,
@@ -185,6 +186,16 @@ export function useMerchandiseSales(shiftId: string | null | undefined, options?
   return useQuery({
     queryKey: queryKeys.merchandiseSales(shiftId ?? ''),
     queryFn: () => txService.getMerchandiseSales(shiftId!).catch(() => []),
+    enabled: !!shiftId,
+    ...TIER.operational,
+    ...options,
+  });
+}
+
+export function useShiftTransactions(shiftId: string | null | undefined, options?: Options<any>) {
+  return useQuery({
+    queryKey: queryKeys.shiftTransactions(shiftId ?? ''),
+    queryFn: () => txService.getShiftTransactions(shiftId!),
     enabled: !!shiftId,
     ...TIER.operational,
     ...options,
@@ -392,6 +403,7 @@ export function useInvalidateOperational() {
   return (stationId?: string | null) => {
     qc.invalidateQueries({ queryKey: ['shift-status'] });
     qc.invalidateQueries({ queryKey: ['shift-summaries'] });
+    qc.invalidateQueries({ queryKey: ['shift-transactions'] });
     qc.invalidateQueries({ queryKey: ['merchandise-handovers'] });
     qc.invalidateQueries({ queryKey: ['merchandise-sales'] });
     qc.invalidateQueries({ queryKey: ['expenses'] });
