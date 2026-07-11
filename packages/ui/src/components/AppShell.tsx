@@ -206,11 +206,11 @@ const getIconSvg = (label: string) => {
  * into a trailing group. Sections with no visible items are dropped.
  */
 const NAV_GROUPS: { heading: string; paths: string[] }[] = [
-  { heading: 'Operations', paths: ['/dashboard', '/shifts', '/inventory'] },
+  { heading: 'Operations', paths: ['/dashboard', '/shifts', '/inventory', '/pricing'] },
   { heading: 'Sales & CRM', paths: ['/customers'] },
-  { heading: 'Purchasing', paths: ['/purchases', '/expenses'] },
-  { heading: 'Finance', paths: ['/accounts', '/reports'] },
-  { heading: 'Setup', paths: ['/setup/station', '/pricing', '/organization'] },
+  { heading: 'Purchasing', paths: ['/purchases'] },
+  { heading: 'Finance', paths: ['/accounts', '/expenses', '/reports'] },
+  { heading: 'Setup', paths: ['/setup/station', '/organization'] },
 ];
 
 export const AppShell: React.FC<AppShellProps> = ({
