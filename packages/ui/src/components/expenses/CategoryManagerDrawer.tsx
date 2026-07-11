@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Drawer } from '../Drawer.js';
-import { Field, TextInput } from '../primitives/Field.js';
-import { Button, Chip, EmptyState } from '../../pump-ds/index.js';
+import { Button, Chip, EmptyState, Input } from '../../pump-ds/index.js';
 import { CloudTransactionService } from '../../services/cloud.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import { Pencil, Plus, Check, X, Tag } from 'lucide-react';
@@ -18,8 +17,9 @@ export interface CategoryManagerDrawerProps {
 }
 
 /**
- * Manage expense categories: add custom categories and rename them. System
- * (seeded) categories are read-only. Archiving is deferred — see the API TODO.
+ * Manage expense categories: add custom categories and rename any category
+ * (seeded defaults are editable too — they only differ by a "Default" tag).
+ * Archiving is deferred — see the API TODO.
  */
 export const CategoryManagerDrawer: React.FC<CategoryManagerDrawerProps> = ({ isOpen, onClose, categories, onChanged, canManage }) => {
   const toast = useToast();
@@ -29,8 +29,7 @@ export const CategoryManagerDrawer: React.FC<CategoryManagerDrawerProps> = ({ is
   const [editName, setEditName] = useState('');
   const [savingId, setSavingId] = useState<string | null>(null);
 
-  const custom = categories.filter((c) => !c.isSystem);
-  const system = categories.filter((c) => c.isSystem);
+  const sorted = [...categories].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 
   const add = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -73,27 +72,28 @@ export const CategoryManagerDrawer: React.FC<CategoryManagerDrawerProps> = ({ is
     <Drawer isOpen={isOpen} onClose={onClose} title="Manage expense categories">
       <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
         {canManage && (
-          <form onSubmit={add} style={{ display: 'flex', alignItems: 'flex-end', gap: '8px' }}>
-            <div style={{ flex: 1 }}>
-              <Field label="New category">
-                <TextInput value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="e.g. Vehicle maintenance" maxLength={100} />
-              </Field>
+          <form onSubmit={add}>
+            <label className="field-label">New category</label>
+            <div style={{ display: 'flex', alignItems: 'stretch', gap: '8px' }}>
+              <div style={{ flex: 1 }}>
+                <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="e.g. Vehicle maintenance" maxLength={100} />
+              </div>
+              <Button type="submit" variant="primary" size="md" leftIcon={<Plus />} loading={adding} disabled={!newName.trim()}>Add</Button>
             </div>
-            <Button type="submit" variant="primary" size="md" leftIcon={<Plus />} loading={adding} disabled={!newName.trim()}>Add</Button>
           </form>
         )}
 
         <div>
-          <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Custom</div>
-          {custom.length === 0 ? (
-            <div style={{ padding: '8px 0' }}><EmptyState compact icon={<Tag />} title="No custom categories" description={canManage ? 'Add one above.' : 'None yet.'} /></div>
+          <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Categories</div>
+          {sorted.length === 0 ? (
+            <div style={{ padding: '8px 0' }}><EmptyState compact icon={<Tag />} title="No categories" description={canManage ? 'Add one above.' : 'None yet.'} /></div>
           ) : (
-            custom.map((c) => (
+            sorted.map((c) => (
               <div key={c.id} style={rowStyle}>
                 {editingId === c.id ? (
                   <>
                     <div style={{ flex: 1 }}>
-                      <TextInput value={editName} onChange={(e) => setEditName(e.target.value)} maxLength={100} autoFocus />
+                      <Input value={editName} onChange={(e) => setEditName(e.target.value)} maxLength={100} autoFocus />
                     </div>
                     <Button variant="primary" size="sm" iconOnly leftIcon={<Check />} aria-label="Save" loading={savingId === c.id} disabled={!editName.trim()} onClick={() => saveEdit(c.id)} />
                     <Button variant="ghost" size="sm" iconOnly leftIcon={<X />} aria-label="Cancel" onClick={cancelEdit} />
@@ -101,22 +101,13 @@ export const CategoryManagerDrawer: React.FC<CategoryManagerDrawerProps> = ({ is
                 ) : (
                   <>
                     <span style={{ flex: 1, fontSize: '13px', color: 'var(--text-strong)', fontWeight: 500 }}>{c.name}</span>
+                    {c.isSystem && <Chip tone="neutral" size="xs">Default</Chip>}
                     {canManage && <Button variant="ghost" size="sm" iconOnly leftIcon={<Pencil />} aria-label="Rename" onClick={() => startEdit(c)} />}
                   </>
                 )}
               </div>
             ))
           )}
-        </div>
-
-        <div>
-          <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>System</div>
-          {system.map((c) => (
-            <div key={c.id} style={rowStyle}>
-              <span style={{ flex: 1, fontSize: '13px', color: 'var(--text-default)' }}>{c.name}</span>
-              <Chip tone="neutral" size="xs">Default</Chip>
-            </div>
-          ))}
         </div>
       </div>
     </Drawer>

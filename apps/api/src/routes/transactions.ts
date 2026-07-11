@@ -497,7 +497,7 @@ transactionsRouter.post('/expense-categories', async (c) => {
   return c.json({ success: true, data: created });
 });
 
-// Rename a custom expense category. System (seeded) categories are read-only.
+// Rename an expense category (custom or seeded default — both are editable).
 // TODO (archive): add an `is_active` column + PATCH to soft-delete categories
 // (expenses reference categoryId, so hard delete isn't safe). Deferred for now.
 transactionsRouter.put('/expense-categories/:id', async (c) => {
@@ -522,9 +522,6 @@ transactionsRouter.put('/expense-categories/:id', async (c) => {
     .limit(1);
   if (!existing) {
     return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Category not found' } }, 404);
-  }
-  if (existing.isSystem) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'System categories cannot be renamed' } }, 403);
   }
   const [dupe] = await db
     .select({ id: schema.expenseCategories.id })

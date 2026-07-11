@@ -1,7 +1,6 @@
 import React from 'react';
 import { resolveBusinessDate } from '@pump/shared';
-import { Select } from './Field.js';
-import { DateField } from './Field.js';
+import { Select, Input } from '../../pump-ds/index.js';
 
 export type RangePreset =
   | 'today'
@@ -94,6 +93,8 @@ export interface DateRangeFieldProps {
   presets?: RangePreset[];
   /** Show the From/To date inputs alongside the preset dropdown. Default true. */
   showInputs?: boolean;
+  /** Control size. 'md' (default) for report pages; 'sm' for compact filter bars. */
+  size?: 'sm' | 'md';
 }
 
 /**
@@ -109,6 +110,7 @@ export const DateRangeField: React.FC<DateRangeFieldProps> = ({
   clock,
   presets = DEFAULT_PRESETS,
   showInputs = true,
+  size = 'md',
 }) => {
   // Derive the active preset from the current value (else 'custom').
   const active: RangePreset =
@@ -122,6 +124,7 @@ export const DateRangeField: React.FC<DateRangeFieldProps> = ({
       <div>
         <label className="field-label">Period</label>
         <Select
+          inputSize={size}
           value={active}
           onChange={(e) => {
             const p = e.target.value as RangePreset;
@@ -143,11 +146,11 @@ export const DateRangeField: React.FC<DateRangeFieldProps> = ({
         <>
           <div>
             <label className="field-label">From</label>
-            <DateField value={value.from} onChange={(e) => onChange({ ...value, from: e.target.value })} />
+            <Input type="date" inputSize={size} value={value.from} onChange={(e) => onChange({ ...value, from: e.target.value })} />
           </div>
           <div>
             <label className="field-label">To</label>
-            <DateField value={value.to} onChange={(e) => onChange({ ...value, to: e.target.value })} />
+            <Input type="date" inputSize={size} value={value.to} onChange={(e) => onChange({ ...value, to: e.target.value })} />
           </div>
         </>
       )}

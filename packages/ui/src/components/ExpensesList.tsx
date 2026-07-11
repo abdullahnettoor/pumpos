@@ -2,7 +2,7 @@ import React, { useMemo, useState, useEffect, useRef } from 'react';
 import type { ExpenseEntryFormValues } from '@pump/shared';
 import { canManageExpenseCategory } from '@pump/shared';
 import { CloudTransactionService } from '../services/cloud.js';
-import { Plus, Search, HelpCircle, Tags, Receipt, ArrowLeftRight } from 'lucide-react';
+import { Plus, HelpCircle, Tags, Receipt, ArrowLeftRight } from 'lucide-react';
 import { PageLayout } from './primitives/PageLayout.js';
 import { DataTable } from './primitives/DataTable.js';
 import { Tabs } from './primitives/Tabs.js';
@@ -14,7 +14,7 @@ import { Drawer } from './Drawer.js';
 import { ExpenseEntryForm } from './transactions/ExpenseEntryForm.js';
 import { useExpenses, useShiftStatus, useExpenseCategories, useInvalidateOperational } from '../query/hooks.js';
 import { useQueryClient } from '@tanstack/react-query';
-import { Panel, Button, KpiStrip, KpiTile, EmptyState } from '../pump-ds/index.js';
+import { Panel, Button, KpiStrip, KpiTile, EmptyState, SearchInput, Select } from '../pump-ds/index.js';
 import type { NavIntent } from './AppShell.js';
 import { expenseColumns } from './expenses/columns.js';
 import { ExpenseAnalytics } from './expenses/ExpenseAnalytics.js';
@@ -31,13 +31,6 @@ interface ExpensesListProps {
   intent?: NavIntent | null;
   onIntentConsumed?: () => void;
 }
-
-const SearchBox: React.FC<{ value: string; onChange: (v: string) => void; placeholder?: string }> = ({ value, onChange, placeholder }) => (
-  <div style={{ position: 'relative' }}>
-    <Search size={13} style={{ position: 'absolute', left: '8px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-    <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} style={{ height: '28px', padding: '0 8px 0 26px', width: '200px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', fontSize: '12px', background: 'var(--bg-surface)' }} />
-  </div>
-);
 
 export const ExpensesList: React.FC<ExpensesListProps> = ({ selectedStation, defaultShiftId, userRole, intent, onIntentConsumed }) => {
   const stationId = selectedStation?.id ?? null;
@@ -192,17 +185,15 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({ selectedStation, def
             </KpiStrip>
 
             <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', gap: '10px' }}>
-              <DateRangeField value={range} onChange={setRange} clock={clock} />
+              <DateRangeField value={range} onChange={setRange} clock={clock} size="sm" />
               <div style={{ flex: 1 }} />
-              <SearchBox value={searchQuery} onChange={setSearchQuery} placeholder="Search description / category…" />
-              <select
-                value={selectedCategoryFilter}
-                onChange={(e) => setSelectedCategoryFilter(e.target.value)}
-                style={{ height: '28px', padding: '0 8px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', fontSize: '12px', background: 'var(--bg-surface)', color: 'var(--text-default)' }}
-              >
-                <option value="">All categories</option>
-                {categories.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
+              <SearchInput inputSize="sm" value={searchQuery} onChange={setSearchQuery} placeholder="Search description / category…" style={{ width: '220px' }} />
+              <div style={{ width: '190px' }}>
+                <Select inputSize="sm" value={selectedCategoryFilter} onChange={(e) => setSelectedCategoryFilter(e.target.value)} aria-label="Filter by category">
+                  <option value="">All categories</option>
+                  {categories.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </Select>
+              </div>
               <button
                 type="button"
                 title="Business expenses post to the selected business day — no open shift required. Cash-drawer expenses are entered from the shift workspace so they reconcile against the drawer."
