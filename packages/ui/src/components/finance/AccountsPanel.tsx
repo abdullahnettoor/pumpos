@@ -1,8 +1,10 @@
 import React, { useMemo, useState } from 'react';
+import type { ColumnDef } from '@tanstack/react-table';
 import { PageLayout } from '../primitives/PageLayout.js';
 import { Drawer } from '../Drawer.js';
 import { Field, TextInput, NumberInput, Select, DateField } from '../primitives/Field.js';
-import { KpiStrip, KpiTile } from '../../pump-ds/index.js';
+import { KpiStrip, KpiTile, Panel, Button, Chip, StatusChip, EmptyState } from '../../pump-ds/index.js';
+import { DataTable } from '../primitives/DataTable.js';
 import { LoadingSpinner } from '../LoadingSpinner.js';
 import { LedgerView } from '../ledger/LedgerView.js';
 import { DateRangeField, computeRange, type DateRange } from '../primitives/DateRangeField.js';
@@ -25,6 +27,14 @@ const TYPE_LABEL: Record<AccountType, string> = {
   OWNER: 'Owner',
 };
 
+const TYPE_TONE: Record<AccountType, 'brand' | 'info' | 'success' | 'warning' | 'danger' | 'neutral'> = {
+  CASH_IN_HAND: 'success',
+  PETTY_CASH: 'neutral',
+  BANK: 'info',
+  MERCHANT_CLEARING: 'warning',
+  OWNER: 'brand',
+};
+
 const SOURCE_LABEL: Record<string, string> = {
   OPENING: 'Opening balance',
   SALE_CASH: 'Cash sale',
@@ -44,6 +54,32 @@ export interface AccountsPanelProps {
   selectedStation: any | null;
 }
 
+const accountColumns: ColumnDef<any, any>[] = [
+  {
+    accessorKey: 'name',
+    header: 'Account',
+    cell: ({ row }) => (
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+        <span style={{ fontWeight: 600, color: 'var(--text-strong)' }}>{row.original.name}</span>
+        {row.original.isActive === false && <StatusChip status="inactive" size="xs" />}
+      </span>
+    ),
+  },
+  {
+    accessorKey: 'accountType',
+    header: 'Type',
+    cell: ({ getValue }) => {
+      const t = getValue() as AccountType;
+      return <Chip tone={TYPE_TONE[t] ?? 'neutral'} size="xs">{TYPE_LABEL[t] ?? t}</Chip>;
+    },
+  },
+  {
+    accessorKey: 'balance',
+    header: 'Balance',
+    cell: ({ getValue }) => <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, color: Number(getValue()) < 0 ? 'var(--brand-danger)' : 'var(--text-strong)' }}>{inr(getValue())}</span>,
+  },
+];
+
 /**
  * Money accounts (Phase F). Lists each account with its live balance and, on
  * selection, shows a per-account ledger/statement. New accounts can be created
@@ -60,6 +96,19 @@ export const AccountsPanel: React.FC<AccountsPanelProps> = ({ selectedStation })
   const { data: accounts, isLoading } = useFinancialAccounts(stationId);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [range, setRange] = useState<DateRange>(() => computeRange('this-month', clock));
+
+  // Overview totals for the list header (cash = cash-in-hand + petty cash).
+  const overview = useMemo(() => {
+    let cash = 0, bank = 0, clearing = 0, net = 0;
+    for (const a of accounts || []) {
+      const b = Number(a.balance || 0);
+      net += b;
+      if (a.accountType === 'CASH_IN_HAND' || a.accountType === 'PETTY_CASH') cash += b;
+      else if (a.accountType === 'BANK') bank += b;
+      else if (a.accountType === 'MERCHANT_CLEARING') clearing += b;
+    }
+    return { cash, bank, clearing, net };
+  }, [accounts]);
 
   // Create drawer state
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -338,16 +387,10 @@ export const AccountsPanel: React.FC<AccountsPanelProps> = ({ selectedStation })
         actions={
           <div style={{ display: 'flex', gap: '8px' }}>
             {selected.accountType === 'MERCHANT_CLEARING' && (
-              <button className="btn btn-primary btn-md" onClick={openSettle} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                <Banknote size={14} /> Settle to bank
-              </button>
+              <Button variant="primary" size="sm" leftIcon={<Banknote />} onClick={openSettle}>Settle to bank</Button>
             )}
-            <button className="btn btn-secondary btn-md" onClick={openEntry} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-              <Plus size={14} /> Add entry
-            </button>
-            <button className="btn btn-secondary btn-md" onClick={() => setSelectedId(null)} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-              <ArrowLeft size={14} /> All accounts
-            </button>
+            <Button variant="secondary" size="sm" leftIcon={<Plus />} onClick={openEntry}>Add entry</Button>
+            <Button variant="secondary" size="sm" leftIcon={<ArrowLeft />} onClick={() => setSelectedId(null)}>All accounts</Button>
           </div>
         }
       >
@@ -414,8 +457,8 @@ export const AccountsPanel: React.FC<AccountsPanelProps> = ({ selectedStation })
               Clearing drops by the gross; bank rises by the net; the fee is booked as a cost.
             </span>
             <div style={{ display: 'flex', gap: '8px' }}>
-              <button className="btn btn-primary btn-md" style={{ flex: 1 }} disabled={settleSubmitting} onClick={submitSettle}>{settleSubmitting ? 'Recording…' : 'Record Settlement'}</button>
-              <button className="btn btn-secondary btn-md" disabled={settleSubmitting} onClick={() => setSettleOpen(false)}>Cancel</button>
+              <Button variant="primary" size="md" fullWidth loading={settleSubmitting} onClick={submitSettle}>Record Settlement</Button>
+              <Button variant="secondary" size="md" disabled={settleSubmitting} onClick={() => setSettleOpen(false)}>Cancel</Button>
             </div>
           </div>
         </Drawer>
@@ -454,10 +497,10 @@ export const AccountsPanel: React.FC<AccountsPanelProps> = ({ selectedStation })
                 : 'Record bank-originated items (charges, fees, interest) so your book balance matches the statement.'}
             </span>
             <div style={{ display: 'flex', gap: '8px' }}>
-              <button className="btn btn-primary btn-md" style={{ flex: 1 }} disabled={entrySubmitting} onClick={submitEntry}>
-                {entrySubmitting ? 'Saving…' : entryKind === 'OPENING' ? 'Save Opening Balance' : 'Add Entry'}
-              </button>
-              <button className="btn btn-secondary btn-md" disabled={entrySubmitting} onClick={() => setEntryOpen(false)}>Cancel</button>
+              <Button variant="primary" size="md" fullWidth loading={entrySubmitting} onClick={submitEntry}>
+                {entryKind === 'OPENING' ? 'Save Opening Balance' : 'Add Entry'}
+              </Button>
+              <Button variant="secondary" size="md" disabled={entrySubmitting} onClick={() => setEntryOpen(false)}>Cancel</Button>
             </div>
           </div>
         </Drawer>
@@ -472,45 +515,34 @@ export const AccountsPanel: React.FC<AccountsPanelProps> = ({ selectedStation })
       subtitle="Cash, bank, petty cash and card/UPI clearing balances."
       actions={
         <div style={{ display: 'flex', gap: '8px' }}>
-          <button className="btn btn-secondary btn-md" onClick={openTransfer} disabled={(accounts || []).length < 2} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-            <ArrowLeftRight size={14} /> Transfer
-          </button>
-          <button className="btn btn-primary btn-md" onClick={openCreate} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-            <Plus size={14} /> New Account
-          </button>
+          <Button variant="secondary" size="sm" leftIcon={<ArrowLeftRight />} onClick={openTransfer} disabled={(accounts || []).length < 2}>Transfer</Button>
+          <Button variant="primary" size="sm" leftIcon={<Plus />} onClick={openCreate}>New Account</Button>
         </div>
       }
     >
       {isLoading ? (
         <LoadingSpinner />
       ) : (accounts || []).length === 0 ? (
-        <div className="card" style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)' }}>
-          <Wallet size={28} style={{ color: 'var(--text-faint)', marginBottom: '8px' }} />
-          <p style={{ margin: 0 }}>No accounts yet. Create a bank/petty-cash/owner account, or record a collection or expense — system accounts (Cash in Hand, Bank) appear automatically.</p>
-        </div>
+        <EmptyState icon={<Wallet />} title="No accounts yet" description="Create a bank / petty-cash / owner account, or record a collection or expense — system accounts (Cash in Hand, Bank) appear automatically." />
       ) : (
-        <div className="card" style={{ overflow: 'hidden' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-            <thead>
-              <tr style={{ backgroundColor: 'var(--bg-surface-alt)', textAlign: 'left' }}>
-                {['Account', 'Type', 'Balance'].map((h, i) => (
-                  <th key={h} style={{ padding: '10px 16px', fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', textAlign: i === 2 ? 'right' : 'left' }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {(accounts || []).map((a: any) => (
-                <tr key={a.id} onClick={() => { setSelectedId(a.id); setRange(computeRange('this-month', clock)); }} style={{ borderTop: '1px solid var(--border-soft)', cursor: 'pointer' }}>
-                  <td style={{ padding: '10px 16px', color: 'var(--text-strong)', fontWeight: 500 }}>
-                    {a.name}
-                    {a.isActive === false && <span style={{ marginLeft: 8, fontSize: '11px', color: 'var(--text-faint)' }}>(inactive)</span>}
-                  </td>
-                  <td style={{ padding: '10px 16px', color: 'var(--text-muted)' }}>{TYPE_LABEL[a.accountType as AccountType] ?? a.accountType}</td>
-                  <td style={{ padding: '10px 16px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: Number(a.balance) < 0 ? 'var(--brand-danger)' : 'var(--text-strong)' }}>{inr(a.balance)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <KpiStrip columns="auto">
+            <KpiTile dot={overview.cash < 0 ? 'danger' : 'success'} valueTone={overview.cash < 0 ? 'danger' : undefined} label="Cash" value={inr(overview.cash)} hint="in hand + petty" />
+            <KpiTile dot={overview.bank < 0 ? 'danger' : 'info'} valueTone={overview.bank < 0 ? 'danger' : undefined} label="Bank" value={inr(overview.bank)} />
+            <KpiTile dot="warning" label="Card/UPI Clearing" value={inr(overview.clearing)} hint="awaiting settlement" />
+            <KpiTile dot={overview.net < 0 ? 'danger' : 'brand'} valueTone={overview.net < 0 ? 'danger' : undefined} label="Net Position" value={inr(overview.net)} />
+          </KpiStrip>
+
+          <Panel flush title="Accounts">
+            <DataTable
+              bare
+              columns={accountColumns}
+              data={accounts || []}
+              emptyMessage="No accounts."
+              getRowId={(r: any) => r.id}
+              onRowClick={(a: any) => { setSelectedId(a.id); setRange(computeRange('this-month', clock)); }}
+            />
+          </Panel>
         </div>
       )}
 
@@ -558,8 +590,8 @@ export const AccountsPanel: React.FC<AccountsPanelProps> = ({ selectedStation })
             The opening balance seeds the ledger. You can set or correct it later from the account's Add entry drawer.
           </span>
           <div style={{ display: 'flex', gap: '8px' }}>
-            <button className="btn btn-primary btn-md" style={{ flex: 1 }} disabled={submitting} onClick={submit}>{submitting ? 'Creating…' : 'Create Account'}</button>
-            <button className="btn btn-secondary btn-md" disabled={submitting} onClick={() => setDrawerOpen(false)}>Cancel</button>
+            <Button variant="primary" size="md" fullWidth loading={submitting} onClick={submit}>Create Account</Button>
+            <Button variant="secondary" size="md" disabled={submitting} onClick={() => setDrawerOpen(false)}>Cancel</Button>
           </div>
         </div>
       </Drawer>
@@ -600,8 +632,8 @@ export const AccountsPanel: React.FC<AccountsPanelProps> = ({ selectedStation })
             Records a paired out/in entry on both accounts (e.g. drawer → bank deposit, or a petty-cash float).
           </span>
           <div style={{ display: 'flex', gap: '8px' }}>
-            <button className="btn btn-primary btn-md" style={{ flex: 1 }} disabled={transferSubmitting} onClick={submitTransfer}>{transferSubmitting ? 'Recording…' : 'Record Transfer'}</button>
-            <button className="btn btn-secondary btn-md" disabled={transferSubmitting} onClick={() => setTransferOpen(false)}>Cancel</button>
+            <Button variant="primary" size="md" fullWidth loading={transferSubmitting} onClick={submitTransfer}>Record Transfer</Button>
+            <Button variant="secondary" size="md" disabled={transferSubmitting} onClick={() => setTransferOpen(false)}>Cancel</Button>
           </div>
         </div>
       </Drawer>
