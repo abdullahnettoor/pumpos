@@ -9,13 +9,15 @@ import {
 import { LedgerView } from '../ledger/LedgerView.js';
 import { computeLedgerRows } from '../ledger/LedgerView.js';
 import type { LedgerResolved } from '../ledger/LedgerView.js';
-import type { KpiTone } from '../primitives/KpiCard.js';
 import { Combobox } from '../primitives/Combobox.js';
 import { DateRangeField, computeRange } from '../primitives/DateRangeField.js';
 import type { DateRange } from '../primitives/DateRangeField.js';
 import { inr, formatDate } from '../../utils/format.js';
 import { KpiStrip, KpiTile, Panel, Button, EmptyState } from '../../pump-ds/index.js';
 import { BookOpen, Download } from 'lucide-react';
+
+/** Tone for the closing-balance KPI (kept local; the old KpiCard primitive is retired). */
+type BalanceTone = 'default' | 'success' | 'warning' | 'danger' | 'info';
 
 export interface UnifiedLedgerProps {
   selectedStation: any | null;
@@ -64,7 +66,7 @@ interface LedgerSource {
   /** Maps a raw transaction into a running-balance row (debit raises balance). */
   resolve: (tx: any) => LedgerResolved;
   /** Tone of the closing-balance KPI given the net value. */
-  balanceTone: (net: number) => KpiTone;
+  balanceTone: (net: number) => BalanceTone;
 }
 
 /**

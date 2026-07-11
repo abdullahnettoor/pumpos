@@ -3,7 +3,7 @@ import type { ColumnDef } from '@tanstack/react-table';
 import { Activity, ClipboardList, Receipt, Users, Warehouse, FileText, Building2, Fuel, Settings, ShieldCheck } from 'lucide-react';
 import { PageLayout } from './primitives/PageLayout.js';
 import { Tabs } from './primitives/Tabs.js';
-import { KpiCard } from './primitives/KpiCard.js';
+import { KpiStrip, KpiTile } from '../pump-ds/index.js';
 import { DataTable } from './primitives/DataTable.js';
 import { SkeletonGrid } from './primitives/Skeleton.js';
 import { useToast } from './primitives/ToastProvider.js';
@@ -412,13 +412,13 @@ const ComponentsPanel: React.FC = () => {
         </Card>
       </Section>
 
-      <Section title="KPI cards" description="Metric tiles for dashboards and summary strips. Values use the mono font.">
-        <div style={grid(180)}>
-          <KpiCard label="Total Sales" value={inr(482350.5)} tone="success" />
-          <KpiCard label="Cash Variance" value={inr(-320)} tone="danger" sub="Short by ₹320" />
-          <KpiCard label="Credit Given" value={inr(15400)} tone="warning" />
-          <KpiCard label="Litres Sold" value={formatQty(3210.75)} tone="info" sub="Petrol + Diesel" />
-        </div>
+      <Section title="KPI strip" description="Metric tiles in a gap-as-divider strip. Values use the mono font; the status dot and valueTone carry meaning.">
+        <KpiStrip columns="auto">
+          <KpiTile dot="success" valueTone="success" label="Total Sales" value={inr(482350.5)} />
+          <KpiTile dot="danger" valueTone="danger" label="Cash Variance" value={inr(-320)} hint="Short by ₹320" />
+          <KpiTile dot="warning" valueTone="warning" label="Credit Given" value={inr(15400)} />
+          <KpiTile dot="info" label="Litres Sold" value={formatQty(3210.75)} hint="Petrol + Diesel" />
+        </KpiStrip>
       </Section>
 
       <Section title="Tabs" description="The shared Tabs primitive — keyboard accessible, roving focus. Three visual variants share the same a11y contract, plus icon / tag / count support on every tab.">

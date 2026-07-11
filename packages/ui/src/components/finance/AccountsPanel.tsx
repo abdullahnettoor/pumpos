@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { PageLayout } from '../primitives/PageLayout.js';
 import { Drawer } from '../Drawer.js';
 import { Field, TextInput, NumberInput, Select, DateField } from '../primitives/Field.js';
-import { KpiCard } from '../primitives/KpiCard.js';
+import { KpiStrip, KpiTile } from '../../pump-ds/index.js';
 import { LoadingSpinner } from '../LoadingSpinner.js';
 import { LedgerView } from '../ledger/LedgerView.js';
 import { DateRangeField, computeRange, type DateRange } from '../primitives/DateRangeField.js';
@@ -352,13 +352,13 @@ export const AccountsPanel: React.FC<AccountsPanelProps> = ({ selectedStation })
         }
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <DateRangeField value={range} onChange={setRange} clock={clock} />
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px' }}>
-            <KpiCard label="Opening" value={inr(opening)} />
-            <KpiCard label="Money In" value={inr(totals.moneyIn)} tone="success" />
-            <KpiCard label="Money Out" value={inr(totals.moneyOut)} tone="danger" />
-            <KpiCard label="Closing" value={inr(closing)} tone={closing < 0 ? 'danger' : 'default'} />
-          </div>
+          <DateRangeField value={range} onChange={setRange} clock={clock} size="sm" />
+          <KpiStrip columns="auto">
+            <KpiTile dot="brand" label="Opening" value={inr(opening)} />
+            <KpiTile dot="success" valueTone="success" label="Money In" value={inr(totals.moneyIn)} />
+            <KpiTile dot="danger" valueTone="danger" label="Money Out" value={inr(totals.moneyOut)} />
+            <KpiTile dot={closing < 0 ? 'danger' : 'brand'} valueTone={closing < 0 ? 'danger' : undefined} label="Closing" value={inr(closing)} />
+          </KpiStrip>
           <LedgerView
             entries={ledger?.entries || []}
             openingBalance={opening}
