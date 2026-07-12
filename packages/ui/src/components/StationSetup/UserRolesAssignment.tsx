@@ -138,15 +138,30 @@ export const UserRolesAssignment: React.FC = () => {
         stationIds: values.stationIds,
       };
 
-      if (editingUser) {
-        await userService.updateUser(editingUser.id, payload);
-      } else {
-        await userService.createUser(payload);
-      }
+      const saved = editingUser
+        ? await userService.updateUser(editingUser.id, payload)
+        : await userService.createUser(payload);
 
       resetForm();
       setIsFormOpen(false);
-      loadData(true);
+
+      // Optimistically reflect the change immediately. The authoritative read
+      // path can lag briefly behind the write (connection-level query caching),
+      // which previously left the freshly added member missing until a later
+      // refetch. Seed both local state and the query cache, then mark the query
+      // stale so it reconciles on the next natural access.
+      const rowId = editingUser?.id ?? (saved as any)?.id;
+      if (rowId) {
+        const optimisticRow = { ...(editingUser || {}), id: rowId, ...payload };
+        const merge = (list: any[] = []) => (list.some((u) => u.id === rowId)
+          ? list.map((u) => (u.id === rowId ? { ...u, ...optimisticRow } : u))
+          : [...list, optimisticRow]);
+        setUsers((prev) => merge(prev));
+        qc.setQueryData(queryKeys.users(), (prev: any[] | undefined) => merge(prev));
+        qc.invalidateQueries({ queryKey: queryKeys.users(), refetchType: 'none' });
+      } else {
+        loadData(true);
+      }
       toast.success(editingUser ? 'Team member updated.' : 'Team member added.');
     } catch (err: any) {
       toast.error(err.message || 'Failed to save team member');

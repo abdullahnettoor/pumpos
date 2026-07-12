@@ -150,12 +150,6 @@ export const Step8Review: React.FC<Step8ReviewProps> = ({
                 {draft.tanks.reduce((sum, tank) => sum + tank.openingQuantity, 0).toLocaleString('en-IN')} L
               </span>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: 'var(--text-muted)' }}>Nozzle readings ready</span>
-              <span style={{ color: 'var(--text-strong)', fontWeight: 600 }}>
-                {draft.nozzles.filter((nozzle) => nozzle.openingReading >= 0).length} / {draft.nozzles.length}
-              </span>
-            </div>
           </div>
         </div>
 

@@ -119,7 +119,10 @@ async function projectShiftSummary(
       .from(schema.expenses)
       .leftJoin(schema.expenseCategories, eq(schema.expenseCategories.id, schema.expenses.categoryId))
       .where(eq(schema.expenses.shiftId, shift.id)),
-    db.select().from(schema.purchases).where(eq(schema.purchases.shiftId, shift.id)),
+    db.select({ p: schema.purchases, supplierName: schema.suppliers.name })
+      .from(schema.purchases)
+      .leftJoin(schema.suppliers, eq(schema.suppliers.id, schema.purchases.supplierId))
+      .where(eq(schema.purchases.shiftId, shift.id)),
     db.select().from(schema.collections).where(eq(schema.collections.shiftId, shift.id)),
     db
       .select({
@@ -155,6 +158,7 @@ async function projectShiftSummary(
   const closedByName = closedUserRows[0]?.fullName ?? 'System';
   const openedByName = openedUserRows[0]?.fullName ?? 'System';
   const expensesEnriched = (expenses ?? []).map((r: any) => ({ ...r.e, categoryName: r.categoryName ?? 'General' }));
+  const purchasesEnriched = (purchases ?? []).map((r: any) => ({ ...r.p, supplierName: r.supplierName ?? 'Unknown Supplier' }));
   const nozzleReadings = nrRows.map(({ nr, nz, prod }) => {
     const gross = Number(nr.volumeSold ?? 0);
     const testing = Math.min(Math.max(Number(nr.testingVolume ?? 0), 0), gross);
@@ -171,9 +175,26 @@ async function projectShiftSummary(
       unitPrice: Number(nr.unitPrice ?? 0),
     };
   });
+  // Natural nozzle order (N1, N2, ... N10) for the summary tables.
+  nozzleReadings.sort((a, b) => String(a.nozzleName).localeCompare(String(b.nozzleName), undefined, { numeric: true }));
   const totalTestingVolume = nozzleReadings.reduce((a, r) => a + r.testingVolume, 0);
   const totalNetVolumeSold = nozzleReadings.reduce((a, r) => a + r.netVolume, 0) || Number(snap.totalNetVolume ?? 0);
   const totalVolumeSold = nozzleReadings.reduce((a, r) => a + r.volumeSold, 0) || Number(snap.totalVolume ?? 0);
+
+  // Product-wise fuel sales (aggregate nozzles by product) for the summary.
+  const fuelByProductMap = new Map<string, { productName: string; productCode: string; grossVolume: number; testingVolume: number; netVolume: number; salesValue: number }>();
+  for (const r of nozzleReadings) {
+    const key = r.productCode || r.productName;
+    if (!fuelByProductMap.has(key)) {
+      fuelByProductMap.set(key, { productName: r.productName, productCode: r.productCode, grossVolume: 0, testingVolume: 0, netVolume: 0, salesValue: 0 });
+    }
+    const agg = fuelByProductMap.get(key)!;
+    agg.grossVolume += r.volumeSold;
+    agg.testingVolume += r.testingVolume;
+    agg.netVolume += r.netVolume;
+    agg.salesValue += r.netVolume * r.unitPrice;
+  }
+  const fuelByProduct = Array.from(fuelByProductMap.values());
 
   const handovers = hoRows.map(({ h, userName, duName, duCode }) => ({
     ...h,
@@ -229,13 +250,14 @@ async function projectShiftSummary(
     closingCash,
     cashNetChange: closingCash - openingCash,
     nozzleReadings,
+    fuelByProduct,
     totalVolumeSold,
     totalTestingVolume,
     totalNetVolumeSold,
     handovers,
     terminalBreakdown,
     expenses: expensesEnriched,
-    purchases,
+    purchases: purchasesEnriched,
     collections,
     creditSales: (creditSaleRows ?? []).map((r: any) => ({
       id: r.id,

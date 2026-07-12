@@ -1366,7 +1366,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                           </button>
                         </div>
 
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '8px' }}>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                             <label style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Name</label>
                             <input
@@ -1386,28 +1386,6 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                                 color: 'var(--text-strong)'
                               }}
                               required
-                            />
-                          </div>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                            <label style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Opening Reading</label>
-                            <input
-                              type="number"
-                              min={0}
-                              step="0.001"
-                              value={nozzle.openingReading ?? 0}
-                              onChange={(e) => setDispenserDrawer({
-                                ...dispenserDrawer,
-                                nozzles: dispenserDrawer.nozzles.map((item) => item.draftId === nozzle.draftId ? { ...item, openingReading: Number(e.target.value) || 0 } : item),
-                              })}
-                              style={{
-                                height: '28px',
-                                padding: '0 8px',
-                                borderRadius: 'var(--radius-input)',
-                                border: '1px solid var(--border-strong)',
-                                fontSize: '12px',
-                                backgroundColor: 'var(--bg-surface)',
-                                color: 'var(--text-strong)'
-                              }}
                             />
                           </div>
                         </div>

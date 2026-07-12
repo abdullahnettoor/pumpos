@@ -185,6 +185,7 @@ const builders: Record<ShiftSummarySection, (d: any, cfg: ReportConfig) => React
     });
     const totalTesting = Number(d.totalTestingVolume ?? 0);
     const totalNet = Number(d.totalNetVolumeSold ?? (Number(d.totalVolumeSold ?? 0) - totalTesting));
+    const fbp = d.fuelByProduct || [];
     return (
       <View key="nozzles"><Text style={s.h2}>NOZZLE RECONCILIATION &amp; VOLUME SOLD</Text>
         <TableView
@@ -197,6 +198,34 @@ const builders: Record<ShiftSummarySection, (d: any, cfg: ReportConfig) => React
           rows={rows}
           total={[{ text: 'TOTAL (GROSS / TESTING / NET)' }, { text: '' }, { text: '' }, { text: '' }, { text: vol3(d.totalVolumeSold), color: C.muted }, { text: vol3(totalTesting), color: C.muted }, { text: vol3(totalNet), color: C.green }]}
         />
+        {fbp.length > 0 ? (
+          <View style={{ marginTop: 10 }}>
+            <Text style={s.h2}>PRODUCT-WISE FUEL SALES</Text>
+            <TableView
+              columns={[
+                { header: 'Product', flex: 2.4, strong: true },
+                { header: 'Gross Vol (L)', flex: 1.4, align: 'right', mono: true },
+                { header: 'Testing (L)', flex: 1.3, align: 'right', mono: true },
+                { header: 'Net Sold (L)', flex: 1.4, align: 'right', mono: true, strong: true },
+                { header: 'Sales Value (\u20b9)', flex: 1.6, align: 'right', mono: true, strong: true },
+              ]}
+              rows={fbp.map((p: any) => [
+                { text: `${p.productName || ''}${p.productCode ? ` (${p.productCode})` : ''}` },
+                { text: vol3(p.grossVolume) },
+                { text: vol3(p.testingVolume), color: Number(p.testingVolume || 0) > 0 ? C.amber : C.muted },
+                { text: vol3(p.netVolume) },
+                { text: inr(p.salesValue) },
+              ])}
+              total={[
+                { text: 'TOTAL' },
+                { text: vol3(fbp.reduce((a: number, p: any) => a + Number(p.grossVolume || 0), 0)), color: C.muted },
+                { text: vol3(fbp.reduce((a: number, p: any) => a + Number(p.testingVolume || 0), 0)), color: C.muted },
+                { text: vol3(fbp.reduce((a: number, p: any) => a + Number(p.netVolume || 0), 0)), color: C.green },
+                { text: inr(fbp.reduce((a: number, p: any) => a + Number(p.salesValue || 0), 0)) },
+              ]}
+            />
+          </View>
+        ) : null}
       </View>
     );
   },
@@ -205,7 +234,6 @@ const builders: Record<ShiftSummarySection, (d: any, cfg: ReportConfig) => React
       <TableView
         columns={[
           { header: 'Attendant', flex: 1.6, strong: true }, { header: 'Dispenser', flex: 1.1 },
-          { header: 'Testing (L)', flex: 1.0, align: 'right', mono: true },
           { header: 'Cash (\u20b9)', flex: 1.3, align: 'right', mono: true }, { header: 'Card/UPI (\u20b9)', flex: 1.4, align: 'right', mono: true },
           { header: 'Credit Chits (\u20b9)', flex: 1.5, align: 'right', mono: true }, { header: 'Expected (\u20b9)', flex: 1.4, align: 'right', mono: true, strong: true },
           { header: 'Variance (\u20b9)', flex: 1.4, align: 'right', mono: true },
@@ -214,12 +242,22 @@ const builders: Record<ShiftSummarySection, (d: any, cfg: ReportConfig) => React
           const v = Number(h.varianceAmount || 0);
           return [
             { text: h.attendantName || '' }, { text: h.duCode || '' },
-            { text: vol3(h.testingVolume) },
             { text: inr(h.cashHandedOver) }, { text: inr(Number(h.cardHandedOver || 0) + Number(h.upiHandedOver || 0)) },
             { text: inr(h.creditHandedOver) }, { text: inr(h.expectedSales) },
             { text: `${v > 0 ? '+' : ''}${inr(v)}`, color: varColor(v) },
           ];
         })}
+        total={(() => {
+          const tv = (d.handovers || []).reduce((a: number, h: any) => a + Number(h.varianceAmount || 0), 0);
+          return [
+            { text: 'TOTALS' }, { text: '' },
+            { text: inr((d.handovers || []).reduce((a: number, h: any) => a + Number(h.cashHandedOver || 0), 0)) },
+            { text: inr((d.handovers || []).reduce((a: number, h: any) => a + Number(h.cardHandedOver || 0) + Number(h.upiHandedOver || 0), 0)) },
+            { text: inr((d.handovers || []).reduce((a: number, h: any) => a + Number(h.creditHandedOver || 0), 0)) },
+            { text: inr((d.handovers || []).reduce((a: number, h: any) => a + Number(h.expectedSales || 0), 0)) },
+            { text: `${tv > 0 ? '+' : ''}${inr(tv)}`, color: varColor(tv) },
+          ];
+        })()}
       />
     </View>
   ) : null),
