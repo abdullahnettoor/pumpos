@@ -56,6 +56,11 @@ function setCachedAuthUser(authId: string, user: CachedAuthUser): void {
 type Bindings = {
   HYPERDRIVE: Hyperdrive;
   SUPABASE_JWT_SECRET: string;
+  // Optional fallback: when set, the worker connects directly to this
+  // Postgres URL (typically Supabase's Supavisor pooler on port 6543) and
+  // bypasses Hyperdrive. Use this to work around Hyperdrive daily-quota
+  // outages. Set via: `wrangler secret put SUPABASE_DIRECT_URL`.
+  SUPABASE_DIRECT_URL?: string;
 };
 
 type Variables = {
@@ -82,12 +87,64 @@ function isLocalRequest(url: string): boolean {
 }
 
 function getDbFromHyperdrive(env: Bindings): DbClient {
-  if (!env.HYPERDRIVE?.connectionString) {
-    throw new Error('Hyperdrive binding is missing or misconfigured');
+  // Primary path: Hyperdrive (edge query cache + pooled connection).
+  // Fallback path: SUPABASE_DIRECT_URL, used when either
+  //   (a) the Hyperdrive binding is not present at all, or
+  //   (b) the circuit breaker has tripped (see tripHyperdriveBreaker below)
+  //       after a Hyperdrive-side failure such as a daily quota outage.
+  const hyperdriveConn = env.HYPERDRIVE?.connectionString;
+  const directConn = env.SUPABASE_DIRECT_URL;
+  const useDirect =
+    !!directConn && (!hyperdriveConn || isHyperdriveBreakerOpen());
+
+  const conn = useDirect ? directConn : hyperdriveConn;
+  if (!conn) {
+    throw new Error(
+      'No database connection available: HYPERDRIVE binding is missing and SUPABASE_DIRECT_URL is not set'
+    );
   }
 
   // Request-scoped client prevents cross-request I/O object reuse in Workers.
-  return createDb(env.HYPERDRIVE.connectionString);
+  return createDb(conn);
+}
+
+// --- Hyperdrive circuit breaker (per-isolate) ----------------------------
+// When Hyperdrive fails for a known-recoverable reason (daily quota, regional
+// outage), trip the breaker so subsequent requests in this isolate skip
+// Hyperdrive and route straight to Supabase via SUPABASE_DIRECT_URL. Auto
+// resets at the next UTC midnight (when the free-tier quota also resets) or
+// after 5 minutes, whichever is later. Each Worker isolate maintains its own
+// breaker; there is no global coordination needed.
+let hyperdriveDisabledUntilMs = 0;
+
+function isHyperdriveBreakerOpen(): boolean {
+  return Date.now() < hyperdriveDisabledUntilMs;
+}
+
+function isHyperdriveQuotaError(err: unknown): boolean {
+  const own = String((err as any)?.message ?? '');
+  const cause = String((err as any)?.cause?.message ?? (err as any)?.cause ?? '');
+  const blob = `${own} ${cause}`.toLowerCase();
+  // Cloudflare's Hyperdrive daily-quota message includes both phrases.
+  return blob.includes('usage limit') || blob.includes('renews at');
+}
+
+function tripHyperdriveBreaker(reason: string): void {
+  const now = Date.now();
+  const nextMidnightUtc = Date.UTC(
+    new Date(now).getUTCFullYear(),
+    new Date(now).getUTCMonth(),
+    new Date(now).getUTCDate() + 1,
+    0, 0, 0
+  );
+  const until = Math.max(now + 5 * 60_000, nextMidnightUtc);
+  // Only log the first trip; subsequent trips extend silently.
+  if (until > hyperdriveDisabledUntilMs) {
+    console.warn(
+      `[HYPERDRIVE FALLBACK TRIPPED] Routing to SUPABASE_DIRECT_URL until ${new Date(until).toISOString()}. Reason: ${reason}`
+    );
+  }
+  hyperdriveDisabledUntilMs = until;
 }
 
 // Enable CORS
@@ -151,7 +208,27 @@ api.use('*', async (c, next) => {
   }
 
   const token = authHeader.split(' ')[1];
-  const db = c.var.db;
+  let db = c.var.db;
+
+  // Runs a DB access with a one-shot Hyperdrive→direct-URL fallback. If the
+  // first attempt fails with a Hyperdrive-quota / usage-limit error and a
+  // SUPABASE_DIRECT_URL is configured, we trip the per-isolate circuit
+  // breaker, rebuild the request-scoped `db`, and retry via the direct URL.
+  // All subsequent requests in this isolate will bypass Hyperdrive until the
+  // breaker resets (at next UTC midnight or +5m, whichever is later).
+  const runWithFallback = async <T>(fn: (client: DbClient) => Promise<T>): Promise<T> => {
+    try {
+      return await fn(db);
+    } catch (dbErr) {
+      if (isHyperdriveQuotaError(dbErr) && c.env.SUPABASE_DIRECT_URL) {
+        tripHyperdriveBreaker((dbErr as any)?.message ?? String(dbErr));
+        db = createDb(c.env.SUPABASE_DIRECT_URL);
+        c.set('db', db);
+        return await fn(db);
+      }
+      throw dbErr;
+    }
+  };
 
   try {
     let payload: any;
@@ -221,25 +298,29 @@ api.use('*', async (c, next) => {
     // on every authenticated request.
     let cachedUser = getCachedAuthUser(authId);
     if (!cachedUser) {
-    const dbUser = await db.query.users.findFirst({
-      where: eq(schema.users.authUserId, authId),
-    });
+      const dbUser = await runWithFallback((client) =>
+        client.query.users.findFirst({
+          where: eq(schema.users.authUserId, authId),
+        })
+      );
 
-    if (!dbUser || dbUser.status === 'INACTIVE') {
-      return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'User profile inactive or not found' } }, 403);
-    }
+      if (!dbUser || dbUser.status === 'INACTIVE') {
+        return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'User profile inactive or not found' } }, 403);
+      }
 
-      const assigns = await db
-        .select()
-        .from(schema.userStationAssignments)
-        .where(eq(schema.userStationAssignments.userId, dbUser.id));
+      const assigns = await runWithFallback((client) =>
+        client
+          .select()
+          .from(schema.userStationAssignments)
+          .where(eq(schema.userStationAssignments.userId, dbUser.id))
+      );
 
       cachedUser = {
-      id: dbUser.id,
-      email: dbUser.email,
-      fullName: dbUser.fullName ?? null,
-      organizationId: dbUser.organizationId,
-      role: dbUser.role as Role,
+        id: dbUser.id,
+        email: dbUser.email,
+        fullName: dbUser.fullName ?? null,
+        organizationId: dbUser.organizationId,
+        role: dbUser.role as Role,
         assignedStationIds: assigns.map((a) => a.stationId),
       };
       setCachedAuthUser(authId, cachedUser);

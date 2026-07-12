@@ -11,6 +11,19 @@ id = "44db8c2a98344989a2a2c572638deb63"
 # CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE=<DIRECT_DATABASE_URL>
 localConnectionString = "postgresql://postgres:postgres@127.0.0.1:54322/postgres"
 
+# --- Hyperdrive fallback -------------------------------------------------
+# The worker also reads an OPTIONAL secret `SUPABASE_DIRECT_URL`. When set,
+# it bypasses Hyperdrive and connects directly (typically via Supabase's
+# Supavisor pooler on port 6543). Use this to work around Hyperdrive daily
+# quota outages on the free plan.
+#
+#   # Set the direct URL (Supavisor transaction pooler):
+#   wrangler secret put SUPABASE_DIRECT_URL
+#     postgresql://postgres.<ref>:<password>@aws-0-<region>.pooler.supabase.com:6543/postgres
+#
+#   # Remove it to restore Hyperdrive routing:
+#   wrangler secret delete SUPABASE_DIRECT_URL
+
 [observability]
 enabled = true
 head_sampling_rate = 0.1
