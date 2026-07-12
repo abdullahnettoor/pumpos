@@ -5,6 +5,7 @@ import { Field, TextInput, NumberInput, Select, DateField } from '../primitives/
 import { Segmented } from '../primitives/Segmented.js';
 import { Combobox } from '../primitives/Combobox.js';
 import { AccountSelect } from '../primitives/AccountSelect.js';
+import { Button } from '../../pump-ds/index.js';
 
 export interface ShiftOption {
   id: string;
@@ -190,10 +191,10 @@ export const CollectionEntryForm: React.FC<CollectionEntryFormProps> = ({
       )}
 
       <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
-        <button type="button" onClick={onCancel} disabled={submitting} className="btn btn-secondary btn-md">Cancel</button>
-        <button type="submit" disabled={submitting} className="btn btn-primary btn-md">
-          {submitting ? submittingLabel : submitLabel}
-        </button>
+        <Button type="button" variant="secondary" size="md" onClick={onCancel} disabled={submitting}>Cancel</Button>
+        <Button type="submit" variant="primary" size="md" loading={submitting}>
+          {submitLabel}
+        </Button>
       </div>
     </form>
   );

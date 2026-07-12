@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { AlertTriangle, Info, CheckCircle, X } from 'lucide-react';
+import { Button } from '../../pump-ds/index.js';
 
 export type BannerSeverity = 'info' | 'success' | 'warning' | 'danger';
 
@@ -87,7 +88,7 @@ export const Banner: React.FC<BannerProps> = ({
       </span>
       <span style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
         {actionLabel && onAction && (
-          <button className="btn btn-secondary btn-sm" onClick={onAction}>{actionLabel}</button>
+          <Button variant="secondary" size="sm" onClick={onAction}>{actionLabel}</Button>
         )}
         {dismissible && (
           <button

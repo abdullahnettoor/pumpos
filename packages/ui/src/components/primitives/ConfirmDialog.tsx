@@ -1,4 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { Button } from '../../pump-ds/index.js';
 
 export interface ConfirmOptions {
   title: string;
@@ -97,17 +98,17 @@ export const ConfirmProvider: React.FC<{ children: React.ReactNode }> = ({ child
               <div style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.5 }}>{state.message}</div>
             )}
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '4px' }}>
-              <button type="button" className="btn btn-secondary btn-md" onClick={() => close(false)} autoFocus>
+              <Button type="button" variant="secondary" size="md" onClick={() => close(false)} autoFocus>
                 {state.cancelLabel || 'Cancel'}
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
-                className={`btn btn-md ${state.danger ? 'btn-danger' : 'btn-primary'}`}
+                variant={state.danger ? 'danger' : 'primary'}
+                size="md"
                 onClick={() => close(true)}
-                style={state.danger ? { backgroundColor: 'var(--brand-danger)', color: 'white', border: 'none' } : undefined}
               >
                 {state.confirmLabel || 'Confirm'}
-              </button>
+              </Button>
             </div>
           </div>
         </div>

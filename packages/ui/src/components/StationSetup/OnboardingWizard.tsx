@@ -1613,9 +1613,10 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
             {(provisioning.failedMessage || provisioning.completed) && (
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
                 {provisioning.failedMessage && (
-                  <button
+                  <Button
                     type="button"
-                    className="btn btn-primary btn-sm"
+                    variant="primary"
+                    size="sm"
                     onClick={() => {
                       const msg = provisioning.failedMessage || '';
                       const stage = provisioning.failedStage || '';
@@ -1647,11 +1648,12 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                     }}
                   >
                     Go to Section
-                  </button>
+                  </Button>
                 )}
-                <button
+                <Button
                   type="button"
-                  className="btn btn-secondary btn-sm"
+                  variant="secondary"
+                  size="sm"
                   onClick={() => setProvisioning({
                     isOpen: false,
                     stageIndex: 0,
@@ -1661,7 +1663,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                   })}
                 >
                   Close
-                </button>
+                </Button>
               </div>
             )}
           </div>

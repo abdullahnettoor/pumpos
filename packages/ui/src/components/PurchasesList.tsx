@@ -410,7 +410,7 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({ selectedStation, d
                 <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)' }}>To</label>
                 <input type="date" value={gstTo} onChange={(e) => setGstTo(e.target.value)} className="input input-compact" />
               </div>
-              <button className="btn btn-secondary btn-md" onClick={loadGstRegister} disabled={gstLoading}>{gstLoading ? 'Loading…' : 'Apply'}</button>
+              <Button variant="secondary" size="md" onClick={loadGstRegister} loading={gstLoading}>Apply</Button>
             </div>
 
             {/* Summary cards */}

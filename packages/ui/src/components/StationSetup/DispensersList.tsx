@@ -462,7 +462,7 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
                       </div>
 
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                        <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                           <label style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Name</label>
                           <input
                             type="text"
@@ -478,7 +478,7 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
                             required
                           />
                         </div>
-                        <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                           <label style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Reading (Liters)</label>
                           <input
                             type="number" min="0"
@@ -497,7 +497,7 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
                       </div>
 
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                        <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                           <label style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Fuel</label>
                           <select
                             value={nozzle.productId}
@@ -516,7 +516,7 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
                             ))}
                           </select>
                         </div>
-                        <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                           <label style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Tank</label>
                           <select
                             value={nozzle.tankId}

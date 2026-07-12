@@ -7,6 +7,7 @@ import { Field, TextInput, NumberInput, Select, DateField } from '../primitives/
 import { Combobox } from '../primitives/Combobox.js';
 import { AccountSelect } from '../primitives/AccountSelect.js';
 import { Checkbox } from '../primitives/Toggle.js';
+import { Button } from '../../pump-ds/index.js';
 
 export interface ShiftOption {
   id: string;
@@ -263,10 +264,10 @@ export const PurchaseEntryForm: React.FC<PurchaseEntryFormProps> = ({
                 </button>
               ))}
             </div>
-            <button type="button" className="btn btn-secondary btn-sm" disabled={submitting}
+            <Button type="button" variant="secondary" size="sm" disabled={submitting}
               onClick={() => append({ productId: '', quantity: undefined as unknown as number, unitPrice: undefined as unknown as number })}>
               + Add line
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -435,10 +436,10 @@ export const PurchaseEntryForm: React.FC<PurchaseEntryFormProps> = ({
       )}
 
       <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
-        <button type="button" onClick={onCancel} disabled={submitting} className="btn btn-secondary btn-md">Cancel</button>
-        <button type="submit" disabled={submitting} className="btn btn-primary btn-md">
-          {submitting ? submittingLabel : submitLabel}
-        </button>
+        <Button type="button" variant="secondary" size="md" onClick={onCancel} disabled={submitting}>Cancel</Button>
+        <Button type="submit" variant="primary" size="md" loading={submitting}>
+          {submitLabel}
+        </Button>
       </div>
     </form>
   );

@@ -7,6 +7,7 @@ import { Field, TextInput, NumberInput, Select } from '../primitives/Field.js';
 import { Segmented } from '../primitives/Segmented.js';
 import { Combobox } from '../primitives/Combobox.js';
 import { Checkbox } from '../primitives/Toggle.js';
+import { Button } from '../../pump-ds/index.js';
 import { inr, formatQty } from '../../utils/format.js';
 import { Plus, Trash2 } from 'lucide-react';
 
@@ -175,7 +176,7 @@ export const MerchandiseSaleEntryForm: React.FC<MerchandiseSaleEntryFormProps> =
                     <div style={{ flex: 1 }}>
                       <NumberInput placeholder="₹ Price" disabled={submitting} invalid={!!errors.lines?.[i]?.unitPrice} {...register(`lines.${i}.unitPrice` as const)} />
                     </div>
-                    <button type="button" className="btn btn-secondary btn-sm" style={{ padding: '6px 8px', height: 34 }} disabled={submitting || fields.length <= 1} onClick={() => remove(i)} aria-label="Remove line"><Trash2 size={13} /></button>
+                    <Button type="button" variant="secondary" size="sm" iconOnly style={{ height: 34 }} disabled={submitting || fields.length <= 1} onClick={() => remove(i)} aria-label="Remove line"><Trash2 size={13} /></Button>
                   </div>
                   {t && (
                     <div style={{ fontSize: '10px', color: 'var(--text-faint)', paddingLeft: '2px' }}>
@@ -191,9 +192,9 @@ export const MerchandiseSaleEntryForm: React.FC<MerchandiseSaleEntryFormProps> =
               );
             })}
           </div>
-          <button type="button" className="btn btn-secondary btn-sm" style={{ marginTop: '8px', display: 'inline-flex', alignItems: 'center', gap: '6px' }} disabled={submitting} onClick={() => append({ productId: '', quantity: undefined as unknown as number, unitPrice: undefined as unknown as number })}>
-            <Plus size={13} /> Add item
-          </button>
+          <Button type="button" variant="secondary" size="sm" leftIcon={<Plus size={13} />} style={{ marginTop: '8px' }} disabled={submitting} onClick={() => append({ productId: '', quantity: undefined as unknown as number, unitPrice: undefined as unknown as number })}>
+            Add item
+          </Button>
           {typeof errors.lines?.message === 'string' && (
             <div style={{ fontSize: '11px', color: 'var(--brand-danger)', marginTop: '4px' }}>{errors.lines.message}</div>
           )}
@@ -284,17 +285,12 @@ export const MerchandiseSaleEntryForm: React.FC<MerchandiseSaleEntryFormProps> =
       </div>
 
       <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
-        <button
-          type="submit"
-          className="btn btn-primary btn-md"
-          style={{ flex: 1 }}
-          disabled={submitting}
-        >
-          {submitting ? 'Recording...' : `Record ${isCredit ? 'Credit ' : ''}Sale`}
-        </button>
-        <button type="button" className="btn btn-secondary btn-md" onClick={onCancel} disabled={submitting}>
+        <Button type="submit" variant="primary" size="md" style={{ flex: 1 }} loading={submitting}>
+          {`Record ${isCredit ? 'Credit ' : ''}Sale`}
+        </Button>
+        <Button type="button" variant="secondary" size="md" onClick={onCancel} disabled={submitting}>
           Cancel
-        </button>
+        </Button>
       </div>
     </form>
   );

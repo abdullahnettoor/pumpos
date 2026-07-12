@@ -1,4 +1,5 @@
 import React from 'react';
+import { Button } from '../pump-ds/index.js';
 
 interface ErrorBoundaryProps {
   children: React.ReactNode;
@@ -85,12 +86,12 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
             {error.message}
           </pre>
           <div style={{ display: 'flex', gap: 'var(--space-2)', justifyContent: 'center' }}>
-            <button className="btn btn-secondary btn-md" onClick={this.reset}>
+            <Button variant="secondary" size="md" onClick={this.reset}>
               Try again
-            </button>
-            <button className="btn btn-primary btn-md" onClick={() => window.location.reload()}>
+            </Button>
+            <Button variant="primary" size="md" onClick={() => window.location.reload()}>
               Reload app
-            </button>
+            </Button>
           </div>
         </div>
       </div>
