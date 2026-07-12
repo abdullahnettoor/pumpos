@@ -410,6 +410,13 @@ export class CloudShiftService {
     });
   }
 
+  async closeBusinessDay(businessDayId: string): Promise<any> {
+    return request<any>('/shifts/business-day/close', {
+      method: 'POST',
+      body: JSON.stringify({ businessDayId }),
+    });
+  }
+
   async getDailyDssr(stationId: string, date: string): Promise<any> {
     return request<any>(`/dssr/daily?stationId=${stationId}&date=${date}`);
   }

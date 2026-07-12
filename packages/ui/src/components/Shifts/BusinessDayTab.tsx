@@ -1,14 +1,21 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
-import { CalendarRange, Info } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
+import { CalendarRange, Info, Lock } from 'lucide-react';
 import { resolveBusinessDate } from '@pump/shared';
-import { KpiStrip, KpiTile, Panel, StatusChip, Chip, DateText, EmptyState } from '../../pump-ds/index.js';
+import { KpiStrip, KpiTile, Panel, StatusChip, Chip, DateText, EmptyState, Button } from '../../pump-ds/index.js';
 import { DataTable } from '../primitives/DataTable.js';
+import { useToast } from '../primitives/ToastProvider.js';
+import { useConfirm } from '../primitives/ConfirmDialog.js';
+import { CloudShiftService } from '../../services/cloud.js';
 import { inr, formatQty, formatTime } from '../../utils/format.js';
-import { useDailyDssrPreview, useShiftStatus } from '../../query/hooks.js';
+import { useDailyDssrPreview, useShiftStatus, useInvalidateOperational } from '../../query/hooks.js';
+
+const shiftService = new CloudShiftService();
 
 interface BusinessDayTabProps {
   selectedStation: any | null;
+  userRole: 'Owner' | 'Manager' | 'Accountant' | 'Staff';
 }
 
 const rowStyle: React.CSSProperties = {
@@ -27,15 +34,23 @@ const money: React.CSSProperties = { fontFamily: 'var(--font-mono)', color: 'var
  * activity is visible even when no shift is open. Composed live from the DSSR
  * preview (all closed shifts + day-level collections, credit, purchases,
  * supplier payments and expenses + P&L), without writing a snapshot.
- * Phase 1 = read-only; the Close-Day / DSSR action is a later phase.
+ * Phase 2 adds the Owner/Manager "Close business day" action (generates the
+ * immutable DSSR snapshot + locks the day), blocked while a shift is open.
  */
-export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({ selectedStation }) => {
+export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({ selectedStation, userRole }) => {
   const stationId = selectedStation?.id ?? null;
   const settings = (selectedStation?.settings ?? {}) as { timezone?: string; business_day_starts_at?: string };
   const businessDate = useMemo(
     () => resolveBusinessDate({ timeZone: settings.timezone, dayStartsAt: settings.business_day_starts_at }),
     [settings.timezone, settings.business_day_starts_at],
   );
+
+  const toast = useToast();
+  const confirm = useConfirm();
+  const qc = useQueryClient();
+  const invalidateOperational = useInvalidateOperational();
+  const [closing, setClosing] = useState(false);
+  const canClose = userRole === 'Owner' || userRole === 'Manager';
 
   const previewQ = useDailyDssrPreview(stationId, businessDate, { enabled: !!stationId } as any);
   const { data: shiftStatus } = useShiftStatus(stationId, true, { enabled: !!stationId } as any);
@@ -103,6 +118,28 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({ selectedStation 
   const status = (snap?.status as string) || 'OPEN';
   const liveAsOf = preview?.generatedAt ? formatTime(preview.generatedAt) : null;
 
+  const handleCloseDay = async () => {
+    if (!snap?.businessDayId || !stationId) return;
+    const ok = await confirm({
+      title: 'Close this business day?',
+      message: `This generates the immutable DSSR snapshot for ${businessDate} and locks the day. Day-level entries can't be added afterwards.`,
+      confirmLabel: 'Close day',
+    });
+    if (!ok) return;
+    try {
+      setClosing(true);
+      await shiftService.generateDailyDssr(stationId, businessDate);
+      await shiftService.closeBusinessDay(snap.businessDayId);
+      toast.success('Business day closed · DSSR generated.');
+      invalidateOperational(stationId);
+      qc.invalidateQueries({ queryKey: ['dssr-range'] });
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to close the business day.');
+    } finally {
+      setClosing(false);
+    }
+  };
+
   const fuel = snap?.fuel ?? {};
   const collections = snap?.collections ?? {};
   const credit = snap?.credit ?? {};
@@ -125,11 +162,31 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({ selectedStation 
             <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Business day · the universal anchor for all records</div>
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <StatusChip status={status === 'CLOSED' ? 'closed' : 'open'} size="sm" />
           {preview?.live && <Chip tone="warning" size="xs">Live{liveAsOf ? ` · ${liveAsOf}` : ''}</Chip>}
+          {status !== 'CLOSED' && canClose && snap && (
+            <Button
+              variant="primary"
+              size="sm"
+              leftIcon={<Lock size={13} />}
+              loading={closing}
+              disabled={hasOpenShift}
+              title={hasOpenShift ? 'Close the active shift before closing the business day' : 'Generate the DSSR snapshot and lock this day'}
+              onClick={handleCloseDay}
+            >
+              Close business day
+            </Button>
+          )}
         </div>
       </div>
+
+      {hasOpenShift && status !== 'CLOSED' && canClose && snap && (
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', padding: '8px 12px', backgroundColor: 'var(--state-warning-bg)', color: 'var(--state-warning-fg)', borderRadius: 'var(--radius-input)', fontSize: '12px', border: '1px solid var(--border-soft)' }}>
+          <Info size={14} style={{ flexShrink: 0 }} />
+          <span>A shift is still open. Close the active shift before closing the business day.</span>
+        </div>
+      )}
 
       {previewQ.isLoading ? (
         <Panel flush title="Business day">

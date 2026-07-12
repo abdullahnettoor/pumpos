@@ -507,7 +507,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontFamily: 'var(--font-sans)' }}
       >
         {renderShiftSubTabs()}
-        <BusinessDayTab selectedStation={selectedStation} />
+        <BusinessDayTab selectedStation={selectedStation} userRole={userRole} />
       </div>
     );
   }
