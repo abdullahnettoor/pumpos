@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Station } from '@pump/shared';
 import { useEvents } from '../../query/hooks.js';
 import { Select } from '../primitives/Field.js';
+import { Panel } from '../../pump-ds/index.js';
 import { eventLabel, eventDetail, eventTone, type EventTone } from '../../utils/eventLog.js';
 
 const TONE_STYLE: Record<EventTone, { bg: string; fg: string }> = {
@@ -49,7 +50,7 @@ export const ActivityFeed: React.FC<ActivityFeedProps> = ({ stations }) => {
       ) : !events || events.length === 0 ? (
         <div style={{ color: 'var(--text-muted)', fontSize: '13px' }}>No activity recorded yet.</div>
       ) : (
-        <div className="card" style={{ overflow: 'hidden' }}>
+        <Panel flush title="Recent activity">
           {events.map((ev: any, i: number) => {
             const tone = TONE_STYLE[eventTone(ev.eventType)];
             const detail = eventDetail(ev);
@@ -85,7 +86,7 @@ export const ActivityFeed: React.FC<ActivityFeedProps> = ({ stations }) => {
               </div>
             );
           })}
-        </div>
+        </Panel>
       )}
     </div>
   );

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { CloudShiftTemplateService } from '../../services/cloud.js';
 import { ShiftTemplate } from '@pump/shared';
-import { StatusBadge } from '../StatusBadge.js';
+import { Chip } from '../../pump-ds/index.js';
 import { Drawer } from '../Drawer.js';
 import { useToast } from '../primitives/ToastProvider.js';
 
@@ -306,7 +306,7 @@ export const ShiftTemplates: React.FC = () => {
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text-strong)' }}>{t.name}</span>
-              <StatusBadge status={t.isActive ? 'ACTIVE' : 'INACTIVE'} type={t.isActive ? 'success' : 'default'} />
+              <Chip tone={t.isActive ? 'success' : 'neutral'} size="sm">{t.isActive ? 'ACTIVE' : 'INACTIVE'}</Chip>
             </div>
             <div>
               <span style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>OPERATING HOURS</span>

@@ -8,7 +8,6 @@ import {
 } from '../../services/cloud.js';
 import { queryKeys, TIER } from '../../query/hooks.js';
 import { DispenserUnit, Tank, Product, Nozzle } from '@pump/shared';
-import { StatusBadge } from '../StatusBadge.js';
 import { Drawer } from '../Drawer.js';
 import { useToast } from '../primitives/ToastProvider.js';
 

@@ -2,7 +2,6 @@ import React, { useState, useRef } from 'react';
 import { CloudShiftService } from '../../services/cloud.js';
 import { DEFAULT_SHIFT_SUMMARY_CONFIG, paperFromStation } from '../../services/reports/reportConfig.js';
 import { letterheadFromStation } from '../../services/reports/letterhead.js';
-import { StatusBadge } from '../StatusBadge.js';
 import { Button } from '../../pump-ds/index.js';
 import { ArrowLeft, Printer, Download, Unlock, AlertTriangle } from 'lucide-react';
 import { ShiftTransactionsPanel } from './ShiftTransactionsPanel.js';

@@ -1,6 +1,6 @@
 import React from 'react';
 import { OnboardingDraft, OnboardingTankDraft } from '@pump/shared';
-import { StatusBadge } from '../../StatusBadge.js';
+import { Chip, Button } from '../../../pump-ds/index.js';
 
 interface Step4TanksProps {
   draft: OnboardingDraft;
@@ -35,13 +35,14 @@ export const Step4Tanks: React.FC<Step4TanksProps> = ({
             Map each tank to its fuel and define its capacity.
           </p>
         </div>
-        <button
+        <Button
           type="button"
-          className="btn btn-primary btn-sm"
+          variant="primary"
+          size="sm"
           onClick={onAddTank}
         >
           Add Tank
-        </button>
+        </Button>
       </div>
 
       {draft.products.length > 0 && (
@@ -68,10 +69,10 @@ export const Step4Tanks: React.FC<Step4TanksProps> = ({
                   style={{ ...inputStyle, width: '110px', height: '28px', fontSize: '12px' }}
                   id={inputId}
                 />
-                <button
+                <Button
                   type="button"
-                  className="btn btn-secondary btn-sm"
-                  style={{ height: '28px', padding: '0 10px', fontSize: '11px' }}
+                  variant="secondary"
+                  size="sm"
                   onClick={() => {
                     const input = document.getElementById(inputId) as HTMLInputElement;
                     const cap = Number(input?.value) || 20000;
@@ -79,7 +80,7 @@ export const Step4Tanks: React.FC<Step4TanksProps> = ({
                   }}
                 >
                   Add
-                </button>
+                </Button>
               </div>
             );
           })}
@@ -117,7 +118,7 @@ export const Step4Tanks: React.FC<Step4TanksProps> = ({
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   <span style={{ fontWeight: 600, color: 'var(--text-strong)', fontSize: '14px' }}>{tank.name}</span>
                   <div style={{ alignSelf: 'flex-start' }}>
-                    <StatusBadge status={product?.name || 'Unmapped'} type="info" />
+                    <Chip tone="info" size="sm">{product?.name || 'Unmapped'}</Chip>
                   </div>
                 </div>
                 <div>
@@ -134,22 +135,22 @@ export const Step4Tanks: React.FC<Step4TanksProps> = ({
                   marginTop: '4px',
                   justifyContent: 'flex-end'
                 }}>
-                  <button
+                  <Button
                     type="button"
-                    className="btn btn-secondary btn-sm"
+                    variant="secondary"
+                    size="xs"
                     onClick={() => onEditTank(tank)}
-                    style={{ height: '24px', padding: '0 8px', fontSize: '11px' }}
                   >
                     Edit
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     type="button"
-                    className="btn btn-secondary btn-sm"
+                    variant="danger"
+                    size="xs"
                     onClick={() => onRemoveTank(tank.draftId)}
-                    style={{ height: '24px', padding: '0 8px', fontSize: '11px', color: 'var(--state-danger-fg)' }}
                   >
                     Remove
-                  </button>
+                  </Button>
                 </div>
               </div>
             );

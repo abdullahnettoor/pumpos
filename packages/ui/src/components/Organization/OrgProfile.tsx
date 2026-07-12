@@ -5,6 +5,7 @@ import { useOrganization, queryKeys } from '../../query/hooks.js';
 import { CloudOrganizationService } from '../../services/cloud.js';
 import { useZodForm } from '../../forms/useZodForm.js';
 import { Field, TextInput } from '../primitives/Field.js';
+import { Button } from '../../pump-ds/index.js';
 import { useToast } from '../primitives/ToastProvider.js';
 
 const orgService = new CloudOrganizationService();
@@ -90,9 +91,9 @@ export const OrgProfile: React.FC = () => {
         </Field>
       </div>
       <div style={{ marginTop: 'var(--space-2)' }}>
-        <button type="submit" className="btn btn-primary btn-md" disabled={isSubmitting}>
-          {isSubmitting ? 'Saving…' : 'Save changes'}
-        </button>
+        <Button type="submit" variant="primary" size="md" loading={isSubmitting}>
+          Save changes
+        </Button>
       </div>
     </form>
   );

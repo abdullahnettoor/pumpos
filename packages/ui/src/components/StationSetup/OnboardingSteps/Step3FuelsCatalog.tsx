@@ -1,6 +1,6 @@
 import React from 'react';
 import { OnboardingDraft, OnboardingProductDraft } from '@pump/shared';
-import { StatusBadge } from '../../StatusBadge.js';
+import { Chip, Button } from '../../../pump-ds/index.js';
 
 interface Step3FuelsCatalogProps {
   draft: OnboardingDraft;
@@ -39,18 +39,18 @@ export const Step3FuelsCatalog: React.FC<Step3FuelsCatalogProps> = ({
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
           {!hasQuickMs && (
-            <button type="button" className="btn btn-secondary btn-sm" onClick={() => handleQuickFuel('MS')}>
+            <Button type="button" variant="secondary" size="sm" onClick={() => handleQuickFuel('MS')}>
               + Petrol (MS)
-            </button>
+            </Button>
           )}
           {!hasQuickHsd && (
-            <button type="button" className="btn btn-secondary btn-sm" onClick={() => handleQuickFuel('HSD')}>
+            <Button type="button" variant="secondary" size="sm" onClick={() => handleQuickFuel('HSD')}>
               + Diesel (HSD)
-            </button>
+            </Button>
           )}
-          <button type="button" className="btn btn-primary btn-sm" onClick={onAddProduct}>
+          <Button type="button" variant="primary" size="sm" onClick={onAddProduct}>
             Add Fuel
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -89,10 +89,7 @@ export const Step3FuelsCatalog: React.FC<Step3FuelsCatalogProps> = ({
                     {product.code || '—'}
                   </span>
                 </div>
-                <StatusBadge
-                  status="Non-GST"
-                  type="info"
-                />
+                <Chip tone="info" size="sm">Non-GST</Chip>
               </div>
 
               <div style={{
@@ -107,22 +104,12 @@ export const Step3FuelsCatalog: React.FC<Step3FuelsCatalogProps> = ({
                   Unit: <strong style={{ color: 'var(--text-strong)' }}>{product.unit}</strong>
                 </span>
                 <div style={{ display: 'flex', gap: '6px' }}>
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-sm"
-                    onClick={() => onEditProduct(product)}
-                    style={{ height: '24px', padding: '0 8px', fontSize: '11px' }}
-                  >
+                  <Button type="button" variant="secondary" size="xs" onClick={() => onEditProduct(product)}>
                     Edit
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-sm"
-                    onClick={() => onRemoveProduct(product.draftId)}
-                    style={{ height: '24px', padding: '0 8px', fontSize: '11px', color: 'var(--state-danger-fg)' }}
-                  >
+                  </Button>
+                  <Button type="button" variant="danger" size="xs" onClick={() => onRemoveProduct(product.draftId)}>
                     Remove
-                  </button>
+                  </Button>
                 </div>
               </div>
             </div>

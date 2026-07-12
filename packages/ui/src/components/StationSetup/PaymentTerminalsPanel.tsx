@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { CloudPaymentTerminalService, CloudFinanceService } from '../../services/cloud.js';
 import { PaymentTerminal } from '@pump/shared';
-import { StatusBadge } from '../StatusBadge.js';
+import { Chip } from '../../pump-ds/index.js';
 import { Drawer } from '../Drawer.js';
 import { DataTable } from '../primitives/DataTable.js';
 import { Checkbox } from '../primitives/Toggle.js';
@@ -49,7 +49,7 @@ const buildTerminalColumns = (openEdit: (t: any) => void, toggleActive: (t: any)
     header: 'Settles into',
     cell: ({ row }) => <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>{clearingName(row.original.clearingAccountId)}</span>,
   },
-  { accessorKey: 'isActive', header: 'Status', cell: ({ getValue }) => <StatusBadge status={getValue() ? 'Active' : 'Inactive'} type={getValue() ? 'success' : 'default'} /> },
+  { accessorKey: 'isActive', header: 'Status', cell: ({ getValue }) => <Chip tone={getValue() ? 'success' : 'neutral'} size="sm">{getValue() ? 'Active' : 'Inactive'}</Chip> },
   {
     id: 'actions',
     header: '',

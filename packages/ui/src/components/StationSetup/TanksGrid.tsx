@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { CloudTankService, CloudProductService } from '../../services/cloud.js';
 import { queryKeys, TIER } from '../../query/hooks.js';
 import { Tank, Product } from '@pump/shared';
-import { StatusBadge } from '../StatusBadge.js';
+import { Chip } from '../../pump-ds/index.js';
 import { Drawer } from '../Drawer.js';
 import { useToast } from '../primitives/ToastProvider.js';
 
@@ -404,7 +404,7 @@ export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontWeight: 600, color: 'var(--text-strong)', fontSize: '14px' }}>{t.name}</span>
-                <StatusBadge status={product?.name || 'Unknown'} type="info" />
+                <Chip tone="info" size="sm">{product?.name || 'Unknown'}</Chip>
               </div>
               <div>
                 <span style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Capacity</span>

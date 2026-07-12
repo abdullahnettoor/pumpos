@@ -16,7 +16,7 @@ import { Tooltip } from './primitives/Tooltip.js';
 import { Menu, Popover } from './primitives/Menu.js';
 import { Banner } from './primitives/Banner.js';
 import { Drawer } from './Drawer.js';
-import { StatusBadge } from './StatusBadge.js';
+import { Chip } from '../pump-ds/index.js';
 import { inr, formatMoney, formatQty } from '../utils/format.js';
 import { DesignSystemV2Panel } from './DesignSystemV2.js';
 import { DesignSystemPumpDsPanel } from './DesignSystemPumpDs.js';
@@ -400,14 +400,14 @@ const ComponentsPanel: React.FC = () => {
   const [cardTab, setCardTab] = useState('general');
   return (
     <div>
-      <Section title="Status badges" description="Compact status pills. Pick the type that matches meaning.">
+      <Section title="Status badges" description="Compact status pills (pump-ds Chip). Pick the tone that matches meaning.">
         <Card>
           <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
-            <StatusBadge status="Open" type="success" />
-            <StatusBadge status="Pending" type="warning" />
-            <StatusBadge status="Variance" type="danger" />
-            <StatusBadge status="Credit" type="info" />
-            <StatusBadge status="Closed" type="default" />
+            <Chip tone="success" size="sm">Open</Chip>
+            <Chip tone="warning" size="sm">Pending</Chip>
+            <Chip tone="danger" size="sm">Variance</Chip>
+            <Chip tone="info" size="sm">Credit</Chip>
+            <Chip tone="neutral" size="sm">Closed</Chip>
           </div>
         </Card>
       </Section>

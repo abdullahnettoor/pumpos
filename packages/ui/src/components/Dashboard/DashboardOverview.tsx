@@ -83,8 +83,9 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
 
   if (!selectedStation) {
     return (
-      <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-sans)', padding: '24px' }}>
-        No station selected. Please configure or select a station to continue.
+      <div className="animate-fade-in flex flex-col gap-5">
+        <PageHeader title="Dashboard" />
+        <EmptyState icon={<TriangleAlert />} title="No station selected" description="Configure or select a station to continue." />
       </div>
     );
   }
@@ -100,30 +101,14 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
 
   if (error) {
     return (
-      <div style={{
-        padding: '24px',
-        backgroundColor: 'var(--state-danger-bg)',
-        color: 'var(--state-danger-fg)',
-        borderRadius: 'var(--radius-card)',
-        fontFamily: 'var(--font-sans)',
-        fontSize: '13px'
-      }}>
-        <strong>Error:</strong> {error.message || 'Failed to retrieve active shifts status'}
-        <button
-          onClick={() => refetch()}
-          style={{
-            display: 'block',
-            marginTop: '12px',
-            padding: '6px 12px',
-            backgroundColor: 'var(--bg-surface)',
-            border: '1px solid var(--border-soft)',
-            borderRadius: 'var(--radius-button)',
-            fontSize: '12px',
-            cursor: 'pointer'
-          }}
-        >
-          Retry Load
-        </button>
+      <div className="animate-fade-in flex flex-col gap-5">
+        <PageHeader title="Dashboard" subtitle={`${selectedStation.name} · ${selectedStation.code}`} />
+        <Panel title="Couldn't load the dashboard">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', alignItems: 'flex-start' }}>
+            <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>{error.message || 'Failed to retrieve the active shift status.'}</p>
+            <Button variant="secondary" size="sm" onClick={() => refetch()}>Retry</Button>
+          </div>
+        </Panel>
       </div>
     );
   }

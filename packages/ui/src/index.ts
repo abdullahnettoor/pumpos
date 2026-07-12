@@ -1,4 +1,3 @@
-export * from './components/StatusBadge.js';
 export * from './components/SyncIndicator.js';
 export * from './components/AppShell.js';
 export { QuickEntryHost } from './quick-entry/QuickEntryHost.js';

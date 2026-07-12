@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Station } from '@pump/shared';
 import { PageLayout } from '../primitives/PageLayout.js';
 import { Tabs } from '../primitives/Tabs.js';
-import { StatusBadge } from '../StatusBadge.js';
+import { Chip, Button } from '../../pump-ds/index.js';
 import { UserRolesAssignment } from '../StationSetup/UserRolesAssignment.js';
 import { OrgProfile } from './OrgProfile.js';
 import { ActivityFeed } from './ActivityFeed.js';
@@ -18,11 +18,11 @@ export interface OrganizationOverviewProps {
 const statusBadge = (status?: string) => {
   switch (status) {
     case 'READY_FOR_OPERATIONS':
-      return <StatusBadge status="Ready" type="success" />;
+      return <Chip tone="success" size="sm">Ready</Chip>;
     case 'IN_PROGRESS':
-      return <StatusBadge status="Setup In Progress" type="warning" />;
+      return <Chip tone="warning" size="sm">Setup in progress</Chip>;
     default:
-      return <StatusBadge status="Not Started" type="default" />;
+      return <Chip tone="neutral" size="sm">Not started</Chip>;
   }
 };
 
@@ -86,10 +86,10 @@ export const OrganizationOverview: React.FC<OrganizationOverviewProps> = ({
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 600, color: 'var(--state-success-fg)' }}>
                         <Check size={14} /> Active
                       </span>
-                      <button className="btn btn-secondary btn-sm" onClick={() => onNavigate('/setup/station')}>Configure</button>
+                      <Button variant="secondary" size="sm" onClick={() => onNavigate('/setup/station')}>Configure</Button>
                     </div>
                   ) : (
-                    <button className="btn btn-secondary btn-sm" style={{ flexShrink: 0 }} onClick={() => onStationChange(s)}>Set active</button>
+                    <Button variant="secondary" size="sm" style={{ flexShrink: 0 }} onClick={() => onStationChange(s)}>Set active</Button>
                   )}
                 </div>
               );

@@ -3,6 +3,8 @@ import { CloudStationService } from '../../services/cloud.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import { Checkbox } from '../primitives/Toggle.js';
 import { Segmented } from '../primitives/Segmented.js';
+import { Field, Select } from '../primitives/Field.js';
+import { Button } from '../../pump-ds/index.js';
 import {
   DEFAULT_SHIFT_SUMMARY_CONFIG, SHIFT_SUMMARY_SECTION_LABELS,
   DEFAULT_DSSR_CONFIG, DSSR_SECTION_LABELS,
@@ -185,21 +187,20 @@ export const ReportConfigPanel: React.FC<ReportConfigPanelProps> = ({ selectedSt
           <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-strong)' }}>Report Configuration</h3>
           <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Choose paper size, and which sections appear (and in what order) on each PDF report.</p>
         </div>
-        <button className="btn btn-primary btn-sm" onClick={handleSave} disabled={saving} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <Save size={13} /> {saving ? 'Saving…' : 'Save Configuration'}
-        </button>
+        <Button variant="primary" size="sm" onClick={handleSave} disabled={saving} loading={saving} leftIcon={<Save size={13} />}>
+          {saving ? 'Saving…' : 'Save Configuration'}
+        </Button>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 0.9fr)', gap: '24px', alignItems: 'start' }}>
         {/* Editor */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <div className="form-group" style={{ maxWidth: '240px' }}>
-            <label className="form-label">Paper Size</label>
-            <select className="select" value={paper} onChange={(e) => setPaper(e.target.value as 'A4' | 'LETTER')} style={{ width: '100%' }}>
+          <Field label="Paper Size" style={{ maxWidth: '240px' }}>
+            <Select value={paper} onChange={(e) => setPaper(e.target.value as 'A4' | 'LETTER')}>
               <option value="A4">A4 (210 × 297 mm)</option>
               <option value="LETTER">US Letter (8.5 × 11 in)</option>
-            </select>
-          </div>
+            </Select>
+          </Field>
 
           {renderList('Shift Summary', 'ss', ss, setSs, SHIFT_SUMMARY_SECTION_LABELS)}
           {renderList('Daily DSSR', 'dssr', dssr, setDssr, DSSR_SECTION_LABELS)}

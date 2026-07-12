@@ -8,8 +8,11 @@ import { TanksGrid } from './TanksGrid.js';
 import { DispensersList } from './DispensersList.js';
 import { ShiftTemplates } from './ShiftTemplates.js';
 import { Tabs } from '../primitives/Tabs.js';
+import { Field, TextInput, Select } from '../primitives/Field.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import { LoadingSpinner } from '../LoadingSpinner.js';
+import { PageHeader, Panel, Button, EmptyState, Chip } from '../../pump-ds/index.js';
+import { Building2 } from 'lucide-react';
 import { PaymentTerminalsPanel } from './PaymentTerminalsPanel.js';
 import { ReportConfigPanel } from './ReportConfigPanel.js';
 
@@ -166,14 +169,11 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }} className="animate-fade-in">
-      
-      {/* Header section */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-soft)', paddingBottom: '12px' }}>
-        <div>
-          <h2 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-strong)' }}>Station Setup & Administration</h2>
-          <p style={{ color: 'var(--text-muted)', fontSize: '12px' }}>Review and modify station components, products, tanks, nozzles, and settings.</p>
-        </div>
-      </div>
+
+      <PageHeader
+        title="Station Setup & Administration"
+        subtitle="Review and modify station components, products, tanks, nozzles, and settings."
+      />
 
       {selectedStation ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -197,125 +197,60 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
           />
 
           {/* Tab Content Panels */}
-          <div style={{ backgroundColor: 'var(--bg-surface)', padding: '20px', borderRadius: 'var(--radius-card)', border: '1px solid var(--border-soft)', minHeight: '350px' }}>
+          <Panel style={{ minHeight: '350px' }}>
             {activeTab === 'general' && (
               <div>
                 {editing ? (
                   <form onSubmit={handleSaveGeneral} style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxWidth: '600px' }}>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                      <div className="form-group">
-                        <label className="form-label">Station Name</label>
-                        <input
-                          type="text"
-                          className="form-input"
-                          value={name}
-                          onChange={(e) => setName(e.target.value)}
-                          required
-                        />
-                      </div>
-                      <div className="form-group">
-                        <label className="form-label">Station Code</label>
-                        <input
-                          type="text"
-                          className="form-input"
-                          value={code}
-                          onChange={(e) => setCode(e.target.value)}
-                          required
-                        />
-                      </div>
+                      <Field label="Station Name" required>
+                        <TextInput value={name} onChange={(e) => setName(e.target.value)} required />
+                      </Field>
+                      <Field label="Station Code" required>
+                        <TextInput value={code} onChange={(e) => setCode(e.target.value)} required />
+                      </Field>
                     </div>
-                    
-                    <div className="form-group">
-                      <label className="form-label">Physical Address</label>
-                      <input
-                        type="text"
-                        className="form-input"
-                        value={address}
-                        onChange={(e) => setAddress(e.target.value)}
-                      />
-                    </div>
-                    
+
+                    <Field label="Physical Address">
+                      <TextInput value={address} onChange={(e) => setAddress(e.target.value)} />
+                    </Field>
+
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                      <div className="form-group">
-                        <label className="form-label">Contact Phone</label>
-                        <input
-                          type="text"
-                          className="form-input"
-                          value={phone}
-                          onChange={(e) => setPhone(e.target.value)}
-                        />
-                      </div>
-                      <div className="form-group">
-                        <label className="form-label">Shift Grace Period (Minutes)</label>
-                        <input
-                          type="number" min="0"
-                          className="form-input mono-num"
-                          value={graceMinutes}
-                          onChange={(e) => setGraceMinutes(parseInt(e.target.value))}
-                        />
-                      </div>
+                      <Field label="Contact Phone">
+                        <TextInput value={phone} onChange={(e) => setPhone(e.target.value)} />
+                      </Field>
+                      <Field label="Shift Grace Period (Minutes)">
+                        <TextInput type="number" min="0" className="mono-num" value={graceMinutes} onChange={(e) => setGraceMinutes(parseInt(e.target.value))} />
+                      </Field>
                     </div>
 
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                      <div className="form-group">
-                        <label className="form-label">Timezone</label>
-                        <select
-                          value={timezone}
-                          onChange={(e) => setTimezone(e.target.value)}
-                          style={{ width: '100%' }}
-                        >
+                      <Field label="Timezone" hint="Used to decide which calendar day operations belong to.">
+                        <Select value={timezone} onChange={(e) => setTimezone(e.target.value)}>
                           <option value="Asia/Kolkata">Asia/Kolkata (IST)</option>
                           <option value="Asia/Dubai">Asia/Dubai (GST)</option>
                           <option value="Asia/Colombo">Asia/Colombo</option>
                           <option value="Asia/Kathmandu">Asia/Kathmandu</option>
                           <option value="Asia/Dhaka">Asia/Dhaka</option>
                           <option value="UTC">UTC</option>
-                        </select>
-                        <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                          Used to decide which calendar day operations belong to.
-                        </span>
-                      </div>
-                      <div className="form-group">
-                        <label className="form-label">Business Day Starts At</label>
-                        <input
-                          type="time"
-                          className="form-input mono-num"
-                          value={businessDayStartsAt}
-                          onChange={(e) => setBusinessDayStartsAt(e.target.value)}
-                        />
-                        <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                          A fuel day commonly runs 06:00 → 06:00. Activity before this rolls to the previous day.
-                        </span>
-                      </div>
+                        </Select>
+                      </Field>
+                      <Field label="Business Day Starts At" hint="A fuel day commonly runs 06:00 → 06:00. Activity before this rolls to the previous day.">
+                        <TextInput type="time" className="mono-num" value={businessDayStartsAt} onChange={(e) => setBusinessDayStartsAt(e.target.value)} />
+                      </Field>
                     </div>
 
-                    <div className="form-group" style={{ maxWidth: '300px' }}>
-                      <label className="form-label">Onboarding Readiness Status</label>
-                      <select
-                        value={onboardingStatus}
-                        onChange={(e) => setOnboardingStatus(e.target.value)}
-                        style={{ width: '100%' }}
-                      >
+                    <Field label="Onboarding Readiness Status" style={{ maxWidth: '300px' }}>
+                      <Select value={onboardingStatus} onChange={(e) => setOnboardingStatus(e.target.value)}>
                         <option value="NOT_STARTED">NOT STARTED</option>
                         <option value="IN_PROGRESS">IN PROGRESS</option>
                         <option value="READY_FOR_OPERATIONS">READY FOR OPERATIONS</option>
-                      </select>
-                    </div>
+                      </Select>
+                    </Field>
 
                     <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '12px', borderTop: '1px solid var(--border-soft)', paddingTop: '12px' }}>
-                      <button
-                        type="button"
-                        className="btn btn-secondary btn-sm"
-                        onClick={() => setEditing(false)}
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        className="btn btn-primary btn-sm"
-                      >
-                        Save Configuration
-                      </button>
+                      <Button type="button" variant="secondary" size="sm" onClick={() => setEditing(false)}>Cancel</Button>
+                      <Button type="submit" variant="primary" size="sm">Save Configuration</Button>
                     </div>
                   </form>
                 ) : (
@@ -323,14 +258,16 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <div>
                         <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-strong)' }}>{selectedStation.name}</h3>
-                        <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Status: <strong style={{ color: onboardingStatus === 'READY_FOR_OPERATIONS' ? 'var(--state-success-fg)' : 'var(--state-warning-fg)' }}>{onboardingStatus.replace(/_/g, ' ')}</strong></p>
+                        <p style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
+                          Status:
+                          <Chip tone={onboardingStatus === 'READY_FOR_OPERATIONS' ? 'success' : 'warning'} size="sm">
+                            {onboardingStatus.replace(/_/g, ' ')}
+                          </Chip>
+                        </p>
                       </div>
-                      <button
-                        className="btn btn-secondary btn-sm"
-                        onClick={() => setEditing(true)}
-                      >
+                      <Button variant="secondary" size="sm" onClick={() => setEditing(true)}>
                         Edit General Parameters
-                      </button>
+                      </Button>
                     </div>
 
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', borderTop: '1px solid var(--border-soft)', paddingTop: '16px' }}>
@@ -367,30 +304,24 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
                         Legal &amp; Tax (Report Letterhead)
                       </h3>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                        <div className="form-group">
-                          <label className="form-label">Legal / Trade Name</label>
-                          <input className="form-input" value={legalName} onChange={(e) => setLegalName(e.target.value)} placeholder="e.g. Sri Lakshmi Fuels" />
-                        </div>
-                        <div className="form-group">
-                          <label className="form-label">GSTIN</label>
-                          <input className="form-input mono-num" value={gstin} onChange={(e) => setGstin(e.target.value.toUpperCase())} placeholder="29ABCDE1234F1Z5" maxLength={15} />
-                        </div>
-                        <div className="form-group">
-                          <label className="form-label">State Code (place of supply)</label>
-                          <input className="form-input mono-num" value={stateCode} onChange={(e) => setStateCode(e.target.value)} placeholder="e.g. 29 (Karnataka)" maxLength={2} />
-                        </div>
-                        <div className="form-group">
-                          <label className="form-label">Retail Outlet / Dealer Code</label>
-                          <input className="form-input" value={roCode} onChange={(e) => setRoCode(e.target.value)} placeholder="RO / dealership code" />
-                        </div>
-                        <div className="form-group">
-                          <label className="form-label">Address Line</label>
-                          <input className="form-input" value={legalAddress} onChange={(e) => setLegalAddress(e.target.value)} placeholder="Street, area, city" />
-                        </div>
-                        <div className="form-group">
-                          <label className="form-label">Pincode</label>
-                          <input className="form-input mono-num" value={pincode} onChange={(e) => setPincode(e.target.value)} placeholder="560001" maxLength={6} />
-                        </div>
+                        <Field label="Legal / Trade Name">
+                          <TextInput value={legalName} onChange={(e) => setLegalName(e.target.value)} placeholder="e.g. Sri Lakshmi Fuels" />
+                        </Field>
+                        <Field label="GSTIN">
+                          <TextInput className="mono-num" value={gstin} onChange={(e) => setGstin(e.target.value.toUpperCase())} placeholder="29ABCDE1234F1Z5" maxLength={15} />
+                        </Field>
+                        <Field label="State Code (place of supply)">
+                          <TextInput className="mono-num" value={stateCode} onChange={(e) => setStateCode(e.target.value)} placeholder="e.g. 29 (Karnataka)" maxLength={2} />
+                        </Field>
+                        <Field label="Retail Outlet / Dealer Code">
+                          <TextInput value={roCode} onChange={(e) => setRoCode(e.target.value)} placeholder="RO / dealership code" />
+                        </Field>
+                        <Field label="Address Line">
+                          <TextInput value={legalAddress} onChange={(e) => setLegalAddress(e.target.value)} placeholder="Street, area, city" />
+                        </Field>
+                        <Field label="Pincode">
+                          <TextInput className="mono-num" value={pincode} onChange={(e) => setPincode(e.target.value)} placeholder="560001" maxLength={6} />
+                        </Field>
                       </div>
                     </div>
 
@@ -399,9 +330,8 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
                         Branding
                       </h3>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                        <div className="form-group">
-                          <label className="form-label">Fuel Company / Brand</label>
-                          <select value={fuelBrand} onChange={(e) => setFuelBrand(e.target.value)} style={{ width: '100%' }}>
+                        <Field label="Fuel Company / Brand">
+                          <Select value={fuelBrand} onChange={(e) => setFuelBrand(e.target.value)}>
                             <option value="">— Select —</option>
                             <option value="Indian Oil">Indian Oil (IOCL)</option>
                             <option value="Bharat Petroleum">Bharat Petroleum (BPCL)</option>
@@ -410,10 +340,9 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
                             <option value="Jio-bp">Jio-bp (Reliance)</option>
                             <option value="Shell">Shell</option>
                             <option value="Other">Other</option>
-                          </select>
-                        </div>
-                        <div className="form-group">
-                          <label className="form-label">Logo (optional, your own)</label>
+                          </Select>
+                        </Field>
+                        <Field label="Logo (optional, your own)" hint="Upload your outlet's own logo. Used on report letterheads.">
                           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                             {logoDataUrl && <img src={logoDataUrl} alt="logo" style={{ width: 36, height: 36, objectFit: 'contain', border: '1px solid var(--border-soft)', borderRadius: 4 }} />}
                             <input
@@ -429,11 +358,10 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
                               style={{ fontSize: '12px' }}
                             />
                             {logoDataUrl && (
-                              <button type="button" className="btn btn-secondary btn-sm" onClick={() => setLogoDataUrl(null)}>Remove</button>
+                              <Button type="button" variant="secondary" size="xs" onClick={() => setLogoDataUrl(null)}>Remove</Button>
                             )}
                           </div>
-                          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Upload your outlet's own logo. Used on report letterheads.</span>
-                        </div>
+                        </Field>
                       </div>
                     </div>
 
@@ -444,8 +372,8 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
                     </div>
 
                     <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '12px', borderTop: '1px solid var(--border-soft)', paddingTop: '12px' }}>
-                      <button type="button" className="btn btn-secondary btn-sm" onClick={() => setEditingBusiness(false)}>Cancel</button>
-                      <button type="submit" className="btn btn-primary btn-sm">Save Configuration</button>
+                      <Button type="button" variant="secondary" size="sm" onClick={() => setEditingBusiness(false)}>Cancel</Button>
+                      <Button type="submit" variant="primary" size="sm">Save Configuration</Button>
                     </div>
                   </form>
                 ) : (
@@ -455,7 +383,7 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
                         <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-strong)' }}>Business, Tax &amp; Branding</h3>
                         <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Legal identity and letterhead used across reports and invoices.</p>
                       </div>
-                      <button className="btn btn-secondary btn-sm" onClick={() => setEditingBusiness(true)}>Edit Business Details</button>
+                      <Button variant="secondary" size="sm" onClick={() => setEditingBusiness(true)}>Edit Business Details</Button>
                     </div>
 
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', borderTop: '1px solid var(--border-soft)', paddingTop: '16px' }}>
@@ -497,12 +425,14 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
             {activeTab === 'dispensers' && <DispensersList stationId={selectedStation.id} />}
             {activeTab === 'terminals' && <PaymentTerminalsPanel stationId={selectedStation.id} />}
             {activeTab === 'shifts' && <ShiftTemplates />}
-          </div>
+          </Panel>
         </div>
       ) : (
-        <div style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '40px', backgroundColor: 'var(--bg-surface)', borderRadius: 'var(--radius-card)', border: '1px solid var(--border-soft)' }}>
-          Please select or initialize a station location first.
-        </div>
+        <EmptyState
+          icon={<Building2 />}
+          title="No station selected"
+          description="Please select or initialize a station location first."
+        />
       )}
     </div>
   );

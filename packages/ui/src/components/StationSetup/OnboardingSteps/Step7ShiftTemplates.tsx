@@ -1,5 +1,6 @@
 import React from 'react';
 import { OnboardingDraft, OnboardingShiftTemplateDraft } from '@pump/shared';
+import { Button } from '../../../pump-ds/index.js';
 
 interface Step7ShiftTemplatesProps {
   draft: OnboardingDraft;
@@ -33,23 +34,25 @@ export const Step7ShiftTemplates: React.FC<Step7ShiftTemplatesProps> = ({
           </p>
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
-          <button
+          <Button
             type="button"
-            className="btn btn-secondary btn-sm"
+            variant="secondary"
+            size="sm"
             onClick={() => onAutofillShifts(2)}
           >
             Autofill 2 Shifts
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
-            className="btn btn-secondary btn-sm"
+            variant="secondary"
+            size="sm"
             onClick={() => onAutofillShifts(3)}
           >
             Autofill 3 Shifts
-          </button>
-          <button type="button" className="btn btn-primary btn-sm" onClick={onAddShiftTemplate}>
+          </Button>
+          <Button type="button" variant="primary" size="sm" onClick={onAddShiftTemplate}>
             Add Shift Template
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -96,22 +99,22 @@ export const Step7ShiftTemplates: React.FC<Step7ShiftTemplatesProps> = ({
                 marginTop: '4px',
                 justifyContent: 'flex-end'
               }}>
-                <button
+                <Button
                   type="button"
-                  className="btn btn-secondary btn-sm"
+                  variant="secondary"
+                  size="xs"
                   onClick={() => onEditShiftTemplate(template)}
-                  style={{ height: '24px', padding: '0 8px', fontSize: '11px' }}
                 >
                   Edit
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
-                  className="btn btn-secondary btn-sm"
+                  variant="danger"
+                  size="xs"
                   onClick={() => onRemoveShiftTemplate(template.draftId)}
-                  style={{ height: '24px', padding: '0 8px', fontSize: '11px', color: 'var(--state-danger-fg)' }}
                 >
                   Remove
-                </button>
+                </Button>
               </div>
             </div>
           ))}

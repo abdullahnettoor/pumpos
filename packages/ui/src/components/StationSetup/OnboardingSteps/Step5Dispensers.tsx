@@ -1,5 +1,6 @@
 import React from 'react';
 import { OnboardingDraft, OnboardingDispenserDraft } from '@pump/shared';
+import { Button } from '../../../pump-ds/index.js';
 
 interface Step5DispensersProps {
   draft: OnboardingDraft;
@@ -37,15 +38,15 @@ export const Step5Dispensers: React.FC<Step5DispensersProps> = ({
           </p>
         </div>
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          <button type="button" className="btn btn-secondary btn-sm" onClick={onAddDualDispenser}>
+          <Button type="button" variant="secondary" size="sm" onClick={onAddDualDispenser}>
             + Add Dual (2 Nozzles)
-          </button>
-          <button type="button" className="btn btn-secondary btn-sm" onClick={onAddQuadDispenser}>
+          </Button>
+          <Button type="button" variant="secondary" size="sm" onClick={onAddQuadDispenser}>
             + Add Quad (4 Nozzles)
-          </button>
-          <button type="button" className="btn btn-primary btn-sm" onClick={onAddCustomDispenser}>
+          </Button>
+          <Button type="button" variant="primary" size="sm" onClick={onAddCustomDispenser}>
             Add Custom
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -132,22 +133,22 @@ export const Step5Dispensers: React.FC<Step5DispensersProps> = ({
                   marginTop: '4px',
                   justifyContent: 'flex-end'
                 }}>
-                  <button
+                  <Button
                     type="button"
-                    className="btn btn-secondary btn-sm"
+                    variant="secondary"
+                    size="xs"
                     onClick={() => onManageDispenser(du)}
-                    style={{ height: '24px', padding: '0 8px', fontSize: '11px' }}
                   >
                     Manage Nozzles
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     type="button"
-                    className="btn btn-secondary btn-sm"
+                    variant="danger"
+                    size="xs"
                     onClick={() => onRemoveDispenser(du.draftId)}
-                    style={{ height: '24px', padding: '0 8px', fontSize: '11px', color: 'var(--state-danger-fg)' }}
                   >
                     Remove
-                  </button>
+                  </Button>
                 </div>
               </div>
             );

@@ -1,6 +1,6 @@
 import React from 'react';
 import { OnboardingDraft, OperatingDaySchedule } from '@pump/shared';
-import { StatusBadge } from '../../StatusBadge.js';
+import { Chip } from '../../../pump-ds/index.js';
 import { formatWeekday } from '../onboardingDraft.js';
 import { Checkbox } from '../../primitives/Toggle.js';
 
@@ -164,10 +164,9 @@ export const Step2BusinessRules: React.FC<Step2BusinessRulesProps> = ({
           <div>
             <span style={fieldLabelStyle}>Operating Mode</span>
             <div style={{ marginTop: '4px' }}>
-              <StatusBadge
-                status={draft.businessRules.operatingSchedule.isTwentyFourSeven ? '24/7' : 'Scheduled'}
-                type={draft.businessRules.operatingSchedule.isTwentyFourSeven ? 'success' : 'info'}
-              />
+              <Chip tone={draft.businessRules.operatingSchedule.isTwentyFourSeven ? 'success' : 'info'} size="sm">
+                {draft.businessRules.operatingSchedule.isTwentyFourSeven ? '24/7' : 'Scheduled'}
+              </Chip>
             </div>
           </div>
           {!draft.businessRules.operatingSchedule.isTwentyFourSeven && (

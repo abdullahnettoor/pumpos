@@ -11,7 +11,7 @@ import {
 } from '@pump/shared';
 import { CloudStationService } from '../../services/cloud.js';
 import { Drawer } from '../Drawer.js';
-import { StatusBadge } from '../StatusBadge.js';
+import { Button, Chip } from '../../pump-ds/index.js';
 import { useConfirm } from '../primitives/ConfirmDialog.js';
 import {
   clearStoredOnboardingDraft,
@@ -713,13 +713,14 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
           </div>
         </div>
 
-        <button
+        <Button
           type="button"
+          variant="secondary"
+          size="sm"
           onClick={discardDraft}
-          className="btn btn-secondary btn-sm"
         >
           Discard Draft
-        </button>
+        </Button>
 
         {/* Global Progress Bar */}
         <div style={{
@@ -867,27 +868,28 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
         padding: '0 24px',
         flexShrink: 0,
       }}>
-        <button
+        <Button
           type="button"
-          className="btn btn-secondary btn-sm"
+          variant="secondary"
+          size="sm"
           onClick={() => setCurrentStep((prev) => Math.max(prev - 1, 1))}
           disabled={currentStep === 1}
         >
           Previous Step
-        </button>
+        </Button>
 
         <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
           Step {currentStep} of {steps.length}
         </div>
 
         {currentStep === steps.length ? (
-          <button type="button" className="btn btn-primary btn-md" onClick={handleProvision}>
+          <Button type="button" variant="primary" size="md" onClick={handleProvision}>
             Provision Station
-          </button>
+          </Button>
         ) : (
-          <button type="button" className="btn btn-primary btn-md" onClick={handleNext}>
+          <Button type="button" variant="primary" size="md" onClick={handleNext}>
             Next Step
-          </button>
+          </Button>
         )}
       </footer>
 
@@ -1582,13 +1584,13 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                   }}>
                     <span style={{ fontSize: '13px', color: 'var(--text-default)', fontWeight: isActive ? 600 : 500 }}>{stage}</span>
                     {isFailed ? (
-                      <StatusBadge status="Failed" type="danger" />
+                      <Chip tone="danger" size="sm">Failed</Chip>
                     ) : isCompleted ? (
-                      <StatusBadge status="Done" type="success" />
+                      <Chip tone="success" size="sm">Done</Chip>
                     ) : isActive ? (
-                      <StatusBadge status="Running" type="info" />
+                      <Chip tone="info" size="sm">Running</Chip>
                     ) : (
-                      <StatusBadge status="Queued" type="default" />
+                      <Chip tone="neutral" size="sm">Queued</Chip>
                     )}
                   </div>
                 );

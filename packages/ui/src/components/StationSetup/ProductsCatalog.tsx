@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { CloudProductService } from '../../services/cloud.js';
 import { queryKeys, TIER } from '../../query/hooks.js';
 import { Product, PRODUCT_UNITS } from '@pump/shared';
-import { StatusBadge } from '../StatusBadge.js';
+import { Chip } from '../../pump-ds/index.js';
 import { Drawer } from '../Drawer.js';
 import { ProductImportDrawer } from './ProductImportDrawer.js';
 import { DataTable } from '../primitives/DataTable.js';
@@ -24,7 +24,7 @@ const buildProductColumns = (startEdit: (p: any) => void, archive: (id: string) 
     header: 'Type',
     cell: ({ getValue }) => {
       const t = getValue() as string;
-      return <StatusBadge status={t} type={t === 'FUEL' ? 'info' : t === 'LUBRICANT' ? 'success' : 'default'} />;
+      return <Chip tone={t === 'FUEL' ? 'info' : t === 'LUBRICANT' ? 'success' : 'neutral'} size="sm">{t}</Chip>;
     },
   },
   {

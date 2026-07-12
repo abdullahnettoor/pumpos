@@ -3,6 +3,7 @@ import { OnboardingDraft, OnboardingPaymentTerminalDraft } from '@pump/shared';
 import { createPaymentTerminalDraft } from '../onboardingDraft.js';
 import { Checkbox } from '../../primitives/Toggle.js';
 import { ProviderField } from '../../primitives/ProviderField.js';
+import { Button } from '../../../pump-ds/index.js';
 
 interface Step8PaymentTerminalsProps {
   draft: OnboardingDraft;
@@ -76,9 +77,9 @@ export const Step8PaymentTerminals: React.FC<Step8PaymentTerminalsProps> = ({
             is opened. Optional — you can run cash-only and add terminals later from Station Setup.
           </p>
         </div>
-        <button type="button" className="btn btn-primary btn-sm" onClick={addTerminal}>
+        <Button type="button" variant="primary" size="sm" onClick={addTerminal}>
           Add Terminal
-        </button>
+        </Button>
       </div>
 
       {/* Quick fill: create N identical machines from one provider at once. */}
@@ -102,15 +103,16 @@ export const Step8PaymentTerminals: React.FC<Step8PaymentTerminalsProps> = ({
               onChange={(e) => setQuickCount(Number(e.target.value))}
             />
           </div>
-          <button
+          <Button
             type="button"
-            className="btn btn-secondary btn-sm"
+            variant="secondary"
+            size="sm"
             onClick={quickAdd}
             disabled={!quickProvider.trim() || quickCount < 1}
             style={{ height: '32px' }}
           >
             Add {Math.max(1, Math.min(50, Math.floor(quickCount) || 1))} machine{Math.max(1, Math.min(50, Math.floor(quickCount) || 1)) > 1 ? 's' : ''}
-          </button>
+          </Button>
         </div>
         <span style={{ fontSize: '11px', color: 'var(--text-faint)' }}>
           Creates machines labelled "{quickProvider.trim() || 'Provider'} POS 1", "…POS 2" — you can rename or set each TID below.
@@ -129,14 +131,14 @@ export const Step8PaymentTerminals: React.FC<Step8PaymentTerminalsProps> = ({
                 <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                   Terminal {idx + 1}
                 </span>
-                <button
+                <Button
                   type="button"
-                  className="btn btn-secondary btn-sm"
+                  variant="danger"
+                  size="xs"
                   onClick={() => removeTerminal(terminal.draftId)}
-                  style={{ height: '24px', padding: '0 8px', fontSize: '11px', color: 'var(--state-danger-fg)' }}
                 >
                   Remove
-                </button>
+                </Button>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>

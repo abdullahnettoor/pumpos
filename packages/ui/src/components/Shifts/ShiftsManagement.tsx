@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { inr } from '../../utils/format.js';
 import { CloudShiftService, CloudTransactionService } from '../../services/cloud.js';
-import { StatusBadge } from '../StatusBadge.js';
 import { ShiftSummaryView } from './ShiftSummaryView.js';
 import { HandoverDrawer } from './HandoverDrawer.js';
 import { ShiftControlBar } from './ShiftControlBar.js';
