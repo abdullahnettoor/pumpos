@@ -145,19 +145,22 @@ export const QuickEntryHost: React.FC<QuickEntryHostProps> = ({ selectedStation 
     } catch (err: any) { setError(err.message || 'Failed to record collection'); } finally { setSubmitting(false); }
   };
 
-  const handlePurchase = async (values: PurchaseEntryFormValues) => {
+  const handlePurchase = async (values: PurchaseEntryFormValues, payment?: { amount: number; accountId?: string | null }) => {
     if (!values.supplierId || values.lines.length === 0) { setError('Select a supplier and at least one line.'); return; }
     try {
       setSubmitting(true); setError(null);
-      await txService.recordPurchase({
-        stationId: stationId ?? undefined,
-        transactionDate: businessDate,
-        supplierId: values.supplierId,
-        invoiceNumber: values.invoiceNumber || undefined,
-        notes: values.notes || undefined,
-        lines: values.lines.map((l) => ({ productId: l.productId, quantity: Number(l.quantity), unitPrice: Number(l.unitPrice), tankAllocations: l.tankAllocations && l.tankAllocations.length > 0 ? l.tankAllocations : undefined })),
-      });
-      done('Purchase recorded.');
+      // Populate the shift id when a shift is open (business day is the anchor;
+      // shift id is stored for provenance). No shift → business-day anchored.
+      const shiftId = values.targetShiftId || activeShiftId;
+      const lines = values.lines.map((l) => ({ productId: l.productId, quantity: Number(l.quantity), unitPrice: Number(l.unitPrice), tankAllocations: l.tankAllocations && l.tankAllocations.length > 0 ? l.tankAllocations : undefined }));
+      const pay = payment && payment.amount > 0 ? { amount: payment.amount, accountId: payment.accountId ?? null } : undefined;
+      const base = { supplierId: values.supplierId, invoiceNumber: values.invoiceNumber || undefined, notes: values.notes || undefined, lines, payment: pay };
+      await txService.recordPurchase(
+        shiftId
+          ? { shiftId, ...base }
+          : { stationId: stationId ?? undefined, transactionDate: values.transactionDate || businessDate, ...base },
+      );
+      done(pay ? 'Purchase recorded with payment.' : 'Purchase recorded.');
     } catch (err: any) { setError(err.message || 'Failed to record purchase'); } finally { setSubmitting(false); }
   };
 
@@ -236,10 +239,15 @@ export const QuickEntryHost: React.FC<QuickEntryHostProps> = ({ selectedStation 
       ) : type === 'purchase' ? (
         <PurchaseEntryForm
           shiftOptions={shiftOptions}
+          showShiftHintWhenSingle={!!activeShiftId}
+          showDateField={!activeShiftId}
+          dateLabel="Purchase Date"
           suppliers={suppliers}
           products={products}
           tanks={tanks}
-          defaultValues={{ supplierId: suppliers[0]?.id ?? '', lines: [{ productId: products[0]?.id ?? '', quantity: undefined as unknown as number, unitPrice: undefined as unknown as number }], ...extra }}
+          stationId={stationId}
+          enablePayment
+          defaultValues={{ supplierId: suppliers[0]?.id ?? '', targetShiftId: activeShiftId ?? '', transactionDate: businessDate, lines: [{ productId: products[0]?.id ?? '', quantity: undefined as unknown as number, unitPrice: undefined as unknown as number }], ...extra }}
           submitting={submitting}
           error={error}
           onCancel={close}

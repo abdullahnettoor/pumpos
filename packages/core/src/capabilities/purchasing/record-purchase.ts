@@ -118,11 +118,17 @@ export class RecordPurchase implements UseCase<RecordPurchaseCommand, RecordPurc
 
     let businessDayId: string;
     let stationId = cmd.stationId ?? ctx.stationId ?? null;
+    // A purchase is always anchored to the business day. When it is recorded from
+    // within an open shift we ALSO stamp the shift id — purchases never touch the
+    // drawer (so this is pure attribution, not a reconciliation input), but storing
+    // it keeps shift-level provenance available for future reporting.
+    let shiftIdToStore: string | null = null;
     if (cmd.shiftId) {
       const shift = await this.deps.shifts.findById(cmd.shiftId);
       if (!shift || shift.organizationId !== ctx.organizationId) return err(notFoundError('Shift', cmd.shiftId));
       businessDayId = shift.businessDayId;
       stationId = shift.stationId;
+      shiftIdToStore = shift.id;
     } else if (stationId) {
       const date = cmd.transactionDate ?? resolveBusinessDate({ now: ctx.clock.now(), timeZone: ctx.timeZone, dayStartsAt: ctx.businessDayStartsAt });
       const bd = await ensureBusinessDayForDate(this.deps.businessDays, ctx, stationId, date);
@@ -254,7 +260,7 @@ export class RecordPurchase implements UseCase<RecordPurchaseCommand, RecordPurc
     const purchase: Purchase = {
       id: purchaseId,
       documentNumber,
-      shiftId: null,
+      shiftId: shiftIdToStore,
       businessDayId,
       supplierId: supplier.id,
       invoiceNumber: cmd.invoiceNumber ?? null,
@@ -288,7 +294,7 @@ export class RecordPurchase implements UseCase<RecordPurchaseCommand, RecordPurc
 
     const payable: SupplierTransaction = {
       id: ctx.ids.newId(),
-      shiftId: null,
+      shiftId: shiftIdToStore,
       businessDayId,
       supplierId: supplier.id,
       transactionType: 'Purchase',

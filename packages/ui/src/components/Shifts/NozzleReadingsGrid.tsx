@@ -83,7 +83,13 @@ export const NozzleReadingsGrid: React.FC<NozzleReadingsGridProps> = ({
           </tr>
         </thead>
         <tbody>
-          {nozzleReadings.map((nr: any, idx: number) => {
+          {[...nozzleReadings]
+            .sort((a: any, b: any) => {
+              const du = String(a.duCode || a.duName || '').localeCompare(String(b.duCode || b.duName || ''), undefined, { numeric: true });
+              if (du !== 0) return du;
+              return String(a.nozzleName || '').localeCompare(String(b.nozzleName || ''), undefined, { numeric: true });
+            })
+            .map((nr: any, idx: number) => {
             const opening = Number(nr.openingReading);
             const closing = closingReadings[nr.nozzleId] ?? opening;
             const volume = closing - opening;

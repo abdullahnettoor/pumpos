@@ -470,7 +470,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
       tabs={[
         {
           id: 'today',
-          label: 'Today',
+          label: 'Active Shift',
           icon: <Clock3 size={13} />,
           badge: activeShift ? (
             <span
@@ -604,7 +604,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         />
 
         {/* 1b. Merchandise Handovers (walk-in bulk, per employee) */}
-        <MerchandiseHandoversPanel shiftId={activeShift.id} onChanged={loadShiftStatus} />
+        <MerchandiseHandoversPanel shiftId={activeShift.id} stationId={selectedStation?.id ?? null} onChanged={loadShiftStatus} />
 
         {/* 2. Nozzle Readings Grid */}
         <NozzleReadingsGrid

@@ -8,7 +8,7 @@ import { useToast } from '../primitives/ToastProvider.js';
 import { useConfirm } from '../primitives/ConfirmDialog.js';
 import { CloudTransactionService, CloudProductService, CloudUserAssignmentService } from '../../services/cloud.js';
 import { useMerchandiseHandovers, useMerchandiseSales, queryKeys } from '../../query/hooks.js';
-import { inr } from '../../utils/format.js';
+import { inr, formatQty } from '../../utils/format.js';
 import { Plus, Trash2, Pencil } from 'lucide-react';
 
 const txService = new CloudTransactionService();
@@ -17,6 +17,8 @@ const userService = new CloudUserAssignmentService();
 
 export interface MerchandiseHandoversPanelProps {
   shiftId: string;
+  /** Station whose merchandise stock-on-hand is shown in the product picker. */
+  stationId?: string | null;
   /** Called after a handover is recorded/deleted so the shift reconciliation refreshes. */
   onChanged?: () => void;
 }
@@ -50,7 +52,7 @@ function lineTax(product: any, qty: number) {
  * seamless. Each handover is a cash sale attributed to the employee, so it flows
  * into their cash-handover reconciliation. Editable while the shift is open.
  */
-export const MerchandiseHandoversPanel: React.FC<MerchandiseHandoversPanelProps> = ({ shiftId, onChanged }) => {
+export const MerchandiseHandoversPanel: React.FC<MerchandiseHandoversPanelProps> = ({ shiftId, stationId, onChanged }) => {
   const toast = useToast();
   const confirm = useConfirm();
   const qc = useQueryClient();
@@ -61,6 +63,7 @@ export const MerchandiseHandoversPanel: React.FC<MerchandiseHandoversPanelProps>
   const loading = handoversQ.isLoading || billedQ.isLoading;
   const [products, setProducts] = useState<any[]>([]);
   const [sellers, setSellers] = useState<{ userId: string; userName: string }[]>([]);
+  const [stock, setStock] = useState<Record<string, number>>({});
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -87,6 +90,13 @@ export const MerchandiseHandoversPanel: React.FC<MerchandiseHandoversPanelProps>
           .filter((u: any) => (u.status ? u.status === 'ACTIVE' : true))
           .map((u: any) => ({ userId: u.id, userName: u.fullName || u.email || 'User' })),
       );
+    }
+    // On-hand stock per product (so similarly-named items are distinguishable).
+    if (stationId) {
+      const items = await txService.getInventoryItems(stationId).catch(() => []);
+      const map: Record<string, number> = {};
+      (items || []).forEach((i: any) => { map[i.productId] = Number(i.quantity); });
+      setStock(map);
     }
   };
 
@@ -326,7 +336,12 @@ export const MerchandiseHandoversPanel: React.FC<MerchandiseHandoversPanelProps>
                 return (
                   <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: '6px', padding: '10px', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', backgroundColor: 'var(--bg-surface)' }}>
                     <Combobox
-                      options={products.map((pr) => ({ value: pr.id, label: `${pr.name}${pr.brand ? ` · ${pr.brand}` : ''}`, sublabel: pr.sellingPrice != null ? `MRP ${inr(pr.sellingPrice)}` : 'No price set' }))}
+                      options={products.map((pr) => {
+                        const onHand = stock[pr.id];
+                        const priceLabel = pr.sellingPrice != null ? `MRP ${inr(pr.sellingPrice)}` : 'No price set';
+                        const stockLabel = onHand != null ? `${formatQty(onHand, 0)} ${pr.unit || 'unit'} on hand` : null;
+                        return { value: pr.id, label: `${pr.name}${pr.brand ? ` · ${pr.brand}` : ''}`, sublabel: stockLabel ? `${priceLabel} · ${stockLabel}` : priceLabel };
+                      })}
                       value={r.productId}
                       onChange={(v) => setRows((prev) => prev.map((x, j) => (j === i ? { ...x, productId: v } : x)))}
                       placeholder="Select product…"

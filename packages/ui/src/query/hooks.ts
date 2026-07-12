@@ -406,6 +406,8 @@ export function useInvalidateOperational() {
     qc.invalidateQueries({ queryKey: ['shift-transactions'] });
     qc.invalidateQueries({ queryKey: ['merchandise-handovers'] });
     qc.invalidateQueries({ queryKey: ['merchandise-sales'] });
+    // Business Day cockpit + P&L read the live DSSR preview — refresh it too.
+    qc.invalidateQueries({ queryKey: ['dssr-preview'] });
     qc.invalidateQueries({ queryKey: ['expenses'] });
     qc.invalidateQueries({ queryKey: ['purchases'] });
     qc.invalidateQueries({ queryKey: ['collections'] });

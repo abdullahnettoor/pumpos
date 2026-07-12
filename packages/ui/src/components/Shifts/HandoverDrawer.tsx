@@ -3,6 +3,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Drawer } from '../Drawer.js';
+import { Button } from '../../pump-ds/index.js';
 import { CloudShiftService, CloudTransactionService } from '../../services/cloud.js';
 import { inr } from '../../utils/format.js';
 
@@ -109,21 +110,23 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
 
     setError(null);
     if (existingHandover) {
-      setValue('cashHandedOver', Number(existingHandover.cashHandedOver ?? 0));
-      setValue('cardHandedOver', Number(existingHandover.cardHandedOver ?? 0));
-      setValue('upiHandedOver', Number(existingHandover.upiHandedOver ?? 0));
-      setValue('creditHandedOver', Number(existingHandover.creditHandedOver ?? 0));
+      setValue('cashHandedOver', (Number(existingHandover.cashHandedOver) || '') as any);
+      setValue('cardHandedOver', (Number(existingHandover.cardHandedOver) || '') as any);
+      setValue('upiHandedOver', (Number(existingHandover.upiHandedOver) || '') as any);
+      setValue('creditHandedOver', (Number(existingHandover.creditHandedOver) || '') as any);
     } else {
-      setValue('cashHandedOver', 0);
-      setValue('cardHandedOver', 0);
-      setValue('upiHandedOver', 0);
-      setValue('creditHandedOver', 0);
+      setValue('cashHandedOver', '' as any);
+      setValue('cardHandedOver', '' as any);
+      setValue('upiHandedOver', '' as any);
+      setValue('creditHandedOver', '' as any);
     }
 
-    // Initialize readings and testing maps
+    // Initialize readings and testing maps. Closing keeps the opening reading as a
+    // helpful starting point; testing defaults blank (placeholder 0) so the field
+    // is empty for typing rather than pre-filled with a literal 0.
     nozzles.forEach((nz) => {
       setValue(`nozzleReadings.${nz.nozzleId}`, Number(nz.closingReading ?? nz.openingReading ?? 0));
-      setValue(`nozzleTesting.${nz.nozzleId}`, 0); // Default testing volume to 0
+      setValue(`nozzleTesting.${nz.nozzleId}`, '' as any);
     });
 
     // Initialize per-terminal POS batch maps for THIS DU's terminals only
@@ -134,8 +137,8 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
       .filter((t: any) => t.duId === duId)
       .forEach((t: any) => {
         const prior = existingEntries.find((e) => e.terminalId === t.terminalId);
-        setValue(`terminalCard.${t.terminalId}`, Number(prior?.cardAmount ?? 0));
-        setValue(`terminalUpi.${t.terminalId}`, Number(prior?.upiAmount ?? 0));
+        setValue(`terminalCard.${t.terminalId}`, (Number(prior?.cardAmount) || '') as any);
+        setValue(`terminalUpi.${t.terminalId}`, (Number(prior?.upiAmount) || '') as any);
       });
   }, [isOpen, existingHandover, nozzles, terminals, duId, setValue]);
 
@@ -519,7 +522,7 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
                     type="number"
                     step="0.1"
                     min="0"
-                    required
+                    placeholder="0"
                     {...register(`nozzleTesting.${nz.nozzleId}`)}
                     style={{
                       width: '100%',
@@ -583,6 +586,7 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
                             type="number"
                             step="any"
                             min="0"
+                            placeholder="0"
                             {...register(`terminalCard.${t.terminalId}`)}
                             style={{ height: '30px', padding: '0 8px', border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-input)', fontFamily: 'var(--font-mono)', fontSize: '12px', textAlign: 'right' }}
                           />
@@ -595,6 +599,7 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
                             type="number"
                             step="any"
                             min="0"
+                            placeholder="0"
                             {...register(`terminalUpi.${t.terminalId}`)}
                             style={{ height: '30px', padding: '0 8px', border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-input)', fontFamily: 'var(--font-mono)', fontSize: '12px', textAlign: 'right' }}
                           />
@@ -652,9 +657,9 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
           )}
 
           {!ccOpen ? (
-            <button type="button" onClick={() => setCcOpen(true)} className="btn btn-secondary btn-sm" style={{ alignSelf: 'flex-start' }}>
+            <Button type="button" variant="secondary" size="sm" onClick={() => setCcOpen(true)} style={{ alignSelf: 'flex-start' }}>
               + Add credit sale
-            </button>
+            </Button>
           ) : (
             <div style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', padding: '10px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {/* Combined search: customer name OR vehicle number */}
@@ -737,10 +742,10 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
               )}
 
               <div style={{ display: 'flex', gap: '8px' }}>
-                <button type="button" onClick={addCreditLine} disabled={ccBusy || !ccCustomerId || !(Number(ccAmount) > 0)} className="btn btn-primary btn-sm">
-                  {ccBusy ? 'Saving…' : '+ Add credit sale'}
-                </button>
-                <button type="button" onClick={() => { resetCcRow(); setCcOpen(false); }} disabled={ccBusy} className="btn btn-secondary btn-sm">Done</button>
+                <Button type="button" variant="primary" size="sm" onClick={addCreditLine} disabled={!ccCustomerId || !(Number(ccAmount) > 0)} loading={ccBusy}>
+                  + Add credit sale
+                </Button>
+                <Button type="button" variant="secondary" size="sm" onClick={() => { resetCcRow(); setCcOpen(false); }} disabled={ccBusy}>Done</Button>
               </div>
             </div>
           )}
@@ -758,8 +763,9 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
                 type="number"
                 step="any"
                 min="0"
+                placeholder="0"
                 {...register('cashHandedOver')}
-                style={{ height: '32px', padding: '0 8px', width: '100%', minWidth: 0, border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-input)', fontFamily: 'var(--font-mono)', fontSize: '13px' }}
+                style={{ height: '32px', padding: '0 8px', width: '100%', minWidth: 0, border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-input)', fontFamily: 'var(--font-mono)', fontSize: '13px', textAlign: 'right' }}
               />
               {errors.cashHandedOver && (
                 <span style={{ color: 'var(--brand-danger)', fontSize: '10px' }}>{errors.cashHandedOver.message}</span>
@@ -860,41 +866,23 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
           </div>
         )}
         <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
-          <button
+          <Button
             type="submit"
-            disabled={submitting || calculatedNozzles.some((n) => n.closing < n.opening)}
-            style={{
-              flex: 1,
-              height: '36px',
-              backgroundColor: 'var(--brand-primary)',
-              color: 'white',
-              border: 'none',
-              borderRadius: 'var(--radius-button)',
-              fontWeight: 600,
-              fontSize: '13px',
-              cursor: submitting || calculatedNozzles.some((n) => n.closing < n.opening) ? 'not-allowed' : 'pointer',
-              opacity: submitting || calculatedNozzles.some((n) => n.closing < n.opening) ? 0.6 : 1,
-            }}
+            variant="primary"
+            disabled={calculatedNozzles.some((n) => n.closing < n.opening)}
+            loading={submitting}
+            style={{ flex: 1, height: '36px' }}
           >
-            {submitting ? 'Saving...' : 'Save Handover & Readings'}
-          </button>
-          <button
+            Save Handover &amp; Readings
+          </Button>
+          <Button
             type="button"
+            variant="secondary"
             onClick={onClose}
-            style={{
-              flex: 1,
-              height: '36px',
-              backgroundColor: 'var(--bg-surface-alt)',
-              color: 'var(--text-default)',
-              border: '1px solid var(--border-soft)',
-              borderRadius: 'var(--radius-button)',
-              fontWeight: 600,
-              fontSize: '13px',
-              cursor: 'pointer',
-            }}
+            style={{ flex: 1, height: '36px' }}
           >
             Cancel
-          </button>
+          </Button>
         </div>
       </form>
     </Drawer>
