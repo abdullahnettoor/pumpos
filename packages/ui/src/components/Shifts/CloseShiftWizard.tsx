@@ -184,7 +184,7 @@ export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
             </label>
             <input
               type="number" min="0"
-              value={closingCash}
+              value={closingCash || ''}
               onChange={(e) => onClosingCashChange(Number(e.target.value))}
               className="close-wizard-input close-wizard-input--num"
               placeholder="0"
