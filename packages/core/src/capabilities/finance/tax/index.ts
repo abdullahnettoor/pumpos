@@ -77,12 +77,13 @@ export function computeLineTax(line: TaxLineInput, interState: boolean): TaxLine
 
   // When the amount is tax-inclusive (retail MRP), back-calculate the taxable
   // base so tax is extracted from the price rather than added on top.
-  let taxable = line.taxableAmount;
+  const gross = line.taxableAmount;
+  let taxable = gross;
   if (line.inclusive) {
     let divisor = 1;
     if (line.taxCategory === 'GST') divisor = 1 + (gstRate + cessRate) / 100;
     else if (line.taxCategory === 'FUEL_VAT') divisor = 1 + vatRate / 100;
-    taxable = divisor > 0 ? line.taxableAmount / divisor : line.taxableAmount;
+    taxable = divisor > 0 ? gross / divisor : gross;
   }
   taxable = round2(taxable);
 
@@ -92,7 +93,25 @@ export function computeLineTax(line: TaxLineInput, interState: boolean): TaxLine
   let vat = 0;
   let cess = 0;
 
-  if (line.taxCategory === 'GST') {
+  if (line.inclusive) {
+    // Inclusive (MRP): the customer pays exactly the gross, so preserve it and
+    // derive the total tax as gross − taxable (no rounding drift), then split it
+    // back into components. Recomputing total from taxable×rate would drift the
+    // total a cent or two below the MRP.
+    const totalTax = round2(gross - taxable);
+    if (line.taxCategory === 'GST') {
+      cess = cessRate > 0 ? round2((totalTax * cessRate) / (gstRate + cessRate)) : 0;
+      const gstPart = round2(totalTax - cess);
+      if (interState) {
+        igst = gstPart;
+      } else {
+        cgst = round2(gstPart / 2);
+        sgst = round2(gstPart - cgst);
+      }
+    } else if (line.taxCategory === 'FUEL_VAT') {
+      vat = totalTax;
+    }
+  } else if (line.taxCategory === 'GST') {
     if (interState) {
       igst = round2((taxable * gstRate) / 100);
     } else {
@@ -106,7 +125,8 @@ export function computeLineTax(line: TaxLineInput, interState: boolean): TaxLine
   // EXEMPT / NON_TAXABLE → no tax.
 
   const taxTotal = round2(cgst + sgst + igst + vat + cess);
-  return { taxableAmount: taxable, cgst, sgst, igst, vat, cess, taxTotal, total: round2(taxable + taxTotal) };
+  const total = line.inclusive ? round2(gross) : round2(taxable + taxTotal);
+  return { taxableAmount: taxable, cgst, sgst, igst, vat, cess, taxTotal, total };
 }
 
 export function computeTax(lines: TaxLineInput[], ctx: TaxContext = {}): TaxComputation {

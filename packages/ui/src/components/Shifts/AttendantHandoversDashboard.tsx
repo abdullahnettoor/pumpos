@@ -55,8 +55,19 @@ export const AttendantHandoversDashboard: React.FC<AttendantHandoversDashboardPr
     };
   }, [staffAssignments, handovers]);
 
+  const recordedCount = staffAssignments.filter((sa: any) => handovers.some((h: any) => h.userId === sa.userId && h.duId === sa.duId)).length;
+  const assignedCount = staffAssignments.length;
+
   return (
-    <Panel flush title="Attendant handovers">
+    <Panel
+      flush
+      title="Attendant handovers"
+      action={
+        <Chip tone={assignedCount > 0 && recordedCount >= assignedCount ? 'success' : 'neutral'} size="sm">
+          {recordedCount}/{assignedCount} recorded
+        </Chip>
+      }
+    >
       <div
         className="shift-table-shell"
         data-shadow-left={showLeftHint ? 'true' : 'false'}

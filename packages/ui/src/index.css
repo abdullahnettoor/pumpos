@@ -545,7 +545,22 @@ select:disabled {
   flex-direction: column;
   gap: 8px;
   border-color: var(--border-strong);
-  box-shadow: 0 4px 14px rgba(24, 32, 26, 0.04);
+  box-shadow: 0 6px 18px rgba(24, 32, 26, 0.08);
+}
+
+/* Solid full-bleed backdrop so scrolling content is cleanly hidden behind the
+   sticky bar (covers the content-area top padding + side gutters) instead of
+   peeking around its edges. */
+.shift-control-bar::before {
+  content: "";
+  position: absolute;
+  top: calc(-1 * var(--space-6));
+  left: calc(-1 * var(--space-6));
+  right: calc(-1 * var(--space-6));
+  bottom: 0;
+  background: var(--bg-canvas);
+  z-index: -1;
+  pointer-events: none;
 }
 
 .shift-control-bar__row {

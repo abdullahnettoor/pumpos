@@ -50,6 +50,16 @@ export const ShiftHistoryTab: React.FC<ShiftHistoryTabProps> = ({
         cell: ({ row }) => <DateText value={row.original.generatedAt} variant="datetime" />,
       },
       {
+        id: 'businessDate',
+        header: 'Business Day',
+        cell: ({ row }) =>
+          row.original.businessDate ? (
+            <DateText value={row.original.businessDate} />
+          ) : (
+            <span style={{ color: 'var(--text-faint)' }}>—</span>
+          ),
+      },
+      {
         id: 'template',
         header: 'Template',
         cell: ({ row }) => (

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { AppTopBar } from './AppTopBar.js';
 import { cn } from '../pump-ds/lib/cn.js';
 import { Station } from '@pump/shared';
@@ -228,6 +228,20 @@ export const AppShell: React.FC<AppShellProps> = ({
 }) => {
   // Sidebar expanded by default; the top-bar hamburger collapses it to an icon rail.
   const [collapsed, setCollapsed] = useState(false);
+
+  // App-wide: stop mouse-wheel from changing a focused number input's value
+  // (a common source of accidental edits while scrolling). Blurring the input on
+  // wheel keeps page scrolling intact while preventing the value change.
+  useEffect(() => {
+    const onWheel = (e: WheelEvent) => {
+      const el = document.activeElement as HTMLInputElement | null;
+      if (el && el.tagName === 'INPUT' && el.type === 'number' && el === e.target) {
+        el.blur();
+      }
+    };
+    document.addEventListener('wheel', onWheel, { passive: true });
+    return () => document.removeEventListener('wheel', onWheel);
+  }, []);
 
   const visibleNavItems = navItems.filter(
     (item) => !item.roles || item.roles.includes(userRole)

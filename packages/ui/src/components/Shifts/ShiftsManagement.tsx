@@ -461,6 +461,9 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     : 'idle';
 
   const renderShiftSubTabs = () => (
+    // Lift the tab strip above the sticky control-bar backdrop (z-20) so its
+    // underline baseline is never masked by the backdrop at rest.
+    <div style={{ position: 'relative', zIndex: 25 }}>
     <Tabs
       variant="underline"
       aria-label="Shift views"
@@ -493,6 +496,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         { id: 'history', label: 'History', icon: <History size={13} /> },
       ]}
     />
+    </div>
   );
 
   // Sub-tab: Business Day (read-only day cockpit)

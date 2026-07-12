@@ -862,9 +862,11 @@ shiftsRouter.get('/shift-summaries', async (c) => {
       shift: schema.shifts,
       snapshotData: schema.shiftSummaries.snapshotData,
       generatedAt: schema.shiftSummaries.generatedAt,
+      businessDate: schema.businessDays.businessDate,
     })
     .from(schema.shiftSummaries)
     .innerJoin(schema.shifts, eq(schema.shifts.id, schema.shiftSummaries.shiftId))
+    .leftJoin(schema.businessDays, eq(schema.businessDays.id, schema.shifts.businessDayId))
     .where(and(eq(schema.shifts.stationId, stationId), eq(schema.shifts.organizationId, user.organizationId)))
     .orderBy(desc(schema.shiftSummaries.generatedAt));
 
@@ -875,6 +877,7 @@ shiftsRouter.get('/shift-summaries', async (c) => {
       openedAt: r.shift.openedAt,
       closedAt: r.shift.closedAt,
       businessDayId: r.shift.businessDayId,
+      businessDate: r.businessDate,
       generatedAt: r.generatedAt,
       snapshotData: await projectShiftSummary(db, r.shift, r.snapshotData),
     })),

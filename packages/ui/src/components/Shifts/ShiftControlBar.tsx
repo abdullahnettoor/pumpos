@@ -1,7 +1,7 @@
 import React from 'react';
 import { inr } from '../../utils/format.js';
 import { Clock3, FileText, Fuel, Receipt, ShoppingBag, ShoppingCart, Wallet } from 'lucide-react';
-import { Button, StatusChip, Chip } from '../../pump-ds/index.js';
+import { Button, Chip } from '../../pump-ds/index.js';
 
 type QuickAction = {
   key: string;
@@ -86,7 +86,7 @@ export const ShiftControlBar: React.FC<ShiftControlBarProps> = ({
     <div className="shift-control-bar card animate-fade-in">
       <div className="shift-control-bar__inline">
         <div className="shift-control-bar__cluster shift-control-bar__identity">
-          {isPreparingClose ? <Chip tone="warning" size="sm">Closing</Chip> : <StatusChip status="open" size="sm" />}
+          {isPreparingClose && <Chip tone="warning" size="sm">Closing</Chip>}
           <strong style={{ fontSize: '13px', color: 'var(--text-strong)' }}>
             {activeShift.templateName}
           </strong>
@@ -118,12 +118,6 @@ export const ShiftControlBar: React.FC<ShiftControlBarProps> = ({
               )}
             </Button>
           ))}
-        </div>
-
-        <div className="shift-control-bar__cluster shift-control-bar__kpis">
-          <span>
-            Hand <strong>{handoversCompleted}/{handoversAssigned}</strong>
-          </span>
         </div>
 
         <div className="shift-control-bar__cluster shift-control-bar__close">
