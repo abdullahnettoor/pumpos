@@ -506,6 +506,8 @@ export const App: React.FC = () => {
           <ReportsOverview
             selectedStation={selectedStation}
             userRole={userRole || 'Staff'}
+            intent={navIntent}
+            onIntentConsumed={() => setNavIntent(null)}
           />
         );
       case '/organization':

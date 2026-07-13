@@ -4,4 +4,5 @@ export type {
   QuickCreateAction,
   NotificationItem,
   UserMenuAction,
+  BusinessDayOption,
 } from './TopBar.js';

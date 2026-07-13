@@ -26,6 +26,8 @@ export interface NavIntent {
   focusInventoryId?: string;
   /** Open a drawer immediately on arrival at the destination page. */
   open?: 'customer-statement' | 'new-customer' | 'new-collection' | 'supplier-statement' | 'supplier-payment' | 'new-expense';
+  /** Open a specific past business day's DSSR summary (Reports page). */
+  openDssrDate?: string;
 }
 
 export interface AppShellProps {

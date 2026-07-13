@@ -1,9 +1,10 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
 import { CloudShiftService } from '../services/cloud.js';
 import { useDailyDssrRange } from '../query/hooks.js';
 import { useQueryClient } from '@tanstack/react-query';
 import { DailyDssrView } from './DailyDssrView.js';
+import type { NavIntent } from './AppShell.js';
 import { PageLayout } from './primitives/PageLayout.js';
 import { Tabs } from './primitives/Tabs.js';
 import { DataTable } from './primitives/DataTable.js';
@@ -37,6 +38,8 @@ const dssrColumns: ColumnDef<any, any>[] = [
 interface ReportsOverviewProps {
   selectedStation: any | null;
   userRole: 'Owner' | 'Manager' | 'Accountant' | 'Staff';
+  intent?: NavIntent | null;
+  onIntentConsumed?: () => void;
 }
 
 type ReportsTab = 'daily-dssr' | 'pnl' | 'ledger' | 'invoices' | 'expense-register' | 'cash-bank';
@@ -44,6 +47,8 @@ type ReportsTab = 'daily-dssr' | 'pnl' | 'ledger' | 'invoices' | 'expense-regist
 export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
   selectedStation,
   userRole,
+  intent,
+  onIntentConsumed,
 }) => {
   const qc = useQueryClient();
   const stationId = selectedStation?.id ?? null;
@@ -79,6 +84,29 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
     }
     return { count: dssrList.length, volume, cash };
   }, [dssrList]);
+
+  // Deep-link: opening a past business day from the top-bar anchor dropdown.
+  // Uses the on-the-fly preview so it works whether or not a snapshot exists.
+  const handledDssrDateRef = useRef<string | null>(null);
+  useEffect(() => {
+    const date = intent?.openDssrDate;
+    if (!date || !stationId) return;
+    if (handledDssrDateRef.current === date) return;
+    handledDssrDateRef.current = date;
+    setActiveTab('daily-dssr');
+    let cancelled = false;
+    (async () => {
+      try {
+        const result = await shiftService.getDailyDssrPreview(stationId, date);
+        if (!cancelled) setActiveDailyDssr(result);
+      } catch {
+        if (!cancelled) setSelectedDate(date);
+      } finally {
+        onIntentConsumed?.();
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [intent?.openDssrDate, stationId, onIntentConsumed]);
 
   const handleGenerateDailyDssr = async () => {
     if (!selectedStation || !selectedDate) return;

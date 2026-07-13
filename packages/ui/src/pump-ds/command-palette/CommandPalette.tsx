@@ -83,7 +83,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
               <Command.Input
                 autoFocus
                 placeholder={placeholder}
-                className="flex-1 bg-transparent text-[14px] text-ink-strong outline-none placeholder:text-ink-muted"
+                className="flex-1 bg-transparent text-[14px] text-ink-strong outline-none focus:outline-none focus-visible:outline-none placeholder:text-ink-muted"
               />
               <Kbd>esc</Kbd>
             </div>

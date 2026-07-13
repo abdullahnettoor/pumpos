@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   Receipt, Wallet, ShoppingCart, ShoppingBag, CreditCard, Users, Truck, Package, FileText,
   ArrowUpRight, LogOut, TriangleAlert, Clock, LayoutDashboard,
@@ -9,10 +9,10 @@ import { openQuickEntry } from '../quick-entry/store.js';
 import {
   TopBar, CommandPalette, useCommandPalette,
   type CommandGroup, type CommandItem, type NotificationItem,
-  type QuickCreateAction, type UserMenuAction, type SyncStatus,
+  type QuickCreateAction, type UserMenuAction, type SyncStatus, type BusinessDayOption,
 } from '../pump-ds/index.js';
 import {
-  useShiftStatus, useCustomers, useSuppliers, useProducts,
+  useShiftStatus, useCustomers, useSuppliers, useProducts, useDailyDssrRange,
 } from '../query/hooks.js';
 import { useStationAlerts } from '../query/useStationAlerts.js';
 import { inr } from '../utils/format.js';
@@ -56,6 +56,21 @@ function formatDayLabel(iso: string): string {
   return dt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', timeZone: 'UTC' });
 }
 
+function formatDayLabelLong(iso: string): string {
+  // iso is YYYY-MM-DD; render as "Mon, 09 Jul".
+  const [y, m, d] = iso.split('-').map(Number);
+  if (!y || !m || !d) return iso;
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return dt.toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', timeZone: 'UTC' });
+}
+
+function addDaysIso(iso: string, days: number): string {
+  const [y, m, d] = iso.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + days);
+  return dt.toISOString().slice(0, 10);
+}
+
 export const AppTopBar: React.FC<AppTopBarProps> = ({
   selectedStation,
   navItems,
@@ -83,10 +98,30 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
   const businessDate = formatDayLabel(businessIso);
   const businessDayStatus: 'open' | 'closed' = (shiftStatus as any)?.activeShift ? 'open' : 'closed';
 
+  // --- recent business days (dropdown) ---
+  // Lazily loaded: the DSSR range is only fetched once the anchor menu opens,
+  // so the always-mounted top bar never triggers a 30-day compute up front.
+  // TODO(follow-up): replace with a lightweight `business_days` list endpoint
+  // (honest per-day open/closed status, close-day action) instead of proxying
+  // the DSSR range.
+  const [dayMenuOpen, setDayMenuOpen] = useState(false);
+  const rangeFrom = addDaysIso(businessIso, -30);
+  const rangeTo = addDaysIso(businessIso, -1);
+  const { data: dssrRange } = useDailyDssrRange(stationId, rangeFrom, rangeTo, { enabled: !!stationId && dayMenuOpen } as any);
+  const businessDays: BusinessDayOption[] = useMemo(() => {
+    const rows = (dssrRange as any[]) || [];
+    return rows
+      .map((r) => r?.businessDate as string)
+      .filter((d): d is string => !!d && d !== businessIso)
+      .sort((a, b) => (a < b ? 1 : -1))
+      .slice(0, 10)
+      .map((d) => ({ date: d, label: formatDayLabelLong(d) }));
+  }, [dssrRange, businessIso]);
+
   // --- quick create ---
   const quickCreate: QuickCreateAction[] = useMemo(() => {
     const items: QuickCreateAction[] = [
-      { id: 'expense', label: 'Expense', icon: <Receipt />, shortcut: 'E', onSelect: () => openQuickEntry('expense') },
+      { id: 'expense', label: 'Expense', icon: <Receipt />, onSelect: () => openQuickEntry('expense') },
       { id: 'collection', label: 'Collection', icon: <Wallet />, onSelect: () => openQuickEntry('collection') },
       { id: 'merchandise-sale', label: 'Merchandise sale', icon: <ShoppingBag />, onSelect: () => openQuickEntry('merchandise-sale') },
       { id: 'purchase', label: 'Purchase', icon: <ShoppingCart />, onSelect: () => openQuickEntry('purchase') },
@@ -212,6 +247,9 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
         businessDate={businessDate}
         businessDayStatus={businessDayStatus}
         onBusinessDay={() => onNavigate('/dashboard')}
+        businessDays={businessDays}
+        onSelectBusinessDay={(date) => onNavigate('/reports', { openDssrDate: date })}
+        onBusinessDayMenuOpenChange={setDayMenuOpen}
         stationLabel={selectedStation?.name}
         onOpenSearch={() => setOpen(true)}
         quickCreate={quickCreate}

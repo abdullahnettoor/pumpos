@@ -45,6 +45,19 @@ export interface UserMenuAction {
   onSelect: () => void;
 }
 
+export interface BusinessDayOption {
+  /** Business date, YYYY-MM-DD. */
+  date: string;
+  /** Human label (e.g. "Mon, 12 May"). */
+  label: string;
+  status?: 'open' | 'closed';
+}
+
+/** True on macOS/iPadOS — render the ⌘ glyph instead of the "Ctrl" text. */
+const IS_MAC =
+  typeof navigator !== 'undefined' &&
+  /Mac|iP(hone|ad|od)/i.test(navigator.platform || navigator.userAgent || '');
+
 export interface TopBarProps {
   onToggleSidebar?: () => void;
 
@@ -53,7 +66,14 @@ export interface TopBarProps {
 
   businessDate: string;
   businessDayStatus: 'open' | 'closed';
+  /** Navigate to today's live view (dashboard). */
   onBusinessDay?: () => void;
+  /** Recent past business days shown in the anchor dropdown. */
+  businessDays?: BusinessDayOption[];
+  /** Open a past day's summary. */
+  onSelectBusinessDay?: (date: string) => void;
+  /** Notified when the business-day dropdown opens/closes (for lazy loading). */
+  onBusinessDayMenuOpenChange?: (open: boolean) => void;
 
   /** Single-station label (switcher deferred). Omit to hide. */
   stationLabel?: string;
@@ -102,6 +122,9 @@ export const TopBar: React.FC<TopBarProps> = ({
   businessDate,
   businessDayStatus,
   onBusinessDay,
+  businessDays = [],
+  onSelectBusinessDay,
+  onBusinessDayMenuOpenChange,
   stationLabel,
   onOpenSearch,
   searchPlaceholder = 'Search customers, invoices, shifts…',
@@ -129,7 +152,35 @@ export const TopBar: React.FC<TopBarProps> = ({
         <div className="select-none pl-0.5 pr-1 text-[15px] font-bold tracking-[-0.01em] text-brand">{brand}</div>
       )}
 
-      <BusinessDayChip date={businessDate} status={businessDayStatus} onClick={onBusinessDay} />
+      <Menu onOpenChange={onBusinessDayMenuOpenChange}>
+        <MenuTrigger asChild>
+          <BusinessDayChip date={businessDate} status={businessDayStatus} />
+        </MenuTrigger>
+        <MenuContent align="start">
+          <MenuLabel>Business day</MenuLabel>
+          <MenuItem onSelect={onBusinessDay}>
+            <span className="flex flex-1 items-center justify-between gap-3">
+              <span>Today · {businessDate}</span>
+              <span className={cn('text-[11px] font-medium', businessDayStatus === 'open' ? 'text-brand' : 'text-ink-muted')}>
+                {businessDayStatus === 'open' ? 'Open' : 'Closed'}
+              </span>
+            </span>
+          </MenuItem>
+          {businessDays.length > 0 && <MenuSeparator />}
+          {businessDays.map((d) => (
+            <MenuItem key={d.date} onSelect={() => onSelectBusinessDay?.(d.date)}>
+              <span className="flex flex-1 items-center justify-between gap-3">
+                <span>{d.label}</span>
+                {d.status && (
+                  <span className={cn('text-[11px]', d.status === 'open' ? 'text-brand' : 'text-ink-faint')}>
+                    {d.status === 'open' ? 'Open' : 'Closed'}
+                  </span>
+                )}
+              </span>
+            </MenuItem>
+          ))}
+        </MenuContent>
+      </Menu>
 
       {stationLabel && (
         <div className="hidden items-center gap-1.5 rounded-button px-2 text-[12px] text-ink-muted lg:inline-flex" title="Single station">
@@ -146,7 +197,9 @@ export const TopBar: React.FC<TopBarProps> = ({
         <Search className="size-4" />
         <span className="flex-1 truncate text-left">{searchPlaceholder}</span>
         <span className="flex items-center gap-0.5">
-          <kbd className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded border border-border-strong border-b-2 bg-surface px-1 font-mono text-[10px] font-medium text-ink-strong"><CommandIcon className="size-2.5" /></kbd>
+          <kbd className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded border border-border-strong border-b-2 bg-surface px-1 font-mono text-[10px] font-medium text-ink-strong">
+            {IS_MAC ? <CommandIcon className="size-2.5" /> : 'Ctrl'}
+          </kbd>
           <kbd className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded border border-border-strong border-b-2 bg-surface px-1 font-mono text-[10px] font-medium text-ink-strong">K</kbd>
         </span>
       </button>
