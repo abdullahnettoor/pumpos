@@ -210,10 +210,14 @@ export const ProductsCatalog: React.FC<{ selectedStation?: any | null }> = ({ se
     setBrand((p as any).brand ?? '');
     setSellingPrice((p as any).sellingPrice != null ? String((p as any).sellingPrice) : '');
     setCostPrice((p as any).costBasis != null && Number((p as any).costBasis) > 0 ? String((p as any).costBasis) : '');
-    setGstRate(p.taxConfig?.gst_rate || 18);
-    setHsnCode(p.taxConfig?.hsn_code || '');
-    setPriceInclusive(p.taxConfig?.price_inclusive !== false);
-    setVatRate((p.taxConfig as any)?.vat_rate || 0);
+    // taxConfig is a jsonb column; normalize in case it arrives as a JSON string
+    // so the GST rate / HSN / inclusive flag reliably repopulate on edit.
+    const rawTc = (p as any).taxConfig;
+    const tc = (typeof rawTc === 'string' ? (() => { try { return JSON.parse(rawTc); } catch { return {}; } })() : rawTc) || {};
+    setGstRate(tc.gst_rate != null ? Number(tc.gst_rate) : 18);
+    setHsnCode(tc.hsn_code || '');
+    setPriceInclusive(tc.price_inclusive !== false);
+    setVatRate(tc.vat_rate != null ? Number(tc.vat_rate) : 0);
     setIsCodeEdited(true);
     setIsFormOpen(true);
   };

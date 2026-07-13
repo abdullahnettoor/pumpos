@@ -17,21 +17,19 @@ export type ProductType = 'FUEL' | 'LUBRICANT' | 'ADDITIVE' | 'ACCESSORY' | 'CON
  */
 export type TaxCategory = 'FUEL_VAT' | 'GST' | 'EXEMPT' | 'NON_TAXABLE';
 
-/** Curated units of measure so the value is system-decided, not free text. */
+/** Curated units of measure so the value is system-decided, not free text.
+ * Scoped to what a fuel station actually sells: fuels (L / kg), lubricants &
+ * additives (L / ml / Bottle / Can), countable merchandise (Nos / Packet), and
+ * labour (Service). */
 export const PRODUCT_UNITS = [
   { value: 'L', label: 'Liters (L)' },
-  { value: 'ml', label: 'Milliliters (ml)' },
   { value: 'kg', label: 'Kilograms (kg)' },
-  { value: 'g', label: 'Grams (g)' },
-  { value: 'Nos', label: 'Numbers (Nos)' },
+  { value: 'ml', label: 'Milliliters (ml)' },
+  { value: 'Nos', label: 'Numbers / Pieces (Nos)' },
   { value: 'Bottle', label: 'Bottle' },
   { value: 'Can', label: 'Can' },
-  { value: 'Box', label: 'Box' },
   { value: 'Packet', label: 'Packet' },
-  { value: 'Set', label: 'Set' },
-  { value: 'Pair', label: 'Pair' },
-  { value: 'Meter', label: 'Meter' },
-  { value: 'Service', label: 'Service' },
+  { value: 'Service', label: 'Service / Job' },
 ] as const;
 
 export type ProductUnit = (typeof PRODUCT_UNITS)[number]['value'];
