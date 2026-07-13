@@ -3,26 +3,58 @@ import { Drawer } from '../Drawer.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import { CloudProductService } from '../../services/cloud.js';
 import type { Product } from '@pump/shared';
+import { PRODUCT_UNITS } from '@pump/shared';
 
 const productService = new CloudProductService();
 
 const PRODUCT_TYPES = ['FUEL', 'LUBRICANT', 'ADDITIVE', 'ACCESSORY', 'CONSUMABLE', 'SPARE_PART', 'SERVICE', 'OTHER'];
 const TAX_CATEGORIES = ['FUEL_VAT', 'GST', 'EXEMPT', 'NON_TAXABLE'];
 
+// Canonical units keyed by lowercase, so a case-only difference ('l' -> 'L')
+// normalizes silently without a warning.
+const UNIT_BY_LOWER = new Map(PRODUCT_UNITS.map((u) => [u.value.toLowerCase(), u.value] as const));
+// Common free-text spellings mapped to a curated unit. Anything not here (and
+// not a canonical unit) is imported as 'Nos' with a warning so the row is never
+// silently wrong nor blocked.
+const UNIT_SYNONYMS: Record<string, string> = {
+  ltr: 'L', ltrs: 'L', liter: 'L', liters: 'L', litre: 'L', litres: 'L',
+  kgs: 'kg', kilo: 'kg', kilos: 'kg', kilogram: 'kg', kilograms: 'kg',
+  milliliter: 'ml', millilitre: 'ml', milliliters: 'ml', millilitres: 'ml',
+  no: 'Nos', 'no.': 'Nos', 'nos.': 'Nos', pc: 'Nos', pcs: 'Nos', pce: 'Nos', piece: 'Nos', pieces: 'Nos',
+  unit: 'Nos', units: 'Nos', ea: 'Nos', each: 'Nos', qty: 'Nos', number: 'Nos', numbers: 'Nos',
+  box: 'Nos', boxes: 'Nos', set: 'Nos', sets: 'Nos', pair: 'Nos', pairs: 'Nos', meter: 'Nos', metre: 'Nos',
+  bottles: 'Bottle', btl: 'Bottle', btls: 'Bottle',
+  cans: 'Can', tin: 'Can', tins: 'Can',
+  packets: 'Packet', pkt: 'Packet', pkts: 'Packet', pouch: 'Packet', pouches: 'Packet', sachet: 'Packet', sachets: 'Packet', pack: 'Packet', packs: 'Packet',
+  service: 'Service', services: 'Service', job: 'Service', jobs: 'Service', labour: 'Service', labor: 'Service', svc: 'Service',
+};
+
+/** Resolve a free-text unit to a curated one. `known` is false when we had to
+ * fall back to the default (Nos) because nothing matched. */
+function normalizeUnit(raw: string): { value: string; known: boolean } {
+  const key = raw.trim().toLowerCase();
+  const canonical = UNIT_BY_LOWER.get(key);
+  if (canonical) return { value: canonical, known: true };
+  const syn = UNIT_SYNONYMS[key];
+  if (syn) return { value: syn, known: true };
+  return { value: 'Nos', known: false };
+}
+
 // Header columns (case-insensitive). Order in the sample; parsing maps by name.
 const COLUMNS = ['name', 'code', 'productType', 'unit', 'taxCategory', 'gstRate', 'hsnCode', 'brand', 'category', 'sellingPrice', 'costPriceExGst', 'openingStock'];
 
 const SAMPLE_CSV = [
   COLUMNS.join(','),
-  'Engine Oil 20W40,LUB-2040,LUBRICANT,pc,GST,18,27101980,Servo,Lubricants,520,410,24',
-  'Coolant 1L,LUB-COOL,LUBRICANT,pc,GST,18,38200000,,Lubricants,240,180,10',
-  'Air Freshener,ACC-AF,ACCESSORY,pc,GST,18,33074900,,Accessories,120,70,0',
+  'Engine Oil 20W40,LUB-2040,LUBRICANT,Bottle,GST,18,27101980,Servo,Lubricants,520,410,24',
+  'Coolant 1L,LUB-COOL,LUBRICANT,Can,GST,18,38200000,,Lubricants,240,180,10',
+  'Air Freshener,ACC-AF,ACCESSORY,Nos,GST,18,33074900,,Accessories,120,70,0',
 ].join('\n');
 
 interface ParsedRow {
   raw: Record<string, string>;
   rowNumber: number;
   errors: string[];
+  warnings: string[];
   payload: any | null;
 }
 
@@ -73,6 +105,7 @@ export const ProductImportDrawer: React.FC<ProductImportDrawerProps> = ({ isOpen
   );
 
   const validCount = useMemo(() => rows.filter((r) => r.errors.length === 0).length, [rows]);
+  const warningCount = useMemo(() => rows.filter((r) => r.errors.length === 0 && r.warnings.length > 0).length, [rows]);
 
   const reset = () => {
     setFileName('');
@@ -108,10 +141,10 @@ export const ProductImportDrawer: React.FC<ProductImportDrawerProps> = ({ isOpen
       COLUMNS.forEach((c) => { raw[c] = get(c); });
 
       const errors: string[] = [];
+      const warnings: string[] = [];
       const name = raw.name;
       const code = raw.code.toUpperCase();
       const productType = raw.productType.toUpperCase();
-      const unit = raw.unit;
       const taxCategoryRaw = raw.taxCategory.toUpperCase();
 
       if (!name) errors.push('name is required');
@@ -120,7 +153,20 @@ export const ProductImportDrawer: React.FC<ProductImportDrawerProps> = ({ isOpen
       else if (existingCodes.has(code)) errors.push(`code "${code}" already exists`);
       if (code) seenCodes.add(code);
       if (!PRODUCT_TYPES.includes(productType)) errors.push(`invalid productType "${raw.productType}"`);
-      if (!unit) errors.push('unit is required');
+      // Unit: required, then normalized to a curated value. Synonyms map silently
+      // (with a note); unrecognized free text imports as 'Nos' with a warning.
+      let unit = '';
+      if (!raw.unit) {
+        errors.push('unit is required');
+      } else {
+        const norm = normalizeUnit(raw.unit);
+        unit = norm.value;
+        if (norm.value.toLowerCase() !== raw.unit.trim().toLowerCase()) {
+          warnings.push(norm.known
+            ? `unit "${raw.unit}" mapped to "${norm.value}"`
+            : `unrecognized unit "${raw.unit}" — set to "${norm.value}"; adjust the product after import if needed`);
+        }
+      }
       const taxCategory = taxCategoryRaw || (productType === 'FUEL' ? 'FUEL_VAT' : 'GST');
       if (taxCategoryRaw && !TAX_CATEGORIES.includes(taxCategoryRaw)) errors.push(`invalid taxCategory "${raw.taxCategory}"`);
 
@@ -159,7 +205,7 @@ export const ProductImportDrawer: React.FC<ProductImportDrawerProps> = ({ isOpen
           payload.stationId = selectedStation?.id ?? undefined;
         }
       }
-      return { raw, rowNumber: i + 2, errors, payload };
+      return { raw, rowNumber: i + 2, errors, warnings, payload };
     });
     setRows(parsed);
   };
@@ -200,6 +246,7 @@ export const ProductImportDrawer: React.FC<ProductImportDrawerProps> = ({ isOpen
           Upload a CSV to bulk-add products. Rows are validated here before anything is sent. Columns:
           <code style={{ display: 'block', marginTop: '6px', fontSize: '11px', color: 'var(--text-default)' }}>{COLUMNS.join(', ')}</code>
           <span style={{ fontSize: '11px' }}>Cost is entered <strong>ex-GST</strong> (pre-tax). Opening stock applies to non-fuel items and needs a selected station.</span>
+          <span style={{ display: 'block', fontSize: '11px', marginTop: '4px' }}>Accepted units: <code style={{ fontSize: '11px' }}>{PRODUCT_UNITS.map((u) => u.value).join(', ')}</code>. Common spellings (pc, litre, kgs, job…) are auto-mapped; anything unrecognized imports as <code style={{ fontSize: '11px' }}>Nos</code> with a warning.</span>
         </div>
 
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
@@ -231,6 +278,7 @@ export const ProductImportDrawer: React.FC<ProductImportDrawerProps> = ({ isOpen
           <>
             <div style={{ display: 'flex', gap: '16px', fontSize: '12px', fontWeight: 600 }}>
               <span style={{ color: 'var(--state-success-fg)' }}>{validCount} valid</span>
+              {warningCount > 0 && <span style={{ color: 'var(--state-warning-fg)' }}>{warningCount} with warnings</span>}
               <span style={{ color: 'var(--state-danger-fg)' }}>{rows.length - validCount} with errors</span>
               <span style={{ color: 'var(--text-muted)' }}>{rows.length} total</span>
             </div>
@@ -246,13 +294,13 @@ export const ProductImportDrawer: React.FC<ProductImportDrawerProps> = ({ isOpen
                 </thead>
                 <tbody>
                   {rows.map((r) => (
-                    <tr key={r.rowNumber} style={{ backgroundColor: r.errors.length ? 'var(--state-danger-bg)' : 'transparent' }}>
+                    <tr key={r.rowNumber} style={{ backgroundColor: r.errors.length ? 'var(--state-danger-bg)' : r.warnings.length ? 'var(--state-warning-bg)' : 'transparent' }}>
                       <td style={{ ...cellStyle, color: 'var(--text-muted)' }}>{r.rowNumber}</td>
                       <td style={{ ...cellStyle, color: 'var(--text-strong)' }}>{r.raw.name || '—'}</td>
                       <td style={{ ...cellStyle, fontFamily: 'var(--font-mono)' }}>{r.raw.code || '—'}</td>
                       <td style={{ ...cellStyle }}>{r.raw.productType || '—'}</td>
-                      <td style={{ ...cellStyle, color: r.errors.length ? 'var(--state-danger-fg)' : 'var(--state-success-fg)' }}>
-                        {r.errors.length ? r.errors.join('; ') : 'OK'}
+                      <td style={{ ...cellStyle, whiteSpace: 'normal', color: r.errors.length ? 'var(--state-danger-fg)' : r.warnings.length ? 'var(--state-warning-fg)' : 'var(--state-success-fg)' }}>
+                        {r.errors.length ? r.errors.join('; ') : r.warnings.length ? r.warnings.join('; ') : 'OK'}
                       </td>
                     </tr>
                   ))}
