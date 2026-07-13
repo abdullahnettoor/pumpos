@@ -214,7 +214,7 @@ export const FuelPricingPanel: React.FC<FuelPricingPanelProps> = ({ selectedStat
                         {currentPrices.map((cp) => <option key={cp.productId} value={cp.productId}>{cp.productName}</option>)}
                       </Select>
                     </Field>
-                    <Field label="Rate / litre (₹)" required>
+                    <Field label={`Rate / ${(products || []).find((p: any) => p.id === selectedProductId)?.unit || 'L'} (₹)`} required>
                       <NumberInput step="0.01" placeholder="e.g. 96.43" value={price} onChange={(e) => setPrice(e.target.value)} required />
                     </Field>
                     <Field label="Effective from" required>

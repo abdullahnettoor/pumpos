@@ -178,7 +178,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         zeroVolumeCount++;
       }
       if (volume > 5000) {
-        warnings.push(`High volume alert: Nozzle ${nr.nozzleName} sold ${volume.toFixed(2)} Liters.`);
+        warnings.push(`High volume alert: Nozzle ${nr.nozzleName} sold ${volume.toFixed(2)} ${nr.unit || 'L'}.`);
       }
     }
 

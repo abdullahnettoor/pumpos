@@ -1,7 +1,7 @@
 import React from 'react';
 import { Document, Page, View, Text } from '@react-pdf/renderer';
 import {
-  C, s, TableView, Kpi, varColor, inr, inr0, vol3, fmtDateTime, LetterheadBand,
+  C, s, TableView, Kpi, varColor, inr, inr0, vol3, vol3u, unitTotals, fmtDateTime, LetterheadBand,
   type Col, type Cell,
 } from './shiftSummaryDoc.js';
 import type { DssrSection, DssrReportConfig } from './reportConfig.js';
@@ -28,14 +28,15 @@ const builders: Record<DssrSection, (d: any, cfg: DssrReportConfig) => React.Rea
   ),
   meta: (d) => {
     const f = d.fuel || {};
+    const bp = (f.byProduct || []) as any[];
     const gross = Number(f.totalGrossVolume ?? f.totalVolume ?? 0);
     const testing = Number(f.totalTestingVolume || 0);
     const net = Number(f.totalNetVolume ?? gross - testing);
     return (
       <View key="meta" style={s.metaBox}>
         <View style={s.metaCell}><Text style={s.label}>SHIFTS INCLUDED</Text><Text style={s.val}>{d.shiftsIncluded ?? 0}</Text></View>
-        <View style={s.metaCell}><Text style={s.label}>NET FUEL VOLUME</Text><Text style={s.valMono}>{vol3(net)}</Text></View>
-        <View style={s.metaCell}><Text style={s.label}>GROSS / TESTING</Text><Text style={s.valMono}>{vol3(gross)} / {vol3(testing)}</Text></View>
+        <View style={s.metaCell}><Text style={s.label}>NET FUEL VOLUME</Text><Text style={s.valMono}>{bp.length ? unitTotals(bp, (p) => Number(p.netVolume || 0)) : vol3(net)}</Text></View>
+        <View style={s.metaCell}><Text style={s.label}>GROSS / TESTING</Text><Text style={s.valMono}>{bp.length ? `${unitTotals(bp, (p) => Number(p.grossVolume || 0))} / ${unitTotals(bp, (p) => Number(p.testingVolume || 0))}` : `${vol3(gross)} / ${vol3(testing)}`}</Text></View>
         <View style={s.metaCell}><Text style={s.label}>FUEL SALES</Text><Text style={s.valMono}>{inr0(f.totalSalesValue)}</Text></View>
       </View>
     );
@@ -84,9 +85,9 @@ const builders: Record<DssrSection, (d: any, cfg: DssrReportConfig) => React.Rea
     if (list.length === 0) return null;
     const rows: Cell[][] = list.map((p) => [
       { text: `${p.productName || 'Unknown'}${p.productCode ? ` (${p.productCode})` : ''}` },
-      { text: vol3(p.grossVolume) },
-      { text: vol3(p.testingVolume), color: Number(p.testingVolume || 0) > 0 ? C.amber : C.muted },
-      { text: vol3(p.netVolume) },
+      { text: vol3u(p.grossVolume, p.unit) },
+      { text: vol3u(p.testingVolume, p.unit), color: Number(p.testingVolume || 0) > 0 ? C.amber : C.muted },
+      { text: vol3u(p.netVolume, p.unit) },
       { text: inr(p.salesValue) },
     ]);
     const cols: Col[] = [
@@ -96,16 +97,19 @@ const builders: Record<DssrSection, (d: any, cfg: DssrReportConfig) => React.Rea
       { header: 'Net', flex: 1.2, align: 'right', mono: true, strong: true },
       { header: 'Sales Value', flex: 1.6, align: 'right', mono: true },
     ];
-    const gross = Number(f.totalGrossVolume ?? f.totalVolume ?? 0);
-    const testing = Number(f.totalTestingVolume || 0);
-    const net = Number(f.totalNetVolume ?? gross - testing);
     return (
       <View key="fuelByProduct">
         <Text style={s.h2}>FUEL SALES BY PRODUCT</Text>
-        <TableView columns={cols} rows={rows} total={[
-          { text: 'TOTAL' }, { text: vol3(gross), color: C.muted }, { text: vol3(testing), color: C.muted },
-          { text: vol3(net), color: C.green }, { text: inr(f.totalSalesValue), color: C.ink },
-        ]} />
+        <TableView columns={cols} rows={rows} totals={Array.from(new Set<string>(list.map((p) => String(p.unit || 'L')))).map((u) => {
+          const pu = list.filter((p) => (p.unit || 'L') === u);
+          return [
+            { text: `TOTAL \u2014 ${u}` },
+            { text: vol3u(pu.reduce((a, p) => a + Number(p.grossVolume || 0), 0), u), color: C.muted },
+            { text: vol3u(pu.reduce((a, p) => a + Number(p.testingVolume || 0), 0), u), color: C.muted },
+            { text: vol3u(pu.reduce((a, p) => a + Number(p.netVolume || 0), 0), u), color: C.green },
+            { text: inr(pu.reduce((a, p) => a + Number(p.salesValue || 0), 0)), color: C.ink },
+          ];
+        })} />
       </View>
     );
   },
@@ -115,9 +119,9 @@ const builders: Record<DssrSection, (d: any, cfg: DssrReportConfig) => React.Rea
     const rows: Cell[][] = list.map((nz) => [
       { text: nz.nozzleName || 'Unknown' },
       { text: nz.productName || 'Unknown' },
-      { text: vol3(nz.grossVolume) },
-      { text: vol3(nz.testingVolume), color: Number(nz.testingVolume || 0) > 0 ? C.amber : C.muted },
-      { text: vol3(nz.netVolume) },
+      { text: vol3u(nz.grossVolume, nz.unit) },
+      { text: vol3u(nz.testingVolume, nz.unit), color: Number(nz.testingVolume || 0) > 0 ? C.amber : C.muted },
+      { text: vol3u(nz.netVolume, nz.unit) },
     ]);
     const cols: Col[] = [
       { header: 'Nozzle', flex: 1.3, strong: true }, { header: 'Product', flex: 2 },
@@ -135,18 +139,18 @@ const builders: Record<DssrSection, (d: any, cfg: DssrReportConfig) => React.Rea
       const variance = Number(v.varianceQuantity || 0);
       return [
         { text: v.tankName || 'Unknown' }, { text: v.productName || 'Unknown' },
-        { text: vol3(v.expectedQuantity) }, { text: vol3(v.actualQuantity) },
-        { text: `${variance > 0 ? '+' : ''}${vol3(variance)}`, color: varColor(variance) },
+        { text: vol3u(v.expectedQuantity, v.unit) }, { text: vol3u(v.actualQuantity, v.unit) },
+        { text: `${variance > 0 ? '+' : ''}${vol3u(variance, v.unit)}`, color: varColor(variance) },
         { text: v.status || '-', color: varColor(variance) },
       ];
     });
     const cols: Col[] = [
       { header: 'Tank', flex: 1.3, strong: true }, { header: 'Product', flex: 1.6 },
-      { header: 'Book (L)', flex: 1.3, align: 'right', mono: true }, { header: 'Dip (L)', flex: 1.3, align: 'right', mono: true },
+      { header: 'Book', flex: 1.3, align: 'right', mono: true }, { header: 'Dip', flex: 1.3, align: 'right', mono: true },
       { header: 'Variance', flex: 1.3, align: 'right', mono: true }, { header: 'Status', flex: 1 },
     ];
     return (
-      <View key="fuelStockVariance"><Text style={s.h2}>TANK DIP &amp; FUEL STOCK VARIANCE (LITRES)</Text><TableView columns={cols} rows={rows} /></View>
+      <View key="fuelStockVariance"><Text style={s.h2}>TANK DIP &amp; FUEL STOCK VARIANCE</Text><TableView columns={cols} rows={rows} /></View>
     );
   },
   merchandiseStockVariance: (d) => {

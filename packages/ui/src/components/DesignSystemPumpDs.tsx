@@ -218,7 +218,7 @@ const KpiStripShowcase: React.FC = () => (
         fixed 4-column grid (drawer / detail panel header)
       </div>
       <KpiStrip columns={4}>
-        <KpiTile size="sm" dot="brand"   label="Litres sold"    value="3,210.75" delta={{ value: '4.8%', direction: 'up' }} />
+        <KpiTile size="sm" dot="brand"   label="Volume sold"    value="3,210.75" delta={{ value: '4.8%', direction: 'up' }} />
         <KpiTile size="sm" dot="success" label="Cash collected" value="₹1,84,260" />
         <KpiTile size="sm" dot="info"    label="UPI collected"  value="₹92,140"   delta={{ value: '18.2%', direction: 'up' }} />
         <KpiTile size="sm" dot="warning" label="Card declined"  value="2"         hint="₹8,420 retry" />

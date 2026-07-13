@@ -298,7 +298,7 @@ const InputsPanel: React.FC = () => {
         <Field label="Opening cash">
           <MoneyInput defaultValue={5000} />
         </Field>
-        <Field label="Litres dispensed">
+        <Field label="Volume dispensed">
           <NumberInput defaultValue={1240.5} />
         </Field>
         <Field label="Business date">
@@ -417,7 +417,7 @@ const ComponentsPanel: React.FC = () => {
           <KpiTile dot="success" valueTone="success" label="Total Sales" value={inr(482350.5)} />
           <KpiTile dot="danger" valueTone="danger" label="Cash Variance" value={inr(-320)} hint="Short by ₹320" />
           <KpiTile dot="warning" valueTone="warning" label="Credit Given" value={inr(15400)} />
-          <KpiTile dot="info" label="Litres Sold" value={formatQty(3210.75)} hint="Petrol + Diesel" />
+          <KpiTile dot="info" label="Volume Sold" value={formatQty(3210.75)} hint="Petrol + Diesel" />
         </KpiStrip>
       </Section>
 

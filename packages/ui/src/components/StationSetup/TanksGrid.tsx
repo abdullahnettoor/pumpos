@@ -198,7 +198,7 @@ export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
                 <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-strong)' }}>Petrol Tank (MS):</span>
                 <input
                   type="number" min="0"
-                  placeholder="Liters"
+                  placeholder="Capacity"
                   value={quickPetrolCapacity}
                   onChange={(e) => setQuickPetrolCapacity(e.target.value)}
                   disabled={quickSubmitting}
@@ -238,7 +238,7 @@ export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
                 <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-strong)' }}>Diesel Tank (HSD):</span>
                 <input
                   type="number" min="0"
-                  placeholder="Liters"
+                  placeholder="Capacity"
                   value={quickDieselCapacity}
                   onChange={(e) => setQuickDieselCapacity(e.target.value)}
                   disabled={quickSubmitting}

@@ -455,7 +455,7 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
                   />
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Price per Liter (₹)</label>
+                  <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Price per {(products.find((p: any) => p.id === purchaseProductId) as any)?.unit || 'L'} (₹)</label>
                   <input
                     type="number"
                     min="0"

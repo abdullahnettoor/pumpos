@@ -17,7 +17,7 @@ const handoverFormSchema = z.object({
   upiHandedOver: z.coerce.number().nonnegative('UPI QR total must be non-negative'),
   creditHandedOver: z.coerce.number().nonnegative('Credit chits total must be non-negative'),
   nozzleReadings: z.record(z.string().uuid(), z.coerce.number().nonnegative('Reading must be non-negative')),
-  nozzleTesting: z.record(z.string().uuid(), z.coerce.number().nonnegative('Testing liters must be non-negative')),
+  nozzleTesting: z.record(z.string().uuid(), z.coerce.number().nonnegative('Testing quantity must be non-negative')),
   terminalCard: z.record(z.string(), z.coerce.number().nonnegative()).optional(),
   terminalUpi: z.record(z.string(), z.coerce.number().nonnegative()).optional(),
 });
@@ -353,10 +353,10 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
   const totalRawSales = calculatedNozzles.reduce((sum, n) => sum + n.rawValue, 0);
   const totalTestingVolume = calculatedNozzles.reduce((sum, n) => sum + n.testing, 0);
   const totalTestingDeduction = calculatedNozzles.reduce((sum, n) => sum + n.testingDeduction, 0);
-  // Fuel unit for this handover (a DU is normally single-product). 'Liters' for
-  // liquids, 'kg' for CNG/Auto-LPG; falls back to a neutral label if mixed.
+  // Fuel unit for this handover (a DU is normally single-product). Uses the
+  // product's own unit code (L / kg); falls back to a neutral label if mixed.
   const handoverUnits = Array.from(new Set(calculatedNozzles.map((n: any) => n.unit || 'L')));
-  const handoverUnitLabel = handoverUnits.length === 1 ? (handoverUnits[0] === 'kg' ? 'kg' : 'Liters') : 'units';
+  const handoverUnitLabel = handoverUnits.length === 1 ? handoverUnits[0] : 'units';
 
   const expectedSales = Math.max(0, totalRawSales - totalTestingDeduction);
 
@@ -381,12 +381,14 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
     if (!n.productId) continue;
     meteredByProduct.set(n.productId, (meteredByProduct.get(n.productId) ?? 0) + Math.max(0, n.volume - n.testing));
   }
+  const unitByProduct = new Map<string, string>();
+  for (const n of calculatedNozzles) { if (n.productId) unitByProduct.set(n.productId, n.unit || 'L'); }
   const creditLitresByProduct = new Map<string, number>();
   for (const l of creditLines) {
     if (l.productId && l.quantity) creditLitresByProduct.set(l.productId, (creditLitresByProduct.get(l.productId) ?? 0) + Number(l.quantity));
   }
   const volumeOverages = Array.from(creditLitresByProduct.entries())
-    .map(([pid, lit]) => ({ name: duProducts.find((p) => p.id === pid)?.name ?? 'Fuel', lit, metered: meteredByProduct.get(pid) ?? 0 }))
+    .map(([pid, lit]) => ({ name: duProducts.find((p) => p.id === pid)?.name ?? 'Fuel', unit: unitByProduct.get(pid) ?? 'L', lit, metered: meteredByProduct.get(pid) ?? 0 }))
     .filter((o) => o.lit > o.metered + 0.001);
 
   const onSubmit = async (values: HandoverFormValues) => {
@@ -635,7 +637,7 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
 
           {volumeOverages.length > 0 && (
             <div style={{ backgroundColor: 'var(--state-warning-bg)', color: 'var(--state-warning-fg)', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', padding: '8px 10px', fontSize: '11px', marginBottom: '10px' }}>
-              Credit litres exceed metered volume for {volumeOverages.map((o) => `${o.name} (${o.lit.toLocaleString('en-IN')} L billed vs ${o.metered.toLocaleString('en-IN')} L metered)`).join(', ')}. Check the readings or the credit quantities.
+              Credit quantity exceeds metered volume for {volumeOverages.map((o) => `${o.name} (${o.lit.toLocaleString('en-IN')} ${o.unit} billed vs ${o.metered.toLocaleString('en-IN')} ${o.unit} metered)`).join(', ')}. Check the readings or the credit quantities.
             </div>
           )}
 
