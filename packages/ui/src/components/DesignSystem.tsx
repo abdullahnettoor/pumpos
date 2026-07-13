@@ -18,8 +18,7 @@ import { Banner } from './primitives/Banner.js';
 import { Drawer } from './Drawer.js';
 import { Chip } from '../pump-ds/index.js';
 import { inr, formatMoney, formatQty } from '../utils/format.js';
-import { DesignSystemV2Panel } from './DesignSystemV2.js';
-import { DesignSystemPumpDsPanel } from './DesignSystemPumpDs.js';
+import { PumpDsButtonsPanel, PumpDsComponentsPanel, PumpDsMetricsPanel } from './DesignSystemPumpDs.js';
 import { DesignSystemShellProtoPanel } from './DesignSystemShellProto.js';
 
 /**
@@ -233,48 +232,6 @@ const TokensPanel: React.FC = () => (
     </Section>
   </div>
 );
-
-const ButtonsPanel: React.FC = () => {
-  const variants: { cls: string; label: string }[] = [
-    { cls: 'btn-primary', label: 'Primary' },
-    { cls: 'btn-secondary', label: 'Secondary' },
-    { cls: 'btn-danger', label: 'Danger' },
-    { cls: 'btn-ghost', label: 'Ghost' },
-  ];
-  const sizes: { cls: string; label: string }[] = [
-    { cls: 'btn-sm', label: 'sm · 32px' },
-    { cls: 'btn-md', label: 'md · 36px' },
-    { cls: 'btn-lg', label: 'lg · 40px' },
-  ];
-  return (
-    <div>
-      <Section title="Variants × Sizes" description="Canonical button system: `btn` base + one variant + one size. Use these classes everywhere instead of inline-styled buttons.">
-        <Card>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-            {variants.map((v) => (
-              <div key={v.cls} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
-                <span style={{ width: 90, flexShrink: 0, fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>{v.label}</span>
-                {sizes.map((s) => (
-                  <button key={s.cls} className={`btn ${v.cls} ${s.cls}`}>{v.label}</button>
-                ))}
-                <button className={`btn ${v.cls} btn-md`} disabled>Disabled</button>
-              </div>
-            ))}
-          </div>
-        </Card>
-      </Section>
-      <Section title="Usage" description="Reach for Primary for the single main action per view. Secondary for cancel/close. Danger only for destructive confirmations. Ghost for toolbar / low-emphasis actions.">
-        <Card>
-          <pre style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--text-default)', whiteSpace: 'pre-wrap', margin: 0 }}>
-{`<button className="btn btn-primary btn-md">Save</button>
-<button className="btn btn-secondary btn-md">Cancel</button>
-<button className="btn btn-danger btn-sm">Delete</button>`}
-          </pre>
-        </Card>
-      </Section>
-    </div>
-  );
-};
 
 const COMBO_OPTIONS = [
   { value: '', label: 'Walk-in / Not linked' },
@@ -730,8 +687,6 @@ const TABS = [
   { id: 'overlays', label: 'Overlays' },
   { id: 'feedback', label: 'Feedback' },
   { id: 'data', label: 'Data & Money' },
-  { id: 'v2', label: 'v2 · Compact' },
-  { id: 'pump-ds', label: 'pump-ds' },
   { id: 'shell-proto', label: 'Shell · proto' },
 ];
 
@@ -744,14 +699,12 @@ export const DesignSystem: React.FC = () => {
       toolbar={<Tabs tabs={TABS} activeId={active} onChange={setActive} aria-label="Design system sections" />}
     >
       {active === 'tokens' && <TokensPanel />}
-      {active === 'buttons' && <ButtonsPanel />}
+      {active === 'buttons' && <PumpDsButtonsPanel />}
       {active === 'inputs' && <InputsPanel />}
-      {active === 'components' && <ComponentsPanel />}
+      {active === 'components' && <><ComponentsPanel /><PumpDsComponentsPanel /></>}
       {active === 'overlays' && <OverlaysPanel />}
       {active === 'feedback' && <FeedbackPanel />}
-      {active === 'data' && <DataMoneyPanel />}
-      {active === 'v2' && <DesignSystemV2Panel />}
-      {active === 'pump-ds' && <DesignSystemPumpDsPanel />}
+      {active === 'data' && <><DataMoneyPanel /><PumpDsMetricsPanel /></>}
       {active === 'shell-proto' && <DesignSystemShellProtoPanel />}
     </PageLayout>
   );

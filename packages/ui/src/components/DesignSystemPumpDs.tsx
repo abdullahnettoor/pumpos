@@ -492,17 +492,44 @@ const DashboardBlocks: React.FC = () => (
 
 // ---------------- root ----------------
 
-export const DesignSystemPumpDsPanel: React.FC = () => (
+export const PumpDsButtonsPanel: React.FC = () => (
   <div>
-    <div className="mb-8 rounded-card border border-border-soft bg-surface-alt px-4 py-3 text-[12.5px] leading-relaxed text-ink-muted">
-      <strong className="text-ink-strong">pump-ds · live design system.</strong> Real primitives on the Tailwind
-      v4 + token-bridge foundation. Everything here is production-shape — same
-      code that will land in <code className="rounded bg-surface px-1 py-0.5 font-mono text-[11px] text-ink-strong">pump-ds/</code>
-      &nbsp;grows this page. Change a raw value in <code className="rounded bg-surface px-1 py-0.5 font-mono text-[11px] text-ink-strong">index.css</code>
-      &nbsp;(e.g. <code className="rounded bg-surface px-1 py-0.5 font-mono text-[11px] text-ink-strong">--brand-primary</code>) and every chip below
-      recolors instantly.
-    </div>
+    <Group
+      title="Button · matrix"
+      description="The single canonical action control. Five variants (primary / secondary / outline / ghost / danger), four sizes (xs 28 · sm 32 · md 36 · lg 40), plus icon-only, loading, and full-width. Replaces the scattered legacy `.btn-*` classes."
+    >
+      <ButtonMatrix />
+    </Group>
 
+    <Group
+      title="Button · in context"
+      description="Real placements: drawer footer (one primary + one ghost escape), destructive confirm (danger primary + safe secondary), and a toolbar (xs ghost + icon-only cluster). One primary action per surface — never two competing primaries."
+    >
+      <ButtonInContext />
+    </Group>
+  </div>
+);
+
+export const PumpDsMetricsPanel: React.FC = () => (
+  <div>
+    <Group
+      title="Delta · trend indicator"
+      description="Compact trend pill for KPIs and metric cells. Direction is auto-derived from the value's sign; pass `invert` for down-is-good metrics (falling outstanding, shrinking variance). The arrow stays truthful; only the tone flips."
+    >
+      <DeltaMatrix />
+    </Group>
+
+    <Group
+      title="KpiStrip · composite"
+      description="Compact metric row. Uses the `gap-as-divider` technique — 1px gap over a `--border-soft` container background renders as clean dividers on both axes automatically, so wrapping to a second row Just Works. Three variants below cover the common dashboard / drawer / page-header shapes."
+    >
+      <KpiStripShowcase />
+    </Group>
+  </div>
+);
+
+export const PumpDsComponentsPanel: React.FC = () => (
+  <div>
     <Group
       title="Chip · matrix"
       description="Six tones × three variants = the whole grid. Tone carries meaning, variant carries emphasis. Soft is the default; use outline for chips inside busy tables; use solid only for the highest-emphasis pin (Overdue, Variance)."
@@ -532,41 +559,6 @@ export const DesignSystemPumpDsPanel: React.FC = () => (
     </Group>
 
     <Group
-      title="Delta · trend indicator"
-      description="Compact trend pill for KPIs and metric cells. Direction is auto-derived from the value's sign; pass `invert` for down-is-good metrics (falling outstanding, shrinking variance). The arrow stays truthful; only the tone flips."
-    >
-      <DeltaMatrix />
-    </Group>
-
-    <Group
-      title="KpiStrip · composite"
-      description="Compact metric row. Uses the `gap-as-divider` technique — 1px gap over a `--border-soft` container background renders as clean dividers on both axes automatically, so wrapping to a second row Just Works. Three variants below cover the common dashboard / drawer / page-header shapes."
-    >
-      <KpiStripShowcase />
-    </Group>
-
-    <Group
-      title="Button · matrix"
-      description="The single canonical action control. Five variants (primary / secondary / outline / ghost / danger), four sizes (xs 28 · sm 32 · md 36 · lg 40), plus icon-only, loading, and full-width. Replaces the scattered legacy `.btn-*` classes."
-    >
-      <ButtonMatrix />
-    </Group>
-
-    <Group
-      title="Button · in context"
-      description="Real placements: drawer footer (one primary + one ghost escape), destructive confirm (danger primary + safe secondary), and a toolbar (xs ghost + icon-only cluster). One primary action per surface — never two competing primaries."
-    >
-      <ButtonInContext />
-    </Group>
-
-    <Group
-      title="Dashboard building blocks"
-      description="The reusable primitives behind the dashboard reframe: PageHeader, Panel, MeterRow (tank gauges), BreakdownBar (collections split), Sparkline (dependency-free trends), and EmptyState. All app-wide, not dashboard-only."
-    >
-      <DashboardBlocks />
-    </Group>
-
-    <Group
       title="StatusChip · vocabulary"
       description="Canonical PumpOS operational states. `status='open'` is the same visual everywhere in the app — no more ad-hoc chip mapping in call sites. Adding a new state = one line in status-map.ts."
     >
@@ -578,6 +570,13 @@ export const DesignSystemPumpDsPanel: React.FC = () => (
       description="Two representative surfaces: shift list and receivables. StatusChip with `size='xs'` fits cleanly in dense rows; `showIcon={false}` for extra compact contexts; `label` override for domain-specific phrasing."
     >
       <StatusInContext />
+    </Group>
+
+    <Group
+      title="Dashboard building blocks"
+      description="The reusable primitives behind the dashboard reframe: PageHeader, Panel, MeterRow (tank gauges), BreakdownBar (collections split), Sparkline (dependency-free trends), and EmptyState. All app-wide, not dashboard-only."
+    >
+      <DashboardBlocks />
     </Group>
   </div>
 );

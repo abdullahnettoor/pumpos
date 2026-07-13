@@ -141,7 +141,7 @@ export const TopBar: React.FC<TopBarProps> = ({
       {/* Global search trigger */}
       <button
         onClick={onOpenSearch}
-        className="group flex h-9 max-w-[420px] flex-1 items-center gap-2 rounded-button border border-border-soft bg-canvas px-3 text-[12.5px] text-ink-muted transition-colors hover:border-border-strong"
+        className="group flex h-9 max-w-[420px] flex-1 items-center gap-2 rounded-button border border-border-soft bg-canvas px-3 text-[12.5px] text-ink-muted transition-colors hover:border-border-strong focus:outline-none focus-visible:outline-none focus-visible:border-border-strong"
       >
         <Search className="size-4" />
         <span className="flex-1 truncate text-left">{searchPlaceholder}</span>
