@@ -929,7 +929,13 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
               <input
                 type="text"
                 value={fuelDrawer.code}
-                onChange={(e) => setFuelDrawer({ ...fuelDrawer, code: e.target.value.toUpperCase() })}
+                onChange={(e) => {
+                  const code = e.target.value.toUpperCase();
+                  // Gaseous fuels are metered/sold by mass (kg), not volume. Nudge
+                  // the unit to kg for CNG/LPG-type codes while it's still the L default.
+                  const isGas = /^(CNG|LPG|AUTOLPG|LNG|CBG)$/.test(code);
+                  setFuelDrawer({ ...fuelDrawer, code, unit: isGas && !/^kg$/i.test(fuelDrawer.unit) ? 'kg' : fuelDrawer.unit });
+                }}
                 placeholder="e.g. MS"
                 style={{
                   height: '32px',
@@ -946,11 +952,9 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
               <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Sales Unit *</label>
-              <input
-                type="text"
-                value={fuelDrawer.unit}
+              <select
+                value={/^kg$/i.test(fuelDrawer.unit) ? 'kg' : 'L'}
                 onChange={(e) => setFuelDrawer({ ...fuelDrawer, unit: e.target.value })}
-                placeholder="e.g. Liters"
                 style={{
                   height: '32px',
                   padding: '0 8px',
@@ -961,7 +965,11 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                   color: 'var(--text-strong)'
                 }}
                 required
-              />
+              >
+                <option value="L">Liters (L) — Petrol / Diesel / Ethanol</option>
+                <option value="kg">Kilograms (kg) — CNG / Auto-LPG</option>
+              </select>
+              <span style={{ fontSize: '10px', color: 'var(--text-faint)' }}>Gaseous fuels (CNG, Auto-LPG) are metered by weight, so tank stock and readings for this fuel are tracked in kg.</span>
             </div>
 
 

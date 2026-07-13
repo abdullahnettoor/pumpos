@@ -47,7 +47,7 @@ export const SHIFT_SUMMARY_SECTION_LABELS: Record<ShiftSummarySection, string> =
   header: 'Header / Letterhead', meta: 'Shift Meta', warnings: 'Warnings',
   nozzles: 'Nozzle Reconciliation', handovers: 'Attendant Handovers', terminals: 'POS Terminals',
   creditSales: 'Fuel-on-Credit Sales', dips: 'Tank Dips', stockVariances: 'Stock Variances',
-  cashRecon: 'Cash Reconciliation', nonCash: 'Non-Cash Summary', expenses: 'Expenses',
+  cashRecon: 'Cash Reconciliation', nonCash: 'Non-Cash Collections', expenses: 'Expenses',
   purchases: 'Purchases', collections: 'Collections', signatures: 'Signatures',
 };
 

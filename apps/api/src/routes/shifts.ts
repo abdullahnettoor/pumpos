@@ -236,6 +236,14 @@ async function projectShiftSummary(
   const openingCash = Number(snap.openingCash ?? shift.openingCash ?? 0);
   const closingCash = Number(snap.closingCash ?? shift.closingCash ?? 0);
 
+  // Non-cash collection channels, summed LIVE from this shift's collection rows
+  // (card / UPI / bank transfer). Bank-deposited collections never touched the
+  // drawer and were previously not surfaced; "Credit" is not a collection method
+  // (collections are Cash | Card | UPI | BankTransfer), which is why the old
+  // "creditCollections" figure was always zero.
+  const collSum = (method: string) =>
+    (collections ?? []).reduce((s: number, c: any) => s + (c.paymentMethod === method ? Number(c.amount || 0) : 0), 0);
+
   return {
     ...snap,
     shiftId: shift.id,
@@ -279,10 +287,10 @@ async function projectShiftSummary(
     expectedCash: Number(snap.expectedDrawerCash ?? openingCash),
     cashVariance: Number(snap.cashVariance ?? 0),
     cashSalesSum: Number(recon.cashSales ?? 0),
-    cashCollectionsSum: Number(recon.cashCollections ?? 0),
-    cardCollectionsSum: Number(recon.cardCollections ?? 0),
-    upiCollectionsSum: Number(recon.upiCollections ?? 0),
-    creditSalesSum: Number(recon.creditCollections ?? 0),
+    cashCollectionsSum: Number(recon.cashCollections ?? collSum('Cash')),
+    cardCollectionsSum: collSum('Card'),
+    upiCollectionsSum: collSum('UPI'),
+    bankCollectionsSum: collSum('BankTransfer'),
     cashExpensesSum: Number(recon.drawerExpenses ?? 0),
   };
 }

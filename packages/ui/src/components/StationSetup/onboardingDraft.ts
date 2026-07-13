@@ -85,7 +85,7 @@ export function createFuelDraft(): OnboardingProductDraft {
     productType: 'FUEL',
     stockTracked: true,
     isTaxable: false,
-    unit: 'Liters',
+    unit: 'L',
     taxConfig: {
       gst_rate: 0,
       hsn_code: '2710',

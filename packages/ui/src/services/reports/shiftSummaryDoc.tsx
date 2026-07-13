@@ -267,7 +267,7 @@ const builders: Record<ShiftSummarySection, (d: any, cfg: ReportConfig) => React
     const rows: Cell[][] = tb.map((t: any) => {
       const handledBy = (t.entries || [])
         .filter((e: any) => Number(e.card || 0) > 0 || Number(e.upi || 0) > 0)
-        .map((e: any) => `${e.attendantName}${e.duCode ? ` · ${e.duCode}` : ''} (${inr(Number(e.card || 0) + Number(e.upi || 0))})`)
+        .map((e: any) => `${e.attendantName}${e.duCode ? ` · ${e.duCode}` : ''}`)
         .join('\n') || '—';
       return [
         { text: `${t.terminalLabel || 'Unknown'}${t.provider ? `\n${t.provider}` : ''}` },
@@ -369,11 +369,11 @@ const builders: Record<ShiftSummarySection, (d: any, cfg: ReportConfig) => React
     </View>
   ),
   nonCash: (d) => (
-    <View key="nonCash"><Text style={s.h2}>NON-CASH PAYMENTS &amp; CREDIT SALES</Text>
+    <View key="nonCash"><Text style={s.h2}>NON-CASH COLLECTIONS</Text>
       <View style={s.kpiRow}>
-        <Kpi l="Card Payments" v={inr0(d.cardCollectionsSum)} />
-        <Kpi l="UPI/QR Payments" v={inr0(d.upiCollectionsSum)} />
-        <Kpi l="Credit Account Sales" v={inr0(d.creditSalesSum)} c={C.amber} />
+        <Kpi l="Card Collections" v={inr0(d.cardCollectionsSum)} />
+        <Kpi l="UPI/QR Collections" v={inr0(d.upiCollectionsSum)} />
+        <Kpi l="Bank Transfer Collections" v={inr0(d.bankCollectionsSum)} />
       </View>
     </View>
   ),

@@ -63,7 +63,7 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
     cashSalesSum = 0,
     cardCollectionsSum = 0,
     upiCollectionsSum = 0,
-    creditSalesSum = 0,
+    bankCollectionsSum = 0,
     cashExpensesSum = 0,
     expenses = [],
     purchases = [],
@@ -414,9 +414,6 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
                         contributors.map((e: any, i: number) => (
                           <div key={i} style={{ marginBottom: i < contributors.length - 1 ? '4px' : 0 }}>
                             {e.attendantName}{e.duCode ? ` · ${e.duCode}` : ''}
-                            <span style={{ color: 'var(--text-faint)', fontFamily: 'var(--font-mono)' }}>
-                              {' '}(₹{(Number(e.card || 0) + Number(e.upi || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })})
-                            </span>
                           </div>
                         ))
                       ) : (
@@ -632,10 +629,13 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
         </div>
       </div>
 
-      {/* Non-Cash Collections & Ledger Sales */}
-      <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
-        Non-Cash Payments & Credit Sales
+      {/* Non-Cash Collections by channel (customer account payments received) */}
+      <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
+        Non-Cash Collections
       </h3>
+      <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '12px' }}>
+        Customer account payments received via card, UPI or direct bank transfer this shift. These settle receivables and do not touch the cash drawer. Fuel-on-credit <em>sales</em> are listed separately above.
+      </p>
       <div style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
@@ -643,16 +643,16 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
         marginBottom: '32px'
       }}>
         <div style={{ padding: '12px', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', backgroundColor: 'var(--bg-surface)' }}>
-          <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', fontWeight: 600 }}>Card Payments</span>
+          <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', fontWeight: 600 }}>Card Collections</span>
           <strong style={{ fontSize: '15px', color: 'var(--text-strong)', fontFamily: 'var(--font-mono)' }}>{inr(cardCollectionsSum)}</strong>
         </div>
         <div style={{ padding: '12px', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', backgroundColor: 'var(--bg-surface)' }}>
-          <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', fontWeight: 600 }}>UPI/QR Payments</span>
+          <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', fontWeight: 600 }}>UPI/QR Collections</span>
           <strong style={{ fontSize: '15px', color: 'var(--text-strong)', fontFamily: 'var(--font-mono)' }}>{inr(upiCollectionsSum)}</strong>
         </div>
         <div style={{ padding: '12px', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', backgroundColor: 'var(--bg-surface)' }}>
-          <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', fontWeight: 600 }}>Credit Account Sales</span>
-          <strong style={{ fontSize: '15px', color: 'var(--brand-warning)', fontFamily: 'var(--font-mono)' }}>{inr(creditSalesSum)}</strong>
+          <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', fontWeight: 600 }}>Bank Transfer Collections</span>
+          <strong style={{ fontSize: '15px', color: 'var(--text-strong)', fontFamily: 'var(--font-mono)' }}>{inr(bankCollectionsSum)}</strong>
         </div>
       </div>
 
