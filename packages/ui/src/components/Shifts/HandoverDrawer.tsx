@@ -353,6 +353,10 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
   const totalRawSales = calculatedNozzles.reduce((sum, n) => sum + n.rawValue, 0);
   const totalTestingVolume = calculatedNozzles.reduce((sum, n) => sum + n.testing, 0);
   const totalTestingDeduction = calculatedNozzles.reduce((sum, n) => sum + n.testingDeduction, 0);
+  // Fuel unit for this handover (a DU is normally single-product). 'Liters' for
+  // liquids, 'kg' for CNG/Auto-LPG; falls back to a neutral label if mixed.
+  const handoverUnits = Array.from(new Set(calculatedNozzles.map((n: any) => n.unit || 'L')));
+  const handoverUnitLabel = handoverUnits.length === 1 ? (handoverUnits[0] === 'kg' ? 'kg' : 'Liters') : 'units';
 
   const expectedSales = Math.max(0, totalRawSales - totalTestingDeduction);
 
@@ -480,7 +484,7 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
                 <div>
                   <div style={{ fontWeight: 600, fontSize: '13px', color: 'var(--text-strong)' }}>{nz.nozzleName}</div>
                   <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                    {nz.productCode} • <strong>₹{nz.price.toFixed(2)}/L</strong>
+                    {nz.productCode} • <strong>₹{nz.price.toFixed(2)}/{nz.unit || 'L'}</strong>
                   </div>
                 </div>
                 <div>
@@ -517,7 +521,7 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
                   ) : null}
                 </div>
                 <div>
-                  <label style={{ fontSize: '10px', color: 'var(--text-muted)', display: 'block', marginBottom: '2px' }}>Testing (L)</label>
+                  <label style={{ fontSize: '10px', color: 'var(--text-muted)', display: 'block', marginBottom: '2px' }}>Testing ({nz.unit || 'L'})</label>
                   <input
                     type="number"
                     step="0.1"
@@ -799,11 +803,11 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
             <span>Derived Fuel Volume:</span>
-            <strong style={{ fontFamily: 'var(--font-mono)' }}>{totalVolumeSold.toFixed(3)} Liters</strong>
+            <strong style={{ fontFamily: 'var(--font-mono)' }}>{totalVolumeSold.toFixed(3)} {handoverUnitLabel}</strong>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
             <span>Testing/Calibration Volume:</span>
-            <strong style={{ fontFamily: 'var(--font-mono)' }}>{totalTestingVolume.toFixed(1)} Liters</strong>
+            <strong style={{ fontFamily: 'var(--font-mono)' }}>{totalTestingVolume.toFixed(1)} {handoverUnitLabel}</strong>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
             <span>Expected Fuel Sales Value:</span>

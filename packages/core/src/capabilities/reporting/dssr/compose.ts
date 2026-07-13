@@ -8,6 +8,7 @@ interface FuelAgg {
   productId: string | null;
   productName: string;
   productCode: string;
+  unit: string;
   grossVolume: number;
   testingVolume: number;
   netVolume: number;
@@ -66,6 +67,7 @@ export function composeDssr(source: DssrSourceData): Record<string, unknown> {
       const prod = source.products[pKey];
       const productName = prod?.name ?? 'Unknown';
       const productCode = prod?.code ?? '';
+      const productUnit = prod?.unit ?? 'L';
       if (!nozzleAgg[nKey]) {
         nozzleAgg[nKey] = {
           nozzleId: nKey,
@@ -73,6 +75,7 @@ export function composeDssr(source: DssrSourceData): Record<string, unknown> {
           productId: r.productId ?? null,
           productName,
           productCode,
+          unit: productUnit,
           grossVolume: 0,
           testingVolume: 0,
           netVolume: 0,
@@ -84,7 +87,7 @@ export function composeDssr(source: DssrSourceData): Record<string, unknown> {
       nozzleAgg[nKey].netVolume += net;
       nozzleAgg[nKey].salesValue += salesValue;
       if (!productAgg[pKey]) {
-        productAgg[pKey] = { productId: r.productId ?? null, productName, productCode, grossVolume: 0, testingVolume: 0, netVolume: 0, salesValue: 0 };
+        productAgg[pKey] = { productId: r.productId ?? null, productName, productCode, unit: productUnit, grossVolume: 0, testingVolume: 0, netVolume: 0, salesValue: 0 };
       }
       productAgg[pKey].grossVolume += gross;
       productAgg[pKey].testingVolume += testing;

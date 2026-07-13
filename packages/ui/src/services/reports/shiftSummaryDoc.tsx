@@ -36,6 +36,14 @@ export const inr = (n: any) => `\u20b9${Number(n || 0).toLocaleString('en-IN', {
 export const inr0 = (n: any) => `\u20b9${Number(n || 0).toLocaleString('en-IN')}`;
 export const vol3 = (n: any) => `${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} L`;
 export const vol1 = (n: any) => `${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} L`;
+// Unit-aware variants (L for liquids, kg for CNG/Auto-LPG). Never sum across units.
+export const vol3u = (n: any, u?: string) => `${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} ${u || 'L'}`;
+export const vol1u = (n: any, u?: string) => `${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} ${u || 'L'}`;
+export const unitTotals = (rows: any[], getter: (r: any) => number, dec = 3): string => {
+  const m: Record<string, number> = {};
+  for (const r of rows) { const u = r.unit || 'L'; m[u] = (m[u] || 0) + Number(getter(r) || 0); }
+  return Object.entries(m).map(([u, v]) => `${Number(v).toLocaleString('en-IN', { minimumFractionDigits: dec, maximumFractionDigits: dec })} ${u}`).join(' \u00b7 ');
+};
 export const fix3 = (n: any) => Number(n || 0).toFixed(3);
 export const fmtTime = (iso?: string) => { if (!iso) return '—'; try { return new Date(iso).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }); } catch { return '—'; } };
 export const fmtDateTime = (iso?: string) => { if (!iso) return '—'; try { return new Date(iso).toLocaleString('en-IN'); } catch { return '—'; } };
@@ -79,7 +87,7 @@ export const s = StyleSheet.create({
 // --- Generic table -----------------------------------------------------------
 export type Col = { header: string; flex: number; align?: 'right'; mono?: boolean; strong?: boolean };
 export type Cell = { text: string; color?: string };
-export const TableView = ({ columns, rows, total }: { columns: Col[]; rows: Cell[][]; total?: Cell[] }) => (
+export const TableView = ({ columns, rows, total, totals }: { columns: Col[]; rows: Cell[][]; total?: Cell[]; totals?: Cell[][] }) => (
   <View>
     <View style={[s.tr, s.thRow]}>
       {columns.map((c, i) => (
@@ -97,16 +105,16 @@ export const TableView = ({ columns, rows, total }: { columns: Col[]; rows: Cell
         })}
       </View>
     ))}
-    {total && (
-      <View style={s.totalRow}>
-        {total.map((cell, ci) => {
+    {[...(total ? [total] : []), ...(totals ?? [])].map((tRow, ti) => (
+      <View key={`t${ti}`} style={s.totalRow}>
+        {tRow.map((cell, ci) => {
           const c = columns[ci];
           return (
             <Text key={ci} style={[c.mono ? s.cellMonoStrong : s.cellStrong, { flex: c.flex }, c.align === 'right' ? { textAlign: 'right' } : {}, { color: cell.color ?? C.ink }]}>{cell.text}</Text>
           );
         })}
       </View>
-    )}
+    ))}
   </View>
 );
 
@@ -169,7 +177,8 @@ const builders: Record<ShiftSummarySection, (d: any, cfg: ReportConfig) => React
     </View>
   ) : null),
   nozzles: (d) => {
-    const rows: Cell[][] = (d.nozzleReadings || []).map((nr: any) => {
+    const nrs = d.nozzleReadings || [];
+    const rows: Cell[][] = nrs.map((nr: any) => {
       const gross = Number(nr.volumeSold ?? 0);
       const testing = Number(nr.testingVolume ?? 0);
       const net = nr.netVolume != null ? Number(nr.netVolume) : gross - testing;
@@ -178,13 +187,12 @@ const builders: Record<ShiftSummarySection, (d: any, cfg: ReportConfig) => React
         { text: `${nr.productName || ''}${nr.productCode ? ` (${nr.productCode})` : ''}` },
         { text: fix3(nr.openingReading) },
         { text: fix3(nr.closingReading ?? nr.openingReading) },
-        { text: vol3(gross) },
-        { text: vol3(testing), color: testing > 0 ? C.amber : C.muted },
-        { text: vol3(net) },
+        { text: vol3u(gross, nr.unit) },
+        { text: vol3u(testing, nr.unit), color: testing > 0 ? C.amber : C.muted },
+        { text: vol3u(net, nr.unit) },
       ];
     });
-    const totalTesting = Number(d.totalTestingVolume ?? 0);
-    const totalNet = Number(d.totalNetVolumeSold ?? (Number(d.totalVolumeSold ?? 0) - totalTesting));
+    const nUnits: string[] = Array.from(new Set(nrs.map((r: any) => r.unit || 'L')));
     const fbp = d.fuelByProduct || [];
     return (
       <View key="nozzles"><Text style={s.h2}>NOZZLE RECONCILIATION &amp; VOLUME SOLD</Text>
@@ -196,7 +204,13 @@ const builders: Record<ShiftSummarySection, (d: any, cfg: ReportConfig) => React
             { header: 'Net Sold', flex: 1.3, align: 'right', mono: true, strong: true },
           ]}
           rows={rows}
-          total={[{ text: 'TOTAL (GROSS / TESTING / NET)' }, { text: '' }, { text: '' }, { text: '' }, { text: vol3(d.totalVolumeSold), color: C.muted }, { text: vol3(totalTesting), color: C.muted }, { text: vol3(totalNet), color: C.green }]}
+          totals={nUnits.map((u) => {
+            const ru = nrs.filter((r: any) => (r.unit || 'L') === u);
+            const g = ru.reduce((a: number, r: any) => a + Number(r.volumeSold || 0), 0);
+            const t = ru.reduce((a: number, r: any) => a + Number(r.testingVolume || 0), 0);
+            const n = ru.reduce((a: number, r: any) => a + (r.netVolume != null ? Number(r.netVolume) : Number(r.volumeSold || 0) - Number(r.testingVolume || 0)), 0);
+            return [{ text: `TOTAL \u2014 ${u}` }, { text: '' }, { text: '' }, { text: '' }, { text: vol3u(g, u), color: C.muted }, { text: vol3u(t, u), color: C.muted }, { text: vol3u(n, u), color: C.green }];
+          })}
         />
         {fbp.length > 0 ? (
           <View style={{ marginTop: 10 }}>
@@ -204,25 +218,26 @@ const builders: Record<ShiftSummarySection, (d: any, cfg: ReportConfig) => React
             <TableView
               columns={[
                 { header: 'Product', flex: 2.4, strong: true },
-                { header: 'Gross Vol (L)', flex: 1.4, align: 'right', mono: true },
-                { header: 'Testing (L)', flex: 1.3, align: 'right', mono: true },
-                { header: 'Net Sold (L)', flex: 1.4, align: 'right', mono: true, strong: true },
+                { header: 'Gross Vol', flex: 1.4, align: 'right', mono: true },
+                { header: 'Testing', flex: 1.3, align: 'right', mono: true },
+                { header: 'Net Sold', flex: 1.4, align: 'right', mono: true, strong: true },
                 { header: 'Sales Value (\u20b9)', flex: 1.6, align: 'right', mono: true, strong: true },
               ]}
               rows={fbp.map((p: any) => [
                 { text: `${p.productName || ''}${p.productCode ? ` (${p.productCode})` : ''}` },
-                { text: vol3(p.grossVolume) },
-                { text: vol3(p.testingVolume), color: Number(p.testingVolume || 0) > 0 ? C.amber : C.muted },
-                { text: vol3(p.netVolume) },
+                { text: vol3u(p.grossVolume, p.unit) },
+                { text: vol3u(p.testingVolume, p.unit), color: Number(p.testingVolume || 0) > 0 ? C.amber : C.muted },
+                { text: vol3u(p.netVolume, p.unit) },
                 { text: inr(p.salesValue) },
               ])}
-              total={[
-                { text: 'TOTAL' },
-                { text: vol3(fbp.reduce((a: number, p: any) => a + Number(p.grossVolume || 0), 0)), color: C.muted },
-                { text: vol3(fbp.reduce((a: number, p: any) => a + Number(p.testingVolume || 0), 0)), color: C.muted },
-                { text: vol3(fbp.reduce((a: number, p: any) => a + Number(p.netVolume || 0), 0)), color: C.green },
-                { text: inr(fbp.reduce((a: number, p: any) => a + Number(p.salesValue || 0), 0)) },
-              ]}
+              totals={Array.from(new Set<string>(fbp.map((p: any) => String(p.unit || 'L')))).map((u) => {
+                const pu = fbp.filter((p: any) => (p.unit || 'L') === u);
+                const g = pu.reduce((a: number, p: any) => a + Number(p.grossVolume || 0), 0);
+                const t = pu.reduce((a: number, p: any) => a + Number(p.testingVolume || 0), 0);
+                const n = pu.reduce((a: number, p: any) => a + Number(p.netVolume || 0), 0);
+                const sv = pu.reduce((a: number, p: any) => a + Number(p.salesValue || 0), 0);
+                return [{ text: `TOTAL \u2014 ${u}` }, { text: vol3u(g, u), color: C.muted }, { text: vol3u(t, u), color: C.muted }, { text: vol3u(n, u), color: C.green }, { text: inr(sv) }];
+              })}
             />
           </View>
         ) : null}
@@ -296,12 +311,12 @@ const builders: Record<ShiftSummarySection, (d: any, cfg: ReportConfig) => React
       <TableView
         columns={[
           { header: 'Customer', flex: 1.8, strong: true }, { header: 'Vehicle', flex: 1.3, mono: true },
-          { header: 'Product', flex: 1.4 }, { header: 'Qty (L)', flex: 1.1, align: 'right', mono: true },
+          { header: 'Product', flex: 1.4 }, { header: 'Qty', flex: 1.1, align: 'right', mono: true },
           { header: 'Notes', flex: 1.8 }, { header: 'Amount (\u20b9)', flex: 1.3, align: 'right', mono: true, strong: true },
         ]}
         rows={(d.creditSales || []).map((r: any) => [
-          { text: r.customerName || 'Customer' }, { text: r.vehicleNumber || '—' },
-          { text: r.productName || '—' }, { text: r.quantity != null ? vol3(r.quantity).replace(' L', '') : '—' },
+          { text: r.customerName || 'Customer' }, { text: r.vehicleNumber || '\u2014' },
+          { text: r.productName || '\u2014' }, { text: r.quantity != null ? vol3u(r.quantity, r.unit) : '\u2014' },
           { text: r.notes || '—' }, { text: inr(r.amount) },
         ])}
         total={[{ text: 'TOTAL CREDIT SALES' }, { text: '' }, { text: '' }, { text: '' }, { text: '' }, { text: inr(d.creditSalesTotal ?? (d.creditSales || []).reduce((a: number, r: any) => a + Number(r.amount || 0), 0)), color: C.green }]}
@@ -317,7 +332,7 @@ const builders: Record<ShiftSummarySection, (d: any, cfg: ReportConfig) => React
         ]}
         rows={(d.dipReadings || []).map((r: any) => [
           { text: r.tankName || '' }, { text: `${r.productName || ''}${r.productCode ? ` (${r.productCode})` : ''}` },
-          { text: `${Number(r.capacity || 0).toLocaleString('en-IN')} L` }, { text: vol1(r.actualQuantity) },
+          { text: `${Number(r.capacity || 0).toLocaleString('en-IN')} ${r.unit || 'L'}` }, { text: vol1u(r.actualQuantity, r.unit) },
         ])}
       />
     </View>
@@ -335,8 +350,8 @@ const builders: Record<ShiftSummarySection, (d: any, cfg: ReportConfig) => React
           const severe = Number(sv.expectedQuantity || 0) > 0 && Math.abs(diff) > 0.005 * Number(sv.expectedQuantity);
           return [
             { text: `${sv.productName || ''}${sv.productCode ? ` (${sv.productCode})` : ''}` },
-            { text: vol1(sv.expectedQuantity) }, { text: vol1(sv.actualQuantity) },
-            { text: `${diff > 0 ? '+' : ''}${vol1(diff)}`, color: diff < 0 ? C.danger : diff > 0 ? C.success : C.ink },
+            { text: vol1u(sv.expectedQuantity, sv.unit) }, { text: vol1u(sv.actualQuantity, sv.unit) },
+            { text: `${diff > 0 ? '+' : ''}${vol1u(diff, sv.unit)}`, color: diff < 0 ? C.danger : diff > 0 ? C.success : C.ink },
             { text: severe ? 'Discrepancy (>0.5%)' : 'Normal', color: severe ? C.warnFg : C.success },
           ];
         })}

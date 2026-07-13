@@ -147,7 +147,15 @@ export const Step8Review: React.FC<Step8ReviewProps> = ({
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span style={{ color: 'var(--text-muted)' }}>Opening stock seeded</span>
               <span style={{ color: 'var(--text-strong)', fontWeight: 600 }}>
-                {draft.tanks.reduce((sum, tank) => sum + tank.openingQuantity, 0).toLocaleString('en-IN')} L
+                {(() => {
+                  const byUnit: Record<string, number> = {};
+                  for (const tank of draft.tanks) {
+                    const unit = draft.products.find((p) => p.draftId === tank.productDraftId)?.unit || 'L';
+                    byUnit[unit] = (byUnit[unit] || 0) + Number(tank.openingQuantity || 0);
+                  }
+                  const parts = Object.entries(byUnit).map(([u, v]) => `${v.toLocaleString('en-IN')} ${u}`);
+                  return parts.length ? parts.join(' · ') : '0 L';
+                })()}
               </span>
             </div>
           </div>

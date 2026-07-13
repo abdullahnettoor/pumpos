@@ -114,10 +114,10 @@ export const Step6OpeningValues: React.FC<Step6OpeningValuesProps> = ({
                     <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{product?.name || 'Unmapped'}</span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text-muted)' }}>
-                    <span>Capacity: {tank.capacity.toLocaleString()} L</span>
+                    <span>Capacity: {tank.capacity.toLocaleString()} {product?.unit || 'L'}</span>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Opening Stock (Liters)</span>
+                    <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Opening Stock ({product?.unit || 'L'})</span>
                     <input
                       type="number"
                       min={0}
@@ -130,7 +130,7 @@ export const Step6OpeningValues: React.FC<Step6OpeningValuesProps> = ({
                     />
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Purchase Rate (₹/L) — landed cost</span>
+                    <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Purchase Rate (₹/{product?.unit || 'L'}) — landed cost</span>
                     <input
                       type="number"
                       min={0}

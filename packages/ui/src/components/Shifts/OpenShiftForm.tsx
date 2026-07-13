@@ -163,7 +163,7 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
               }).map((nz: any) => {
                 const initial = initialReadings.find((r) => r.nozzleId === nz.id);
                 return (
-                  <Field key={nz.id} label={`Nozzle ${nz.name} (${nz.productCode})`}>
+                  <Field key={nz.id} label={`Nozzle ${nz.name} — ${nz.productCode} (${nz.unit || 'L'})`}>
                     <NumberInput step="0.001" min="0" value={initial?.openingReading ?? 0} onChange={(e) => onInitialReadingChange(nz.id, Number(e.target.value))} />
                   </Field>
                 );

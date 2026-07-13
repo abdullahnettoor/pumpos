@@ -326,7 +326,7 @@ export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Capacity (Liters) *</label>
+            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Capacity ({fuelProducts.find((p) => p.id === productId)?.unit || 'L'}) *</label>
             <input
               type="number" min="0"
               style={{
@@ -409,7 +409,7 @@ export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
               <div>
                 <span style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Capacity</span>
                 <p style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text-strong)', fontFamily: 'var(--font-mono)', marginTop: '2px' }}>
-                  {t.capacity.toLocaleString()} L
+                  {t.capacity.toLocaleString()} {product?.unit || 'L'}
                 </p>
               </div>
             </div>

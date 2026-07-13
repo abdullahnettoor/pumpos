@@ -160,7 +160,7 @@ export class DrizzleDssrDataReader implements DssrDataReader {
     // Reference lookups for enriching the fuel roll-up with names + cost basis.
     const productRows = organizationId
       ? await this.db
-          .select({ id: schema.products.id, name: schema.products.name, code: schema.products.code, costBasis: schema.products.costBasis })
+          .select({ id: schema.products.id, name: schema.products.name, code: schema.products.code, unit: schema.products.unit, costBasis: schema.products.costBasis })
           .from(schema.products)
           .where(eq(schema.products.organizationId, organizationId))
       : [];
@@ -171,8 +171,8 @@ export class DrizzleDssrDataReader implements DssrDataReader {
           .where(eq(schema.nozzles.stationId, stationId))
       : [];
 
-    const products: Record<string, { name: string; code: string; costBasis: number }> = {};
-    for (const p of productRows) products[p.id] = { name: p.name, code: p.code ?? '', costBasis: Number(p.costBasis ?? 0) };
+    const products: Record<string, { name: string; code: string; unit: string; costBasis: number }> = {};
+    for (const p of productRows) products[p.id] = { name: p.name, code: p.code ?? '', unit: p.unit ?? 'L', costBasis: Number(p.costBasis ?? 0) };
     const nozzles: Record<string, string> = {};
     for (const n of nozzleRows) nozzles[n.id] = n.name;
 

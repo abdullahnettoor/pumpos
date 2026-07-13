@@ -1069,7 +1069,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Capacity (Liters) *</label>
+              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Capacity ({draft.products.find((p) => p.draftId === tankDrawer.productDraftId)?.unit || 'L'}) *</label>
               <input
                 type="number"
                 min={0}

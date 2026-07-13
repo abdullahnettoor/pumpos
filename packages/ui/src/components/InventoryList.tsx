@@ -168,12 +168,20 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation, i
   const tanksData = tanksQ.data ?? [];
 
   const kpis = useMemo(() => {
-    const totalFuel = tanksData.reduce((s: number, t: any) => s + Number(t.currentVolume || 0), 0);
+    const fuelByUnit: Record<string, number> = {};
+    for (const t of tanksData as any[]) { const u = t.productUnit || 'L'; fuelByUnit[u] = (fuelByUnit[u] || 0) + Number(t.currentVolume || 0); }
+    // Liquids first, then gaseous — so the L total is the headline value and any
+    // kg total moves into the hint (a single-line KPI can't add L + kg anyway).
+    const entries = Object.entries(fuelByUnit).sort((a, b) => (/^(l|liters?|litres?)$/i.test(a[0]) ? 0 : 1) - (/^(l|liters?|litres?)$/i.test(b[0]) ? 0 : 1));
+    const fmtV = (v: number) => Number(v).toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+    const tankCount = `${tanksData.length} ${tanksData.length === 1 ? 'tank' : 'tanks'}`;
+    const totalFuelValue = entries.length ? `${fmtV(entries[0][1])} ${entries[0][0]}` : fmtL(0);
+    const totalFuelHint = [...entries.slice(1).map(([u, v]) => `${fmtV(v)} ${u}`), tankCount].join(' · ');
     const lowTanks = tanksData.filter((t: any) => classifyTank(tankPct(t.currentVolume, t.capacity)) !== 'ok').length;
     const oversold = items.filter((i: any) => Number(i.quantity) < 0).length;
     const outOfStock = items.filter((i: any) => Number(i.quantity) === 0).length;
     const variances = (variancesQ.data ?? []).length;
-    return { totalFuel, lowTanks, oversold, outOfStock, variances };
+    return { totalFuelValue, totalFuelHint, lowTanks, oversold, outOfStock, variances };
   }, [tanksData, items, variancesQ.data]);
 
   const [movementSearch, setMovementSearch] = useState('');
@@ -265,7 +273,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation, i
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <KpiStrip columns="auto">
-            <KpiTile dot="brand" label="Total Fuel Stock" value={fmtL(kpis.totalFuel)} hint={`${tanksData.length} ${tanksData.length === 1 ? 'tank' : 'tanks'}`} />
+            <KpiTile dot="brand" label="Total Fuel Stock" value={kpis.totalFuelValue} hint={kpis.totalFuelHint} />
             <KpiTile dot={kpis.lowTanks > 0 ? 'warning' : 'success'} valueTone={kpis.lowTanks > 0 ? 'warning' : undefined} label="Tanks Low / Critical" value={String(kpis.lowTanks)} hint="below 35% capacity" />
             <KpiTile dot={kpis.outOfStock > 0 ? 'warning' : 'success'} valueTone={kpis.outOfStock > 0 ? 'warning' : undefined} label="Out of Stock" value={String(kpis.outOfStock)} hint="zero on-hand" />
             <KpiTile dot={kpis.oversold > 0 ? 'danger' : 'success'} valueTone={kpis.oversold > 0 ? 'danger' : undefined} label="Oversold Items" value={String(kpis.oversold)} hint="negative on-hand" />
@@ -303,9 +311,9 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation, i
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                         <span style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text-strong)', fontFamily: 'var(--font-mono)' }}>
                           {vol.toLocaleString('en-IN', { maximumFractionDigits: 1 })}
-                          <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-muted)', marginLeft: '4px' }}>L</span>
+                          <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-muted)', marginLeft: '4px' }}>{tank.productUnit || 'L'}</span>
                         </span>
-                        <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>of {cap.toLocaleString('en-IN')} L</span>
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>of {cap.toLocaleString('en-IN')} {tank.productUnit || 'L'}</span>
                       </div>
                       <MeterRow label="" value={vol} max={cap || 1} tone="auto" valueLabel={`${pct.toFixed(0)}% capacity`} />
                     </div>

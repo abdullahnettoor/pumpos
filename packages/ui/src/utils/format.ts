@@ -22,10 +22,11 @@ export const inr = (value: number | string | null | undefined): string => format
  * Quantity / volume formatting (e.g. liters). Grouped, no currency symbol.
  * Defaults to 2 decimals; pass 3 for precise nozzle/dip readings.
  */
-export function formatQty(value: number | string | null | undefined, decimals = 2): string {
+export function formatQty(value: number | string | null | undefined, decimals = 2, unit?: string | null): string {
   const n = Number(value ?? 0);
   const safe = Number.isFinite(n) ? n : 0;
-  return safe.toLocaleString('en-IN', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+  const num = safe.toLocaleString('en-IN', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+  return unit ? `${num} ${unit}` : num;
 }
 
 /**

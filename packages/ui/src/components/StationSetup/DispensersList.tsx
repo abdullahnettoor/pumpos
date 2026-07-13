@@ -479,7 +479,7 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
                           />
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                          <label style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Reading (Liters)</label>
+                          <label style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Reading ({products.find((p) => p.id === nozzle.productId)?.unit || 'L'})</label>
                           <input
                             type="number" min="0"
                             value={nozzle.currentReading}
@@ -644,7 +644,7 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
                             {n.name} → <span style={{ color: 'var(--text-muted)' }}>{tank?.name || 'No Tank'} ({prod?.name || 'No Fuel'})</span>
                           </span>
                           <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--text-strong)' }}>
-                            {parseFloat(n.currentReading.toString()).toLocaleString(undefined, { minimumFractionDigits: 1 })} L
+                            {parseFloat(n.currentReading.toString()).toLocaleString(undefined, { minimumFractionDigits: 1 })} {prod?.unit || 'L'}
                           </span>
                         </div>
                       );

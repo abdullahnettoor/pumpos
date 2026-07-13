@@ -1513,13 +1513,14 @@ transactionsRouter.get('/inventory/status', async (c) => {
       capacity: schema.tanks.capacity,
       productName: schema.products.name,
       productCode: schema.products.code,
+      productUnit: schema.products.unit,
       total: sql<string>`COALESCE(SUM(${schema.stockMovements.quantity}), 0)`,
     })
     .from(schema.tanks)
     .leftJoin(schema.products, eq(schema.products.id, schema.tanks.productId))
     .leftJoin(schema.stockMovements, eq(schema.stockMovements.tankId, schema.tanks.id))
     .where(and(eq(schema.tanks.stationId, stationId), eq(schema.tanks.organizationId, user.organizationId)))
-    .groupBy(schema.tanks.id, schema.products.name, schema.products.code);
+    .groupBy(schema.tanks.id, schema.products.name, schema.products.code, schema.products.unit);
 
   const enriched = rows.map((r) => ({
     id: r.id,
@@ -1527,6 +1528,7 @@ transactionsRouter.get('/inventory/status', async (c) => {
     productId: r.productId,
     productName: r.productName ?? 'Unknown',
     productCode: r.productCode ?? 'Unknown',
+    productUnit: r.productUnit ?? 'L',
     capacity: Number(r.capacity),
     currentVolume: Math.max(0, Number(r.total ?? 0)),
   }));

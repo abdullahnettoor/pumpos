@@ -297,7 +297,12 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                 </div>
                 {lastDssr && (
                   <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-[12.5px]">
-                    <div className="text-ink-muted">Fuel sold<span className="mt-0.5 block font-mono font-semibold text-ink-strong">{Number(lastDssr.snapshotData.totalVolumeSold).toFixed(2)} L</span></div>
+                    <div className="text-ink-muted">Fuel sold<span className="mt-0.5 block font-mono font-semibold text-ink-strong">{(() => {
+                      const snap = lastDssr.snapshotData || {};
+                      const units = Array.from(new Set((snap.fuelByProduct || []).map((p: any) => p.unit || 'L')));
+                      const label = units.length === 1 ? units[0] : units.length > 1 ? '' : 'L';
+                      return `${Number(snap.totalVolumeSold || 0).toFixed(2)}${label ? ` ${label}` : ''}`;
+                    })()}</span></div>
                     <div className="text-ink-muted">Closing cash<span className="mt-0.5 block font-mono font-semibold text-ink-strong">{inr(lastDssr.snapshotData.closingCash)}</span></div>
                   </div>
                 )}
@@ -326,7 +331,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                     sublabel={tank.productName}
                     value={vol}
                     max={cap}
-                    valueLabel={`${formatQty(vol, 0)} / ${formatQty(cap, 0)} L`}
+                    valueLabel={`${formatQty(vol, 0)} / ${formatQty(cap, 0)} ${tank.productUnit || 'L'}`}
                   />
                 );
               })}
@@ -344,7 +349,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                   <span className="flex items-center gap-1.5 text-[13px] text-ink-strong">
                     <Droplet className="size-3.5 text-brand-secondary" /> {cp.productName}
                   </span>
-                  <span className="font-mono text-[13px] font-semibold text-ink-strong">{inr(cp.price)}/L</span>
+                  <span className="font-mono text-[13px] font-semibold text-ink-strong">{inr(cp.price)}/{tankRows.find((t) => t.productId === cp.productId)?.productUnit || 'L'}</span>
                 </div>
               ))}
             </div>

@@ -23,7 +23,14 @@ const shiftService = new CloudShiftService();
 const dssrColumns: ColumnDef<any, any>[] = [
   { accessorKey: 'businessDate', header: 'Business Date', cell: ({ getValue }) => <DateText value={getValue() as string} /> },
   { id: 'shifts', header: 'Shifts', cell: ({ row }) => <span style={{ color: 'var(--text-default)' }}>{Number(row.original.snapshotData?.shiftsIncluded || 0)}</span> },
-  { id: 'volume', header: 'Net Volume Sold', cell: ({ row }) => <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-default)' }}>{Number(row.original.snapshotData?.totalVolumeSold || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} L</span> },
+  { id: 'volume', header: 'Net Volume Sold', cell: ({ row }) => {
+    const snap = row.original.snapshotData || {};
+    const bp = (snap.fuel?.byProduct || []) as any[];
+    const units = Array.from(new Set(bp.map((p: any) => p.unit || 'L')));
+    const vol = Number(snap.fuel?.totalNetVolume ?? snap.totalVolumeSold ?? 0);
+    const label = units.length === 1 ? units[0] : units.length > 1 ? '' : 'L';
+    return <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-default)' }}>{vol.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{label ? ` ${label}` : ''}</span>;
+  } },
   { id: 'collections', header: 'Cash Collected', cell: ({ row }) => <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--state-success-fg)' }}>{inr(row.original.snapshotData?.totalCashCollections || 0)}</span> },
 ];
 

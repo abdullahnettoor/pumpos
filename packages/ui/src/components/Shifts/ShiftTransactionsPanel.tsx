@@ -435,7 +435,7 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Volume (Liters)</label>
+                  <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Volume ({(products.find((p: any) => p.id === purchaseProductId) as any)?.unit || 'L'})</label>
                   <input
                     type="number"
                     min="0"

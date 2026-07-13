@@ -110,7 +110,7 @@ export const ProductsCatalog: React.FC<{ selectedStation?: any | null }> = ({ se
           productType: 'FUEL',
           stockTracked: true,
           taxCategory: 'FUEL_VAT',
-          unit: 'Liters',
+          unit: 'L',
           taxConfig: { vat_rate: 0, hsn_code: '2710' },
           isActive: true,
         });
@@ -121,7 +121,7 @@ export const ProductsCatalog: React.FC<{ selectedStation?: any | null }> = ({ se
           productType: 'FUEL',
           stockTracked: true,
           taxCategory: 'FUEL_VAT',
-          unit: 'Liters',
+          unit: 'L',
           taxConfig: { vat_rate: 0, hsn_code: '2710' },
           isActive: true,
         });

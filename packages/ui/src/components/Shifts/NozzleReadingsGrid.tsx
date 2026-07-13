@@ -135,7 +135,7 @@ export const NozzleReadingsGrid: React.FC<NozzleReadingsGridProps> = ({
                   color: volume < 0 ? 'var(--state-danger-fg)' : 'var(--text-strong)',
                   fontFamily: 'var(--font-mono)'
                 }}>
-                  {volume.toFixed(3)} L
+                  {volume.toFixed(3)} {nr.unit || 'L'}
                 </td>
                 <td style={{
                   padding: '12px 20px',

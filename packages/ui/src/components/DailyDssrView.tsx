@@ -34,6 +34,15 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
   const totalTestingVolume = Number(fuel.totalTestingVolume || 0);
   const totalNetVolume = Number(fuel.totalNetVolume ?? totalGrossVolume - totalTestingVolume);
   const totalFuelSalesValue = Number(fuel.totalSalesValue || 0);
+  // Fuel units (L for liquids, kg for CNG/Auto-LPG). Never sum across units.
+  const dssrFuelUnits: string[] = Array.from(new Set(byProduct.map((p: any) => p.unit || 'L')));
+  const singleDssrUnit: string | null = dssrFuelUnits.length === 1 ? dssrFuelUnits[0] : null;
+  const dssrUnitTotals = (getter: (p: any) => number, dec = 3): string => {
+    const m: Record<string, number> = {};
+    for (const p of byProduct) { const u = p.unit || 'L'; m[u] = (m[u] || 0) + Number(getter(p) || 0); }
+    const entries = Object.entries(m);
+    return entries.length ? entries.map(([u, v]) => `${Number(v).toFixed(dec)} ${u}`).join(' \u00b7 ') : `${(0).toFixed(dec)} L`;
+  };
   const totalCashCollections = Number(collections.Cash || 0);
   const totalCardCollections = Number(collections.Card || 0);
   const totalUpiCollections = Number(collections.UPI || 0);
@@ -120,7 +129,7 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
             Net Fuel Volume
           </span>
           <strong style={{ fontSize: '16px', color: 'var(--text-strong)', fontFamily: 'var(--font-mono)' }}>
-            {totalNetVolume.toFixed(3)} L
+            {singleDssrUnit ? `${totalNetVolume.toFixed(3)} ${singleDssrUnit}` : dssrUnitTotals((p) => Number(p.netVolume || 0))}
           </strong>
           <span style={{ fontSize: '10px', color: 'var(--text-muted)', display: 'block', fontFamily: 'var(--font-mono)' }}>
             Gross {totalGrossVolume.toFixed(3)} − Testing {totalTestingVolume.toFixed(3)}
@@ -256,9 +265,9 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
         <thead>
           <tr style={{ borderBottom: '2px solid var(--border-strong)', textAlign: 'left', color: 'var(--text-muted)' }}>
             <th style={{ padding: '8px 12px', fontWeight: 600 }}>Product</th>
-            <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Gross (L)</th>
-            <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Testing (L)</th>
-            <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Net (L)</th>
+            <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Gross</th>
+            <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Testing</th>
+            <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Net</th>
             <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Sales Value</th>
           </tr>
         </thead>
@@ -267,9 +276,9 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
             byProduct.map((p: any, idx: number) => (
               <tr key={idx} style={{ borderBottom: '1px solid var(--border-soft)' }}>
                 <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--text-strong)' }}>{p.productName || 'Unknown'}{p.productCode ? ` (${p.productCode})` : ''}</td>
-                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{Number(p.grossVolume || 0).toFixed(3)}</td>
-                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: Number(p.testingVolume || 0) > 0 ? 'var(--brand-warning)' : 'var(--text-muted)' }}>{Number(p.testingVolume || 0).toFixed(3)}</td>
-                <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, fontFamily: 'var(--font-mono)' }}>{Number(p.netVolume || 0).toFixed(3)}</td>
+                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{Number(p.grossVolume || 0).toFixed(3)} {p.unit || 'L'}</td>
+                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: Number(p.testingVolume || 0) > 0 ? 'var(--brand-warning)' : 'var(--text-muted)' }}>{Number(p.testingVolume || 0).toFixed(3)} {p.unit || 'L'}</td>
+                <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, fontFamily: 'var(--font-mono)' }}>{Number(p.netVolume || 0).toFixed(3)} {p.unit || 'L'}</td>
                 <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{inr(Number(p.salesValue || 0))}</td>
               </tr>
             ))
@@ -280,9 +289,9 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
           )}
           <tr style={{ borderTop: '2px solid var(--border-strong)', backgroundColor: 'var(--bg-surface-alt)', fontWeight: 700 }}>
             <td style={{ padding: '10px 12px', textTransform: 'uppercase', fontSize: '11px', color: 'var(--text-muted)' }}>Total</td>
-            <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>{totalGrossVolume.toFixed(3)}</td>
-            <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>{totalTestingVolume.toFixed(3)}</td>
-            <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--text-strong)', fontSize: '14px' }}>{totalNetVolume.toFixed(3)}</td>
+            <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>{dssrUnitTotals((p) => Number(p.grossVolume || 0))}</td>
+            <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>{dssrUnitTotals((p) => Number(p.testingVolume || 0))}</td>
+            <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--text-strong)', fontSize: '14px' }}>{dssrUnitTotals((p) => Number(p.netVolume || 0))}</td>
             <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--text-strong)' }}>{inr(totalFuelSalesValue)}</td>
           </tr>
         </tbody>
@@ -296,9 +305,9 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
           <tr style={{ borderBottom: '2px solid var(--border-strong)', textAlign: 'left', color: 'var(--text-muted)' }}>
             <th style={{ padding: '8px 12px', fontWeight: 600 }}>Nozzle</th>
             <th style={{ padding: '8px 12px', fontWeight: 600 }}>Product</th>
-            <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Gross (L)</th>
-            <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Testing (L)</th>
-            <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Net (L)</th>
+            <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Gross</th>
+            <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Testing</th>
+            <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Net</th>
           </tr>
         </thead>
         <tbody>
@@ -307,9 +316,9 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
               <tr key={idx} style={{ borderBottom: '1px solid var(--border-soft)' }}>
                 <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--text-strong)' }}>{nz.nozzleName || 'Unknown'}</td>
                 <td style={{ padding: '10px 12px', color: 'var(--text-default)' }}>{nz.productName || 'Unknown'}</td>
-                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{Number(nz.grossVolume || 0).toFixed(3)}</td>
-                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: Number(nz.testingVolume || 0) > 0 ? 'var(--brand-warning)' : 'var(--text-muted)' }}>{Number(nz.testingVolume || 0).toFixed(3)}</td>
-                <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, fontFamily: 'var(--font-mono)' }}>{Number(nz.netVolume || 0).toFixed(3)}</td>
+                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{Number(nz.grossVolume || 0).toFixed(3)} {nz.unit || 'L'}</td>
+                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: Number(nz.testingVolume || 0) > 0 ? 'var(--brand-warning)' : 'var(--text-muted)' }}>{Number(nz.testingVolume || 0).toFixed(3)} {nz.unit || 'L'}</td>
+                <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, fontFamily: 'var(--font-mono)' }}>{Number(nz.netVolume || 0).toFixed(3)} {nz.unit || 'L'}</td>
               </tr>
             ))
           ) : (
@@ -323,16 +332,16 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
       {fuelStockVariance.length > 0 && (
         <>
           <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
-            Tank Dip & Fuel Stock Variance <span style={{ textTransform: 'none', fontWeight: 400, color: 'var(--text-muted)', fontSize: '12px' }}>(Litres)</span>
+            Tank Dip &amp; Fuel Stock Variance
           </h3>
           <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '28px', fontSize: '13px' }}>
             <thead>
               <tr style={{ borderBottom: '2px solid var(--border-strong)', textAlign: 'left', color: 'var(--text-muted)' }}>
                 <th style={{ padding: '8px 12px', fontWeight: 600 }}>Tank</th>
                 <th style={{ padding: '8px 12px', fontWeight: 600 }}>Product</th>
-                <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Book (L)</th>
-                <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Dip (L)</th>
-                <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Variance (L)</th>
+                <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Book</th>
+                <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Dip</th>
+                <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Variance</th>
                 <th style={{ padding: '8px 12px', fontWeight: 600 }}>Status</th>
               </tr>
             </thead>
@@ -344,9 +353,9 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
                   <tr key={idx} style={{ borderBottom: '1px solid var(--border-soft)' }}>
                     <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--text-strong)' }}>{v.tankName || 'Unknown'}</td>
                     <td style={{ padding: '10px 12px', color: 'var(--text-default)' }}>{v.productName || 'Unknown'}</td>
-                    <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{Number(v.expectedQuantity || 0).toFixed(3)}</td>
-                    <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{Number(v.actualQuantity || 0).toFixed(3)}</td>
-                    <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, fontFamily: 'var(--font-mono)', color: varColor }}>{variance > 0 ? '+' : ''}{variance.toFixed(3)}</td>
+                    <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{Number(v.expectedQuantity || 0).toFixed(3)} {v.unit || 'L'}</td>
+                    <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{Number(v.actualQuantity || 0).toFixed(3)} {v.unit || 'L'}</td>
+                    <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, fontFamily: 'var(--font-mono)', color: varColor }}>{variance > 0 ? '+' : ''}{variance.toFixed(3)} {v.unit || 'L'}</td>
                     <td style={{ padding: '10px 12px', color: varColor, fontWeight: 600 }}>{v.status || '-'}</td>
                   </tr>
                 );

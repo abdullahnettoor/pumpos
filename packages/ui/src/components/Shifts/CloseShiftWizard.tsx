@@ -270,7 +270,7 @@ export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
                       <div className="close-wizard-tank-name">{tank.name}</div>
                       <div className="close-wizard-tank-meta">
                         {tank.productName} · Expected{' '}
-                        <strong>{Number(tank.currentVolume).toFixed(1)} L</strong>
+                        <strong>{Number(tank.currentVolume).toFixed(1)} {tank.productUnit || 'L'}</strong>
                       </div>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>

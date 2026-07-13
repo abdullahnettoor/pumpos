@@ -64,7 +64,7 @@ export const Step4Tanks: React.FC<Step4TanksProps> = ({
                 <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-strong)' }}>{product.name}</span>
                 <input
                   type="number" min="0"
-                  placeholder="Capacity (L)"
+                  placeholder={`Capacity (${product.unit || 'L'})`}
                   defaultValue={20000}
                   style={{ ...inputStyle, width: '110px', height: '28px', fontSize: '12px' }}
                   id={inputId}
@@ -124,7 +124,7 @@ export const Step4Tanks: React.FC<Step4TanksProps> = ({
                 <div>
                   <span style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Capacity</span>
                   <p style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text-strong)', fontFamily: 'var(--font-mono)', marginTop: '2px' }}>
-                    {tank.capacity.toLocaleString('en-IN')} L
+                    {tank.capacity.toLocaleString('en-IN')} {product?.unit || 'L'}
                   </p>
                 </div>
                 <div style={{

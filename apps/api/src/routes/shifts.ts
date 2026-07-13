@@ -139,6 +139,7 @@ async function projectShiftSummary(
         customerName: schema.customers.name,
         productName: schema.products.name,
         productCode: schema.products.code,
+        unit: schema.products.unit,
         vehicleNumber: schema.customerVehicles.registrationNumber,
       })
       .from(schema.customerTransactions)
@@ -173,6 +174,7 @@ async function projectShiftSummary(
       testingVolume: testing,
       netVolume: gross - testing,
       unitPrice: Number(nr.unitPrice ?? 0),
+      unit: prod?.unit ?? 'L',
     };
   });
   // Natural nozzle order (N1, N2, ... N10) for the summary tables.
@@ -182,11 +184,11 @@ async function projectShiftSummary(
   const totalVolumeSold = nozzleReadings.reduce((a, r) => a + r.volumeSold, 0) || Number(snap.totalVolume ?? 0);
 
   // Product-wise fuel sales (aggregate nozzles by product) for the summary.
-  const fuelByProductMap = new Map<string, { productName: string; productCode: string; grossVolume: number; testingVolume: number; netVolume: number; salesValue: number }>();
+  const fuelByProductMap = new Map<string, { productName: string; productCode: string; unit: string; grossVolume: number; testingVolume: number; netVolume: number; salesValue: number }>();
   for (const r of nozzleReadings) {
     const key = r.productCode || r.productName;
     if (!fuelByProductMap.has(key)) {
-      fuelByProductMap.set(key, { productName: r.productName, productCode: r.productCode, grossVolume: 0, testingVolume: 0, netVolume: 0, salesValue: 0 });
+      fuelByProductMap.set(key, { productName: r.productName, productCode: r.productCode, unit: r.unit, grossVolume: 0, testingVolume: 0, netVolume: 0, salesValue: 0 });
     }
     const agg = fuelByProductMap.get(key)!;
     agg.grossVolume += r.volumeSold;
@@ -281,6 +283,7 @@ async function projectShiftSummary(
       customerName: r.customerName ?? 'Customer',
       productName: r.productName ?? null,
       productCode: r.productCode ?? null,
+      unit: r.unit ?? 'L',
       vehicleNumber: r.vehicleNumber ?? null,
     })),
     creditSalesTotal: (creditSaleRows ?? []).reduce((sum: number, r: any) => sum + Number(r.amount), 0),
@@ -362,6 +365,7 @@ shiftsRouter.get('/status', async (c) => {
       productId: nz?.productId ?? null,
       productName: prod?.name ?? 'Unknown',
       productCode: prod?.code ?? 'Unknown',
+      unit: prod?.unit ?? 'L',
       tankName: tnk?.name ?? 'Unknown',
       duId: nz?.duId ?? null,
       duName: du?.name ?? 'Unknown',
@@ -617,7 +621,7 @@ shiftsRouter.get('/status', async (c) => {
     .leftJoin(schema.products, eq(schema.products.id, schema.nozzles.productId))
     .leftJoin(schema.tanks, eq(schema.tanks.id, schema.nozzles.tankId))
     .where(and(eq(schema.nozzles.stationId, stationId), eq(schema.nozzles.organizationId, orgId)));
-  const nozzles = nozzleRows.map(({ nz, prod, tnk }) => ({ ...nz, productName: prod?.name ?? 'Unknown', productCode: prod?.code ?? 'Unknown', tankName: tnk?.name ?? 'Unknown' }));
+  const nozzles = nozzleRows.map(({ nz, prod, tnk }) => ({ ...nz, productName: prod?.name ?? 'Unknown', productCode: prod?.code ?? 'Unknown', unit: prod?.unit ?? 'L', tankName: tnk?.name ?? 'Unknown' }));
   const staff = await db
     .select()
     .from(schema.users)

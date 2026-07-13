@@ -197,7 +197,7 @@ export const FuelPricingPanel: React.FC<FuelPricingPanelProps> = ({ selectedStat
                     key={cp.productId}
                     dot="brand"
                     label={`${cp.productName} · ${cp.productCode}`}
-                    value={`${inr(cp.price)}/L`}
+                    value={`${inr(cp.price)}/${(products || []).find((p: any) => p.id === cp.productId)?.unit || 'L'}`}
                     hint={cp.effectiveFrom ? `since ${formatDate(cp.effectiveFrom, { compact: true })}` : undefined}
                   />
                 ))}

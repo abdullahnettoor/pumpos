@@ -180,9 +180,9 @@ export const buildCreditSaleColumns = (): ColumnDef<any, any>[] => [
   {
     accessorKey: 'quantity',
     header: 'Qty',
-    cell: ({ getValue }) => {
+    cell: ({ getValue, row }) => {
       const q = getValue();
-      return q ? <span style={{ fontFamily: 'var(--font-mono)', fontSize: '12px' }}>{Number(q).toLocaleString('en-IN')} L</span> : <span style={{ color: 'var(--text-faint)' }}>—</span>;
+      return q ? <span style={{ fontFamily: 'var(--font-mono)', fontSize: '12px' }}>{Number(q).toLocaleString('en-IN')} {(row.original as any).unit || 'L'}</span> : <span style={{ color: 'var(--text-faint)' }}>—</span>;
     },
   },
   {
