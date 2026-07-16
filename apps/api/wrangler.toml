@@ -39,3 +39,37 @@ head_sampling_rate = 0.1
 
 [secrets]
 required = [ "SUPABASE_JWT_SECRET" ]
+
+# ---------------------------------------------------------------------------
+# PRODUCTION API (separate Supabase instance)
+# ---------------------------------------------------------------------------
+# The top-level config above is the DEV stack (dev Supabase). Production uses a
+# DIFFERENT Supabase project, so it needs its own worker, its own Hyperdrive
+# config (pointing at the prod DB), and the prod project's JWT secret.
+#
+# Deploy prod explicitly (kept out of auto-deploy):   wrangler deploy --env production
+#
+# Setup checklist when the prod Supabase project exists:
+#   1. Create a Hyperdrive config for the prod DB direct connection:
+#        wrangler hyperdrive create pumpos-prod \
+#          --connection-string "postgresql://postgres.<ref>:<pwd>@<host>:5432/postgres"
+#      then paste the returned id below.
+#   2. Set the prod JWT secret on the prod worker:
+#        wrangler secret put SUPABASE_JWT_SECRET --env production
+#   3. Point the frontends at this worker via PROD_API_URL (api.pumpos.app).
+#
+# [env.production]
+# name = "pumpos-api-prod"
+# [[env.production.routes]]
+# pattern = "api.pumpos.app"
+# custom_domain = true
+#
+# [[env.production.hyperdrive]]
+# binding = "HYPERDRIVE"
+# id = "<PROD_HYPERDRIVE_ID>"
+#
+# [env.production.observability]
+# enabled = true
+#
+# [env.production.secrets]
+# required = [ "SUPABASE_JWT_SECRET" ]

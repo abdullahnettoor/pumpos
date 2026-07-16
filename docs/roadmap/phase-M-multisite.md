@@ -28,6 +28,60 @@ and mobile share the session.
 
 ---
 
+## Deployment (CI/CD)
+
+All web surfaces deploy from one GitHub Actions workflow
+(`.github/workflows/deploy.yml`) — no per-project Cloudflare-managed builds:
+
+- **push to `main`** → production (top-level custom-domain routes).
+- **push to `dev`** → preview (`--env preview`, workers.dev).
+- Per-app **path filters** (`dorny/paths-filter`) mean each app deploys only
+  when its files — or a shared package it depends on (`packages/ui`,
+  `packages/shared`) — change.
+- Deploys run `npx wrangler deploy` with `CLOUDFLARE_API_TOKEN` +
+  `CLOUDFLARE_ACCOUNT_ID` repo secrets.
+- The **API** job is included but commented out (still deployed manually; auto
+  API deploys can be risky when a change needs a migration first).
+
+One-time setup:
+1. Add repo secrets `CLOUDFLARE_API_TOKEN` (Edit Workers) + `CLOUDFLARE_ACCOUNT_ID`.
+2. **Disconnect** the existing Cloudflare-managed console build so it doesn't
+   double-deploy alongside the workflow.
+3. Commit the updated `package-lock.json` (needed by `npm ci`).
+
+### Environment isolation (dev vs prod Supabase)
+
+Two branch-selected stacks share the codebase:
+
+| | `dev` push → preview | `main` push → production |
+|---|---|---|
+| Frontends | `dev-pumpos-*` (workers.dev) | `console.` / `m.` / apex |
+| Supabase | dev project | separate **prod** project |
+| API worker | `pumpos-api` | `pumpos-api-prod` (`--env production`) |
+| Hyperdrive | dev config | prod config (own id) |
+| JWT secret | dev project's | prod project's |
+
+- **Frontend** Supabase URL + anon key + API URL are injected per branch from
+  repo secrets (`PROD_SUPABASE_URL`, `PROD_SUPABASE_ANON_KEY`, `PROD_API_URL`)
+  on `main` builds; `dev` builds fall back to the baked-in dev defaults.
+- **API** prod is a separate worker: `apps/api/wrangler.toml` has a commented
+  `[env.production]` scaffold (prod route + prod Hyperdrive + prod JWT secret).
+  Deploy prod API deliberately with `wrangler deploy --env production` (not
+  auto-deployed).
+
+### Database migrations
+
+Migrations never run on deploy. A separate **manually-triggered** workflow
+(`.github/workflows/migrate.yml`, `workflow_dispatch`) applies drizzle-kit
+migrations to a chosen target (`dev` or `prod`) using
+`DEV_DIRECT_DATABASE_URL` / `PROD_DIRECT_DATABASE_URL` secrets (direct
+connection on 5432, not the transaction pooler). Flow for a schema change:
+generate + commit migration → run migrate (dev) → verify → run migrate (prod)
+→ deploy API. RLS/policy SQL in `supabase/migrations/*.sql` is applied
+separately (supabase CLI / direct scripts).
+
+---
+
 ## Repository layout after this phase
 
 ```
