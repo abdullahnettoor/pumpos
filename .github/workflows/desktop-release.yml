@@ -1,0 +1,142 @@
+name: Desktop release
+
+# Builds the Tauri desktop app for macOS + Windows and attaches the installers
+# to a GitHub Release. Runs ONLY on version tags — desktop CI is expensive on
+# private repos (GitHub runner minute multipliers: macOS = 10x, Windows = 2x),
+# so never trigger it on push.
+#
+# Cut a release with `npm run release` (bumps versions + creates the tag), then
+# `git push --follow-tags`.
+#
+# Signing / notarization: this first cut ships UNSIGNED — users will see an
+# "unverified publisher" (Windows SmartScreen) / Gatekeeper warning. To sign:
+#   - macOS: set APPLE_CERTIFICATE, APPLE_CERTIFICATE_PASSWORD, APPLE_SIGNING_IDENTITY,
+#     APPLE_ID, APPLE_PASSWORD, APPLE_TEAM_ID (Apple Developer, $99/yr) → tauri-action
+#     picks them up from env for signing + notarization.
+#   - Windows: set a code-signing cert (WINDOWS_CERTIFICATE / password).
+#
+# Auto-updater (opt-in, separate from OS signing — uses a free Tauri keypair):
+#   1. npx @tauri-apps/cli signer generate -w ~/.tauri/pumpos.key
+#   2. Add the PUBLIC key to apps/desktop/src-tauri/tauri.conf.json → plugins.updater.pubkey
+#      and set an updater endpoint (e.g. the GitHub Releases latest.json).
+#   3. Add repo secrets TAURI_SIGNING_PRIVATE_KEY (+ _PASSWORD) — tauri-action
+#      then emits the signed `latest.json` + `.sig` files on the release.
+#
+# Public downloads (needed once the repo is PRIVATE — GitHub Release assets on a
+# private repo aren't publicly downloadable). Installers are also pushed to a
+# public Cloudflare R2 bucket that the marketing download page reads. Configure:
+#   - Create an R2 bucket + public access (custom domain e.g. downloads.pumpos.app,
+#     or the r2.dev URL). Add a CORS rule allowing GET from the marketing origin.
+#   - REPOSITORY variables: R2_BUCKET (bucket name), R2_PUBLIC_BASE (public URL).
+#   - The CLOUDFLARE_API_TOKEN must include R2 read/write (Workers R2 Storage).
+#   - Point the download page at the R2 manifest: set the marketing build var
+#     DOWNLOAD_MANIFEST_URL = <R2_PUBLIC_BASE>/downloads/manifest.json
+#   Until R2_BUCKET is set, the R2 steps are skipped (GitHub Release still made).
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+# The release step needs write access to create/update the GitHub Release and
+# upload the installers. GITHUB_TOKEN is read-only by default.
+permissions:
+  contents: write
+
+concurrency:
+  group: desktop-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            args: '--target universal-apple-darwin'
+            rust-targets: 'aarch64-apple-darwin,x86_64-apple-darwin'
+          - platform: windows-latest
+            args: ''
+            rust-targets: ''
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust-targets }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+      - run: npm ci
+      - name: Build shared UI
+        # The desktop frontend imports @pump/ui (and @pump/shared) from dist/;
+        # tauri-action's beforeBuildCommand then runs the desktop vite build.
+        run: npm run build --workspace=@pump/ui
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Bake the backend config into the desktop bundle (falls back to the
+          # app's built-in defaults when these prod secrets are unset).
+          VITE_API_URL: ${{ secrets.PROD_API_URL }}
+          VITE_SUPABASE_URL: ${{ secrets.PROD_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.PROD_SUPABASE_PUBLISHABLE_KEY }}
+        with:
+          projectPath: apps/desktop
+          tagName: ${{ github.ref_name }}
+          releaseName: 'PumpOS ${{ github.ref_name }}'
+          releaseBody: 'PumpOS desktop installers. Download the file for your OS below.'
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.args }}
+
+      # Public distribution: private-repo GitHub Release assets aren't publicly
+      # downloadable, so we also push installers to a public R2 bucket that the
+      # marketing download page reads. Skipped until R2_BUCKET is configured.
+      - name: Upload installers to R2
+        if: ${{ vars.R2_BUCKET != '' }}
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          shopt -s nullglob
+          files=(
+            apps/desktop/src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+            apps/desktop/src-tauri/target/release/bundle/msi/*.msi
+            apps/desktop/src-tauri/target/release/bundle/nsis/*-setup.exe
+          )
+          for f in "${files[@]}"; do
+            name="$(basename "$f")"
+            echo "Uploading $name"
+            npx wrangler r2 object put "${{ vars.R2_BUCKET }}/pumpos/v$version/$name" --file "$f" --remote
+          done
+
+  # After both installers are on R2, publish the manifest the download page
+  # reads. Skipped until R2 is configured.
+  manifest:
+    needs: build
+    if: ${{ vars.R2_BUCKET != '' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Generate + upload download manifest
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          node scripts/gen-download-manifest.mjs "$version" "${{ vars.R2_PUBLIC_BASE }}" > manifest.json
+          cat manifest.json
+          npx wrangler r2 object put "${{ vars.R2_BUCKET }}/downloads/manifest.json" --file manifest.json --content-type application/json --remote
+          npx wrangler r2 object put "${{ vars.R2_BUCKET }}/pumpos/v$version/manifest.json" --file manifest.json --content-type application/json --remote

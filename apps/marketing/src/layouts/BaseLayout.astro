@@ -1,5 +1,6 @@
 ---
 import '../styles/global.css';
+import { CONSOLE_URL } from '../config.ts';
 
 interface Props {
   title: string;
@@ -42,6 +43,7 @@ const ogImage = new URL('/og-default.svg', Astro.site).toString();
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={ogImage} />
 
+    <link rel="alternate" type="application/rss+xml" title="PumpOS Blog" href="/rss.xml" />
     <meta name="generator" content={Astro.generator} />
   </head>
   <body class="min-h-screen flex flex-col">
@@ -60,11 +62,17 @@ const ogImage = new URL('/og-default.svg', Astro.site).toString();
           <a href="/#features" class="text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]"
             >Features</a
           >
+          <a href="/docs" class="text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]"
+            >Docs</a
+          >
+          <a href="/blog" class="text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]"
+            >Blog</a
+          >
           <a href="/download" class="text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]"
             >Download</a
           >
           <a
-            href="https://console.pumpos.app"
+            href={CONSOLE_URL}
             class="rounded-lg bg-[var(--color-brand)] px-4 py-2 font-medium text-white transition hover:bg-[var(--color-brand-dark)]"
             >Open console</a
           >

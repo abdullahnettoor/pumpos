@@ -2,17 +2,19 @@
 import { defineConfig } from 'astro/config';
 import mdx from '@astrojs/mdx';
 import sitemap from '@astrojs/sitemap';
+import pagefind from 'astro-pagefind';
 import tailwindcss from '@tailwindcss/vite';
 
-// Production apex. Overridden per-deploy via the SITE env var so the dev custom
-// domain (pumpos.abdullahnettoor.com) gets a correct sitemap/canonical too.
-const site = process.env.SITE ?? 'https://pumpos.app';
+// Canonical site host. Defaults to the CURRENT domain; overridden per-deploy
+// via the SITE env var (set SITE=https://pumpos.app at go-live) so the
+// sitemap/canonical/OG URLs are correct.
+const site = process.env.SITE ?? 'https://pumpos.abdullahnettoor.com';
 
 // https://astro.build/config
 export default defineConfig({
   site,
   output: 'static',
-  integrations: [mdx(), sitemap()],
+  integrations: [mdx(), sitemap(), pagefind()],
   vite: {
     plugins: [tailwindcss()],
   },

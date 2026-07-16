@@ -28,6 +28,90 @@ and mobile share the session.
 
 ---
 
+## Deployment (CI/CD)
+
+**Tag-driven releases.** Web surfaces deploy from `.github/workflows/deploy.yml`;
+the desktop app from `.github/workflows/desktop-release.yml`. Plain branch pushes
+never build — so syncing WIP between machines costs no CI minutes.
+
+- **`git tag vX.Y.Z` + push** → production release: all web apps deploy to their
+  top-level (custom-domain) config; desktop builds macOS + Windows installers
+  and attaches them to a **draft GitHub Release**.
+- **Actions → Deploy → Run** (`workflow_dispatch`, pick an app) → **preview**
+  deploy to workers.dev (`--env preview`). Manual, on demand.
+- Cut releases with **`npm run release -- patch|minor|major|X.Y.Z`** — one
+  unified version bumps every workspace `package.json` + `tauri.conf.json` +
+  `Cargo.toml`, commits, and creates the tag. Then `git push --follow-tags`.
+- The **API** job builds workspace deps (`npm run build:api`) before
+  `wrangler deploy` — wrangler bundles `apps/api` from source and needs
+  `@pump/{db,core,shared}/dist`.
+
+### GitHub Actions minute cost (Free plan, private repo = 2,000 min/mo)
+- Web jobs run on Linux (**1×**) and are short. Tag-only triggering keeps usage
+  low.
+- Desktop runners are billed at **macOS 10× / Windows 2×**, so desktop CI is
+  **tag-only** (never on push). Rust build cache (`Swatinem/rust-cache`) trims
+  repeat-build time. A release ≈ a few hundred billed minutes, mostly macOS.
+
+### Environment isolation (dev vs prod Supabase)
+
+One codebase, config selected at build time:
+
+| | Preview (manual run) | Production (tag) |
+|---|---|---|
+| Frontends | `dev-pumpos-*` (workers.dev) | top-level custom domains |
+| Supabase | dev (via `DEV_*` or fallback) | `PROD_*` if set, else current (warns) |
+| API worker | `pumpos-api` (top-level) | top-level, or `--env $API_DEPLOY_ENV` |
+
+- **Frontend** Supabase URL + publishable key + API URL are injected from repo
+  secrets: `PROD_*` on tags, `DEV_*` on manual runs. Injection is **soft** —
+  an unset var falls back to the app's baked-in default (`X || default`), so it
+  works today with the single current Supabase; a warning fires on tags until
+  `PROD_*` is set.
+- **API** prod: `apps/api/wrangler.toml` has a commented `[env.production]`
+  scaffold (prod route + Hyperdrive + JWT secret). Once live, set the repo
+  variable `API_DEPLOY_ENV=production` and the tag deploy targets the prod
+  worker; until then it deploys the current top-level worker.
+- Secrets live in **repository** secrets (Environment secrets need Pro/Team on
+  private repos), namespaced `PROD_*` / `DEV_*`.
+
+### Database migrations
+
+Migrations never run on deploy. A separate **manually-triggered** workflow
+(`.github/workflows/migrate.yml`, `workflow_dispatch`) applies drizzle-kit
+migrations to a chosen target (`dev` or `prod`) using
+`DEV_DIRECT_DATABASE_URL` / `PROD_DIRECT_DATABASE_URL` secrets (direct
+connection on 5432, not the transaction pooler). Flow for a schema change:
+generate + commit migration → run migrate (dev) → verify → run migrate (prod)
+→ deploy API. RLS/policy SQL in `supabase/migrations/*.sql` is applied
+separately (supabase CLI / direct scripts).
+
+### Go-live domain switch (abdullahnettoor.com → pumpos.app)
+
+Hostnames are config-driven, so switching to the real prod domain is mostly
+setting variables — no code edits except the wrangler route strings (which
+can't read env vars):
+
+1. **Repo variables:** `MARKETING_SITE=https://pumpos.app`,
+   `CONSOLE_URL=https://console.pumpos.app` (marketing links + sitemap flip on
+   the next tag build).
+2. **Repo secrets:** `PROD_SUPABASE_URL`, `PROD_SUPABASE_PUBLISHABLE_KEY`,
+   `PROD_API_URL=https://api.pumpos.app` (frontends inject these on tag builds;
+   until set, they fall back to the current Supabase/API and warn).
+3. **Wrangler routes (the only code edit):** update the top-level `pattern` in
+   `apps/{console,marketing,mobile}/wrangler.toml` → `console.pumpos.app` /
+   `pumpos.app` / `m.pumpos.app`; uncomment `apps/api` `[env.production]` +
+   prod Hyperdrive id; set variable `API_DEPLOY_ENV=production`.
+4. **Supabase Auth:** add the `pumpos.app` hosts to Site URL + Redirect URLs.
+5. **Zone:** `pumpos.app` active in the Cloudflare account (routes then
+   auto-provision DNS + certs on the next tag deploy).
+
+The console's `resolveApiUrl` and marketing links carry current-domain
+defaults, so nothing breaks before the switch and there are no dead links in
+dev.
+
+---
+
 ## Repository layout after this phase
 
 ```
@@ -297,6 +381,10 @@ data caching follows the `pump-data-caching` tiers (operational = 15s).
 
 Only activates the collections scaffolded in M2.
 
+**Status: implemented (code).** Docs + blog + RSS + Pagefind search build and
+render; two sample docs + one sample post ship as starters. Remaining: author
+real content.
+
 ### Scope
 - `/docs` — user manual and admin guide (MDX). Sidebar generated from
   frontmatter. Search via Pagefind (static, no server).
@@ -310,6 +398,20 @@ Only activates the collections scaffolded in M2.
 
 **Exit criteria:** first tutorial published; docs discoverable via search;
 sitemap includes both trees.
+
+### What shipped in code
+- **Blog** — `/blog` index + `/blog/[slug]` post pages (Astro 5 content
+  collections), `/rss.xml` feed (`@astrojs/rss`), sample post
+  `introducing-pumpos.mdx`.
+- **Docs** — `DocsLayout` with category-grouped sidebar (ordered by
+  frontmatter `order`), `/docs` → first-doc redirect, `/docs/[slug]` pages,
+  sample docs `getting-started` + `running-shifts`.
+- **Search** — `astro-pagefind` integration; static index built from
+  `data-pagefind-body` content; `<Search>` box in the docs sidebar.
+- Header nav gains **Docs** + **Blog**; RSS `<link>` in `<head>`; `.prose-pump`
+  typography for rendered MDX. Sitemap auto-covers both trees.
+- To author: drop `.md`/`.mdx` into `apps/marketing/src/content/{docs,blog}/`
+  with the frontmatter fields (`content.config.ts` schemas).
 
 ---
 

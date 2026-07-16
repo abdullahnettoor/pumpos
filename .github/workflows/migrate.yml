@@ -1,0 +1,62 @@
+name: DB migrate
+
+# Manually-triggered database migrations. Migrations are NOT run on deploy —
+# they must be applied deliberately, before the API that depends on them, and
+# prod runs are high-risk. Trigger from the Actions tab → "DB migrate" → Run
+# workflow → choose the target.
+#
+# Requires repo secrets (Settings → Secrets and variables → Actions):
+#   DEV_DIRECT_DATABASE_URL   – dev Supabase DIRECT connection (session pooler,
+#                               port 5432) e.g.
+#                               postgresql://postgres.<ref>:<pwd>@<host>:5432/postgres
+#   PROD_DIRECT_DATABASE_URL  – prod Supabase DIRECT connection
+#
+# Use the DIRECT (non-Hyperdrive, non-transaction-pooler) URL for DDL — drizzle
+# migrations run schema changes that the transaction pooler (6543) can't handle.
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Which database to migrate
+        required: true
+        type: choice
+        options:
+          - dev
+          - prod
+      dry_run:
+        description: Print pending migrations without applying
+        type: boolean
+        default: false
+
+concurrency:
+  # Never run two migrations against the same target at once.
+  group: migrate-${{ github.event.inputs.target }}
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Resolve target database URL
+        run: |
+          if [ "${{ github.event.inputs.target }}" = "prod" ]; then
+            echo "::add-mask::${{ secrets.PROD_DIRECT_DATABASE_URL }}"
+            echo "DIRECT_DATABASE_URL=${{ secrets.PROD_DIRECT_DATABASE_URL }}" >> "$GITHUB_ENV"
+          else
+            echo "::add-mask::${{ secrets.DEV_DIRECT_DATABASE_URL }}"
+            echo "DIRECT_DATABASE_URL=${{ secrets.DEV_DIRECT_DATABASE_URL }}" >> "$GITHUB_ENV"
+          fi
+      - name: Show pending migrations
+        working-directory: packages/db
+        run: npx drizzle-kit up --config drizzle.config.ts || true
+      - name: Apply migrations
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        working-directory: packages/db
+        run: npm run db:migrate

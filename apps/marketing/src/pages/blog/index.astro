@@ -1,0 +1,41 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { getCollection } from 'astro:content';
+
+const posts = (await getCollection('blog', ({ data }) => !data.draft)).sort(
+  (a, b) => b.data.publishedAt.valueOf() - a.data.publishedAt.valueOf(),
+);
+
+const fmt = (d: Date) =>
+  d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+---
+
+<BaseLayout title="Blog — PumpOS" description="Release notes and deep dives from the PumpOS team." path="/blog">
+  <section class="mx-auto max-w-3xl px-6 py-20">
+    <h1 class="text-4xl font-bold tracking-tight">Blog</h1>
+    <p class="mt-3 text-[var(--color-ink-muted)]">Release notes and deep dives from the PumpOS team.</p>
+
+    {posts.length === 0 && (
+      <p class="mt-10 text-[var(--color-ink-muted)]">No posts yet — check back soon.</p>
+    )}
+
+    <ul class="mt-10 flex flex-col gap-8">
+      {
+        posts.map((post) => (
+          <li class="border-b border-[var(--color-border-soft)] pb-8 last:border-0">
+            <p class="text-xs font-medium uppercase tracking-wide text-[var(--color-ink-muted)]">
+              {fmt(post.data.publishedAt)}
+            </p>
+            <h2 class="mt-1 text-2xl font-semibold">
+              <a href={`/blog/${post.id}`} class="hover:text-[var(--color-brand)]">{post.data.title}</a>
+            </h2>
+            <p class="mt-2 text-[var(--color-ink-muted)]">{post.data.description}</p>
+            <a href={`/blog/${post.id}`} class="mt-3 inline-block text-sm font-medium text-[var(--color-brand)]">
+              Read more →
+            </a>
+          </li>
+        ))
+      }
+    </ul>
+  </section>
+</BaseLayout>

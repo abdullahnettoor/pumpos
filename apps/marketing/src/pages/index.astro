@@ -1,5 +1,6 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
+import { CONSOLE_URL } from '../config.ts';
 
 const features = [
   {
@@ -58,7 +59,7 @@ const steps = [
         >Download the desktop app</a
       >
       <a
-        href="https://console.pumpos.app"
+        href={CONSOLE_URL}
         class="w-full rounded-lg border border-[var(--color-border-soft)] bg-[var(--color-surface)] px-6 py-3 font-medium text-[var(--color-ink)] transition hover:border-[var(--color-brand)] sm:w-auto"
         >Open the web console</a
       >
@@ -117,7 +118,7 @@ const steps = [
           >Download</a
         >
         <a
-          href="https://console.pumpos.app"
+          href={CONSOLE_URL}
           class="w-full rounded-lg border border-white/40 px-6 py-3 font-medium text-white transition hover:bg-white/10 sm:w-auto"
           >Open console</a
         >

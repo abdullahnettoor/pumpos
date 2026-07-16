@@ -1,7 +1,7 @@
 {
   "name": "pumpos-monorepo",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "PumpOS Platform",
   "workspaces": [
     "apps/*",
@@ -27,7 +27,8 @@
     "build:desktop": "npm run build --workspace=apps/desktop",
     "test": "npm run test --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",
-    "fonts": "node scripts/download-fonts.mjs"
+    "fonts": "node scripts/download-fonts.mjs",
+    "release": "node scripts/release.mjs"
   },
   "devDependencies": {
     "@types/node": "^26.0.0",
