@@ -1,0 +1,32 @@
+---
+title: Running shifts
+description: Open, operate, and close a shift with accurate reconciliation.
+order: 1
+category: Operations
+---
+
+A shift is the operator-accountability window for the cash drawer.
+
+## Opening
+
+Capture opening nozzle readings (they default from the previous close). Record
+the opening cash float.
+
+## During the shift
+
+- **Fuel sales** are derived from nozzle readings — no manual entry.
+- Record **expenses**, **collections**, **purchases**, and **credit sales** as
+  they happen. Only cash movements touch the drawer.
+
+## Closing
+
+Enter closing readings and count the drawer. PumpOS reconciles:
+
+```
+expectedDrawerCash =
+  openingCash + cashSales + cashCollections
+  − drawerExpenses − drawerSupplierPayments − cashDrops
+```
+
+Any difference is recorded as **variance** — a first-class, auditable number.
+On close, an immutable **shift summary** snapshot is created.

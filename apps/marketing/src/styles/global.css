@@ -28,3 +28,66 @@ body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
 }
+
+/* Rendered MDX content (docs + blog). Tailwind's reset strips defaults, so we
+ * restore readable typography scoped to `.prose-pump`. */
+.prose-pump {
+  line-height: 1.7;
+  color: var(--color-ink);
+}
+.prose-pump > * + * {
+  margin-top: 1rem;
+}
+.prose-pump h2 {
+  margin-top: 2rem;
+  font-size: 1.5rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.prose-pump h3 {
+  margin-top: 1.5rem;
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+.prose-pump p,
+.prose-pump li {
+  color: var(--color-ink-muted);
+}
+.prose-pump a {
+  color: var(--color-brand);
+  text-decoration: underline;
+}
+.prose-pump ul {
+  list-style: disc;
+  padding-left: 1.5rem;
+}
+.prose-pump ol {
+  list-style: decimal;
+  padding-left: 1.5rem;
+}
+.prose-pump code {
+  font-family: var(--font-mono);
+  font-size: 0.875em;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border-soft);
+  border-radius: 4px;
+  padding: 0.1em 0.35em;
+}
+.prose-pump pre {
+  background-color: #0f1a14;
+  color: #e6efe9;
+  border-radius: 10px;
+  padding: 1rem 1.25rem;
+  overflow-x: auto;
+  font-size: 0.85rem;
+}
+.prose-pump pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+}
+.prose-pump strong {
+  color: var(--color-ink);
+  font-weight: 600;
+}

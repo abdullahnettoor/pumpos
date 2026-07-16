@@ -1,0 +1,75 @@
+---
+import BaseLayout from './BaseLayout.astro';
+import { getCollection } from 'astro:content';
+import Search from 'astro-pagefind/components/Search';
+
+interface Props {
+  title: string;
+  description?: string;
+  currentId: string;
+}
+const { title, description, currentId } = Astro.props;
+
+// Build the sidebar: group docs by category, ordered by `order` then title.
+const docs = await getCollection('docs');
+const groups = new Map<string, typeof docs>();
+for (const d of docs) {
+  const cat = d.data.category ?? 'Docs';
+  if (!groups.has(cat)) groups.set(cat, [] as unknown as typeof docs);
+  groups.get(cat)!.push(d);
+}
+const sidebar = [...groups.entries()]
+  .sort((a, b) => a[0].localeCompare(b[0]))
+  .map(([category, items]) => ({
+    category,
+    items: items.sort(
+      (a, b) => a.data.order - b.data.order || a.data.title.localeCompare(b.data.title),
+    ),
+  }));
+---
+
+<BaseLayout title={`${title} — PumpOS Docs`} description={description} path={`/docs/${currentId}`}>
+  <div class="mx-auto flex max-w-6xl gap-10 px-6 py-12">
+    <aside class="hidden w-60 shrink-0 md:block">
+      <div class="sticky top-24">
+        <Search id="docs-search" className="pagefind-ui--compact" uiOptions={{ showImages: false }} />
+        <nav class="mt-6 flex flex-col gap-6">
+          {
+            sidebar.map((group) => (
+              <div>
+                <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--color-ink-muted)]">
+                  {group.category}
+                </p>
+                <ul class="flex flex-col gap-1">
+                  {group.items.map((item) => (
+                    <li>
+                      <a
+                        href={`/docs/${item.id}`}
+                        class="block rounded-md px-2 py-1 text-sm"
+                        style={
+                          item.id === currentId
+                            ? 'background-color: var(--color-surface); color: var(--color-brand); font-weight: 600;'
+                            : 'color: var(--color-ink-muted);'
+                        }
+                      >
+                        {item.data.title}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))
+          }
+        </nav>
+      </div>
+    </aside>
+
+    <article class="min-w-0 flex-1">
+      <h1 class="text-3xl font-bold tracking-tight">{title}</h1>
+      {description && <p class="mt-2 text-[var(--color-ink-muted)]">{description}</p>}
+      <div class="prose-pump mt-8" data-pagefind-body>
+        <slot />
+      </div>
+    </article>
+  </div>
+</BaseLayout>

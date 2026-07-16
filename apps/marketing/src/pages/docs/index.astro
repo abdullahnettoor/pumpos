@@ -1,0 +1,14 @@
+---
+import { getCollection } from 'astro:content';
+
+// Send /docs to the first doc (lowest order in the first category).
+const docs = (await getCollection('docs')).sort(
+  (a, b) =>
+    (a.data.category ?? 'Docs').localeCompare(b.data.category ?? 'Docs') ||
+    a.data.order - b.data.order,
+);
+const first = docs[0];
+if (first) return Astro.redirect(`/docs/${first.id}`);
+---
+
+<p>No documentation yet.</p>

@@ -2,6 +2,7 @@
 import { defineConfig } from 'astro/config';
 import mdx from '@astrojs/mdx';
 import sitemap from '@astrojs/sitemap';
+import pagefind from 'astro-pagefind';
 import tailwindcss from '@tailwindcss/vite';
 
 // Canonical site host. Defaults to the CURRENT domain; overridden per-deploy
@@ -13,7 +14,7 @@ const site = process.env.SITE ?? 'https://pumpos.abdullahnettoor.com';
 export default defineConfig({
   site,
   output: 'static',
-  integrations: [mdx(), sitemap()],
+  integrations: [mdx(), sitemap(), pagefind()],
   vite: {
     plugins: [tailwindcss()],
   },

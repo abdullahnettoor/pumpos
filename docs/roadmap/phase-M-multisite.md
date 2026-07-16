@@ -381,6 +381,10 @@ data caching follows the `pump-data-caching` tiers (operational = 15s).
 
 Only activates the collections scaffolded in M2.
 
+**Status: implemented (code).** Docs + blog + RSS + Pagefind search build and
+render; two sample docs + one sample post ship as starters. Remaining: author
+real content.
+
 ### Scope
 - `/docs` — user manual and admin guide (MDX). Sidebar generated from
   frontmatter. Search via Pagefind (static, no server).
@@ -394,6 +398,20 @@ Only activates the collections scaffolded in M2.
 
 **Exit criteria:** first tutorial published; docs discoverable via search;
 sitemap includes both trees.
+
+### What shipped in code
+- **Blog** — `/blog` index + `/blog/[slug]` post pages (Astro 5 content
+  collections), `/rss.xml` feed (`@astrojs/rss`), sample post
+  `introducing-pumpos.mdx`.
+- **Docs** — `DocsLayout` with category-grouped sidebar (ordered by
+  frontmatter `order`), `/docs` → first-doc redirect, `/docs/[slug]` pages,
+  sample docs `getting-started` + `running-shifts`.
+- **Search** — `astro-pagefind` integration; static index built from
+  `data-pagefind-body` content; `<Search>` box in the docs sidebar.
+- Header nav gains **Docs** + **Blog**; RSS `<link>` in `<head>`; `.prose-pump`
+  typography for rendered MDX. Sitemap auto-covers both trees.
+- To author: drop `.md`/`.mdx` into `apps/marketing/src/content/{docs,blog}/`
+  with the frontmatter fields (`content.config.ts` schemas).
 
 ---
 
