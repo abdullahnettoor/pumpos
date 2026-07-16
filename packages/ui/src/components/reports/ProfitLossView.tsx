@@ -142,9 +142,13 @@ export const ProfitLossView: React.FC<ProfitLossViewProps> = ({ selectedStation 
       {/* Net-profit trend across the period (FB3). */}
       {!isSingleDay && trend.length > 1 && (
         <Panel title="Net profit trend" action={<Chip tone={totals.netProfit < 0 ? 'danger' : 'success'} variant="soft">{inr(totals.netProfit)}</Chip>}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <Sparkline data={trend} tone={totals.netProfit < 0 ? 'danger' : 'success'} fill width={240} height={44} aria-label="Daily net profit trend" />
-            <span style={{ fontSize: '11px', color: 'var(--text-faint)' }}>{trend.length} days · oldest → newest</span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <Sparkline data={trend} tone={totals.netProfit < 0 ? 'danger' : 'success'} fill height={64} className="w-full" aria-label="Daily net profit trend" />
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text-faint)' }}>
+              <span>{days[days.length - 1]?.date}</span>
+              <span>{trend.length} days · net profit / day</span>
+              <span>{days[0]?.date}</span>
+            </div>
           </div>
         </Panel>
       )}

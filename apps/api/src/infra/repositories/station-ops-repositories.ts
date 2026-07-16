@@ -257,12 +257,34 @@ export class DrizzleShiftReconciliationReader implements ShiftReconciliationRead
     const cashPortion = (s: { totalAmount: string; nonCashAmount?: string | null }) =>
       Number(s.totalAmount) - Number(s.nonCashAmount ?? 0);
     const merchCashSales = cashSaleRows.reduce((acc, s) => acc + cashPortion(s), 0);
-    const nonHandoverMerchCash = cashSaleRows
-      .filter((s) => !(s.attendantId && handoverUserIds.has(s.attendantId)))
-      .reduce((acc, s) => acc + cashPortion(s), 0);
+    const outsideRows = cashSaleRows.filter((s) => !(s.attendantId && handoverUserIds.has(s.attendantId)));
+    const nonHandoverMerchCash = outsideRows.reduce((acc, s) => acc + cashPortion(s), 0);
+
+    // Per-seller breakdown of the non-attendant (outside-handover) merch cash,
+    // computed from the SAME rows as the total so the two always reconcile. Names
+    // resolved via a users lookup (same pattern as the merchandise panel); sales
+    // with no seller fall under "Counter / unassigned".
+    const rowsForBreakdown = handovers.length > 0 ? outsideRows : cashSaleRows;
+    const bySeller = new Map<string, number>();
+    for (const s of rowsForBreakdown) {
+      const key = (s as { attendantId?: string | null }).attendantId ?? 'unassigned';
+      bySeller.set(key, (bySeller.get(key) ?? 0) + cashPortion(s));
+    }
+    const sellerIds = [...bySeller.keys()].filter((k) => k !== 'unassigned');
+    const sellerNameRows = sellerIds.length
+      ? await this.db.select({ id: schema.users.id, fullName: schema.users.fullName }).from(schema.users).where(inArray(schema.users.id, sellerIds))
+      : [];
+    const nameById = new Map(sellerNameRows.map((u) => [u.id, u.fullName]));
+    const merchCashOutsideHandoverBreakdown = [...bySeller.entries()]
+      .filter(([, amount]) => amount !== 0)
+      .map(([key, amount]) => ({ sellerName: key === 'unassigned' ? 'Counter / unassigned' : (nameById.get(key) ?? 'Unknown'), amount }))
+      .sort((a, b) => b.amount - a.amount);
 
     return {
       cashSales: handovers.length > 0 ? handoverCash + nonHandoverMerchCash : merchCashSales,
+      handoverCash: handovers.length > 0 ? handoverCash : 0,
+      merchCashOutsideHandover: handovers.length > 0 ? nonHandoverMerchCash : merchCashSales,
+      merchCashOutsideHandoverBreakdown,
       cashCollections: sumBy(collections, 'Cash'),
       cardCollections: sumBy(collections, 'Card'),
       upiCollections: sumBy(collections, 'UPI'),

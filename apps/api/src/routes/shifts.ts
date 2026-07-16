@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { and, desc, eq, ne, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, ne, sql } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
 import { canOpenShift, canCloseShift, canReopenShift, isAuthorizedForStation, type Role } from '@pump/shared';
 import {
@@ -506,6 +506,8 @@ shiftsRouter.get('/status', async (c) => {
 
     const handovers = handoverRows.map((h) => ({
       ...h,
+      attendantName: assignmentRows.find((a) => a.sa.userId === h.userId)?.staffUser?.fullName ?? 'Attendant',
+      duName: assignmentRows.find((a) => a.du?.id === h.duId)?.du?.name ?? null,
       terminalEntries: handoverEntryRows.filter((e) => e.handoverId === h.id),
       attributed: attributedFor(h.userId),
       creditSales: creditSalesFor(h.userId, h.duId),
@@ -525,6 +527,57 @@ shiftsRouter.get('/status', async (c) => {
       duCode: du?.code ?? null,
     }));
 
+    // Merchandise tracker data folded into the status payload so the panel
+    // renders without a second round-trip (mirrors the /merchandise-handovers
+    // and /merchandise-sales endpoints; the panel seeds its queries from these).
+    const [merchHandoverRows, merchandiseSales] = lite
+      ? [[] as any[], [] as any[]]
+      : await Promise.all([
+          db
+            .select({
+              id: schema.sales.id,
+              attendantId: schema.sales.attendantId,
+              attendantName: schema.users.fullName,
+              subtotalAmount: schema.sales.subtotalAmount,
+              taxAmount: schema.sales.taxAmount,
+              totalAmount: schema.sales.totalAmount,
+              nonCashAmount: schema.sales.nonCashAmount,
+              createdAt: schema.sales.createdAt,
+            })
+            .from(schema.sales)
+            .leftJoin(schema.users, eq(schema.users.id, schema.sales.attendantId))
+            .where(and(eq(schema.sales.shiftId, dbActiveShift.id), eq(schema.sales.captureMechanism, 'MERCH_HANDOVER')))
+            .orderBy(desc(schema.sales.createdAt)),
+          db
+            .select({
+              id: schema.sales.id,
+              documentNumber: schema.sales.documentNumber,
+              attendantId: schema.sales.attendantId,
+              attendantName: schema.users.fullName,
+              customerId: schema.sales.customerId,
+              customerName: schema.customers.name,
+              buyerDetails: schema.sales.buyerDetails,
+              paymentMethod: schema.sales.paymentMethod,
+              totalAmount: schema.sales.totalAmount,
+              createdAt: schema.sales.createdAt,
+            })
+            .from(schema.sales)
+            .leftJoin(schema.users, eq(schema.users.id, schema.sales.attendantId))
+            .leftJoin(schema.customers, eq(schema.customers.id, schema.sales.customerId))
+            .where(and(eq(schema.sales.shiftId, dbActiveShift.id), ne(schema.sales.saleType, 'Fuel'), ne(schema.sales.captureMechanism, 'MERCH_HANDOVER')))
+            .orderBy(desc(schema.sales.createdAt)),
+        ]);
+    const merchSaleIds = merchHandoverRows.map((h) => h.id);
+    const merchItemRows = merchSaleIds.length
+      ? await db
+          .select({ saleId: schema.saleItems.saleId, productId: schema.saleItems.productId, productName: schema.products.name, quantity: schema.saleItems.quantity, unitPrice: schema.saleItems.unitPrice, lineTotal: schema.saleItems.lineTotal })
+          .from(schema.saleItems)
+          .leftJoin(schema.products, eq(schema.products.id, schema.saleItems.productId))
+          .where(inArray(schema.saleItems.saleId, merchSaleIds))
+      : [];
+    const merchItemsBySale = merchItemRows.reduce((acc: Record<string, any[]>, it) => { (acc[it.saleId] ||= []).push(it); return acc; }, {});
+    const merchandiseHandovers = merchHandoverRows.map((h) => ({ ...h, items: merchItemsBySale[h.id] ?? [] }));
+
     activeShift = {
       ...dbActiveShift,
       templateName: template?.name ?? 'Custom',
@@ -533,6 +586,12 @@ shiftsRouter.get('/status', async (c) => {
       staffAssignments,
       handovers,
       terminalLinks,
+      merchandiseHandovers,
+      merchandiseSales,
+      // Authoritative cash reconciliation (same figures CloseShift will use), so
+      // the closing wizard's expected drawer includes non-attendant merch cash
+      // and reads the true station-level short/surplus. Skipped in lite mode.
+      reconciliation: lite ? undefined : await new DrizzleShiftReconciliationReader(db).totalsForShift(dbActiveShift.id),
     };
   }
 

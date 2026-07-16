@@ -66,6 +66,12 @@ export interface ShiftReconciliationTotals {
   creditCollections: number;
   drawerExpenses: number;
   drawerSupplierPayments: number;
+  /** Breakdown of cashSales (optional; for the closing cash summary). */
+  handoverCash?: number;
+  /** Merchandise cash from sellers with no handover (office/counter staff). */
+  merchCashOutsideHandover?: number;
+  /** Per-seller split of merchCashOutsideHandover (sums exactly to it). */
+  merchCashOutsideHandoverBreakdown?: { sellerName: string; amount: number }[];
 }
 
 export interface ShiftReconciliationReader {

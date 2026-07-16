@@ -155,14 +155,46 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   const totalCardHandedOver = handovers.reduce((sum: number, h: any) => sum + Number(h.cardHandedOver || 0), 0);
   const totalUpiHandedOver = handovers.reduce((sum: number, h: any) => sum + Number(h.upiHandedOver || 0), 0);
   const totalCreditHandedOver = handovers.reduce((sum: number, h: any) => sum + Number(h.creditHandedOver || 0), 0);
+  // Net attendant accountability variance (declared − meter-expected), summed
+  // across handovers. Positive = surplus, negative = shortage.
+  const totalAttendantVariance = handovers.reduce((sum: number, h: any) => sum + Number(h.varianceAmount || 0), 0);
 
   const activeCashCollections = hasHandovers ? totalCashHandedOver : shiftTotals.cashCollections;
   const activeCardCollections = hasHandovers ? totalCardHandedOver : shiftTotals.cardCollections;
   const activeUpiCollections = hasHandovers ? totalUpiHandedOver : shiftTotals.upiCollections;
   const activeCreditSales = hasHandovers ? totalCreditHandedOver : shiftTotals.creditSales;
 
-  const expectedCash = openingCashNum + activeCashCollections - shiftTotals.cashExpenses;
+  // Authoritative cash reconciliation from the server (same figures CloseShift
+  // uses). Preferred over the client estimate so the expected drawer includes
+  // non-attendant merchandise cash and reads the true station-level short/surplus.
+  const recon = data?.activeShift?.reconciliation;
+  const expectedCash = recon
+    ? openingCashNum + Number(recon.cashSales || 0) + Number(recon.cashCollections || 0) - Number(recon.drawerExpenses || 0) - Number(recon.drawerSupplierPayments || 0)
+    : openingCashNum + activeCashCollections - shiftTotals.cashExpenses;
   const cashVariance = closingCash - expectedCash;
+
+  // Station-level cash summary for the closing wizard (#4). Aggregate figures —
+  // cross-attendant settlements (e.g. a borrowed POS) net out in the drawer total.
+  const cashSummary = recon
+    ? {
+        openingCash: openingCashNum,
+        cashSales: Number(recon.cashSales || 0),
+        handoverCash: Number(recon.handoverCash || 0),
+        merchCashOutsideHandover: Number(recon.merchCashOutsideHandover || 0),
+        cashCollections: Number(recon.cashCollections || 0),
+        drawerExpenses: Number(recon.drawerExpenses || 0),
+        drawerSupplierPayments: Number(recon.drawerSupplierPayments || 0),
+        expectedDrawer: expectedCash,
+        merchCashBreakdown: Array.isArray(recon.merchCashOutsideHandoverBreakdown) ? recon.merchCashOutsideHandoverBreakdown : [],
+        attendantVariance: totalAttendantVariance,
+        attendantVariances: handovers.map((h: any) => ({
+          name: h.attendantName || h.userName || 'Attendant',
+          du: h.duName || null,
+          variance: Number(h.varianceAmount || 0),
+        })),
+        hasHandovers,
+      }
+    : null;
 
   // Reactively compute close warnings when close flow is active
   const warnings: string[] = [];
@@ -599,24 +631,30 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
           } : undefined}
         />
 
-        {/* 1. Attendant Handovers Dashboard */}
+        {/* 1. Merchandise Handovers (walk-in bulk, per employee) */}
+        <MerchandiseHandoversPanel
+          shiftId={activeShift.id}
+          stationId={selectedStation?.id ?? null}
+          onChanged={loadShiftStatus}
+          initialHandovers={data?.activeShift?.merchandiseHandovers}
+          initialSales={data?.activeShift?.merchandiseSales}
+        />
+
+        {/* 2. Attendant (DU) Handovers Dashboard */}
         <AttendantHandoversDashboard
           staffAssignments={activeShift.staffAssignments}
           handovers={handovers}
           onRecordHandover={handleOpenHandoverDrawer}
         />
 
-        {/* 1b. Merchandise Handovers (walk-in bulk, per employee) */}
-        <MerchandiseHandoversPanel shiftId={activeShift.id} stationId={selectedStation?.id ?? null} onChanged={loadShiftStatus} />
-
-        {/* 2. Nozzle Readings Grid */}
+        {/* 3. Nozzle Readings Grid (fuel sales preview) */}
         <NozzleReadingsGrid
           nozzleReadings={activeShift.nozzleReadings}
           closingReadings={closingReadings}
           staffAssignments={data?.activeShift?.staffAssignments || []}
         />
 
-        {/* Shift Totals Summary Card */}
+        {/* 4. Shift Totals Summary Card (KPI) */}
         <ShiftTotalsSummary
           shiftTotals={shiftTotals}
           cashCollections={activeCashCollections}
@@ -647,6 +685,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
           expectedCash={expectedCash}
           closingCash={closingCash}
           onClosingCashChange={setClosingCash}
+          cashSummary={cashSummary}
           stationTanks={stationTanks}
           dipReadings={dipReadings}
           onDipReadingsChange={setDipReadings}

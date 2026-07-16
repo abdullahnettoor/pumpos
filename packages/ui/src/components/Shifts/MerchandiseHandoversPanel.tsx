@@ -21,6 +21,9 @@ export interface MerchandiseHandoversPanelProps {
   stationId?: string | null;
   /** Called after a handover is recorded/deleted so the shift reconciliation refreshes. */
   onChanged?: () => void;
+  /** Seed data from the shift-status payload so the tracker renders without a second round-trip. */
+  initialHandovers?: any[];
+  initialSales?: any[];
 }
 
 interface LineRow {
@@ -52,12 +55,12 @@ function lineTax(product: any, qty: number) {
  * seamless. Each handover is a cash sale attributed to the employee, so it flows
  * into their cash-handover reconciliation. Editable while the shift is open.
  */
-export const MerchandiseHandoversPanel: React.FC<MerchandiseHandoversPanelProps> = ({ shiftId, stationId, onChanged }) => {
+export const MerchandiseHandoversPanel: React.FC<MerchandiseHandoversPanelProps> = ({ shiftId, stationId, onChanged, initialHandovers, initialSales }) => {
   const toast = useToast();
   const confirm = useConfirm();
   const qc = useQueryClient();
-  const handoversQ = useMerchandiseHandovers(shiftId);
-  const billedQ = useMerchandiseSales(shiftId);
+  const handoversQ = useMerchandiseHandovers(shiftId, initialHandovers ? ({ initialData: initialHandovers } as any) : undefined);
+  const billedQ = useMerchandiseSales(shiftId, initialSales ? ({ initialData: initialSales } as any) : undefined);
   const handovers = handoversQ.data ?? [];
   const billed = billedQ.data ?? [];
   const loading = handoversQ.isLoading || billedQ.isLoading;
