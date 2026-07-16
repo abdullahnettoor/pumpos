@@ -22,6 +22,7 @@
     { "path": "./packages/ui" },
     { "path": "./apps/api" },
     { "path": "./apps/console" },
+    { "path": "./apps/mobile" },
     { "path": "./apps/desktop" }
   ]
 }

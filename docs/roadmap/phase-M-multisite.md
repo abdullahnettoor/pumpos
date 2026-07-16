@@ -212,13 +212,18 @@ apex root removed.
 
 Owner-focused, read-mostly. Ships only the surfaces you selected.
 
+**Status: implemented (code).** All four tabs + auth + role gating build and
+type-check. Remaining: real device QA, `m.` custom-domain deploy (manual), and
+raster PWA icons (currently SVG).
+
 ### Stack
 - Vite + React (same as console).
 - Uses `@pump/ui` **primitives + hooks + services** (design tokens, TanStack
   Query wiring, Supabase auth, `CloudStationService`).
 - **Does not** import operational screens (`ShiftsManagement`, `ExpensesList`,
   etc.) — those are desktop-only.
-- Installable PWA (`manifest.webmanifest`, service worker via `vite-plugin-pwa`).
+- Installable PWA (`manifest.webmanifest` + a minimal hand-rolled `sw.js`; no
+  extra plugin dependency).
 
 ### Information architecture (v1)
 ```
@@ -250,6 +255,41 @@ Bottom tab bar
 **Exit criteria:** each of the four tabs renders live data end-to-end for a
 demo org; Lighthouse mobile perf ≥90; installable on iOS/Android home screen;
 data caching follows the `pump-data-caching` tiers (operational = 15s).
+
+### What shipped in code
+- `apps/mobile` — Vite + React PWA reusing `@pump/ui` (services, TanStack Query
+  hooks, Supabase auth, design tokens). No operational/desktop screens imported.
+- Auth: `src/lib/session.ts` mirrors the console wiring (`setApiBaseUrl` for
+  `m.` hosts, `setAuthToken`, backend `/session` for role + name, cache purge on
+  account switch).
+- Shell: `MobileShell` (header + station chip picker + sign-out) + `BottomNav`
+  with **role-gated tabs** — Owner: Home/Shifts/DSSR/Ledger; Manager:
+  Shifts/DSSR/Ledger; Accountant: DSSR/Ledger; Staff: locked-out screen.
+- Screens (all read-only, live data):
+  - **Home** — today's KPIs (fuel sales, volume, collections, expenses,
+    purchases, receivables, payables, cash variance) + shift-open badge, all
+    business-day-resolved via `resolveBusinessDate`.
+  - **Shifts** — live active-shift card (elapsed, operator, opening cash,
+    nozzle count) + recent closed-shift summaries with fuel value + variance.
+  - **DSSR** — date picker → live `useDailyDssrPreview` totals + collections
+    breakdown.
+  - **Ledger** — customers/suppliers segmented search by balance, tap to expand
+    recent ledger entries.
+- PWA: `manifest.webmanifest`, `theme-color`, apple-touch meta, SVG icons
+  (192/512), and a minimal `sw.js` (network-first shell, never caches API/data).
+- Wiring: `apps/mobile/wrangler.toml` (`pumpos-mobile` / `dev-pumpos-mobile`,
+  `m.` custom-domain route, preview pinned to workers.dev); root scripts
+  `dev:mobile` / `deploy:mobile` / `build:ui-mobile`; `tsconfig` project ref;
+  `apps/mobile/src` added to the shared Tailwind `@source`; fonts vendored.
+
+### Manual / follow-up
+1. **Deploy:** `npm run deploy:dev --workspace=apps/mobile` (preview →
+   workers.dev) or `npm run deploy --workspace=apps/mobile` (prod → `m.` custom
+   domain).
+2. **Supabase Auth:** add the `m.` hosts to Site URL + Redirect URLs so the
+   shared session works there.
+3. **Deferred polish:** raster PNG icons (currently SVG), on-device QA, and
+   optional approvals/alerts tabs (M3.5).
 
 ---
 

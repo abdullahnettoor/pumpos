@@ -50,6 +50,7 @@
 @source "../";
 @source "../../../../apps/desktop/src/";
 @source "../../../../apps/console/src/";
+@source "../../../../apps/mobile/src/";
 
 @theme {
   /* -------- Colors -------- */

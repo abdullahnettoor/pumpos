@@ -1,0 +1,31 @@
+/* Mobile-specific layout on top of the shared PumpOS design tokens.
+ * The tokens + Tailwind theme come from @pump/ui (imported in main.tsx). */
+
+:root {
+  color-scheme: light;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  margin: 0;
+  overscroll-behavior-y: none;
+}
+
+/* Safe-area padding for notched devices + bottom tab bar. */
+.mobile-safe-top {
+  padding-top: max(env(safe-area-inset-top), 12px);
+}
+.mobile-safe-bottom {
+  padding-bottom: max(env(safe-area-inset-bottom), 12px);
+}
+
+/* Hide scrollbars on horizontal chip rows. */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
