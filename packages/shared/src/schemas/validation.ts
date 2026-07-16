@@ -18,6 +18,21 @@ export const organizationSchema = z.object({
   subscriptionStatus: z.string().default('Active'),
 });
 
+/** Owner-editable organization profile (name + legal/branding metadata). */
+export const organizationUpdateSchema = z.object({
+  name: z.string().min(2, 'Organization name must be at least 2 characters').max(255),
+  metadata: z.object({
+    legalName: z.string().max(255).optional().nullable(),
+    gstin: z.string().max(15).optional().nullable(),
+    pan: z.string().max(10).optional().nullable(),
+    stateCode: z.string().max(2).optional().nullable(),
+    address: z.string().max(500).optional().nullable(),
+    phone: z.string().max(50).optional().nullable(),
+    email: z.string().email('Invalid email address').or(z.literal('')).optional().nullable(),
+  }).optional().nullable(),
+});
+export type OrganizationUpdateValues = z.infer<typeof organizationUpdateSchema>;
+
 export const stationSchema = z.object({
   name: z.string().min(2, 'Station name must be at least 2 characters'),
   code: z.string().min(2, 'Station code must be at least 2 characters').toUpperCase(),
@@ -44,6 +59,22 @@ export const stationSchema = z.object({
       productId: z.string().uuid('Invalid product ID'),
       quantity: z.number().nonnegative('Opening quantity must be non-negative'),
     })).optional().nullable(),
+    legal: z.object({
+      legalName: z.string().optional().nullable(),
+      gstin: z.string().max(15).optional().nullable(),
+      stateCode: z.string().max(2).optional().nullable(),
+      addressLine: z.string().optional().nullable(),
+      pincode: z.string().max(6).optional().nullable(),
+      roCode: z.string().optional().nullable(),
+      contact: z.string().optional().nullable(),
+    }).optional().nullable(),
+    fuel_brand: z.string().optional().nullable(),
+    logo_data_url: z.string().optional().nullable(),
+    report_config: z.object({
+      shiftSummary: z.array(z.string()).optional(),
+      dssr: z.array(z.string()).optional(),
+      paper: z.enum(['A4', 'LETTER']).optional(),
+    }).optional().nullable(),
   }).default({
     shift_grace_minutes: 15,
     shift_lock_grace_days: 3,
@@ -174,6 +205,7 @@ export const customerCreateSchema = z.object({
   isActive: z.boolean().default(true),
   metadata: z.object({
     gstin: z.string().max(15).optional().nullable(),
+    stateCode: z.string().max(2).optional().nullable(),
     pan: z.string().max(10).optional().nullable(),
     tradeName: z.string().max(255).optional().nullable(),
     billingAddress: z.string().max(500).optional().nullable(),
@@ -199,6 +231,7 @@ export const supplierCreateSchema = z.object({
   isActive: z.boolean().default(true),
   metadata: z.object({
     gstin: z.string().max(15).optional().nullable(),
+    stateCode: z.string().max(2).optional().nullable(),
     pan: z.string().max(10).optional().nullable(),
     tradeName: z.string().max(255).optional().nullable(),
     billingAddress: z.string().max(500).optional().nullable(),
@@ -263,6 +296,7 @@ export const onboardingTankDraftSchema = z.object({
   productDraftId: z.string().min(1, 'Fuel product is required'),
   capacity: z.number().positive('Tank capacity must be positive'),
   openingQuantity: z.number().nonnegative('Opening quantity must be non-negative'),
+  openingCostRate: z.number().nonnegative('Opening cost rate must be non-negative').optional(),
 });
 
 export const onboardingDispenserDraftSchema = z.object({
@@ -289,6 +323,15 @@ export const onboardingShiftTemplateDraftSchema = z.object({
   isActive: z.boolean().default(true),
 });
 
+export const onboardingPaymentTerminalDraftSchema = z.object({
+  draftId: z.string().min(1, 'Missing payment terminal draft ID'),
+  label: z.string().min(1, 'Terminal label is required').max(100),
+  provider: z.string().max(100).optional().default(''),
+  terminalCode: z.string().max(100).optional().default(''),
+  supportsCard: z.boolean().default(true),
+  supportsUpi: z.boolean().default(true),
+});
+
 export const onboardingDraftSchema = z.object({
   station: z.object({
     name: z.string().min(2, 'Station name must be at least 2 characters'),
@@ -307,6 +350,8 @@ export const onboardingDraftSchema = z.object({
   dispensers: z.array(onboardingDispenserDraftSchema),
   nozzles: z.array(onboardingNozzleDraftSchema),
   shiftTemplates: z.array(onboardingShiftTemplateDraftSchema),
+  // Payment terminals are optional; a station may operate cash-only at launch.
+  paymentTerminals: z.array(onboardingPaymentTerminalDraftSchema).optional().default([]),
 });
 
 export const finalizeOnboardingSchema = z.object({
@@ -334,5 +379,88 @@ export const supplierPaymentSchema = z.object({
   supplierId: z.string().uuid('Invalid supplier ID'),
   amount: z.number().positive('Payment amount must be positive'),
   notes: z.string().max(500).optional().nullable(),
+  accountId: z.string().optional().nullable(),
 });
+
+// ---------------------------------------------------------------------------
+// UI entry-form schemas
+//
+// These back the transaction quick-entry forms (Expense / Collection / Purchase
+// / Merchandise sale) which are driven by react-hook-form + zodResolver. They
+// are string-friendly (number fields use z.coerce.number so raw <input> string
+// values validate and coerce in one pass) and intentionally looser than the
+// service-layer schemas above: `targetShiftId` is optional because some entry
+// points (e.g. the standalone Expenses page) post to a business day with no
+// drawer shift.
+// ---------------------------------------------------------------------------
+
+export const expenseEntryFormSchema = z.object({
+  targetShiftId: z.string().optional().default(''),
+  transactionDate: z.string().optional().default(''),
+  categoryId: z.string().min(1, 'Category is required'),
+  amount: z.coerce.number({ invalid_type_error: 'Amount is required' }).positive('Amount must be positive'),
+  description: z.string().max(255).optional().default(''),
+  /** Which money account it's paid from (empty = auto by context). */
+  accountId: z.string().optional().default(''),
+});
+export type ExpenseEntryFormValues = z.infer<typeof expenseEntryFormSchema>;
+
+export const collectionEntryFormSchema = z.object({
+  targetShiftId: z.string().optional().default(''),
+  transactionDate: z.string().optional().default(''),
+  customerId: z.string().optional().default(''),
+  amount: z.coerce.number({ invalid_type_error: 'Amount is required' }).positive('Amount must be positive'),
+  paymentMethod: z.enum(['Cash', 'Card', 'UPI', 'BankTransfer']).default('Cash'),
+  notes: z.string().max(500).optional().default(''),
+  /** Bank account a non-cash collection lands in (empty = auto/default). */
+  accountId: z.string().optional().default(''),
+});
+export type CollectionEntryFormValues = z.infer<typeof collectionEntryFormSchema>;
+
+export const purchaseLineFormSchema = z.object({
+  productId: z.string().min(1, 'Product is required'),
+  quantity: z.coerce.number({ invalid_type_error: 'Quantity is required' }).positive('Quantity must be positive'),
+  unitPrice: z.coerce.number({ invalid_type_error: 'Rate is required' }).positive('Rate must be positive'),
+  // Fuel lines may split the received quantity across destination tanks. The
+  // form injects this on submit; it is not a user-typed RHF field.
+  tankAllocations: z.array(z.object({ tankId: z.string(), quantity: z.coerce.number().nonnegative() })).optional(),
+});
+export type PurchaseLineFormValues = z.infer<typeof purchaseLineFormSchema>;
+
+export const purchaseEntryFormSchema = z.object({
+  targetShiftId: z.string().optional().default(''),
+  transactionDate: z.string().optional().default(''),
+  supplierId: z.string().min(1, 'Supplier is required'),
+  invoiceNumber: z.string().max(100).optional().default(''),
+  notes: z.string().max(500).optional().default(''),
+  lines: z.array(purchaseLineFormSchema).min(1, 'Add at least one line item'),
+});
+export type PurchaseEntryFormValues = z.infer<typeof purchaseEntryFormSchema>;
+
+export const merchandiseSaleLineFormSchema = z.object({
+  productId: z.string().min(1, 'Product is required'),
+  quantity: z.coerce.number({ invalid_type_error: 'Quantity is required' }).positive('Quantity must be positive'),
+  unitPrice: z.coerce.number({ invalid_type_error: 'Unit price is required' }).nonnegative('Unit price must be non-negative'),
+});
+export type MerchandiseSaleLineFormValues = z.infer<typeof merchandiseSaleLineFormSchema>;
+
+export const merchandiseSaleEntryFormSchema = z.object({
+  targetShiftId: z.string().optional().default(''),
+  paymentMethod: z.enum(['Cash', 'Card', 'UPI', 'Credit']).default('Cash'),
+  customerId: z.string().optional().default(''),
+  attendantId: z.string().optional().default(''),
+  notes: z.string().max(500).optional().default(''),
+  lines: z.array(merchandiseSaleLineFormSchema).min(1, 'Add at least one product'),
+  // Ad-hoc walk-in buyer bill-to (used only when no saved customer is selected).
+  buyerName: z.string().max(255).optional().default(''),
+  buyerPhone: z.string().max(50).optional().default(''),
+  buyerGstin: z.string().max(20).optional().default(''),
+  buyerStateCode: z.string().max(2).optional().default(''),
+  /** When true (and a buyer name is given), save/dedup the buyer into the registry. */
+  saveAsCustomer: z.boolean().optional().default(false),
+}).refine((data) => data.paymentMethod !== 'Credit' || !!data.customerId, {
+  message: 'A customer account is required for credit sales',
+  path: ['customerId'],
+});
+export type MerchandiseSaleEntryFormValues = z.infer<typeof merchandiseSaleEntryFormSchema>;
 

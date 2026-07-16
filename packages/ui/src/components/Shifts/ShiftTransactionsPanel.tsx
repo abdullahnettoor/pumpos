@@ -1,5 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { CloudTransactionService } from '../../services/cloud.js';
+import { inr } from '../../utils/format.js';
+import { useQueryClient } from '@tanstack/react-query';
+import { queryKeys, TIER } from '../../query/hooks.js';
+import { Tabs } from '../primitives/Tabs.js';
 import { 
   Plus, 
   Coins, 
@@ -27,6 +31,7 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
   onTransactionAdded,
   isReadOnly = false,
 }) => {
+  const qc = useQueryClient();
   const [activeTab, setActiveTab] = useState<'expenses' | 'purchases' | 'collections'>('expenses');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -86,9 +91,9 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
       setError(null);
 
       const [cats, sups, custs, txs] = await Promise.all([
-        transactionService.getExpenseCategories(),
-        transactionService.getSuppliers(),
-        transactionService.getCustomers(),
+        qc.ensureQueryData({ queryKey: queryKeys.expenseCategories(), queryFn: () => transactionService.getExpenseCategories(), staleTime: TIER.semi.staleTime }),
+        qc.ensureQueryData({ queryKey: queryKeys.suppliers(true), queryFn: () => transactionService.getSuppliers(), staleTime: TIER.semi.staleTime }),
+        qc.ensureQueryData({ queryKey: queryKeys.customers(true), queryFn: () => transactionService.getCustomers(), staleTime: TIER.semi.staleTime }),
         transactionService.getShiftTransactions(shiftId),
       ]);
 
@@ -150,11 +155,13 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
       await transactionService.recordPurchase({
         shiftId,
         supplierId: purchaseSupplierId,
-        productId: purchaseProductId,
-        quantity: Number(purchaseQuantity),
-        unitPrice: Number(purchaseUnitPrice),
         invoiceNumber: purchaseInvoice || undefined,
         notes: purchaseNotes || undefined,
+        lines: [{
+          productId: purchaseProductId,
+          quantity: Number(purchaseQuantity),
+          unitPrice: Number(purchaseUnitPrice),
+        }],
       });
 
       // Clear form
@@ -262,26 +269,17 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
           )}
         </div>
 
-        <div style={{ display: 'flex', gap: '8px', marginBottom: '-1px' }}>
-          <button
-            className={`btn ${activeTab === 'expenses' ? 'btn-ghost' : ''} btn-md`} style={{ borderBottom: activeTab === 'expenses' ? '2px solid var(--brand-primary)' : '2px solid transparent' }}
-            onClick={() => setActiveTab('expenses')}
-          >
-            <Coins size={14} /> Petty Expenses
-          </button>
-          <button
-            className={`btn ${activeTab === 'purchases' ? 'btn-ghost' : ''} btn-md`} style={{ borderBottom: activeTab === 'purchases' ? '2px solid var(--brand-primary)' : '2px solid transparent' }}
-            onClick={() => setActiveTab('purchases')}
-          >
-            <ShoppingCart size={14} /> Fuel Deliveries (Purchases)
-          </button>
-          <button
-            className={`btn ${activeTab === 'collections' ? 'btn-ghost' : ''} btn-md`} style={{ borderBottom: activeTab === 'collections' ? '2px solid var(--brand-primary)' : '2px solid transparent' }}
-            onClick={() => setActiveTab('collections')}
-          >
-            <CreditCard size={14} /> Credit Sales & Collections
-          </button>
-        </div>
+        <Tabs
+          variant="underline"
+          aria-label="Shift transactions"
+          activeId={activeTab}
+          onChange={(id) => setActiveTab(id as 'expenses' | 'purchases' | 'collections')}
+          tabs={[
+            { id: 'expenses', label: 'Petty Expenses', icon: <Coins size={14} /> },
+            { id: 'purchases', label: 'Fuel Deliveries (Purchases)', icon: <ShoppingCart size={14} /> },
+            { id: 'collections', label: 'Credit Sales & Collections', icon: <CreditCard size={14} /> },
+          ]}
+        />
       </div>
 
       {/* Main Panel Content */}
@@ -331,6 +329,8 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
                 <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Amount (₹)</label>
                 <input
                   type="number"
+                  min="0"
+                  step="0.01"
                   placeholder="0.00"
                   value={expenseAmount}
                   onChange={(e) => setExpenseAmount(e.target.value)}
@@ -435,9 +435,11 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Volume (Liters)</label>
+                  <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Volume ({(products.find((p: any) => p.id === purchaseProductId) as any)?.unit || 'L'})</label>
                   <input
                     type="number"
+                    min="0"
+                    step="0.001"
                     placeholder="0.00"
                     value={purchaseQuantity}
                     onChange={(e) => setPurchaseQuantity(e.target.value)}
@@ -453,9 +455,11 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
                   />
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Price per Liter (₹)</label>
+                  <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Price per {(products.find((p: any) => p.id === purchaseProductId) as any)?.unit || 'L'} (₹)</label>
                   <input
                     type="number"
+                    min="0"
+                    step="0.01"
                     placeholder="0.00"
                     value={purchaseUnitPrice}
                     onChange={(e) => setPurchaseUnitPrice(e.target.value)}
@@ -590,6 +594,8 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
                 <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Amount (₹)</label>
                 <input
                   type="number"
+                  min="0"
+                  step="0.01"
                   placeholder="0.00"
                   value={collectionAmount}
                   onChange={(e) => setCollectionAmount(e.target.value)}
@@ -698,7 +704,7 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
                       )}
                     </div>
                     <div style={{ fontWeight: 700, color: 'var(--brand-danger)' }}>
-                      - ₹{Number(tx.amount).toLocaleString('en-IN')}
+                      - {inr(tx.amount)}
                     </div>
                   </div>
                 ))
@@ -736,7 +742,7 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
                       )}
                     </div>
                     <div style={{ fontWeight: 700, color: 'var(--text-strong)', textAlign: 'right' }}>
-                      ₹{Number(tx.amount).toLocaleString('en-IN')}
+                      {inr(tx.amount)}
                     </div>
                   </div>
                 ))
@@ -784,7 +790,7 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
                       fontWeight: 700,
                       color: tx.paymentMethod === 'Credit' ? 'var(--text-muted)' : 'var(--state-success-fg)'
                     }}>
-                      {tx.paymentMethod === 'Credit' ? '' : '+ '}₹{Number(tx.amount).toLocaleString('en-IN')}
+                      {tx.paymentMethod === 'Credit' ? '' : '+ '}{inr(tx.amount)}
                     </div>
                   </div>
                 ))
@@ -806,13 +812,13 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
             <div>
               <span style={{ color: 'var(--text-muted)' }}>Petty Expenses:</span>
               <strong style={{ display: 'block', fontSize: '13px', color: 'var(--brand-danger)' }}>
-                ₹{loggedTransactions.expenses.reduce((sum, e) => sum + Number(e.amount), 0).toLocaleString('en-IN')}
+                {inr(loggedTransactions.expenses.reduce((sum, e) => sum + Number(e.amount), 0))}
               </strong>
             </div>
             <div>
               <span style={{ color: 'var(--text-muted)' }}>Cash Collections:</span>
               <strong style={{ display: 'block', fontSize: '13px', color: 'var(--state-success-fg)' }}>
-                ₹{loggedTransactions.collections.filter(c => c.paymentMethod === 'Cash').reduce((sum, c) => sum + Number(c.amount), 0).toLocaleString('en-IN')}
+                {inr(loggedTransactions.collections.filter(c => c.paymentMethod === 'Cash').reduce((sum, c) => sum + Number(c.amount), 0))}
               </strong>
             </div>
           </div>

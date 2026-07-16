@@ -1,4 +1,10 @@
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap');
+/* Self-hosted IBM Plex (vendored via scripts/download-fonts.mjs → /fonts). */
+@font-face { font-family: 'IBM Plex Sans'; font-weight: 400; font-display: swap; src: url('/fonts/IBMPlexSans-Regular.ttf') format('truetype'); }
+@font-face { font-family: 'IBM Plex Sans'; font-weight: 500; font-display: swap; src: url('/fonts/IBMPlexSans-Medium.ttf') format('truetype'); }
+@font-face { font-family: 'IBM Plex Sans'; font-weight: 600; font-display: swap; src: url('/fonts/IBMPlexSans-SemiBold.ttf') format('truetype'); }
+@font-face { font-family: 'IBM Plex Sans'; font-weight: 700; font-display: swap; src: url('/fonts/IBMPlexSans-SemiBold.ttf') format('truetype'); }
+@font-face { font-family: 'IBM Plex Mono'; font-weight: 400; font-display: swap; src: url('/fonts/IBMPlexMono-Regular.ttf') format('truetype'); }
+@font-face { font-family: 'IBM Plex Mono'; font-weight: 500; font-display: swap; src: url('/fonts/IBMPlexMono-Medium.ttf') format('truetype'); }
 
 :root {
   /* Font Families */
@@ -60,6 +66,28 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+}
+
+/*
+ * Control reset (Preflight gap).
+ * We deliberately exclude Tailwind's Preflight globally because it also resets
+ * heading/list/line-height and breaks legacy screen spacing (see
+ * packages/ui/src/pump-ds/tailwind.css). But Preflight ALSO zeroes the
+ * browser's default form-control border + normalizes fonts — dropping those
+ * makes any Tailwind-styled <button>/<input> that doesn't set its own border
+ * show the UA default ~2px control border (looks like a stray dark ring).
+ *
+ * These rules restore only the SAFE, spacing-neutral parts of Preflight:
+ * no margins, no line-height, no heading changes — so the legacy spacing fix
+ * stands. Class-level borders (.btn-*, .input, pump-ds `border-*`) all have
+ * higher specificity and still win.
+ */
+button, input, optgroup, select, textarea {
+  border: 0 solid;
+}
+button {
+  background-color: transparent;
+  background-image: none;
 }
 
 body {
@@ -240,28 +268,233 @@ a:focus-visible {
   letter-spacing: 0.05em;
 }
 
-.form-input, select {
+/* Legacy .form-input and bare <select> are aliased to the canonical .input
+ * look below so there is exactly one input appearance across the app. */
+.form-input-sm {
+  height: 32px;
+  font-size: 13px;
+}
+
+/* Canonical input surface for all text inputs, selects and (aliased) legacy
+ * .form-input / bare <select> elements. */
+.input,
+.select,
+.form-input,
+select {
   width: 100%;
   height: 36px;
   padding: 0 var(--space-3);
   background-color: var(--bg-surface);
-  border: 1px solid var(--border-soft);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-input);
   color: var(--text-strong);
   font-family: var(--font-sans);
-  font-size: 14px;
+  font-size: 13px;
   outline: none;
   transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
 }
 
-.form-input:focus, select:focus {
+.input:focus,
+.select:focus,
+.form-input:focus,
+select:focus {
   border-color: var(--brand-primary);
   box-shadow: 0 0 0 2px rgba(31, 106, 83, 0.15);
 }
 
-.form-input-sm {
-  height: 32px;
+/* Compact inputs for filter bars / toolbars. */
+.input-compact {
+  height: 28px;
+  font-size: 12px;
+  padding: 0 var(--space-2);
+}
+
+.textarea {
+  width: 100%;
+  min-height: 72px;
+  padding: var(--space-2) var(--space-3);
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-input);
+  color: var(--text-strong);
+  font-family: var(--font-sans);
   font-size: 13px;
+  resize: vertical;
+  outline: none;
+}
+
+.textarea:focus {
+  border-color: var(--brand-primary);
+  box-shadow: 0 0 0 2px rgba(31, 106, 83, 0.15);
+}
+
+/* Sentence-case field label (the lighter counterpart to .form-label). */
+.field-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.field-error {
+  display: block;
+  font-size: 11px;
+  color: var(--state-danger-fg);
+  margin-top: 4px;
+}
+
+/* Muted helper text under a field (the neutral counterpart to .field-error). */
+.field-hint {
+  display: block;
+  font-size: 11px;
+  color: var(--text-faint);
+  margin-top: 4px;
+}
+
+/* Required marker appended to a field label. */
+.field-required {
+  color: var(--state-danger-fg);
+  margin-left: 2px;
+}
+
+/* Invalid state for the canonical .input / .select / .textarea primitives. */
+.input-invalid,
+.input-invalid:focus {
+  border-color: var(--brand-danger);
+  box-shadow: 0 0 0 2px rgba(180, 74, 63, 0.15);
+}
+
+/* Disabled inputs read as inert without disappearing. */
+.input:disabled,
+.select:disabled,
+.textarea:disabled,
+.form-input:disabled,
+select:disabled {
+  background-color: var(--bg-surface-alt);
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
+/* Right-aligned monospace figures for numeric / money inputs. */
+.input-numeric {
+  font-family: var(--font-mono);
+  text-align: right;
+}
+
+/* ==================== Checkbox & Switch ==================== */
+.pump-check {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-default);
+}
+.pump-check--disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.pump-check-input {
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+  accent-color: var(--brand-primary);
+  cursor: inherit;
+  flex-shrink: 0;
+}
+.pump-check-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.pump-check-label {
+  font-weight: 500;
+  color: var(--text-strong);
+}
+.pump-check-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.pump-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  cursor: pointer;
+}
+.pump-switch--disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.pump-switch-input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
+}
+.pump-switch-track {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: 34px;
+  height: 20px;
+  border-radius: 999px;
+  background-color: var(--border-strong);
+  transition: background-color 0.15s ease-in-out;
+  flex-shrink: 0;
+}
+.pump-switch-thumb {
+  position: absolute;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background-color: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  transition: transform 0.15s ease-in-out;
+}
+.pump-switch-input:checked + .pump-switch-track {
+  background-color: var(--brand-primary);
+}
+.pump-switch-input:checked + .pump-switch-track .pump-switch-thumb {
+  transform: translateX(14px);
+}
+.pump-switch-input:focus-visible + .pump-switch-track {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 2px;
+}
+
+/* ==================== Segmented Control ==================== */
+.segmented {
+  display: grid;
+  gap: 8px;
+}
+.segmented-item {
+  height: 36px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-default);
+  background-color: var(--bg-surface-alt);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-input);
+  cursor: pointer;
+  transition: background-color 0.1s, color 0.1s, border-color 0.1s;
+}
+.segmented--sm .segmented-item {
+  height: 32px;
+  font-size: 12px;
+}
+.segmented-item--active {
+  background-color: var(--brand-primary);
+  color: #fff;
+  border-color: transparent;
+}
+.segmented-item:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* ==================== Table System ==================== */
@@ -312,7 +545,22 @@ a:focus-visible {
   flex-direction: column;
   gap: 8px;
   border-color: var(--border-strong);
-  box-shadow: 0 4px 14px rgba(24, 32, 26, 0.04);
+  box-shadow: 0 6px 18px rgba(24, 32, 26, 0.08);
+}
+
+/* Solid full-bleed backdrop so scrolling content is cleanly hidden behind the
+   sticky bar (covers the content-area top padding + side gutters) instead of
+   peeking around its edges. */
+.shift-control-bar::before {
+  content: "";
+  position: absolute;
+  top: calc(-1 * var(--space-6));
+  left: calc(-1 * var(--space-6));
+  right: calc(-1 * var(--space-6));
+  bottom: 0;
+  background: var(--bg-canvas);
+  z-index: -1;
+  pointer-events: none;
 }
 
 .shift-control-bar__row {
@@ -428,22 +676,45 @@ a:focus-visible {
   font-weight: 600;
 }
 
-.shift-table-scroll-container {
+.shift-table-shell {
   position: relative;
+}
+
+.shift-table-scroll-container {
   overflow-x: auto;
   overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
 }
 
-.shift-table-scroll-container::after {
+.shift-table-shell::before,
+.shift-table-shell::after {
   content: '';
   position: absolute;
   top: 0;
-  right: 0;
-  width: 28px;
-  height: 100%;
+  bottom: 0;
+  width: 14px;
   pointer-events: none;
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0), var(--bg-surface));
+  opacity: 0;
+  transition: opacity 0.12s ease;
+  z-index: 3;
+}
+
+.shift-table-shell::before {
+  left: var(--sticky-shadow-left, 0px);
+  background: linear-gradient(90deg, rgba(43, 52, 45, 0.08), rgba(43, 52, 45, 0));
+}
+
+.shift-table-shell::after {
+  right: 0;
+  background: linear-gradient(270deg, rgba(43, 52, 45, 0.08), rgba(43, 52, 45, 0));
+}
+
+.shift-table-shell[data-shadow-left='true']::before {
+  opacity: 1;
+}
+
+.shift-table-shell[data-shadow-right='true']::after {
+  opacity: 1;
 }
 
 .shift-table th,
@@ -1028,8 +1299,255 @@ a:focus-visible {
 
 .flex { display: flex; }
 .flex-col { flex-direction: column; }
+
+/* Shimmer skeletons for partial/lazy loading (Phase P). */
+.pump-skeleton {
+  background: linear-gradient(90deg, var(--bg-surface-alt) 25%, var(--border-soft) 37%, var(--bg-surface-alt) 63%);
+  background-size: 400% 100%;
+  animation: pump-shimmer 1.2s ease-in-out infinite;
+}
+@keyframes pump-shimmer {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
 .items-center { align-items: center; }
 .justify-between { justify-content: space-between; }
 .gap-2 { gap: var(--space-2); }
 .gap-3 { gap: var(--space-3); }
 .gap-4 { gap: var(--space-4); }
+
+/* ==================== Print (Save as PDF) ====================
+   Scopes printing to the element marked `.print-area` (e.g. a Shift Summary
+   or DSSR card). The app chrome (sidebar, top bar, toolbars) is dropped and the
+   fixed-height scroll containers are released so the report flows + paginates
+   full-width. */
+@media print {
+  /* Drop app chrome + any explicitly excluded controls. */
+  .no-print {
+    display: none !important;
+  }
+  /* Release the 100vh / overflow:hidden shell so content can paginate. */
+  .app-shell {
+    display: block !important;
+    height: auto !important;
+    width: auto !important;
+    overflow: visible !important;
+  }
+  .app-shell__main {
+    height: auto !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    position: static !important;
+  }
+  /* The report fills the printable width (inside @page margins). */
+  .print-area {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+  }
+  /* Preserve the design-system colours (badges, surfaces) in print/PDF. */
+  html,
+  body,
+  .print-area,
+  .print-area * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  @page {
+    margin: 12mm;
+  }
+}
+
+
+/* =========================================================================
+ * Tabs primitive (canonical) — see packages/ui/src/components/primitives/Tabs.tsx.
+ * Three visual variants (`pill`, `underline`, `card`) share the same
+ * keyboard + ARIA contract; only the paint layer differs. Icons, count pills
+ * and text tags are supported in every variant.
+ * ========================================================================= */
+
+.pump-tabs {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  box-shadow: inset 0 -1px 0 var(--border-soft);
+  /* Hide the horizontal scroll rail; keyboard nav is still available. */
+  scrollbar-width: none;
+}
+
+.pump-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.pump-tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 120ms ease, border-color 120ms ease, background-color 120ms ease;
+}
+
+.pump-tab:hover:not(:disabled):not(.pump-tab--active) {
+  color: var(--text-strong);
+}
+
+.pump-tab:disabled {
+  color: var(--text-faint);
+  cursor: not-allowed;
+}
+
+.pump-tab:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: -2px;
+  border-radius: 4px;
+}
+
+/* Icon slot — normalizes size + vertical alignment for lucide / svg glyphs. */
+.pump-tab__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pump-tab__icon > svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 1.75;
+}
+
+/* Size — applies to all variants. */
+.pump-tabs--md .pump-tab { padding: 10px 16px; font-size: 13px; }
+.pump-tabs--sm .pump-tab { padding: 7px 12px;  font-size: 12px; }
+
+/* ---- Variant: pill (default, historical PumpOS look) ------------------- */
+.pump-tabs--pill .pump-tab--active {
+  color: var(--brand-primary);
+  border-bottom-color: var(--brand-primary);
+  font-weight: 600;
+}
+
+/* ---- Variant: underline (Cloudflare / HPE operator-panel look) --------- */
+/* Span the full width of the toolbar so the baseline rule runs edge-to-edge
+ * (GitHub / Stripe style); the tabs themselves stay left-aligned at their
+ * natural width since they don't flex-grow. */
+.pump-tabs--underline {
+  width: 100%;
+}
+
+.pump-tabs--underline .pump-tab {
+  color: var(--text-default);
+  /* Thicker underline; sits below the container's inset baseline so the
+   * transparent bar of inactive tabs doesn't clip the baseline rule. */
+  border-bottom-width: 3px;
+  padding-bottom: calc(var(--_pt-pb, 10px) - 1px);
+}
+
+.pump-tabs--underline.pump-tabs--md .pump-tab { padding: 12px 14px 11px; --_pt-pb: 12px; }
+.pump-tabs--underline.pump-tabs--sm .pump-tab { padding: 9px 10px 8px;   --_pt-pb: 9px; }
+
+.pump-tabs--underline .pump-tab:hover:not(:disabled):not(.pump-tab--active) {
+  color: var(--text-strong);
+}
+
+.pump-tabs--underline .pump-tab--active {
+  color: var(--text-strong);
+  border-bottom-color: var(--brand-primary);
+  font-weight: 600;
+  /* Slight rounded top on the underline bar. */
+  border-top-left-radius: 2px;
+  border-top-right-radius: 2px;
+}
+
+/* ---- Variant: card (folder-tab / settings-wizard look) ---------------- */
+.pump-tabs--card {
+  gap: 2px;
+  padding: 0 4px;
+}
+
+.pump-tabs--card .pump-tab {
+  color: var(--text-muted);
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  /* Nudge the tab downward so the transparent 1px at the bottom of the
+   * active card overlaps the container's inset baseline, visually
+   * merging with the panel below. */
+  margin-bottom: -1px;
+  padding-bottom: calc(var(--_ct-pb, 10px) + 1px);
+}
+
+.pump-tabs--card.pump-tabs--md .pump-tab { padding: 10px 16px 11px; --_ct-pb: 10px; }
+.pump-tabs--card.pump-tabs--sm .pump-tab { padding: 7px 12px 8px;   --_ct-pb: 7px; }
+
+.pump-tabs--card .pump-tab:hover:not(:disabled):not(.pump-tab--active) {
+  color: var(--text-strong);
+  background: var(--bg-surface-alt);
+  border-radius: 8px 8px 0 0;
+}
+
+.pump-tabs--card .pump-tab--active {
+  color: var(--text-strong);
+  background: var(--bg-surface);
+  border-color: var(--border-soft);
+  font-weight: 600;
+}
+
+/* ---- Numeric count badge (all variants, tone-aware) ------------------- */
+.pump-tab__count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--bg-surface-alt);
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+/* Active count pill inherits the tab's tone. */
+.pump-tab__count--active.pump-tab__count--brand    { background: var(--brand-primary);    color: #fff; }
+.pump-tab__count--active.pump-tab__count--info     { background: var(--state-info-fg);    color: #fff; }
+.pump-tab__count--active.pump-tab__count--success  { background: var(--state-success-fg); color: #fff; }
+.pump-tab__count--active.pump-tab__count--warning  { background: var(--state-warning-fg); color: #fff; }
+.pump-tab__count--active.pump-tab__count--danger   { background: var(--state-danger-fg);  color: #fff; }
+.pump-tab__count--active.pump-tab__count--neutral  { background: var(--text-strong);      color: #fff; }
+
+/* ---- Text tag ("NEW" / "BETA" / "PRO", tone-aware) --------------------- */
+.pump-tab__tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 15px;
+  padding: 0 5px;
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1;
+}
+
+.pump-tab__tag--brand    { background: color-mix(in oklab, var(--brand-primary) 12%, transparent); color: var(--brand-primary); }
+.pump-tab__tag--info     { background: var(--state-info-bg);    color: var(--state-info-fg); }
+.pump-tab__tag--success  { background: var(--state-success-bg); color: var(--state-success-fg); }
+.pump-tab__tag--warning  { background: var(--state-warning-bg); color: var(--state-warning-fg); }
+.pump-tab__tag--danger   { background: var(--state-danger-bg);  color: var(--state-danger-fg); }
+.pump-tab__tag--neutral  { background: var(--bg-surface-alt);   color: var(--text-muted); }

@@ -1,30 +1,28 @@
-import React from 'react';
+import React, { useEffect } from 'react';
+import { collectionEntryFormSchema, type CollectionEntryFormValues } from '@pump/shared';
+import { useZodForm } from '../../forms/useZodForm.js';
+import { Field, TextInput, NumberInput, Select, DateField } from '../primitives/Field.js';
+import { Segmented } from '../primitives/Segmented.js';
+import { Combobox } from '../primitives/Combobox.js';
+import { AccountSelect } from '../primitives/AccountSelect.js';
+import { Button } from '../../pump-ds/index.js';
 
 export interface ShiftOption {
   id: string;
   label: string;
 }
-
 export interface CollectionEntryFormProps {
   shiftOptions: ShiftOption[];
-  targetShiftId: string;
-  onTargetShiftIdChange: (value: string) => void;
-  customerId: string;
-  onCustomerIdChange: (value: string) => void;
   customers: any[];
-  amount: string;
-  onAmountChange: (value: string) => void;
-  paymentMethod: 'Cash' | 'Card' | 'UPI' | 'Credit';
-  onPaymentMethodChange: (value: 'Cash' | 'Card' | 'UPI' | 'Credit') => void;
-  notes: string;
-  onNotesChange: (value: string) => void;
+  /** Station whose bank accounts populate the deposit picker (non-cash). */
+  stationId?: string | null;
+  defaultValues?: Partial<CollectionEntryFormValues>;
   submitting: boolean;
   error?: string | null;
   onCancel: () => void;
-  onSubmit: (e: React.FormEvent) => void;
+  onSubmit: (values: CollectionEntryFormValues) => void | Promise<void>;
   submitLabel?: string;
   submittingLabel?: string;
-  submitDisabled?: boolean;
   amountLabel?: string;
   amountPlaceholder?: string;
   notesLabel?: string;
@@ -32,32 +30,36 @@ export interface CollectionEntryFormProps {
   paymentMethodLabel?: string;
   usePaymentMethodButtons?: boolean;
   walkInOptionLabel?: string;
-  customerLabelCredit?: string;
-  customerLabelNonCredit?: string;
+  customerLabel?: string;
   customerOptionLabel?: (customer: any) => string;
+  /** Collections are receivable payments — require a customer (no walk-in). */
+  requireCustomer?: boolean;
   showShiftHintWhenSingle?: boolean;
+  showDateField?: boolean;
+  dateLabel?: string;
 }
+
+const EMPTY_DEFAULTS: CollectionEntryFormValues = {
+  targetShiftId: '',
+  transactionDate: '',
+  customerId: '',
+  amount: undefined as unknown as number,
+  paymentMethod: 'Cash',
+  notes: '',
+  accountId: '',
+};
 
 export const CollectionEntryForm: React.FC<CollectionEntryFormProps> = ({
   shiftOptions,
-  targetShiftId,
-  onTargetShiftIdChange,
-  customerId,
-  onCustomerIdChange,
   customers,
-  amount,
-  onAmountChange,
-  paymentMethod,
-  onPaymentMethodChange,
-  notes,
-  onNotesChange,
+  stationId,
+  defaultValues,
   submitting,
   error,
   onCancel,
   onSubmit,
   submitLabel = 'Log Collection',
   submittingLabel = 'Saving...',
-  submitDisabled,
   amountLabel = 'Amount (INR)',
   amountPlaceholder,
   notesLabel = 'Notes',
@@ -65,29 +67,49 @@ export const CollectionEntryForm: React.FC<CollectionEntryFormProps> = ({
   paymentMethodLabel = 'Payment Method',
   usePaymentMethodButtons = false,
   walkInOptionLabel = 'Walk-in / Not Linked',
-  customerLabelCredit = 'Customer Account (Required)',
-  customerLabelNonCredit = 'Customer Account (Optional for Walk-in)',
+  customerLabel = 'Customer Account (Optional for Walk-in)',
   customerOptionLabel,
+  requireCustomer = false,
   showShiftHintWhenSingle = true,
+  showDateField = false,
+  dateLabel = 'Collection Date',
 }) => {
   const hasMultipleShiftOptions = shiftOptions.length > 1;
 
+  const { register, handleSubmit, reset, watch, setValue, setError, clearErrors, formState: { errors } } = useZodForm<CollectionEntryFormValues>(collectionEntryFormSchema, {
+    defaultValues: { ...EMPTY_DEFAULTS, ...defaultValues },
+  });
+
+  const serializedDefaults = JSON.stringify(defaultValues ?? {});
+  useEffect(() => {
+    reset({ ...EMPTY_DEFAULTS, ...defaultValues });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serializedDefaults]);
+
+  const paymentMethod = watch('paymentMethod');
+  const customerId = watch('customerId');
+
   return (
-    <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+    <form onSubmit={handleSubmit((values) => {
+      if (requireCustomer && !values.customerId) {
+        setError('customerId', { type: 'manual', message: 'Select a customer for this collection.' });
+        return;
+      }
+      return onSubmit(values);
+    })} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      {showDateField && (
+        <Field label={dateLabel}>
+          <DateField disabled={submitting} {...register('transactionDate')} />
+        </Field>
+      )}
       {hasMultipleShiftOptions ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Target Shift</label>
-          <select
-            value={targetShiftId}
-            onChange={(e) => onTargetShiftIdChange(e.target.value)}
-            disabled={submitting}
-            style={{ height: '32px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', padding: '0 8px' }}
-          >
+        <Field label="Target Shift">
+          <Select disabled={submitting} {...register('targetShiftId')}>
             {shiftOptions.map((option) => (
               <option key={option.id} value={option.id}>{option.label}</option>
             ))}
-          </select>
-        </div>
+          </Select>
+        </Field>
       ) : showShiftHintWhenSingle && shiftOptions.length === 1 ? (
         <div style={{
           backgroundColor: 'var(--state-info-bg)',
@@ -100,89 +122,60 @@ export const CollectionEntryForm: React.FC<CollectionEntryFormProps> = ({
         </div>
       ) : null}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>{paymentMethodLabel}</label>
+      <Field label={paymentMethodLabel}>
         {usePaymentMethodButtons ? (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '8px' }}>
-            {(['Cash', 'Card', 'UPI', 'Credit'] as const).map((method) => (
-              <button
-                key={method}
-                type="button"
-                onClick={() => onPaymentMethodChange(method)}
-                disabled={submitting}
-                style={{
-                  height: '32px',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  backgroundColor: paymentMethod === method ? 'var(--brand-primary)' : 'var(--bg-surface-alt)',
-                  color: paymentMethod === method ? 'white' : 'var(--text-default)',
-                  border: paymentMethod === method ? 'none' : '1px solid var(--border-strong)',
-                  borderRadius: 'var(--radius-input)',
-                  cursor: 'pointer',
-                }}
-              >
-                {method}
-              </button>
-            ))}
-          </div>
-        ) : (
-          <select
+          <Segmented
+            options={[
+              { value: 'Cash', label: 'Cash' },
+              { value: 'Card', label: 'Card' },
+              { value: 'UPI', label: 'UPI' },
+              { value: 'BankTransfer', label: 'Bank' },
+            ]}
             value={paymentMethod}
-            onChange={(e) => onPaymentMethodChange(e.target.value as 'Cash' | 'Card' | 'UPI' | 'Credit')}
+            onChange={(v) => { setValue('paymentMethod', v as typeof paymentMethod, { shouldValidate: true }); if (v === 'Cash') setValue('accountId', ''); }}
             disabled={submitting}
-            style={{ height: '32px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', padding: '0 8px' }}
-          >
+            aria-label={paymentMethodLabel}
+          />
+        ) : (
+          <Select disabled={submitting} {...register('paymentMethod')}>
             <option value="Cash">Cash</option>
             <option value="Card">Card</option>
             <option value="UPI">UPI</option>
-            <option value="Credit">Credit</option>
-          </select>
+            <option value="BankTransfer">Bank</option>
+          </Select>
         )}
-      </div>
+      </Field>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>
-          {paymentMethod === 'Credit' ? customerLabelCredit : customerLabelNonCredit}
-        </label>
-        <select
-          value={customerId}
-          onChange={(e) => onCustomerIdChange(e.target.value)}
+      <Field label={requireCustomer ? 'Customer Account' : customerLabel} error={errors.customerId?.message as string | undefined}>
+        <Combobox
+          options={[
+            ...(requireCustomer ? [] : [{ value: '', label: walkInOptionLabel }]),
+            ...customers.map((customer) => ({
+              value: customer.id,
+              label: customerOptionLabel ? customerOptionLabel(customer) : customer.name,
+            })),
+          ]}
+          value={customerId ?? ''}
+          onChange={(v) => { setValue('customerId', v, { shouldValidate: true }); if (v) clearErrors('customerId'); }}
+          placeholder={requireCustomer ? 'Select a customer…' : walkInOptionLabel}
+          searchPlaceholder="Search customers…"
           disabled={submitting}
-          style={{ height: '32px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', padding: '0 8px' }}
-        >
-          <option value="">{walkInOptionLabel}</option>
-          {customers.map((customer) => (
-            <option key={customer.id} value={customer.id}>
-              {customerOptionLabel ? customerOptionLabel(customer) : customer.name}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>{amountLabel}</label>
-        <input
-          type="number"
-          required
-          placeholder={amountPlaceholder}
-          value={amount}
-          onChange={(e) => onAmountChange(e.target.value)}
-          disabled={submitting}
-          style={{ height: '32px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', padding: '0 8px' }}
         />
-      </div>
+      </Field>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>{notesLabel}</label>
-        <input
-          type="text"
-          placeholder={notesPlaceholder}
-          value={notes}
-          onChange={(e) => onNotesChange(e.target.value)}
-          disabled={submitting}
-          style={{ height: '32px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', padding: '0 8px' }}
-        />
-      </div>
+      <Field label={amountLabel} error={errors.amount?.message}>
+        <NumberInput placeholder={amountPlaceholder} disabled={submitting} invalid={!!errors.amount} {...register('amount')} />
+      </Field>
+
+      {paymentMethod !== 'Cash' && (
+        <Field label="Deposit to (Bank)">
+          <AccountSelect stationId={stationId} value={watch('accountId') || ''} onChange={(v) => setValue('accountId', v, { shouldValidate: true })} types={['BANK']} disabled={submitting} autoLabel="Auto (default bank)" />
+        </Field>
+      )}
+
+      <Field label={notesLabel}>
+        <TextInput placeholder={notesPlaceholder} disabled={submitting} {...register('notes')} />
+      </Field>
 
       {error && (
         <div style={{
@@ -198,10 +191,10 @@ export const CollectionEntryForm: React.FC<CollectionEntryFormProps> = ({
       )}
 
       <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
-        <button type="button" onClick={onCancel} disabled={submitting} className="btn btn-secondary btn-md">Cancel</button>
-        <button type="submit" disabled={submitDisabled ?? (submitting || !amount)} className="btn btn-primary btn-md">
-          {submitting ? submittingLabel : submitLabel}
-        </button>
+        <Button type="button" variant="secondary" size="md" onClick={onCancel} disabled={submitting}>Cancel</Button>
+        <Button type="submit" variant="primary" size="md" loading={submitting}>
+          {submitLabel}
+        </Button>
       </div>
     </form>
   );

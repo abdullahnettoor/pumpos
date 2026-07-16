@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { CloudTankService, CloudProductService } from '../../services/cloud.js';
+import { queryKeys, TIER } from '../../query/hooks.js';
 import { Tank, Product } from '@pump/shared';
-import { StatusBadge } from '../StatusBadge.js';
+import { Chip } from '../../pump-ds/index.js';
 import { Drawer } from '../Drawer.js';
+import { useToast } from '../primitives/ToastProvider.js';
 
 const tankService = new CloudTankService();
 const productService = new CloudProductService();
@@ -12,6 +15,8 @@ export interface TanksGridProps {
 }
 
 export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
+  const qc = useQueryClient();
+  const toast = useToast();
   const [tanks, setTanks] = useState<Tank[]>([]);
   const [fuelProducts, setFuelProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -31,13 +36,14 @@ export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
     loadData();
   }, [stationId]);
 
-  const loadData = async () => {
+  const loadData = async (force = false) => {
     if (!stationId) return;
     try {
       setLoading(true);
+      if (force) await qc.invalidateQueries({ queryKey: queryKeys.tanks(stationId) });
       const [tankList, prodList] = await Promise.all([
-        tankService.listTanks(stationId),
-        productService.listProducts(),
+        qc.ensureQueryData({ queryKey: queryKeys.tanks(stationId), queryFn: () => tankService.listTanks(stationId), staleTime: TIER.static.staleTime }),
+        qc.ensureQueryData({ queryKey: queryKeys.products(), queryFn: () => productService.listProducts(), staleTime: TIER.semi.staleTime }),
       ]);
       setTanks(tankList);
       const fuels = prodList.filter((p) => p.productType === 'FUEL' && p.isActive);
@@ -58,7 +64,7 @@ export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!productId) {
-      alert('Please define a fuel product in the catalog first.');
+      toast.error('Please define a fuel product in the catalog first.');
       return;
     }
     try {
@@ -70,21 +76,22 @@ export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
       });
       setIsFormOpen(false);
       resetForm();
-      loadData();
+      loadData(true);
+      toast.success('Tank created.');
     } catch (err: any) {
-      alert(err.message || 'Failed to create tank');
+      toast.error(err.message || 'Failed to create tank');
     }
   };
 
   const handleQuickAdd = async (fuelCode: 'MS' | 'HSD', capStr: string) => {
     const fuel = fuelProducts.find(p => p.code === fuelCode);
     if (!fuel) {
-      alert(`Please define active ${fuelCode === 'MS' ? 'Petrol (MS)' : 'Diesel (HSD)'} in the catalog first.`);
+      toast.error(`Please define active ${fuelCode === 'MS' ? 'Petrol (MS)' : 'Diesel (HSD)'} in the catalog first.`);
       return;
     }
     const cap = parseInt(capStr);
     if (!cap || cap <= 0) {
-      alert('Please enter a valid capacity');
+      toast.error('Please enter a valid capacity');
       return;
     }
 
@@ -102,9 +109,10 @@ export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
         capacity: cap,
       });
 
-      await loadData();
+      await loadData(true);
+      toast.success('Tank created.');
     } catch (err: any) {
-      alert(err.message || 'Failed to create tank');
+      toast.error(err.message || 'Failed to create tank');
     } finally {
       setQuickSubmitting(false);
     }
@@ -113,7 +121,7 @@ export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
   const prefillSuggestion = (fuelCode: 'MS' | 'HSD') => {
     const fuel = fuelProducts.find(p => p.code === fuelCode);
     if (!fuel) {
-      alert(`Please define active ${fuelCode === 'MS' ? 'Petrol (MS)' : 'Diesel (HSD)'} in step 2 first.`);
+      toast.error(`Please define active ${fuelCode === 'MS' ? 'Petrol (MS)' : 'Diesel (HSD)'} in step 2 first.`);
       return;
     }
     
@@ -189,8 +197,8 @@ export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-strong)' }}>Petrol Tank (MS):</span>
                 <input
-                  type="number"
-                  placeholder="Liters"
+                  type="number" min="0"
+                  placeholder="Capacity"
                   value={quickPetrolCapacity}
                   onChange={(e) => setQuickPetrolCapacity(e.target.value)}
                   disabled={quickSubmitting}
@@ -229,8 +237,8 @@ export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-strong)' }}>Diesel Tank (HSD):</span>
                 <input
-                  type="number"
-                  placeholder="Liters"
+                  type="number" min="0"
+                  placeholder="Capacity"
                   value={quickDieselCapacity}
                   onChange={(e) => setQuickDieselCapacity(e.target.value)}
                   disabled={quickSubmitting}
@@ -318,9 +326,9 @@ export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Capacity (Liters) *</label>
+            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Capacity ({fuelProducts.find((p) => p.id === productId)?.unit || 'L'}) *</label>
             <input
-              type="number"
+              type="number" min="0"
               style={{
                 height: '32px',
                 padding: '0 8px',
@@ -396,12 +404,12 @@ export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontWeight: 600, color: 'var(--text-strong)', fontSize: '14px' }}>{t.name}</span>
-                <StatusBadge status={product?.name || 'Unknown'} type="info" />
+                <Chip tone="info" size="sm">{product?.name || 'Unknown'}</Chip>
               </div>
               <div>
                 <span style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Capacity</span>
                 <p style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text-strong)', fontFamily: 'var(--font-mono)', marginTop: '2px' }}>
-                  {t.capacity.toLocaleString()} L
+                  {t.capacity.toLocaleString()} {product?.unit || 'L'}
                 </p>
               </div>
             </div>

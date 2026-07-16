@@ -6,11 +6,13 @@ import {
   INozzleService,
   IShiftTemplateService,
   IUserAssignmentService,
+  IPaymentTerminalService,
   Station,
   Product,
   Tank,
   DispenserUnit,
   Nozzle,
+  PaymentTerminal,
   ShiftTemplate,
   User,
   ShiftOpenPayload,
@@ -49,23 +51,51 @@ function getHeaders() {
   };
 }
 
-async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const url = `${apiBase}${path}`;
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      ...getHeaders(),
-      ...options.headers,
-    },
-  });
+type ApiError = Error & { code?: string; details?: Record<string, any>; status?: number };
 
-  const res = await response.json() as any;
+/**
+ * Shared typed API client. Unwraps the `{ success, data }` envelope and throws a
+ * typed `ApiError` (with `code`/`details`/`status`) on failures, mapping network
+ * and non-JSON failures to friendly messages. Pass an `idempotencyKey` on a
+ * mutation to have the server de-duplicate retries / offline replays of the same
+ * logical action (its idempotency middleware caches the first response). Keys are
+ * opt-in — reuse the SAME key across explicit retries of one action, or the
+ * server will treat each call as distinct.
+ */
+async function request<T>(
+  path: string,
+  options: RequestInit = {},
+  extras: { idempotencyKey?: string } = {},
+): Promise<T> {
+  const url = `${apiBase}${path}`;
+  const headers: Record<string, string> = { ...getHeaders(), ...(options.headers as Record<string, string> | undefined) };
+  if (extras.idempotencyKey && !headers['Idempotency-Key'] && !headers['idempotency-key']) {
+    headers['Idempotency-Key'] = extras.idempotencyKey;
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(url, { ...options, headers });
+  } catch {
+    const error = new Error('Network error — please check your connection and try again.') as ApiError;
+    error.code = 'NETWORK';
+    throw error;
+  }
+
+  let res: any;
+  try {
+    res = await response.json();
+  } catch {
+    const error = new Error(
+      response.ok ? 'Unexpected empty response from the server.' : `Request failed (${response.status}).`,
+    ) as ApiError;
+    error.code = 'BAD_RESPONSE';
+    error.status = response.status;
+    throw error;
+  }
+
   if (!res.success) {
-    const error = new Error(res.error?.message || 'API request failed') as Error & {
-      code?: string;
-      details?: Record<string, any>;
-      status?: number;
-    };
+    const error = new Error(res.error?.message || 'API request failed') as ApiError;
     error.code = res.error?.code;
     error.details = res.error?.details;
     error.status = response.status;
@@ -144,6 +174,50 @@ export class CloudProductService implements IProductService {
     await request<void>(`/setup/products/${id}`, {
       method: 'PUT',
       body: JSON.stringify({ isActive: false }),
+    });
+  }
+
+  async importProducts(products: any[], stationId?: string): Promise<{ total: number; createdCount: number; created: { id: string; code: string }[]; failed: { code?: string; name?: string; error: string }[] }> {
+    return request('/setup/products/import', {
+      method: 'POST',
+      body: JSON.stringify({ products, stationId }),
+    });
+  }
+}
+
+export class CloudPaymentTerminalService implements IPaymentTerminalService {
+  async listTerminals(stationId: string): Promise<PaymentTerminal[]> {
+    return request<PaymentTerminal[]>(`/setup/payment-terminals?stationId=${stationId}`);
+  }
+
+  async createTerminal(data: {
+    stationId: string;
+    label: string;
+    provider?: string | null;
+    terminalCode?: string | null;
+    supportsCard?: boolean;
+    supportsUpi?: boolean;
+    clearingAccountId?: string | null;
+  }): Promise<PaymentTerminal> {
+    return request<PaymentTerminal>('/setup/payment-terminals', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateTerminal(
+    id: string,
+    data: Partial<{ label: string; provider: string | null; terminalCode: string | null; supportsCard: boolean; supportsUpi: boolean; isActive: boolean; clearingAccountId: string | null }>
+  ): Promise<PaymentTerminal> {
+    return request<PaymentTerminal>(`/setup/payment-terminals/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteTerminal(id: string): Promise<void> {
+    await request<void>(`/setup/payment-terminals/${id}`, {
+      method: 'DELETE',
     });
   }
 }
@@ -336,8 +410,19 @@ export class CloudShiftService {
     });
   }
 
+  async closeBusinessDay(businessDayId: string): Promise<any> {
+    return request<any>('/shifts/business-day/close', {
+      method: 'POST',
+      body: JSON.stringify({ businessDayId }),
+    });
+  }
+
   async getDailyDssr(stationId: string, date: string): Promise<any> {
     return request<any>(`/dssr/daily?stationId=${stationId}&date=${date}`);
+  }
+
+  async getDailyDssrPreview(stationId: string, date: string): Promise<any> {
+    return request<any>(`/dssr/daily/preview?stationId=${stationId}&date=${date}`);
   }
 
   async getDailyDssrRange(stationId: string, from: string, to: string): Promise<any[]> {
@@ -353,6 +438,20 @@ export class CloudTransactionService {
 
   async getExpenseCategories(): Promise<any> {
     return request<any>('/transactions/expense-categories');
+  }
+
+  async createExpenseCategory(payload: { name: string }): Promise<any> {
+    return request<any>('/transactions/expense-categories', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async updateExpenseCategory(id: string, payload: { name: string }): Promise<any> {
+    return request<any>(`/transactions/expense-categories/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
   }
 
   async getSuppliers(activeOnly: boolean = true): Promise<any> {
@@ -383,14 +482,14 @@ export class CloudTransactionService {
     return request<any>(`/transactions/customers?activeOnly=${activeOnly}`);
   }
 
-  async createCustomer(payload: { name: string; phone?: string | null; customerType: 'Regular' | 'Credit' | 'Fleet'; creditLimit?: number | null; fleetCode?: string | null; isPrepaid?: boolean; isActive?: boolean; metadata?: { gstin?: string | null; pan?: string | null; tradeName?: string | null; billingAddress?: string | null } | null }): Promise<any> {
+  async createCustomer(payload: { name: string; phone?: string | null; customerType: 'Regular' | 'Credit' | 'Fleet'; creditLimit?: number | null; fleetCode?: string | null; isPrepaid?: boolean; isActive?: boolean; metadata?: { gstin?: string | null; stateCode?: string | null; pan?: string | null; tradeName?: string | null; billingAddress?: string | null } | null }): Promise<any> {
     return request<any>('/transactions/customers', {
       method: 'POST',
       body: JSON.stringify(payload),
     });
   }
 
-  async updateCustomer(id: string, payload: { name: string; phone?: string | null; customerType: 'Regular' | 'Credit' | 'Fleet'; creditLimit?: number | null; fleetCode?: string | null; isPrepaid?: boolean; isActive?: boolean; metadata?: { gstin?: string | null; pan?: string | null; tradeName?: string | null; billingAddress?: string | null } | null }): Promise<any> {
+  async updateCustomer(id: string, payload: { name: string; phone?: string | null; customerType: 'Regular' | 'Credit' | 'Fleet'; creditLimit?: number | null; fleetCode?: string | null; isPrepaid?: boolean; isActive?: boolean; metadata?: { gstin?: string | null; stateCode?: string | null; pan?: string | null; tradeName?: string | null; billingAddress?: string | null } | null }): Promise<any> {
     return request<any>(`/transactions/customers/${id}`, {
       method: 'PUT',
       body: JSON.stringify(payload),
@@ -454,11 +553,38 @@ export class CloudTransactionService {
     return request<any[]>('/transactions/purchases');
   }
 
+  async getPurchaseItems(purchaseId: string): Promise<any[]> {
+    return request<any[]>(`/transactions/purchases/${purchaseId}/items`);
+  }
+
+  async getPurchaseGstRegister(from?: string, to?: string): Promise<any[]> {
+    const qs = new URLSearchParams();
+    if (from) qs.set('from', from);
+    if (to) qs.set('to', to);
+    const suffix = qs.toString() ? `?${qs.toString()}` : '';
+    return request<any[]>(`/transactions/purchases/gst-register${suffix}`);
+  }
+
   async getCollections(): Promise<any[]> {
     return request<any[]>('/transactions/collections');
   }
 
-  async recordExpense(payload: { shiftId: string; categoryId: string; amount: number; description?: string }): Promise<any> {
+  async getCreditSales(): Promise<any[]> {
+    return request<any[]>('/transactions/credit-sales');
+  }
+
+  async getAllVehicles(activeOnly = false): Promise<any[]> {
+    return request<any[]>(`/transactions/vehicles${activeOnly ? '?activeOnly=true' : ''}`);
+  }
+
+  async getMoneyMovements(params: { stationId: string; from?: string; to?: string }): Promise<{ movements: any[]; openings: { account: string; opening: number }[] }> {
+    const qs = new URLSearchParams({ stationId: params.stationId });
+    if (params.from) qs.set('from', params.from);
+    if (params.to) qs.set('to', params.to);
+    return request<{ movements: any[]; openings: { account: string; opening: number }[] }>(`/transactions/money-movements?${qs.toString()}`);
+  }
+
+  async recordExpense(payload: { shiftId?: string; stationId?: string; transactionDate?: string; paidFrom?: 'SHIFT_CASH' | 'BANK' | 'OWNER'; categoryId: string; amount: number; description?: string; accountId?: string | null }): Promise<any> {
     return request<any>('/transactions/expenses', {
       method: 'POST',
       body: JSON.stringify(payload),
@@ -466,14 +592,20 @@ export class CloudTransactionService {
   }
 
   async recordPurchase(payload: {
-    shiftId: string;
+    shiftId?: string;
+    stationId?: string;
+    transactionDate?: string;
     supplierId: string;
-    productId: string;
-    quantity: number;
-    unitPrice: number;
     invoiceNumber?: string;
     notes?: string;
-    tankAllocations?: { tankId: string; quantity: number }[] | null;
+    lines: {
+      productId: string;
+      quantity: number;
+      unitPrice: number;
+      tankAllocations?: { tankId: string; quantity: number }[];
+    }[];
+    /** Optional immediate payment recorded atomically with the purchase. */
+    payment?: { amount: number; accountId?: string | null; notes?: string };
   }): Promise<any> {
     return request<any>('/transactions/purchases', {
       method: 'POST',
@@ -482,15 +614,20 @@ export class CloudTransactionService {
   }
 
   async recordCollection(payload: {
-    shiftId: string;
+    shiftId?: string;
+    stationId?: string;
+    transactionDate?: string;
     customerId?: string;
     vehicleId?: string | null;
     productId?: string | null;
     quantity?: number | null;
     unitPrice?: number | null;
     amount: number;
-    paymentMethod: 'Cash' | 'Card' | 'UPI' | 'Credit';
+    paymentMethod: 'Cash' | 'Card' | 'UPI' | 'BankTransfer' | 'Credit';
+    attendantId?: string | null;
+    duId?: string | null;
     notes?: string;
+    accountId?: string | null;
   }): Promise<any> {
     return request<any>('/transactions/collections', {
       method: 'POST',
@@ -498,8 +635,23 @@ export class CloudTransactionService {
     });
   }
 
+  async voidCreditSale(id: string): Promise<any> {
+    return request<any>(`/transactions/credit-sales/${id}`, { method: 'DELETE' });
+  }
+
   async getInventoryStatus(stationId: string): Promise<any[]> {
     return request<any[]>(`/transactions/inventory/status?stationId=${stationId}`);
+  }
+
+  async getInventoryItems(stationId: string): Promise<any[]> {
+    return request<any[]>(`/transactions/inventory/items?stationId=${stationId}`);
+  }
+
+  async recordStockCount(payload: { stationId: string; productId: string; actualQuantity: number; tankId?: string | null; reason?: string }): Promise<any> {
+    return request<any>('/transactions/inventory/count', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
   }
 
   async getInventoryMovements(stationId: string): Promise<any[]> {
@@ -518,8 +670,80 @@ export class CloudTransactionService {
     return request<any[]>(`/transactions/suppliers/${supplierId}/ledger`);
   }
 
-  async recordSupplierPayment(payload: { shiftId: string; supplierId: string; amount: number; notes?: string }): Promise<any> {
+  /** Issue (or fetch existing) GST tax invoice for a sale. Idempotent. */
+  async issueInvoice(saleId: string): Promise<any> {
+    return request<any>(`/transactions/sales/${saleId}/invoice`, { method: 'POST', body: '{}' });
+  }
+
+  /** The invoice already issued for a sale, or null if none. */
+  async getInvoiceForSale(saleId: string): Promise<any | null> {
+    try {
+      return await request<any>(`/transactions/sales/${saleId}/invoice`);
+    } catch {
+      return null;
+    }
+  }
+
+  async getInvoices(params: { stationId?: string; from?: string; to?: string } = {}): Promise<any[]> {
+    const qs = new URLSearchParams();
+    if (params.stationId) qs.set('stationId', params.stationId);
+    if (params.from) qs.set('from', params.from);
+    if (params.to) qs.set('to', params.to);
+    const q = qs.toString();
+    return request<any[]>(`/transactions/invoices${q ? `?${q}` : ''}`);
+  }
+
+  async getInvoice(id: string): Promise<any> {
+    return request<any>(`/transactions/invoices/${id}`);
+  }
+
+  /** Non-fuel (merchandise) sales with invoice status, for the Invoices workspace. */
+  async getSales(params: { stationId: string; from?: string; to?: string }): Promise<any[]> {
+    const qs = new URLSearchParams({ stationId: params.stationId });
+    if (params.from) qs.set('from', params.from);
+    if (params.to) qs.set('to', params.to);
+    return request<any[]>(`/transactions/sales?${qs.toString()}`);
+  }
+
+  /** Record/replace an employee's itemized walk-in merchandise handover for a shift. */
+  async recordMerchandiseHandover(shiftId: string, payload: { attendantId: string; lines: { productId: string; quantity: number }[]; nonCashAmount?: number }): Promise<any> {
+    return request<any>(`/transactions/shifts/${shiftId}/merchandise-handover`, { method: 'POST', body: JSON.stringify(payload) });
+  }
+
+  async getMerchandiseHandovers(shiftId: string): Promise<any[]> {
+    return request<any[]>(`/transactions/shifts/${shiftId}/merchandise-handovers`);
+  }
+
+  /** Individual (quick-entry) non-fuel "billed" sales for a shift — view-only in the handover drawer. */
+  async getMerchandiseSales(shiftId: string): Promise<any[]> {
+    return request<any[]>(`/transactions/shifts/${shiftId}/merchandise-sales`);
+  }
+
+  async deleteMerchandiseHandover(saleId: string): Promise<any> {
+    return request<any>(`/transactions/merchandise-handovers/${saleId}`, { method: 'DELETE' });
+  }
+
+  async recordSupplierPayment(payload: { shiftId?: string; stationId?: string; transactionDate?: string; paidFrom?: 'SHIFT_CASH' | 'BANK' | 'OWNER'; supplierId: string; amount: number; notes?: string; accountId?: string | null }): Promise<any> {
     return request<any>('/transactions/supplier-payments', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async recordSale(payload: {
+    shiftId: string;
+    paymentMethod: 'Cash' | 'Card' | 'UPI' | 'Credit';
+    lines: { productId: string; quantity: number; unitPrice: number; discountAmount?: number; taxAmount?: number; tankId?: string | null }[];
+    customerId?: string | null;
+    vehicleId?: string | null;
+    attendantId?: string | null;
+    notes?: string;
+    /** Ad-hoc walk-in buyer bill-to (used only when no saved customerId is set). */
+    buyer?: { name: string; phone?: string | null; gstin?: string | null; stateCode?: string | null } | null;
+    /** When true (with a buyer), save/dedup the buyer into the customer registry. */
+    saveAsCustomer?: boolean;
+  }): Promise<any> {
+    return request<any>('/transactions/sales', {
       method: 'POST',
       body: JSON.stringify(payload),
     });
@@ -540,5 +764,88 @@ export class CloudPricingService {
       method: 'POST',
       body: JSON.stringify(payload),
     });
+  }
+}
+
+export class CloudOrganizationService {
+  async getOrganization(): Promise<any> {
+    return request<any>('/organization');
+  }
+
+  async updateOrganization(payload: { name: string; metadata?: Record<string, unknown> | null }): Promise<any> {
+    return request<any>('/organization', {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+  }
+}
+
+export class CloudEventsService {
+  async getEvents(params?: { stationId?: string; type?: string; limit?: number }): Promise<any[]> {
+    const qs = new URLSearchParams();
+    if (params?.stationId) qs.set('stationId', params.stationId);
+    if (params?.type) qs.set('type', params.type);
+    if (params?.limit) qs.set('limit', String(params.limit));
+    const suffix = qs.toString() ? `?${qs.toString()}` : '';
+    return request<any[]>(`/activity${suffix}`);
+  }
+}
+
+export class CloudFinanceService {
+  /** Money accounts with current balances (cash / petty / bank / clearing / owner). */
+  async listAccounts(stationId?: string | null): Promise<any[]> {
+    return request<any[]>(`/finance/accounts${stationId ? `?stationId=${stationId}` : ''}`);
+  }
+
+  /** Per-account statement: period-opening balance + entries in [from, to]. */
+  async getAccountLedger(accountId: string, from?: string, to?: string): Promise<any> {
+    const qs = new URLSearchParams();
+    if (from) qs.set('from', from);
+    if (to) qs.set('to', to);
+    const suffix = qs.toString() ? `?${qs.toString()}` : '';
+    return request<any>(`/finance/accounts/${accountId}/ledger${suffix}`);
+  }
+
+  async createAccount(payload: {
+    stationId?: string | null;
+    accountType: 'CASH_IN_HAND' | 'PETTY_CASH' | 'BANK' | 'MERCHANT_CLEARING' | 'OWNER';
+    name: string;
+    openingBalance?: number;
+    openingDate?: string | null;
+    metadata?: Record<string, unknown> | null;
+  }): Promise<any> {
+    return request<any>('/finance/accounts', { method: 'POST', body: JSON.stringify(payload) });
+  }
+
+  async updateAccount(id: string, payload: { name?: string; metadata?: Record<string, unknown> | null; isActive?: boolean }): Promise<any> {
+    return request<any>(`/finance/accounts/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+  }
+
+  /** Set / correct an account's opening balance at any time (rewrites the OPENING entry). */
+  async setOpeningBalance(id: string, payload: { openingBalance: number; openingDate?: string | null }): Promise<any> {
+    return request<any>(`/finance/accounts/${id}/opening`, { method: 'PUT', body: JSON.stringify(payload) });
+  }
+
+  /** Move money between two accounts (deposit / petty-cash float / bank↔bank). */
+  async recordTransfer(payload: { fromAccountId: string; toAccountId: string; amount: number; date?: string | null; notes?: string | null }): Promise<any> {
+    return request<any>('/finance/transfers', { method: 'POST', body: JSON.stringify(payload) });
+  }
+
+  /** Settle a card/UPI clearing batch to a bank account, net of MDR fee. */
+  async recordSettlement(payload: { clearingAccountId: string; bankAccountId: string; grossAmount: number; feeAmount?: number; date?: string | null; notes?: string | null }): Promise<any> {
+    return request<any>('/finance/settlements', { method: 'POST', body: JSON.stringify(payload) });
+  }
+
+  /** Manual entry against one account: bank charge / interest / adjustment. */
+  async recordAdjustment(accountId: string, payload: { direction: 'in' | 'out'; amount: number; sourceType?: 'BANK_CHARGE' | 'INTEREST' | 'ADJUSTMENT'; date?: string | null; notes?: string | null }): Promise<any> {
+    return request<any>(`/finance/accounts/${accountId}/entry`, { method: 'POST', body: JSON.stringify(payload) });
+  }
+
+  /** Station-wide ledger movements (backs the Cash & Bank report). */
+  async getMovements(params: { stationId: string; from?: string; to?: string }): Promise<{ movements: any[]; openings: { accountType: string; opening: string }[] }> {
+    const qs = new URLSearchParams({ stationId: params.stationId });
+    if (params.from) qs.set('from', params.from);
+    if (params.to) qs.set('to', params.to);
+    return request<{ movements: any[]; openings: { accountType: string; opening: string }[] }>(`/finance/movements?${qs.toString()}`);
   }
 }

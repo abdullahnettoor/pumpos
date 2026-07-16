@@ -1,6 +1,19 @@
-import { spawn } from 'node:child_process';
-import { readFileSync, existsSync } from 'node:fs';
-import { resolve } from 'node:path';
+#!/usr/bin/env node
+
+/**
+ * dev-remote.mjs
+ * 
+ * Local development against remote Supabase.
+ * Launches local Wrangler dev server with proper local Hyperdrive binding.
+ */
+
+import { spawn } from 'child_process';
+import { readFileSync, existsSync } from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const projectRoot = path.resolve(__dirname, '..');
 
 function loadValueFromDotEnv(filePath, key) {
   if (!existsSync(filePath)) {
@@ -24,25 +37,31 @@ function loadRawValue(filePath) {
   return readFileSync(filePath, 'utf8').trim().replace(/^"|"$/g, '');
 }
 
-const pooledUrl = process.env.DATABASE_URL
-  || loadValueFromDotEnv(resolve(process.cwd(), '.dev.vars'), 'DATABASE_URL')
-  || loadRawValue(resolve(process.cwd(), '../../supabase/.temp/pooler-url'));
+const devVarsPath = path.resolve(projectRoot, '.dev.vars');
 
 const directUrl = process.env.DIRECT_DATABASE_URL
-  || loadValueFromDotEnv(resolve(process.cwd(), '.dev.vars'), 'DIRECT_DATABASE_URL');
+  || loadValueFromDotEnv(devVarsPath, 'DIRECT_DATABASE_URL');
 
-const connectionString = pooledUrl || directUrl;
+const pooledUrl = process.env.DATABASE_URL
+  || loadValueFromDotEnv(devVarsPath, 'DATABASE_URL')
+  || loadRawValue(path.resolve(projectRoot, '../../supabase/.temp/pooler-url'));
+
+const connectionString = directUrl || pooledUrl;
 
 if (!connectionString) {
   console.error('Missing DIRECT_DATABASE_URL and apps/api/.dev.vars. Set DIRECT_DATABASE_URL to your Supabase connection string.');
   process.exit(1);
 }
 
+console.log('🚀 Starting PumpOS API dev server (local Wrangler connecting to remote Supabase)...\n');
+
 const child = spawn('wrangler', ['dev', 'src/index.ts'], {
+  cwd: projectRoot,
   stdio: 'inherit',
   env: {
     ...process.env,
     CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE: connectionString,
+    NODE_ENV: 'development',
   },
 });
 

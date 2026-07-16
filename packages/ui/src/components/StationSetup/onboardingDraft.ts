@@ -2,6 +2,7 @@ import {
   OnboardingDraft,
   OnboardingDispenserDraft,
   OnboardingNozzleDraft,
+  OnboardingPaymentTerminalDraft,
   OnboardingProductDraft,
   OnboardingShiftTemplateDraft,
   OnboardingTankDraft,
@@ -72,6 +73,7 @@ export function createEmptyOnboardingDraft(): OnboardingDraft {
     dispensers: [],
     nozzles: [],
     shiftTemplates: [],
+    paymentTerminals: [],
   };
 }
 
@@ -83,7 +85,7 @@ export function createFuelDraft(): OnboardingProductDraft {
     productType: 'FUEL',
     stockTracked: true,
     isTaxable: false,
-    unit: 'Liters',
+    unit: 'L',
     taxConfig: {
       gst_rate: 0,
       hsn_code: '2710',
@@ -133,6 +135,17 @@ export function createShiftTemplateDraft(): OnboardingShiftTemplateDraft {
   };
 }
 
+export function createPaymentTerminalDraft(): OnboardingPaymentTerminalDraft {
+  return {
+    draftId: createDraftId(),
+    label: '',
+    provider: '',
+    terminalCode: '',
+    supportsCard: true,
+    supportsUpi: true,
+  };
+}
+
 export function saveStoredOnboardingDraft(state: StoredOnboardingDraft) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
@@ -142,7 +155,12 @@ export function loadStoredOnboardingDraft(): StoredOnboardingDraft | null {
   if (!raw) return null;
 
   try {
-    return JSON.parse(raw) as StoredOnboardingDraft;
+    const parsed = JSON.parse(raw) as StoredOnboardingDraft;
+    // Backward-compat: older stored drafts predate the payment terminals step.
+    if (parsed?.draft && !Array.isArray(parsed.draft.paymentTerminals)) {
+      parsed.draft.paymentTerminals = [];
+    }
+    return parsed;
   } catch {
     return null;
   }
@@ -291,6 +309,21 @@ export function validateOnboardingDraft(draft: OnboardingDraft): OnboardingValid
     if (!template.startTime || !template.endTime) {
       issues.push({ step: 7, message: `Shift template "${template.name || 'Untitled shift'}" needs start and end times.` });
     }
+  }
+
+  // Payment terminals are optional, but any added must be valid + uniquely labelled.
+  const terminalLabels = new Set<string>();
+  for (const terminal of draft.paymentTerminals ?? []) {
+    const label = terminal.label.trim().toLowerCase();
+    if (!terminal.label.trim()) {
+      issues.push({ step: 8, message: 'Every payment terminal needs a label.' });
+    } else if (terminalLabels.has(label)) {
+      issues.push({ step: 8, message: `Duplicate payment terminal label "${terminal.label}" found.` });
+    }
+    if (!terminal.supportsCard && !terminal.supportsUpi) {
+      issues.push({ step: 8, message: `Terminal "${terminal.label || 'Untitled terminal'}" must support card and/or UPI.` });
+    }
+    terminalLabels.add(label);
   }
 
   return issues;

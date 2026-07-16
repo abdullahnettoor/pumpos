@@ -29,35 +29,100 @@ This is an operational operating system focused on fuel station management.
 
 # Core Architecture Principles
 
-## Shift-Centric System
+## Business-Day & Shift Anchoring
 
-The entire platform revolves around shifts.
+The platform has two anchors, and using the right one is the single most
+important domain rule:
+
+* **`business_day_id`** is the **universal anchor**. Every operational and
+  financial record belongs to a business day.
+* **`shift_id`** is present **if and only if the money touches the physical cash
+  drawer.** A shift is an operator-accountability window for drawer cash.
 
 Operational flow:
 
 ```text
-Shift
+Business Day
+ ↓
+Shift(s)            ← drawer-cash accountability
  ↓
 Operations
  ↓
-DSSR
+Shift Summary       ← immutable snapshot, created on SHIFT close
+ ↓
+DSSR                ← immutable snapshot, created on BUSINESS-DAY close
  ↓
 Reports
 ```
 
-All operational transactions MUST belong to a shift.
+Anchoring rules (DO NOT couple everything to a shift):
 
-Examples:
+* Fuel/merchandise **sales** occur within a shift (operator accountability) →
+  `shift_id` set.
+* **Cash** collections / cash supplier payments / drawer (`SHIFT_CASH`) expenses
+  touch the drawer → `shift_id` set.
+* **Card / UPI / bank / online** collections, **bank/owner** expenses,
+  **purchases**, and **credit sales** do NOT touch the drawer → `shift_id` is
+  NULL, anchored to the business day only.
+* **Credit sales are receivables**, not drawer cash. A fleet fuel-on-credit sale
+  records only a customer-ledger debit (receivable); it never moves stock again
+  (the fuel is already metered via nozzle readings). Customer balance =
+  Σ credit sales − Σ collections.
 
-* Expenses
-* Purchases
-* Collections
-* Credit Sales
-* Manual Sales
-* Nozzle Readings
-* Variance Records
+Drawer reconciliation at shift close:
 
-Never create operational transactions that exist outside a shift.
+```text
+expectedDrawerCash =
+  openingCash + cashSales + cashCollections
+  − drawerExpenses − drawerSupplierPayments − cashDrops
+```
+
+Never force card/UPI/bank/credit movements into the drawer reconciliation.
+
+---
+
+## Business-Day Date Resolution (timezone-aware)
+
+A business day is keyed by **`(station, calendar date)`**, lazily opened when the
+first shift OR financial entry of that date lands. Several business days may be
+**open at once**; a past day is closed **independently** at any time (e.g. close
+day 1 on day 5) — closing never blocks today's day. `OpenShift` and
+`ensureBusinessDayForDate` both resolve via `findByStationAndDate`, so shifts and
+financials always agree. Uniqueness is enforced by
+`business_days_org_station_date_uniq (org, station, date)`.
+
+The `business_date` (`varchar(10)` `YYYY-MM-DD`) is the single date anchor;
+audit timestamps stay UTC. **Never derive a business date with
+`new Date().toISOString().slice(0,10)`** — that is UTC-only and ignores the
+day-start boundary. Always use **`resolveBusinessDate({ now, timeZone, dayStartsAt })`**
+from `@pump/shared`, which converts the instant to the station's timezone and
+rolls back to the previous date when the local time is before the station's
+`business_day_starts_at` (a fuel day commonly runs 06:00 → 06:00).
+
+* The station's `timezone` + `business_day_starts_at` are captured at onboarding
+  and stored in `stations.settings`.
+* The API resolves them via `loadStationClock(db, stationId)` and passes them into
+  `buildContext` → `ExecutionContext.timeZone` / `.businessDayStartsAt`; core
+  use-cases read those when calling `resolveBusinessDate`.
+* The same helper is used client-side to default the shift-open date field.
+* TODO: render displayed timestamps in station timezone (currently UTC-instant).
+
+---
+
+## Code Organization (ports & adapters)
+
+* **`packages/core`** (`@pump/core`) — framework-agnostic domain. Capability
+  folders (`station-setup`, `station-ops`, `inventory`, `retail`, `purchasing`,
+  `crm`, `finance`, `reporting`) composed of **use-cases**. Repository **ports**
+  (interfaces) live here. Core never imports Hono, Drizzle, React or SQL.
+* **`apps/api`** — thin Hono routes that wire Drizzle repository **adapters** +
+  the event dispatcher into core use-cases. Mutations run inside
+  `runInTransaction(db, (tx, events) => useCase.execute(...))`, a transactional
+  outbox: state changes AND the `events` append commit atomically.
+* Response envelope is always `{ success: true, data }` or
+  `{ success: false, error: { code, message } }`.
+* Mutating routes honor an optional `Idempotency-Key` header (dedupes retries /
+  offline replays via the `idempotency_keys` store).
 
 ---
 
@@ -149,16 +214,22 @@ Manual sales are separate from fuel sales.
 
 ---
 
-## DSSR
+## Shift Summary & DSSR
 
-DSSR is a snapshot.
+There are **two** immutable report snapshots:
 
-Rules:
+* **Shift Summary** — created when a **shift is closed** (`shift_summaries`).
+  Holds that shift's nozzle reconciliation, drawer reconciliation, and totals.
+* **DSSR** (Daily Station Sales Report) — created when a **business day is
+  closed** / generated on demand (`dssr_snapshots`). Composes all of the day's
+  closed-shift summaries plus business-day-anchored financials (collections,
+  expenses, purchases, supplier payments, credit sales).
 
-* Generated during shift close.
+Rules for both:
+
 * Stored permanently.
 * Never recalculated historically.
-* Never modified after generation.
+* Never modified after generation (regeneration is explicit + idempotent).
 
 ---
 
@@ -428,6 +499,35 @@ stock_movements
 ```
 
 for inventory.
+
+---
+
+# Data Caching & Performance
+
+Client data is cached with TanStack Query, **tiered by how often it changes**, to keep the
+app fast without ever showing same-session stale data. Apply the `pump-data-caching` skill for
+any data fetch or mutation.
+
+Tiers (see `packages/ui/src/query/hooks.ts` → `TIER`):
+
+```text
+static       (stations, tanks, dispensers, nozzles, terminals, templates, users)  → 24h, persisted
+semi         (products, customers, suppliers, expense categories)                 → 10m, persisted
+operational  (shift status, sales, collections, inventory, DSSR)                  → 15s, not persisted
+```
+
+Mandatory rules:
+
+* Read through query hooks / `ensureQueryData` with a **centralized key** — never call
+  `service.getX()` directly in a component (that bypasses the cache).
+* **Every mutation invalidates its key(s).** Setup edits invalidate their static/semi key;
+  operational writes use `useInvalidateOperational` (which also refreshes `customers` and
+  `suppliers` whose balances move).
+* Persist only static/semi (`PERSIST_PREFIXES`); bump `CACHE_BUSTER` on payload shape changes.
+* Never use `refetchOnMount: 'always'` on tiered queries.
+
+Full plan + audit: `docs/roadmap/phase-P-performance.md`. Practice + review checklist:
+`.agents/skills/pump-data-caching/SKILL.md`.
 
 ---
 

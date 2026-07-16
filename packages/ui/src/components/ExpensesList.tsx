@@ -1,131 +1,108 @@
-import React, { useEffect, useState } from 'react';
-import { CloudTransactionService, CloudShiftService } from '../services/cloud.js';
-import { Calendar, Plus, Coins, Info } from 'lucide-react';
-import { LoadingSpinner } from './LoadingSpinner.js';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
+import type { ExpenseEntryFormValues } from '@pump/shared';
+import { canManageExpenseCategory } from '@pump/shared';
+import { CloudTransactionService } from '../services/cloud.js';
+import { Plus, HelpCircle, Tags, Receipt, ArrowLeftRight } from 'lucide-react';
+import { PageLayout } from './primitives/PageLayout.js';
+import { DataTable } from './primitives/DataTable.js';
+import { Tabs } from './primitives/Tabs.js';
+import { DateRangeField, computeRange } from './primitives/DateRangeField.js';
+import type { DateRange } from './primitives/DateRangeField.js';
+import { inr } from '../utils/format.js';
+import { useToast } from './primitives/ToastProvider.js';
 import { Drawer } from './Drawer.js';
 import { ExpenseEntryForm } from './transactions/ExpenseEntryForm.js';
+import { useExpenses, useShiftStatus, useExpenseCategories, useInvalidateOperational } from '../query/hooks.js';
+import { useQueryClient } from '@tanstack/react-query';
+import { Panel, Button, KpiStrip, KpiTile, EmptyState, SearchInput, Select } from '../pump-ds/index.js';
+import type { NavIntent } from './AppShell.js';
+import { expenseColumns } from './expenses/columns.js';
+import { ExpenseAnalytics } from './expenses/ExpenseAnalytics.js';
+import { CategoryManagerDrawer } from './expenses/CategoryManagerDrawer.js';
 
 const transactionService = new CloudTransactionService();
-const shiftService = new CloudShiftService();
+
+type TabType = 'ledger' | 'analytics';
 
 interface ExpensesListProps {
   selectedStation: any | null;
   defaultShiftId?: string;
+  userRole?: string;
+  intent?: NavIntent | null;
+  onIntentConsumed?: () => void;
 }
 
-export const ExpensesList: React.FC<ExpensesListProps> = ({ selectedStation, defaultShiftId }) => {
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [expenses, setExpenses] = useState<any[]>([]);
-  const [activeShift, setActiveShift] = useState<any | null>(null);
-  const [recentClosedShifts, setRecentClosedShifts] = useState<any[]>([]);
-  const [targetShiftId, setTargetShiftId] = useState('');
-  const [categories, setCategories] = useState<any[]>([]);
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+export const ExpensesList: React.FC<ExpensesListProps> = ({ selectedStation, defaultShiftId, userRole, intent, onIntentConsumed }) => {
+  const stationId = selectedStation?.id ?? null;
+  const expensesQ = useExpenses();
+  const statusQ = useShiftStatus(stationId, true);
+  const categoriesQ = useExpenseCategories();
+  const invalidateOperational = useInvalidateOperational();
+  const qc = useQueryClient();
+  const toast = useToast();
 
-  // Form States
-  const [categoryId, setCategoryId] = useState('');
-  const [amount, setAmount] = useState('');
-  const [description, setDescription] = useState('');
+  const s = (selectedStation as any)?.settings || {};
+  const clock = { timeZone: s.timezone, dayStartsAt: s.business_day_starts_at };
+
+  const expenses = expensesQ.data ?? [];
+  const categories = categoriesQ.data ?? [];
+  const activeShift = statusQ.data?.activeShift ?? null;
+  const recentClosedShifts: any[] = statusQ.data?.recentClosedShifts ?? [];
+  const canManageCategories = canManageExpenseCategory((userRole as any) ?? 'Staff');
+
+  const [activeTab, setActiveTab] = useState<TabType>('ledger');
+  const [range, setRange] = useState<DateRange>(() => computeRange('this-month', clock));
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState('');
+
+  // Drawers
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [categoryManagerOpen, setCategoryManagerOpen] = useState(false);
+  const [formDefaults, setFormDefaults] = useState<Partial<ExpenseEntryFormValues>>({});
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
-  // Filter States
-  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
-
-  useEffect(() => {
-    if (selectedStation) {
-      loadData();
-    }
-  }, [selectedStation]);
-
   const resolvePreferredShiftId = (active: any | null, closedList: any[]) => {
-    if (defaultShiftId) {
-      const matchesActive = active?.id === defaultShiftId;
-      const matchesClosed = closedList.some((shift) => shift.id === defaultShiftId);
-
-      if (matchesActive || matchesClosed) {
-        return defaultShiftId;
-      }
-    }
-
-    if (active) {
-      return active.id;
-    }
-
-    if (closedList.length > 0) {
-      return closedList[0].id;
-    }
-
+    if (defaultShiftId && (active?.id === defaultShiftId || closedList.some((sh) => sh.id === defaultShiftId))) return defaultShiftId;
+    if (active) return active.id;
+    if (closedList.length > 0) return closedList[0].id;
     return '';
   };
+  const preferredShiftId = resolvePreferredShiftId(activeShift, recentClosedShifts);
 
-  const resetForm = (nextTargetShiftId?: string) => {
+  const openDrawer = () => {
     setFormError(null);
-    setCategoryId(categories[0]?.id ?? '');
-    setAmount('');
-    setDescription('');
-    setTargetShiftId(nextTargetShiftId ?? resolvePreferredShiftId(activeShift, recentClosedShifts));
-  };
-
-  const openDrawer = (shiftIdOverride?: string) => {
-    resetForm(shiftIdOverride);
+    setFormDefaults({
+      categoryId: categories[0]?.id ?? '',
+      targetShiftId: preferredShiftId,
+      transactionDate: new Date().toISOString().slice(0, 10),
+      amount: undefined as unknown as number,
+      description: '',
+    });
     setIsDrawerOpen(true);
   };
+  const closeDrawer = () => setIsDrawerOpen(false);
 
-  const closeDrawer = () => {
-    resetForm();
-    setIsDrawerOpen(false);
-  };
-
-  const loadData = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      // Fetch active shift status and historical expenses
-      const [list, status, cats] = await Promise.all([
-        transactionService.getExpenses(),
-        shiftService.getShiftStatus(selectedStation.id, true),
-        transactionService.getExpenseCategories()
-      ]);
-
-      setExpenses(list || []);
-      const active = status.activeShift || null;
-      const closedList = status.recentClosedShifts || [];
-      setActiveShift(active);
-      setRecentClosedShifts(closedList);
-      setCategories(cats || []);
-
-      setCategoryId(cats?.[0]?.id ?? '');
-      setTargetShiftId(resolvePreferredShiftId(active, closedList));
-    } catch (err: any) {
-      setError(err.message || 'Failed to load expenses data');
-    } finally {
-      setLoading(false);
+  // Command-palette deep-link: open the entry drawer on arrival.
+  const handledIntentRef = useRef<NavIntent | null>(null);
+  useEffect(() => {
+    if (!intent || handledIntentRef.current === intent) return;
+    if (intent.open === 'new-expense') {
+      handledIntentRef.current = intent;
+      openDrawer();
+      onIntentConsumed?.();
     }
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [intent]);
 
-  const handleAddExpense = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!targetShiftId || !categoryId || !amount) return;
-
+  const handleAddExpense = async (values: ExpenseEntryFormValues) => {
     try {
       setSubmitting(true);
       setFormError(null);
-      await transactionService.recordExpense({
-        shiftId: targetShiftId,
-        categoryId,
-        amount: Number(amount),
-        description: description || undefined,
-      });
-
+      await transactionService.recordExpense({ stationId: stationId ?? undefined, transactionDate: values.transactionDate || undefined, paidFrom: 'BANK', categoryId: values.categoryId, amount: Number(values.amount), description: values.description || undefined, accountId: values.accountId || undefined });
       closeDrawer();
-      const updatedList = await transactionService.getExpenses();
-      setExpenses(updatedList || []);
+      invalidateOperational(stationId);
+      toast.success('Expense recorded.');
     } catch (err: any) {
       setFormError(err.message || 'Failed to record expense');
     } finally {
@@ -133,309 +110,150 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({ selectedStation, def
     }
   };
 
-  const filteredExpenses = expenses.filter((e) => {
-    if (selectedCategoryFilter && e.categoryId !== selectedCategoryFilter) {
-      return false;
-    }
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      const descMatch = e.description ? e.description.toLowerCase().includes(q) : false;
-      const catMatch = e.categoryName ? e.categoryName.toLowerCase().includes(q) : false;
-      if (!descMatch && !catMatch) return false;
-    }
-    if (startDate || endDate) {
-      const date = new Date(e.shiftDate);
-      if (startDate) {
-        const start = new Date(startDate);
-        start.setHours(0, 0, 0, 0);
-        if (date < start) return false;
-      }
-      if (endDate) {
-        const end = new Date(endDate);
-        end.setHours(23, 59, 59, 999);
-        if (date > end) return false;
-      }
-    }
-    return true;
-  });
+  const refetchCategories = () => qc.invalidateQueries({ queryKey: ['expense-categories'] });
+
+  // KPIs — fixed windows (today / this month), independent of the table range filter.
+  const kpis = useMemo(() => {
+    const today = computeRange('today', clock);
+    const month = computeRange('this-month', clock);
+    const active = expenses.filter((e: any) => e.status !== 'VOIDED');
+    const inWindow = (e: any, r: DateRange) => {
+      const d = e.businessDate ?? e.shiftDate;
+      return d && d >= r.from && d <= r.to;
+    };
+    const monthRows = active.filter((e: any) => inWindow(e, month));
+    const spentToday = active.filter((e: any) => inWindow(e, today)).reduce((sum: number, e: any) => sum + Number(e.amount || 0), 0);
+    const spentMonth = monthRows.reduce((sum: number, e: any) => sum + Number(e.amount || 0), 0);
+    const drawerMonth = monthRows.filter((e: any) => e.paidFrom === 'SHIFT_CASH').reduce((sum: number, e: any) => sum + Number(e.amount || 0), 0);
+    const otherMonth = spentMonth - drawerMonth;
+    return { spentToday, spentMonth, entriesMonth: monthRows.length, drawerMonth, otherMonth };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expenses, clock.timeZone, clock.dayStartsAt]);
+
+  const filteredExpenses = useMemo(
+    () =>
+      expenses.filter((e: any) => {
+        if (selectedCategoryFilter && e.categoryId !== selectedCategoryFilter) return false;
+        if (searchQuery) {
+          const q = searchQuery.toLowerCase();
+          const descMatch = e.description ? e.description.toLowerCase().includes(q) : false;
+          const catMatch = e.categoryName ? e.categoryName.toLowerCase().includes(q) : false;
+          if (!descMatch && !catMatch) return false;
+        }
+        const d = e.businessDate ?? e.shiftDate;
+        if (d && (d < range.from || d > range.to)) return false;
+        return true;
+      }),
+    [expenses, selectedCategoryFilter, searchQuery, range.from, range.to],
+  );
 
   if (!selectedStation) {
-    return (
-      <div style={{ color: 'var(--text-muted)', padding: '24px' }}>
-        Please select a station to view expenses.
-      </div>
-    );
-  }
-
-  if (loading) {
-    return <LoadingSpinner text="Loading expenses registry..." />;
-  }
-
-  if (error) {
-    return (
-      <div style={{ padding: '24px', backgroundColor: 'var(--state-danger-bg)', color: 'var(--state-danger-fg)', borderRadius: 'var(--radius-card)' }}>
-        <strong>Error:</strong> {error}
-      </div>
-    );
+    return <div style={{ color: 'var(--text-muted)', padding: '24px' }}>Please select a station to view expenses.</div>;
   }
 
   return (
-    <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '24px', fontFamily: 'var(--font-sans)' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px' }}>
-        <div>
-          <h1 style={{ fontSize: '20px', fontWeight: 600, color: 'var(--text-strong)' }}>
-            Expenses Tracker
-          </h1>
-          <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '2px' }}>
-            Log and reconcile daily petty cash operational expenditures.
-          </p>
-        </div>
-
-        <button
-          type="button"
-          onClick={() => openDrawer()}
-          disabled={!targetShiftId}
-          style={{
-            height: '36px',
-            padding: '0 14px',
-            backgroundColor: targetShiftId ? 'var(--brand-primary)' : 'var(--border-strong)',
-            color: '#ffffff',
-            border: 'none',
-            borderRadius: 'var(--radius-button)',
-            fontWeight: 600,
-            fontSize: '13px',
-            cursor: targetShiftId ? 'pointer' : 'not-allowed',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '6px',
-            whiteSpace: 'nowrap'
-          }}
-        >
-          <Plus size={14} /> Add Expense
-        </button>
-      </div>
-
-      {targetShiftId ? (
-        <div style={{
-          backgroundColor: 'var(--state-info-bg)',
-          color: 'var(--state-info-fg)',
-          padding: '12px 14px',
-          borderRadius: 'var(--radius-card)',
-          fontSize: '12px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          border: '1px solid var(--border-soft)'
-        }}>
-          <Info size={14} />
-          <span>
-            Expense entries will post to{' '}
-            <strong>
-              {targetShiftId === activeShift?.id
-                ? `${activeShift?.templateName} (Active)`
-                : recentClosedShifts.find((shift) => shift.id === targetShiftId)?.templateName ?? 'selected shift'}
-            </strong>
-            {defaultShiftId === targetShiftId ? ' from the current context.' : '.'}
-          </span>
-        </div>
-      ) : (
-        <div style={{
-          backgroundColor: 'var(--state-warning-bg)',
-          color: 'var(--state-warning-fg)',
-          padding: '16px',
-          borderRadius: 'var(--radius-card)',
-          fontSize: '13px',
-          border: '1px solid var(--border-soft)',
-          lineHeight: '1.5'
-        }}>
-          <span style={{ fontWeight: 700, display: 'block', marginBottom: '4px' }}>Shift Gated Action</span>
-          Petty expenses must be linked to a shift. Please open an active operational shift on the dashboard or shifts management page before entering expenses.
-        </div>
-      )}
-
-      <div style={{
-          backgroundColor: 'var(--bg-surface)',
-          border: '1px solid var(--border-soft)',
-          borderRadius: 'var(--radius-card)',
-          overflow: 'hidden'
-        }}>
-          <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-soft)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)' }}>
-              Petty Cash Ledger
-            </h3>
-            <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-              Showing: <strong>{filteredExpenses.length}</strong> of {expenses.length}
-            </span>
+    <div className="animate-fade-in">
+      <PageLayout
+        title="Expenses"
+        subtitle="Log and reconcile operational expenditure, and analyse spend by category."
+        actions={
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <Button variant="secondary" size="sm" leftIcon={<Tags />} onClick={() => setCategoryManagerOpen(true)}>Categories</Button>
+            <Button variant="primary" size="sm" leftIcon={<Plus />} onClick={openDrawer} disabled={categories.length === 0}>Add Expense</Button>
           </div>
-
-          {/* Filter Bar */}
-          <div style={{
-            padding: '12px 20px',
-            borderBottom: '1px solid var(--border-soft)',
-            backgroundColor: 'var(--bg-surface-alt)',
-            display: 'grid',
-            gridTemplateColumns: '1.2fr 1fr 1fr 1fr',
-            gap: '12px',
-            alignItems: 'center'
-          }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-              <label style={{ fontSize: '10px', fontWeight: 600, color: 'var(--text-muted)' }}>Search description</label>
-              <input
-                type="text"
-                placeholder="Search..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                style={{
-                  height: '28px',
-                  padding: '0 8px',
-                  borderRadius: 'var(--radius-input)',
-                  border: '1px solid var(--border-strong)',
-                  fontSize: '12px',
-                }}
-              />
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-              <label style={{ fontSize: '10px', fontWeight: 600, color: 'var(--text-muted)' }}>Category</label>
-              <select
-                value={selectedCategoryFilter}
-                onChange={(e) => setSelectedCategoryFilter(e.target.value)}
-                style={{
-                  height: '28px',
-                  padding: '0 6px',
-                  borderRadius: 'var(--radius-input)',
-                  border: '1px solid var(--border-strong)',
-                  fontSize: '12px',
-                  backgroundColor: 'var(--bg-surface)'
-                }}
-              >
-                <option value="">All Categories</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-              <label style={{ fontSize: '10px', fontWeight: 600, color: 'var(--text-muted)' }}>Start Date</label>
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                style={{
-                  height: '28px',
-                  padding: '0 6px',
-                  borderRadius: 'var(--radius-input)',
-                  border: '1px solid var(--border-strong)',
-                  fontSize: '12px',
-                }}
-              />
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-              <label style={{ fontSize: '10px', fontWeight: 600, color: 'var(--text-muted)' }}>End Date</label>
-              <input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                style={{
-                  height: '28px',
-                  padding: '0 6px',
-                  borderRadius: 'var(--radius-input)',
-                  border: '1px solid var(--border-strong)',
-                  fontSize: '12px',
-                }}
-              />
-            </div>
-          </div>
-
-          {filteredExpenses.length === 0 ? (
-            <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>
-              No matching expenses found.
-            </div>
-          ) : (
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-              <thead>
-                <tr style={{ backgroundColor: 'var(--bg-surface-alt)', borderBottom: '1px solid var(--border-soft)', textAlign: 'left', color: 'var(--text-muted)' }}>
-                  <th style={{ padding: '10px 20px', fontWeight: 600 }}>Shift Date</th>
-                  <th style={{ padding: '10px 20px', fontWeight: 600 }}>Category</th>
-                  <th style={{ padding: '10px 20px', fontWeight: 600 }}>Description</th>
-                  <th style={{ padding: '10px 20px', fontWeight: 600, textAlign: 'right' }}>Amount</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredExpenses.map((e, idx) => (
-                  <tr key={idx} style={{ borderBottom: '1px solid var(--border-soft)' }}>
-                    <td style={{ padding: '12px 20px', color: 'var(--text-default)' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <Calendar size={13} style={{ color: 'var(--text-muted)' }} />
-                        {new Date(e.shiftDate).toLocaleDateString(undefined, { dateStyle: 'medium' })}
-                      </div>
-                    </td>
-                    <td style={{ padding: '12px 20px', fontWeight: 600, color: 'var(--text-strong)' }}>
-                      {e.categoryName}
-                    </td>
-                    <td style={{ padding: '12px 20px', color: 'var(--text-muted)' }}>
-                      {e.description || '--'}
-                    </td>
-                    <td style={{ padding: '12px 20px', textAlign: 'right', fontWeight: 700, color: 'var(--brand-danger)', fontFamily: 'var(--font-mono)' }}>
-                      ₹{Number(e.amount).toLocaleString('en-IN')}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-      </div>
-
-      <Drawer
-        isOpen={isDrawerOpen}
-        onClose={closeDrawer}
-        title="Log New Expense"
-      >
-        {targetShiftId ? (
-          <ExpenseEntryForm
-            shiftOptions={[
-              ...(activeShift ? [{ id: activeShift.id, label: `Active: ${activeShift.templateName} (Open)` }] : []),
-              ...recentClosedShifts.map((shift) => ({
-                id: shift.id,
-                label: `Closed: ${shift.templateName} (${new Date(shift.closedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })})`,
-              })),
+        }
+        toolbar={
+          <Tabs
+            variant="underline"
+            aria-label="Expense views"
+            activeId={activeTab}
+            onChange={(id) => setActiveTab(id as TabType)}
+            tabs={[
+              { id: 'ledger', label: 'Ledger', icon: <Receipt size={15} /> },
+              { id: 'analytics', label: 'By Category', icon: <ArrowLeftRight size={15} /> },
             ]}
-            targetShiftId={targetShiftId}
-            onTargetShiftIdChange={setTargetShiftId}
-            categoryId={categoryId}
-            onCategoryIdChange={setCategoryId}
-            categories={categories}
-            amount={amount}
-            onAmountChange={setAmount}
-            description={description}
-            onDescriptionChange={setDescription}
-            submitting={submitting}
-            error={formError}
-            submittingLabel="Recording..."
-            submitDisabled={submitting || !amount || !categoryId}
-            amountLabel="Amount (₹)"
-            descriptionPlaceholder="e.g. Staff tea and refreshments"
-            onCancel={closeDrawer}
-            onSubmit={handleAddExpense}
-            submitLabel="Add Expense"
           />
-        ) : (
-          <div style={{
-            backgroundColor: 'var(--state-warning-bg)',
-            color: 'var(--state-warning-fg)',
-            padding: '16px',
-            borderRadius: 'var(--radius-input)',
-            fontSize: '13px',
-            border: '1px solid var(--border-soft)',
-            lineHeight: '1.5'
-          }}>
-            <span style={{ fontWeight: 700, display: 'block', marginBottom: '4px' }}>Shift Gated Action</span>
-            Petty expenses must be linked to a shift. Please open an active operational shift on the dashboard or shifts management page before entering expenses.
+        }
+      >
+        {activeTab === 'ledger' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <KpiStrip columns="auto">
+              <KpiTile dot="danger" valueTone="danger" label="Spent Today" value={inr(kpis.spentToday)} hint="business day" />
+              <KpiTile dot="danger" valueTone="danger" label="Spent This Month" value={inr(kpis.spentMonth)} hint={`${kpis.entriesMonth} ${kpis.entriesMonth === 1 ? 'entry' : 'entries'}`} />
+              <KpiTile dot="warning" label="From Cash Drawer" value={inr(kpis.drawerMonth)} hint="this month" />
+              <KpiTile dot="info" label="From Bank / Owner" value={inr(kpis.otherMonth)} hint="this month" />
+            </KpiStrip>
+
+            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', gap: '10px' }}>
+              <DateRangeField value={range} onChange={setRange} clock={clock} size="sm" />
+              <div style={{ flex: 1 }} />
+              <SearchInput inputSize="sm" value={searchQuery} onChange={setSearchQuery} placeholder="Search description / category…" style={{ width: '220px' }} />
+              <div style={{ width: '190px' }}>
+                <Select inputSize="sm" value={selectedCategoryFilter} onChange={(e) => setSelectedCategoryFilter(e.target.value)} aria-label="Filter by category">
+                  <option value="">All categories</option>
+                  {categories.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </Select>
+              </div>
+              <button
+                type="button"
+                title="Business expenses post to the selected business day — no open shift required. Cash-drawer expenses are entered from the shift workspace so they reconcile against the drawer."
+                aria-label="About expense anchoring"
+                style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', height: '28px', width: '28px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-soft)', background: 'var(--bg-surface)', color: 'var(--text-muted)', cursor: 'help' }}
+              >
+                <HelpCircle size={14} />
+              </button>
+            </div>
+
+            <Panel flush title="Expense ledger">
+              {expensesQ.isLoading ? (
+                <div style={{ padding: '16px' }}><EmptyState compact icon={<Receipt />} title="Loading…" description="Fetching expenses." /></div>
+              ) : filteredExpenses.length === 0 ? (
+                <div style={{ padding: '12px' }}><EmptyState compact icon={<Receipt />} title={expenses.length === 0 ? 'No expenses yet' : 'No matches'} description={expenses.length === 0 ? 'Record your first expense with “Add Expense”.' : 'Adjust the range, search, or category filter.'} /></div>
+              ) : (
+                <DataTable
+                  bare
+                  columns={expenseColumns}
+                  data={filteredExpenses}
+                  error={expensesQ.error as Error | null}
+                  emptyMessage="No matching expenses found."
+                  getRowId={(r: any) => r.id}
+                  initialSorting={[{ id: 'businessDate', desc: true }]}
+                />
+              )}
+            </Panel>
           </div>
         )}
+
+        {activeTab === 'analytics' && <ExpenseAnalytics selectedStation={selectedStation} />}
+      </PageLayout>
+
+      <Drawer isOpen={isDrawerOpen} onClose={closeDrawer} title="Log New Expense">
+        <ExpenseEntryForm
+          shiftOptions={[]}
+          categories={categories}
+          stationId={stationId}
+          defaultValues={formDefaults}
+          showDateField
+          dateLabel="Expense Date"
+          showShiftHintWhenSingle={false}
+          submitting={submitting}
+          error={formError}
+          submittingLabel="Recording..."
+          amountLabel="Amount (₹)"
+          descriptionPlaceholder="e.g. Bank charges, owner drawings, office supplies"
+          onCancel={closeDrawer}
+          onSubmit={handleAddExpense}
+          submitLabel="Add Expense"
+        />
       </Drawer>
+
+      <CategoryManagerDrawer
+        isOpen={categoryManagerOpen}
+        onClose={() => setCategoryManagerOpen(false)}
+        categories={categories}
+        onChanged={refetchCategories}
+        canManage={canManageCategories}
+      />
     </div>
   );
 };

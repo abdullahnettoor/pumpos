@@ -1,0 +1,13 @@
+{
+  "version": "0.1.0",
+  "channel": "stable",
+  "released_at": null,
+  "notes": "Placeholder manifest. Wired to real Tauri artifacts in Phase M5. The <DownloadPicker /> only reads this file, so swapping to GitHub Releases or R2 later is a URL/content change — not a UI change.",
+  "artifacts": {
+    "windows-x64": { "url": null, "size": null, "sha256": null, "ext": "msi" },
+    "macos-arm64": { "url": null, "size": null, "sha256": null, "ext": "dmg" },
+    "macos-x64": { "url": null, "size": null, "sha256": null, "ext": "dmg" },
+    "linux-x64-appimage": { "url": null, "size": null, "sha256": null, "ext": "AppImage" },
+    "linux-x64-deb": { "url": null, "size": null, "sha256": null, "ext": "deb" }
+  }
+}

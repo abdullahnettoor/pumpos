@@ -1,13 +1,20 @@
 import React, { useState, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { CloudStationService } from '../../services/cloud.js';
+import { queryKeys } from '../../query/hooks.js';
 import { Station } from '@pump/shared';
 import { ProductsCatalog } from './ProductsCatalog.js';
-import { FuelPricingPanel } from './FuelPricingPanel.js';
 import { TanksGrid } from './TanksGrid.js';
 import { DispensersList } from './DispensersList.js';
 import { ShiftTemplates } from './ShiftTemplates.js';
+import { Tabs } from '../primitives/Tabs.js';
+import { Field, TextInput, Select } from '../primitives/Field.js';
+import { useToast } from '../primitives/ToastProvider.js';
 import { LoadingSpinner } from '../LoadingSpinner.js';
-import { UserRolesAssignment } from './UserRolesAssignment.js';
+import { PageHeader, Panel, Button, EmptyState, Chip } from '../../pump-ds/index.js';
+import { Building2 } from 'lucide-react';
+import { PaymentTerminalsPanel } from './PaymentTerminalsPanel.js';
+import { ReportConfigPanel } from './ReportConfigPanel.js';
 
 const stationService = new CloudStationService();
 
@@ -22,8 +29,11 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
 }) => {
   const [stationsList, setStationsList] = useState<Station[]>([]);
   const [loading, setLoading] = useState(true);
+  const qc = useQueryClient();
+  const toast = useToast();
   const [editing, setEditing] = useState(false);
-  const [activeTab, setActiveTab] = useState<'general' | 'products' | 'pricing' | 'tanks' | 'dispensers' | 'shifts' | 'roster'>('general');
+  const [editingBusiness, setEditingBusiness] = useState(false);
+  const [activeTab, setActiveTab] = useState<'general' | 'business' | 'reports' | 'products' | 'tanks' | 'dispensers' | 'terminals' | 'shifts'>('general');
 
   // General tab form states
   const [name, setName] = useState('');
@@ -31,6 +41,17 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
   const [address, setAddress] = useState('');
   const [phone, setPhone] = useState('');
   const [graceMinutes, setGraceMinutes] = useState(15);
+  const [timezone, setTimezone] = useState('Asia/Kolkata');
+  const [businessDayStartsAt, setBusinessDayStartsAt] = useState('06:00');
+  // Legal / branding (letterhead for reports & invoices)
+  const [legalName, setLegalName] = useState('');
+  const [gstin, setGstin] = useState('');
+  const [stateCode, setStateCode] = useState('');
+  const [legalAddress, setLegalAddress] = useState('');
+  const [pincode, setPincode] = useState('');
+  const [roCode, setRoCode] = useState('');
+  const [fuelBrand, setFuelBrand] = useState('');
+  const [logoDataUrl, setLogoDataUrl] = useState<string | null>(null);
   const [onboardingStatus, setOnboardingStatus] = useState<string>('NOT_STARTED');
 
   useEffect(() => {
@@ -44,14 +65,32 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
       setAddress(selectedStation.address || '');
       setPhone(selectedStation.phone || '');
       setGraceMinutes(selectedStation.settings?.shift_grace_minutes || 15);
+      setTimezone(selectedStation.settings?.timezone || 'Asia/Kolkata');
+      setBusinessDayStartsAt(selectedStation.settings?.business_day_starts_at || '06:00');
+      const legal = selectedStation.settings?.legal || {};
+      setLegalName(legal.legalName || '');
+      setGstin(legal.gstin || '');
+      setStateCode(legal.stateCode || '');
+      setLegalAddress(legal.addressLine || '');
+      setPincode(legal.pincode || '');
+      setRoCode(legal.roCode || '');
+      setFuelBrand(selectedStation.settings?.fuel_brand || '');
+      setLogoDataUrl(selectedStation.settings?.logo_data_url || null);
       setOnboardingStatus(selectedStation.onboardingStatus || 'NOT_STARTED');
     }
   }, [selectedStation]);
 
-  const loadStations = async () => {
+  const loadStations = async (force = false) => {
     try {
       setLoading(true);
-      const list = await stationService.getStations();
+      if (force) await qc.invalidateQueries({ queryKey: queryKeys.stations() });
+      // Shared cache: repeat visits within staleTime serve from cache (+ localStorage)
+      // instead of re-hitting /setup/stations on every mount.
+      const list = await qc.fetchQuery({
+        queryKey: queryKeys.stations(),
+        queryFn: () => stationService.getStations(),
+        staleTime: 24 * 60 * 60_000,
+      });
       setStationsList(list);
       if (list.length > 0 && !selectedStation) {
         onStationSelected(list[0]);
@@ -76,6 +115,8 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
         settings: {
           ...(selectedStation.settings || {}),
           shift_grace_minutes: graceMinutes,
+          timezone,
+          business_day_starts_at: businessDayStartsAt,
           shift_lock_grace_days: selectedStation.settings?.shift_lock_grace_days || 3,
           offline_warning_days: selectedStation.settings?.offline_warning_days || 3,
           offline_critical_days: selectedStation.settings?.offline_critical_days || 7,
@@ -84,9 +125,39 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
       });
       onStationSelected(updated);
       setEditing(false);
-      loadStations();
+      loadStations(true);
+      toast.success('Station details saved.');
     } catch (err: any) {
-      alert(err.message);
+      toast.error(err.message);
+    }
+  };
+
+  const handleSaveBusiness = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedStation) return;
+
+    try {
+      const updated = await stationService.updateStation(selectedStation.id, {
+        settings: {
+          ...(selectedStation.settings || {}),
+          legal: {
+            legalName: legalName || null,
+            gstin: gstin || null,
+            stateCode: stateCode || null,
+            addressLine: legalAddress || null,
+            pincode: pincode || null,
+            roCode: roCode || null,
+          },
+          fuel_brand: fuelBrand || null,
+          logo_data_url: logoDataUrl || null,
+        },
+      });
+      onStationSelected(updated);
+      setEditingBusiness(false);
+      loadStations(true);
+      toast.success('Business details saved.');
+    } catch (err: any) {
+      toast.error(err.message);
     }
   };
 
@@ -98,167 +169,88 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }} className="animate-fade-in">
-      
-      {/* Header section */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-soft)', paddingBottom: '12px' }}>
-        <div>
-          <h2 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-strong)' }}>Station Setup & Administration</h2>
-          <p style={{ color: 'var(--text-muted)', fontSize: '12px' }}>Review and modify station components, products, tanks, nozzles, and settings.</p>
-        </div>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <select
-            value={selectedStation?.id || ''}
-            onChange={(e) => {
-              const found = stationsList.find((s) => s.id === e.target.value);
-              onStationSelected(found || null);
-            }}
-            style={{
-              padding: '0 8px',
-              height: '32px',
-              backgroundColor: 'var(--bg-surface)',
-              border: '1px solid var(--border-strong)',
-              borderRadius: 'var(--radius-input)',
-              fontSize: '13px',
-              color: 'var(--text-strong)',
-              cursor: 'pointer'
-            }}
-          >
-            <option value="">Select Location</option>
-            {stationsList.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name} ({s.code})
-              </option>
-            ))}
-          </select>
 
-        </div>
-      </div>
+      <PageHeader
+        title="Station Setup & Administration"
+        subtitle="Review and modify station components, products, tanks, nozzles, and settings."
+      />
 
       {selectedStation ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           
           {/* Tabs bar */}
-          <div style={{ display: 'flex', borderBottom: '1px solid var(--border-soft)', gap: '16px', overflowX: 'auto' }}>
-            {[
+          <Tabs
+            variant="underline"
+            aria-label="Station setup"
+            activeId={activeTab}
+            onChange={(id) => setActiveTab(id as any)}
+            tabs={[
               { id: 'general', label: 'General Info' },
+              { id: 'business', label: 'Business & Branding' },
+              { id: 'reports', label: 'Reports' },
               { id: 'products', label: 'Products Catalog' },
-              { id: 'pricing', label: 'Fuel Pricing' },
               { id: 'tanks', label: 'Storage Tanks' },
               { id: 'dispensers', label: 'Dispenser Units' },
+              { id: 'terminals', label: 'Payment Terminals' },
               { id: 'shifts', label: 'Shift Templates' },
-              { id: 'roster', label: 'Team Roster' }
-            ].map((tab) => {
-              const isActive = activeTab === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id as any)}
-                  style={{
-                    padding: '8px 12px 12px 12px',
-                    border: 'none',
-                    backgroundColor: 'transparent',
-                    color: isActive ? 'var(--brand-primary)' : 'var(--text-muted)',
-                    fontWeight: isActive ? 600 : 500,
-                    fontSize: '13px',
-                    borderBottom: isActive ? '2px solid var(--brand-primary)' : '2px solid transparent',
-                    cursor: 'pointer',
-                    transition: 'all 0.15s ease',
-                    whiteSpace: 'nowrap'
-                  }}
-                >
-                  {tab.label}
-                </button>
-              );
-            })}
-          </div>
+            ]}
+          />
 
           {/* Tab Content Panels */}
-          <div style={{ backgroundColor: 'var(--bg-surface)', padding: '20px', borderRadius: 'var(--radius-card)', border: '1px solid var(--border-soft)', minHeight: '350px' }}>
+          <Panel style={{ minHeight: '350px' }}>
             {activeTab === 'general' && (
               <div>
                 {editing ? (
                   <form onSubmit={handleSaveGeneral} style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxWidth: '600px' }}>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                      <div className="form-group">
-                        <label className="form-label">Station Name</label>
-                        <input
-                          type="text"
-                          className="form-input"
-                          value={name}
-                          onChange={(e) => setName(e.target.value)}
-                          required
-                        />
-                      </div>
-                      <div className="form-group">
-                        <label className="form-label">Station Code</label>
-                        <input
-                          type="text"
-                          className="form-input"
-                          value={code}
-                          onChange={(e) => setCode(e.target.value)}
-                          required
-                        />
-                      </div>
-                    </div>
-                    
-                    <div className="form-group">
-                      <label className="form-label">Physical Address</label>
-                      <input
-                        type="text"
-                        className="form-input"
-                        value={address}
-                        onChange={(e) => setAddress(e.target.value)}
-                      />
-                    </div>
-                    
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                      <div className="form-group">
-                        <label className="form-label">Contact Phone</label>
-                        <input
-                          type="text"
-                          className="form-input"
-                          value={phone}
-                          onChange={(e) => setPhone(e.target.value)}
-                        />
-                      </div>
-                      <div className="form-group">
-                        <label className="form-label">Shift Grace Period (Minutes)</label>
-                        <input
-                          type="number"
-                          className="form-input mono-num"
-                          value={graceMinutes}
-                          onChange={(e) => setGraceMinutes(parseInt(e.target.value))}
-                        />
-                      </div>
+                      <Field label="Station Name" required>
+                        <TextInput value={name} onChange={(e) => setName(e.target.value)} required />
+                      </Field>
+                      <Field label="Station Code" required>
+                        <TextInput value={code} onChange={(e) => setCode(e.target.value)} required />
+                      </Field>
                     </div>
 
-                    <div className="form-group" style={{ maxWidth: '300px' }}>
-                      <label className="form-label">Onboarding Readiness Status</label>
-                      <select
-                        value={onboardingStatus}
-                        onChange={(e) => setOnboardingStatus(e.target.value)}
-                        style={{ width: '100%' }}
-                      >
+                    <Field label="Physical Address">
+                      <TextInput value={address} onChange={(e) => setAddress(e.target.value)} />
+                    </Field>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                      <Field label="Contact Phone">
+                        <TextInput value={phone} onChange={(e) => setPhone(e.target.value)} />
+                      </Field>
+                      <Field label="Shift Grace Period (Minutes)">
+                        <TextInput type="number" min="0" className="mono-num" value={graceMinutes} onChange={(e) => setGraceMinutes(parseInt(e.target.value))} />
+                      </Field>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                      <Field label="Timezone" hint="Used to decide which calendar day operations belong to.">
+                        <Select value={timezone} onChange={(e) => setTimezone(e.target.value)}>
+                          <option value="Asia/Kolkata">Asia/Kolkata (IST)</option>
+                          <option value="Asia/Dubai">Asia/Dubai (GST)</option>
+                          <option value="Asia/Colombo">Asia/Colombo</option>
+                          <option value="Asia/Kathmandu">Asia/Kathmandu</option>
+                          <option value="Asia/Dhaka">Asia/Dhaka</option>
+                          <option value="UTC">UTC</option>
+                        </Select>
+                      </Field>
+                      <Field label="Business Day Starts At" hint="A fuel day commonly runs 06:00 → 06:00. Activity before this rolls to the previous day.">
+                        <TextInput type="time" className="mono-num" value={businessDayStartsAt} onChange={(e) => setBusinessDayStartsAt(e.target.value)} />
+                      </Field>
+                    </div>
+
+                    <Field label="Onboarding Readiness Status" style={{ maxWidth: '300px' }}>
+                      <Select value={onboardingStatus} onChange={(e) => setOnboardingStatus(e.target.value)}>
                         <option value="NOT_STARTED">NOT STARTED</option>
                         <option value="IN_PROGRESS">IN PROGRESS</option>
                         <option value="READY_FOR_OPERATIONS">READY FOR OPERATIONS</option>
-                      </select>
-                    </div>
+                      </Select>
+                    </Field>
 
                     <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '12px', borderTop: '1px solid var(--border-soft)', paddingTop: '12px' }}>
-                      <button
-                        type="button"
-                        className="btn btn-secondary btn-sm"
-                        onClick={() => setEditing(false)}
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        className="btn btn-primary btn-sm"
-                      >
-                        Save Configuration
-                      </button>
+                      <Button type="button" variant="secondary" size="sm" onClick={() => setEditing(false)}>Cancel</Button>
+                      <Button type="submit" variant="primary" size="sm">Save Configuration</Button>
                     </div>
                   </form>
                 ) : (
@@ -266,14 +258,16 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <div>
                         <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-strong)' }}>{selectedStation.name}</h3>
-                        <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Status: <strong style={{ color: onboardingStatus === 'READY_FOR_OPERATIONS' ? 'var(--state-success-fg)' : 'var(--state-warning-fg)' }}>{onboardingStatus.replace(/_/g, ' ')}</strong></p>
+                        <p style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
+                          Status:
+                          <Chip tone={onboardingStatus === 'READY_FOR_OPERATIONS' ? 'success' : 'warning'} size="sm">
+                            {onboardingStatus.replace(/_/g, ' ')}
+                          </Chip>
+                        </p>
                       </div>
-                      <button
-                        className="btn btn-secondary btn-sm"
-                        onClick={() => setEditing(true)}
-                      >
+                      <Button variant="secondary" size="sm" onClick={() => setEditing(true)}>
                         Edit General Parameters
-                      </button>
+                      </Button>
                     </div>
 
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', borderTop: '1px solid var(--border-soft)', paddingTop: '16px' }}>
@@ -301,18 +295,144 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
               </div>
             )}
 
-            {activeTab === 'products' && <ProductsCatalog />}
-            {activeTab === 'pricing' && <FuelPricingPanel selectedStation={selectedStation} />}
+            {activeTab === 'business' && (
+              <div>
+                {editingBusiness ? (
+                  <form onSubmit={handleSaveBusiness} style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxWidth: '600px' }}>
+                    <div>
+                      <h3 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-strong)', marginBottom: '10px' }}>
+                        Legal &amp; Tax (Report Letterhead)
+                      </h3>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                        <Field label="Legal / Trade Name">
+                          <TextInput value={legalName} onChange={(e) => setLegalName(e.target.value)} placeholder="e.g. Sri Lakshmi Fuels" />
+                        </Field>
+                        <Field label="GSTIN">
+                          <TextInput className="mono-num" value={gstin} onChange={(e) => setGstin(e.target.value.toUpperCase())} placeholder="29ABCDE1234F1Z5" maxLength={15} />
+                        </Field>
+                        <Field label="State Code (place of supply)">
+                          <TextInput className="mono-num" value={stateCode} onChange={(e) => setStateCode(e.target.value)} placeholder="e.g. 29 (Karnataka)" maxLength={2} />
+                        </Field>
+                        <Field label="Retail Outlet / Dealer Code">
+                          <TextInput value={roCode} onChange={(e) => setRoCode(e.target.value)} placeholder="RO / dealership code" />
+                        </Field>
+                        <Field label="Address Line">
+                          <TextInput value={legalAddress} onChange={(e) => setLegalAddress(e.target.value)} placeholder="Street, area, city" />
+                        </Field>
+                        <Field label="Pincode">
+                          <TextInput className="mono-num" value={pincode} onChange={(e) => setPincode(e.target.value)} placeholder="560001" maxLength={6} />
+                        </Field>
+                      </div>
+                    </div>
+
+                    <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: '12px' }}>
+                      <h3 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-strong)', marginBottom: '10px' }}>
+                        Branding
+                      </h3>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                        <Field label="Fuel Company / Brand">
+                          <Select value={fuelBrand} onChange={(e) => setFuelBrand(e.target.value)}>
+                            <option value="">— Select —</option>
+                            <option value="Indian Oil">Indian Oil (IOCL)</option>
+                            <option value="Bharat Petroleum">Bharat Petroleum (BPCL)</option>
+                            <option value="Hindustan Petroleum">Hindustan Petroleum (HPCL)</option>
+                            <option value="Nayara Energy">Nayara Energy</option>
+                            <option value="Jio-bp">Jio-bp (Reliance)</option>
+                            <option value="Shell">Shell</option>
+                            <option value="Other">Other</option>
+                          </Select>
+                        </Field>
+                        <Field label="Logo (optional, your own)" hint="Upload your outlet's own logo. Used on report letterheads.">
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            {logoDataUrl && <img src={logoDataUrl} alt="logo" style={{ width: 36, height: 36, objectFit: 'contain', border: '1px solid var(--border-soft)', borderRadius: 4 }} />}
+                            <input
+                              type="file"
+                              accept="image/png,image/jpeg"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (!file) return;
+                                const reader = new FileReader();
+                                reader.onload = () => setLogoDataUrl(typeof reader.result === 'string' ? reader.result : null);
+                                reader.readAsDataURL(file);
+                              }}
+                              style={{ fontSize: '12px' }}
+                            />
+                            {logoDataUrl && (
+                              <Button type="button" variant="secondary" size="xs" onClick={() => setLogoDataUrl(null)}>Remove</Button>
+                            )}
+                          </div>
+                        </Field>
+                      </div>
+                    </div>
+
+                    <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: '12px' }}>
+                      <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                        Report paper size and which sections appear on each PDF are configured in the <strong>Reports</strong> tab.
+                      </span>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '12px', borderTop: '1px solid var(--border-soft)', paddingTop: '12px' }}>
+                      <Button type="button" variant="secondary" size="sm" onClick={() => setEditingBusiness(false)}>Cancel</Button>
+                      <Button type="submit" variant="primary" size="sm">Save Configuration</Button>
+                    </div>
+                  </form>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-strong)' }}>Business, Tax &amp; Branding</h3>
+                        <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Legal identity and letterhead used across reports and invoices.</p>
+                      </div>
+                      <Button variant="secondary" size="sm" onClick={() => setEditingBusiness(true)}>Edit Business Details</Button>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', borderTop: '1px solid var(--border-soft)', paddingTop: '16px' }}>
+                      <div>
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Legal Name</span>
+                        <p style={{ fontSize: '13px', fontWeight: 500, marginTop: '4px', color: 'var(--text-default)' }}>{legalName || '—'}</p>
+                      </div>
+                      <div>
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>GSTIN</span>
+                        <p style={{ fontSize: '13px', fontWeight: 500, marginTop: '4px', color: 'var(--text-default)', fontFamily: 'var(--font-mono)' }}>{gstin || '—'}</p>
+                      </div>
+                      <div>
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>State Code</span>
+                        <p style={{ fontSize: '13px', fontWeight: 500, marginTop: '4px', color: 'var(--text-default)', fontFamily: 'var(--font-mono)' }}>{stateCode || '—'}</p>
+                      </div>
+                      <div>
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Fuel Brand</span>
+                        <p style={{ fontSize: '13px', fontWeight: 500, marginTop: '4px', color: 'var(--text-default)' }}>{fuelBrand || '—'}</p>
+                      </div>
+                      <div>
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Logo</span>
+                        <p style={{ fontSize: '13px', fontWeight: 500, marginTop: '4px', color: 'var(--text-default)' }}>{logoDataUrl ? 'Uploaded' : '—'}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'reports' && (
+              <ReportConfigPanel
+                selectedStation={selectedStation}
+                onSaved={(updated) => { onStationSelected(updated); loadStations(true); }}
+              />
+            )}
+
+            {activeTab === 'products' && <ProductsCatalog selectedStation={selectedStation} />}
             {activeTab === 'tanks' && <TanksGrid stationId={selectedStation.id} />}
             {activeTab === 'dispensers' && <DispensersList stationId={selectedStation.id} />}
+            {activeTab === 'terminals' && <PaymentTerminalsPanel stationId={selectedStation.id} />}
             {activeTab === 'shifts' && <ShiftTemplates />}
-            {activeTab === 'roster' && <UserRolesAssignment />}
-          </div>
+          </Panel>
         </div>
       ) : (
-        <div style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '40px', backgroundColor: 'var(--bg-surface)', borderRadius: 'var(--radius-card)', border: '1px solid var(--border-soft)' }}>
-          Please select or initialize a station location first.
-        </div>
+        <EmptyState
+          icon={<Building2 />}
+          title="No station selected"
+          description="Please select or initialize a station location first."
+        />
       )}
     </div>
   );

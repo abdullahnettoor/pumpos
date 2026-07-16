@@ -1,4 +1,9 @@
-import React from 'react';
+import React, { useEffect } from 'react';
+import { expenseEntryFormSchema, type ExpenseEntryFormValues } from '@pump/shared';
+import { useZodForm } from '../../forms/useZodForm.js';
+import { Field, TextInput, NumberInput, Select, DateField } from '../primitives/Field.js';
+import { AccountSelect } from '../primitives/AccountSelect.js';
+import { Button } from '../../pump-ds/index.js';
 
 export interface ShiftOption {
   id: string;
@@ -7,73 +12,83 @@ export interface ShiftOption {
 
 export interface ExpenseEntryFormProps {
   shiftOptions: ShiftOption[];
-  targetShiftId: string;
-  onTargetShiftIdChange: (value: string) => void;
-  categoryId: string;
-  onCategoryIdChange: (value: string) => void;
   categories: any[];
-  amount: string;
-  onAmountChange: (value: string) => void;
-  description: string;
-  onDescriptionChange: (value: string) => void;
+  /** Station whose money accounts populate the "Paid from" picker. */
+  stationId?: string | null;
+  defaultValues?: Partial<ExpenseEntryFormValues>;
   submitting: boolean;
   error?: string | null;
   onCancel: () => void;
-  onSubmit: (e: React.FormEvent) => void;
+  onSubmit: (values: ExpenseEntryFormValues) => void | Promise<void>;
   submitLabel?: string;
   submittingLabel?: string;
-  submitDisabled?: boolean;
   amountLabel?: string;
   categoryLabel?: string;
   descriptionLabel?: string;
   descriptionPlaceholder?: string;
   categoryEmptyMessage?: string;
   showShiftHintWhenSingle?: boolean;
+  /** When true, a date input is shown (standalone business-day expenses). */
+  showDateField?: boolean;
+  dateLabel?: string;
 }
+
+const EMPTY_DEFAULTS: ExpenseEntryFormValues = {
+  targetShiftId: '',
+  transactionDate: '',
+  categoryId: '',
+  amount: undefined as unknown as number,
+  description: '',
+  accountId: '',
+};
 
 export const ExpenseEntryForm: React.FC<ExpenseEntryFormProps> = ({
   shiftOptions,
-  targetShiftId,
-  onTargetShiftIdChange,
-  categoryId,
-  onCategoryIdChange,
   categories,
-  amount,
-  onAmountChange,
-  description,
-  onDescriptionChange,
+  stationId,
+  defaultValues,
   submitting,
   error,
   onCancel,
   onSubmit,
   submitLabel = 'Add Expense',
   submittingLabel = 'Saving...',
-  submitDisabled,
   amountLabel = 'Amount (INR)',
   categoryLabel = 'Category',
   descriptionLabel = 'Description',
   descriptionPlaceholder,
   categoryEmptyMessage = 'No expense categories configured. Please add categories before recording expenses.',
   showShiftHintWhenSingle = true,
+  showDateField = false,
+  dateLabel = 'Expense Date',
 }) => {
   const hasMultipleShiftOptions = shiftOptions.length > 1;
 
+  const { register, handleSubmit, reset, watch, setValue, formState: { errors } } = useZodForm<ExpenseEntryFormValues>(expenseEntryFormSchema, {
+    defaultValues: { ...EMPTY_DEFAULTS, ...defaultValues },
+  });
+
+  const serializedDefaults = JSON.stringify(defaultValues ?? {});
+  useEffect(() => {
+    reset({ ...EMPTY_DEFAULTS, ...defaultValues });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serializedDefaults]);
+
   return (
-    <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+    <form onSubmit={handleSubmit((values) => onSubmit(values))} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      {showDateField && (
+        <Field label={dateLabel}>
+          <DateField disabled={submitting} {...register('transactionDate')} />
+        </Field>
+      )}
       {hasMultipleShiftOptions ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Target Shift</label>
-          <select
-            value={targetShiftId}
-            onChange={(e) => onTargetShiftIdChange(e.target.value)}
-            disabled={submitting}
-            style={{ height: '32px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', padding: '0 8px' }}
-          >
+        <Field label="Target Shift">
+          <Select disabled={submitting} {...register('targetShiftId')}>
             {shiftOptions.map((option) => (
               <option key={option.id} value={option.id}>{option.label}</option>
             ))}
-          </select>
-        </div>
+          </Select>
+        </Field>
       ) : showShiftHintWhenSingle && shiftOptions.length === 1 ? (
         <div style={{
           backgroundColor: 'var(--state-info-bg)',
@@ -86,49 +101,31 @@ export const ExpenseEntryForm: React.FC<ExpenseEntryFormProps> = ({
         </div>
       ) : null}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>{categoryLabel}</label>
+      <Field label={categoryLabel} error={errors.categoryId?.message}>
         {categories.length === 0 ? (
           <div style={{ fontSize: '12px', color: 'var(--brand-warning)', padding: '6px 0' }}>
             {categoryEmptyMessage}
           </div>
         ) : (
-          <select
-            value={categoryId}
-            onChange={(e) => onCategoryIdChange(e.target.value)}
-            disabled={submitting}
-            style={{ height: '32px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', padding: '0 8px' }}
-          >
+          <Select disabled={submitting} invalid={!!errors.categoryId} {...register('categoryId')}>
             {categories.map((cat) => (
               <option key={cat.id} value={cat.id}>{cat.name}</option>
             ))}
-          </select>
+          </Select>
         )}
-      </div>
+      </Field>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>{amountLabel}</label>
-        <input
-          type="number"
-          required
-          value={amount}
-          onChange={(e) => onAmountChange(e.target.value)}
-          disabled={submitting}
-          style={{ height: '32px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', padding: '0 8px' }}
-        />
-      </div>
+      <Field label={amountLabel} error={errors.amount?.message}>
+        <NumberInput disabled={submitting} invalid={!!errors.amount} {...register('amount')} />
+      </Field>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        <label style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>{descriptionLabel}</label>
-        <input
-          type="text"
-          placeholder={descriptionPlaceholder}
-          value={description}
-          onChange={(e) => onDescriptionChange(e.target.value)}
-          disabled={submitting}
-          style={{ height: '32px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', padding: '0 8px' }}
-        />
-      </div>
+      <Field label={descriptionLabel}>
+        <TextInput placeholder={descriptionPlaceholder} disabled={submitting} {...register('description')} />
+      </Field>
+
+      <Field label="Paid from">
+        <AccountSelect stationId={stationId} value={watch('accountId') || ''} onChange={(v) => setValue('accountId', v, { shouldValidate: true })} disabled={submitting} />
+      </Field>
 
       {error && (
         <div style={{
@@ -144,10 +141,10 @@ export const ExpenseEntryForm: React.FC<ExpenseEntryFormProps> = ({
       )}
 
       <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
-        <button type="button" onClick={onCancel} disabled={submitting} className="btn btn-secondary btn-md">Cancel</button>
-        <button type="submit" disabled={submitDisabled ?? (submitting || !amount || categories.length === 0)} className="btn btn-primary btn-md">
-          {submitting ? submittingLabel : submitLabel}
-        </button>
+        <Button type="button" variant="secondary" size="md" onClick={onCancel} disabled={submitting}>Cancel</Button>
+        <Button type="submit" variant="primary" size="md" loading={submitting} disabled={categories.length === 0}>
+          {submitLabel}
+        </Button>
       </div>
     </form>
   );

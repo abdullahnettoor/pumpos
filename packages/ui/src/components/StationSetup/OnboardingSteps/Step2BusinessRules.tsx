@@ -1,7 +1,8 @@
 import React from 'react';
 import { OnboardingDraft, OperatingDaySchedule } from '@pump/shared';
-import { StatusBadge } from '../../StatusBadge.js';
+import { Chip } from '../../../pump-ds/index.js';
 import { formatWeekday } from '../onboardingDraft.js';
+import { Checkbox } from '../../primitives/Toggle.js';
 
 interface Step2BusinessRulesProps {
   draft: OnboardingDraft;
@@ -85,14 +86,11 @@ export const Step2BusinessRules: React.FC<Step2BusinessRulesProps> = ({
           </div>
         </div>
 
-        <label style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px', color: 'var(--text-default)', fontWeight: 500, cursor: 'pointer' }}>
-          <input
-            type="checkbox"
-            checked={draft.businessRules.operatingSchedule.isTwentyFourSeven}
-            onChange={(e) => syncTwentyFourSeven(e.target.checked)}
-          />
-          This station operates 24 / 7
-        </label>
+        <Checkbox
+          label="This station operates 24 / 7"
+          checked={draft.businessRules.operatingSchedule.isTwentyFourSeven}
+          onChange={(e) => syncTwentyFourSeven(e.target.checked)}
+        />
 
         <div>
           <span style={{ ...fieldLabelStyle, display: 'block', marginBottom: '8px' }}>Weekly Operating Schedule</span>
@@ -114,15 +112,12 @@ export const Step2BusinessRules: React.FC<Step2BusinessRulesProps> = ({
                   <span style={{ fontWeight: 600, fontSize: '12px', color: 'var(--text-strong)' }}>
                     {formatWeekday(day.day)}
                   </span>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', color: 'var(--text-default)', cursor: 'pointer' }}>
-                    <input
-                      type="checkbox"
-                      checked={day.isOpen}
-                      disabled={draft.businessRules.operatingSchedule.isTwentyFourSeven}
-                      onChange={(e) => handleDayOpenChange(day.day, e.target.checked)}
-                    />
-                    Open
-                  </label>
+                  <Checkbox
+                    label="Open"
+                    checked={day.isOpen}
+                    disabled={draft.businessRules.operatingSchedule.isTwentyFourSeven}
+                    onChange={(e) => handleDayOpenChange(day.day, e.target.checked)}
+                  />
                 </div>
                 <div style={{ display: 'flex', gap: '8px' }}>
                   <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '2px' }}>
@@ -169,10 +164,9 @@ export const Step2BusinessRules: React.FC<Step2BusinessRulesProps> = ({
           <div>
             <span style={fieldLabelStyle}>Operating Mode</span>
             <div style={{ marginTop: '4px' }}>
-              <StatusBadge
-                status={draft.businessRules.operatingSchedule.isTwentyFourSeven ? '24/7' : 'Scheduled'}
-                type={draft.businessRules.operatingSchedule.isTwentyFourSeven ? 'success' : 'info'}
-              />
+              <Chip tone={draft.businessRules.operatingSchedule.isTwentyFourSeven ? 'success' : 'info'} size="sm">
+                {draft.businessRules.operatingSchedule.isTwentyFourSeven ? '24/7' : 'Scheduled'}
+              </Chip>
             </div>
           </div>
           {!draft.businessRules.operatingSchedule.isTwentyFourSeven && (

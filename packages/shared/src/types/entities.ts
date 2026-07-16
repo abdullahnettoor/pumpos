@@ -4,6 +4,8 @@ import {
   SyncStatus,
   DocumentType,
   ProductType,
+  InventoryType,
+  TaxCategory,
   CustomerType,
   TransactionType,
   MovementType,
@@ -49,6 +51,17 @@ export interface PendingOpeningStockSeed {
   quantity: number;
 }
 
+/** Letterhead / legal identity for branded reports & GST invoices. */
+export interface StationLegalInfo {
+  legalName?: string;
+  gstin?: string;
+  stateCode?: string;
+  addressLine?: string;
+  pincode?: string;
+  roCode?: string; // retail-outlet / dealer code
+  contact?: string;
+}
+
 export interface StationSettings {
   shift_grace_minutes: number;
   shift_lock_grace_days: number;
@@ -58,6 +71,13 @@ export interface StationSettings {
   timezone?: string;
   operating_schedule?: WeeklyOperatingSchedule | null;
   pending_opening_stock_seed?: PendingOpeningStockSeed[] | null;
+  legal?: StationLegalInfo | null;
+  /** Oil marketing company brand the outlet operates under (display only). */
+  fuel_brand?: string | null;
+  /** Optional uploaded logo as a data URL (base64). Shown on report letterhead. */
+  logo_data_url?: string | null;
+  /** Per-document enabled report sections (ordered). Falls back to defaults. */
+  report_config?: { shiftSummary?: string[]; dssr?: string[]; paper?: 'A4' | 'LETTER' } | null;
 }
 
 export interface Station {
@@ -110,6 +130,8 @@ export interface OnboardingTankDraft {
   productDraftId: string;
   capacity: number;
   openingQuantity: number;
+  /** Landed purchase rate per unit for the opening stock; seeds cost_basis. */
+  openingCostRate?: number;
 }
 
 export interface OnboardingDispenserDraft {
@@ -136,6 +158,15 @@ export interface OnboardingShiftTemplateDraft {
   isActive: boolean;
 }
 
+export interface OnboardingPaymentTerminalDraft {
+  draftId: string;
+  label: string;
+  provider: string;
+  terminalCode: string;
+  supportsCard: boolean;
+  supportsUpi: boolean;
+}
+
 export interface OnboardingDraft {
   station: OnboardingStationDraft;
   businessRules: OnboardingBusinessRulesDraft;
@@ -144,6 +175,7 @@ export interface OnboardingDraft {
   dispensers: OnboardingDispenserDraft[];
   nozzles: OnboardingNozzleDraft[];
   shiftTemplates: OnboardingShiftTemplateDraft[];
+  paymentTerminals: OnboardingPaymentTerminalDraft[];
 }
 
 export interface FinalizeOnboardingPayload {
@@ -158,6 +190,7 @@ export interface FinalizeOnboardingResult {
     dispenserCount: number;
     nozzleCount: number;
     shiftTemplateCount: number;
+    paymentTerminalCount: number;
   };
 }
 
@@ -231,18 +264,44 @@ export interface Nozzle {
   updatedAt: string;
 }
 
+export interface PaymentTerminal {
+  id: string;
+  organizationId: string;
+  stationId: string;
+  label: string;
+  provider: string | null;
+  terminalCode: string | null;
+  supportsCard: boolean;
+  supportsUpi: boolean;
+  clearingAccountId?: string | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Product {
   id: string;
   organizationId: string;
   name: string;
   code: string;
   productType: ProductType;
+  inventoryType: InventoryType;
   stockTracked: boolean;
   isTaxable: boolean;
+  taxCategory: TaxCategory;
   unit: string;
+  brand?: string | null;
+  category?: string | null;
+  sellingPrice?: string | number | null;
+  /** Rolling weighted-average landed cost per unit; drives COGS / margin. */
+  costBasis?: string | number | null;
   taxConfig: {
     gst_rate?: number;
+    vat_rate?: number;
     hsn_code?: string;
+    cess?: number;
+    /** Selling price is tax-inclusive (retail MRP); tax is extracted, not added. */
+    price_inclusive?: boolean;
   };
   isActive: boolean;
   createdAt: string;
@@ -279,6 +338,8 @@ export interface ShiftOpenPayload {
   stationId: string;
   shiftTemplateId: string;
   openingCash: number;
+  /** Business day this shift anchors to (YYYY-MM-DD). Defaults to today. */
+  businessDate?: string;
   staffAssignments?: { userId: string; duId: string }[];
   initialReadings?: { nozzleId: string; openingReading: number }[];
 }

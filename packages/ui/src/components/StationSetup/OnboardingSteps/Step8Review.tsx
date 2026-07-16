@@ -1,6 +1,6 @@
 import React from 'react';
 import { OnboardingDraft } from '@pump/shared';
-import { StatusBadge } from '../../StatusBadge.js';
+import { Chip, Button } from '../../../pump-ds/index.js';
 import { OnboardingValidationIssue } from '../onboardingDraft.js';
 
 interface Step8ReviewProps {
@@ -29,10 +29,9 @@ export const Step8Review: React.FC<Step8ReviewProps> = ({
                 Review the full setup, resolve any issues, then provision the entire station in one shot.
               </p>
             </div>
-            <StatusBadge
-              status={validationIssues.length === 0 ? 'Ready' : `${validationIssues.length} Issues`}
-              type={validationIssues.length === 0 ? 'success' : 'warning'}
-            />
+            <Chip tone={validationIssues.length === 0 ? 'success' : 'warning'} size="sm">
+              {validationIssues.length === 0 ? 'Ready' : `${validationIssues.length} Issues`}
+            </Chip>
           </div>
 
           {validationIssues.length > 0 ? (
@@ -85,7 +84,7 @@ export const Step8Review: React.FC<Step8ReviewProps> = ({
         <div style={panelStyle}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)' }}>Station & Rules</h3>
-            <button type="button" className="btn btn-secondary btn-sm" onClick={() => moveToStep(1)}>Edit</button>
+            <Button type="button" variant="secondary" size="xs" onClick={() => moveToStep(1)}>Edit</Button>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
             <div>
@@ -105,9 +104,9 @@ export const Step8Review: React.FC<Step8ReviewProps> = ({
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)' }}>Infrastructure & Values</h3>
             <div style={{ display: 'flex', gap: '8px' }}>
-              <button type="button" className="btn btn-secondary btn-sm" onClick={() => moveToStep(3)}>Fuels</button>
-              <button type="button" className="btn btn-secondary btn-sm" onClick={() => moveToStep(4)}>Tanks</button>
-              <button type="button" className="btn btn-secondary btn-sm" onClick={() => moveToStep(5)}>Dispensers</button>
+              <Button type="button" variant="secondary" size="xs" onClick={() => moveToStep(3)}>Fuels</Button>
+              <Button type="button" variant="secondary" size="xs" onClick={() => moveToStep(4)}>Tanks</Button>
+              <Button type="button" variant="secondary" size="xs" onClick={() => moveToStep(5)}>Dispensers</Button>
             </div>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '12px' }}>
@@ -127,6 +126,10 @@ export const Step8Review: React.FC<Step8ReviewProps> = ({
               <div style={fieldLabelStyle}>Nozzles</div>
               <div style={{ marginTop: '4px', fontSize: '18px', fontWeight: 700, color: 'var(--text-strong)' }}>{draft.nozzles.length}</div>
             </div>
+            <div style={{ backgroundColor: 'var(--bg-surface-alt)', borderRadius: 'var(--radius-card)', padding: '12px' }}>
+              <div style={fieldLabelStyle}>Payment Terminals</div>
+              <div style={{ marginTop: '4px', fontSize: '18px', fontWeight: 700, color: 'var(--text-strong)' }}>{(draft.paymentTerminals ?? []).length}</div>
+            </div>
           </div>
         </div>
       </div>
@@ -144,13 +147,15 @@ export const Step8Review: React.FC<Step8ReviewProps> = ({
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span style={{ color: 'var(--text-muted)' }}>Opening stock seeded</span>
               <span style={{ color: 'var(--text-strong)', fontWeight: 600 }}>
-                {draft.tanks.reduce((sum, tank) => sum + tank.openingQuantity, 0).toLocaleString('en-IN')} L
-              </span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: 'var(--text-muted)' }}>Nozzle readings ready</span>
-              <span style={{ color: 'var(--text-strong)', fontWeight: 600 }}>
-                {draft.nozzles.filter((nozzle) => nozzle.openingReading >= 0).length} / {draft.nozzles.length}
+                {(() => {
+                  const byUnit: Record<string, number> = {};
+                  for (const tank of draft.tanks) {
+                    const unit = draft.products.find((p) => p.draftId === tank.productDraftId)?.unit || 'L';
+                    byUnit[unit] = (byUnit[unit] || 0) + Number(tank.openingQuantity || 0);
+                  }
+                  const parts = Object.entries(byUnit).map(([u, v]) => `${v.toLocaleString('en-IN')} ${u}`);
+                  return parts.length ? parts.join(' · ') : '0 L';
+                })()}
               </span>
             </div>
           </div>
@@ -163,9 +168,9 @@ export const Step8Review: React.FC<Step8ReviewProps> = ({
               ? `${draft.shiftTemplates.length} template(s) will be created.`
               : 'No templates will be created during onboarding.'}
           </div>
-          <button type="button" className="btn btn-secondary btn-sm" onClick={() => moveToStep(7)}>
+          <Button type="button" variant="secondary" size="xs" onClick={() => moveToStep(7)}>
             Edit Shift Templates
-          </button>
+          </Button>
         </div>
       </div>
     </div>

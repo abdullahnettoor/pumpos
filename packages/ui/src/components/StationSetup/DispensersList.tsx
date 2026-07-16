@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   CloudDispenserService,
   CloudTankService,
   CloudProductService,
   CloudNozzleService
 } from '../../services/cloud.js';
+import { queryKeys, TIER } from '../../query/hooks.js';
 import { DispenserUnit, Tank, Product, Nozzle } from '@pump/shared';
-import { StatusBadge } from '../StatusBadge.js';
 import { Drawer } from '../Drawer.js';
+import { useToast } from '../primitives/ToastProvider.js';
 
 const dispenserService = new CloudDispenserService();
 const tankService = new CloudTankService();
@@ -26,6 +28,8 @@ interface NozzleInput {
 }
 
 export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => {
+  const qc = useQueryClient();
+  const toast = useToast();
   const [dispensers, setDispensers] = useState<DispenserUnit[]>([]);
   const [tanks, setTanks] = useState<Tank[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -44,15 +48,19 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
     loadData();
   }, [stationId]);
 
-  const loadData = async () => {
+  const loadData = async (force = false) => {
     if (!stationId) return;
     try {
       setLoading(true);
+      if (force) await Promise.all([
+        qc.invalidateQueries({ queryKey: queryKeys.dispensers(stationId) }),
+        qc.invalidateQueries({ queryKey: queryKeys.nozzles(stationId) }),
+      ]);
       const [duList, tankList, prodList, nozzleList] = await Promise.all([
-        dispenserService.listDispensers(stationId),
-        tankService.listTanks(stationId),
-        productService.listProducts(),
-        nozzleService.listNozzles(stationId)
+        qc.ensureQueryData({ queryKey: queryKeys.dispensers(stationId), queryFn: () => dispenserService.listDispensers(stationId), staleTime: TIER.static.staleTime }),
+        qc.ensureQueryData({ queryKey: queryKeys.tanks(stationId), queryFn: () => tankService.listTanks(stationId), staleTime: TIER.static.staleTime }),
+        qc.ensureQueryData({ queryKey: queryKeys.products(), queryFn: () => productService.listProducts(), staleTime: TIER.semi.staleTime }),
+        qc.ensureQueryData({ queryKey: queryKeys.nozzles(stationId), queryFn: () => nozzleService.listNozzles(stationId), staleTime: TIER.static.staleTime }),
       ]);
 
       setDispensers(duList);
@@ -171,9 +179,10 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
 
       setIsFormOpen(false);
       resetForm();
-      loadData();
+      loadData(true);
+      toast.success('Dispenser unit created.');
     } catch (err: any) {
-      alert(err.message || 'Failed to create dispenser unit and nozzles');
+      toast.error(err.message || 'Failed to create dispenser unit and nozzles');
     } finally {
       setSubmitting(false);
     }
@@ -453,7 +462,7 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
                       </div>
 
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                        <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                           <label style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Name</label>
                           <input
                             type="text"
@@ -469,10 +478,10 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
                             required
                           />
                         </div>
-                        <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                          <label style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Reading (Liters)</label>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          <label style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Reading ({products.find((p) => p.id === nozzle.productId)?.unit || 'L'})</label>
                           <input
-                            type="number"
+                            type="number" min="0"
                             value={nozzle.currentReading}
                             onChange={(e) => handleNozzleReadingChange(idx, parseFloat(e.target.value) || 0)}
                             style={{
@@ -488,7 +497,7 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
                       </div>
 
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                        <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                           <label style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Fuel</label>
                           <select
                             value={nozzle.productId}
@@ -507,7 +516,7 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
                             ))}
                           </select>
                         </div>
-                        <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                           <label style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Tank</label>
                           <select
                             value={nozzle.tankId}
@@ -635,7 +644,7 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
                             {n.name} → <span style={{ color: 'var(--text-muted)' }}>{tank?.name || 'No Tank'} ({prod?.name || 'No Fuel'})</span>
                           </span>
                           <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--text-strong)' }}>
-                            {parseFloat(n.currentReading.toString()).toLocaleString(undefined, { minimumFractionDigits: 1 })} L
+                            {parseFloat(n.currentReading.toString()).toLocaleString(undefined, { minimumFractionDigits: 1 })} {prod?.unit || 'L'}
                           </span>
                         </div>
                       );

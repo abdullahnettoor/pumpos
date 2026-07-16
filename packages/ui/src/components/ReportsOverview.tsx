@@ -1,68 +1,124 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import type { ColumnDef } from '@tanstack/react-table';
 import { CloudShiftService } from '../services/cloud.js';
+import { useDailyDssrRange } from '../query/hooks.js';
+import { useQueryClient } from '@tanstack/react-query';
 import { DailyDssrView } from './DailyDssrView.js';
-import { LoadingSpinner } from './LoadingSpinner.js';
-import { Calendar, RefreshCw, Play, Zap, Layers } from 'lucide-react';
+import type { NavIntent } from './AppShell.js';
+import { PageLayout } from './primitives/PageLayout.js';
+import { Tabs } from './primitives/Tabs.js';
+import { DataTable } from './primitives/DataTable.js';
+import { DateField } from './primitives/Field.js';
+import { ExpenseRegister } from './reports/ExpenseRegister.js';
+import { CashBankLedger } from './reports/CashBankLedger.js';
+import { UnifiedLedger } from './reports/UnifiedLedger.js';
+import { InvoicesPanel } from './reports/InvoicesPanel.js';
+import { ProfitLossView } from './reports/ProfitLossView.js';
+import { inr } from '../utils/format.js';
+import { resolveBusinessDate } from '@pump/shared';
+import { Panel, Button, KpiStrip, KpiTile, EmptyState, DateText } from '../pump-ds/index.js';
+import { Play, Zap, Receipt, Wallet, BookOpen, FileText, TrendingUp } from 'lucide-react';
 
 const shiftService = new CloudShiftService();
+
+const dssrColumns: ColumnDef<any, any>[] = [
+  { accessorKey: 'businessDate', header: 'Business Date', cell: ({ getValue }) => <DateText value={getValue() as string} /> },
+  { id: 'shifts', header: 'Shifts', cell: ({ row }) => <span style={{ color: 'var(--text-default)' }}>{Number(row.original.snapshotData?.shiftsIncluded || 0)}</span> },
+  { id: 'volume', header: 'Net Volume Sold', cell: ({ row }) => {
+    const snap = row.original.snapshotData || {};
+    const bp = (snap.fuel?.byProduct || []) as any[];
+    const units = Array.from(new Set(bp.map((p: any) => p.unit || 'L')));
+    const vol = Number(snap.fuel?.totalNetVolume ?? snap.totalVolumeSold ?? 0);
+    const label = units.length === 1 ? units[0] : units.length > 1 ? '' : 'L';
+    return <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-default)' }}>{vol.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{label ? ` ${label}` : ''}</span>;
+  } },
+  { id: 'collections', header: 'Cash Collected', cell: ({ row }) => <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--state-success-fg)' }}>{inr(row.original.snapshotData?.totalCashCollections || 0)}</span> },
+];
 
 interface ReportsOverviewProps {
   selectedStation: any | null;
   userRole: 'Owner' | 'Manager' | 'Accountant' | 'Staff';
+  intent?: NavIntent | null;
+  onIntentConsumed?: () => void;
 }
 
-type ReportsTab = 'daily-dssr' | 'custom-reports';
+type ReportsTab = 'daily-dssr' | 'pnl' | 'ledger' | 'invoices' | 'expense-register' | 'cash-bank';
 
 export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
   selectedStation,
+  userRole,
+  intent,
+  onIntentConsumed,
 }) => {
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const qc = useQueryClient();
+  const stationId = selectedStation?.id ?? null;
+  const s = (selectedStation as any)?.settings || {};
+  const clock = { timeZone: s.timezone, dayStartsAt: s.business_day_starts_at };
+
   const [activeTab, setActiveTab] = useState<ReportsTab>('daily-dssr');
-
-  // Daily DSSR states
-  const [dailyDssrList, setDailyDssrList] = useState<any[]>([]);
   const [activeDailyDssr, setActiveDailyDssr] = useState<any | null>(null);
-  const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = useState<string>(() =>
+    resolveBusinessDate({ timeZone: clock.timeZone, dayStartsAt: clock.dayStartsAt }),
+  );
   const [generatingDailyDssr, setGeneratingDailyDssr] = useState(false);
+  const [generateError, setGenerateError] = useState<string | null>(null);
 
+  // Rolling 30-day window for the DSSR list, anchored to the station's business date.
+  const { from, to } = useMemo(() => {
+    const toD = resolveBusinessDate({ timeZone: clock.timeZone, dayStartsAt: clock.dayStartsAt });
+    const d = new Date(`${toD}T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() - 30);
+    return { from: d.toISOString().split('T')[0], to: toD };
+  }, [clock.timeZone, clock.dayStartsAt]);
+
+  const dssrQ = useDailyDssrRange(stationId, from, to, { enabled: !!stationId && activeTab === 'daily-dssr' } as any);
+  const dssrList = dssrQ.data ?? [];
+
+  const kpis = useMemo(() => {
+    let volume = 0;
+    let cash = 0;
+    for (const d of dssrList) {
+      const x = (d as any).snapshotData || {};
+      volume += Number(x.totalVolumeSold || 0);
+      cash += Number(x.totalCashCollections || 0);
+    }
+    return { count: dssrList.length, volume, cash };
+  }, [dssrList]);
+
+  // Deep-link: opening a past business day from the top-bar anchor dropdown.
+  // Uses the on-the-fly preview so it works whether or not a snapshot exists.
+  const handledDssrDateRef = useRef<string | null>(null);
   useEffect(() => {
-    if (selectedStation && activeTab === 'daily-dssr') {
-      loadDailyDssrs();
-    }
-  }, [selectedStation, activeTab]);
-
-  const loadDailyDssrs = async () => {
-    if (!selectedStation) return;
-    try {
-      setLoading(true);
-      setError(null);
-      const toDate = new Date();
-      const fromDate = new Date(toDate);
-      fromDate.setDate(fromDate.getDate() - 30);
-
-      const from = fromDate.toISOString().split('T')[0];
-      const to = toDate.toISOString().split('T')[0];
-
-      const list = await shiftService.getDailyDssrRange(selectedStation.id, from, to);
-      setDailyDssrList(list);
-    } catch (err: any) {
-      setError(err.message || 'Failed to load daily DSSR reports');
-    } finally {
-      setLoading(false);
-    }
-  };
+    const date = intent?.openDssrDate;
+    if (!date || !stationId) return;
+    if (handledDssrDateRef.current === date) return;
+    handledDssrDateRef.current = date;
+    setActiveTab('daily-dssr');
+    let cancelled = false;
+    (async () => {
+      try {
+        const result = await shiftService.getDailyDssrPreview(stationId, date);
+        if (!cancelled) setActiveDailyDssr(result);
+      } catch {
+        if (!cancelled) setSelectedDate(date);
+      } finally {
+        onIntentConsumed?.();
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [intent?.openDssrDate, stationId, onIntentConsumed]);
 
   const handleGenerateDailyDssr = async () => {
     if (!selectedStation || !selectedDate) return;
     try {
       setGeneratingDailyDssr(true);
-      setError(null);
+      setGenerateError(null);
       const result = await shiftService.generateDailyDssr(selectedStation.id, selectedDate);
+      // The list is a cached query — invalidate so the new snapshot appears.
+      qc.invalidateQueries({ queryKey: ['dssr-range'] });
       setActiveDailyDssr(result);
-      await loadDailyDssrs();
     } catch (err: any) {
-      setError(err.message || 'Failed to generate daily DSSR');
+      setGenerateError(err.message || 'Failed to generate daily DSSR');
     } finally {
       setGeneratingDailyDssr(false);
     }
@@ -76,330 +132,95 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
     );
   }
 
-  if (loading && dailyDssrList.length === 0 && activeTab === 'daily-dssr') {
-    return <LoadingSpinner text="Retrieving reports..." />;
-  }
-
   if (activeDailyDssr) {
     return (
       <div className="animate-fade-in">
         <DailyDssrView
           dailyDssr={activeDailyDssr}
-          onBack={() => {
-            setActiveDailyDssr(null);
-            loadDailyDssrs();
-          }}
+          station={selectedStation}
+          onBack={() => setActiveDailyDssr(null)}
         />
       </div>
     );
   }
 
   return (
-    <div
-      className="animate-fade-in"
-      style={{ display: 'flex', flexDirection: 'column', gap: '20px', fontFamily: 'var(--font-sans)' }}
+    <PageLayout
+      title="Reports"
+      subtitle="Daily sales summaries, profit & loss, ledgers, and tax registers."
+      toolbar={
+        <Tabs
+          variant="underline"
+          aria-label="Reports"
+          activeId={activeTab}
+          onChange={(id) => setActiveTab(id as ReportsTab)}
+          tabs={[
+            { id: 'daily-dssr', label: 'Daily DSSR', icon: <Zap size={13} /> },
+            ...(userRole === 'Owner' ? [{ id: 'pnl', label: 'Profit & Loss', icon: <TrendingUp size={13} /> }] : []),
+            { id: 'ledger', label: 'Ledger', icon: <BookOpen size={13} /> },
+            { id: 'invoices', label: 'Invoices', icon: <FileText size={13} /> },
+            { id: 'cash-bank', label: 'Cash & Bank', icon: <Wallet size={13} /> },
+            { id: 'expense-register', label: 'Expense Register', icon: <Receipt size={13} /> },
+          ]}
+        />
+      }
     >
-      {/* Page Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <h1 style={{ fontSize: '20px', fontWeight: 600, color: 'var(--text-strong)' }}>
-            Reports
-          </h1>
-          <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '2px' }}>
-            Daily sales summaries and custom reporting. Per-shift summaries are in the Shift tab → History.
-          </p>
-        </div>
-        {activeTab === 'daily-dssr' && (
-          <button
-            className="btn btn-secondary btn-sm"
-            onClick={loadDailyDssrs}
-            disabled={loading}
-            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-          >
-            <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
-            Refresh
-          </button>
-        )}
-      </div>
-
-      {/* Tab Navigation */}
-      <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid var(--border-soft)' }}>
-        <button
-          onClick={() => setActiveTab('daily-dssr')}
-          style={{
-            padding: '10px 18px',
-            backgroundColor: 'transparent',
-            borderBottom: activeTab === 'daily-dssr' ? '2px solid var(--brand-primary)' : '2px solid transparent',
-            borderTop: 'none',
-            borderLeft: 'none',
-            borderRight: 'none',
-            color: activeTab === 'daily-dssr' ? 'var(--brand-primary)' : 'var(--text-muted)',
-            fontWeight: activeTab === 'daily-dssr' ? 600 : 400,
-            fontSize: '13px',
-            cursor: 'pointer',
-            marginBottom: '-1px',
-            transition: 'all 0.15s ease',
-          }}
-        >
-          <Zap size={13} style={{ display: 'inline', marginRight: '6px', verticalAlign: 'middle' }} />
-          Daily DSSR
-        </button>
-        <button
-          onClick={() => setActiveTab('custom-reports')}
-          style={{
-            padding: '10px 18px',
-            backgroundColor: 'transparent',
-            borderBottom: activeTab === 'custom-reports' ? '2px solid var(--brand-primary)' : '2px solid transparent',
-            borderTop: 'none',
-            borderLeft: 'none',
-            borderRight: 'none',
-            color: activeTab === 'custom-reports' ? 'var(--brand-primary)' : 'var(--text-muted)',
-            fontWeight: activeTab === 'custom-reports' ? 600 : 400,
-            fontSize: '13px',
-            cursor: 'pointer',
-            marginBottom: '-1px',
-            transition: 'all 0.15s ease',
-          }}
-        >
-          <Layers size={13} style={{ display: 'inline', marginRight: '6px', verticalAlign: 'middle' }} />
-          Custom Reports
-        </button>
-      </div>
-
-      {error && (
-        <div
-          style={{
-            padding: '12px 16px',
-            backgroundColor: 'var(--state-danger-bg)',
-            color: 'var(--state-danger-fg)',
-            borderRadius: 'var(--radius-card)',
-            fontSize: '13px',
-          }}
-        >
-          <strong>Error:</strong> {error}
-        </div>
-      )}
 
       {/* Daily DSSR Tab */}
       {activeTab === 'daily-dssr' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {/* Generate Controls */}
-          <div
-            className="card"
-            style={{ padding: '16px', display: 'flex', gap: '12px', alignItems: 'flex-end' }}
-          >
-            <div style={{ flex: 1, maxWidth: '260px' }}>
-              <label
-                style={{
-                  display: 'block',
-                  fontSize: '11px',
-                  fontWeight: 600,
-                  color: 'var(--text-muted)',
-                  marginBottom: '6px',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.04em',
-                }}
-              >
-                Business Date
-              </label>
-              <input
-                type="date"
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '8px 10px',
-                  border: '1px solid var(--border-soft)',
-                  borderRadius: 'var(--radius-input)',
-                  fontSize: '13px',
-                  fontFamily: 'inherit',
-                  backgroundColor: 'var(--bg-surface)',
-                  color: 'var(--text-strong)',
-                }}
-              />
+          <KpiStrip columns="auto">
+            <KpiTile dot="brand" label="Generated DSSRs" value={String(kpis.count)} hint="last 30 days" />
+            <KpiTile dot="info" label="Net Volume Sold" value={`${kpis.volume.toLocaleString('en-IN', { maximumFractionDigits: 0 })} L`} hint="period" />
+            <KpiTile dot="success" label="Cash Collected" value={inr(kpis.cash)} hint="period" />
+          </KpiStrip>
+
+          <Panel title="Generate a daily snapshot">
+            <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+              <div style={{ maxWidth: '220px' }}>
+                <label className="field-label">Business Date</label>
+                <DateField value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} />
+              </div>
+              <Button variant="primary" size="sm" leftIcon={<Play style={{ fill: 'currentColor' }} />} loading={generatingDailyDssr} disabled={!selectedDate} onClick={handleGenerateDailyDssr}>
+                Generate DSSR
+              </Button>
             </div>
-            <button
-              className="btn btn-primary btn-sm"
-              onClick={handleGenerateDailyDssr}
-              disabled={generatingDailyDssr || !selectedDate}
-              style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-            >
-              <Play size={13} style={{ fill: 'currentColor' }} />
-              {generatingDailyDssr ? 'Generating...' : 'Generate DSSR'}
-            </button>
-          </div>
-
-          {/* Daily DSSR List */}
-          <div className="card" style={{ overflow: 'hidden' }}>
-            {dailyDssrList.length > 0 ? (
-              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                {dailyDssrList.map((d) => {
-                  const data = d.snapshotData || {};
-
-                  return (
-                    <div
-                      key={d.id}
-                      onClick={() => setActiveDailyDssr(d)}
-                      style={{
-                        padding: '14px 18px',
-                        borderBottom: '1px solid var(--border-soft)',
-                        cursor: 'pointer',
-                        transition: 'background-color 0.15s ease',
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: 'grid',
-                          gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
-                          gap: '16px',
-                        }}
-                      >
-                        <div>
-                          <span
-                            style={{
-                              fontSize: '11px',
-                              color: 'var(--text-muted)',
-                              display: 'block',
-                              fontWeight: 600,
-                              marginBottom: '4px',
-                            }}
-                          >
-                            BUSINESS DATE
-                          </span>
-                          <strong style={{ fontSize: '14px', color: 'var(--text-strong)' }}>
-                            <Calendar size={12} style={{ display: 'inline', marginRight: '6px', verticalAlign: 'middle' }} />
-                            {d.businessDate}
-                          </strong>
-                        </div>
-                        <div>
-                          <span
-                            style={{
-                              fontSize: '11px',
-                              color: 'var(--text-muted)',
-                              display: 'block',
-                              fontWeight: 600,
-                              marginBottom: '4px',
-                            }}
-                          >
-                            SHIFTS INCLUDED
-                          </span>
-                          <strong style={{ fontSize: '14px', color: 'var(--text-strong)' }}>
-                            {data.shiftsIncluded || 0}
-                          </strong>
-                        </div>
-                        <div>
-                          <span
-                            style={{
-                              fontSize: '11px',
-                              color: 'var(--text-muted)',
-                              display: 'block',
-                              fontWeight: 600,
-                              marginBottom: '4px',
-                            }}
-                          >
-                            TOTAL VOLUME SOLD
-                          </span>
-                          <strong
-                            style={{
-                              fontSize: '14px',
-                              color: 'var(--text-strong)',
-                              fontFamily: 'var(--font-mono)',
-                            }}
-                          >
-                            {Number(data.totalVolumeSold || 0).toFixed(2)} L
-                          </strong>
-                        </div>
-                        <div>
-                          <span
-                            style={{
-                              fontSize: '11px',
-                              color: 'var(--text-muted)',
-                              display: 'block',
-                              fontWeight: 600,
-                              marginBottom: '4px',
-                            }}
-                          >
-                            TOTAL COLLECTIONS
-                          </span>
-                          <strong
-                            style={{
-                              fontSize: '14px',
-                              color: 'var(--state-success-fg)',
-                              fontFamily: 'var(--font-mono)',
-                            }}
-                          >
-                            ₹{Number(data.totalCashCollections || 0).toLocaleString('en-IN')}
-                          </strong>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div
-                style={{
-                  padding: '40px 20px',
-                  textAlign: 'center',
-                  color: 'var(--text-muted)',
-                }}
-              >
-                <div
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    gap: '12px',
-                  }}
-                >
-                  <Zap size={32} style={{ color: 'var(--text-faint)' }} />
-                  <div>
-                    <h4 style={{ fontWeight: 600, color: 'var(--text-strong)' }}>
-                      No Daily DSSR Reports
-                    </h4>
-                    <p style={{ fontSize: '12px', marginTop: '4px' }}>
-                      Generate a daily snapshot or select a date above to get started.
-                    </p>
-                  </div>
-                </div>
-              </div>
+            {generateError && (
+              <div style={{ marginTop: '10px', padding: '8px 12px', backgroundColor: 'var(--state-danger-bg)', color: 'var(--state-danger-fg)', borderRadius: 'var(--radius-input)', fontSize: '12px' }}>{generateError}</div>
             )}
-          </div>
+          </Panel>
+
+
+          <Panel flush title="Recent DSSRs">
+            {dssrQ.isLoading ? (
+              <div style={{ padding: '16px' }}><EmptyState compact icon={<Zap />} title="Loading…" description="Fetching recent daily snapshots." /></div>
+            ) : dssrList.length === 0 ? (
+              <div style={{ padding: '12px' }}><EmptyState compact icon={<Zap />} title="No daily DSSR reports" description="Generate a daily snapshot above to get started." /></div>
+            ) : (
+              <DataTable
+                bare
+                columns={dssrColumns}
+                data={dssrList}
+                error={dssrQ.error as Error | null}
+                emptyMessage="No daily DSSR reports."
+                getRowId={(r: any) => r.id}
+                onRowClick={(r: any) => setActiveDailyDssr(r)}
+                initialSorting={[{ id: 'businessDate', desc: true }]}
+              />
+            )}
+          </Panel>
         </div>
       )}
 
-      {/* Custom Reports Tab (placeholder) */}
-      {activeTab === 'custom-reports' && (
-        <div
-          className="card"
-          style={{
-            padding: '40px 24px',
-            textAlign: 'center',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: '12px',
-          }}
-        >
-          <Layers size={32} style={{ color: 'var(--text-faint)' }} />
-          <div>
-            <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-strong)' }}>
-              Custom Reports Coming Soon
-            </h3>
-            <p
-              style={{
-                fontSize: '13px',
-                color: 'var(--text-muted)',
-                marginTop: '4px',
-                maxWidth: '460px',
-              }}
-            >
-              Configurable date-range reports for sales, expenses, variance trends, customer
-              ledgers, fuel throughput, and GST exports.
-            </p>
-          </div>
-        </div>
-      )}
-    </div>
+      {activeTab === 'ledger' && <UnifiedLedger selectedStation={selectedStation} />}
+
+      {activeTab === 'pnl' && userRole === 'Owner' && <ProfitLossView selectedStation={selectedStation} />}
+
+      {activeTab === 'invoices' && <InvoicesPanel selectedStation={selectedStation} userRole={userRole} />}
+
+      {activeTab === 'expense-register' && <ExpenseRegister selectedStation={selectedStation} />}
+
+      {activeTab === 'cash-bank' && <CashBankLedger selectedStation={selectedStation} />}
+    </PageLayout>
   );
 };

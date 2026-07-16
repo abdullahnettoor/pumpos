@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
 import { Drawer } from '../Drawer.js';
+import { Checkbox } from '../primitives/Toggle.js';
+import { Button } from '../../pump-ds/index.js';
+import { inr } from '../../utils/format.js';
 import { AlertTriangle, Check, ChevronLeft, ChevronRight, Lock, Wallet, Droplet, FileText } from 'lucide-react';
 
 export interface CloseShiftWizardProps {
@@ -17,6 +20,22 @@ export interface CloseShiftWizardProps {
   expectedCash: number;
   closingCash: number;
   onClosingCashChange: (val: number) => void;
+
+  /** Station-level cash summary (server-authoritative) for the closing drawer. */
+  cashSummary?: {
+    openingCash: number;
+    cashSales: number;
+    handoverCash: number;
+    merchCashOutsideHandover: number;
+    cashCollections: number;
+    drawerExpenses: number;
+    drawerSupplierPayments: number;
+    expectedDrawer: number;
+    merchCashBreakdown: { sellerName: string; amount: number }[];
+    attendantVariance: number;
+    attendantVariances: { name: string; du: string | null; variance: number }[];
+    hasHandovers: boolean;
+  } | null;
 
   // Physical dip
   stationTanks: any[];
@@ -60,6 +79,7 @@ export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
   expectedCash,
   closingCash,
   onClosingCashChange,
+  cashSummary,
   stationTanks,
   dipReadings,
   onDipReadingsChange,
@@ -106,31 +126,35 @@ export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
 
   const footer = (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', width: '100%' }}>
-      <button
-        type="button"
-        className="btn btn-secondary btn-sm"
+      <Button
+        variant="secondary"
+        size="sm"
+        leftIcon={<ChevronLeft size={13} />}
         onClick={step === 1 ? onClose : goBack}
       >
-        <ChevronLeft size={13} /> {step === 1 ? 'Cancel' : 'Back'}
-      </button>
+        {step === 1 ? 'Cancel' : 'Back'}
+      </Button>
 
       {step < 4 ? (
-        <button
-          type="button"
-          className="btn btn-primary btn-sm"
+        <Button
+          variant="primary"
+          size="sm"
+          rightIcon={<ChevronRight size={13} />}
           onClick={goNext}
         >
-          Next <ChevronRight size={13} />
-        </button>
+          Next
+        </Button>
       ) : (
-        <button
-          type="button"
-          className={canSubmit ? 'btn btn-primary btn-sm' : 'btn btn-secondary btn-sm'}
+        <Button
+          variant={canSubmit ? 'primary' : 'secondary'}
+          size="sm"
+          leftIcon={<Lock size={13} />}
           onClick={onConfirmClose}
-          disabled={!canSubmit || isClosing}
+          disabled={!canSubmit}
+          loading={isClosing}
         >
-          <Lock size={13} /> {isClosing ? 'Closing Shift…' : 'Close Shift'}
-        </button>
+          {isClosing ? 'Closing Shift…' : 'Close Shift'}
+        </Button>
       )}
     </div>
   );
@@ -154,30 +178,113 @@ export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
             <h4 className="close-wizard-section-title">Cash Reconciliation</h4>
 
             <div className="close-wizard-summary-card">
-              <div className="close-wizard-row">
-                <span>Opening Cash Float</span>
-                <span className="font-mono">₹{openingCash.toLocaleString('en-IN')}</span>
-              </div>
-              <div className="close-wizard-row" style={{ color: 'var(--state-success-fg)' }}>
-                <span>(+) Cash Collections</span>
-                <span className="font-mono">+ ₹{cashCollections.toLocaleString('en-IN')}</span>
-              </div>
-              <div className="close-wizard-row" style={{ color: 'var(--brand-danger)' }}>
-                <span>(−) Petty Cash Expenses</span>
-                <span className="font-mono">− ₹{cashExpenses.toLocaleString('en-IN')}</span>
-              </div>
-              <div className="close-wizard-row close-wizard-row--total">
-                <span>Expected Safe Cash</span>
-                <span className="font-mono">₹{expectedCash.toLocaleString('en-IN')}</span>
-              </div>
+              {cashSummary ? (
+                <>
+                  <div className="close-wizard-row">
+                    <span>Opening Cash Float</span>
+                    <span className="font-mono">{inr(cashSummary.openingCash)}</span>
+                  </div>
+                  <div className="close-wizard-row" style={{ color: 'var(--state-success-fg)' }}>
+                    <span>(+) Cash Sales</span>
+                    <span className="font-mono">+ {inr(cashSummary.cashSales)}</span>
+                  </div>
+                  {cashSummary.merchCashOutsideHandover > 0 && (
+                    <div className="close-wizard-row" style={{ paddingLeft: 14, fontSize: 12, color: 'var(--text-muted)' }}>
+                      <span>· incl. non-attendant merchandise cash</span>
+                      <span className="font-mono">{inr(cashSummary.merchCashOutsideHandover)}</span>
+                    </div>
+                  )}
+                  {cashSummary.merchCashBreakdown.length > 0 && (
+                    <div style={{ paddingLeft: 24, paddingRight: 2 }}>
+                      {cashSummary.merchCashBreakdown.map((b, i) => (
+                        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text-faint)', padding: '1px 0' }}>
+                          <span>– {b.sellerName}</span>
+                          <span className="font-mono">{inr(b.amount)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div className="close-wizard-row" style={{ color: 'var(--state-success-fg)' }}>
+                    <span>(+) Cash Collections</span>
+                    <span className="font-mono">+ {inr(cashSummary.cashCollections)}</span>
+                  </div>
+                  <div className="close-wizard-row" style={{ color: 'var(--brand-danger)' }}>
+                    <span>(−) Drawer Expenses</span>
+                    <span className="font-mono">− {inr(cashSummary.drawerExpenses)}</span>
+                  </div>
+                  {cashSummary.drawerSupplierPayments > 0 && (
+                    <div className="close-wizard-row" style={{ color: 'var(--brand-danger)' }}>
+                      <span>(−) Supplier Payments (cash)</span>
+                      <span className="font-mono">− {inr(cashSummary.drawerSupplierPayments)}</span>
+                    </div>
+                  )}
+                  <div className="close-wizard-row close-wizard-row--total">
+                    <span>Expected Safe Cash</span>
+                    <span className="font-mono">{inr(expectedCash)}</span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="close-wizard-row">
+                    <span>Opening Cash Float</span>
+                    <span className="font-mono">{inr(openingCash)}</span>
+                  </div>
+                  <div className="close-wizard-row" style={{ color: 'var(--state-success-fg)' }}>
+                    <span>(+) Cash Collections</span>
+                    <span className="font-mono">+ {inr(cashCollections)}</span>
+                  </div>
+                  <div className="close-wizard-row" style={{ color: 'var(--brand-danger)' }}>
+                    <span>(−) Petty Cash Expenses</span>
+                    <span className="font-mono">− {inr(cashExpenses)}</span>
+                  </div>
+                  <div className="close-wizard-row close-wizard-row--total">
+                    <span>Expected Safe Cash</span>
+                    <span className="font-mono">{inr(expectedCash)}</span>
+                  </div>
+                </>
+              )}
             </div>
+
+            {/* Attendant accountability variance (declared vs metered-expected),
+                summed across all attendants — the true net short/surplus that
+                nets out cross-attendant settlements (e.g. a borrowed POS). This
+                is separate from the drawer count variance below. */}
+            {/* Per-attendant / DU variance (declared − metered-expected), with the
+                net total on the right of the header. Separate from the drawer
+                count variance below; nets out cross-attendant settlements. */}
+            {cashSummary?.hasHandovers && cashSummary.attendantVariances.length > 0 && (
+              <div style={{ border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', overflow: 'hidden', marginTop: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 12px', backgroundColor: 'var(--bg-surface-alt)' }}>
+                  <span style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--text-muted)' }}>
+                    Attendant sales variance
+                  </span>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700, color: Math.abs(cashSummary.attendantVariance) < 0.005 ? 'var(--text-muted)' : cashSummary.attendantVariance > 0 ? 'var(--brand-warning)' : 'var(--brand-danger)' }}>
+                    {cashSummary.attendantVariance > 0 ? '+' : ''}{inr(cashSummary.attendantVariance)}
+                    {Math.abs(cashSummary.attendantVariance) < 0.005 ? ' (balanced)' : cashSummary.attendantVariance > 0 ? ' (surplus)' : ' (short)'}
+                  </span>
+                </div>
+                {cashSummary.attendantVariances.map((v, i) => {
+                  const bal = Math.abs(v.variance) < 0.005;
+                  const color = bal ? 'var(--text-muted)' : v.variance > 0 ? 'var(--brand-warning)' : 'var(--brand-danger)';
+                  return (
+                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 12px', fontSize: 12, borderTop: '1px solid var(--border-soft)' }}>
+                      <span style={{ color: 'var(--text-strong)' }}>{v.name}{v.du ? ` · ${v.du}` : ''}</span>
+                      <span style={{ fontFamily: 'var(--font-mono)', color }}>
+                        {v.variance > 0 ? '+' : ''}{inr(v.variance)}{bal ? '' : v.variance > 0 ? ' (surplus)' : ' (short)'}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
 
             <label className="close-wizard-field-label">
               Physical counted safe cash (float + deposited)
             </label>
+
             <input
-              type="number"
-              value={closingCash}
+              type="number" min="0"
+              value={closingCash || ''}
               onChange={(e) => onClosingCashChange(Number(e.target.value))}
               className="close-wizard-input close-wizard-input--num"
               placeholder="0"
@@ -188,7 +295,7 @@ export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
               className="close-wizard-variance"
               data-state={cashVariance === 0 ? 'match' : cashVariance > 0 ? 'surplus' : 'shortage'}
             >
-              Variance: {cashVariance > 0 ? '+' : ''}₹{cashVariance.toLocaleString('en-IN')}
+              Drawer cash variance: {cashVariance > 0 ? '+' : ''}{inr(cashVariance)}
               {cashVariance === 0
                 ? ' (Perfect Match)'
                 : cashVariance > 0
@@ -237,9 +344,9 @@ export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
               on-the-ground count. Otherwise system will use computed expected stock.
             </p>
 
-            <label className="close-wizard-toggle">
-              <input
-                type="checkbox"
+            <div className="close-wizard-toggle">
+              <Checkbox
+                label="I recorded physical dip readings this shift"
                 checked={recordDip}
                 onChange={(e) => {
                   const next = e.target.checked;
@@ -247,8 +354,7 @@ export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
                   if (!next) onDipReadingsChange({});
                 }}
               />
-              <span>I recorded physical dip readings this shift</span>
-            </label>
+            </div>
 
             {recordDip && stationTanks.length === 0 && (
               <div className="close-wizard-helper" style={{ marginTop: '8px' }}>
@@ -264,12 +370,12 @@ export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
                       <div className="close-wizard-tank-name">{tank.name}</div>
                       <div className="close-wizard-tank-meta">
                         {tank.productName} · Expected{' '}
-                        <strong>{Number(tank.currentVolume).toFixed(1)} L</strong>
+                        <strong>{Number(tank.currentVolume).toFixed(1)} {tank.productUnit || 'L'}</strong>
                       </div>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <input
-                        type="number"
+                        type="number" min="0"
                         step="0.1"
                         placeholder="Actual"
                         value={dipReadings[tank.id] ?? ''}
@@ -309,14 +415,13 @@ export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
                     <li key={idx}>{w}</li>
                   ))}
                 </ul>
-                <label className="close-wizard-toggle">
-                  <input
-                    type="checkbox"
+                <div className="close-wizard-toggle">
+                  <Checkbox
+                    label="I confirm these readings are correct and wish to proceed anyway."
                     checked={confirmWarningsChecked}
                     onChange={(e) => onConfirmWarningsChange(e.target.checked)}
                   />
-                  <span>I confirm these readings are correct and wish to proceed anyway.</span>
-                </label>
+                </div>
               </>
             )}
           </section>
@@ -328,11 +433,11 @@ export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
             <div className="close-wizard-summary-card">
               <div className="close-wizard-row">
                 <span>Expected Safe Cash</span>
-                <span className="font-mono">₹{expectedCash.toLocaleString('en-IN')}</span>
+                <span className="font-mono">{inr(expectedCash)}</span>
               </div>
               <div className="close-wizard-row">
                 <span>Counted Closing Cash</span>
-                <span className="font-mono">₹{closingCash.toLocaleString('en-IN')}</span>
+                <span className="font-mono">{inr(closingCash)}</span>
               </div>
               <div
                 className="close-wizard-row close-wizard-row--total"
@@ -343,7 +448,7 @@ export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
               >
                 <span>Cash Variance</span>
                 <span className="font-mono">
-                  {cashVariance > 0 ? '+' : ''}₹{cashVariance.toLocaleString('en-IN')}
+                  {cashVariance > 0 ? '+' : ''}{inr(cashVariance)}
                 </span>
               </div>
               <div className="close-wizard-row">

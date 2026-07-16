@@ -19,6 +19,12 @@
       "skillPath": "toolchains/typescript/data/drizzle/SKILL.md",
       "computedHash": "29bca379595409403d95ec463d899a11a609e49d2d6bf57755d06655b35eecb4"
     },
+    "impeccable": {
+      "source": "pbakaus/impeccable",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/impeccable/SKILL.md",
+      "computedHash": "44751520ba3ae35a305e70fb880e9f5fe34d34fdf3e6d42840b37cad18f31e1f"
+    },
     "supabase": {
       "source": "supabase/agent-skills",
       "sourceType": "github",

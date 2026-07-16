@@ -4,6 +4,7 @@ import {
   Tank,
   DispenserUnit,
   Nozzle,
+  PaymentTerminal,
   ShiftTemplate,
   User,
   FinalizeOnboardingPayload,
@@ -24,6 +25,13 @@ export interface IProductService {
   createProduct(data: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>): Promise<Product>;
   updateProduct(id: string, data: Partial<Omit<Product, 'id' | 'createdAt' | 'updatedAt'>>): Promise<Product>;
   archiveProduct(id: string): Promise<void>;
+}
+
+export interface IPaymentTerminalService {
+  listTerminals(stationId: string): Promise<PaymentTerminal[]>;
+  createTerminal(data: { stationId: string; label: string; provider?: string | null; terminalCode?: string | null; supportsCard?: boolean; supportsUpi?: boolean; clearingAccountId?: string | null }): Promise<PaymentTerminal>;
+  updateTerminal(id: string, data: Partial<{ label: string; provider: string | null; terminalCode: string | null; supportsCard: boolean; supportsUpi: boolean; isActive: boolean; clearingAccountId: string | null }>): Promise<PaymentTerminal>;
+  deleteTerminal(id: string): Promise<void>;
 }
 
 export interface ITankService {

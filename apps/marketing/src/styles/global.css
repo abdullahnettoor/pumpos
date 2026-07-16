@@ -1,0 +1,30 @@
+@import "tailwindcss";
+
+/* PumpOS brand tokens (mirrors packages/ui/src/index.css). Marketing is a
+ * standalone static site, so we duplicate the handful of tokens we need rather
+ * than couple to the app's runtime CSS. */
+@theme {
+  --color-brand: #1f6a53; /* Petrol Green */
+  --color-brand-dark: #164d3c;
+  --color-brand-secondary: #2e5e88; /* Diesel Blue */
+  --color-canvas: #f6f7f4;
+  --color-surface: #ffffff;
+  --color-ink: #18201a;
+  --color-ink-muted: #566057;
+  --color-border-soft: #e3e6e0;
+
+  --font-sans: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", monospace;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}

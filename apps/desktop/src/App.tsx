@@ -1,19 +1,28 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { 
   AppShell, 
   Login, 
   OnboardingWizard, 
   StationOverview, 
   DashboardOverview,
+  OrganizationOverview,
   ShiftsManagement,
   ExpensesList,
   PurchasesList,
   CustomersList,
   InventoryList,
   ReportsOverview,
+  FuelPricingPanel,
+  AccountsPanel,
+  DesignSystem,
+  QuickEntryHost,
   CloudStationService, 
+  queryKeys,
   setApiBaseUrl,
   setAuthToken, 
+  clearPersistedQueryCache,
+  clearStoredOnboardingDraft,
   supabase 
 } from '@pump/ui';
 import { Station } from '@pump/shared';
@@ -39,10 +48,39 @@ const environmentTag = (() => {
   return null;
 })();
 
+// Local development only: the Design System reference tab is never shown in
+// deployed (dev/preview/prod) builds.
+const isLocalDev = (() => {
+  if (import.meta.env.DEV) return true;
+  if (typeof window !== 'undefined') {
+    const h = window.location.hostname;
+    return h === 'localhost' || h === '127.0.0.1';
+  }
+  return false;
+})();
+
 const App: React.FC = () => {
   const [currentPath, setCurrentPath] = useState('/dashboard');
-  const [syncStatus] = useState<'online' | 'offline' | 'synced' | 'pending' | 'failed'>('synced');
-  
+  const [navIntent, setNavIntent] = useState<import('@pump/ui').NavIntent | null>(null);
+  const navigate = useCallback((path: string, intent?: import('@pump/ui').NavIntent) => {
+    setCurrentPath(path);
+    setNavIntent(intent ?? null);
+  }, []);
+  const [syncStatus, setSyncStatus] = useState<'online' | 'offline' | 'synced' | 'pending' | 'failed'>(
+    typeof navigator !== 'undefined' && navigator.onLine === false ? 'offline' : 'online',
+  );
+
+  // Reflect real browser network status in the top-bar indicator.
+  useEffect(() => {
+    const update = () => setSyncStatus(navigator.onLine ? 'online' : 'offline');
+    window.addEventListener('online', update);
+    window.addEventListener('offline', update);
+    return () => {
+      window.removeEventListener('online', update);
+      window.removeEventListener('offline', update);
+    };
+  }, []);
+
   // Track globally active/selected station for setup context
   const [stations, setStations] = useState<Station[]>([]);
   const [selectedStation, setSelectedStation] = useState<Station | null>(null);
@@ -54,6 +92,8 @@ const App: React.FC = () => {
   const [userName, setUserName] = useState<string>('');
   const [profileError, setProfileError] = useState<string | null>(null);
   const lastUserIdRef = useRef<string | null>(null);
+  const resolvedRef = useRef(false);
+  const qc = useQueryClient();
 
   useEffect(() => {
     // 1. Check current active session
@@ -79,8 +119,17 @@ const App: React.FC = () => {
       setAuthToken(currentSession.access_token);
 
       // If it's the same user session and we've already resolved permissions, skip resetting/re-fetching
-      if (isSameUser && userRole) {
+      // (uses a ref, not the captured `userRole`, to avoid a stale-closure flash on tab refocus).
+      if (isSameUser && resolvedRef.current) {
         return;
+      }
+
+      // Account switch within the same tab: purge the previous user's cached
+      // (and persisted) data so their stations/products never bleed through.
+      if (lastUserIdRef.current && lastUserIdRef.current !== currentSession.user.id) {
+        qc.clear();
+        clearPersistedQueryCache();
+        clearStoredOnboardingDraft();
       }
 
       lastUserIdRef.current = currentSession.user.id;
@@ -92,10 +141,16 @@ const App: React.FC = () => {
         // Fetch session context from our backend (verifies JWT, gets user role & name)
         const sessionData = await stationService.getCurrentSession();
         setUserRole(sessionData.user.role);
-        setUserName(sessionData.user.fullName || sessionData.user.email);
+        resolvedRef.current = true;
+        setUserName(sessionData.user.fullName?.trim() || sessionData.user.email);
 
-        // Fetch station setup status
-        const list = await stationService.getStations();
+        // Stations rarely change — serve from the shared cache (+ localStorage) on
+        // repeat session resolves instead of re-hitting /setup/stations every time.
+        const list = await qc.fetchQuery({
+          queryKey: queryKeys.stations(),
+          queryFn: () => stationService.getStations(),
+          staleTime: 24 * 60 * 60_000,
+        });
         setStations(list);
         if (list.length > 0) {
           const active = list.find((station) => station.onboardingStatus === 'READY_FOR_OPERATIONS') || list[0];
@@ -114,6 +169,7 @@ const App: React.FC = () => {
         console.error('Failed to resolve backend profile:', err);
         setProfileError(err.message || 'Verification failed. Profile not found.');
         setUserRole(null);
+        resolvedRef.current = false;
         lastUserIdRef.current = null;
       } finally {
         setLoading(false);
@@ -121,6 +177,7 @@ const App: React.FC = () => {
     } else {
       // Clear token and states
       lastUserIdRef.current = null;
+      resolvedRef.current = false;
       setAuthToken('');
       setStations([]);
       setSelectedStation(null);
@@ -128,6 +185,11 @@ const App: React.FC = () => {
       setUserName('');
       setLoading(false);
       setCurrentPath('/login');
+      // Wipe all cached + persisted data so the next user starts from a clean
+      // slate (prevents cross-user data bleed and stale "station not found").
+      qc.clear();
+      clearPersistedQueryCache();
+      clearStoredOnboardingDraft();
     }
   };
 
@@ -142,7 +204,9 @@ const App: React.FC = () => {
 
   const handleOnboardingComplete = async (completedStation: Station) => {
     try {
+      await qc.invalidateQueries({ queryKey: queryKeys.stations() });
       const list = await stationService.getStations();
+      qc.setQueryData(queryKeys.stations(), list);
       setStations(list);
       setSelectedStation(list.find((station) => station.id === completedStation.id) || completedStation);
     } catch (err) {
@@ -166,12 +230,19 @@ const App: React.FC = () => {
         { label: 'Expenses', path: '/expenses' },
         { label: 'Purchases', path: '/purchases', roles: ['Owner', 'Manager', 'Accountant'] },
         { label: 'Inventory', path: '/inventory', roles: ['Owner', 'Manager', 'Accountant'] },
+        { label: 'Pricing', path: '/pricing', roles: ['Owner', 'Manager'] },
+        { label: 'Accounts', path: '/accounts', roles: ['Owner', 'Manager', 'Accountant'] },
         { label: 'Customers', path: '/customers' },
         { label: 'Reports', path: '/reports', roles: ['Owner', 'Manager', 'Accountant'] },
+        { label: 'Organization', path: '/organization', roles: ['Owner'] },
       ]
     : [
         { label: 'Onboarding Setup', path: '/onboarding', roles: ['Owner', 'Manager'] }
       ];
+
+  const navItemsWithDev = isLocalDev
+    ? [...navItems, { label: 'Design System', path: '/design-system' }]
+    : navItems;
 
   const renderContent = () => {
     // 1. If not logged in, render the Login screen
@@ -334,7 +405,7 @@ const App: React.FC = () => {
             selectedStation={selectedStation}
             userRole={userRole || 'Staff'}
             userName={userName}
-            onNavigate={setCurrentPath}
+            onNavigate={navigate}
           />
         );
       
@@ -356,20 +427,62 @@ const App: React.FC = () => {
           />
         );
       case '/expenses':
-        return <ExpensesList selectedStation={selectedStation} />;
+        return (
+          <ExpensesList
+            selectedStation={selectedStation}
+            userRole={userRole || 'Staff'}
+            intent={navIntent}
+            onIntentConsumed={() => setNavIntent(null)}
+          />
+        );
       case '/purchases':
-        return <PurchasesList selectedStation={selectedStation} />;
+        return (
+          <PurchasesList
+            selectedStation={selectedStation}
+            intent={navIntent}
+            onIntentConsumed={() => setNavIntent(null)}
+          />
+        );
       case '/inventory':
-        return <InventoryList selectedStation={selectedStation} />;
+        return (
+          <InventoryList
+            selectedStation={selectedStation}
+            intent={navIntent}
+            onIntentConsumed={() => setNavIntent(null)}
+          />
+        );
+      case '/pricing':
+        return <FuelPricingPanel selectedStation={selectedStation} />;
+      case '/accounts':
+        return <AccountsPanel selectedStation={selectedStation} />;
       case '/customers':
-        return <CustomersList selectedStation={selectedStation} />;
+        return (
+          <CustomersList
+            selectedStation={selectedStation}
+            intent={navIntent}
+            onIntentConsumed={() => setNavIntent(null)}
+          />
+        );
       case '/reports':
         return (
           <ReportsOverview
             selectedStation={selectedStation}
             userRole={userRole || 'Staff'}
+            intent={navIntent}
+            onIntentConsumed={() => setNavIntent(null)}
           />
         );
+      case '/organization':
+        return (
+          <OrganizationOverview
+            stations={stations}
+            selectedStation={selectedStation}
+            onStationChange={handleStationChange}
+            onNavigate={setCurrentPath}
+          />
+        );
+      case '/design-system':
+        return isLocalDev ? <DesignSystem /> : <div>Not found</div>;
       default:
         return <div>Not found</div>;
     }
@@ -399,13 +512,13 @@ const App: React.FC = () => {
 
   return (
     <AppShell
-      navItems={navItems}
+      navItems={navItemsWithDev}
       currentPath={currentPath}
-      onNavigate={setCurrentPath}
+      onNavigate={navigate}
       userRole={userRole || 'Staff'}
       userName={userName}
       syncStatus={syncStatus}
-      pendingSyncCount={syncStatus === 'pending' ? 3 : 0}
+      pendingSyncCount={0}
       onLogout={handleLogout}
       stations={stations}
       selectedStation={selectedStation}
@@ -413,6 +526,7 @@ const App: React.FC = () => {
       environmentTag={environmentTag}
     >
       {renderContent()}
+      <QuickEntryHost selectedStation={selectedStation} />
     </AppShell>
   );
 };

@@ -11,7 +11,8 @@ import {
 } from '@pump/shared';
 import { CloudStationService } from '../../services/cloud.js';
 import { Drawer } from '../Drawer.js';
-import { StatusBadge } from '../StatusBadge.js';
+import { Button, Chip } from '../../pump-ds/index.js';
+import { useConfirm } from '../primitives/ConfirmDialog.js';
 import {
   clearStoredOnboardingDraft,
   createDefaultOperatingSchedule,
@@ -36,6 +37,7 @@ import { Step4Tanks } from './OnboardingSteps/Step4Tanks.js';
 import { Step5Dispensers } from './OnboardingSteps/Step5Dispensers.js';
 import { Step6OpeningValues } from './OnboardingSteps/Step6OpeningValues.js';
 import { Step7ShiftTemplates } from './OnboardingSteps/Step7ShiftTemplates.js';
+import { Step8PaymentTerminals } from './OnboardingSteps/Step8PaymentTerminals.js';
 import { Step8Review } from './OnboardingSteps/Step8Review.js';
 
 const stationService = new CloudStationService();
@@ -53,7 +55,8 @@ const steps = [
   { num: 5, title: 'Dispensers & Nozzles' },
   { num: 6, title: 'Opening / Current Values' },
   { num: 7, title: 'Shift Templates' },
-  { num: 8, title: 'Review & Provision' },
+  { num: 8, title: 'Payment Terminals' },
+  { num: 9, title: 'Review & Provision' },
 ] as const;
 
 const provisioningStages = [
@@ -149,6 +152,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
   const [currentStep, setCurrentStep] = useState(1);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isHydrated, setIsHydrated] = useState(false);
+  const confirm = useConfirm();
 
   // Modal Drawers
   const [fuelDrawer, setFuelDrawer] = useState<OnboardingProductDraft | null>(null);
@@ -255,12 +259,13 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     const msTank = msTanks[0] || draft.tanks[0];
     const hsdTank = hsdTanks[0] || draft.tanks[1] || draft.tanks[0];
 
+    const nozzleBase = draft.nozzles.length;
     const nozzle1: OnboardingNozzleDraft = {
       draftId: createDraftId(),
       dispenserDraftId: dispenserId,
       tankDraftId: msTank?.draftId || '',
       productDraftId: msProduct?.draftId || '',
-      name: 'N1',
+      name: `N${nozzleBase + 1}`,
       openingReading: 0,
     };
 
@@ -269,7 +274,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
       dispenserDraftId: dispenserId,
       tankDraftId: hsdTank?.draftId || '',
       productDraftId: hsdProduct?.draftId || '',
-      name: 'N2',
+      name: `N${nozzleBase + 2}`,
       openingReading: 0,
     };
 
@@ -304,13 +309,14 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     const hsdTank1 = hsdTanks[0] || draft.tanks[1] || draft.tanks[0];
     const hsdTank2 = hsdTanks[1] || hsdTanks[0] || draft.tanks[1] || draft.tanks[0];
 
+    const nozzleBase = draft.nozzles.length;
     const nozzles: OnboardingNozzleDraft[] = [
       {
         draftId: createDraftId(),
         dispenserDraftId: dispenserId,
         tankDraftId: msTank1?.draftId || '',
         productDraftId: msProduct?.draftId || '',
-        name: 'N1',
+        name: `N${nozzleBase + 1}`,
         openingReading: 0,
       },
       {
@@ -318,7 +324,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
         dispenserDraftId: dispenserId,
         tankDraftId: msTank2?.draftId || '',
         productDraftId: msProduct?.draftId || '',
-        name: 'N2',
+        name: `N${nozzleBase + 2}`,
         openingReading: 0,
       },
       {
@@ -326,7 +332,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
         dispenserDraftId: dispenserId,
         tankDraftId: hsdTank1?.draftId || '',
         productDraftId: hsdProduct?.draftId || '',
-        name: 'N3',
+        name: `N${nozzleBase + 3}`,
         openingReading: 0,
       },
       {
@@ -334,7 +340,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
         dispenserDraftId: dispenserId,
         tankDraftId: hsdTank2?.draftId || '',
         productDraftId: hsdProduct?.draftId || '',
-        name: 'N4',
+        name: `N${nozzleBase + 4}`,
         openingReading: 0,
       },
     ];
@@ -467,6 +473,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
           productDraftId,
           capacity,
           openingQuantity: 0,
+          openingCostRate: 0,
         },
       ],
     }));
@@ -586,8 +593,8 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     }));
   };
 
-  const discardDraft = () => {
-    if (!window.confirm('Discard the current onboarding draft? This will clear the locally stored setup.')) return;
+  const discardDraft = async () => {
+    if (!(await confirm({ title: 'Discard onboarding draft?', message: 'This will clear the locally stored setup and start over.', confirmLabel: 'Discard', danger: true }))) return;
     clearStoredOnboardingDraft();
     setDraft(createEmptyOnboardingDraft());
     setCurrentStep(1);
@@ -706,13 +713,14 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
           </div>
         </div>
 
-        <button
+        <Button
           type="button"
+          variant="secondary"
+          size="sm"
           onClick={discardDraft}
-          className="btn btn-secondary btn-sm"
         >
           Discard Draft
-        </button>
+        </Button>
 
         {/* Global Progress Bar */}
         <div style={{
@@ -829,6 +837,16 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
           )}
 
           {currentStep === 8 && (
+            <Step8PaymentTerminals
+              draft={draft}
+              updateDraft={updateDraft}
+              panelStyle={panelStyle}
+              fieldLabelStyle={fieldLabelStyle}
+              inputStyle={inputStyle}
+            />
+          )}
+
+          {currentStep === 9 && (
             <Step8Review
               draft={draft}
               validationIssues={validationIssues}
@@ -850,27 +868,28 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
         padding: '0 24px',
         flexShrink: 0,
       }}>
-        <button
+        <Button
           type="button"
-          className="btn btn-secondary btn-sm"
+          variant="secondary"
+          size="sm"
           onClick={() => setCurrentStep((prev) => Math.max(prev - 1, 1))}
           disabled={currentStep === 1}
         >
           Previous Step
-        </button>
+        </Button>
 
         <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
           Step {currentStep} of {steps.length}
         </div>
 
         {currentStep === steps.length ? (
-          <button type="button" className="btn btn-primary btn-md" onClick={handleProvision}>
+          <Button type="button" variant="primary" size="md" onClick={handleProvision}>
             Provision Station
-          </button>
+          </Button>
         ) : (
-          <button type="button" className="btn btn-primary btn-md" onClick={handleNext}>
+          <Button type="button" variant="primary" size="md" onClick={handleNext}>
             Next Step
-          </button>
+          </Button>
         )}
       </footer>
 
@@ -910,7 +929,13 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
               <input
                 type="text"
                 value={fuelDrawer.code}
-                onChange={(e) => setFuelDrawer({ ...fuelDrawer, code: e.target.value.toUpperCase() })}
+                onChange={(e) => {
+                  const code = e.target.value.toUpperCase();
+                  // Gaseous fuels are metered/sold by mass (kg), not volume. Nudge
+                  // the unit to kg for CNG/LPG-type codes while it's still the L default.
+                  const isGas = /^(CNG|LPG|AUTOLPG|LNG|CBG)$/.test(code);
+                  setFuelDrawer({ ...fuelDrawer, code, unit: isGas && !/^kg$/i.test(fuelDrawer.unit) ? 'kg' : fuelDrawer.unit });
+                }}
                 placeholder="e.g. MS"
                 style={{
                   height: '32px',
@@ -927,11 +952,9 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
               <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Sales Unit *</label>
-              <input
-                type="text"
-                value={fuelDrawer.unit}
+              <select
+                value={/^kg$/i.test(fuelDrawer.unit) ? 'kg' : 'L'}
                 onChange={(e) => setFuelDrawer({ ...fuelDrawer, unit: e.target.value })}
-                placeholder="e.g. Liters"
                 style={{
                   height: '32px',
                   padding: '0 8px',
@@ -942,7 +965,11 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                   color: 'var(--text-strong)'
                 }}
                 required
-              />
+              >
+                <option value="L">Liters (L) — Petrol / Diesel / Ethanol</option>
+                <option value="kg">Kilograms (kg) — CNG / Auto-LPG</option>
+              </select>
+              <span style={{ fontSize: '10px', color: 'var(--text-faint)' }}>Gaseous fuels (CNG, Auto-LPG) are metered by weight, so tank stock and readings for this fuel are tracked in kg.</span>
             </div>
 
 
@@ -1042,7 +1069,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Capacity (Liters) *</label>
+              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Capacity ({draft.products.find((p) => p.draftId === tankDrawer.productDraftId)?.unit || 'L'}) *</label>
               <input
                 type="number"
                 min={0}
@@ -1347,7 +1374,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                           </button>
                         </div>
 
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '8px' }}>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                             <label style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Name</label>
                             <input
@@ -1367,28 +1394,6 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                                 color: 'var(--text-strong)'
                               }}
                               required
-                            />
-                          </div>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                            <label style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Opening Reading</label>
-                            <input
-                              type="number"
-                              min={0}
-                              step="0.001"
-                              value={nozzle.openingReading ?? 0}
-                              onChange={(e) => setDispenserDrawer({
-                                ...dispenserDrawer,
-                                nozzles: dispenserDrawer.nozzles.map((item) => item.draftId === nozzle.draftId ? { ...item, openingReading: Number(e.target.value) || 0 } : item),
-                              })}
-                              style={{
-                                height: '28px',
-                                padding: '0 8px',
-                                borderRadius: 'var(--radius-input)',
-                                border: '1px solid var(--border-strong)',
-                                fontSize: '12px',
-                                backgroundColor: 'var(--bg-surface)',
-                                color: 'var(--text-strong)'
-                              }}
                             />
                           </div>
                         </div>
@@ -1565,13 +1570,13 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                   }}>
                     <span style={{ fontSize: '13px', color: 'var(--text-default)', fontWeight: isActive ? 600 : 500 }}>{stage}</span>
                     {isFailed ? (
-                      <StatusBadge status="Failed" type="danger" />
+                      <Chip tone="danger" size="sm">Failed</Chip>
                     ) : isCompleted ? (
-                      <StatusBadge status="Done" type="success" />
+                      <Chip tone="success" size="sm">Done</Chip>
                     ) : isActive ? (
-                      <StatusBadge status="Running" type="info" />
+                      <Chip tone="info" size="sm">Running</Chip>
                     ) : (
-                      <StatusBadge status="Queued" type="default" />
+                      <Chip tone="neutral" size="sm">Queued</Chip>
                     )}
                   </div>
                 );
@@ -1594,9 +1599,10 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
             {(provisioning.failedMessage || provisioning.completed) && (
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
                 {provisioning.failedMessage && (
-                  <button
+                  <Button
                     type="button"
-                    className="btn btn-primary btn-sm"
+                    variant="primary"
+                    size="sm"
                     onClick={() => {
                       const msg = provisioning.failedMessage || '';
                       const stage = provisioning.failedStage || '';
@@ -1628,11 +1634,12 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                     }}
                   >
                     Go to Section
-                  </button>
+                  </Button>
                 )}
-                <button
+                <Button
                   type="button"
-                  className="btn btn-secondary btn-sm"
+                  variant="secondary"
+                  size="sm"
                   onClick={() => setProvisioning({
                     isOpen: false,
                     stageIndex: 0,
@@ -1642,7 +1649,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                   })}
                 >
                   Close
-                </button>
+                </Button>
               </div>
             )}
           </div>

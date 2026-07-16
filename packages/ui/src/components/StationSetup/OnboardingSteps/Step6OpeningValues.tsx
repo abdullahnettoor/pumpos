@@ -34,11 +34,11 @@ export const Step6OpeningValues: React.FC<Step6OpeningValuesProps> = ({
     }));
   };
 
-  const handleNozzleReadingChange = (nozzleDraftId: string, val: number) => {
+  const handleTankCostChange = (tankDraftId: string, val: number) => {
     updateDraft((prev) => ({
       ...prev,
-      nozzles: prev.nozzles.map((item) =>
-        item.draftId === nozzleDraftId ? { ...item, openingReading: val } : item
+      tanks: prev.tanks.map((item) =>
+        item.draftId === tankDraftId ? { ...item, openingCostRate: val } : item
       ),
     }));
   };
@@ -49,7 +49,7 @@ export const Step6OpeningValues: React.FC<Step6OpeningValuesProps> = ({
         <div>
           <h2 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-strong)' }}>Opening / Current Values</h2>
           <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px' }}>
-            Finalize current rates, opening tank stock, and starting nozzle readings before provisioning the station.
+            Finalize current rates and opening tank stock before provisioning the station. Nozzle opening readings are captured when you open the first operational shift.
           </p>
         </div>
 
@@ -114,10 +114,10 @@ export const Step6OpeningValues: React.FC<Step6OpeningValuesProps> = ({
                     <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{product?.name || 'Unmapped'}</span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text-muted)' }}>
-                    <span>Capacity: {tank.capacity.toLocaleString()} L</span>
+                    <span>Capacity: {tank.capacity.toLocaleString()} {product?.unit || 'L'}</span>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Opening Stock (Liters)</span>
+                    <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Opening Stock ({product?.unit || 'L'})</span>
                     <input
                       type="number"
                       min={0}
@@ -129,54 +129,18 @@ export const Step6OpeningValues: React.FC<Step6OpeningValuesProps> = ({
                       style={{ ...inputStyle, width: '100%', height: '30px' }}
                     />
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* 3. Nozzles Opening Readings */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', borderTop: '1px solid var(--border-soft)', paddingTop: '16px', marginTop: '8px' }}>
-          <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)' }}>Nozzles Opening Readings</h3>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '12px' }}>
-            {draft.nozzles.map((nozzle) => {
-              const dispenser = draft.dispensers.find((d) => d.draftId === nozzle.dispenserDraftId);
-              const tank = draft.tanks.find((t) => t.draftId === nozzle.tankDraftId);
-              const product = draft.products.find((p) => p.draftId === nozzle.productDraftId);
-
-              return (
-                <div
-                  key={nozzle.draftId}
-                  style={{
-                    backgroundColor: 'var(--bg-surface-alt)',
-                    border: '1px solid var(--border-soft)',
-                    borderRadius: 'var(--radius-card)',
-                    padding: '14px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '8px',
-                  }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontWeight: 600, fontSize: '13px', color: 'var(--text-strong)' }}>{nozzle.name}</span>
-                    <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                      {dispenser?.name || 'Unmapped DU'}
-                    </span>
-                  </div>
-                  <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                    Linked: {tank?.name || 'No Tank'} ({product?.name || 'No Fuel'})
-                  </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Opening Reading (Liters)</span>
+                    <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Purchase Rate (₹/{product?.unit || 'L'}) — landed cost</span>
                     <input
                       type="number"
                       min={0}
-                      step="0.001"
-                      placeholder="e.g. 1000.0"
-                      value={nozzle.openingReading ?? 0}
-                      onChange={(e) => handleNozzleReadingChange(nozzle.draftId, Number(e.target.value))}
+                      step="0.01"
+                      placeholder="e.g. 88.50"
+                      value={tank.openingCostRate ?? 0}
+                      onChange={(e) => handleTankCostChange(tank.draftId, Number(e.target.value))}
                       style={{ ...inputStyle, width: '100%', height: '30px' }}
                     />
+                    <span style={{ fontSize: '9px', color: 'var(--text-faint)' }}>Seeds cost basis for margin. Leave 0 if unknown.</span>
                   </div>
                 </div>
               );

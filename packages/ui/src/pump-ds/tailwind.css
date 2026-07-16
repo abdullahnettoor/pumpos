@@ -1,0 +1,126 @@
+/*
+ * pump-ds — Tailwind v4 entry + token bridge.
+ *
+ * This file:
+ *   1. Loads Tailwind v4's utility layer (NOT preflight — see below).
+ *   2. Exposes every PumpOS CSS variable declared in `packages/ui/src/index.css`
+ *      as a first-class Tailwind theme token, so utilities like `bg-brand`,
+ *      `text-strong`, `border-border-soft`, `rounded-card`, `font-mono` all
+ *      resolve to the same values as the existing `--brand-primary`,
+ *      `--text-strong`, etc.
+ *
+ * Single source of truth stays in `index.css` — this file only mirrors the
+ * variables into Tailwind's `@theme` namespace. Change a raw value in one
+ * place; both the legacy CSS classes and the Tailwind utilities pick it up.
+ *
+ * Load order matters: apps must import `@pump/ui/src/index.css` FIRST (so the
+ * raw `--*` variables exist on `:root`), then this file (so Tailwind's
+ * `@theme` can reference them).
+ *
+ * IMPORTANT — preflight is deliberately excluded.
+ * `@import "tailwindcss"` would also pull in Tailwind's Preflight (its global
+ * reset), which strips default margins from headings/paragraphs/lists, forces
+ * `border: 0 solid` on every element, resets heading font sizes, and changes
+ * `line-height`. The app already ships its own reset + component styles in
+ * `index.css`; layering Preflight on top of that silently broke spacing across
+ * every legacy screen.
+ *
+ * IMPORTANT — utilities are also deliberately imported WITHOUT CSS cascade
+ * layers. The legacy reset in `index.css` is unlayered (`* { margin: 0;
+ * padding: 0; }`). In CSS cascade rules, unlayered author styles beat layered
+ * author styles regardless of selector specificity, so layered Tailwind
+ * utilities like `.px-3.5` lost to the reset's `padding: 0`. Importing the
+ * utilities unlayered lets normal specificity apply again: `.px-3.5` beats `*`.
+ */
+
+@import "tailwindcss/theme.css";
+@import "tailwindcss/utilities.css";
+
+/*
+ * Tell Tailwind's JIT where to look for class usage. In a monorepo the
+ * default auto-detection only scans the CSS file's own directory, so we have
+ * to point it at:
+ *   1. The whole `packages/ui/src/` tree (this is where pump-ds primitives
+ *      and legacy components live).
+ *   2. Both host apps' source trees, because that's where consumers will
+ *      author `<div className="bg-brand …">` markup.
+ *
+ * Paths are relative to this file (packages/ui/src/pump-ds/tailwind.css).
+ */
+@source "../";
+@source "../../../../apps/desktop/src/";
+@source "../../../../apps/console/src/";
+@source "../../../../apps/mobile/src/";
+
+@theme {
+  /* -------- Colors -------- */
+  /* Brand */
+  --color-brand: var(--brand-primary);
+  --color-brand-secondary: var(--brand-secondary);
+  --color-brand-warning: var(--brand-warning);
+  --color-brand-danger: var(--brand-danger);
+
+  /* Surfaces + borders */
+  --color-canvas: var(--bg-canvas);
+  --color-surface: var(--bg-surface);
+  --color-surface-alt: var(--bg-surface-alt);
+  --color-border-soft: var(--border-soft);
+  --color-border-strong: var(--border-strong);
+
+  /* Text ramp */
+  --color-ink: var(--text-strong);
+  --color-ink-strong: var(--text-strong);
+  --color-ink-default: var(--text-default);
+  --color-ink-muted: var(--text-muted);
+  --color-ink-faint: var(--text-faint);
+
+  /* Semantic state pairs (bg + fg per tone) */
+  --color-success-bg: var(--state-success-bg);
+  --color-success-fg: var(--state-success-fg);
+  --color-warning-bg: var(--state-warning-bg);
+  --color-warning-fg: var(--state-warning-fg);
+  --color-danger-bg: var(--state-danger-bg);
+  --color-danger-fg: var(--state-danger-fg);
+  --color-info-bg: var(--state-info-bg);
+  --color-info-fg: var(--state-info-fg);
+
+  /* -------- Radii --------
+   * Inlined (not `var(--radius-*)`) for the same cyclic-reference reason as
+   * the fonts below: index.css already defines these names on :root, so a
+   * same-named `@theme` entry pointing at itself would invalidate them
+   * app-wide (legacy `border-radius: var(--radius-card)` would collapse to 0).
+   * Values mirror index.css :root. */
+  --radius-card: 10px;
+  --radius-input: 8px;
+  --radius-button: 8px;
+  --radius-chip: 999px;
+  --radius-drawer: 12px;
+
+  /* -------- Spacing (4px grid) -------- */
+  /* Tailwind v4 keeps its default `--spacing` scale (0.25rem step). We add
+   * PumpOS-named aliases so semantic classes like `p-space-4` remain
+   * available without breaking the standard `p-4` scale. */
+  --spacing-space-1: var(--space-1);
+  --spacing-space-2: var(--space-2);
+  --spacing-space-3: var(--space-3);
+  --spacing-space-4: var(--space-4);
+  --spacing-space-5: var(--space-5);
+  --spacing-space-6: var(--space-6);
+  --spacing-space-8: var(--space-8);
+  --spacing-space-10: var(--space-10);
+
+  /* -------- Fonts --------
+   * NOTE: these MUST NOT be `var(--font-sans)` / `var(--font-mono)`. That
+   * would be a self-referential (cyclic) custom property — the app's
+   * index.css already defines `--font-sans` / `--font-mono` on :root, and a
+   * `@theme` entry of the same name pointing at itself resolves to the CSS
+   * "guaranteed-invalid value". That invalidates the variable app-wide, so
+   * every `.font-mono` (and legacy `var(--font-mono)`) falls back to the
+   * inherited sans font — turning monospace figures into proportional ones
+   * and breaking numeric column alignment across the app.
+   *
+   * Fonts change ~never, so inline the actual stacks here. This is the one
+   * place we deliberately duplicate a token value rather than bridge it. */
+  --font-sans: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", monospace;
+}

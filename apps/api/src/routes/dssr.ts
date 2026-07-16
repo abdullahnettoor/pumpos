@@ -1,8 +1,15 @@
 import { Hono } from 'hono';
-import { eq, and, desc, gte, lt } from 'drizzle-orm';
-import { schema, DbClient } from '@pump/db';
-import { Role } from '@pump/shared';
-import { z } from 'zod';
+import { and, desc, eq, gte, lte } from 'drizzle-orm';
+import { schema, type DbClient } from '@pump/db';
+import { isAuthorizedForStation, canExportReports, type Role } from '@pump/shared';
+import { GenerateDssr, composeDssr, type Result } from '@pump/core';
+import { buildContext } from '../infra/context.js';
+import { runInTransaction } from '../infra/transaction.js';
+import {
+  DrizzleDssrSnapshotRepository,
+  DrizzleDssrDataReader,
+} from '../infra/repositories/reporting-repositories.js';
+import { DrizzleBusinessDayRepository } from '../infra/repositories/station-ops-repositories.js';
 
 type Variables = {
   db: DbClient;
@@ -17,214 +24,66 @@ type Variables = {
 
 export const dssrRouter = new Hono<{ Variables: Variables }>();
 
-// Helper to check if user belongs/has access to station
-function hasStationAccess(user: any, stationId: string): boolean {
-  if (user.role === 'Owner') return true;
-  return user.assignedStationIds.includes(stationId);
+const STATUS_BY_CODE: Record<string, number> = {
+  VALIDATION_ERROR: 400,
+  NOT_FOUND: 404,
+  CONFLICT: 409,
+  FORBIDDEN: 403,
+  UNAUTHORIZED: 401,
+  INVARIANT_VIOLATION: 409,
+};
+
+function sendResult<T>(c: any, result: Result<T>) {
+  if (result.success) return c.json({ success: true, data: result.data });
+  const status = STATUS_BY_CODE[result.error.code] ?? 400;
+  return c.json({ success: false, error: result.error }, status);
 }
 
-// Parse business day window from settings
-function getBusinessDayWindow(settings: any): { startHour: number; startMinute: number } {
-  const businessDayStartsAt = (settings?.business_day_starts_at as string) || '06:00';
-  const [hourStr, minStr] = businessDayStartsAt.split(':');
-  return {
-    startHour: parseInt(hourStr, 10) || 6,
-    startMinute: parseInt(minStr, 10) || 0,
-  };
-}
-
-// Calculate business day timestamp range
-function getBusinessDayTimestamps(
-  businessDate: string,
-  settings: any,
-  timezone: string = 'UTC'
-): { windowStart: Date; windowEnd: Date } {
-  const { startHour, startMinute } = getBusinessDayWindow(settings);
-  
-  // Parse businessDate (YYYY-MM-DD)
-  const [year, month, day] = businessDate.split('-');
-  const dateObj = new Date(`${year}-${month}-${day}T00:00:00Z`);
-  
-  // Window start = businessDate at startHour:startMinute
-  const windowStart = new Date(dateObj);
-  windowStart.setHours(startHour, startMinute, 0, 0);
-  
-  // Window end = next day at startHour:startMinute
-  const windowEnd = new Date(windowStart);
-  windowEnd.setDate(windowEnd.getDate() + 1);
-  
-  return { windowStart, windowEnd };
-}
-
-// POST /api/dssr/daily/generate
+// POST /api/dssr/daily/generate — { stationId, businessDate } | { businessDayId }
 dssrRouter.post('/daily/generate', async (c) => {
   const db = c.var.db;
   const user = c.var.user;
+  if (!canExportReports(user.role)) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions to generate DSSR' } }, 403);
+  }
+  const body = await c.req.json().catch(() => ({}));
+  let businessDayId: string | undefined = body?.businessDayId;
+  const stationId: string | undefined = body?.stationId;
+  const businessDate: string | undefined = body?.businessDate;
 
-  try {
-    const bodyStr = await c.req.text();
-    const body = bodyStr ? JSON.parse(bodyStr) : {};
-    const { stationId, businessDate } = body;
-
+  if (!businessDayId) {
     if (!stationId || !businessDate) {
-      return c.json(
-        { success: false, error: { code: 'BAD_REQUEST', message: 'Missing stationId or businessDate' } },
-        400
-      );
+      return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Provide businessDayId, or stationId + businessDate' } }, 400);
     }
-
-    if (!hasStationAccess(user, stationId)) {
+    if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId })) {
       return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
     }
-
-    // Fetch station
-    const [station] = await db
-      .select()
-      .from(schema.stations)
-      .where(and(eq(schema.stations.id, stationId), eq(schema.stations.organizationId, user.organizationId)));
-
-    if (!station) {
-      return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Station not found' } }, 404);
-    }
-
-    // Get business day window
-    const { windowStart, windowEnd } = getBusinessDayTimestamps(businessDate, station.settings);
-
-    // Fetch all shifts in the business day window
-    const shiftsInWindow = await db
-      .select()
-      .from(schema.shifts)
+    const [bd] = await db
+      .select({ id: schema.businessDays.id })
+      .from(schema.businessDays)
       .where(
         and(
-          eq(schema.shifts.stationId, stationId),
-          eq(schema.shifts.organizationId, user.organizationId),
-          gte(schema.shifts.closedAt, windowStart),
-          lt(schema.shifts.closedAt, windowEnd),
-          eq(schema.shifts.status, 'CLOSED')
-        )
-      );
-
-    // Fetch corresponding shift summaries
-    const summariesData = await db
-      .select()
-      .from(schema.shiftSummaries)
-      .where(
-        and(
-          eq(schema.shifts.stationId, stationId),
-          eq(schema.shifts.organizationId, user.organizationId)
-        )
+          eq(schema.businessDays.organizationId, user.organizationId),
+          eq(schema.businessDays.stationId, stationId),
+          eq(schema.businessDays.businessDate, businessDate),
+        ),
       )
-      .innerJoin(schema.shifts, eq(schema.shiftSummaries.shiftId, schema.shifts.id))
-      .then((rows) =>
-        rows.filter((row) => shiftsInWindow.some((s) => s.id === row.shifts.id))
-      );
-
-    // Aggregate snapshot data from all shift summaries
-    const aggregated: any = {
-      businessDate,
-      stationId,
-      organizationId: user.organizationId,
-      shiftsIncluded: shiftsInWindow.length,
-      totalVolumeSold: 0,
-      totalCashCollections: 0,
-      totalCardCollections: 0,
-      totalUpiCollections: 0,
-      totalCreditSales: 0,
-      totalExpenses: 0,
-      totalPurchases: 0,
-      nozzles: {},
-      warnings: [],
-      shifts: [],
-    };
-
-    // Iterate through shift summaries and aggregate
-    for (const row of summariesData) {
-      const snapshot = row.shift_summaries.snapshotData as any;
-      if (!snapshot) continue;
-
-      aggregated.totalVolumeSold += Number(snapshot.totalVolumeSold || 0);
-      aggregated.totalCashCollections += Number(snapshot.cashCollectionsSum || 0);
-      aggregated.totalCardCollections += Number(snapshot.cardCollectionsSum || 0);
-      aggregated.totalUpiCollections += Number(snapshot.upiCollectionsSum || 0);
-      aggregated.totalCreditSales += Number(snapshot.creditSalesSum || 0);
-      aggregated.totalExpenses += Number(snapshot.cashExpensesSum || 0);
-      aggregated.totalPurchases += Number(snapshot.purchases?.length || 0);
-
-      // Aggregate by nozzle
-      if (snapshot.nozzleReadings) {
-        for (const nr of snapshot.nozzleReadings) {
-          if (!aggregated.nozzles[nr.nozzleId]) {
-            aggregated.nozzles[nr.nozzleId] = {
-              nozzleName: nr.nozzleName,
-              productName: nr.productName,
-              totalVolume: 0,
-              instances: 0,
-            };
-          }
-          aggregated.nozzles[nr.nozzleId].totalVolume += Number(nr.volumeSold || 0);
-          aggregated.nozzles[nr.nozzleId].instances += 1;
-        }
-      }
-
-      // Collect shift details
-      aggregated.shifts.push({
-        shiftId: row.shift_summaries.shiftId,
-        templateName: snapshot.templateName,
-        closedAt: snapshot.closedAt,
-        cashVariance: snapshot.cashVariance,
-      });
+      .limit(1);
+    if (!bd) {
+      return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'No business day found for that station and date' } }, 404);
     }
-
-    // Upsert into dssr_snapshots
-    const [existing] = await db
-      .select()
-      .from(schema.dssrSnapshots)
-      .where(
-        and(
-          eq(schema.dssrSnapshots.stationId, stationId),
-          eq(schema.dssrSnapshots.businessDate, businessDate)
-        )
-      );
-
-    let dssrRecord;
-    if (existing) {
-      // Update
-      await db
-        .update(schema.dssrSnapshots)
-        .set({
-          snapshotData: aggregated,
-          generatedAt: new Date(),
-        })
-        .where(eq(schema.dssrSnapshots.id, existing.id));
-
-      dssrRecord = { ...existing, snapshotData: aggregated };
-    } else {
-      // Insert
-      const newId = crypto.randomUUID();
-      await db.insert(schema.dssrSnapshots).values({
-        id: newId,
-        organizationId: user.organizationId,
-        stationId,
-        businessDate,
-        snapshotData: aggregated,
-        generatedAt: new Date(),
-      });
-
-      dssrRecord = {
-        id: newId,
-        organizationId: user.organizationId,
-        stationId,
-        businessDate,
-        snapshotData: aggregated,
-        generatedAt: new Date(),
-      };
-    }
-
-    return c.json({ success: true, data: dssrRecord });
-  } catch (err: any) {
-    console.error('DSSR generate error:', err);
-    return c.json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }, 500);
+    businessDayId = bd.id;
   }
+
+  const result = await runInTransaction(db, (tx, events) =>
+    new GenerateDssr({
+      businessDays: new DrizzleBusinessDayRepository(tx),
+      snapshots: new DrizzleDssrSnapshotRepository(tx),
+      reader: new DrizzleDssrDataReader(tx),
+      events,
+    }).execute({ businessDayId: businessDayId!, force: Boolean(body?.force) }, buildContext(user, { stationId, businessDayId })),
+  );
+  return sendResult(c, result);
 });
 
 // GET /api/dssr/daily?stationId=&date=
@@ -233,38 +92,56 @@ dssrRouter.get('/daily', async (c) => {
   const user = c.var.user;
   const stationId = c.req.query('stationId');
   const date = c.req.query('date');
-
   if (!stationId || !date) {
-    return c.json(
-      { success: false, error: { code: 'BAD_REQUEST', message: 'Missing stationId or date' } },
-      400
-    );
+    return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Missing stationId or date' } }, 400);
   }
-
-  if (!hasStationAccess(user, stationId)) {
+  if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId })) {
     return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
   }
+  const snapshot = await new DrizzleDssrSnapshotRepository(db).findByStationDate(user.organizationId, stationId, date);
+  return c.json({ success: true, data: snapshot });
+});
 
-  try {
-    const [dssr] = await db
-      .select()
-      .from(schema.dssrSnapshots)
-      .where(
-        and(
-          eq(schema.dssrSnapshots.stationId, stationId),
-          eq(schema.dssrSnapshots.businessDate, date),
-          eq(schema.dssrSnapshots.organizationId, user.organizationId)
-        )
-      );
-
-    if (!dssr) {
-      return c.json({ success: true, data: null });
-    }
-
-    return c.json({ success: true, data: dssr });
-  } catch (err: any) {
-    return c.json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }, 500);
+// GET /api/dssr/daily/preview?stationId=&date= — LIVE (non-persisted) DSSR/P&L
+// for the given business day, composed from current data. Used for the open
+// day's "Today's P&L" so it reflects sales as they happen without writing a
+// snapshot (snapshots stay reserved for day close / explicit generation).
+dssrRouter.get('/daily/preview', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  const stationId = c.req.query('stationId');
+  const date = c.req.query('date');
+  if (!stationId || !date) {
+    return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Missing stationId or date' } }, 400);
   }
+  if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId })) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+  }
+  const [bd] = await db
+    .select({ id: schema.businessDays.id, status: schema.businessDays.status })
+    .from(schema.businessDays)
+    .where(
+      and(
+        eq(schema.businessDays.organizationId, user.organizationId),
+        eq(schema.businessDays.stationId, stationId),
+        eq(schema.businessDays.businessDate, date),
+      ),
+    )
+    .limit(1);
+  // No business day yet (no activity) → return null; the UI shows an empty state.
+  if (!bd) return c.json({ success: true, data: null });
+  const source = await new DrizzleDssrDataReader(db).readBusinessDay(bd.id);
+  const snapshotData = {
+    generatedAt: new Date().toISOString(),
+    businessDayId: bd.id,
+    businessDate: date,
+    stationId,
+    organizationId: user.organizationId,
+    status: bd.status,
+    live: true,
+    ...composeDssr(source),
+  };
+  return c.json({ success: true, data: { businessDate: date, generatedAt: snapshotData.generatedAt, live: true, snapshotData } });
 });
 
 // GET /api/dssr/daily/range?stationId=&from=&to=
@@ -274,34 +151,23 @@ dssrRouter.get('/daily/range', async (c) => {
   const stationId = c.req.query('stationId');
   const from = c.req.query('from');
   const to = c.req.query('to');
-
   if (!stationId || !from || !to) {
-    return c.json(
-      { success: false, error: { code: 'BAD_REQUEST', message: 'Missing stationId, from, or to' } },
-      400
-    );
+    return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Missing stationId, from, or to' } }, 400);
   }
-
-  if (!hasStationAccess(user, stationId)) {
+  if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId })) {
     return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
   }
-
-  try {
-    const list = await db
-      .select()
-      .from(schema.dssrSnapshots)
-      .where(
-        and(
-          eq(schema.dssrSnapshots.stationId, stationId),
-          eq(schema.dssrSnapshots.organizationId, user.organizationId),
-          gte(schema.dssrSnapshots.businessDate, from),
-          lt(schema.dssrSnapshots.businessDate, to)
-        )
-      )
-      .orderBy(desc(schema.dssrSnapshots.businessDate));
-
-    return c.json({ success: true, data: list });
-  } catch (err: any) {
-    return c.json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }, 500);
-  }
+  const list = await db
+    .select()
+    .from(schema.dssrSnapshots)
+    .where(
+      and(
+        eq(schema.dssrSnapshots.organizationId, user.organizationId),
+        eq(schema.dssrSnapshots.stationId, stationId),
+        gte(schema.dssrSnapshots.businessDate, from),
+        lte(schema.dssrSnapshots.businessDate, to),
+      ),
+    )
+    .orderBy(desc(schema.dssrSnapshots.businessDate));
+  return c.json({ success: true, data: list });
 });

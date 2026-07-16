@@ -1,0 +1,151 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+
+// Static list drives the card layout; live availability + URLs come from
+// /downloads/manifest.json at runtime (see the client script below).
+const platforms = [
+  { key: 'windows-x64', os: 'windows', label: 'Windows', sub: '10/11 · 64-bit', icon: '🪟' },
+  { key: 'macos-arm64', os: 'macos', label: 'macOS', sub: 'Apple Silicon', icon: '' },
+  { key: 'macos-x64', os: 'macos', label: 'macOS', sub: 'Intel', icon: '' },
+  { key: 'linux-x64-appimage', os: 'linux', label: 'Linux', sub: 'AppImage', icon: '🐧' },
+  { key: 'linux-x64-deb', os: 'linux', label: 'Linux', sub: '.deb (Debian/Ubuntu)', icon: '🐧' },
+];
+---
+
+<BaseLayout
+  title="Download PumpOS"
+  description="Download the PumpOS desktop app for Windows, macOS or Linux."
+  path="/download"
+>
+  <section class="mx-auto max-w-4xl px-6 pb-24 pt-20 text-center">
+    <h1 class="text-4xl font-bold tracking-tight sm:text-5xl">Download PumpOS</h1>
+    <p class="mx-auto mt-4 max-w-xl text-lg text-[var(--color-ink-muted)]">
+      The desktop app runs your station offline-first. Pick your platform below.
+    </p>
+
+    <!-- Recommended (OS-detected) slot, filled by client script -->
+    <div id="recommended" class="mt-10 hidden">
+      <div
+        class="mx-auto max-w-md rounded-xl border border-[var(--color-brand)] bg-[var(--color-surface)] p-6 text-left"
+      >
+        <p class="text-xs font-medium uppercase tracking-wide text-[var(--color-brand)]">
+          Recommended for your device
+        </p>
+        <p id="recommended-label" class="mt-1 text-lg font-semibold"></p>
+        <a
+          id="recommended-link"
+          href="#"
+          class="mt-4 inline-block rounded-lg bg-[var(--color-brand)] px-6 py-3 font-medium text-white transition hover:bg-[var(--color-brand-dark)]"
+        ></a>
+      </div>
+    </div>
+
+    <!-- All platforms -->
+    <div class="mt-12 grid gap-4 text-left sm:grid-cols-2">
+      {
+        platforms.map((p) => (
+          <div
+            data-platform={p.key}
+            data-os={p.os}
+            class="platform-card rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-surface)] p-5"
+          >
+            <div class="flex items-center gap-3">
+              <span class="text-2xl">{p.icon}</span>
+              <div>
+                <p class="font-semibold">{p.label}</p>
+                <p class="text-sm text-[var(--color-ink-muted)]">{p.sub}</p>
+              </div>
+            </div>
+            <a
+              data-download
+              href="#"
+              class="mt-4 inline-block rounded-lg border border-[var(--color-border-soft)] px-4 py-2 text-sm font-medium transition hover:border-[var(--color-brand)]"
+            >
+              Download
+            </a>
+            <p data-meta class="mt-2 text-xs text-[var(--color-ink-muted)]" />
+          </div>
+        ))
+      }
+    </div>
+
+    <p class="mt-10 text-sm text-[var(--color-ink-muted)]">
+      Prefer the browser? <a href="https://console.pumpos.app" class="text-[var(--color-brand)] underline">Open the web console</a> from any desktop.
+    </p>
+  </section>
+</BaseLayout>
+
+<script>
+  type Artifact = { url: string | null; size: number | null; sha256: string | null; ext: string };
+  type Manifest = { version: string; artifacts: Record<string, Artifact> };
+
+  function detectOs(): 'windows' | 'macos' | 'linux' | null {
+    const p = navigator.platform?.toLowerCase() ?? '';
+    const ua = navigator.userAgent.toLowerCase();
+    if (p.includes('win') || ua.includes('windows')) return 'windows';
+    if (p.includes('mac') || ua.includes('mac os')) return 'macos';
+    if (p.includes('linux') || ua.includes('linux')) return 'linux';
+    return null;
+  }
+
+  function fmtSize(bytes: number | null): string {
+    if (!bytes) return '';
+    const mb = bytes / (1024 * 1024);
+    return `${mb.toFixed(1)} MB`;
+  }
+
+  async function init() {
+    let manifest: Manifest | null = null;
+    try {
+      const res = await fetch('/downloads/manifest.json', { cache: 'no-store' });
+      if (res.ok) manifest = (await res.json()) as Manifest;
+    } catch {
+      /* offline / not yet published — cards stay in "coming soon" state */
+    }
+
+    const cards = document.querySelectorAll<HTMLElement>('.platform-card');
+    cards.forEach((card) => {
+      const key = card.dataset.platform!;
+      const link = card.querySelector<HTMLAnchorElement>('[data-download]')!;
+      const meta = card.querySelector<HTMLElement>('[data-meta]')!;
+      const art = manifest?.artifacts?.[key];
+      if (art?.url) {
+        link.href = art.url;
+        link.textContent = 'Download';
+        meta.textContent = [manifest?.version && `v${manifest.version}`, fmtSize(art.size)]
+          .filter(Boolean)
+          .join(' · ');
+      } else {
+        link.textContent = 'Coming soon';
+        link.setAttribute('aria-disabled', 'true');
+        link.classList.add('pointer-events-none', 'opacity-50');
+      }
+    });
+
+    // Recommended slot
+    const os = detectOs();
+    if (os) {
+      const match = Array.from(cards).find((c) => c.dataset.os === os);
+      if (match) {
+        const key = match.dataset.platform!;
+        const art = manifest?.artifacts?.[key];
+        const label = match.querySelector('.font-semibold')?.textContent ?? os;
+        const box = document.getElementById('recommended')!;
+        const lbl = document.getElementById('recommended-label')!;
+        const rlink = document.getElementById('recommended-link') as HTMLAnchorElement;
+        lbl.textContent = label;
+        if (art?.url) {
+          rlink.href = art.url;
+          rlink.textContent = `Download for ${label}`;
+        } else {
+          rlink.textContent = 'Coming soon';
+          rlink.setAttribute('aria-disabled', 'true');
+          rlink.classList.add('pointer-events-none', 'opacity-60');
+        }
+        box.classList.remove('hidden');
+      }
+    }
+  }
+
+  init();
+</script>

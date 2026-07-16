@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { SyncIndicator } from './SyncIndicator.js';
+import React, { useEffect, useMemo, useState } from 'react';
+import { AppTopBar } from './AppTopBar.js';
+import { cn } from '../pump-ds/lib/cn.js';
 import { Station } from '@pump/shared';
 
 export interface NavItem {
@@ -9,11 +10,31 @@ export interface NavItem {
   roles?: string[];
 }
 
+/**
+ * Optional intent passed alongside a navigation. Lets one screen (or the
+ * command palette / quick-create) deep-link into another and have it open a
+ * specific drawer or focus an entity on arrival. Screens consume the intent
+ * once on mount/update and are expected to ignore stale intents.
+ */
+export interface NavIntent {
+  /** Focus a specific customer (opens their statement drawer). */
+  focusCustomerId?: string;
+  /** Focus a specific supplier (opens their statement drawer). */
+  focusSupplierId?: string;
+  /** Focus a specific inventory tab + entity (tank card / merchandise row). */
+  focusInventoryTab?: 'tanks' | 'items';
+  focusInventoryId?: string;
+  /** Open a drawer immediately on arrival at the destination page. */
+  open?: 'customer-statement' | 'new-customer' | 'new-collection' | 'supplier-statement' | 'supplier-payment' | 'new-expense';
+  /** Open a specific past business day's DSSR summary (Reports page). */
+  openDssrDate?: string;
+}
+
 export interface AppShellProps {
   children: React.ReactNode;
   navItems: NavItem[];
   currentPath: string;
-  onNavigate: (path: string) => void;
+  onNavigate: (path: string, intent?: NavIntent) => void;
   userRole: string;
   userName: string;
   syncStatus: 'online' | 'offline' | 'synced' | 'pending' | 'failed';
@@ -123,8 +144,8 @@ const getIconSvg = (label: string) => {
     case 'customers':
       return (
         <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-          <polyline points="22 4 12 14.01 9 11.01" />
+          <circle cx="12" cy="8" r="5" />
+          <path d="M20 21a8 8 0 0 0-16 0" />
         </svg>
       );
     case 'inventory':
@@ -143,6 +164,33 @@ const getIconSvg = (label: string) => {
           <line x1="6" y1="20" x2="6" y2="14" />
         </svg>
       );
+    case 'fuel pricing':
+    case 'pricing':
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M7.5 3H4a1 1 0 0 0-1 1v3.5a2 2 0 0 0 .586 1.414l9.5 9.5a2 2 0 0 0 2.828 0l3.5-3.5a2 2 0 0 0 0-2.828l-9.5-9.5A2 2 0 0 0 7.5 3Z" />
+          <circle cx="7.5" cy="7.5" r="1" />
+        </svg>
+      );
+    case 'organization':
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="7" width="18" height="14" rx="1" />
+          <path d="M8 7V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v3" />
+          <line x1="9" y1="11" x2="9" y2="11.01" />
+          <line x1="15" y1="11" x2="15" y2="11.01" />
+          <line x1="9" y1="15" x2="9" y2="15.01" />
+          <line x1="15" y1="15" x2="15" y2="15.01" />
+        </svg>
+      );
+    case 'accounts':
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M19 5H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Z" />
+          <path d="M16 12h.01" />
+          <path d="M3 10h18" />
+        </svg>
+      );
     default:
       return (
         <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -154,6 +202,19 @@ const getIconSvg = (label: string) => {
   }
 };
 
+/**
+ * Sidebar section grouping. Items are matched to sections by `path`; order
+ * within a section follows the `paths` order here. Anything unmatched falls
+ * into a trailing group. Sections with no visible items are dropped.
+ */
+const NAV_GROUPS: { heading: string; paths: string[] }[] = [
+  { heading: 'Operations', paths: ['/dashboard', '/shifts', '/inventory', '/pricing'] },
+  { heading: 'Sales & CRM', paths: ['/customers'] },
+  { heading: 'Purchasing', paths: ['/purchases'] },
+  { heading: 'Finance', paths: ['/accounts', '/expenses', '/reports'] },
+  { heading: 'Setup', paths: ['/setup/station', '/organization'] },
+];
+
 export const AppShell: React.FC<AppShellProps> = ({
   children,
   navItems,
@@ -164,21 +225,55 @@ export const AppShell: React.FC<AppShellProps> = ({
   syncStatus,
   pendingSyncCount = 0,
   onLogout,
-  stations = [],
   selectedStation = null,
-  onStationChange,
   environmentTag = null,
 }) => {
+  // Sidebar expanded by default; the top-bar hamburger collapses it to an icon rail.
   const [collapsed, setCollapsed] = useState(false);
+
+  // App-wide: stop mouse-wheel from changing a focused number input's value
+  // (a common source of accidental edits while scrolling). Blurring the input on
+  // wheel keeps page scrolling intact while preventing the value change.
+  useEffect(() => {
+    const onWheel = (e: WheelEvent) => {
+      const el = document.activeElement as HTMLInputElement | null;
+      if (el && el.tagName === 'INPUT' && el.type === 'number' && el === e.target) {
+        el.blur();
+      }
+    };
+    document.addEventListener('wheel', onWheel, { passive: true });
+    return () => document.removeEventListener('wheel', onWheel);
+  }, []);
 
   const visibleNavItems = navItems.filter(
     (item) => !item.roles || item.roles.includes(userRole)
   );
 
+  // Bucket the flat nav list into ordered sections. Items not mapped to any
+  // section fall into a trailing group (unlabelled when it's the ONLY group,
+  // e.g. onboarding mode; "More" otherwise, e.g. the dev Design System link).
+  const groupedNav = useMemo(() => {
+    const used = new Set<string>();
+    const groups = NAV_GROUPS.map((g) => ({
+      heading: g.heading,
+      items: g.paths
+        .map((p) => visibleNavItems.find((n) => n.path === p))
+        .filter((n): n is NavItem => Boolean(n)),
+    })).filter((g) => g.items.length > 0);
+    groups.forEach((g) => g.items.forEach((it) => used.add(it.path)));
+    const rest = visibleNavItems.filter((n) => !used.has(n.path));
+    if (rest.length) {
+      groups.push({ heading: rest.length === visibleNavItems.length ? '' : 'More', items: rest });
+    }
+    return groups;
+  }, [visibleNavItems]);
+
   return (
     <div
+      className="app-shell"
       style={{
         display: 'flex',
+        flexDirection: 'column',
         height: '100vh',
         width: '100vw',
         backgroundColor: 'var(--bg-canvas)',
@@ -187,228 +282,116 @@ export const AppShell: React.FC<AppShellProps> = ({
         overflow: 'hidden',
       }}
     >
-      {/* Sidebar Rail */}
-      <aside
-        style={{
-          width: collapsed ? '72px' : '220px',
-          backgroundColor: 'var(--bg-surface-alt)',
-          borderRight: '1px solid var(--border-soft)',
-          display: 'flex',
-          flexDirection: 'column',
-          transition: 'width 0.15s cubic-bezier(0.4, 0, 0.2, 1)',
-          flexShrink: 0,
-        }}
-      >
-        {/* Brand/Logo Section */}
-        <div
-          style={{
-            height: '56px',
-            display: 'flex',
-            alignItems: 'center',
-            padding: '0 var(--space-4)',
-            borderBottom: '1px solid var(--border-soft)',
-            justifyContent: collapsed ? 'center' : 'space-between',
-          }}
-        >
-          {!collapsed && (
-            <span style={{ fontSize: '15px', fontWeight: 700, color: 'var(--brand-primary)', fontFamily: 'var(--font-sans)', letterSpacing: '-0.01em' }}>
-              PumpOS
-            </span>
-          )}
-          <button
-            onClick={() => setCollapsed(!collapsed)}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: 'var(--text-muted)',
-              cursor: 'pointer',
-              padding: '4px',
-              borderRadius: '4px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--border-soft)')}
-            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-          >
-            {collapsed ? (
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
-            ) : (
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
-            )}
-          </button>
-        </div>
+      {/* Full-width top bar (pump-ds): hamburger + brand · business day · search · + New · notifications · sync · user */}
+      <div className="no-print" style={{ flexShrink: 0 }}>
+        <AppTopBar
+          selectedStation={selectedStation}
+          navItems={navItems}
+          userRole={(userRole as 'Owner' | 'Manager' | 'Accountant' | 'Staff') || 'Staff'}
+          userName={userName}
+          syncStatus={syncStatus}
+          pendingSyncCount={pendingSyncCount}
+          onNavigate={onNavigate}
+          onLogout={onLogout}
+          onToggleSidebar={() => setCollapsed((c) => !c)}
+        />
+      </div>
 
-        {/* Navigation links */}
-        <nav style={{ flex: 1, padding: 'var(--space-3) var(--space-2)', display: 'flex', flexDirection: 'column', gap: '2px' }}>
-          {visibleNavItems.map((item) => {
-            const isActive = currentPath === item.path;
-            return (
-              <button
-                key={item.path}
-                onClick={() => onNavigate(item.path)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  padding: '8px var(--space-3)',
-                  borderRadius: 'var(--radius-button)',
-                  border: 'none',
-                  backgroundColor: isActive ? 'var(--state-info-bg)' : 'transparent',
-                  color: isActive ? 'var(--state-info-fg)' : 'var(--text-default)',
-                  cursor: 'pointer',
-                  fontWeight: isActive ? 600 : 500,
-                  fontSize: '13px',
-                  textAlign: 'left',
-                  width: '100%',
-                  gap: '12px',
-                  transition: 'background-color 0.1s, color 0.1s',
-                }}
-                onMouseEnter={(e) => {
-                  if (!isActive) {
-                    e.currentTarget.style.backgroundColor = 'var(--border-soft)';
-                    e.currentTarget.style.color = 'var(--text-strong)';
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (!isActive) {
-                    e.currentTarget.style.backgroundColor = 'transparent';
-                    e.currentTarget.style.color = 'var(--text-default)';
-                  }
-                }}
-              >
-                <span style={{ display: 'flex', alignItems: 'center', color: isActive ? 'var(--state-info-fg)' : 'var(--text-muted)' }}>
-                  {getIconSvg(item.label)}
-                </span>
-                {!collapsed && <span>{item.label}</span>}
-              </button>
-            );
-          })}
-        </nav>
-
-        {/* User context footer */}
-        <div
+      {/* Body: sidebar rail + content canvas */}
+      <div style={{ display: 'flex', flex: 1, minHeight: 0, position: 'relative' }}>
+        {/* Sidebar Rail */}
+        <aside
+          className="no-print"
           style={{
-            padding: 'var(--space-3) var(--space-4)',
-            borderTop: '1px solid var(--border-soft)',
+            width: collapsed ? '72px' : '220px',
+            backgroundColor: 'var(--bg-surface-alt)',
+            borderRight: '1px solid var(--border-soft)',
             display: 'flex',
             flexDirection: 'column',
-            gap: '8px',
-            backgroundColor: 'var(--bg-surface)',
-          }}
-        >
-          {!collapsed && (
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-strong)' }}>{userName}</span>
-              <span style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700, fontFamily: 'var(--font-mono)' }}>
-                {userRole}
-              </span>
-            </div>
-          )}
-          <button
-            onClick={onLogout}
-            style={{
-              padding: '6px var(--space-3)',
-              borderRadius: 'var(--radius-button)',
-              border: '1px solid var(--border-soft)',
-              backgroundColor: 'var(--bg-surface)',
-              color: 'var(--text-default)',
-              cursor: 'pointer',
-              fontWeight: 500,
-              fontSize: '11px',
-              width: '100%',
-              textAlign: collapsed ? 'center' : 'left',
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--bg-surface-alt)')}
-            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'var(--bg-surface)')}
-          >
-            {collapsed ? 'Exit' : 'Logout'}
-          </button>
-        </div>
-      </aside>
-
-      {/* Main canvas area */}
-      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0, position: 'relative' }}>
-        {environmentTag ? (
-          <div
-            style={{
-              position: 'absolute',
-              top: '12px',
-              right: '16px',
-              zIndex: 20,
-              height: '22px',
-              display: 'inline-flex',
-              alignItems: 'center',
-              padding: '0 8px',
-              borderRadius: '999px',
-              border: '1px solid rgba(250, 204, 21, 0.45)',
-              backgroundColor: 'rgba(250, 204, 21, 0.14)',
-              color: '#854d0e',
-              fontSize: '10px',
-              fontWeight: 700,
-              letterSpacing: '0.08em',
-              textTransform: 'uppercase',
-              pointerEvents: 'none',
-            }}
-          >
-            {environmentTag}
-          </div>
-        ) : null}
-        {/* Top Header details */}
-        <header
-          style={{
-            height: '56px',
-            backgroundColor: 'var(--bg-surface)',
-            borderBottom: '1px solid var(--border-soft)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '0 var(--space-6)',
+            transition: 'width 0.15s cubic-bezier(0.4, 0, 0.2, 1)',
             flexShrink: 0,
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-            {stations.length > 1 ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 600, letterSpacing: '0.05em' }}>Station:</span>
-                <select
-                  value={selectedStation?.id || ''}
-                  onChange={(e) => {
-                    const target = stations.find((s) => s.id === e.target.value);
-                    if (target && onStationChange) onStationChange(target);
-                  }}
-                  style={{
-                    border: '1px solid var(--border-soft)',
-                    borderRadius: 'var(--radius-input)',
-                    padding: '4px 24px 4px 8px',
-                    fontSize: '13px',
-                    fontWeight: 600,
-                    height: '28px',
-                    backgroundColor: 'var(--bg-surface-alt)',
-                    color: 'var(--text-strong)',
-                    cursor: 'pointer',
-                    outline: 'none',
-                  }}
-                >
-                  {stations.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
+        {/* Navigation links — grouped, collapsible-friendly */}
+        <nav className="flex-1 overflow-y-auto px-2 py-3">
+          {groupedNav.map((group, gi) => (
+            <div key={group.heading || `grp-${gi}`} className={gi > 0 ? 'mt-4' : ''}>
+              {!collapsed && group.heading && (
+                <div className="px-2 pb-1.5 font-mono text-[10px] font-medium uppercase tracking-wider text-ink-faint">
+                  {group.heading}
+                </div>
+              )}
+              {collapsed && gi > 0 && <div className="mx-2 mb-2 h-px bg-border-soft" />}
+              <div className="flex flex-col gap-0.5">
+                {group.items.map((item) => {
+                  const isActive = currentPath === item.path;
+                  return (
+                    <button
+                      key={item.path}
+                      onClick={() => onNavigate(item.path)}
+                      title={collapsed ? item.label : undefined}
+                      className={cn(
+                        'flex w-full items-center rounded-button text-[13px] transition-colors',
+                        collapsed ? 'justify-center px-0 py-2' : 'gap-3 px-3 py-2',
+                        isActive
+                          ? 'bg-info-bg font-semibold text-info-fg'
+                          : 'font-medium text-ink-default hover:bg-surface-alt hover:text-ink-strong',
+                      )}
+                    >
+                      <span className={cn('flex items-center', isActive ? 'text-info-fg' : 'text-ink-muted')}>
+                        {getIconSvg(item.label)}
+                      </span>
+                      {!collapsed && <span className="truncate">{item.label}</span>}
+                    </button>
+                  );
+                })}
               </div>
-            ) : (
-              <span style={{ fontSize: '14px', color: 'var(--text-strong)', fontWeight: 600 }}>
-                {selectedStation ? selectedStation.name : 'Workspace Setup'}
-              </span>
-            )}
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <SyncIndicator status={syncStatus} pendingCount={pendingSyncCount} />
-          </div>
-        </header>
+            </div>
+          ))}
+        </nav>
+      </aside>
 
-        {/* Content body layout */}
-        <main style={{ flex: 1, overflowY: 'auto', padding: 'var(--space-6)', position: 'relative' }}>
+        {/* Content canvas */}
+        <main
+          className="app-shell__main"
+          style={{
+            flex: 1,
+            overflowY: 'auto',
+            padding: 'var(--space-6)',
+            // Draw the (6px) scrollbar within the right padding instead of adding
+            // to it: reserve a stable gutter and trim the right padding by its
+            // width, so the content inset stays a symmetric 24px with no layout
+            // shift when the scrollbar toggles.
+            paddingRight: 'calc(var(--space-6) - 6px)',
+            scrollbarGutter: 'stable',
+            position: 'relative',
+          }}
+        >
+          {environmentTag ? (
+            <div
+              style={{
+                position: 'absolute',
+                top: '12px',
+                right: '16px',
+                zIndex: 20,
+                height: '22px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                padding: '0 8px',
+                borderRadius: '999px',
+                border: '1px solid rgba(250, 204, 21, 0.45)',
+                backgroundColor: 'rgba(250, 204, 21, 0.14)',
+                color: '#854d0e',
+                fontSize: '10px',
+                fontWeight: 700,
+                letterSpacing: '0.08em',
+                textTransform: 'uppercase',
+                pointerEvents: 'none',
+              }}
+            >
+              {environmentTag}
+            </div>
+          ) : null}
           {children}
         </main>
       </div>

@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { CloudShiftTemplateService } from '../../services/cloud.js';
 import { ShiftTemplate } from '@pump/shared';
-import { StatusBadge } from '../StatusBadge.js';
+import { Chip } from '../../pump-ds/index.js';
 import { Drawer } from '../Drawer.js';
+import { useToast } from '../primitives/ToastProvider.js';
 
 const templateService = new CloudShiftTemplateService();
 
 export const ShiftTemplates: React.FC = () => {
+  const toast = useToast();
   const [templates, setTemplates] = useState<ShiftTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -59,8 +61,9 @@ export const ShiftTemplates: React.FC = () => {
       });
       setIsFormOpen(false);
       loadTemplates();
+      toast.success('Shift template created.');
     } catch (err: any) {
-      alert(err.message || 'Failed to create shift template');
+      toast.error(err.message || 'Failed to create shift template');
     }
   };
 
@@ -86,8 +89,9 @@ export const ShiftTemplates: React.FC = () => {
         isActive: true,
       });
       await loadTemplates();
+      toast.success('Default shifts created.');
     } catch (err: any) {
-      alert(err.message || 'Failed to pre-fill default shifts');
+      toast.error(err.message || 'Failed to pre-fill default shifts');
     } finally {
       setLoading(false);
     }
@@ -302,7 +306,7 @@ export const ShiftTemplates: React.FC = () => {
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text-strong)' }}>{t.name}</span>
-              <StatusBadge status={t.isActive ? 'ACTIVE' : 'INACTIVE'} type={t.isActive ? 'success' : 'default'} />
+              <Chip tone={t.isActive ? 'success' : 'neutral'} size="sm">{t.isActive ? 'ACTIVE' : 'INACTIVE'}</Chip>
             </div>
             <div>
               <span style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>OPERATING HOURS</span>

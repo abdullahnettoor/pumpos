@@ -1,0 +1,378 @@
+import { and, eq, inArray, desc } from 'drizzle-orm';
+import { schema, type DbClient } from '@pump/db';
+import type {
+  BusinessDay,
+  BusinessDayRepository,
+  Shift,
+  ShiftRepository,
+  StaffAssignmentInput,
+  TerminalLinkInput,
+  NozzleReading,
+  NozzleReadingRepository,
+  ShiftReconciliationReader,
+  ShiftReconciliationTotals,
+  CreditSalesReader,
+  CreditSaleRecord,
+  StockMovementInput,
+  StockMovementWriter,
+  ShiftSummaryWriter,
+} from '@pump/core';
+
+export class DrizzleBusinessDayRepository implements BusinessDayRepository {
+  constructor(private readonly db: DbClient) {}
+
+  private toEntity(r: typeof schema.businessDays.$inferSelect): BusinessDay {
+    return {
+      id: r.id,
+      organizationId: r.organizationId,
+      stationId: r.stationId,
+      businessDate: r.businessDate,
+      status: r.status as BusinessDay['status'],
+      openedBy: r.openedBy,
+      openedAt: r.openedAt.toISOString(),
+      closedBy: r.closedBy,
+      closedAt: r.closedAt ? r.closedAt.toISOString() : null,
+      createdAt: r.createdAt.toISOString(),
+      updatedAt: r.updatedAt.toISOString(),
+    };
+  }
+
+  async findById(id: string): Promise<BusinessDay | null> {
+    const [r] = await this.db.select().from(schema.businessDays).where(eq(schema.businessDays.id, id)).limit(1);
+    return r ? this.toEntity(r) : null;
+  }
+
+  async save(d: BusinessDay): Promise<void> {
+    await this.db
+      .insert(schema.businessDays)
+      .values({
+        id: d.id,
+        organizationId: d.organizationId,
+        stationId: d.stationId,
+        businessDate: d.businessDate,
+        status: d.status,
+        openedBy: d.openedBy,
+        openedAt: new Date(d.openedAt),
+        closedBy: d.closedBy,
+        closedAt: d.closedAt ? new Date(d.closedAt) : null,
+        createdAt: new Date(d.createdAt),
+        updatedAt: new Date(d.updatedAt),
+      })
+      .onConflictDoUpdate({
+        target: schema.businessDays.id,
+        set: {
+          status: d.status,
+          closedBy: d.closedBy,
+          closedAt: d.closedAt ? new Date(d.closedAt) : null,
+          updatedAt: new Date(d.updatedAt),
+        },
+      });
+  }
+
+  async findOpenByStation(organizationId: string, stationId: string): Promise<BusinessDay | null> {
+    const [r] = await this.db
+      .select()
+      .from(schema.businessDays)
+      .where(
+        and(
+          eq(schema.businessDays.organizationId, organizationId),
+          eq(schema.businessDays.stationId, stationId),
+          eq(schema.businessDays.status, 'OPEN'),
+        ),
+      )
+      .orderBy(desc(schema.businessDays.businessDate))
+      .limit(1);
+    return r ? this.toEntity(r) : null;
+  }
+
+  async findByStationAndDate(organizationId: string, stationId: string, businessDate: string): Promise<BusinessDay | null> {
+    const [r] = await this.db
+      .select()
+      .from(schema.businessDays)
+      .where(
+        and(
+          eq(schema.businessDays.organizationId, organizationId),
+          eq(schema.businessDays.stationId, stationId),
+          eq(schema.businessDays.businessDate, businessDate),
+        ),
+      )
+      .limit(1);
+    return r ? this.toEntity(r) : null;
+  }
+}
+
+// ---------------- Shifts ----------------
+export class DrizzleShiftRepository implements ShiftRepository {
+  constructor(private readonly db: DbClient) {}
+  private toEntity(r: typeof schema.shifts.$inferSelect): Shift {
+    return {
+      id: r.id,
+      organizationId: r.organizationId,
+      stationId: r.stationId,
+      businessDayId: r.businessDayId,
+      shiftTemplateId: r.shiftTemplateId,
+      status: r.status as Shift['status'],
+      openedBy: r.openedBy,
+      openedAt: r.openedAt.toISOString(),
+      closedBy: r.closedBy,
+      closedAt: r.closedAt ? r.closedAt.toISOString() : null,
+      lockedAt: r.lockedAt ? r.lockedAt.toISOString() : null,
+      openingCash: r.openingCash,
+      closingCash: r.closingCash,
+      createdAt: r.createdAt.toISOString(),
+      updatedAt: r.updatedAt.toISOString(),
+    };
+  }
+  async findById(id: string): Promise<Shift | null> {
+    const [r] = await this.db.select().from(schema.shifts).where(eq(schema.shifts.id, id)).limit(1);
+    return r ? this.toEntity(r) : null;
+  }
+  async save(s: Shift): Promise<void> {
+    await this.db
+      .insert(schema.shifts)
+      .values({
+        id: s.id,
+        organizationId: s.organizationId,
+        stationId: s.stationId,
+        businessDayId: s.businessDayId,
+        shiftTemplateId: s.shiftTemplateId,
+        status: s.status,
+        openedBy: s.openedBy,
+        openedAt: new Date(s.openedAt),
+        closedBy: s.closedBy,
+        closedAt: s.closedAt ? new Date(s.closedAt) : null,
+        lockedAt: s.lockedAt ? new Date(s.lockedAt) : null,
+        openingCash: s.openingCash,
+        closingCash: s.closingCash,
+        createdAt: new Date(s.createdAt),
+        updatedAt: new Date(s.updatedAt),
+      })
+      .onConflictDoUpdate({
+        target: schema.shifts.id,
+        set: {
+          status: s.status,
+          closedBy: s.closedBy,
+          closedAt: s.closedAt ? new Date(s.closedAt) : null,
+          lockedAt: s.lockedAt ? new Date(s.lockedAt) : null,
+          closingCash: s.closingCash,
+          updatedAt: new Date(s.updatedAt),
+        },
+      });
+  }
+  async findOpenByStation(organizationId: string, stationId: string): Promise<Shift | null> {
+    const [r] = await this.db
+      .select()
+      .from(schema.shifts)
+      .where(and(eq(schema.shifts.organizationId, organizationId), eq(schema.shifts.stationId, stationId), eq(schema.shifts.status, 'OPEN')))
+      .limit(1);
+    return r ? this.toEntity(r) : null;
+  }
+  async addStaffAssignments(shiftId: string, assignments: StaffAssignmentInput[]): Promise<void> {
+    if (assignments.length === 0) return;
+    await this.db.insert(schema.shiftStaffAssignments).values(assignments.map((a) => ({ shiftId, userId: a.userId, duId: a.duId })));
+  }
+  async addTerminalLinks(shiftId: string, links: TerminalLinkInput[]): Promise<void> {
+    if (links.length === 0) return;
+    await this.db.insert(schema.shiftTerminalLinks).values(links.map((l) => ({ shiftId, terminalId: l.terminalId, duId: l.duId ?? null })));
+  }
+}
+
+// ---------------- Nozzle Readings ----------------
+export class DrizzleNozzleReadingRepository implements NozzleReadingRepository {
+  constructor(private readonly db: DbClient) {}
+  private toEntity(r: typeof schema.nozzleReadings.$inferSelect): NozzleReading {
+    return {
+      id: r.id,
+      shiftId: r.shiftId,
+      nozzleId: r.nozzleId,
+      openingReading: r.openingReading,
+      closingReading: r.closingReading,
+      volumeSold: r.volumeSold,
+      testingVolume: r.testingVolume,
+      unitPrice: r.unitPrice,
+      createdAt: r.createdAt.toISOString(),
+    };
+  }
+  async lastClosingByNozzleIds(nozzleIds: string[]): Promise<Map<string, number>> {
+    const m = new Map<string, number>();
+    if (nozzleIds.length === 0) return m;
+    const rows = await this.db
+      .select()
+      .from(schema.nozzleReadings)
+      .where(inArray(schema.nozzleReadings.nozzleId, nozzleIds))
+      .orderBy(desc(schema.nozzleReadings.createdAt));
+    for (const r of rows) {
+      if (!m.has(r.nozzleId)) m.set(r.nozzleId, Number(r.closingReading));
+    }
+    return m;
+  }
+  async saveMany(readings: NozzleReading[]): Promise<void> {
+    if (readings.length === 0) return;
+    await this.db.insert(schema.nozzleReadings).values(
+      readings.map((r) => ({
+        id: r.id,
+        shiftId: r.shiftId,
+        nozzleId: r.nozzleId,
+        openingReading: r.openingReading,
+        closingReading: r.closingReading,
+        volumeSold: r.volumeSold,
+        testingVolume: r.testingVolume,
+        unitPrice: r.unitPrice,
+        createdAt: new Date(r.createdAt),
+      })),
+    );
+  }
+  async listByShift(shiftId: string): Promise<NozzleReading[]> {
+    const rows = await this.db.select().from(schema.nozzleReadings).where(eq(schema.nozzleReadings.shiftId, shiftId));
+    return rows.map((r) => this.toEntity(r));
+  }
+  async updateClosing(id: string, closingReading: string, volumeSold: string): Promise<void> {
+    await this.db.update(schema.nozzleReadings).set({ closingReading, volumeSold }).where(eq(schema.nozzleReadings.id, id));
+  }
+}
+
+// ---------------- Shift Reconciliation (drawer model) ----------------
+export class DrizzleShiftReconciliationReader implements ShiftReconciliationReader {
+  constructor(private readonly db: DbClient) {}
+  async totalsForShift(shiftId: string): Promise<ShiftReconciliationTotals> {
+    const collections = await this.db.select().from(schema.collections).where(eq(schema.collections.shiftId, shiftId));
+    const expenses = await this.db.select().from(schema.expenses).where(eq(schema.expenses.shiftId, shiftId));
+    const supplierTxns = await this.db.select().from(schema.supplierTransactions).where(eq(schema.supplierTransactions.shiftId, shiftId));
+    const sales = await this.db.select().from(schema.sales).where(eq(schema.sales.shiftId, shiftId));
+    const handovers = await this.db.select().from(schema.attendantHandovers).where(eq(schema.attendantHandovers.shiftId, shiftId));
+
+    const sumBy = (rows: { amount: string; paymentMethod?: string }[], method: string) =>
+      rows.filter((r) => r.paymentMethod === method).reduce((acc, r) => acc + Number(r.amount), 0);
+
+    // Cash sales for the drawer = the cash attendants declared in their DU handovers
+    // (fuel cash is never a `sales` row — it's metered and declared at handover),
+    // PLUS merchandise cash from sellers who have NO handover (office/counter staff),
+    // whose cash isn't captured anywhere else. Attendants' own merch cash is already
+    // inside their handover cashHandedOver. Fall back to all merch cash when there
+    // are no handovers at all (legacy / handover-less shifts).
+    const handoverCash = handovers.reduce((acc, h) => acc + Number(h.cashHandedOver ?? 0), 0);
+    const handoverUserIds = new Set(handovers.map((h) => h.userId));
+    const cashSaleRows = sales.filter((s) => s.paymentMethod === 'Cash');
+    // Cash portion = total − non-cash (card/UPI) portion (Option B).
+    const cashPortion = (s: { totalAmount: string; nonCashAmount?: string | null }) =>
+      Number(s.totalAmount) - Number(s.nonCashAmount ?? 0);
+    const merchCashSales = cashSaleRows.reduce((acc, s) => acc + cashPortion(s), 0);
+    const outsideRows = cashSaleRows.filter((s) => !(s.attendantId && handoverUserIds.has(s.attendantId)));
+    const nonHandoverMerchCash = outsideRows.reduce((acc, s) => acc + cashPortion(s), 0);
+
+    // Per-seller breakdown of the non-attendant (outside-handover) merch cash,
+    // computed from the SAME rows as the total so the two always reconcile. Names
+    // resolved via a users lookup (same pattern as the merchandise panel); sales
+    // with no seller fall under "Counter / unassigned".
+    const rowsForBreakdown = handovers.length > 0 ? outsideRows : cashSaleRows;
+    const bySeller = new Map<string, number>();
+    for (const s of rowsForBreakdown) {
+      const key = (s as { attendantId?: string | null }).attendantId ?? 'unassigned';
+      bySeller.set(key, (bySeller.get(key) ?? 0) + cashPortion(s));
+    }
+    const sellerIds = [...bySeller.keys()].filter((k) => k !== 'unassigned');
+    const sellerNameRows = sellerIds.length
+      ? await this.db.select({ id: schema.users.id, fullName: schema.users.fullName }).from(schema.users).where(inArray(schema.users.id, sellerIds))
+      : [];
+    const nameById = new Map(sellerNameRows.map((u) => [u.id, u.fullName]));
+    const merchCashOutsideHandoverBreakdown = [...bySeller.entries()]
+      .filter(([, amount]) => amount !== 0)
+      .map(([key, amount]) => ({ sellerName: key === 'unassigned' ? 'Counter / unassigned' : (nameById.get(key) ?? 'Unknown'), amount }))
+      .sort((a, b) => b.amount - a.amount);
+
+    return {
+      cashSales: handovers.length > 0 ? handoverCash + nonHandoverMerchCash : merchCashSales,
+      handoverCash: handovers.length > 0 ? handoverCash : 0,
+      merchCashOutsideHandover: handovers.length > 0 ? nonHandoverMerchCash : merchCashSales,
+      merchCashOutsideHandoverBreakdown,
+      cashCollections: sumBy(collections, 'Cash'),
+      cardCollections: sumBy(collections, 'Card'),
+      upiCollections: sumBy(collections, 'UPI'),
+      creditCollections: sumBy(collections, 'Credit'),
+      drawerExpenses: expenses
+        .filter((e) => e.affectsDrawer && e.status !== 'VOIDED')
+        .reduce((acc, e) => acc + Number(e.amount), 0),
+      drawerSupplierPayments: supplierTxns
+        .filter((t) => t.transactionType === 'Payment' && t.affectsDrawer)
+        .reduce((acc, t) => acc + Number(t.amount), 0),
+    };
+  }
+}
+
+// ---------------- Stock Movements ----------------
+export class DrizzleStockMovementWriter implements StockMovementWriter {
+  constructor(private readonly db: DbClient) {}
+  async saveMany(movements: StockMovementInput[]): Promise<void> {
+    if (movements.length === 0) return;
+    await this.db.insert(schema.stockMovements).values(
+      movements.map((m) => ({
+        shiftId: m.shiftId,
+        businessDayId: m.businessDayId,
+        productId: m.productId,
+        tankId: m.tankId,
+        movementType: m.movementType,
+        quantity: m.quantity,
+        referenceType: m.referenceType ?? null,
+        referenceId: m.referenceId ?? null,
+        notes: m.notes ?? null,
+        createdAt: new Date(),
+      })),
+    );
+  }
+}
+
+// ---------------- Shift Summaries ----------------
+export class DrizzleShiftSummaryWriter implements ShiftSummaryWriter {
+  constructor(private readonly db: DbClient) {}
+  async save(shiftId: string, snapshot: Record<string, unknown>): Promise<void> {
+    await this.db.delete(schema.shiftSummaries).where(eq(schema.shiftSummaries.shiftId, shiftId));
+    await this.db.insert(schema.shiftSummaries).values({ shiftId, snapshotData: snapshot, generatedAt: new Date() });
+  }
+  async deleteForShift(shiftId: string): Promise<void> {
+    await this.db.delete(schema.shiftSummaries).where(eq(schema.shiftSummaries.shiftId, shiftId));
+  }
+}
+
+// ---------------- Credit Sales ----------------
+export class DrizzleCreditSalesReader implements CreditSalesReader {
+  constructor(private readonly db: DbClient) {}
+
+  async listByShift(shiftId: string): Promise<CreditSaleRecord[]> {
+    const rows = await this.db
+      .select({
+        ct: schema.customerTransactions,
+        customerName: schema.customers.name,
+        productName: schema.products.name,
+        productCode: schema.products.code,
+        registrationNumber: schema.customerVehicles.registrationNumber,
+      })
+      .from(schema.customerTransactions)
+      .leftJoin(schema.customers, eq(schema.customers.id, schema.customerTransactions.customerId))
+      .leftJoin(schema.products, eq(schema.products.id, schema.customerTransactions.productId))
+      .leftJoin(schema.customerVehicles, eq(schema.customerVehicles.id, schema.customerTransactions.vehicleId))
+      .where(
+        and(
+          eq(schema.customerTransactions.shiftId, shiftId),
+          eq(schema.customerTransactions.transactionType, 'Credit Sale'),
+          eq(schema.customerTransactions.referenceType, 'CREDIT_SALE'),
+        ),
+      );
+
+    return rows.map((r) => ({
+      id: r.ct.id,
+      amount: Number(r.ct.amount),
+      quantity: r.ct.quantity != null ? Number(r.ct.quantity) : null,
+      unitPrice: r.ct.unitPrice != null ? Number(r.ct.unitPrice) : null,
+      notes: r.ct.notes ?? null,
+      duId: r.ct.duId ?? null,
+      attendantId: r.ct.attendantId ?? null,
+      customerId: r.ct.customerId,
+      vehicleId: r.ct.vehicleId ?? null,
+      productId: r.ct.productId ?? null,
+      customerName: r.customerName ?? 'Customer',
+      productName: r.productName ?? null,
+      productCode: r.productCode ?? null,
+      vehicleNumber: r.registrationNumber ?? null,
+    }));
+  }
+}

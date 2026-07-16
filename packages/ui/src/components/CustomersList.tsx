@@ -1,335 +1,217 @@
-import React, { useEffect, useState } from 'react';
-import { CloudTransactionService, CloudShiftService, CloudProductService } from '../services/cloud.js';
-import { User, ShieldAlert, CreditCard, DollarSign, Plus, Info, Edit, Check, Settings, Scale, Truck, Trash2 } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { CloudTransactionService } from '../services/cloud.js';
+import { useCustomers, useShiftStatus, useProducts, useInvalidateOperational, useCollections, useCreditSales, useAllVehicles } from '../query/hooks.js';
+import { Users, CreditCard, Plus, Truck, Search, Wallet, HelpCircle } from 'lucide-react';
 import { LoadingSpinner } from './LoadingSpinner.js';
 import { Drawer } from './Drawer.js';
 import { CollectionEntryForm } from './transactions/CollectionEntryForm.js';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { customerCreateSchema } from '@pump/shared';
+import { DataTable } from './primitives/DataTable.js';
+import { inr } from '../utils/format.js';
+import { Tabs } from './primitives/Tabs.js';
+import { PageLayout } from './primitives/PageLayout.js';
+import { useConfirm } from './primitives/ConfirmDialog.js';
+import { useToast } from './primitives/ToastProvider.js';
+import { Panel, Button, Chip, KpiStrip, KpiTile, EmptyState } from '../pump-ds/index.js';
+import type { NavIntent } from './AppShell.js';
+import { resolveBusinessDate, type CollectionEntryFormValues } from '@pump/shared';
+import { buildCustomerColumns, buildCollectionColumns, buildCreditSaleColumns, buildVehicleColumns } from './customers/columns.js';
+import { CustomerFormDrawer } from './customers/CustomerFormDrawer.js';
+import { VehicleDrawer } from './customers/VehicleDrawer.js';
+import { StatementDrawer } from './customers/StatementDrawer.js';
 
 const transactionService = new CloudTransactionService();
-const shiftService = new CloudShiftService();
-const productService = new CloudProductService();
 
 interface CustomersListProps {
   selectedStation: any | null;
   defaultShiftId?: string;
+  /** Optional deep-link intent (focus a customer, open a drawer). */
+  intent?: NavIntent | null;
+  /** Called once the intent has been handled so the parent can clear it. */
+  onIntentConsumed?: () => void;
 }
 
-type TabType = 'transactions' | 'registry' | 'vehicles';
+type TabType = 'transactions' | 'sales' | 'registry' | 'vehicles';
 
-export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, defaultShiftId }) => {
+export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, defaultShiftId, intent, onIntentConsumed }) => {
   const [activeTab, setActiveTab] = useState<TabType>('transactions');
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  
-  // Customers Data
-  const [customers, setCustomers] = useState<any[]>([]); // Active only for transactions dropdown
-  const [allCustomers, setAllCustomers] = useState<any[]>([]); // All customers for management
-  const [activeShift, setActiveShift] = useState<any | null>(null);
-  const [recentClosedShifts, setRecentClosedShifts] = useState<any[]>([]);
 
-  // CRUD Drawer States
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const [isCollectionDrawerOpen, setIsCollectionDrawerOpen] = useState(false);
-  const [editingCustomer, setEditingCustomer] = useState<any | null>(null); // null = Creating, object = Editing
-  
-  // Ledger Drawer States
-  const [selectedLedgerCustomer, setSelectedLedgerCustomer] = useState<any | null>(null);
-  const [ledgerTransactions, setLedgerTransactions] = useState<any[]>([]);
-  const [loadingLedger, setLoadingLedger] = useState(false);
-  const [ledgerError, setLedgerError] = useState<string | null>(null);
+  const stationId = selectedStation?.id ?? null;
+  const customersActiveQ = useCustomers(true);
+  const customersAllQ = useCustomers(false);
+  const statusQ = useShiftStatus(stationId, true);
+  const productsQ = useProducts();
+  const collectionsQ = useCollections();
+  const creditSalesQ = useCreditSales();
+  const vehiclesQ = useAllVehicles(false);
+  const invalidateOperational = useInvalidateOperational();
+  const qc = useQueryClient();
+  const confirm = useConfirm();
+  const toast = useToast();
 
-  const openLedgerDrawer = async (cust: any) => {
-    setSelectedLedgerCustomer(cust);
-    setLedgerTransactions([]);
-    setLoadingLedger(true);
-    setLedgerError(null);
+  const customers = customersActiveQ.data ?? [];
+  const allCustomers = customersAllQ.data ?? [];
+  const allCollections = collectionsQ.data ?? [];
+  const anyPrepaid = allCustomers.some((c: any) => c.isPrepaid);
+  const activeShift = statusQ.data?.activeShift ?? null;
+  const recentClosedShifts: any[] = statusQ.data?.recentClosedShifts ?? [];
+  const fuelProducts = (productsQ.data ?? []).filter((p: any) => p.productType === 'FUEL' && p.isActive);
+
+  // Business date (station-timezone aware) used to bucket "today" collections.
+  const stationSettings: any = (selectedStation as any)?.settings || {};
+  const todayIso = resolveBusinessDate({ timeZone: stationSettings.timezone, dayStartsAt: stationSettings.business_day_starts_at });
+  const monthPrefix = todayIso.slice(0, 7);
+
+  // Collections ledger filters
+  const [collectionSearch, setCollectionSearch] = useState('');
+  const [collectionMethod, setCollectionMethod] = useState<string>('all');
+
+  const collectionKpis = useMemo(() => {
+    let today = 0, month = 0, todayCount = 0;
+    const todayCustomers = new Set<string>();
+    for (const c of allCollections) {
+      const amt = Number(c.amount || 0);
+      const bd: string = c.businessDate || '';
+      if (bd === todayIso) { today += amt; todayCount += 1; if (c.customerId) todayCustomers.add(c.customerId); }
+      if (bd.startsWith(monthPrefix)) month += amt;
+    }
+    return { today, month, todayCount, todayCustomers: todayCustomers.size };
+  }, [allCollections, todayIso, monthPrefix]);
+
+  const filteredCollections = useMemo(() => {
+    const q = collectionSearch.trim().toLowerCase();
+    return allCollections.filter((c: any) => {
+      if (collectionMethod !== 'all' && c.paymentMethod !== collectionMethod) return false;
+      if (q && !((c.customerName || '').toLowerCase().includes(q) || (c.notes || '').toLowerCase().includes(q))) return false;
+      return true;
+    });
+  }, [allCollections, collectionSearch, collectionMethod]);
+
+  // Credit-sales ledger
+  const allCreditSales = creditSalesQ.data ?? [];
+  const [salesSearch, setSalesSearch] = useState('');
+  const salesKpis = useMemo(() => {
+    let today = 0, month = 0, todayCount = 0;
+    const custs = new Set<string>();
+    for (const s of allCreditSales) {
+      const amt = Number(s.amount || 0);
+      const bd: string = s.businessDate || '';
+      if (bd === todayIso) { today += amt; todayCount += 1; }
+      if (bd.startsWith(monthPrefix)) month += amt;
+      if (s.customerId) custs.add(s.customerId);
+    }
+    return { today, month, todayCount, customers: custs.size };
+  }, [allCreditSales, todayIso, monthPrefix]);
+  const filteredCreditSales = useMemo(() => {
+    const q = salesSearch.trim().toLowerCase();
+    if (!q) return allCreditSales;
+    return allCreditSales.filter((s: any) =>
+      (s.customerName || '').toLowerCase().includes(q) ||
+      (s.vehicleReg || '').toLowerCase().includes(q) ||
+      (s.productName || '').toLowerCase().includes(q) ||
+      (s.notes || '').toLowerCase().includes(q));
+  }, [allCreditSales, salesSearch]);
+
+  const loading = customersActiveQ.isLoading || statusQ.isLoading;
+  const error = (customersActiveQ.error || statusQ.error) as Error | null;
+
+  const eligibleCustomers = allCustomers.filter((c: any) => c.customerType === 'Credit' || c.customerType === 'Fleet');
+
+  // --- Vehicles (list + filter) ---
+  const allVehicles = vehiclesQ.data ?? [];
+  const loadingVehicles = vehiclesQ.isLoading;
+  const [vehicleSearch, setVehicleSearch] = useState('');
+  const filteredVehicles = useMemo(() => {
+    const q = vehicleSearch.trim().toLowerCase();
+    if (!q) return allVehicles;
+    return allVehicles.filter((v: any) =>
+      (v.registrationNumber || '').toLowerCase().includes(q) ||
+      (v.customerName || '').toLowerCase().includes(q) ||
+      (v.vehicleType || '').toLowerCase().includes(q));
+  }, [allVehicles, vehicleSearch]);
+
+  // --- Customer form drawer ---
+  const [isCustomerDrawerOpen, setIsCustomerDrawerOpen] = useState(false);
+  const [editingCustomer, setEditingCustomer] = useState<any | null>(null);
+  const openCreateCustomer = () => { setEditingCustomer(null); setIsCustomerDrawerOpen(true); };
+  const openEditCustomer = (cust: any) => { setEditingCustomer(cust); setIsCustomerDrawerOpen(true); };
+
+  // --- Statement drawer ---
+  const [statementCustomer, setStatementCustomer] = useState<any | null>(null);
+
+  // --- Vehicle drawer ---
+  const [isVehicleDrawerOpen, setIsVehicleDrawerOpen] = useState(false);
+  const [editingVehicle, setEditingVehicle] = useState<any | null>(null);
+  const [vehicleCustomerId, setVehicleCustomerId] = useState('');
+  const openCreateVehicle = () => { setEditingVehicle(null); setIsVehicleDrawerOpen(true); };
+  const openEditVehicle = (v: any) => { setEditingVehicle(v); setIsVehicleDrawerOpen(true); };
+  const onDeleteVehicle = async (vehicle: any) => {
+    if (!(await confirm({ title: 'Delete vehicle?', message: `This will remove vehicle ${vehicle.registrationNumber}.`, confirmLabel: 'Delete', danger: true }))) return;
     try {
-      const data = await transactionService.getCustomerLedger(cust.id);
-      setLedgerTransactions(data || []);
+      await transactionService.deleteCustomerVehicle(vehicle.id);
+      qc.invalidateQueries({ queryKey: ['vehicles'] });
+      toast.success('Vehicle deleted.');
     } catch (err: any) {
-      setLedgerError(err.message || 'Failed to load ledger history');
-    } finally {
-      setLoadingLedger(false);
+      toast.error(err.message || 'Failed to delete vehicle');
     }
   };
 
-  const [formError, setFormError] = useState<string | null>(null);
-  const [drawerError, setDrawerError] = useState<string | null>(null);
-  const [collectionShiftId, setCollectionShiftId] = useState('');
-  const [collectionCustomerId, setCollectionCustomerId] = useState('');
-  const [collectionAmount, setCollectionAmount] = useState('');
-  const [collectionPaymentMethod, setCollectionPaymentMethod] = useState<'Cash' | 'Card' | 'UPI' | 'Credit'>('Cash');
-  const [collectionNotes, setCollectionNotes] = useState('');
+  // Default the "add vehicle" customer to the first eligible one.
+  useEffect(() => {
+    setVehicleCustomerId((prev) => prev || eligibleCustomers[0]?.id || '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customersAllQ.data]);
+
+  // --- Collection drawer ---
+  const [isCollectionDrawerOpen, setIsCollectionDrawerOpen] = useState(false);
+  const [collectionDefaults, setCollectionDefaults] = useState<Partial<CollectionEntryFormValues>>({});
   const [collectionSubmitting, setCollectionSubmitting] = useState(false);
-
-  // Prepaid top-up state
-  const [isTopupDrawerOpen, setIsTopupDrawerOpen] = useState(false);
-  const [topupAmount, setTopupAmount] = useState('');
-  const [topupPaymentMethod, setTopupPaymentMethod] = useState<'Cash' | 'Card' | 'UPI' | 'BankTransfer'>('Cash');
-  const [topupNotes, setTopupNotes] = useState('');
-  const [topupSubmitting, setTopupSubmitting] = useState(false);
-  const [topupError, setTopupError] = useState<string | null>(null);
-
-  // Vehicles tab state
-  const [fuelProducts, setFuelProducts] = useState<any[]>([]);
-  const [vehicleCustomerId, setVehicleCustomerId] = useState('');
-  const [vehicles, setVehicles] = useState<any[]>([]);
-  const [loadingVehicles, setLoadingVehicles] = useState(false);
-  const [vehicleError, setVehicleError] = useState<string | null>(null);
-  const [isVehicleDrawerOpen, setIsVehicleDrawerOpen] = useState(false);
-  const [editingVehicle, setEditingVehicle] = useState<any | null>(null);
-  const [vehicleForm, setVehicleForm] = useState({
-    customerId: '',
-    registrationNumber: '',
-    vehicleType: '',
-    defaultProductId: '',
-    isActive: true,
-  });
-  const [vehicleSubmitting, setVehicleSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   const resolvePreferredShiftId = (active: any | null, closedList: any[]) => {
     if (defaultShiftId) {
       const matchesActive = active?.id === defaultShiftId;
       const matchesClosed = closedList.some((shift) => shift.id === defaultShiftId);
-
-      if (matchesActive || matchesClosed) {
-        return defaultShiftId;
-      }
+      if (matchesActive || matchesClosed) return defaultShiftId;
     }
-
-    if (active) {
-      return active.id;
-    }
-
-    if (closedList.length > 0) {
-      return closedList[0].id;
-    }
-
+    if (active) return active.id;
+    if (closedList.length > 0) return closedList[0].id;
     return '';
   };
 
-  const resetCollectionForm = () => {
+  const resetCollectionForm = (customerId?: string) => {
     const preferredShiftId = resolvePreferredShiftId(activeShift, recentClosedShifts);
-    setCollectionShiftId(preferredShiftId);
-    setCollectionCustomerId(customers[0]?.id || '');
-    setCollectionAmount('');
-    setCollectionPaymentMethod('Cash');
-    setCollectionNotes('');
+    setCollectionDefaults({
+      targetShiftId: preferredShiftId,
+      transactionDate: new Date().toISOString().slice(0, 10),
+      customerId: customerId || customers[0]?.id || '',
+      amount: undefined as unknown as number,
+      paymentMethod: 'Cash',
+      notes: '',
+    });
     setCollectionSubmitting(false);
     setFormError(null);
   };
 
-  const openCollectionDrawer = () => {
-    resetCollectionForm();
-    setIsCollectionDrawerOpen(true);
-  };
+  const openCollectionDrawer = (customerId?: string) => { resetCollectionForm(customerId); setIsCollectionDrawerOpen(true); };
+  const closeCollectionDrawer = () => { setIsCollectionDrawerOpen(false); resetCollectionForm(); };
 
-  const closeCollectionDrawer = () => {
-    setIsCollectionDrawerOpen(false);
-    resetCollectionForm();
-  };
-
-  // 2. Customer Drawer Form (Create/Edit)
-  const {
-    register: registerCust,
-    handleSubmit: handleSubmitCust,
-    setValue: setValueCust,
-    watch: watchCust,
-    reset: resetCust,
-    formState: { errors: custErrors, isSubmitting: drawerSubmitting }
-  } = useForm({
-    resolver: zodResolver(customerCreateSchema),
-    defaultValues: {
-      name: '',
-      phone: '',
-      customerType: 'Regular' as const,
-      creditLimit: 50000 as any,
-      fleetCode: '',
-      isPrepaid: false,
-      isActive: true,
-      metadata: {
-        gstin: '',
-        pan: '',
-        tradeName: '',
-        billingAddress: '',
-      }
-    }
-  });
-
-  const custType = watchCust('customerType');
-
-  useEffect(() => {
-    if (selectedStation) {
-      loadData();
-    }
-  }, [selectedStation]);
-
-  useEffect(() => {
-    if (activeTab === 'vehicles' && vehicleCustomerId) {
-      loadVehicles(vehicleCustomerId);
-    }
-  }, [activeTab, vehicleCustomerId]);
-
-  useEffect(() => {
-    setCollectionShiftId(resolvePreferredShiftId(activeShift, recentClosedShifts));
-  }, [activeShift, recentClosedShifts, defaultShiftId]);
-
-  const loadData = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      const [activeList, allList, status, products] = await Promise.all([
-        transactionService.getCustomers(true),
-        transactionService.getCustomers(false),
-        shiftService.getShiftStatus(selectedStation.id, true),
-        productService.listProducts(),
-      ]);
-
-      setCustomers(activeList || []);
-      setAllCustomers(allList || []);
-      const active = status.activeShift || null;
-      const closedList = status.recentClosedShifts || [];
-      setActiveShift(active);
-      setRecentClosedShifts(closedList);
-      setFuelProducts((products || []).filter((p: any) => p.productType === 'FUEL' && p.isActive));
-
-      const eligibleCustomers = (allList || []).filter((c: any) => c.customerType === 'Credit' || c.customerType === 'Fleet');
-      if (eligibleCustomers.length > 0) {
-        setVehicleCustomerId((prev) => prev || eligibleCustomers[0].id);
-      } else {
-        setVehicleCustomerId('');
-      }
-
-      if (activeList && activeList.length > 0) {
-        setCollectionCustomerId(activeList[0].id);
-      } else {
-        setCollectionCustomerId('');
-      }
-    } catch (err: any) {
-      setError(err.message || 'Failed to load customers data');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadVehicles = async (customerId: string) => {
-    if (!customerId) {
-      setVehicles([]);
-      return;
-    }
-
-    try {
-      setLoadingVehicles(true);
-      setVehicleError(null);
-      const list = await transactionService.getCustomerVehicles(customerId, false);
-      setVehicles(list || []);
-    } catch (err: any) {
-      setVehicleError(err.message || 'Failed to load vehicles');
-    } finally {
-      setLoadingVehicles(false);
-    }
-  };
-
-  const openCreateVehicleDrawer = () => {
-    setEditingVehicle(null);
-    setVehicleForm({
-      customerId: vehicleCustomerId,
-      registrationNumber: '',
-      vehicleType: '',
-      defaultProductId: '',
-      isActive: true,
-    });
-    setVehicleError(null);
-    setIsVehicleDrawerOpen(true);
-  };
-
-  const openEditVehicleDrawer = (vehicle: any) => {
-    setEditingVehicle(vehicle);
-    setVehicleForm({
-      customerId: vehicle.customerId,
-      registrationNumber: vehicle.registrationNumber || '',
-      vehicleType: vehicle.vehicleType || '',
-      defaultProductId: vehicle.defaultProductId || '',
-      isActive: vehicle.isActive,
-    });
-    setVehicleError(null);
-    setIsVehicleDrawerOpen(true);
-  };
-
-  const onSaveVehicle = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setVehicleError(null);
-
-    if (!vehicleForm.customerId || !vehicleForm.registrationNumber || !vehicleForm.vehicleType) {
-      setVehicleError('Customer, registration number and vehicle type are required.');
-      return;
-    }
-
-    try {
-      setVehicleSubmitting(true);
-      const payload = {
-        registrationNumber: vehicleForm.registrationNumber.trim().toUpperCase(),
-        vehicleType: vehicleForm.vehicleType.trim(),
-        defaultProductId: vehicleForm.defaultProductId || null,
-        isActive: vehicleForm.isActive,
-      };
-
-      if (editingVehicle) {
-        await transactionService.updateCustomerVehicle(editingVehicle.id, payload);
-      } else {
-        await transactionService.createCustomerVehicle(vehicleForm.customerId, payload);
-      }
-
-      setIsVehicleDrawerOpen(false);
-      await loadVehicles(vehicleForm.customerId);
-    } catch (err: any) {
-      setVehicleError(err.message || 'Failed to save vehicle');
-    } finally {
-      setVehicleSubmitting(false);
-    }
-  };
-
-  const onDeleteVehicle = async (vehicle: any) => {
-    if (!window.confirm(`Delete vehicle ${vehicle.registrationNumber}?`)) {
-      return;
-    }
-
-    try {
-      await transactionService.deleteCustomerVehicle(vehicle.id);
-      await loadVehicles(vehicle.customerId);
-    } catch (err: any) {
-      setVehicleError(err.message || 'Failed to delete vehicle');
-    }
-  };
-
-  const onAddCollection = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const onAddCollection = async (values: CollectionEntryFormValues) => {
     setFormError(null);
-    if (!collectionShiftId || !collectionAmount) {
-      return;
-    }
-
-    if (collectionPaymentMethod === 'Credit' && !collectionCustomerId) {
-      setFormError('A customer account must be selected for Credit Fleet Sales.');
-      return;
-    }
-
+    if (!values.targetShiftId) { setFormError('A shift is required to record this entry.'); return; }
     try {
       setCollectionSubmitting(true);
       await transactionService.recordCollection({
-        shiftId: collectionShiftId,
-        customerId: collectionCustomerId || undefined,
-        amount: Number(collectionAmount),
-        paymentMethod: collectionPaymentMethod,
-        notes: collectionNotes || undefined,
+        shiftId: values.targetShiftId,
+        customerId: values.customerId || undefined,
+        amount: Number(values.amount),
+        paymentMethod: values.paymentMethod,
+        notes: values.notes || undefined,
+        accountId: values.accountId || undefined,
       });
-
       closeCollectionDrawer();
-      await loadData();
+      invalidateOperational(stationId);
+      toast.success('Collection recorded.');
     } catch (err: any) {
       setFormError(err.message || 'Failed to record entry');
     } finally {
@@ -337,112 +219,22 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
     }
   };
 
-  const openCreateDrawer = () => {
-    setEditingCustomer(null);
-    resetCust({
-      name: '',
-      phone: '',
-      customerType: 'Regular',
-      creditLimit: 50000 as any,
-      fleetCode: '',
-      isPrepaid: false,
-      isActive: true,
-      metadata: {
-        gstin: '',
-        pan: '',
-        tradeName: '',
-        billingAddress: '',
-      }
-    });
-    setDrawerError(null);
-    setIsDrawerOpen(true);
-  };
-
-  const openEditDrawer = (cust: any) => {
-    setEditingCustomer(cust);
-    const meta = cust.metadata || {};
-    resetCust({
-      name: cust.name,
-      phone: cust.phone || '',
-      customerType: cust.customerType,
-      creditLimit: cust.creditLimit ? Number(cust.creditLimit) : (cust.customerType === 'Regular' ? null : 50000) as any,
-      fleetCode: cust.fleetCode || '',
-      isPrepaid: Boolean(cust.isPrepaid),
-      isActive: cust.isActive,
-      metadata: {
-        gstin: meta.gstin || '',
-        pan: meta.pan || '',
-        tradeName: meta.tradeName || '',
-        billingAddress: meta.billingAddress || '',
-      }
-    });
-    setDrawerError(null);
-    setIsDrawerOpen(true);
-  };
-
-  const onSaveCustomer = async (data: any) => {
-    setDrawerError(null);
-    try {
-      const payload = {
-        name: data.name,
-        phone: data.phone || null,
-        customerType: data.customerType,
-        creditLimit: (data.customerType === 'Credit' || data.customerType === 'Fleet') && data.creditLimit ? Number(data.creditLimit) : null,
-        fleetCode: data.customerType === 'Fleet' ? data.fleetCode : null,
-        isPrepaid: Boolean(data.isPrepaid),
-        isActive: data.isActive,
-        metadata: {
-          gstin: data.metadata?.gstin || null,
-          pan: data.metadata?.pan || null,
-          tradeName: data.metadata?.tradeName || null,
-          billingAddress: data.metadata?.billingAddress || null,
-        },
-      };
-      if (editingCustomer) {
-        await transactionService.updateCustomer(editingCustomer.id, payload);
-      } else {
-        await transactionService.createCustomer(payload);
-      }
-
-      setIsDrawerOpen(false);
-      await loadData();
-    } catch (err: any) {
-      setDrawerError(err.message || 'Failed to save customer');
+  // --- deep-link intent (from global search / quick-create) ---
+  const handledIntentRef = useRef<NavIntent | null>(null);
+  useEffect(() => {
+    if (!intent || handledIntentRef.current === intent) return;
+    // For a focus intent, wait until the customer list has loaded.
+    if (intent.focusCustomerId && customersAllQ.isLoading) return;
+    handledIntentRef.current = intent;
+    if (intent.open === 'new-customer') openCreateCustomer();
+    else if (intent.open === 'new-collection') openCollectionDrawer();
+    if (intent.focusCustomerId) {
+      const cust = allCustomers.find((c: any) => c.id === intent.focusCustomerId);
+      if (cust) { setActiveTab('registry'); setStatementCustomer(cust); }
     }
-  };
-
-  const openTopupDrawer = () => {
-    setTopupAmount('');
-    setTopupPaymentMethod('Cash');
-    setTopupNotes('');
-    setTopupError(null);
-    setIsTopupDrawerOpen(true);
-  };
-
-  const handleTopupSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedLedgerCustomer?.id || !topupAmount) {
-      return;
-    }
-
-    try {
-      setTopupSubmitting(true);
-      setTopupError(null);
-      await transactionService.topupCustomer(selectedLedgerCustomer.id, {
-        amount: Number(topupAmount),
-        paymentMethod: topupPaymentMethod,
-        notes: topupNotes || undefined,
-      });
-
-      setIsTopupDrawerOpen(false);
-      await loadData();
-      await openLedgerDrawer(selectedLedgerCustomer);
-    } catch (err: any) {
-      setTopupError(err.message || 'Failed to record top-up');
-    } finally {
-      setTopupSubmitting(false);
-    }
-  };
+    onIntentConsumed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [intent, allCustomers, customersAllQ.isLoading]);
 
   if (!selectedStation) {
     return (
@@ -459,856 +251,260 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
   if (error) {
     return (
       <div style={{ padding: '24px', backgroundColor: 'var(--state-danger-bg)', color: 'var(--state-danger-fg)', borderRadius: 'var(--radius-card)', fontFamily: 'var(--font-sans)' }}>
-        <strong>Error:</strong> {error}
+        <strong>Error:</strong> {error.message || 'Failed to load customers data'}
       </div>
     );
   }
 
   return (
-    <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '24px', fontFamily: 'var(--font-sans)' }}>
-      {/* Page Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <h1 style={{ fontSize: '20px', fontWeight: 600, color: 'var(--text-strong)' }}>
-            Customer Fleet Accounts
-          </h1>
-          <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '2px' }}>
-            Manage fleet customer profiles, credit limits, and record shift collections.
-          </p>
-        </div>
-        
-        {activeTab === 'transactions' && (
-          <button
-            onClick={() => openCollectionDrawer()}
-            disabled={!(activeShift || recentClosedShifts.length > 0)}
-            style={{
-              height: '32px',
-              padding: '0 12px',
-              borderRadius: 'var(--radius-input)',
-              backgroundColor: activeShift || recentClosedShifts.length > 0 ? 'var(--brand-primary)' : 'var(--border-strong)',
-              color: 'white',
-              fontSize: '13px',
-              fontWeight: 500,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              border: 'none',
-              cursor: activeShift || recentClosedShifts.length > 0 ? 'pointer' : 'not-allowed',
-            }}
-          >
-            <Plus size={14} /> Add Collection
-          </button>
-        )}
-        {activeTab === 'registry' && (
-          <button
-            onClick={openCreateDrawer}
-            style={{
-              height: '32px',
-              padding: '0 12px',
-              borderRadius: 'var(--radius-input)',
-              backgroundColor: 'var(--brand-primary)',
-              color: 'white',
-              fontSize: '13px',
-              fontWeight: 500,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              border: 'none',
-              cursor: 'pointer',
-            }}
-          >
-            <Plus size={14} /> Add Customer
-          </button>
-        )}
-        {activeTab === 'vehicles' && (
-          <button
-            onClick={openCreateVehicleDrawer}
-            disabled={!vehicleCustomerId}
-            style={{
-              height: '32px',
-              padding: '0 12px',
-              borderRadius: 'var(--radius-input)',
-              backgroundColor: vehicleCustomerId ? 'var(--brand-primary)' : 'var(--border-strong)',
-              color: 'white',
-              fontSize: '13px',
-              fontWeight: 500,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              border: 'none',
-              cursor: vehicleCustomerId ? 'pointer' : 'not-allowed',
-            }}
-          >
-            <Plus size={14} /> Add Vehicle
-          </button>
-        )}
-      </div>
-
-      {/* Tabs Menu */}
-      <div style={{
-        display: 'flex',
-        borderBottom: '1px solid var(--border-soft)',
-        gap: '24px',
-      }}>
-        <button
-          onClick={() => setActiveTab('transactions')}
-          style={{
-            padding: '12px 4px',
-            fontSize: '14px',
-            fontWeight: activeTab === 'transactions' ? 600 : 500,
-            color: activeTab === 'transactions' ? 'var(--primary)' : 'var(--text-muted)',
-            borderBottom: activeTab === 'transactions' ? '2px solid var(--primary)' : '2px solid transparent',
-            background: 'none',
-            borderTop: 'none',
-            borderLeft: 'none',
-            borderRight: 'none',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-          }}
-        >
-          <CreditCard size={16} />
-          Shift Collections & Sales
-        </button>
-
-        <button
-          onClick={() => setActiveTab('registry')}
-          style={{
-            padding: '12px 4px',
-            fontSize: '14px',
-            fontWeight: activeTab === 'registry' ? 600 : 500,
-            color: activeTab === 'registry' ? 'var(--primary)' : 'var(--text-muted)',
-            borderBottom: activeTab === 'registry' ? '2px solid var(--primary)' : '2px solid transparent',
-            background: 'none',
-            borderTop: 'none',
-            borderLeft: 'none',
-            borderRight: 'none',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-          }}
-        >
-          <Settings size={16} />
-          Customer Registry
-        </button>
-
-        <button
-          onClick={() => setActiveTab('vehicles')}
-          style={{
-            padding: '12px 4px',
-            fontSize: '14px',
-            fontWeight: activeTab === 'vehicles' ? 600 : 500,
-            color: activeTab === 'vehicles' ? 'var(--primary)' : 'var(--text-muted)',
-            borderBottom: activeTab === 'vehicles' ? '2px solid var(--primary)' : '2px solid transparent',
-            background: 'none',
-            borderTop: 'none',
-            borderLeft: 'none',
-            borderRight: 'none',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-          }}
-        >
-          <Truck size={16} />
-          Vehicles
-        </button>
-      </div>
-
+    <PageLayout
+      title="Customer Fleet Accounts"
+      subtitle="Manage fleet customer profiles, credit limits, and record shift collections."
+      actions={
+        <>
+          {activeTab === 'transactions' && (
+            <Button variant="primary" size="sm" leftIcon={<Plus />} onClick={() => openCollectionDrawer()}>Add Collection</Button>
+          )}
+          {activeTab === 'registry' && (
+            <Button variant="primary" size="sm" leftIcon={<Plus />} onClick={openCreateCustomer}>Add Customer</Button>
+          )}
+          {activeTab === 'vehicles' && (
+            <Button variant="primary" size="sm" leftIcon={<Plus />} disabled={eligibleCustomers.length === 0} onClick={openCreateVehicle}>Add Vehicle</Button>
+          )}
+        </>
+      }
+      toolbar={
+        <Tabs
+          variant="underline"
+          aria-label="Customers"
+          activeId={activeTab}
+          onChange={(id) => setActiveTab(id as TabType)}
+          tabs={[
+            { id: 'transactions', label: 'Collections', icon: <Wallet size={15} /> },
+            { id: 'sales', label: 'Credit Sales', icon: <CreditCard size={15} /> },
+            { id: 'registry', label: 'Customer Registry', icon: <Users size={15} /> },
+            { id: 'vehicles', label: 'Vehicles', icon: <Truck size={15} /> },
+          ]}
+        />
+      }
+    >
       {/* Tab Contents */}
       <div>
         {activeTab === 'transactions' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {activeShift || recentClosedShifts.length > 0 ? (
-              <div style={{
-                backgroundColor: 'var(--state-info-bg)',
-                color: 'var(--state-info-fg)',
-                padding: '12px 14px',
-                borderRadius: 'var(--radius-card)',
-                fontSize: '12px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                border: '1px solid var(--border-soft)'
-              }}>
-                <Info size={14} />
-                <span>
-                  Collections will post to{' '}
-                  <strong>
-                    {resolvePreferredShiftId(activeShift, recentClosedShifts) === activeShift?.id
-                      ? `${activeShift?.templateName} (Active)`
-                      : recentClosedShifts.find((shift) => shift.id === resolvePreferredShiftId(activeShift, recentClosedShifts))?.templateName ?? 'selected shift'}
-                  </strong>
-                  {defaultShiftId === resolvePreferredShiftId(activeShift, recentClosedShifts) ? ' from the current context.' : '.'}
-                </span>
-              </div>
-            ) : (
-              <div style={{
-                backgroundColor: 'var(--state-warning-bg)',
-                color: 'var(--state-warning-fg)',
-                padding: '16px',
-                borderRadius: 'var(--radius-card)',
-                fontSize: '13px',
-                border: '1px solid var(--border-soft)',
-                lineHeight: '1.5'
-              }}>
-                <span style={{ fontWeight: 700, display: 'block', marginBottom: '4px' }}>Shift Gated Action</span>
-                Collections and credit fleet sales must be logged during an active shift. Please open a shift first.
-              </div>
-            )}
+            {/* KPI strip — today & month collections at a glance */}
+            <KpiStrip columns={4}>
+              <KpiTile dot="brand" label="Collected Today" value={inr(collectionKpis.today)} hint={`${collectionKpis.todayCount} ${collectionKpis.todayCount === 1 ? 'entry' : 'entries'}`} />
+              <KpiTile dot="success" valueTone="success" label="Collected This Month" value={inr(collectionKpis.month)} />
+              <KpiTile dot="info" label="Customers Paid Today" value={String(collectionKpis.todayCustomers)} />
+              <KpiTile dot="warning" valueTone="warning" label="Total Receivables" value={inr(customers.reduce((s: number, c: any) => s + Number(c.currentBalance || 0), 0))} hint="Outstanding dues" />
+            </KpiStrip>
 
-            <div style={{
-              backgroundColor: 'var(--bg-surface)',
-              border: '1px solid var(--border-soft)',
-              borderRadius: 'var(--radius-card)',
-              overflow: 'hidden'
-            }}>
-              <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-soft)' }}>
-                <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)' }}>
-                  Active Credit Accounts Summary
-                </h3>
-              </div>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-                <thead>
-                  <tr style={{ backgroundColor: 'var(--bg-surface-alt)', borderBottom: '1px solid var(--border-soft)', textAlign: 'left', color: 'var(--text-muted)' }}>
-                    <th style={{ padding: '10px 20px', fontWeight: 600 }}>Customer</th>
-                    <th style={{ padding: '10px 20px', fontWeight: 600 }}>Type</th>
-                    <th style={{ padding: '10px 20px', fontWeight: 600, textAlign: 'right' }}>Outstanding Balance</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {customers.map((c, idx) => {
-                    const balance = Number(c.currentBalance || 0);
-                    return (
-                      <tr key={idx} style={{ borderBottom: '1px solid var(--border-soft)' }}>
-                        <td style={{ padding: '12px 20px', fontWeight: 600, color: 'var(--text-strong)' }}>{c.name}</td>
-                        <td style={{ padding: '12px 20px', color: 'var(--text-default)' }}>{c.customerType}</td>
-                        <td style={{ padding: '12px 20px', textAlign: 'right', fontWeight: 700, color: balance > 0 ? 'var(--brand-warning)' : 'var(--state-success-fg)', fontFamily: 'var(--font-mono)' }}>
-                          ₹{balance.toLocaleString('en-IN')}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+            {/* Collections ledger */}
+            <Panel
+              flush
+              title="Collections"
+              action={
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{ position: 'relative' }}>
+                    <Search size={13} style={{ position: 'absolute', left: '8px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                    <input
+                      value={collectionSearch}
+                      onChange={(e) => setCollectionSearch(e.target.value)}
+                      placeholder="Search customer / note…"
+                      style={{ height: '28px', padding: '0 8px 0 26px', width: '200px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', fontSize: '12px', background: 'var(--bg-surface)' }}
+                    />
+                  </div>
+                  <select
+                    value={collectionMethod}
+                    onChange={(e) => setCollectionMethod(e.target.value)}
+                    style={{ height: '28px', padding: '0 6px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', fontSize: '12px', background: 'var(--bg-surface)' }}
+                  >
+                    <option value="all">All methods</option>
+                    <option value="Cash">Cash</option>
+                    <option value="Card">Card</option>
+                    <option value="UPI">UPI</option>
+                    <option value="BankTransfer">Bank</option>
+                  </select>
+                  <button
+                    type="button"
+                    aria-label="Where do collections post?"
+                    title={
+                      activeShift || recentClosedShifts.length > 0
+                        ? `New collections post to ${
+                            resolvePreferredShiftId(activeShift, recentClosedShifts) === activeShift?.id
+                              ? `${activeShift?.templateName} (active shift)`
+                              : recentClosedShifts.find((s) => s.id === resolvePreferredShiftId(activeShift, recentClosedShifts))?.templateName ?? 'the selected shift'
+                          }. Cash collections touch the drawer; card / UPI / bank do not.`
+                        : 'Open a shift to record collections — cash collections are reconciled against the drawer.'
+                    }
+                    style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', height: '28px', width: '22px', marginLeft: '2px', border: 'none', background: 'transparent', color: 'var(--text-faint)', cursor: 'help' }}
+                  >
+                    <HelpCircle size={15} />
+                  </button>
+                </div>
+              }
+            >
+              {collectionsQ.isLoading ? (
+                <div style={{ padding: '16px' }}><LoadingSpinner text="Loading collections…" /></div>
+              ) : filteredCollections.length === 0 ? (
+                <div style={{ padding: '12px' }}>
+                  <EmptyState
+                    compact
+                    icon={<Wallet />}
+                    title={allCollections.length === 0 ? 'No collections yet' : 'No matching collections'}
+                    description={allCollections.length === 0 ? 'Record a collection to see it here.' : 'Try clearing the search or method filter.'}
+                  />
+                </div>
+              ) : (
+                <DataTable
+                  bare
+                  columns={buildCollectionColumns()}
+                  data={filteredCollections}
+                  emptyMessage="No collections."
+                  getRowId={(r: any) => r.id}
+                />
+              )}
+            </Panel>
+          </div>
+        )}
+
+        {activeTab === 'sales' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <KpiStrip columns={4}>
+              <KpiTile dot="warning" valueTone="warning" label="Credit Issued Today" value={inr(salesKpis.today)} hint={`${salesKpis.todayCount} ${salesKpis.todayCount === 1 ? 'sale' : 'sales'}`} />
+              <KpiTile dot="brand" label="Credit This Month" value={inr(salesKpis.month)} />
+              <KpiTile dot="info" label="Customers on Credit" value={String(salesKpis.customers)} />
+              <KpiTile dot="warning" valueTone="warning" label="Total Receivables" value={inr(customers.reduce((s: number, c: any) => s + Number(c.currentBalance || 0), 0))} hint="Outstanding dues" />
+            </KpiStrip>
+
+            <Panel
+              flush
+              title="Credit sales"
+              action={
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{ position: 'relative' }}>
+                    <Search size={13} style={{ position: 'absolute', left: '8px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                    <input
+                      value={salesSearch}
+                      onChange={(e) => setSalesSearch(e.target.value)}
+                      placeholder="Search customer / vehicle / product…"
+                      style={{ height: '28px', padding: '0 8px 0 26px', width: '260px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', fontSize: '12px', background: 'var(--bg-surface)' }}
+                    />
+                  </div>
+                  <button type="button" aria-label="About credit sales" title="Credit sales are receivables — fuel-on-credit and merchandise on credit. They never touch the drawer; record them from the shift handover." style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', height: '28px', width: '22px', marginLeft: '2px', border: 'none', background: 'transparent', color: 'var(--text-faint)', cursor: 'help' }}>
+                    <HelpCircle size={15} />
+                  </button>
+                </div>
+              }
+            >
+              {creditSalesQ.isLoading ? (
+                <div style={{ padding: '16px' }}><LoadingSpinner text="Loading credit sales…" /></div>
+              ) : filteredCreditSales.length === 0 ? (
+                <div style={{ padding: '12px' }}>
+                  <EmptyState
+                    compact
+                    icon={<CreditCard />}
+                    title={allCreditSales.length === 0 ? 'No credit sales yet' : 'No matching credit sales'}
+                    description={allCreditSales.length === 0 ? 'Fuel-on-credit and merchandise-on-credit sales appear here.' : 'Try a different search term.'}
+                  />
+                </div>
+              ) : (
+                <DataTable
+                  bare
+                  columns={buildCreditSaleColumns()}
+                  data={filteredCreditSales}
+                  emptyMessage="No credit sales."
+                  getRowId={(r: any) => r.id}
+                />
+              )}
+            </Panel>
           </div>
         )}
 
         {activeTab === 'registry' && (
-          <div style={{
-            backgroundColor: 'var(--bg-surface)',
-            border: '1px solid var(--border-soft)',
-            borderRadius: 'var(--radius-card)',
-            overflow: 'hidden'
-          }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left' }}>
-              <thead>
-                <tr style={{ backgroundColor: 'var(--bg-surface-alt)', borderBottom: '1px solid var(--border-soft)', color: 'var(--text-muted)' }}>
-                  <th style={{ padding: '12px 20px', fontWeight: 600 }}>Customer Name</th>
-                  <th style={{ padding: '12px 20px', fontWeight: 600 }}>Account Type</th>
-                  <th style={{ padding: '12px 20px', fontWeight: 600 }}>Phone</th>
-                  <th style={{ padding: '12px 20px', fontWeight: 600 }}>Credit Limit</th>
-                  <th style={{ padding: '12px 20px', fontWeight: 600 }}>Prepaid Mode</th>
-                  <th style={{ padding: '12px 20px', fontWeight: 600, textAlign: 'right' }}>Prepaid Balance</th>
-                  <th style={{ padding: '12px 20px', fontWeight: 600 }}>Fleet Code</th>
-                  <th style={{ padding: '12px 20px', fontWeight: 600 }}>Status</th>
-                  <th style={{ padding: '12px 20px', fontWeight: 600, textAlign: 'right' }}>Outstanding Balance</th>
-                  <th style={{ padding: '12px 20px', fontWeight: 600, textAlign: 'center' }}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {allCustomers.length === 0 ? (
-                  <tr>
-                    <td colSpan={10} style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)' }}>
-                      No customers registered.
-                    </td>
-                  </tr>
-                ) : (
-                  allCustomers.map((c) => {
-                    const balance = Number(c.currentBalance || 0);
-                    const limit = Number(c.creditLimit || 0);
-                    const prepaidBalance = Number(c.prepaidBalance || 0);
-                    return (
-                      <tr key={c.id} style={{ borderBottom: '1px solid var(--border-soft)' }}>
-                        <td style={{ padding: '12px 20px', fontWeight: 600, color: 'var(--text-strong)' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <User size={14} style={{ color: 'var(--text-muted)' }} />
-                            <div>
-                              <button
-                                type="button"
-                                onClick={() => openLedgerDrawer(c)}
-                                style={{
-                                  background: 'none',
-                                  border: 'none',
-                                  padding: 0,
-                                  color: 'var(--brand-primary)',
-                                  fontWeight: 600,
-                                  textAlign: 'left',
-                                  cursor: 'pointer',
-                                  textDecoration: 'underline',
-                                }}
-                              >
-                                {c.name}
-                              </button>
-                              {c.metadata?.tradeName && (
-                                <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 400 }}>{c.metadata.tradeName}</div>
-                              )}
-                              {c.metadata?.gstin && (
-                                <div style={{ fontSize: '10px', color: 'var(--primary)', fontFamily: 'var(--font-mono)', fontWeight: 500, marginTop: '2px' }}>GSTIN: {c.metadata.gstin}</div>
-                              )}
-                            </div>
-                          </div>
-                        </td>
-                        <td style={{ padding: '12px 20px' }}>
-                          <span style={{
-                            fontSize: '11px',
-                            fontWeight: 600,
-                            backgroundColor: c.customerType === 'Fleet' ? 'var(--state-info-bg)' : c.customerType === 'Credit' ? 'var(--state-warning-bg)' : 'var(--bg-surface-alt)',
-                            color: c.customerType === 'Fleet' ? 'var(--state-info-fg)' : c.customerType === 'Credit' ? 'var(--state-warning-fg)' : 'var(--text-strong)',
-                            padding: '2px 8px',
-                            borderRadius: 'var(--radius-chip)'
-                          }}>
-                            {c.customerType}
-                          </span>
-                        </td>
-                        <td style={{ padding: '12px 20px', color: 'var(--text-muted)' }}>
-                          {c.phone || '-'}
-                        </td>
-                        <td style={{ padding: '12px 20px', color: 'var(--text-default)' }}>
-                          {limit > 0 ? (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                              <span style={{ fontFamily: 'var(--font-mono)' }}>₹{limit.toLocaleString('en-IN')}</span>
-                              <div style={{ width: '80px', height: '4px', backgroundColor: 'var(--border-soft)', borderRadius: '2px', overflow: 'hidden' }}>
-                                <div style={{
-                                  width: `${Math.min(100, (balance / limit) * 100)}%`,
-                                  height: '100%',
-                                  backgroundColor: balance > limit ? 'var(--brand-danger)' : balance >= limit * 0.75 ? 'var(--brand-warning)' : 'var(--brand-primary)'
-                                }} />
-                              </div>
-                            </div>
-                          ) : (
-                            <span style={{ color: 'var(--text-muted)' }}>N/A</span>
-                          )}
-                        </td>
-                        <td style={{ padding: '12px 20px' }}>
-                          <span style={{
-                            fontSize: '11px',
-                            fontWeight: 600,
-                            backgroundColor: c.isPrepaid ? 'var(--state-info-bg)' : 'var(--bg-surface-alt)',
-                            color: c.isPrepaid ? 'var(--state-info-fg)' : 'var(--text-muted)',
-                            padding: '2px 8px',
-                            borderRadius: 'var(--radius-chip)'
-                          }}>
-                            {c.isPrepaid ? 'Enabled' : 'Disabled'}
-                          </span>
-                        </td>
-                        <td style={{ padding: '12px 20px', textAlign: 'right', fontWeight: 700, color: c.isPrepaid ? 'var(--state-success-fg)' : 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-                          ₹{prepaidBalance.toLocaleString('en-IN')}
-                        </td>
-                        <td style={{ padding: '12px 20px', color: 'var(--text-muted)' }}>
-                          {c.fleetCode || '-'}
-                        </td>
-                        <td style={{ padding: '12px 20px' }}>
-                          <span style={{
-                            fontSize: '11px',
-                            fontWeight: 600,
-                            backgroundColor: c.isActive ? 'var(--state-success-bg)' : 'var(--state-danger-bg)',
-                            color: c.isActive ? 'var(--state-success-fg)' : 'var(--state-danger-fg)',
-                            padding: '2px 8px',
-                            borderRadius: 'var(--radius-chip)'
-                          }}>
-                            {c.isActive ? 'Active' : 'Suspended'}
-                          </span>
-                        </td>
-                        <td style={{ padding: '12px 20px', textAlign: 'right', fontWeight: 700, color: limit > 0 && balance > limit ? 'var(--brand-danger)' : balance > 0 ? 'var(--brand-warning)' : 'var(--state-success-fg)', fontFamily: 'var(--font-mono)' }}>
-                          ₹{balance.toLocaleString('en-IN')}
-                        </td>
-                        <td style={{ padding: '12px 20px', textAlign: 'center' }}>
-                          <button
-                            onClick={() => openEditDrawer(c)}
-                            style={{
-                              border: 'none',
-                              background: 'none',
-                              cursor: 'pointer',
-                              color: 'var(--text-muted)',
-                              padding: '4px',
-                            }}
-                          >
-                            <Edit size={14} />
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
+          <DataTable
+            columns={buildCustomerColumns(setStatementCustomer, openEditCustomer, anyPrepaid)}
+            data={allCustomers}
+            emptyMessage="No customers registered."
+            getRowId={(r: any) => r.id}
+          />
         )}
 
         {activeTab === 'vehicles' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end' }}>
-              <div style={{ flex: 1 }}>
-                <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>
-                  Credit/Fleet Customer
-                </label>
-                <select
-                  value={vehicleCustomerId}
-                  onChange={(e) => setVehicleCustomerId(e.target.value)}
-                  style={{
-                    width: '100%',
-                    height: '32px',
-                    padding: '0 8px',
-                    borderRadius: 'var(--radius-input)',
-                    border: '1px solid var(--border-strong)',
-                    fontSize: '13px',
-                  }}
-                >
-                  {allCustomers
-                    .filter((c) => c.customerType === 'Credit' || c.customerType === 'Fleet')
-                    .map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name} ({c.customerType})
-                      </option>
-                    ))}
-                </select>
-              </div>
-            </div>
-
-            {vehicleError && (
-              <div style={{ padding: '12px', backgroundColor: 'var(--state-danger-bg)', color: 'var(--state-danger-fg)', borderRadius: 'var(--radius-card)', fontSize: '12px' }}>
-                {vehicleError}
-              </div>
-            )}
-
-            {!vehicleCustomerId ? (
-              <div style={{ padding: '16px', backgroundColor: 'var(--state-warning-bg)', color: 'var(--state-warning-fg)', borderRadius: 'var(--radius-card)', fontSize: '13px' }}>
-                No Credit/Fleet customer found. Create a Credit or Fleet customer first.
-              </div>
-            ) : loadingVehicles ? (
+            {loadingVehicles ? (
               <LoadingSpinner text="Loading vehicles..." />
             ) : (
-              <div style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-card)', overflow: 'hidden' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left' }}>
-                  <thead>
-                    <tr style={{ backgroundColor: 'var(--bg-surface-alt)', borderBottom: '1px solid var(--border-soft)', color: 'var(--text-muted)' }}>
-                      <th style={{ padding: '12px 20px', fontWeight: 600 }}>Registration No.</th>
-                      <th style={{ padding: '12px 20px', fontWeight: 600 }}>Vehicle Type</th>
-                      <th style={{ padding: '12px 20px', fontWeight: 600 }}>Default Product</th>
-                      <th style={{ padding: '12px 20px', fontWeight: 600 }}>Status</th>
-                      <th style={{ padding: '12px 20px', fontWeight: 600 }}>Updated</th>
-                      <th style={{ padding: '12px 20px', fontWeight: 600, textAlign: 'center' }}>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {vehicles.length === 0 ? (
-                      <tr>
-                        <td colSpan={6} style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)' }}>
-                          No vehicles registered for this customer.
-                        </td>
-                      </tr>
-                    ) : (
-                      vehicles.map((v) => (
-                        <tr key={v.id} style={{ borderBottom: '1px solid var(--border-soft)' }}>
-                          <td style={{ padding: '12px 20px', fontWeight: 600, color: 'var(--text-strong)', fontFamily: 'var(--font-mono)' }}>
-                            {v.registrationNumber}
-                          </td>
-                          <td style={{ padding: '12px 20px', color: 'var(--text-default)' }}>{v.vehicleType}</td>
-                          <td style={{ padding: '12px 20px', color: 'var(--text-default)' }}>
-                            {v.defaultProductName ? `${v.defaultProductName} (${v.defaultProductCode || ''})` : '-'}
-                          </td>
-                          <td style={{ padding: '12px 20px' }}>
-                            <span
-                              style={{
-                                fontSize: '11px',
-                                fontWeight: 600,
-                                backgroundColor: v.isActive ? 'var(--state-success-bg)' : 'var(--state-danger-bg)',
-                                color: v.isActive ? 'var(--state-success-fg)' : 'var(--state-danger-fg)',
-                                padding: '2px 8px',
-                                borderRadius: 'var(--radius-chip)',
-                              }}
-                            >
-                              {v.isActive ? 'Active' : 'Inactive'}
-                            </span>
-                          </td>
-                          <td style={{ padding: '12px 20px', color: 'var(--text-muted)' }}>
-                            {new Date(v.updatedAt).toLocaleDateString('en-IN')}
-                          </td>
-                          <td style={{ padding: '12px 20px', textAlign: 'center' }}>
-                            <button
-                              onClick={() => openEditVehicleDrawer(v)}
-                              style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '4px' }}
-                              title="Edit Vehicle"
-                            >
-                              <Edit size={14} />
-                            </button>
-                            <button
-                              onClick={() => onDeleteVehicle(v)}
-                              style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--brand-danger)', padding: '4px' }}
-                              title="Delete Vehicle"
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
+              <Panel
+                flush
+                title="Vehicles"
+                action={
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div style={{ position: 'relative' }}>
+                      <Search size={13} style={{ position: 'absolute', left: '8px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                      <input
+                        value={vehicleSearch}
+                        onChange={(e) => setVehicleSearch(e.target.value)}
+                        placeholder="Search registration / customer…"
+                        style={{ height: '28px', padding: '0 8px 0 26px', width: '240px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', fontSize: '12px', background: 'var(--bg-surface)' }}
+                      />
+                    </div>
+                    <Chip tone="neutral" size="xs">{filteredVehicles.length}</Chip>
+                  </div>
+                }
+              >
+                {filteredVehicles.length === 0 ? (
+                  <div style={{ padding: '12px' }}>
+                    <EmptyState
+                      compact
+                      icon={<Truck />}
+                      title={allVehicles.length === 0 ? 'No vehicles' : 'No matching vehicles'}
+                      description={allVehicles.length === 0 ? 'Register a vehicle against a Credit or Fleet customer to see it here.' : 'Try a different search term.'}
+                    />
+                  </div>
+                ) : (
+                  <DataTable
+                    bare
+                    columns={buildVehicleColumns(openEditVehicle, onDeleteVehicle)}
+                    data={filteredVehicles}
+                    emptyMessage="No vehicles registered."
+                    getRowId={(r: any) => r.id}
+                  />
+                )}
+              </Panel>
             )}
           </div>
         )}
       </div>
 
-      {/* CRUD Drawer */}
-      <Drawer
-        isOpen={isDrawerOpen}
-        onClose={() => setIsDrawerOpen(false)}
-        title={editingCustomer ? 'Edit Customer Profile' : 'Register New Customer'}
-      >
-        <form onSubmit={handleSubmitCust(onSaveCustomer)} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {drawerError && (
-            <div style={{
-              backgroundColor: 'var(--state-danger-bg)',
-              color: 'var(--state-danger-fg)',
-              padding: '8px 12px',
-              borderRadius: 'var(--radius-input)',
-              fontSize: '12px',
-              border: '1px solid var(--border-soft)'
-            }}>
-              {drawerError}
-            </div>
-          )}
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Customer Name *</label>
-            <input
-              type="text"
-              placeholder="e.g. KSRTC Depo, John Doe"
-              {...registerCust('name')}
-              disabled={drawerSubmitting}
-              style={{
-                height: '32px',
-                padding: '0 8px',
-                borderRadius: 'var(--radius-input)',
-                border: '1px solid var(--border-strong)',
-                fontSize: '13px',
-              }}
-            />
-            {custErrors.name && (
-              <span style={{ color: 'var(--state-danger-fg)', fontSize: '11px' }}>
-                {custErrors.name.message}
-              </span>
-            )}
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Phone Number</label>
-            <input
-              type="text"
-              placeholder="e.g. +91 9900..."
-              {...registerCust('phone')}
-              disabled={drawerSubmitting}
-              style={{
-                height: '32px',
-                padding: '0 8px',
-                borderRadius: 'var(--radius-input)',
-                border: '1px solid var(--border-strong)',
-                fontSize: '13px',
-              }}
-            />
-            {custErrors.phone && (
-              <span style={{ color: 'var(--state-danger-fg)', fontSize: '11px' }}>
-                {custErrors.phone.message}
-              </span>
-            )}
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Account Type *</label>
-            <select
-              {...registerCust('customerType')}
-              disabled={drawerSubmitting}
-              style={{
-                height: '32px',
-                padding: '0 8px',
-                borderRadius: 'var(--radius-input)',
-                border: '1px solid var(--border-strong)',
-                fontSize: '13px',
-              }}
-            >
-              <option value="Regular">Regular (Cash/Card/UPI walk-in)</option>
-              <option value="Credit">Credit (Standard outstanding account)</option>
-              <option value="Fleet">Fleet (Requires fleet code authorization)</option>
-            </select>
-            {custErrors.customerType && (
-              <span style={{ color: 'var(--state-danger-fg)', fontSize: '11px' }}>
-                {custErrors.customerType.message}
-              </span>
-            )}
-          </div>
-
-          {(custType === 'Credit' || custType === 'Fleet') && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Credit Limit (₹)</label>
-              <input
-                type="number"
-                placeholder="e.g. 50000"
-                {...registerCust('creditLimit', { valueAsNumber: true })}
-                disabled={drawerSubmitting}
-                style={{
-                  height: '32px',
-                  padding: '0 8px',
-                  borderRadius: 'var(--radius-input)',
-                  border: '1px solid var(--border-strong)',
-                  fontSize: '13px',
-                }}
-              />
-              {custErrors.creditLimit && (
-                <span style={{ color: 'var(--state-danger-fg)', fontSize: '11px' }}>
-                  {custErrors.creditLimit.message}
-                </span>
-              )}
-            </div>
-          )}
-
-          {custType === 'Fleet' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Fleet Code / Card Reference</label>
-              <input
-                type="text"
-                placeholder="e.g. FL-9923"
-                {...registerCust('fleetCode')}
-                disabled={drawerSubmitting}
-                style={{
-                  height: '32px',
-                  padding: '0 8px',
-                  borderRadius: 'var(--radius-input)',
-                  border: '1px solid var(--border-strong)',
-                  fontSize: '13px',
-                }}
-              />
-              {custErrors.fleetCode && (
-                <span style={{ color: 'var(--state-danger-fg)', fontSize: '11px' }}>
-                  {custErrors.fleetCode.message}
-                </span>
-              )}
-            </div>
-          )}
-
-          <div style={{
-            borderTop: '1px solid var(--border-soft)',
-            paddingTop: '12px',
-            marginTop: '4px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '12px'
-          }}>
-            <h4 style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-strong)', margin: 0 }}>
-              GST & Tax Registration (Optional B2B)
-            </h4>
-            
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)' }}>GSTIN</label>
-                <input
-                  type="text"
-                  placeholder="15-digit GSTIN"
-                  {...registerCust('metadata.gstin', {
-                    onChange: (e) => setValueCust('metadata.gstin', e.target.value.toUpperCase())
-                  })}
-                  disabled={drawerSubmitting}
-                  style={{
-                    height: '32px',
-                    padding: '0 8px',
-                    borderRadius: 'var(--radius-input)',
-                    border: '1px solid var(--border-strong)',
-                    fontSize: '13px',
-                  }}
-                />
-                {custErrors.metadata?.gstin && (
-                  <span style={{ color: 'var(--state-danger-fg)', fontSize: '11px' }}>
-                    {custErrors.metadata.gstin.message}
-                  </span>
-                )}
-              </div>
-              
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)' }}>PAN</label>
-                <input
-                  type="text"
-                  placeholder="10-digit PAN"
-                  {...registerCust('metadata.pan', {
-                    onChange: (e) => setValueCust('metadata.pan', e.target.value.toUpperCase())
-                  })}
-                  disabled={drawerSubmitting}
-                  style={{
-                    height: '32px',
-                    padding: '0 8px',
-                    borderRadius: 'var(--radius-input)',
-                    border: '1px solid var(--border-strong)',
-                    fontSize: '13px',
-                  }}
-                />
-                {custErrors.metadata?.pan && (
-                  <span style={{ color: 'var(--state-danger-fg)', fontSize: '11px' }}>
-                    {custErrors.metadata.pan.message}
-                  </span>
-                )}
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)' }}>Trade Name</label>
-              <input
-                type="text"
-                placeholder="Business Trade Name"
-                {...registerCust('metadata.tradeName')}
-                disabled={drawerSubmitting}
-                style={{
-                  height: '32px',
-                  padding: '0 8px',
-                  borderRadius: 'var(--radius-input)',
-                  border: '1px solid var(--border-strong)',
-                  fontSize: '13px',
-                }}
-              />
-              {custErrors.metadata?.tradeName && (
-                <span style={{ color: 'var(--state-danger-fg)', fontSize: '11px' }}>
-                  {custErrors.metadata.tradeName.message}
-                </span>
-              )}
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)' }}>Billing Address</label>
-              <textarea
-                placeholder="Full Billing Address"
-                {...registerCust('metadata.billingAddress')}
-                disabled={drawerSubmitting}
-                rows={2}
-                style={{
-                  padding: '6px 8px',
-                  borderRadius: 'var(--radius-input)',
-                  border: '1px solid var(--border-strong)',
-                  fontSize: '13px',
-                  resize: 'vertical',
-                  fontFamily: 'inherit'
-                }}
-              />
-              {custErrors.metadata?.billingAddress && (
-                <span style={{ color: 'var(--state-danger-fg)', fontSize: '11px' }}>
-                  {custErrors.metadata.billingAddress.message}
-                </span>
-              )}
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
-            <input
-              type="checkbox"
-              id="custIsPrepaid"
-              {...registerCust('isPrepaid')}
-              disabled={drawerSubmitting}
-              style={{ cursor: 'pointer' }}
-            />
-            <label htmlFor="custIsPrepaid" style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-strong)', cursor: 'pointer' }}>
-              Enable Prepaid Wallet Mode
-            </label>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
-            <input
-              type="checkbox"
-              id="custIsActive"
-              {...registerCust('isActive')}
-              disabled={drawerSubmitting}
-              style={{ cursor: 'pointer' }}
-            />
-            <label htmlFor="custIsActive" style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-strong)', cursor: 'pointer' }}>
-              Account Active (Clear for operational logging)
-            </label>
-          </div>
-
-          <div style={{ display: 'flex', gap: '12px', marginTop: '12px' }}>
-            <button
-              type="submit"
-              disabled={drawerSubmitting}
-              style={{
-                flex: 1,
-                height: '32px',
-                backgroundColor: 'var(--brand-primary)',
-                color: 'white',
-                border: 'none',
-                borderRadius: 'var(--radius-button)',
-                fontWeight: 600,
-                fontSize: '13px',
-                cursor: 'pointer',
-              }}
-            >
-              {drawerSubmitting ? 'Saving...' : 'Save Customer'}
-            </button>
-            
-            <button
-              type="button"
-              onClick={() => setIsDrawerOpen(false)}
-              disabled={drawerSubmitting}
-              style={{
-                flex: 1,
-                height: '32px',
-                backgroundColor: 'var(--bg-surface-alt)',
-                color: 'var(--text-default)',
-                border: '1px solid var(--border-strong)',
-                borderRadius: 'var(--radius-button)',
-                fontWeight: 600,
-                fontSize: '13px',
-                cursor: 'pointer',
-              }}
-            >
-              Cancel
-            </button>
-          </div>
-        </form>
-      </Drawer>
+      <CustomerFormDrawer
+        isOpen={isCustomerDrawerOpen}
+        editingCustomer={editingCustomer}
+        stationId={stationId}
+        onClose={() => setIsCustomerDrawerOpen(false)}
+      />
 
       {/* Collections Drawer */}
       <Drawer
         isOpen={isCollectionDrawerOpen}
         onClose={closeCollectionDrawer}
-        title="Log Credit Transaction / Collection"
+        title="Log Customer Collection"
       >
-        {activeShift || recentClosedShifts.length > 0 ? (
-          <CollectionEntryForm
-            shiftOptions={[
-              ...(activeShift ? [{ id: activeShift.id, label: `Active: ${activeShift.templateName} (Open)` }] : []),
-              ...recentClosedShifts.map((s) => ({
-                id: s.id,
-                label: `Closed: ${s.templateName} (${new Date(s.closedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })})`,
-              })),
-            ]}
-            targetShiftId={collectionShiftId}
-            onTargetShiftIdChange={setCollectionShiftId}
-            customerId={collectionCustomerId}
-            onCustomerIdChange={setCollectionCustomerId}
+        <CollectionEntryForm
+            shiftOptions={[]}
+            showShiftHintWhenSingle={false}
+            showDateField
+            dateLabel="Collection Date"
+            stationId={selectedStation?.id}
+            defaultValues={collectionDefaults}
             customers={customers}
-            amount={collectionAmount}
-            onAmountChange={setCollectionAmount}
-            paymentMethod={collectionPaymentMethod}
-            onPaymentMethodChange={setCollectionPaymentMethod}
-            notes={collectionNotes}
-            onNotesChange={setCollectionNotes}
             submitting={collectionSubmitting}
             error={formError}
             onCancel={closeCollectionDrawer}
             onSubmit={onAddCollection}
-            submitLabel={collectionPaymentMethod === 'Credit' ? 'Log Credit Sale' : 'Log Collection'}
+            submitLabel={'Log Collection'}
             submittingLabel="Recording..."
-            submitDisabled={collectionSubmitting || !collectionAmount}
             amountLabel="Amount (₹)"
             amountPlaceholder="0.00"
             notesLabel="Notes / Fleet Slip ID"
@@ -1318,457 +514,25 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
             walkInOptionLabel="-- Walk-in / Cash Customer --"
             customerOptionLabel={(cust) => `${cust.name} (${cust.customerType})`}
           />
-        ) : (
-          <div style={{
-            backgroundColor: 'var(--state-warning-bg)',
-            color: 'var(--state-warning-fg)',
-            padding: '16px',
-            borderRadius: 'var(--radius-input)',
-            fontSize: '13px',
-            border: '1px solid var(--border-soft)',
-            lineHeight: '1.5'
-          }}>
-            <span style={{ fontWeight: 700, display: 'block', marginBottom: '4px' }}>Shift Gated Action</span>
-            Collections and credit fleet sales must be logged during an active shift. Please open a shift first.
-          </div>
-        )}
       </Drawer>
 
-      {/* Customer Ledger Drawer */}
-      <Drawer
-        isOpen={selectedLedgerCustomer !== null}
-        onClose={() => setSelectedLedgerCustomer(null)}
-        title="Customer Account Statement"
-      >
-        {selectedLedgerCustomer && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', fontFamily: 'var(--font-sans)' }}>
-            {/* Customer Summary Card */}
-            <div style={{
-              backgroundColor: 'var(--bg-surface-alt)',
-              border: '1px solid var(--border-soft)',
-              borderRadius: 'var(--radius-card)',
-              padding: '16px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '12px'
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div>
-                  <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-strong)', margin: 0 }}>
-                    {selectedLedgerCustomer.name}
-                  </h3>
-                  <span style={{
-                    fontSize: '11px',
-                    fontWeight: 600,
-                    backgroundColor: selectedLedgerCustomer.customerType === 'Fleet' ? 'var(--state-info-bg)' : selectedLedgerCustomer.customerType === 'Credit' ? 'var(--state-warning-bg)' : 'var(--bg-surface)',
-                    color: selectedLedgerCustomer.customerType === 'Fleet' ? 'var(--state-info-fg)' : selectedLedgerCustomer.customerType === 'Credit' ? 'var(--state-warning-fg)' : 'var(--text-strong)',
-                    padding: '2px 6px',
-                    borderRadius: 'var(--radius-chip)',
-                    display: 'inline-block',
-                    marginTop: '4px'
-                  }}>
-                    {selectedLedgerCustomer.customerType}
-                  </span>
-                </div>
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                    {selectedLedgerCustomer.isPrepaid ? 'Prepaid Wallet Balance' : 'Outstanding Balance'}
-                  </div>
-                  <div style={{
-                    fontSize: '18px',
-                    fontWeight: 700,
-                    fontFamily: 'var(--font-mono)',
-                    color: selectedLedgerCustomer.isPrepaid
-                      ? 'var(--state-success-fg)'
-                      : selectedLedgerCustomer.creditLimit > 0 && selectedLedgerCustomer.currentBalance > selectedLedgerCustomer.creditLimit
-                        ? 'var(--brand-danger)'
-                        : selectedLedgerCustomer.currentBalance > 0
-                          ? 'var(--brand-warning)'
-                          : 'var(--state-success-fg)'
-                  }}>
-                    ₹{Number(selectedLedgerCustomer.isPrepaid ? selectedLedgerCustomer.prepaidBalance : selectedLedgerCustomer.currentBalance || 0).toLocaleString('en-IN')}
-                  </div>
-                </div>
-              </div>
+      <StatementDrawer
+        customer={statementCustomer}
+        stationId={stationId}
+        onClose={() => setStatementCustomer(null)}
+        onEdit={(c) => { setStatementCustomer(null); openEditCustomer(c); }}
+        onRecordCollection={(c) => { setStatementCustomer(null); openCollectionDrawer(c.id); }}
+      />
 
-                <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: '10px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '12px' }}>
-                <div>
-                  <span style={{ color: 'var(--text-muted)', display: 'block' }}>Credit Limit</span>
-                  <strong style={{ color: 'var(--text-strong)', fontFamily: 'var(--font-mono)' }}>
-                    {selectedLedgerCustomer.creditLimit > 0 ? `₹${Number(selectedLedgerCustomer.creditLimit).toLocaleString('en-IN')}` : 'N/A'}
-                  </strong>
-                </div>
-                {selectedLedgerCustomer.creditLimit > 0 && (
-                  <div>
-                    <span style={{ color: 'var(--text-muted)', display: 'block' }}>Available Credit</span>
-                    <strong style={{
-                      color: (selectedLedgerCustomer.creditLimit - selectedLedgerCustomer.currentBalance) < 0 ? 'var(--brand-danger)' : 'var(--text-strong)',
-                      fontFamily: 'var(--font-mono)'
-                    }}>
-                      ₹{Math.max(0, Number(selectedLedgerCustomer.creditLimit) - Number(selectedLedgerCustomer.currentBalance)).toLocaleString('en-IN')}
-                    </strong>
-                  </div>
-                )}
-              </div>
-
-              {selectedLedgerCustomer.isPrepaid && (
-                <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                    Top-up prepaid wallet for this customer.
-                  </div>
-                  <button
-                    className="btn btn-secondary btn-sm"
-                    onClick={openTopupDrawer}
-                  >
-                    <Plus size={12} /> Top Up
-                  </button>
-                </div>
-              )}
-
-              {(selectedLedgerCustomer.metadata?.gstin || selectedLedgerCustomer.metadata?.pan || selectedLedgerCustomer.metadata?.billingAddress) && (
-                <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: '10px', fontSize: '11px', display: 'flex', flexDirection: 'column', gap: '4px', color: 'var(--text-muted)' }}>
-                  {selectedLedgerCustomer.metadata?.gstin && <div><strong>GSTIN:</strong> <span style={{ fontFamily: 'var(--font-mono)' }}>{selectedLedgerCustomer.metadata.gstin}</span></div>}
-                  {selectedLedgerCustomer.metadata?.pan && <div><strong>PAN:</strong> <span style={{ fontFamily: 'var(--font-mono)' }}>{selectedLedgerCustomer.metadata.pan}</span></div>}
-                  {selectedLedgerCustomer.metadata?.billingAddress && <div><strong>Billing Address:</strong> {selectedLedgerCustomer.metadata.billingAddress}</div>}
-                </div>
-              )}
-            </div>
-
-            {/* Ledger Timeline Table */}
-            <div>
-              <h4 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-strong)', marginBottom: '8px' }}>
-                Statement of Account
-              </h4>
-
-              {loadingLedger ? (
-                <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px' }}>
-                  Loading ledger transactions...
-                </div>
-              ) : ledgerError ? (
-                <div style={{ padding: '12px', backgroundColor: 'var(--state-danger-bg)', color: 'var(--state-danger-fg)', borderRadius: 'var(--radius-input)', fontSize: '12px' }}>
-                  {ledgerError}
-                </div>
-              ) : ledgerTransactions.length === 0 ? (
-                <div style={{ padding: '24px', border: '1px dashed var(--border-soft)', borderRadius: 'var(--radius-card)', textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px' }}>
-                  No transaction history found for this account.
-                </div>
-              ) : (
-                <div style={{ border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-card)', overflow: 'hidden' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', textAlign: 'left' }}>
-                    <thead>
-                      <tr style={{ backgroundColor: 'var(--bg-surface-alt)', borderBottom: '1px solid var(--border-soft)', color: 'var(--text-muted)' }}>
-                        <th style={{ padding: '8px 12px', fontWeight: 600 }}>Date / Shift</th>
-                        <th style={{ padding: '8px 12px', fontWeight: 600 }}>Type</th>
-                        <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Amount</th>
-                        <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Balance</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(() => {
-                        let running = 0;
-                        const sorted = [...ledgerTransactions].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-                        const enriched = sorted.map(tx => {
-                          const amt = Number(tx.amount);
-                          if (tx.transactionType === 'Credit Sale' || tx.transactionType === 'Adjustment') {
-                            running += amt;
-                          } else if (tx.transactionType === 'Collection') {
-                            running -= amt;
-                          } else if (tx.transactionType === 'Prepaid Top-up') {
-                            running += amt;
-                          } else if (tx.transactionType === 'Prepaid Charge') {
-                            running -= amt;
-                          }
-                          return { ...tx, runningBalance: running };
-                        });
-                        return [...enriched].reverse().map((tx) => {
-                          const amt = Number(tx.amount);
-                          const isDebit = tx.transactionType === 'Credit Sale' || tx.transactionType === 'Adjustment' || tx.transactionType === 'Prepaid Top-up';
-                          const txColor = tx.transactionType === 'Credit Sale'
-                            ? 'var(--brand-warning)'
-                            : tx.transactionType === 'Prepaid Top-up'
-                              ? 'var(--state-success-fg)'
-                              : 'var(--text-default)';
-                          return (
-                            <tr key={tx.id} style={{ borderBottom: '1px solid var(--border-soft)' }}>
-                              <td style={{ padding: '8px 12px' }}>
-                                <div style={{ fontWeight: 500, color: 'var(--text-strong)' }}>
-                                  {new Date(tx.shiftDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' })}
-                                </div>
-                                <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
-                                  {tx.shiftName}
-                                </div>
-                              </td>
-                              <td style={{ padding: '8px 12px' }}>
-                                <span style={{
-                                  fontWeight: 600,
-                                  color: txColor
-                                }}>
-                                  {tx.transactionType}
-                                </span>
-                                {tx.notes && (
-                                  <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                                    {tx.notes}
-                                  </div>
-                                )}
-                              </td>
-                              <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 600, fontFamily: 'var(--font-mono)', color: isDebit ? 'var(--text-strong)' : 'var(--state-success-fg)' }}>
-                                {isDebit ? '' : '-'}₹{amt.toLocaleString('en-IN')}
-                              </td>
-                              <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--text-strong)' }}>
-                                ₹{tx.runningBalance.toLocaleString('en-IN')}
-                              </td>
-                            </tr>
-                          );
-                        });
-                      })()}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-
-            <button
-              onClick={() => setSelectedLedgerCustomer(null)}
-              style={{
-                height: '32px',
-                width: '100%',
-                backgroundColor: 'var(--bg-surface-alt)',
-                color: 'var(--text-default)',
-                border: '1px solid var(--border-strong)',
-                borderRadius: 'var(--radius-button)',
-                fontWeight: 600,
-                fontSize: '13px',
-                cursor: 'pointer',
-                marginTop: '8px'
-              }}
-            >
-              Close Statement
-            </button>
-          </div>
-        )}
-      </Drawer>
-
-      <Drawer
-        isOpen={isTopupDrawerOpen}
-        onClose={() => setIsTopupDrawerOpen(false)}
-        title="Prepaid Wallet Top-Up"
-      >
-        <form onSubmit={handleTopupSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          {topupError && (
-            <div style={{ backgroundColor: 'var(--state-danger-bg)', color: 'var(--state-danger-fg)', padding: '8px 12px', borderRadius: 'var(--radius-input)', fontSize: '12px' }}>
-              {topupError}
-            </div>
-          )}
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Amount (₹) *</label>
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={topupAmount}
-              onChange={(e) => setTopupAmount(e.target.value)}
-              disabled={topupSubmitting}
-              placeholder="0.00"
-              style={{ height: '32px', padding: '0 8px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', fontSize: '13px' }}
-            />
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Payment Method *</label>
-            <select
-              value={topupPaymentMethod}
-              onChange={(e) => setTopupPaymentMethod(e.target.value as any)}
-              disabled={topupSubmitting}
-              style={{ height: '32px', padding: '0 8px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', fontSize: '13px' }}
-            >
-              <option value="Cash">Cash</option>
-              <option value="Card">Card</option>
-              <option value="UPI">UPI</option>
-              <option value="BankTransfer">Bank Transfer</option>
-            </select>
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Notes</label>
-            <textarea
-              rows={2}
-              value={topupNotes}
-              onChange={(e) => setTopupNotes(e.target.value)}
-              disabled={topupSubmitting}
-              placeholder="Optional reference or remark"
-              style={{ padding: '6px 8px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', fontSize: '13px', fontFamily: 'inherit', resize: 'vertical' }}
-            />
-          </div>
-
-          <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
-            <button
-              type="submit"
-              disabled={topupSubmitting || !topupAmount}
-              style={{
-                flex: 1,
-                height: '32px',
-                backgroundColor: 'var(--brand-primary)',
-                color: 'white',
-                border: 'none',
-                borderRadius: 'var(--radius-button)',
-                fontWeight: 600,
-                fontSize: '13px',
-                cursor: 'pointer',
-              }}
-            >
-              {topupSubmitting ? 'Recording...' : 'Record Top-Up'}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setIsTopupDrawerOpen(false)}
-              disabled={topupSubmitting}
-              style={{
-                flex: 1,
-                height: '32px',
-                backgroundColor: 'var(--bg-surface-alt)',
-                color: 'var(--text-default)',
-                border: '1px solid var(--border-strong)',
-                borderRadius: 'var(--radius-button)',
-                fontWeight: 600,
-                fontSize: '13px',
-                cursor: 'pointer',
-              }}
-            >
-              Cancel
-            </button>
-          </div>
-        </form>
-      </Drawer>
-
-      <Drawer
+      <VehicleDrawer
         isOpen={isVehicleDrawerOpen}
+        editingVehicle={editingVehicle}
+        defaultCustomerId={vehicleCustomerId}
+        eligibleCustomers={eligibleCustomers}
+        fuelProducts={fuelProducts}
         onClose={() => setIsVehicleDrawerOpen(false)}
-        title={editingVehicle ? 'Edit Vehicle' : 'Add Vehicle'}
-      >
-        <form onSubmit={onSaveVehicle} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-          {vehicleError && (
-            <div style={{ backgroundColor: 'var(--state-danger-bg)', color: 'var(--state-danger-fg)', padding: '8px 12px', borderRadius: 'var(--radius-input)', fontSize: '12px' }}>
-              {vehicleError}
-            </div>
-          )}
-
-          {!editingVehicle && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Customer *</label>
-              <select
-                value={vehicleForm.customerId}
-                onChange={(e) => setVehicleForm((prev) => ({ ...prev, customerId: e.target.value }))}
-                disabled={vehicleSubmitting}
-                style={{ height: '32px', padding: '0 8px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', fontSize: '13px' }}
-              >
-                {allCustomers
-                  .filter((c) => c.customerType === 'Credit' || c.customerType === 'Fleet')
-                  .map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name} ({c.customerType})
-                    </option>
-                  ))}
-              </select>
-            </div>
-          )}
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Registration Number *</label>
-            <input
-              type="text"
-              value={vehicleForm.registrationNumber}
-              onChange={(e) => setVehicleForm((prev) => ({ ...prev, registrationNumber: e.target.value.toUpperCase() }))}
-              disabled={vehicleSubmitting}
-              placeholder="e.g. KL07AB1234"
-              style={{ height: '32px', padding: '0 8px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', fontSize: '13px' }}
-            />
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Vehicle Type *</label>
-            <input
-              type="text"
-              value={vehicleForm.vehicleType}
-              onChange={(e) => setVehicleForm((prev) => ({ ...prev, vehicleType: e.target.value }))}
-              disabled={vehicleSubmitting}
-              placeholder="e.g. Truck, Bus"
-              style={{ height: '32px', padding: '0 8px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', fontSize: '13px' }}
-            />
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Default Fuel Product</label>
-            <select
-              value={vehicleForm.defaultProductId}
-              onChange={(e) => setVehicleForm((prev) => ({ ...prev, defaultProductId: e.target.value }))}
-              disabled={vehicleSubmitting}
-              style={{ height: '32px', padding: '0 8px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', fontSize: '13px' }}
-            >
-              <option value="">-- Select Product --</option>
-              {fuelProducts.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name} ({p.code})
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <input
-              type="checkbox"
-              id="vehicleIsActive"
-              checked={vehicleForm.isActive}
-              onChange={(e) => setVehicleForm((prev) => ({ ...prev, isActive: e.target.checked }))}
-              disabled={vehicleSubmitting}
-            />
-            <label htmlFor="vehicleIsActive" style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-strong)' }}>
-              Vehicle Active
-            </label>
-          </div>
-
-          <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
-            <button
-              type="submit"
-              disabled={vehicleSubmitting}
-              style={{
-                flex: 1,
-                height: '32px',
-                backgroundColor: 'var(--brand-primary)',
-                color: 'white',
-                border: 'none',
-                borderRadius: 'var(--radius-button)',
-                fontWeight: 600,
-                fontSize: '13px',
-                cursor: 'pointer',
-              }}
-            >
-              {vehicleSubmitting ? 'Saving...' : 'Save Vehicle'}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setIsVehicleDrawerOpen(false)}
-              disabled={vehicleSubmitting}
-              style={{
-                flex: 1,
-                height: '32px',
-                backgroundColor: 'var(--bg-surface-alt)',
-                color: 'var(--text-default)',
-                border: '1px solid var(--border-strong)',
-                borderRadius: 'var(--radius-button)',
-                fontWeight: 600,
-                fontSize: '13px',
-                cursor: 'pointer',
-              }}
-            >
-              Cancel
-            </button>
-          </div>
-        </form>
-      </Drawer>
-    </div>
+      />
+    </PageLayout>
   );
 };
 

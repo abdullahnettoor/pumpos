@@ -3,8 +3,14 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { CloudUserAssignmentService, CloudStationService } from '../../services/cloud.js';
+import { useQueryClient } from '@tanstack/react-query';
+import { queryKeys, TIER } from '../../query/hooks.js';
 import { Station, userSchema } from '@pump/shared';
 import { Drawer } from '../Drawer.js';
+import { DataTable } from '../primitives/DataTable.js';
+import { Checkbox } from '../primitives/Toggle.js';
+import { useToast } from '../primitives/ToastProvider.js';
+import type { ColumnDef } from '@tanstack/react-table';
 
 const userService = new CloudUserAssignmentService();
 const stationService = new CloudStationService();
@@ -21,7 +27,44 @@ const userFormSchema = z.object({
 
 type UserFormValues = z.infer<typeof userFormSchema>;
 
+const buildUserColumns = (stations: any[], startEdit: (u: any) => void): ColumnDef<any, any>[] => [
+  { accessorKey: 'fullName', header: 'Name', cell: ({ getValue }) => <span style={{ fontWeight: 600, color: 'var(--text-strong)' }}>{getValue() as string}</span> },
+  {
+    accessorKey: 'email',
+    header: 'Email / Type',
+    cell: ({ getValue }) => (getValue() as string) || <span style={{ color: 'var(--text-muted)', fontSize: '12px', fontStyle: 'italic' }}>Offline Attendant</span>,
+  },
+  {
+    accessorKey: 'role',
+    header: 'Role',
+    cell: ({ row }) => {
+      const u = row.original;
+      const bg = !u.email ? 'rgba(245, 158, 11, 0.15)' : u.role === 'Owner' ? 'rgba(99, 102, 241, 0.15)' : u.role === 'Manager' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(46, 94, 136, 0.15)';
+      const fg = !u.email ? '#f59e0b' : u.role === 'Owner' ? '#6366f1' : u.role === 'Manager' ? 'rgb(52, 211, 153)' : '#2e5e88';
+      return <span style={{ fontSize: '11px', fontWeight: 650, padding: '2px 6px', borderRadius: '4px', backgroundColor: bg, color: fg }}>{!u.email ? 'Attendant' : u.role}</span>;
+    },
+  },
+  {
+    id: 'stations',
+    header: 'Assigned Stations',
+    cell: ({ row }) => {
+      const u = row.original;
+      const assignedNames = u.stationIds ? u.stationIds.map((sid: string) => stations.find((s) => s.id === sid)?.name || 'Unknown').join(', ') : 'None';
+      return <span style={{ color: 'var(--text-muted)' }}>{u.role === 'Owner' ? 'All Stations (Global)' : assignedNames || 'None'}</span>;
+    },
+  },
+  {
+    id: 'actions',
+    header: '',
+    cell: ({ row }) => (
+      <button onClick={() => startEdit(row.original)} style={{ height: '24px', padding: '0 8px', fontSize: '11px', backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-strong)', color: 'var(--text-default)', borderRadius: '4px', cursor: 'pointer' }}>Edit</button>
+    ),
+  },
+];
+
 export const UserRolesAssignment: React.FC = () => {
+  const qc = useQueryClient();
+  const toast = useToast();
   const [users, setUsers] = useState<any[]>([]);
   const [stations, setStations] = useState<Station[]>([]);
   const [loading, setLoading] = useState(true);
@@ -58,12 +101,16 @@ export const UserRolesAssignment: React.FC = () => {
     loadData();
   }, []);
 
-  const loadData = async () => {
+  const loadData = async (force = false) => {
     try {
       setLoading(true);
+      if (force) await Promise.all([
+        qc.invalidateQueries({ queryKey: queryKeys.users() }),
+        qc.invalidateQueries({ queryKey: queryKeys.stations() }),
+      ]);
       const [userList, stationList] = await Promise.all([
-        userService.listUsers(),
-        stationService.getStations(),
+        qc.ensureQueryData({ queryKey: queryKeys.users(), queryFn: () => userService.listUsers(), staleTime: TIER.static.staleTime }),
+        qc.ensureQueryData({ queryKey: queryKeys.stations(), queryFn: () => stationService.getStations(), staleTime: TIER.static.staleTime }),
       ]);
       setUsers(userList);
       setStations(stationList);
@@ -77,7 +124,7 @@ export const UserRolesAssignment: React.FC = () => {
   const handleCreateOrUpdate = async (values: any) => {
     // Custom check: if app access is enabled, email is required
     if (values.enableAppAccess && (!values.email || values.email.trim() === '')) {
-      alert('Email address is required for application login access.');
+      toast.error('Email address is required for application login access.');
       return;
     }
 
@@ -91,17 +138,33 @@ export const UserRolesAssignment: React.FC = () => {
         stationIds: values.stationIds,
       };
 
-      if (editingUser) {
-        await userService.updateUser(editingUser.id, payload);
-      } else {
-        await userService.createUser(payload);
-      }
+      const saved = editingUser
+        ? await userService.updateUser(editingUser.id, payload)
+        : await userService.createUser(payload);
 
       resetForm();
       setIsFormOpen(false);
-      loadData();
+
+      // Optimistically reflect the change immediately. The authoritative read
+      // path can lag briefly behind the write (connection-level query caching),
+      // which previously left the freshly added member missing until a later
+      // refetch. Seed both local state and the query cache, then mark the query
+      // stale so it reconciles on the next natural access.
+      const rowId = editingUser?.id ?? (saved as any)?.id;
+      if (rowId) {
+        const optimisticRow = { ...(editingUser || {}), id: rowId, ...payload };
+        const merge = (list: any[] = []) => (list.some((u) => u.id === rowId)
+          ? list.map((u) => (u.id === rowId ? { ...u, ...optimisticRow } : u))
+          : [...list, optimisticRow]);
+        setUsers((prev) => merge(prev));
+        qc.setQueryData(queryKeys.users(), (prev: any[] | undefined) => merge(prev));
+        qc.invalidateQueries({ queryKey: queryKeys.users(), refetchType: 'none' });
+      } else {
+        loadData(true);
+      }
+      toast.success(editingUser ? 'Team member updated.' : 'Team member added.');
     } catch (err: any) {
-      alert(err.message || 'Failed to save team member');
+      toast.error(err.message || 'Failed to save team member');
     }
   };
 
@@ -148,7 +211,7 @@ export const UserRolesAssignment: React.FC = () => {
       {/* Header section with + Add Button */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h2 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-strong)' }}>Team & Roster</h2>
+          <h2 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-strong)' }}>Team</h2>
           <p style={{ color: 'var(--text-muted)', fontSize: '12px' }}>Manage user access permissions, station scoping, and offline pump attendants.</p>
         </div>
         {!isFormOpen && (
@@ -175,88 +238,12 @@ export const UserRolesAssignment: React.FC = () => {
       </div>
 
       {/* List / Table */}
-      <div style={{ overflowX: 'auto', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-card)', backgroundColor: 'var(--bg-surface)' }}>
-        <table className="dense-table" style={{ width: '100%' }}>
-          <thead>
-            <tr>
-              <th style={{ width: '25%', textAlign: 'left', padding: '10px 12px' }}>Name</th>
-              <th style={{ width: '30%', textAlign: 'left', padding: '10px 12px' }}>Email / Type</th>
-              <th style={{ width: '15%', textAlign: 'left', padding: '10px 12px' }}>Role</th>
-              <th style={{ width: '20%', textAlign: 'left', padding: '10px 12px' }}>Assigned Stations</th>
-              <th style={{ width: '10%', textAlign: 'center', padding: '10px 12px' }}>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {users.map((u) => {
-              const assignedNames = u.stationIds
-                 ? u.stationIds
-                    .map((sid: string) => stations.find((s) => s.id === sid)?.name || 'Unknown')
-                    .join(', ')
-                 : 'None';
-              return (
-                <tr key={u.id} style={{ borderBottom: '1px solid var(--border-soft)' }}>
-                  <td style={{ fontWeight: 600, color: 'var(--text-strong)', padding: '10px 12px' }}>{u.fullName}</td>
-                  <td style={{ padding: '10px 12px' }}>
-                    {u.email || (
-                      <span style={{ color: 'var(--text-muted)', fontSize: '12px', fontStyle: 'italic' }}>
-                        Offline Attendant
-                      </span>
-                    )}
-                  </td>
-                  <td style={{ padding: '10px 12px' }}>
-                    <span
-                      style={{
-                        fontSize: '11px',
-                        fontWeight: 650,
-                        padding: '2px 6px',
-                        borderRadius: '4px',
-                        backgroundColor:
-                          !u.email
-                            ? 'rgba(245, 158, 11, 0.15)'
-                            : u.role === 'Owner'
-                            ? 'rgba(99, 102, 241, 0.15)'
-                            : u.role === 'Manager'
-                            ? 'rgba(16, 185, 129, 0.15)'
-                            : 'rgba(46, 94, 136, 0.15)',
-                        color:
-                          !u.email
-                            ? '#f59e0b'
-                            : u.role === 'Owner'
-                            ? '#6366f1'
-                            : u.role === 'Manager'
-                            ? 'rgb(52, 211, 153)'
-                            : '#2e5e88',
-                      }}
-                    >
-                      {!u.email ? 'Attendant' : u.role}
-                    </span>
-                  </td>
-                  <td style={{ padding: '10px 12px', color: 'var(--text-muted)' }}>
-                    {u.role === 'Owner' ? 'All Stations (Global)' : assignedNames || 'None'}
-                  </td>
-                  <td style={{ padding: '10px 12px', textAlign: 'center' }}>
-                    <button
-                      onClick={() => startEdit(u)}
-                      style={{
-                        height: '24px',
-                        padding: '0 8px',
-                        fontSize: '11px',
-                        backgroundColor: 'var(--bg-surface)',
-                        border: '1px solid var(--border-strong)',
-                        color: 'var(--text-default)',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      Edit
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      <DataTable
+        columns={buildUserColumns(stations, startEdit)}
+        data={users}
+        emptyMessage="No team members yet."
+        getRowId={(r: any) => r.id}
+      />
 
       {/* Form Drawer */}
       <Drawer
@@ -285,13 +272,11 @@ export const UserRolesAssignment: React.FC = () => {
             {errors.fullName && <span style={{ color: 'var(--state-danger-fg)', fontSize: '11px' }}>{errors.fullName.message}</span>}
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px', margin: '4px 0' }}>
-            <input
-              type="checkbox"
-              id="enableAppAccess"
+          <div style={{ margin: '4px 0' }}>
+            <Checkbox
+              label="Enable App Access (allows login)"
               {...register('enableAppAccess')}
             />
-            <label htmlFor="enableAppAccess" style={{ cursor: 'pointer', color: 'var(--text-strong)', fontWeight: 500 }}>Enable App Access (allows login)</label>
           </div>
 
           {watchEnableAppAccess && (
@@ -357,14 +342,12 @@ export const UserRolesAssignment: React.FC = () => {
               <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Assign Stations</label>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '6px' }}>
                 {stations.map((s) => (
-                  <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px' }}>
-                    <input
-                      type="checkbox"
-                      checked={watchStationIds.includes(s.id)}
-                      onChange={(e) => handleStationCheckbox(s.id, e.target.checked)}
-                    />
-                    {s.name} ({s.code})
-                  </label>
+                  <Checkbox
+                    key={s.id}
+                    label={`${s.name} (${s.code})`}
+                    checked={watchStationIds.includes(s.id)}
+                    onChange={(e) => handleStationCheckbox(s.id, e.target.checked)}
+                  />
                 ))}
               </div>
             </div>
@@ -385,7 +368,7 @@ export const UserRolesAssignment: React.FC = () => {
               opacity: isSubmitting ? 0.6 : 1,
             }}
           >
-            {isSubmitting ? 'Saving...' : (editingUser ? 'Save Profile Changes' : 'Add to Roster')}
+            {isSubmitting ? 'Saving...' : (editingUser ? 'Save Profile Changes' : 'Add Member')}
           </button>
         </form>
       </Drawer>

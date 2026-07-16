@@ -158,6 +158,29 @@ export function canManageInfrastructure(role: Role): boolean {
 }
 
 // ----------------------------------------------------
+// Party (Customer / Supplier) & Purchase Permissions
+// ----------------------------------------------------
+
+/** Create/edit customers or suppliers (back-office). Owner, Manager, Accountant. */
+export function canManageCustomers(role: Role): boolean {
+  return role === 'Owner' || role === 'Manager' || role === 'Accountant';
+}
+
+export function canManageSuppliers(role: Role): boolean {
+  return role === 'Owner' || role === 'Manager' || role === 'Accountant';
+}
+
+/** Archive (soft-delete) a customer or supplier. Owner, Manager only. */
+export function canArchiveParty(role: Role): boolean {
+  return role === 'Owner' || role === 'Manager';
+}
+
+/** Record purchases / supplier payments. Owner, Manager, Accountant (not Staff). */
+export function canRecordPurchase(role: Role): boolean {
+  return role === 'Owner' || role === 'Manager' || role === 'Accountant';
+}
+
+// ----------------------------------------------------
 // User Management
 // ----------------------------------------------------
 
@@ -170,5 +193,23 @@ export function canManageUsers(role: Role): boolean {
 // ----------------------------------------------------
 
 export function canExportReports(role: Role): boolean {
+  return role === 'Owner' || role === 'Manager' || role === 'Accountant';
+}
+
+// ----------------------------------------------------
+// Financial Accounts (Phase F) — money accounts & ledger
+// ----------------------------------------------------
+
+/** Create/edit money accounts and view ledgers/balances. Owner, Manager, Accountant. */
+export function canManageFinancialAccounts(role: Role): boolean {
+  return role === 'Owner' || role === 'Manager' || role === 'Accountant';
+}
+
+// ----------------------------------------------------
+// Expense categories (master data)
+// ----------------------------------------------------
+
+/** Create/rename expense categories. Owner, Manager, Accountant (not Staff). */
+export function canManageExpenseCategory(role: Role): boolean {
   return role === 'Owner' || role === 'Manager' || role === 'Accountant';
 }

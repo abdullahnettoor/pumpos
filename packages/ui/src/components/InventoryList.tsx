@@ -1,65 +1,238 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import type { ColumnDef } from '@tanstack/react-table';
+import { Database, ArrowUpRight, ArrowDownRight, ClipboardCheck, Package, ArrowLeftRight, Scale, Search } from 'lucide-react';
+import { PageLayout } from './primitives/PageLayout.js';
+import { DataTable } from './primitives/DataTable.js';
+import { Tabs } from './primitives/Tabs.js';
+import { Drawer } from './Drawer.js';
+import { Field, NumberInput, TextInput, Select } from './primitives/Field.js';
 import { CloudTransactionService } from '../services/cloud.js';
-import { Database, ListOrdered, Scale, RefreshCw, AlertTriangle, ArrowUpRight, ArrowDownRight } from 'lucide-react';
-import { LoadingSpinner } from './LoadingSpinner.js';
+import { useInventoryStatus, useInventoryItems, useInventoryMovements, useInventoryVariances } from '../query/hooks.js';
+import { Panel, Button, KpiStrip, KpiTile, StatusChip, Chip, MeterRow, EmptyState, DateText } from '../pump-ds/index.js';
+import { tankPct, classifyTank } from '../utils/stock.js';
+import type { NavIntent } from './AppShell.js';
 
 const transactionService = new CloudTransactionService();
 
 interface InventoryListProps {
   selectedStation: any | null;
+  intent?: NavIntent | null;
+  onIntentConsumed?: () => void;
 }
 
-type TabType = 'tanks' | 'movements' | 'variances';
+type TabType = 'tanks' | 'items' | 'movements' | 'variances';
 
-export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation }) => {
+const fmtL = (n: number) => `${Number(n).toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} L`;
+
+const SearchBox: React.FC<{ value: string; onChange: (v: string) => void; placeholder?: string }> = ({ value, onChange, placeholder }) => (
+  <div style={{ position: 'relative' }}>
+    <Search size={13} style={{ position: 'absolute', left: '8px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+    <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} style={{ height: '28px', padding: '0 8px 0 26px', width: '220px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', fontSize: '12px', background: 'var(--bg-surface)' }} />
+  </div>
+);
+
+const movementColumns: ColumnDef<any, any>[] = [
+  { accessorKey: 'businessDate', header: 'Business Day', cell: ({ getValue }) => <DateText value={getValue() as string} tone="muted" /> },
+  { accessorKey: 'productName', header: 'Product', cell: ({ row }) => <span style={{ fontWeight: 500, color: 'var(--text-strong)' }}>{row.original.productName}</span> },
+  {
+    accessorKey: 'movementType',
+    header: 'Type',
+    cell: ({ getValue }) => {
+      const t = getValue() as string;
+      const tone = t === 'Purchase' ? 'info' : t === 'Variance' ? 'danger' : t === 'Adjustment' ? 'warning' : t === 'Sale' ? 'success' : 'neutral';
+      return <Chip tone={tone} size="xs">{t}</Chip>;
+    },
+  },
+  {
+    accessorKey: 'quantity',
+    header: 'Quantity',
+    cell: ({ row }) => {
+      const q = Number(row.original.quantity);
+      const unit = row.original.productUnit ?? 'L';
+      const positive = q > 0;
+      return (
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '2px', fontFamily: 'var(--font-mono)', color: positive ? 'var(--state-success-fg)' : 'var(--text-strong)', fontWeight: positive ? 600 : 400 }}>
+          {positive ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
+          {Math.abs(q).toLocaleString('en-IN', { maximumFractionDigits: 3 })} {unit}
+        </span>
+      );
+    },
+  },
+  { accessorKey: 'referenceType', header: 'Reference', cell: ({ getValue }) => <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>{(getValue() as string) ?? 'N/A'}</span> },
+  { accessorKey: 'tankName', header: 'Tank', cell: ({ getValue }) => <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>{(getValue() as string) ?? '—'}</span> },
+];
+
+const varianceColumns: ColumnDef<any, any>[] = [
+  { accessorKey: 'businessDate', header: 'Business Day', cell: ({ getValue }) => <DateText value={getValue() as string} tone="muted" /> },
+  { accessorKey: 'productName', header: 'Product', cell: ({ row }) => <span style={{ fontWeight: 500, color: 'var(--text-strong)' }}>{row.original.productName}</span> },
+  { accessorKey: 'expectedQuantity', header: 'Expected', cell: ({ row }) => <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>{Number(row.original.expectedQuantity).toLocaleString('en-IN', { maximumFractionDigits: 3 })} {row.original.productUnit ?? 'L'}</span> },
+  { accessorKey: 'actualQuantity', header: 'Actual', cell: ({ row }) => <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-strong)' }}>{Number(row.original.actualQuantity).toLocaleString('en-IN', { maximumFractionDigits: 3 })} {row.original.productUnit ?? 'L'}</span> },
+  {
+    accessorKey: 'varianceQuantity',
+    header: 'Variance',
+    cell: ({ row }) => {
+      const diff = Number(row.original.varianceQuantity);
+      const unit = row.original.productUnit ?? 'L';
+      const color = diff < 0 ? 'var(--state-danger-fg)' : diff > 0 ? 'var(--state-info-fg)' : 'var(--text-strong)';
+      return (
+        <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, color }}>
+          {diff > 0 ? `+${diff.toLocaleString('en-IN', { maximumFractionDigits: 3 })}` : diff.toLocaleString('en-IN', { maximumFractionDigits: 3 })} {unit}
+        </span>
+      );
+    },
+  },
+  {
+    id: 'status',
+    header: 'Status',
+    cell: ({ row }) => {
+      const diff = Number(row.original.varianceQuantity);
+      const expected = Number(row.original.expectedQuantity);
+      const tol = 0.005 * (Math.abs(expected) || 1);
+      const status = Math.abs(diff) <= tol ? 'balanced' : diff < 0 ? 'shortage' : 'excess';
+      return <StatusChip status={status} size="xs" />;
+    },
+  },
+  { accessorKey: 'reason', header: 'Reason', cell: ({ getValue }) => <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>{(getValue() as string) ?? 'Reconciliation run'}</span> },
+];
+
+const itemColumns: ColumnDef<any, any>[] = [
+  { accessorKey: 'name', header: 'Product', cell: ({ row }) => <span style={{ fontWeight: 600, color: 'var(--text-strong)' }}>{row.original.name}</span> },
+  { accessorKey: 'code', header: 'Code', cell: ({ getValue }) => <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', fontSize: '12px' }}>{(getValue() as string) ?? '—'}</span> },
+  { accessorKey: 'productType', header: 'Type', cell: ({ getValue }) => <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>{(getValue() as string) ?? '—'}</span> },
+  { accessorKey: 'unit', header: 'Unit', cell: ({ getValue }) => <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>{(getValue() as string) ?? '—'}</span> },
+  {
+    accessorKey: 'quantity',
+    header: 'On Hand',
+    cell: ({ row }) => {
+      const q = Number(row.original.quantity);
+      const oversold = q < 0;
+      const empty = q === 0;
+      const color = oversold ? 'var(--state-danger-fg)' : empty ? 'var(--state-warning-fg)' : 'var(--text-strong)';
+      return (
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+          <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, color }}>{q.toLocaleString('en-IN', { maximumFractionDigits: 2 })} {row.original.unit ?? ''}</span>
+          {oversold && <Chip tone="danger" size="xs">Oversold</Chip>}
+          {empty && <Chip tone="warning" size="xs">Out of stock</Chip>}
+        </span>
+      );
+    },
+  },
+];
+
+export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation, intent, onIntentConsumed }) => {
   const [activeTab, setActiveTab] = useState<TabType>('tanks');
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [tanks, setTanks] = useState<any[]>([]);
-  const [movements, setMovements] = useState<any[]>([]);
-  const [variances, setVariances] = useState<any[]>([]);
-  const [refreshing, setRefreshing] = useState(false);
+  const stationId = selectedStation?.id ?? null;
 
-  useEffect(() => {
-    if (selectedStation) {
-      loadData();
-    }
-  }, [selectedStation]);
+  const tanksQ = useInventoryStatus(stationId);
+  const itemsQ = useInventoryItems(stationId);
+  const movementsQ = useInventoryMovements(stationId);
+  const variancesQ = useInventoryVariances(stationId);
 
-  const loadData = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const [tanksList, movementsList, variancesList] = await Promise.all([
-        transactionService.getInventoryStatus(selectedStation.id),
-        transactionService.getInventoryMovements(selectedStation.id),
-        transactionService.getInventoryVariances(selectedStation.id),
-      ]);
-      setTanks(tanksList || []);
-      setMovements(movementsList || []);
-      setVariances(variancesList || []);
-    } catch (err: any) {
-      setError(err.message || 'Failed to load inventory data');
-    } finally {
-      setLoading(false);
-    }
+  const refresh = () => {
+    tanksQ.refetch();
+    itemsQ.refetch();
+    movementsQ.refetch();
+    variancesQ.refetch();
   };
 
-  const handleRefresh = async () => {
+  // Deep-link focus (from a dashboard/bell stock alert): switch to the target
+  // tab and highlight the offending tank card / merchandise row.
+  const [highlightId, setHighlightId] = useState<string | null>(null);
+  const handledIntentRef = useRef<NavIntent | null>(null);
+  useEffect(() => {
+    if (!intent || handledIntentRef.current === intent) return;
+    if (intent.focusInventoryTab) {
+      handledIntentRef.current = intent;
+      setActiveTab(intent.focusInventoryTab);
+      setHighlightId(intent.focusInventoryId ?? null);
+      onIntentConsumed?.();
+    }
+  }, [intent, onIntentConsumed]);
+  // Fade the highlight out after a few seconds so it doesn't linger.
+  useEffect(() => {
+    if (!highlightId) return;
+    const t = setTimeout(() => setHighlightId(null), 4000);
+    return () => clearTimeout(t);
+  }, [highlightId]);
+
+  // Stock count / opening balance / adjustment
+  const [countOpen, setCountOpen] = useState(false);
+  const [countScope, setCountScope] = useState<'item' | 'tank'>('item');
+  const [countTargetId, setCountTargetId] = useState('');
+  const [countActual, setCountActual] = useState('');
+  const [countReason, setCountReason] = useState('');
+  const [countSubmitting, setCountSubmitting] = useState(false);
+  const [countError, setCountError] = useState<string | null>(null);
+
+  const items = itemsQ.data ?? [];
+  const tanksData = tanksQ.data ?? [];
+
+  const kpis = useMemo(() => {
+    const fuelByUnit: Record<string, number> = {};
+    for (const t of tanksData as any[]) { const u = t.productUnit || 'L'; fuelByUnit[u] = (fuelByUnit[u] || 0) + Number(t.currentVolume || 0); }
+    // Liquids first, then gaseous — so the L total is the headline value and any
+    // kg total moves into the hint (a single-line KPI can't add L + kg anyway).
+    const entries = Object.entries(fuelByUnit).sort((a, b) => (/^(l|liters?|litres?)$/i.test(a[0]) ? 0 : 1) - (/^(l|liters?|litres?)$/i.test(b[0]) ? 0 : 1));
+    const fmtV = (v: number) => Number(v).toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+    const tankCount = `${tanksData.length} ${tanksData.length === 1 ? 'tank' : 'tanks'}`;
+    const totalFuelValue = entries.length ? `${fmtV(entries[0][1])} ${entries[0][0]}` : fmtL(0);
+    const totalFuelHint = [...entries.slice(1).map(([u, v]) => `${fmtV(v)} ${u}`), tankCount].join(' · ');
+    const lowTanks = tanksData.filter((t: any) => classifyTank(tankPct(t.currentVolume, t.capacity)) !== 'ok').length;
+    const oversold = items.filter((i: any) => Number(i.quantity) < 0).length;
+    const outOfStock = items.filter((i: any) => Number(i.quantity) === 0).length;
+    const variances = (variancesQ.data ?? []).length;
+    return { totalFuelValue, totalFuelHint, lowTanks, oversold, outOfStock, variances };
+  }, [tanksData, items, variancesQ.data]);
+
+  const [movementSearch, setMovementSearch] = useState('');
+  const [itemSearch, setItemSearch] = useState('');
+  const filteredMovements = useMemo(() => {
+    const q = movementSearch.trim().toLowerCase();
+    const d = movementsQ.data ?? [];
+    if (!q) return d;
+    return d.filter((m: any) => (m.productName || '').toLowerCase().includes(q) || (m.movementType || '').toLowerCase().includes(q) || (m.tankName || '').toLowerCase().includes(q));
+  }, [movementsQ.data, movementSearch]);
+  const filteredItems = useMemo(() => {
+    const q = itemSearch.trim().toLowerCase();
+    if (!q) return items;
+    return items.filter((i: any) => (i.name || '').toLowerCase().includes(q) || (i.code || '').toLowerCase().includes(q));
+  }, [items, itemSearch]);
+
+  const openCount = (scope: 'item' | 'tank') => {
+    setCountScope(scope);
+    setCountTargetId(scope === 'item' ? (items[0]?.productId ?? '') : (tanksData[0]?.id ?? ''));
+    setCountActual('');
+    setCountReason('');
+    setCountError(null);
+    setCountOpen(true);
+  };
+
+  const submitCount = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!stationId || !countTargetId || countActual === '') return;
     try {
-      setRefreshing(true);
-      const [tanksList, movementsList, variancesList] = await Promise.all([
-        transactionService.getInventoryStatus(selectedStation.id),
-        transactionService.getInventoryMovements(selectedStation.id),
-        transactionService.getInventoryVariances(selectedStation.id),
-      ]);
-      setTanks(tanksList || []);
-      setMovements(movementsList || []);
-      setVariances(variancesList || []);
+      setCountSubmitting(true);
+      setCountError(null);
+      let productId = countTargetId;
+      let tankId: string | null = null;
+      if (countScope === 'tank') {
+        const tank = tanksData.find((t: any) => t.id === countTargetId);
+        productId = tank?.productId ?? '';
+        tankId = countTargetId;
+      }
+      await transactionService.recordStockCount({
+        stationId,
+        productId,
+        actualQuantity: Number(countActual),
+        tankId,
+        reason: countReason || undefined,
+      });
+      setCountOpen(false);
+      refresh();
     } catch (err: any) {
-      console.error('Failed to refresh inventory:', err);
+      setCountError(err.message || 'Failed to record stock count');
     } finally {
-      setRefreshing(false);
+      setCountSubmitting(false);
     }
   };
 
@@ -71,370 +244,169 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation })
     );
   }
 
-  if (loading) {
-    return <LoadingSpinner text="Loading inventory control panel..." />;
-  }
-
-  if (error) {
-    return (
-      <div style={{
-        padding: '24px',
-        backgroundColor: 'var(--state-danger-bg)',
-        color: 'var(--state-danger-fg)',
-        borderRadius: 'var(--radius-card)',
-        fontFamily: 'var(--font-sans)',
-      }}>
-        <strong>Error:</strong> {error}
-      </div>
-    );
-  }
+  const tanks = tanksQ.data ?? [];
 
   return (
-    <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '24px', fontFamily: 'var(--font-sans)' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <h1 style={{ fontSize: '20px', fontWeight: 600, color: 'var(--text-strong)' }}>
-            Inventory Management
-          </h1>
-          <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '2px' }}>
-            Monitor tank stock levels, audit physical dip variances, and inspect fuel movements.
-          </p>
-        </div>
-        <button
-          onClick={handleRefresh}
-          disabled={refreshing}
-          style={{
-            height: '32px',
-            padding: '0 12px',
-            borderRadius: 'var(--radius-input)',
-            border: '1px solid var(--border-soft)',
-            backgroundColor: 'var(--bg-surface)',
-            color: 'var(--text-strong)',
-            fontSize: '13px',
-            fontWeight: 500,
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            cursor: 'pointer',
-          }}
-        >
-          <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
-          {refreshing ? 'Refreshing...' : 'Refresh'}
-        </button>
-      </div>
+    <div className="animate-fade-in">
+      <PageLayout
+        title="Inventory Management"
+        subtitle="Monitor tank stock levels, audit physical dip variances, and inspect fuel movements."
+        actions={
+          <Button variant="primary" size="sm" leftIcon={<ClipboardCheck />} onClick={() => openCount(activeTab === 'tanks' ? 'tank' : 'item')}>
+            Reconcile Stock
+          </Button>
+        }
+        toolbar={
+          <Tabs
+            variant="underline"
+            aria-label="Inventory views"
+            activeId={activeTab}
+            onChange={(id) => setActiveTab(id as TabType)}
+            tabs={[
+              { id: 'tanks', label: 'Tank Status', icon: <Database size={15} /> },
+              { id: 'items', label: 'Merchandise Stock', icon: <Package size={15} /> },
+              { id: 'movements', label: 'Stock Movements', icon: <ArrowLeftRight size={15} /> },
+              { id: 'variances', label: 'Reconciliations', icon: <Scale size={15} /> },
+            ]}
+          />
+        }
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <KpiStrip columns="auto">
+            <KpiTile dot="brand" label="Total Fuel Stock" value={kpis.totalFuelValue} hint={kpis.totalFuelHint} />
+            <KpiTile dot={kpis.lowTanks > 0 ? 'warning' : 'success'} valueTone={kpis.lowTanks > 0 ? 'warning' : undefined} label="Tanks Low / Critical" value={String(kpis.lowTanks)} hint="below 35% capacity" />
+            <KpiTile dot={kpis.outOfStock > 0 ? 'warning' : 'success'} valueTone={kpis.outOfStock > 0 ? 'warning' : undefined} label="Out of Stock" value={String(kpis.outOfStock)} hint="zero on-hand" />
+            <KpiTile dot={kpis.oversold > 0 ? 'danger' : 'success'} valueTone={kpis.oversold > 0 ? 'danger' : undefined} label="Oversold Items" value={String(kpis.oversold)} hint="negative on-hand" />
+            <KpiTile dot="neutral" label="Reconciliations" value={String(kpis.variances)} hint="variances logged" />
+          </KpiStrip>
 
-      {/* Tabs Selector */}
-      <div style={{
-        display: 'flex',
-        borderBottom: '1px solid var(--border-soft)',
-        gap: '24px',
-      }}>
-        <button
-          onClick={() => setActiveTab('tanks')}
-          style={{
-            padding: '12px 4px',
-            fontSize: '14px',
-            fontWeight: activeTab === 'tanks' ? 600 : 500,
-            color: activeTab === 'tanks' ? 'var(--primary)' : 'var(--text-muted)',
-            borderBottom: activeTab === 'tanks' ? '2px solid var(--primary)' : '2px solid transparent',
-            background: 'none',
-            borderTop: 'none',
-            borderLeft: 'none',
-            borderRight: 'none',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-          }}
-        >
-          <Database size={16} />
-          Tank Status
-        </button>
-
-        <button
-          onClick={() => setActiveTab('movements')}
-          style={{
-            padding: '12px 4px',
-            fontSize: '14px',
-            fontWeight: activeTab === 'movements' ? 600 : 500,
-            color: activeTab === 'movements' ? 'var(--primary)' : 'var(--text-muted)',
-            borderBottom: activeTab === 'movements' ? '2px solid var(--primary)' : '2px solid transparent',
-            background: 'none',
-            borderTop: 'none',
-            borderLeft: 'none',
-            borderRight: 'none',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-          }}
-        >
-          <ListOrdered size={16} />
-          Stock Movements Ledger
-        </button>
-
-        <button
-          onClick={() => setActiveTab('variances')}
-          style={{
-            padding: '12px 4px',
-            fontSize: '14px',
-            fontWeight: activeTab === 'variances' ? 600 : 500,
-            color: activeTab === 'variances' ? 'var(--primary)' : 'var(--text-muted)',
-            borderBottom: activeTab === 'variances' ? '2px solid var(--primary)' : '2px solid transparent',
-            background: 'none',
-            borderTop: 'none',
-            borderLeft: 'none',
-            borderRight: 'none',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-          }}
-        >
-          <Scale size={16} />
-          Physical Reconciliations
-        </button>
-      </div>
-
-      {/* Tab Contents */}
-      <div>
-        {activeTab === 'tanks' && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px' }}>
-            {tanks.length === 0 ? (
-              <div style={{ color: 'var(--text-muted)', padding: '12px 0' }}>No fuel tanks configured for this station.</div>
+          {activeTab === 'tanks' && (
+            tanksQ.isLoading ? (
+              <div style={{ padding: '16px' }}><EmptyState compact icon={<Database />} title="Loading tanks…" description="Fetching current tank levels." /></div>
+            ) : tanks.length === 0 ? (
+              <EmptyState compact icon={<Database />} title="No fuel tanks" description="No fuel tanks configured for this station." />
             ) : (
-              tanks.map((tank) => {
-                const percentage = Math.min(100, Math.max(0, (tank.currentVolume / tank.capacity) * 100));
-                // Set color of progress bar based on capacity percentage
-                // Low level: red/orange (under 15%), Warning: yellow (under 35%), Good: green/blue
-                let progressColor = 'var(--primary)';
-                if (percentage < 15) {
-                  progressColor = 'var(--state-danger-fg)';
-                } else if (percentage < 35) {
-                  progressColor = 'var(--state-warning-fg)';
-                } else {
-                  progressColor = 'var(--state-success-fg)';
-                }
-
-                return (
-                  <div key={tank.id} style={{
-                    backgroundColor: 'var(--bg-surface)',
-                    border: '1px solid var(--border-soft)',
-                    borderRadius: 'var(--radius-card)',
-                    padding: '20px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '12px',
-                  }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                      <div>
-                        <h4 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-strong)' }}>{tank.name}</h4>
-                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>
-                          {tank.productName} ({tank.productCode})
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '12px' }}>
+                {tanks.map((tank: any) => {
+                  const cap = Number(tank.capacity) || 0;
+                  const vol = Number(tank.currentVolume) || 0;
+                  const pct = tankPct(vol, cap);
+                  const level = classifyTank(pct);
+                  const tone = level === 'critical' ? 'danger' : level === 'low' ? 'warning' : 'success';
+                  const label = level === 'critical' ? 'Critical' : level === 'low' ? 'Low' : 'OK';
+                  const highlighted = highlightId === tank.id;
+                  return (
+                    <div
+                      key={tank.id}
+                      ref={(el) => { if (el && highlighted) el.scrollIntoView({ behavior: 'smooth', block: 'center' }); }}
+                      style={{ backgroundColor: 'var(--bg-surface)', border: `1px solid ${highlighted ? 'var(--state-info-fg)' : 'var(--border-soft)'}`, borderRadius: 'var(--radius-card)', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: '12px', boxShadow: highlighted ? '0 0 0 3px var(--state-info-bg)' : undefined, transition: 'border-color 0.4s ease, box-shadow 0.4s ease' }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
+                        <div style={{ minWidth: 0 }}>
+                          <h4 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)' }}>{tank.name}</h4>
+                          <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 500 }}>{tank.productName} · {tank.productCode}</span>
+                        </div>
+                        <Chip tone={tone} size="xs">{label}</Chip>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                        <span style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text-strong)', fontFamily: 'var(--font-mono)' }}>
+                          {vol.toLocaleString('en-IN', { maximumFractionDigits: 1 })}
+                          <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-muted)', marginLeft: '4px' }}>{tank.productUnit || 'L'}</span>
                         </span>
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>of {cap.toLocaleString('en-IN')} {tank.productUnit || 'L'}</span>
                       </div>
-                      <Database size={18} style={{ color: 'var(--text-muted)' }} />
+                      <MeterRow label="" value={vol} max={cap || 1} tone="auto" valueLabel={`${pct.toFixed(0)}% capacity`} />
                     </div>
+                  );
+                })}
+              </div>
+            )
+          )}
 
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginTop: '4px' }}>
-                      <span style={{ fontSize: '24px', fontWeight: 700, color: 'var(--text-strong)' }}>
-                        {tank.currentVolume.toLocaleString('en-IN', { maximumFractionDigits: 1 })}
-                        <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-muted)', marginLeft: '4px' }}>L</span>
-                      </span>
-                      <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                        of {tank.capacity.toLocaleString('en-IN')} L
-                      </span>
-                    </div>
+          {activeTab === 'items' && (
+            <Panel flush title="Merchandise stock" action={<SearchBox value={itemSearch} onChange={setItemSearch} placeholder="Search product / code…" />}>
+              {itemsQ.isLoading ? (
+                <div style={{ padding: '16px' }}><EmptyState compact icon={<Package />} title="Loading…" description="Fetching merchandise stock." /></div>
+              ) : filteredItems.length === 0 ? (
+                <div style={{ padding: '12px' }}><EmptyState compact icon={<Package />} title={items.length === 0 ? 'No merchandise' : 'No matches'} description={items.length === 0 ? 'Add non-fuel products in Station Overview → Products.' : 'Try a different search.'} /></div>
+              ) : (
+                <DataTable bare columns={itemColumns} data={filteredItems} emptyMessage="No merchandise." getRowId={(r: any) => r.productId} initialSorting={[{ id: 'name', desc: false }]} highlightRowId={highlightId} />
+              )}
+            </Panel>
+          )}
 
-                    {/* Progress Bar */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                      <div style={{
-                        height: '6px',
-                        backgroundColor: 'var(--border-soft)',
-                        borderRadius: '3px',
-                        width: '100%',
-                        overflow: 'hidden',
-                      }}>
-                        <div style={{
-                          height: '100%',
-                          width: `${percentage}%`,
-                          backgroundColor: progressColor,
-                          transition: 'width 0.4s ease',
-                          borderRadius: '3px',
-                        }} />
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text-muted)' }}>
-                        <span>{percentage.toFixed(0)}% Capacity</span>
-                        {percentage < 15 && (
-                          <span style={{ color: 'var(--state-danger-fg)', display: 'flex', alignItems: 'center', gap: '2px' }}>
-                            <AlertTriangle size={10} /> Low Stock
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })
-            )}
+          {activeTab === 'movements' && (
+            <Panel flush title="Stock movements" action={<SearchBox value={movementSearch} onChange={setMovementSearch} placeholder="Search product / type / tank…" />}>
+              {movementsQ.isLoading ? (
+                <div style={{ padding: '16px' }}><EmptyState compact icon={<ArrowLeftRight />} title="Loading…" description="Fetching movements." /></div>
+              ) : filteredMovements.length === 0 ? (
+                <div style={{ padding: '12px' }}><EmptyState compact icon={<ArrowLeftRight />} title={(movementsQ.data ?? []).length === 0 ? 'No movements' : 'No matches'} description={(movementsQ.data ?? []).length === 0 ? 'No stock movements recorded.' : 'Try a different search.'} /></div>
+              ) : (
+                <DataTable bare columns={movementColumns} data={filteredMovements} emptyMessage="No stock movements." getRowId={(r: any) => r.id} />
+              )}
+            </Panel>
+          )}
+
+          {activeTab === 'variances' && (
+            <Panel flush title="Reconciliations">
+              {variancesQ.isLoading ? (
+                <div style={{ padding: '16px' }}><EmptyState compact icon={<Scale />} title="Loading…" description="Fetching variances." /></div>
+              ) : (variancesQ.data ?? []).length === 0 ? (
+                <div style={{ padding: '12px' }}><EmptyState compact icon={<Scale />} title="No reconciliations" description="No reconciliation logs or physical variances logged yet." /></div>
+              ) : (
+                <DataTable bare columns={varianceColumns} data={variancesQ.data} emptyMessage="No variances." getRowId={(r: any) => r.id} />
+              )}
+            </Panel>
+          )}
+        </div>
+      </PageLayout>
+
+      <Drawer isOpen={countOpen} onClose={() => setCountOpen(false)} title="Stock Reconciliation">
+        <form onSubmit={submitCount} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+            Enter the physically measured quantity. Book stock is reconciled to it (a variance is logged and an adjustment movement posts the difference). Use this to set an opening balance for a new product or correct a count.
           </div>
-        )}
-
-        {activeTab === 'movements' && (
-          <div style={{
-            backgroundColor: 'var(--bg-surface)',
-            border: '1px solid var(--border-soft)',
-            borderRadius: 'var(--radius-card)',
-            overflow: 'hidden',
-          }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left' }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid var(--border-soft)', backgroundColor: 'rgba(0,0,0,0.01)' }}>
-                  <th style={{ padding: '12px 16px', fontWeight: 600, color: 'var(--text-strong)' }}>Date</th>
-                  <th style={{ padding: '12px 16px', fontWeight: 600, color: 'var(--text-strong)' }}>Product</th>
-                  <th style={{ padding: '12px 16px', fontWeight: 600, color: 'var(--text-strong)' }}>Movement Type</th>
-                  <th style={{ padding: '12px 16px', fontWeight: 600, color: 'var(--text-strong)', textAlign: 'right' }}>Quantity</th>
-                  <th style={{ padding: '12px 16px', fontWeight: 600, color: 'var(--text-strong)' }}>Reference</th>
-                  <th style={{ padding: '12px 16px', fontWeight: 600, color: 'var(--text-strong)' }}>Notes</th>
-                </tr>
-              </thead>
-              <tbody>
-                {movements.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)' }}>
-                      No stock movements recorded.
-                    </td>
-                  </tr>
-                ) : (
-                  movements.map((m) => {
-                    const isPositive = m.quantity > 0;
-                    const qtyStyle = isPositive ? { color: 'var(--state-success-fg)', fontWeight: 600 } : { color: 'var(--text-strong)' };
-
-                    return (
-                      <tr key={m.id} style={{ borderBottom: '1px solid var(--border-soft)' }}>
-                        <td style={{ padding: '12px 16px', color: 'var(--text-muted)' }}>
-                          {new Date(m.shiftDate).toLocaleDateString('en-IN', {
-                            day: '2-digit',
-                            month: 'short',
-                            year: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
-                        </td>
-                        <td style={{ padding: '12px 16px', fontWeight: 500, color: 'var(--text-strong)' }}>
-                          {m.productName}
-                        </td>
-                        <td style={{ padding: '12px 16px' }}>
-                          <span style={{
-                            padding: '2px 6px',
-                            borderRadius: '4px',
-                            fontSize: '11px',
-                            fontWeight: 600,
-                            backgroundColor:
-                              m.movementType === 'Purchase' ? 'var(--state-info-bg)' :
-                              m.movementType === 'Sale' ? 'var(--border-soft)' :
-                              m.movementType === 'Variance' ? 'var(--state-danger-bg)' : 'var(--border-soft)',
-                            color:
-                              m.movementType === 'Purchase' ? 'var(--state-info-fg)' :
-                              m.movementType === 'Sale' ? 'var(--text-strong)' :
-                              m.movementType === 'Variance' ? 'var(--state-danger-fg)' : 'var(--text-strong)',
-                          }}>
-                            {m.movementType}
-                          </span>
-                        </td>
-                        <td style={{ padding: '12px 16px', textAlign: 'right', ...qtyStyle }}>
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
-                            {isPositive ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
-                            {Math.abs(m.quantity).toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} L
-                          </span>
-                        </td>
-                        <td style={{ padding: '12px 16px', color: 'var(--text-muted)', fontSize: '12px' }}>
-                          {m.referenceType ?? 'N/A'}
-                        </td>
-                        <td style={{ padding: '12px 16px', color: 'var(--text-muted)', fontSize: '12px' }}>
-                          {m.notes ?? '-'}
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
+          {countError && (
+            <div style={{ backgroundColor: 'var(--state-danger-bg)', color: 'var(--state-danger-fg)', padding: '8px 12px', borderRadius: 'var(--radius-input)', fontSize: '12px' }}>{countError}</div>
+          )}
+          <Field label="Scope">
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+              {(['item', 'tank'] as const).map((s) => (
+                <Button
+                  key={s}
+                  type="button"
+                  variant={countScope === s ? 'primary' : 'secondary'}
+                  size="sm"
+                  fullWidth
+                  leftIcon={s === 'item' ? <Package /> : <Database />}
+                  onClick={() => { setCountScope(s); setCountTargetId(s === 'item' ? (items[0]?.productId ?? '') : (tanksData[0]?.id ?? '')); }}
+                >
+                  {s === 'item' ? 'Merchandise' : 'Fuel Tank'}
+                </Button>
+              ))}
+            </div>
+          </Field>
+          <Field label={countScope === 'item' ? 'Product' : 'Tank'}>
+            <Select value={countTargetId} onChange={(e) => setCountTargetId(e.target.value)} required>
+              {countScope === 'item'
+                ? items.map((i: any) => <option key={i.productId} value={i.productId}>{i.name} ({i.code}) — on hand {Number(i.quantity).toLocaleString('en-IN')} {i.unit ?? ''}</option>)
+                : tanksData.map((t: any) => <option key={t.id} value={t.id}>{t.name} — {t.productName} — {Number(t.currentVolume).toLocaleString('en-IN')} L</option>)}
+            </Select>
+          </Field>
+          <Field label="Actual Counted Quantity">
+            <NumberInput min="0" step="any" value={countActual} onChange={(e) => setCountActual(e.target.value)} placeholder="Measured quantity" required />
+          </Field>
+          <Field label="Reason" hint="optional">
+            <TextInput value={countReason} onChange={(e) => setCountReason(e.target.value)} placeholder="e.g. opening stock, monthly count, breakage" />
+          </Field>
+          <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+            <Button type="submit" variant="primary" size="md" fullWidth loading={countSubmitting} disabled={!countTargetId || countActual === ''}>
+              Reconcile Stock
+            </Button>
+            <Button type="button" variant="secondary" size="md" onClick={() => setCountOpen(false)} disabled={countSubmitting}>Cancel</Button>
           </div>
-        )}
-
-        {activeTab === 'variances' && (
-          <div style={{
-            backgroundColor: 'var(--bg-surface)',
-            border: '1px solid var(--border-soft)',
-            borderRadius: 'var(--radius-card)',
-            overflow: 'hidden',
-          }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left' }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid var(--border-soft)', backgroundColor: 'rgba(0,0,0,0.01)' }}>
-                  <th style={{ padding: '12px 16px', fontWeight: 600, color: 'var(--text-strong)' }}>Shift Date</th>
-                  <th style={{ padding: '12px 16px', fontWeight: 600, color: 'var(--text-strong)' }}>Product</th>
-                  <th style={{ padding: '12px 16px', fontWeight: 600, color: 'var(--text-strong)', textAlign: 'right' }}>Expected Qty</th>
-                  <th style={{ padding: '12px 16px', fontWeight: 600, color: 'var(--text-strong)', textAlign: 'right' }}>Actual Qty</th>
-                  <th style={{ padding: '12px 16px', fontWeight: 600, color: 'var(--text-strong)', textAlign: 'right' }}>Variance</th>
-                  <th style={{ padding: '12px 16px', fontWeight: 600, color: 'var(--text-strong)' }}>Reconciliation Reason</th>
-                </tr>
-              </thead>
-              <tbody>
-                {variances.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)' }}>
-                      No reconciliation logs or physical variances logged yet.
-                    </td>
-                  </tr>
-                ) : (
-                  variances.map((v) => {
-                    const diff = v.varianceQuantity;
-                    const isSevere = Math.abs(diff) > 0.005 * v.expectedQuantity;
-                    let diffColor = 'var(--text-strong)';
-                    if (diff < 0) {
-                      diffColor = 'var(--state-danger-fg)';
-                    } else if (diff > 0) {
-                      diffColor = 'var(--state-success-fg)';
-                    }
-
-                    return (
-                      <tr key={v.id} style={{ borderBottom: '1px solid var(--border-soft)' }}>
-                        <td style={{ padding: '12px 16px', color: 'var(--text-muted)' }}>
-                          {new Date(v.shiftDate).toLocaleDateString('en-IN', {
-                            day: '2-digit',
-                            month: 'short',
-                            year: 'numeric',
-                          })}
-                        </td>
-                        <td style={{ padding: '12px 16px', fontWeight: 500, color: 'var(--text-strong)' }}>
-                          {v.productName}
-                        </td>
-                        <td style={{ padding: '12px 16px', textAlign: 'right', color: 'var(--text-muted)' }}>
-                          {v.expectedQuantity.toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} L
-                        </td>
-                        <td style={{ padding: '12px 16px', textAlign: 'right', color: 'var(--text-strong)' }}>
-                          {v.actualQuantity.toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} L
-                        </td>
-                        <td style={{ padding: '12px 16px', textAlign: 'right', color: diffColor, fontWeight: 600 }}>
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                            {diff > 0 ? `+${diff.toFixed(1)}` : diff.toFixed(1)} L
-                            {isSevere && <AlertTriangle size={12} style={{ color: 'var(--state-warning-fg)' }} />}
-                          </span>
-                        </td>
-                        <td style={{ padding: '12px 16px', color: 'var(--text-muted)', fontSize: '12px' }}>
-                          {v.reason ?? 'Reconciliation run'}
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+        </form>
+      </Drawer>
     </div>
   );
 };

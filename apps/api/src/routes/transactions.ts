@@ -1,18 +1,61 @@
 import { Hono } from 'hono';
-import { eq, and, desc, sql, inArray, ilike } from 'drizzle-orm';
-import { schema, DbClient } from '@pump/db';
+import { and, desc, eq, gte, ilike, inArray, lt, lte, ne, sql } from 'drizzle-orm';
+import { schema, type DbClient } from '@pump/db';
 import {
-  shiftExpenseSchema,
-  shiftPurchaseSchema,
-  shiftCollectionSchema,
-  customerCreateSchema,
-  customerTopupSchema,
-  customerVehicleCreateSchema,
-  supplierCreateSchema,
-  supplierPaymentSchema,
-  Role,
+  isAuthorizedForStation,
+  canManageCustomers,
+  canManageSuppliers,
+  canArchiveParty,
+  canRecordPurchase,
+  canManageExpenseCategory,
+  type Role,
 } from '@pump/shared';
-import { validateJson } from '../utils/validator.js';
+import {
+  CreateCustomer,
+  UpdateCustomer,
+  CreateSupplier,
+  UpdateSupplier,
+  AddVehicle,
+  UpdateVehicle,
+  RecordExpense,
+  RecordCollection,
+  RecordCreditSale,
+  VoidCreditSale,
+  RecordPurchase,
+  RecordSupplierPayment,
+  CreateSale,
+  RecordStockCount,
+  GenerateInvoice,
+  RecordMerchandiseHandover,
+  type Result,
+} from '@pump/core';
+import { buildContext } from '../infra/context.js';
+import { loadStationClock } from '../infra/station-clock.js';
+import { runInTransaction } from '../infra/transaction.js';
+import { TimestampDocumentNumberGenerator } from '../infra/doc-numbers.js';
+import {
+  DrizzleCustomerRepository,
+  DrizzleCustomerLedgerRepository,
+  DrizzleCollectionRepository,
+  DrizzleSupplierRepository,
+  DrizzleVehicleRepository,
+} from '../infra/repositories/crm-repositories.js';
+import {
+  DrizzlePurchaseRepository,
+  DrizzlePurchaseItemRepository,
+  DrizzleSupplierTransactionRepository,
+} from '../infra/repositories/purchasing-repositories.js';
+import { DrizzleExpenseRepository } from '../infra/repositories/finance-repositories.js';
+import { DrizzleStockMovementRepository, DrizzleStockVarianceRepository } from '../infra/repositories/inventory-repositories.js';
+import { DrizzleSaleRepository, DrizzleMerchandiseHandoverRepository } from '../infra/repositories/retail-repositories.js';
+import { DrizzleInvoiceRepository, DrizzleDocumentSequenceRepository } from '../infra/repositories/invoicing-repositories.js';
+import { DrizzleProductRepository } from '../infra/repositories/product.repo.js';
+import { DrizzleStationRepository } from '../infra/repositories/setup-repositories.js';
+import { LedgerPostingService } from '../infra/ledger-posting.js';
+import {
+  DrizzleShiftRepository,
+  DrizzleBusinessDayRepository,
+} from '../infra/repositories/station-ops-repositories.js';
 
 type Variables = {
   db: DbClient;
@@ -27,1675 +70,1596 @@ type Variables = {
 
 export const transactionsRouter = new Hono<{ Variables: Variables }>();
 
-async function resolveOperationalShiftId(db: DbClient, organizationId: string, stationId?: string | null): Promise<string | null> {
-  const stationFilter = stationId ? eq(schema.shifts.stationId, stationId) : undefined;
+const STATUS_BY_CODE: Record<string, number> = {
+  VALIDATION_ERROR: 400,
+  NOT_FOUND: 404,
+  CONFLICT: 409,
+  FORBIDDEN: 403,
+  UNAUTHORIZED: 401,
+  INVARIANT_VIOLATION: 409,
+};
 
-  const [openShift] = await db
-    .select({ id: schema.shifts.id })
-    .from(schema.shifts)
-    .where(
-      and(
-        eq(schema.shifts.organizationId, organizationId),
-        eq(schema.shifts.status, 'OPEN'),
-        ...(stationFilter ? [stationFilter] : [])
-      )
-    )
-    .orderBy(desc(schema.shifts.openedAt))
-    .limit(1);
-
-  if (openShift) {
-    return openShift.id;
-  }
-
-  const [latestClosed] = await db
-    .select({ id: schema.shifts.id })
-    .from(schema.shifts)
-    .where(
-      and(
-        eq(schema.shifts.organizationId, organizationId),
-        eq(schema.shifts.status, 'CLOSED'),
-        ...(stationFilter ? [stationFilter] : [])
-      )
-    )
-    .orderBy(desc(schema.shifts.closedAt))
-    .limit(1);
-
-  return latestClosed?.id ?? null;
+function sendResult<T>(c: any, result: Result<T>) {
+  if (result.success) return c.json({ success: true, data: result.data });
+  const status = STATUS_BY_CODE[result.error.code] ?? 400;
+  return c.json({ success: false, error: result.error }, status);
 }
 
-// Helper to compile Shift Summary reactively
-export async function compileShiftSummary(
-  db: DbClient,
-  shiftId: string,
-  closingDipReadings?: { tankId: string; actualQuantity: number }[]
-) {
-  const [shift] = await db
-    .select()
-    .from(schema.shifts)
-    .where(eq(schema.shifts.id, shiftId))
-    .limit(1);
+const docNumbers = new TimestampDocumentNumberGenerator();
 
-  if (!shift) return;
+const DEFAULT_EXPENSE_CATEGORIES = [
+  'Staff Tea & Snacks',
+  'Office Stationery',
+  'Generator Diesel',
+  'Cleaning & Hygiene',
+  'General Miscellaneous',
+];
 
-  const [template] = await db
-    .select()
-    .from(schema.shiftTemplates)
-    .where(eq(schema.shiftTemplates.id, shift.shiftTemplateId))
-    .limit(1);
+// ====================================================
+// MASTER DATA — Suppliers
+// ====================================================
 
-  const [closedByUser] = shift.closedBy
-    ? await db.select().from(schema.users).where(eq(schema.users.id, shift.closedBy)).limit(1)
-    : [null];
-
-  // Fetch all nozzle readings
-  const rawNozzleReadings = await db
-    .select()
-    .from(schema.nozzleReadings)
-    .where(eq(schema.nozzleReadings.shiftId, shiftId));
-
-  const enrichedReadingsSnapshot = await Promise.all(
-    rawNozzleReadings.map(async (nr) => {
-      const [nz] = await db.select().from(schema.nozzles).where(eq(schema.nozzles.id, nr.nozzleId)).limit(1);
-      const [prod] = nz ? await db.select().from(schema.products).where(eq(schema.products.id, nz.productId)).limit(1) : [null];
-      return {
-        nozzleId: nr.nozzleId,
-        productId: nz?.productId ?? 'Unknown',
-        nozzleName: nz?.name ?? 'Unknown',
-        productName: prod?.name ?? 'Unknown',
-        productCode: prod?.code ?? 'Unknown',
-        openingReading: Number(nr.openingReading),
-        closingReading: Number(nr.closingReading),
-        volumeSold: Number(nr.volumeSold),
-        unitPrice: nr.unitPrice ? Number(nr.unitPrice) : 0,
-      };
-    })
-  );
-
-  const totalVolumeSold = enrichedReadingsSnapshot.reduce((sum, r) => sum + r.volumeSold, 0);
-
-  // Fetch all transactions
-  const expenses = await db
-    .select()
-    .from(schema.expenses)
-    .where(eq(schema.expenses.shiftId, shiftId));
-
-  const purchases = await db
-    .select()
-    .from(schema.purchases)
-    .where(eq(schema.purchases.shiftId, shiftId));
-
-  const collections = await db
-    .select()
-    .from(schema.collections)
-    .where(eq(schema.collections.shiftId, shiftId));
-
-  // Retrieve attendant handovers recorded for the shift
-  const handovers = await db
-    .select()
-    .from(schema.attendantHandovers)
-    .where(eq(schema.attendantHandovers.shiftId, shiftId));
-
-  const handoversList = await Promise.all(
-    handovers.map(async (h) => {
-      const [u] = await db.select().from(schema.users).where(eq(schema.users.id, h.userId)).limit(1);
-      const [du] = await db.select().from(schema.dispenserUnits).where(eq(schema.dispenserUnits.id, h.duId)).limit(1);
-      return {
-        ...h,
-        attendantName: u?.fullName ?? 'Unknown Attendant',
-        duCode: du?.code ?? 'Unknown DU',
-        cashHandedOver: Number(h.cashHandedOver),
-        cardHandedOver: Number(h.cardHandedOver),
-        upiHandedOver: Number(h.upiHandedOver),
-        creditHandedOver: Number(h.creditHandedOver),
-        testingVolume: Number(h.testingVolume),
-        expectedSales: Number(h.expectedSales),
-        varianceAmount: Number(h.varianceAmount),
-      };
-    })
-  );
-
-  // Compute cash calculations
-  const openingCashNum = Number(shift.openingCash);
-  const closingCashNum = Number(shift.closingCash ?? 0);
-
-  let cashCollectionsSum = 0;
-  let cardCollectionsSum = 0;
-  let upiCollectionsSum = 0;
-  let creditSalesSum = 0;
-
-  if (handovers.length > 0) {
-    cashCollectionsSum = handoversList.reduce((sum, h) => sum + h.cashHandedOver, 0);
-    cardCollectionsSum = handoversList.reduce((sum, h) => sum + h.cardHandedOver, 0);
-    upiCollectionsSum = handoversList.reduce((sum, h) => sum + h.upiHandedOver, 0);
-    creditSalesSum = handoversList.reduce((sum, h) => sum + h.creditHandedOver, 0);
-  } else {
-    cashCollectionsSum = collections
-      .filter((c) => c.paymentMethod === 'Cash')
-      .reduce((sum, c) => sum + Number(c.amount), 0);
-
-    cardCollectionsSum = collections
-      .filter((c) => c.paymentMethod === 'Card')
-      .reduce((sum, c) => sum + Number(c.amount), 0);
-
-    upiCollectionsSum = collections
-      .filter((c) => c.paymentMethod === 'UPI')
-      .reduce((sum, c) => sum + Number(c.amount), 0);
-
-    creditSalesSum = collections
-      .filter((c) => c.paymentMethod === 'Credit')
-      .reduce((sum, c) => sum + Number(c.amount), 0);
-  }
-
-  const cashExpensesSum = expenses.reduce((sum, e) => sum + Number(e.amount), 0);
-
-  const expectedCash = openingCashNum + cashCollectionsSum - cashExpensesSum;
-  const cashVariance = closingCashNum - expectedCash;
-
-  // Compile warnings
-  const warnings = [];
-  if (closingCashNum === 0 && openingCashNum > 0) {
-    warnings.push('Closing cash is ₹0, which is highly unusual.');
-  }
-  if (totalVolumeSold === 0) {
-    warnings.push('Zero volume was sold across all nozzles this shift.');
-  }
-  if (Math.abs(cashVariance) > 100) {
-    warnings.push(`Cash discrepancy detected! Variance is ₹${cashVariance.toLocaleString('en-IN')}`);
-  }
-
-  // Credit sales mismatch check
-  if (handovers.length > 0) {
-    const detailedCreditSum = collections
-      .filter((c) => c.paymentMethod === 'Credit')
-      .reduce((sum, c) => sum + Number(c.amount), 0);
-    
-    if (Math.abs(detailedCreditSum - creditSalesSum) > 1.00) {
-      warnings.push(`Credit Sales mismatch: Attendants declared ₹${creditSalesSum.toLocaleString('en-IN')} in chits, but only ₹${detailedCreditSum.toLocaleString('en-IN')} of detailed customer billing has been logged.`);
-    }
-  }
-
-  // Format list profiles for snapshot summary lists
-  const expensesList = await Promise.all(
-    expenses.map(async (e) => {
-      const [cat] = await db.select().from(schema.expenseCategories).where(eq(schema.expenseCategories.id, e.categoryId)).limit(1);
-      return {
-        id: e.id,
-        amount: Number(e.amount),
-        description: e.description ?? '',
-        categoryName: cat?.name ?? 'General',
-        createdAt: e.createdAt,
-      };
-    })
-  );
-
-  const purchasesList = await Promise.all(
-    purchases.map(async (p) => {
-      const [sup] = await db.select().from(schema.suppliers).where(eq(schema.suppliers.id, p.supplierId)).limit(1);
-      return {
-        id: p.id,
-        amount: Number(p.amount),
-        notes: p.notes ?? '',
-        supplierName: sup?.name ?? 'Unknown',
-        documentNumber: p.documentNumber,
-        createdAt: p.createdAt,
-      };
-    })
-  );
-
-  const collectionsList = await Promise.all(
-    collections.map(async (c) => {
-      const [cust] = c.customerId
-        ? await db.select().from(schema.customers).where(eq(schema.customers.id, c.customerId)).limit(1)
-        : [null];
-      return {
-        id: c.id,
-        amount: Number(c.amount),
-        paymentMethod: c.paymentMethod,
-        notes: c.notes ?? '',
-        customerName: cust?.name ?? 'Walk-in Customer',
-        documentNumber: c.documentNumber,
-        createdAt: c.createdAt,
-      };
-    })
-  );
-
-  // Fetch stock variances for this shift
-  const stockVariances = await db
-    .select()
-    .from(schema.stockVariances)
-    .where(eq(schema.stockVariances.shiftId, shiftId));
-
-  const stockVariancesList = await Promise.all(
-    stockVariances.map(async (v) => {
-      const [prod] = await db
-        .select()
-        .from(schema.products)
-        .where(eq(schema.products.id, v.productId))
-        .limit(1);
-      const [tank] = v.tankId
-        ? await db.select().from(schema.tanks).where(eq(schema.tanks.id, v.tankId)).limit(1)
-        : [null];
-
-      return {
-        id: v.id,
-        productId: v.productId,
-        productName: prod?.name ?? 'Unknown',
-        productCode: prod?.code ?? 'Unknown',
-        tankId: v.tankId,
-        tankName: tank?.name ?? null,
-        expectedQuantity: Number(v.expectedQuantity),
-        actualQuantity: Number(v.actualQuantity),
-        varianceQuantity: Number(v.varianceQuantity),
-        reason: v.reason ?? '',
-      };
-    })
-  );
-
-  // Compile warnings for stock variances (flag if variance exceeds 0.5% of expected stock)
-  for (const sv of stockVariancesList) {
-    if (sv.expectedQuantity > 0 && Math.abs(sv.varianceQuantity) > 0.005 * sv.expectedQuantity) {
-      const label = sv.tankName ? `${sv.productName} (${sv.tankName})` : sv.productName;
-      warnings.push(`Stock discrepancy for ${label}! Variance is ${sv.varianceQuantity.toFixed(2)} Liters`);
-    }
-  }
-
-  // Construct dip readings snapshot
-  let dipReadingsSnapshot: any[] = [];
-  if (closingDipReadings && closingDipReadings.length > 0) {
-    dipReadingsSnapshot = await Promise.all(
-      closingDipReadings.map(async (dr) => {
-        const [tank] = await db
-          .select()
-          .from(schema.tanks)
-          .where(eq(schema.tanks.id, dr.tankId))
-          .limit(1);
-        const [prod] = tank
-          ? await db.select().from(schema.products).where(eq(schema.products.id, tank.productId)).limit(1)
-          : [null];
-        return {
-          tankId: dr.tankId,
-          tankName: tank?.name ?? 'Unknown Tank',
-          productName: prod?.name ?? 'Unknown',
-          productCode: prod?.code ?? 'Unknown',
-          capacity: tank ? Number(tank.capacity) : 0,
-          actualQuantity: dr.actualQuantity,
-        };
-      })
-    );
-  } else {
-    // Try to get from existing snapshot
-    const [existingShiftSummary] = await db
-      .select()
-      .from(schema.shiftSummaries)
-      .where(eq(schema.shiftSummaries.shiftId, shiftId))
-      .limit(1);
-    if (existingShiftSummary && (existingShiftSummary.snapshotData as any)?.dipReadings) {
-      dipReadingsSnapshot = (existingShiftSummary.snapshotData as any).dipReadings;
-    }
-  }
-
-  const snapshotData = {
-    shiftId,
-    templateName: template?.name ?? 'Unknown',
-    openedAt: shift.openedAt,
-    closedAt: shift.closedAt,
-    openedBy: shift.openedBy,
-    closedBy: shift.closedBy,
-    closedByName: closedByUser?.fullName ?? 'Staff',
-    openingCash: openingCashNum,
-    closingCash: closingCashNum,
-    expectedCash,
-    cashVariance,
-    cashCollectionsSum,
-    cardCollectionsSum,
-    upiCollectionsSum,
-    creditSalesSum,
-    cashExpensesSum,
-    nozzleReadings: enrichedReadingsSnapshot,
-    totalVolumeSold,
-    expenses: expensesList,
-    purchases: purchasesList,
-    collections: collectionsList,
-    stockVariances: stockVariancesList,
-    dipReadings: dipReadingsSnapshot,
-    handovers: handoversList,
-    warnings,
-  };
-
-  // Upsert Shift Summary: Delete existing one first and insert fresh compilation
-  await db.delete(schema.shiftSummaries).where(eq(schema.shiftSummaries.shiftId, shiftId));
-  await db.insert(schema.shiftSummaries).values({
-    shiftId,
-    snapshotData,
-    generatedAt: new Date(),
-  });
-}
-
-// Check lock guard middleware
-async function ensureShiftNotLocked(db: DbClient, shiftId: string): Promise<boolean> {
-  const [shift] = await db.select().from(schema.shifts).where(eq(schema.shifts.id, shiftId)).limit(1);
-  if (!shift) return false;
-  if (shift.status === 'LOCKED') return false;
-
-  if (shift.status === 'CLOSED' && shift.closedAt) {
-    const [station] = await db.select().from(schema.stations).where(eq(schema.stations.id, shift.stationId)).limit(1);
-    const lockGraceDays = (station?.settings as any)?.shift_lock_grace_days ?? 3;
-    const closedTime = new Date(shift.closedAt).getTime();
-    const lockExpiryTime = closedTime + lockGraceDays * 24 * 60 * 60 * 1000;
-
-    if (Date.now() > lockExpiryTime) {
-      // Auto-lock transition
-      await db.update(schema.shifts).set({ status: 'LOCKED', lockedAt: new Date(lockExpiryTime) }).where(eq(schema.shifts.id, shiftId));
-      return false;
-    }
-  }
-
-  return true;
-}
-
-// GET /api/shifts/:id/transactions
-transactionsRouter.get('/shifts/:id/transactions', async (c) => {
-  const db = c.var.db;
-  const shiftId = c.req.param('id');
-
-  try {
-    const expenses = await db.select().from(schema.expenses).where(eq(schema.expenses.shiftId, shiftId));
-    const enrichedExpenses = await Promise.all(
-      expenses.map(async (e) => {
-        const [cat] = await db.select().from(schema.expenseCategories).where(eq(schema.expenseCategories.id, e.categoryId)).limit(1);
-        return { ...e, categoryName: cat?.name ?? 'General' };
-      })
-    );
-
-    const purchases = await db.select().from(schema.purchases).where(eq(schema.purchases.shiftId, shiftId));
-    const enrichedPurchases = await Promise.all(
-      purchases.map(async (p) => {
-        const [sup] = await db.select().from(schema.suppliers).where(eq(schema.suppliers.id, p.supplierId)).limit(1);
-        return { ...p, supplierName: sup?.name ?? 'Unknown' };
-      })
-    );
-
-    const collections = await db.select().from(schema.collections).where(eq(schema.collections.shiftId, shiftId));
-    const enrichedCollections = await Promise.all(
-      collections.map(async (cl) => {
-        const [cust] = cl.customerId 
-          ? await db.select().from(schema.customers).where(eq(schema.customers.id, cl.customerId)).limit(1)
-          : [null];
-        return { ...cl, customerName: cust?.name ?? 'Walk-in Customer' };
-      })
-    );
-
-    return c.json({
-      success: true,
-      data: {
-        expenses: enrichedExpenses,
-        purchases: enrichedPurchases,
-        collections: enrichedCollections,
-      },
-    });
-  } catch (err: any) {
-    return c.json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }, 500);
-  }
-});
-
-// GET /api/shifts/expense-categories
-transactionsRouter.get('/expense-categories', async (c) => {
-  const db = c.var.db;
-  const user = c.var.user;
-
-  try {
-    let list = await db
-      .select()
-      .from(schema.expenseCategories)
-      .where(eq(schema.expenseCategories.organizationId, user.organizationId));
-
-    if (list.length === 0) {
-      // Seed standard categories
-      const defaults = [
-        { name: 'Staff Tea & Snacks', isSystem: true },
-        { name: 'Office Stationery', isSystem: true },
-        { name: 'Generator Diesel', isSystem: true },
-        { name: 'Cleaning & Hygiene', isSystem: true },
-        { name: 'General Miscellaneous', isSystem: true },
-      ];
-      
-      await db.insert(schema.expenseCategories)
-        .values(defaults.map(item => ({
-          organizationId: user.organizationId,
-          name: item.name,
-          isSystem: item.isSystem
-        })))
-        .onConflictDoNothing();
-
-      list = await db
-        .select()
-        .from(schema.expenseCategories)
-        .where(eq(schema.expenseCategories.organizationId, user.organizationId));
-    }
-
-    return c.json({ success: true, data: list });
-  } catch (err: any) {
-    return c.json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }, 500);
-  }
-});
-
-// GET /api/transactions/suppliers
 transactionsRouter.get('/suppliers', async (c) => {
   const db = c.var.db;
   const user = c.var.user;
   const activeOnly = c.req.query('activeOnly') !== 'false';
 
-  try {
-    let list;
-    if (activeOnly) {
-      list = await db
-        .select()
-        .from(schema.suppliers)
-        .where(and(eq(schema.suppliers.organizationId, user.organizationId), eq(schema.suppliers.isActive, true)));
-    } else {
-      list = await db
-        .select()
-        .from(schema.suppliers)
-        .where(eq(schema.suppliers.organizationId, user.organizationId));
-    }
-
-    // Fetch supplier transactions to compute dynamic outstanding balances
-    const txs = await db
+  // Outstanding balance = Σ purchases − Σ payments, scoped to org via business_days.
+  // Aggregated in SQL (one row per supplier) + run alongside the list query.
+  const [list, balanceRows] = await Promise.all([
+    new DrizzleSupplierRepository(db).listByOrganization(user.organizationId, activeOnly),
+    db
       .select({
         supplierId: schema.supplierTransactions.supplierId,
-        transactionType: schema.supplierTransactions.transactionType,
-        amount: schema.supplierTransactions.amount,
+        balance: sql<string>`COALESCE(SUM(CASE WHEN ${schema.supplierTransactions.transactionType} = 'Payment' THEN -${schema.supplierTransactions.amount} ELSE ${schema.supplierTransactions.amount} END), 0)`,
       })
       .from(schema.supplierTransactions)
-      .innerJoin(schema.shifts, eq(schema.supplierTransactions.shiftId, schema.shifts.id))
-      .where(eq(schema.shifts.organizationId, user.organizationId));
+      .innerJoin(schema.businessDays, eq(schema.supplierTransactions.businessDayId, schema.businessDays.id))
+      .where(eq(schema.businessDays.organizationId, user.organizationId))
+      .groupBy(schema.supplierTransactions.supplierId),
+  ]);
 
-    const balances: Record<string, number> = {};
-    for (const tx of txs) {
-      const amount = Number(tx.amount);
-      const type = tx.transactionType;
-      if (!balances[tx.supplierId]) balances[tx.supplierId] = 0;
-      if (type === 'Purchase') {
-        balances[tx.supplierId] += amount;
-      } else if (type === 'Payment') {
-        balances[tx.supplierId] -= amount;
-      } else if (type === 'Adjustment') {
-        balances[tx.supplierId] += amount;
-      }
-    }
+  const balances: Record<string, number> = {};
+  for (const r of balanceRows) balances[r.supplierId] = Number(r.balance);
+  return c.json({ success: true, data: list.map((s) => ({ ...s, currentBalance: balances[s.id] ?? 0 })) });
+});
 
-    const enrichedList = list.map((sup) => ({
-      ...sup,
-      currentBalance: balances[sup.id] || 0,
-    }));
-
-    return c.json({ success: true, data: enrichedList });
-  } catch (err: any) {
-    return c.json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }, 500);
+transactionsRouter.post('/suppliers', async (c) => {
+  const user = c.var.user;
+  if (!canManageSuppliers(user.role)) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } }, 403);
   }
+  const body = await c.req.json().catch(() => ({}));
+  const result = await runInTransaction(c.var.db, (tx, events) =>
+    new CreateSupplier({ repository: new DrizzleSupplierRepository(tx), events }).execute(body, buildContext(user)),
+  );
+  return sendResult(c, result);
 });
 
-// POST /api/transactions/suppliers
-transactionsRouter.post('/suppliers', validateJson(supplierCreateSchema), async (c) => {
-  const db = c.var.db;
+transactionsRouter.put('/suppliers/:id', async (c) => {
   const user = c.var.user;
-
-  const parsed = c.req.valid('json');
-
-  const [newSup] = await db
-    .insert(schema.suppliers)
-    .values({
-      organizationId: user.organizationId,
-      name: parsed.name,
-      phone: parsed.phone,
-      isActive: parsed.isActive,
-      metadata: parsed.metadata,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    })
-    .returning();
-
-  return c.json({ success: true, data: newSup });
+  if (!canManageSuppliers(user.role)) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } }, 403);
+  }
+  const body = await c.req.json().catch(() => ({}));
+  const result = await runInTransaction(c.var.db, (tx, events) =>
+    new UpdateSupplier({ repository: new DrizzleSupplierRepository(tx), events }).execute({ ...body, id: c.req.param('id') }, buildContext(user)),
+  );
+  return sendResult(c, result);
 });
 
-// PUT /api/transactions/suppliers/:id
-transactionsRouter.put('/suppliers/:id', validateJson(supplierCreateSchema), async (c) => {
+transactionsRouter.delete('/suppliers/:id', async (c) => {
+  const user = c.var.user;
+  if (!canArchiveParty(user.role)) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } }, 403);
+  }
+  const result = await runInTransaction(c.var.db, (tx, events) =>
+    new UpdateSupplier({ repository: new DrizzleSupplierRepository(tx), events }).execute({ id: c.req.param('id'), isActive: false }, buildContext(user)),
+  );
+  return sendResult(c, result);
+});
+
+transactionsRouter.get('/suppliers/:id/ledger', async (c) => {
   const db = c.var.db;
   const user = c.var.user;
-  const id = c.req.param('id');
-
-  const parsed = c.req.valid('json');
-
-  const [updatedSup] = await db
-    .update(schema.suppliers)
-    .set({
-      name: parsed.name,
-      phone: parsed.phone,
-      isActive: parsed.isActive,
-      metadata: parsed.metadata,
-      updatedAt: new Date(),
-    })
-    .where(and(eq(schema.suppliers.id, id), eq(schema.suppliers.organizationId, user.organizationId)))
-    .returning();
-
-  if (!updatedSup) {
+  const supplierId = c.req.param('id');
+  const supplier = await new DrizzleSupplierRepository(db).findById(supplierId);
+  if (!supplier || supplier.organizationId !== user.organizationId) {
     return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Supplier not found' } }, 404);
   }
-
-  return c.json({ success: true, data: updatedSup });
+  // TODO (ledger scaling): this returns the supplier's ALL-TIME transactions and
+  // the client computes the period opening + in-range rows. Bounded per single
+  // supplier, so fine for now. When a supplier's history grows large, mirror the
+  // account-statement pattern: accept from/to, return
+  // { periodOpeningBalance: Σ(debit − credit) WHERE businessDate < from, entries: in-range only }
+  // and drop the client-side clampByDate/opening computation in UnifiedLedger.
+  const list = await db
+    .select({
+      id: schema.supplierTransactions.id,
+      transactionType: schema.supplierTransactions.transactionType,
+      amount: schema.supplierTransactions.amount,
+      paidFrom: schema.supplierTransactions.paidFrom,
+      notes: schema.supplierTransactions.notes,
+      createdAt: schema.supplierTransactions.createdAt,
+      shiftId: schema.supplierTransactions.shiftId,
+      businessDate: schema.businessDays.businessDate,
+    })
+    .from(schema.supplierTransactions)
+    .innerJoin(schema.businessDays, eq(schema.supplierTransactions.businessDayId, schema.businessDays.id))
+    .where(eq(schema.supplierTransactions.supplierId, supplierId))
+    .orderBy(schema.supplierTransactions.createdAt);
+  return c.json({ success: true, data: list });
 });
 
-// DELETE /api/transactions/suppliers/:id (Soft delete)
-transactionsRouter.delete('/suppliers/:id', async (c) => {
-  const db = c.var.db;
-  const user = c.var.user;
-  const id = c.req.param('id');
+// ====================================================
+// MASTER DATA — Customers
+// ====================================================
 
-  try {
-    const [deletedSup] = await db
-      .update(schema.suppliers)
-      .set({
-        isActive: false,
-        updatedAt: new Date(),
-      })
-      .where(and(eq(schema.suppliers.id, id), eq(schema.suppliers.organizationId, user.organizationId)))
-      .returning();
-
-    if (!deletedSup) {
-      return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Supplier not found' } }, 404);
-    }
-
-    return c.json({ success: true, data: deletedSup });
-  } catch (err: any) {
-    return c.json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }, 500);
-  }
-});
-
-// GET /api/transactions/customers
 transactionsRouter.get('/customers', async (c) => {
   const db = c.var.db;
   const user = c.var.user;
   const activeOnly = c.req.query('activeOnly') !== 'false';
 
-  try {
-    let list;
-    if (activeOnly) {
-      list = await db
-        .select()
-        .from(schema.customers)
-        .where(and(eq(schema.customers.organizationId, user.organizationId), eq(schema.customers.isActive, true)));
-    } else {
-      list = await db
-        .select()
-        .from(schema.customers)
-        .where(eq(schema.customers.organizationId, user.organizationId));
-    }
-
-    // Fetch customer transactions to compute dynamic outstanding and prepaid balances
-    const txs = await db
+  // Receivable = Σ credit sales/adjustments − Σ collections, scoped via business_days.
+  // Aggregated in SQL (one row per customer) + run alongside the list query.
+  const [list, balanceRows] = await Promise.all([
+    new DrizzleCustomerRepository(db).listByOrganization(user.organizationId, activeOnly),
+    db
       .select({
         customerId: schema.customerTransactions.customerId,
-        transactionType: schema.customerTransactions.transactionType,
-        amount: schema.customerTransactions.amount,
+        balance: sql<string>`COALESCE(SUM(CASE WHEN ${schema.customerTransactions.transactionType} = 'Collection' THEN -${schema.customerTransactions.amount} ELSE ${schema.customerTransactions.amount} END), 0)`,
       })
       .from(schema.customerTransactions)
-      .innerJoin(schema.shifts, eq(schema.customerTransactions.shiftId, schema.shifts.id))
-      .where(eq(schema.shifts.organizationId, user.organizationId));
+      .innerJoin(schema.businessDays, eq(schema.customerTransactions.businessDayId, schema.businessDays.id))
+      .where(eq(schema.businessDays.organizationId, user.organizationId))
+      .groupBy(schema.customerTransactions.customerId),
+  ]);
 
-    const balances: Record<string, number> = {};
-    const prepaidBalances: Record<string, number> = {};
-    for (const tx of txs) {
-      const amount = Number(tx.amount);
-      const type = tx.transactionType;
-      if (!balances[tx.customerId]) balances[tx.customerId] = 0;
-      if (!prepaidBalances[tx.customerId]) prepaidBalances[tx.customerId] = 0;
-      
-      if (type === 'Credit Sale') {
-        balances[tx.customerId] += amount;
-      } else if (type === 'Collection') {
-        balances[tx.customerId] -= amount;
-      } else if (type === 'Adjustment') {
-        balances[tx.customerId] += amount;
-      } else if (type === 'Prepaid Top-up') {
-        prepaidBalances[tx.customerId] += amount;
-      } else if (type === 'Prepaid Charge') {
-        prepaidBalances[tx.customerId] -= amount;
-      }
-    }
-
-    const enrichedList = list.map((cust) => ({
-      ...cust,
-      currentBalance: balances[cust.id] || 0,
-      prepaidBalance: prepaidBalances[cust.id] || 0,
-    }));
-
-    return c.json({ success: true, data: enrichedList });
-  } catch (err: any) {
-    return c.json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }, 500);
-  }
+  const balances: Record<string, number> = {};
+  for (const r of balanceRows) balances[r.customerId] = Number(r.balance);
+  return c.json({ success: true, data: list.map((cust) => ({ ...cust, currentBalance: balances[cust.id] ?? 0 })) });
 });
 
-// POST /api/transactions/customers
-transactionsRouter.post('/customers', validateJson(customerCreateSchema), async (c) => {
-  const db = c.var.db;
+transactionsRouter.post('/customers', async (c) => {
   const user = c.var.user;
-
-  const parsed = c.req.valid('json');
-
-  const [newCust] = await db
-    .insert(schema.customers)
-    .values({
-      organizationId: user.organizationId,
-      name: parsed.name,
-      phone: parsed.phone,
-      customerType: parsed.customerType,
-      creditLimit: parsed.creditLimit ? String(parsed.creditLimit) : null,
-      fleetCode: parsed.fleetCode,
-      isPrepaid: parsed.isPrepaid,
-      isActive: parsed.isActive,
-      metadata: parsed.metadata,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    })
-    .returning();
-
-  return c.json({ success: true, data: newCust });
-});
-
-// PUT /api/transactions/customers/:id
-transactionsRouter.put('/customers/:id', validateJson(customerCreateSchema), async (c) => {
-  const db = c.var.db;
-  const user = c.var.user;
-  const id = c.req.param('id');
-
-  const parsed = c.req.valid('json');
-
-  const [updatedCust] = await db
-    .update(schema.customers)
-    .set({
-      name: parsed.name,
-      phone: parsed.phone,
-      customerType: parsed.customerType,
-      creditLimit: parsed.creditLimit ? String(parsed.creditLimit) : null,
-      fleetCode: parsed.fleetCode,
-      isPrepaid: parsed.isPrepaid,
-      isActive: parsed.isActive,
-      metadata: parsed.metadata,
-      updatedAt: new Date(),
-    })
-    .where(and(eq(schema.customers.id, id), eq(schema.customers.organizationId, user.organizationId)))
-    .returning();
-
-  if (!updatedCust) {
-    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Customer not found' } }, 404);
+  if (!canManageCustomers(user.role)) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } }, 403);
   }
-
-  return c.json({ success: true, data: updatedCust });
+  const body = await c.req.json().catch(() => ({}));
+  const result = await runInTransaction(c.var.db, (tx, events) =>
+    new CreateCustomer({ repository: new DrizzleCustomerRepository(tx), events }).execute(body, buildContext(user)),
+  );
+  return sendResult(c, result);
 });
 
-// DELETE /api/transactions/customers/:id (Soft delete)
+transactionsRouter.put('/customers/:id', async (c) => {
+  const user = c.var.user;
+  if (!canManageCustomers(user.role)) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } }, 403);
+  }
+  const body = await c.req.json().catch(() => ({}));
+  const result = await runInTransaction(c.var.db, (tx, events) =>
+    new UpdateCustomer({ repository: new DrizzleCustomerRepository(tx), events }).execute({ ...body, id: c.req.param('id') }, buildContext(user)),
+  );
+  return sendResult(c, result);
+});
+
 transactionsRouter.delete('/customers/:id', async (c) => {
-  const db = c.var.db;
   const user = c.var.user;
-  const id = c.req.param('id');
-
-  try {
-    const [deletedCust] = await db
-      .update(schema.customers)
-      .set({
-        isActive: false,
-        updatedAt: new Date(),
-      })
-      .where(and(eq(schema.customers.id, id), eq(schema.customers.organizationId, user.organizationId)))
-      .returning();
-
-    if (!deletedCust) {
-      return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Customer not found' } }, 404);
-    }
-
-    return c.json({ success: true, data: deletedCust });
-  } catch (err: any) {
-    return c.json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }, 500);
+  if (!canArchiveParty(user.role)) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } }, 403);
   }
+  const result = await runInTransaction(c.var.db, (tx, events) =>
+    new UpdateCustomer({ repository: new DrizzleCustomerRepository(tx), events }).execute({ id: c.req.param('id'), isActive: false }, buildContext(user)),
+  );
+  return sendResult(c, result);
 });
 
-// POST /api/transactions/customers/:id/topup
-transactionsRouter.post('/customers/:id/topup', validateJson(customerTopupSchema), async (c) => {
+transactionsRouter.get('/customers/:id/ledger', async (c) => {
   const db = c.var.db;
   const user = c.var.user;
   const customerId = c.req.param('id');
-  const parsed = c.req.valid('json');
-
-  try {
-    const [customer] = await db
-      .select()
-      .from(schema.customers)
-      .where(and(eq(schema.customers.id, customerId), eq(schema.customers.organizationId, user.organizationId)))
-      .limit(1);
-
-    if (!customer) {
-      return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Customer not found' } }, 404);
-    }
-
-    if (!customer.isPrepaid) {
-      return c.json({ success: false, error: { code: 'BAD_REQUEST', message: 'Customer is not prepaid-enabled' } }, 400);
-    }
-
-    const shiftId = await resolveOperationalShiftId(db, user.organizationId, customer.stationId);
-    if (!shiftId) {
-      return c.json({ success: false, error: { code: 'BAD_REQUEST', message: 'No operational shift found for recording top-up' } }, 400);
-    }
-
-    // Insert top-up ledger row (balance computed on-read from ledger)
-    const [topupTx] = await db
-      .insert(schema.customerTransactions)
-      .values({
-        shiftId,
-        customerId,
-        transactionType: 'Prepaid Top-up',
-        amount: String(parsed.amount),
-        referenceType: 'PREPAID_TOPUP',
-        notes: parsed.notes ? `${parsed.notes} [${parsed.paymentMethod}]` : `Top-up via ${parsed.paymentMethod}`,
-        createdAt: new Date(),
-      })
-      .returning();
-
-    return c.json({ success: true, data: topupTx });
-  } catch (err: any) {
-    return c.json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }, 500);
+  const customer = await new DrizzleCustomerRepository(db).findById(customerId);
+  if (!customer || customer.organizationId !== user.organizationId) {
+    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Customer not found' } }, 404);
   }
+  // TODO (ledger scaling): this returns the customer's ALL-TIME transactions and
+  // the client computes the period opening + in-range rows. Bounded per single
+  // customer, so fine for now. When a customer's history grows large, mirror the
+  // account-statement pattern: accept from/to, return
+  // { periodOpeningBalance: Σ(debit − credit) WHERE businessDate < from, entries: in-range only }
+  // and drop the client-side clampByDate/opening computation in UnifiedLedger.
+  const list = await db
+    .select({
+      id: schema.customerTransactions.id,
+      transactionType: schema.customerTransactions.transactionType,
+      amount: schema.customerTransactions.amount,
+      notes: schema.customerTransactions.notes,
+      createdAt: schema.customerTransactions.createdAt,
+      shiftId: schema.customerTransactions.shiftId,
+      businessDate: schema.businessDays.businessDate,
+    })
+    .from(schema.customerTransactions)
+    .innerJoin(schema.businessDays, eq(schema.customerTransactions.businessDayId, schema.businessDays.id))
+    .where(eq(schema.customerTransactions.customerId, customerId))
+    .orderBy(schema.customerTransactions.createdAt);
+  return c.json({ success: true, data: list });
 });
 
-// GET /api/transactions/customers/:id/vehicles
+// ====================================================
+// MASTER DATA — Vehicles
+// ====================================================
+
 transactionsRouter.get('/customers/:id/vehicles', async (c) => {
   const db = c.var.db;
   const user = c.var.user;
   const customerId = c.req.param('id');
   const activeOnly = c.req.query('activeOnly') !== 'false';
-
-  try {
-    const [customer] = await db
-      .select({ id: schema.customers.id })
-      .from(schema.customers)
-      .where(and(eq(schema.customers.id, customerId), eq(schema.customers.organizationId, user.organizationId)))
-      .limit(1);
-
-    if (!customer) {
-      return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Customer not found' } }, 404);
-    }
-
-    const vehicleRows = await db
-      .select({
-        id: schema.customerVehicles.id,
-        organizationId: schema.customerVehicles.organizationId,
-        customerId: schema.customerVehicles.customerId,
-        registrationNumber: schema.customerVehicles.registrationNumber,
-        vehicleType: schema.customerVehicles.vehicleType,
-        defaultProductId: schema.customerVehicles.defaultProductId,
-        isActive: schema.customerVehicles.isActive,
-        createdAt: schema.customerVehicles.createdAt,
-        updatedAt: schema.customerVehicles.updatedAt,
-        defaultProductName: schema.products.name,
-        defaultProductCode: schema.products.code,
-      })
-      .from(schema.customerVehicles)
-      .leftJoin(schema.products, eq(schema.customerVehicles.defaultProductId, schema.products.id))
-      .where(
-        and(
-          eq(schema.customerVehicles.customerId, customerId),
-          eq(schema.customerVehicles.organizationId, user.organizationId),
-          ...(activeOnly ? [eq(schema.customerVehicles.isActive, true)] : [])
-        )
-      )
-      .orderBy(desc(schema.customerVehicles.updatedAt));
-
-    return c.json({ success: true, data: vehicleRows });
-  } catch (err: any) {
-    return c.json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }, 500);
+  const customer = await new DrizzleCustomerRepository(db).findById(customerId);
+  if (!customer || customer.organizationId !== user.organizationId) {
+    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Customer not found' } }, 404);
   }
+  const rows = await db
+    .select({
+      id: schema.customerVehicles.id,
+      organizationId: schema.customerVehicles.organizationId,
+      customerId: schema.customerVehicles.customerId,
+      registrationNumber: schema.customerVehicles.registrationNumber,
+      vehicleType: schema.customerVehicles.vehicleType,
+      defaultProductId: schema.customerVehicles.defaultProductId,
+      isActive: schema.customerVehicles.isActive,
+      createdAt: schema.customerVehicles.createdAt,
+      updatedAt: schema.customerVehicles.updatedAt,
+      defaultProductName: schema.products.name,
+      defaultProductCode: schema.products.code,
+    })
+    .from(schema.customerVehicles)
+    .leftJoin(schema.products, eq(schema.customerVehicles.defaultProductId, schema.products.id))
+    .where(
+      and(
+        eq(schema.customerVehicles.customerId, customerId),
+        eq(schema.customerVehicles.organizationId, user.organizationId),
+        ...(activeOnly ? [eq(schema.customerVehicles.isActive, true)] : []),
+      ),
+    )
+    .orderBy(desc(schema.customerVehicles.updatedAt));
+  return c.json({ success: true, data: rows });
 });
 
-// POST /api/transactions/customers/:id/vehicles
-transactionsRouter.post('/customers/:id/vehicles', validateJson(customerVehicleCreateSchema), async (c) => {
+// GET /transactions/vehicles?activeOnly=  — all vehicles across the org, each
+// with its owning customer + default product. Backs the Customers → Vehicles
+// tab's "show all" view (filter client-side by customer / registration).
+transactionsRouter.get('/vehicles', async (c) => {
   const db = c.var.db;
   const user = c.var.user;
-  const customerId = c.req.param('id');
-  const parsed = c.req.valid('json');
-
-  try {
-    const [customer] = await db
-      .select({ id: schema.customers.id })
-      .from(schema.customers)
-      .where(and(eq(schema.customers.id, customerId), eq(schema.customers.organizationId, user.organizationId)))
-      .limit(1);
-
-    if (!customer) {
-      return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Customer not found' } }, 404);
-    }
-
-    if (parsed.defaultProductId) {
-      const [product] = await db
-        .select({ id: schema.products.id })
-        .from(schema.products)
-        .where(and(eq(schema.products.id, parsed.defaultProductId), eq(schema.products.organizationId, user.organizationId)))
-        .limit(1);
-
-      if (!product) {
-        return c.json({ success: false, error: { code: 'BAD_REQUEST', message: 'Default product not found' } }, 400);
-      }
-    }
-
-    const [newVehicle] = await db
-      .insert(schema.customerVehicles)
-      .values({
-        organizationId: user.organizationId,
-        customerId,
-        registrationNumber: parsed.registrationNumber.toUpperCase(),
-        vehicleType: parsed.vehicleType,
-        defaultProductId: parsed.defaultProductId || null,
-        isActive: parsed.isActive,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .returning();
-
-    return c.json({ success: true, data: newVehicle });
-  } catch (err: any) {
-    if (String(err.message || '').toLowerCase().includes('duplicate')) {
-      return c.json({ success: false, error: { code: 'CONFLICT', message: 'Vehicle registration already exists for this organization' } }, 409);
-    }
-    return c.json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }, 500);
-  }
+  const activeOnly = c.req.query('activeOnly') === 'true';
+  const rows = await db
+    .select({
+      id: schema.customerVehicles.id,
+      organizationId: schema.customerVehicles.organizationId,
+      customerId: schema.customerVehicles.customerId,
+      customerName: schema.customers.name,
+      customerType: schema.customers.customerType,
+      registrationNumber: schema.customerVehicles.registrationNumber,
+      vehicleType: schema.customerVehicles.vehicleType,
+      defaultProductId: schema.customerVehicles.defaultProductId,
+      defaultProductName: schema.products.name,
+      defaultProductCode: schema.products.code,
+      isActive: schema.customerVehicles.isActive,
+      createdAt: schema.customerVehicles.createdAt,
+      updatedAt: schema.customerVehicles.updatedAt,
+    })
+    .from(schema.customerVehicles)
+    .innerJoin(schema.customers, eq(schema.customerVehicles.customerId, schema.customers.id))
+    .leftJoin(schema.products, eq(schema.customerVehicles.defaultProductId, schema.products.id))
+    .where(
+      and(
+        eq(schema.customerVehicles.organizationId, user.organizationId),
+        ...(activeOnly ? [eq(schema.customerVehicles.isActive, true)] : []),
+      ),
+    )
+    .orderBy(desc(schema.customerVehicles.updatedAt));
+  return c.json({ success: true, data: rows });
 });
 
-// PUT /api/transactions/vehicles/:id
-transactionsRouter.put('/vehicles/:id', validateJson(customerVehicleCreateSchema), async (c) => {
-  const db = c.var.db;
+transactionsRouter.post('/customers/:id/vehicles', async (c) => {
   const user = c.var.user;
-  const vehicleId = c.req.param('id');
-  const parsed = c.req.valid('json');
-
-  try {
-    if (parsed.defaultProductId) {
-      const [product] = await db
-        .select({ id: schema.products.id })
-        .from(schema.products)
-        .where(and(eq(schema.products.id, parsed.defaultProductId), eq(schema.products.organizationId, user.organizationId)))
-        .limit(1);
-
-      if (!product) {
-        return c.json({ success: false, error: { code: 'BAD_REQUEST', message: 'Default product not found' } }, 400);
-      }
-    }
-
-    const [updatedVehicle] = await db
-      .update(schema.customerVehicles)
-      .set({
-        registrationNumber: parsed.registrationNumber.toUpperCase(),
-        vehicleType: parsed.vehicleType,
-        defaultProductId: parsed.defaultProductId || null,
-        isActive: parsed.isActive,
-        updatedAt: new Date(),
-      })
-      .where(and(eq(schema.customerVehicles.id, vehicleId), eq(schema.customerVehicles.organizationId, user.organizationId)))
-      .returning();
-
-    if (!updatedVehicle) {
-      return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Vehicle not found' } }, 404);
-    }
-
-    return c.json({ success: true, data: updatedVehicle });
-  } catch (err: any) {
-    if (String(err.message || '').toLowerCase().includes('duplicate')) {
-      return c.json({ success: false, error: { code: 'CONFLICT', message: 'Vehicle registration already exists for this organization' } }, 409);
-    }
-    return c.json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }, 500);
+  if (!canManageCustomers(user.role)) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } }, 403);
   }
+  const body = await c.req.json().catch(() => ({}));
+  const result = await runInTransaction(c.var.db, (tx, events) =>
+    new AddVehicle({
+      repository: new DrizzleVehicleRepository(tx),
+      customers: new DrizzleCustomerRepository(tx),
+      events,
+    }).execute({ ...body, customerId: c.req.param('id') }, buildContext(user)),
+  );
+  return sendResult(c, result);
 });
 
-// DELETE /api/transactions/vehicles/:id (soft delete)
+transactionsRouter.put('/vehicles/:id', async (c) => {
+  const user = c.var.user;
+  if (!canManageCustomers(user.role)) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } }, 403);
+  }
+  const body = await c.req.json().catch(() => ({}));
+  const result = await runInTransaction(c.var.db, (tx, events) =>
+    new UpdateVehicle({
+      repository: new DrizzleVehicleRepository(tx),
+      customers: new DrizzleCustomerRepository(tx),
+      events,
+    }).execute({ ...body, id: c.req.param('id') }, buildContext(user)),
+  );
+  return sendResult(c, result);
+});
+
 transactionsRouter.delete('/vehicles/:id', async (c) => {
-  const db = c.var.db;
   const user = c.var.user;
-  const vehicleId = c.req.param('id');
-
-  try {
-    const [deletedVehicle] = await db
-      .update(schema.customerVehicles)
-      .set({
-        isActive: false,
-        updatedAt: new Date(),
-      })
-      .where(and(eq(schema.customerVehicles.id, vehicleId), eq(schema.customerVehicles.organizationId, user.organizationId)))
-      .returning();
-
-    if (!deletedVehicle) {
-      return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Vehicle not found' } }, 404);
-    }
-
-    return c.json({ success: true, data: deletedVehicle });
-  } catch (err: any) {
-    return c.json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }, 500);
+  if (!canArchiveParty(user.role)) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } }, 403);
   }
+  const result = await runInTransaction(c.var.db, (tx, events) =>
+    new UpdateVehicle({
+      repository: new DrizzleVehicleRepository(tx),
+      customers: new DrizzleCustomerRepository(tx),
+      events,
+    }).execute({ id: c.req.param('id'), isActive: false }, buildContext(user)),
+  );
+  return sendResult(c, result);
 });
 
-// GET /api/transactions/vehicles/search?q=KA01 (cross-customer registration search)
 transactionsRouter.get('/vehicles/search', async (c) => {
   const db = c.var.db;
   const user = c.var.user;
   const q = (c.req.query('q') || '').trim();
   const limit = Math.min(Number(c.req.query('limit') || 20), 50);
-
-  if (q.length < 1) {
-    return c.json({ success: true, data: [] });
-  }
-
-  try {
-    const rows = await db
-      .select({
-        id: schema.customerVehicles.id,
-        registrationNumber: schema.customerVehicles.registrationNumber,
-        vehicleType: schema.customerVehicles.vehicleType,
-        defaultProductId: schema.customerVehicles.defaultProductId,
-        customerId: schema.customerVehicles.customerId,
-        customerName: schema.customers.name,
-        customerType: schema.customers.customerType,
-        isPrepaid: schema.customers.isPrepaid,
-        creditLimit: schema.customers.creditLimit,
-        defaultProductName: schema.products.name,
-        defaultProductCode: schema.products.code,
-        defaultProductUnit: schema.products.unit,
-      })
-      .from(schema.customerVehicles)
-      .innerJoin(schema.customers, eq(schema.customerVehicles.customerId, schema.customers.id))
-      .leftJoin(schema.products, eq(schema.customerVehicles.defaultProductId, schema.products.id))
-      .where(
-        and(
-          eq(schema.customerVehicles.organizationId, user.organizationId),
-          eq(schema.customerVehicles.isActive, true),
-          eq(schema.customers.isActive, true),
-          ilike(schema.customerVehicles.registrationNumber, `%${q}%`)
-        )
-      )
-      .orderBy(
-        sql`CASE WHEN ${schema.customerVehicles.registrationNumber} ILIKE ${q + '%'} THEN 0 ELSE 1 END`,
-        desc(schema.customerVehicles.updatedAt)
-      )
-      .limit(limit);
-
-    return c.json({ success: true, data: rows });
-  } catch (err: any) {
-    return c.json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }, 500);
-  }
+  if (q.length < 1) return c.json({ success: true, data: [] });
+  const rows = await db
+    .select({
+      id: schema.customerVehicles.id,
+      registrationNumber: schema.customerVehicles.registrationNumber,
+      vehicleType: schema.customerVehicles.vehicleType,
+      defaultProductId: schema.customerVehicles.defaultProductId,
+      customerId: schema.customerVehicles.customerId,
+      customerName: schema.customers.name,
+      customerType: schema.customers.customerType,
+      isPrepaid: schema.customers.isPrepaid,
+      creditLimit: schema.customers.creditLimit,
+      defaultProductName: schema.products.name,
+      defaultProductCode: schema.products.code,
+      defaultProductUnit: schema.products.unit,
+    })
+    .from(schema.customerVehicles)
+    .innerJoin(schema.customers, eq(schema.customerVehicles.customerId, schema.customers.id))
+    .leftJoin(schema.products, eq(schema.customerVehicles.defaultProductId, schema.products.id))
+    .where(
+      and(
+        eq(schema.customerVehicles.organizationId, user.organizationId),
+        eq(schema.customerVehicles.isActive, true),
+        eq(schema.customers.isActive, true),
+        ilike(schema.customerVehicles.registrationNumber, `%${q}%`),
+      ),
+    )
+    .orderBy(
+      sql`CASE WHEN ${schema.customerVehicles.registrationNumber} ILIKE ${q + '%'} THEN 0 ELSE 1 END`,
+      desc(schema.customerVehicles.updatedAt),
+    )
+    .limit(limit);
+  return c.json({ success: true, data: rows });
 });
 
-// POST /api/expenses
-transactionsRouter.post('/expenses', validateJson(shiftExpenseSchema), async (c) => {
+// ====================================================
+// EXPENSE CATEGORIES
+// ====================================================
+
+transactionsRouter.get('/expense-categories', async (c) => {
   const db = c.var.db;
   const user = c.var.user;
-
-  const parsed = c.req.valid('json');
-
-  try {
-    const editable = await ensureShiftNotLocked(db, parsed.shiftId);
-    if (!editable) {
-      return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Target shift is locked' } }, 403);
-    }
-
-    const [newExpense] = await db
-      .insert(schema.expenses)
-      .values({
-        shiftId: parsed.shiftId,
-        categoryId: parsed.categoryId,
-        amount: String(parsed.amount),
-        description: parsed.description,
-        status: 'ACTIVE',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .returning();
-
-    // Check if shift is closed: recompile Shift Summary
-    const [shift] = await db.select().from(schema.shifts).where(eq(schema.shifts.id, parsed.shiftId)).limit(1);
-    if (shift.status === 'CLOSED') {
-      await compileShiftSummary(db, parsed.shiftId);
-    }
-
-    return c.json({ success: true, data: newExpense });
-  } catch (err: any) {
-    return c.json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }, 500);
+  let list = await db.select().from(schema.expenseCategories).where(eq(schema.expenseCategories.organizationId, user.organizationId));
+  if (list.length === 0) {
+    await db
+      .insert(schema.expenseCategories)
+      .values(DEFAULT_EXPENSE_CATEGORIES.map((name) => ({ organizationId: user.organizationId, name, isSystem: true })))
+      .onConflictDoNothing();
+    list = await db.select().from(schema.expenseCategories).where(eq(schema.expenseCategories.organizationId, user.organizationId));
   }
+  return c.json({ success: true, data: list });
 });
 
-// POST /api/purchases
-transactionsRouter.post('/purchases', validateJson(shiftPurchaseSchema), async (c) => {
+// Create a custom expense category (org-scoped, deduped by name).
+transactionsRouter.post('/expense-categories', async (c) => {
   const db = c.var.db;
   const user = c.var.user;
-
-  const parsed = c.req.valid('json');
-
-  try {
-    const editable = await ensureShiftNotLocked(db, parsed.shiftId);
-    if (!editable) {
-      return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Target shift is locked' } }, 403);
-    }
-
-    const docNum = `PURCH-${Date.now().toString().slice(-6)}`;
-    const totalAmount = parsed.quantity * parsed.unitPrice;
-
-    const [newPurchase] = await db
-      .insert(schema.purchases)
-      .values({
-        documentNumber: docNum,
-        shiftId: parsed.shiftId,
-        supplierId: parsed.supplierId,
-        invoiceNumber: parsed.invoiceNumber,
-        amount: String(totalAmount),
-        notes: parsed.notes,
-        createdAt: new Date(),
-      })
-      .returning();
-
-    // Create stock movements: support split drops across multiple tanks
-    if (parsed.tankAllocations && parsed.tankAllocations.length > 0) {
-      for (const alloc of parsed.tankAllocations) {
-        if (Number(alloc.quantity) > 0) {
-          await db.insert(schema.stockMovements).values({
-            shiftId: parsed.shiftId,
-            productId: parsed.productId,
-            tankId: alloc.tankId,
-            movementType: 'Purchase',
-            quantity: String(alloc.quantity),
-            referenceType: 'PURCHASE',
-            referenceId: newPurchase.id,
-            notes: parsed.notes || `Split drop to tank`,
-            createdAt: new Date(),
-          });
-        }
-      }
-    } else {
-      await db.insert(schema.stockMovements).values({
-        shiftId: parsed.shiftId,
-        productId: parsed.productId,
-        movementType: 'Purchase',
-        quantity: String(parsed.quantity),
-        referenceType: 'PURCHASE',
-        referenceId: newPurchase.id,
-        notes: parsed.notes,
-        createdAt: new Date(),
-      });
-    }
-
-    // If customer / supplier transaction is required, record it
-    await db.insert(schema.supplierTransactions).values({
-      shiftId: parsed.shiftId,
-      supplierId: parsed.supplierId,
-      transactionType: 'Purchase',
-      amount: String(totalAmount),
-      referenceType: 'PURCHASE',
-      referenceId: newPurchase.id,
-      notes: parsed.notes,
-      createdAt: new Date(),
-    });
-
-    const [shift] = await db.select().from(schema.shifts).where(eq(schema.shifts.id, parsed.shiftId)).limit(1);
-    if (shift.status === 'CLOSED') {
-      await compileShiftSummary(db, parsed.shiftId);
-    }
-
-    return c.json({ success: true, data: newPurchase });
-  } catch (err: any) {
-    return c.json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }, 500);
+  if (!canManageExpenseCategory(user.role)) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } }, 403);
   }
+  const body = await c.req.json().catch(() => ({}));
+  const name = String(body?.name ?? '').trim();
+  if (!name) {
+    return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Category name is required' } }, 400);
+  }
+  if (name.length > 100) {
+    return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Category name is too long (max 100)' } }, 400);
+  }
+  const [dupe] = await db
+    .select({ id: schema.expenseCategories.id })
+    .from(schema.expenseCategories)
+    .where(and(eq(schema.expenseCategories.organizationId, user.organizationId), ilike(schema.expenseCategories.name, name)))
+    .limit(1);
+  if (dupe) {
+    return c.json({ success: false, error: { code: 'CONFLICT', message: 'A category with this name already exists' } }, 409);
+  }
+  const [created] = await db
+    .insert(schema.expenseCategories)
+    .values({ organizationId: user.organizationId, name, isSystem: false })
+    .returning();
+  return c.json({ success: true, data: created });
 });
 
-// POST /api/collections
-transactionsRouter.post('/collections', validateJson(shiftCollectionSchema), async (c) => {
+// Rename an expense category (custom or seeded default — both are editable).
+// TODO (archive): add an `is_active` column + PATCH to soft-delete categories
+// (expenses reference categoryId, so hard delete isn't safe). Deferred for now.
+transactionsRouter.put('/expense-categories/:id', async (c) => {
   const db = c.var.db;
   const user = c.var.user;
+  if (!canManageExpenseCategory(user.role)) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } }, 403);
+  }
+  const id = c.req.param('id');
+  const body = await c.req.json().catch(() => ({}));
+  const name = String(body?.name ?? '').trim();
+  if (!name) {
+    return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Category name is required' } }, 400);
+  }
+  if (name.length > 100) {
+    return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Category name is too long (max 100)' } }, 400);
+  }
+  const [existing] = await db
+    .select()
+    .from(schema.expenseCategories)
+    .where(and(eq(schema.expenseCategories.id, id), eq(schema.expenseCategories.organizationId, user.organizationId)))
+    .limit(1);
+  if (!existing) {
+    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Category not found' } }, 404);
+  }
+  const [dupe] = await db
+    .select({ id: schema.expenseCategories.id })
+    .from(schema.expenseCategories)
+    .where(and(eq(schema.expenseCategories.organizationId, user.organizationId), ilike(schema.expenseCategories.name, name), ne(schema.expenseCategories.id, id)))
+    .limit(1);
+  if (dupe) {
+    return c.json({ success: false, error: { code: 'CONFLICT', message: 'A category with this name already exists' } }, 409);
+  }
+  const [updated] = await db
+    .update(schema.expenseCategories)
+    .set({ name })
+    .where(and(eq(schema.expenseCategories.id, id), eq(schema.expenseCategories.organizationId, user.organizationId)))
+    .returning();
+  return c.json({ success: true, data: updated });
+});
 
-  const parsed = c.req.valid('json');
+// ====================================================
+// OPERATIONAL TRANSACTIONS (write via use-cases)
+// ====================================================
 
-  try {
-    const editable = await ensureShiftNotLocked(db, parsed.shiftId);
-    if (!editable) {
-      return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Target shift is locked' } }, 403);
-    }
-
-    const docNum = `COLL-${Date.now().toString().slice(-6)}`;
-
-    let targetCustomerId = parsed.customerId;
-    let targetCustomer: any = null;
-    if (!targetCustomerId) {
-      const [defaultCust] = await db
-        .select()
-        .from(schema.customers)
-        .where(eq(schema.customers.organizationId, user.organizationId))
+transactionsRouter.post('/expenses', async (c) => {
+  const user = c.var.user;
+  const body = await c.req.json().catch(() => ({}));
+  const clock = await loadStationClock(c.var.db, body?.stationId);
+  const result = await runInTransaction(c.var.db, async (tx, events) => {
+    // When a specific pay-from account is chosen, derive paidFrom/affectsDrawer
+    // from its type so drawer reconciliation stays correct (only the shift's
+    // Cash-in-Hand affects the drawer; petty cash / bank / owner do not).
+    if (body?.accountId) {
+      const [acc] = await tx
+        .select({ t: schema.financialAccounts.accountType })
+        .from(schema.financialAccounts)
+        .where(and(eq(schema.financialAccounts.id, body.accountId), eq(schema.financialAccounts.organizationId, user.organizationId)))
         .limit(1);
+      const t = acc?.t;
+      if (t === 'BANK') { body.paidFrom = 'BANK'; body.affectsDrawer = false; }
+      else if (t === 'OWNER') { body.paidFrom = 'OWNER'; body.affectsDrawer = false; }
+      else if (t === 'PETTY_CASH') { body.paidFrom = 'SHIFT_CASH'; body.affectsDrawer = false; }
+      else if (t === 'CASH_IN_HAND') { body.paidFrom = 'SHIFT_CASH'; }
+    }
+    const r = await new RecordExpense({
+      expenses: new DrizzleExpenseRepository(tx),
+      shifts: new DrizzleShiftRepository(tx),
+      businessDays: new DrizzleBusinessDayRepository(tx),
+      events,
+    }).execute(body, buildContext(user, { stationId: body?.stationId, ...clock }));
+    if (r.success) await new LedgerPostingService(tx).postExpense(user.organizationId, r.data, body?.accountId);
+    return r;
+  });
+  return sendResult(c, result);
+});
 
-      if (!defaultCust) {
-        const [seeded] = await db.insert(schema.customers).values({
-          organizationId: user.organizationId,
-          name: 'General Cash Customer',
-          customerType: 'Credit',
-          isActive: true,
-        }).returning();
-        targetCustomerId = seeded.id;
-        targetCustomer = seeded;
-      } else {
-        targetCustomerId = defaultCust.id;
-        targetCustomer = defaultCust;
+transactionsRouter.post('/collections', async (c) => {
+  const user = c.var.user;
+  const body = await c.req.json().catch(() => ({}));
+  const clock = await loadStationClock(c.var.db, body?.stationId);
+  // A "Credit" collection is a credit SALE (a receivable), not a payment. It is
+  // recorded on the customer ledger with no drawer/stock impact.
+  if (body?.paymentMethod === 'Credit') {
+    const result = await runInTransaction(c.var.db, (tx, events) =>
+      new RecordCreditSale({
+        ledger: new DrizzleCustomerLedgerRepository(tx),
+        customers: new DrizzleCustomerRepository(tx),
+        shifts: new DrizzleShiftRepository(tx),
+        businessDays: new DrizzleBusinessDayRepository(tx),
+        events,
+      }).execute(body, buildContext(user, { stationId: body?.stationId, ...clock })),
+    );
+    return sendResult(c, result);
+  }
+  const result = await runInTransaction(c.var.db, async (tx, events) => {
+    const r = await new RecordCollection({
+      collections: new DrizzleCollectionRepository(tx),
+      ledger: new DrizzleCustomerLedgerRepository(tx),
+      customers: new DrizzleCustomerRepository(tx),
+      shifts: new DrizzleShiftRepository(tx),
+      businessDays: new DrizzleBusinessDayRepository(tx),
+      docNumbers,
+      events,
+    }).execute(body, buildContext(user, { stationId: body?.stationId, ...clock }));
+    if (r.success) await new LedgerPostingService(tx).postCollection(user.organizationId, r.data, body?.accountId);
+    return r;
+  });
+  return sendResult(c, result);
+});
+
+// Void a credit fuel sale (correction while the shift is still open). The
+// receivable is removed; allowed only before the originating shift closes.
+transactionsRouter.delete('/credit-sales/:id', async (c) => {
+  const user = c.var.user;
+  const id = c.req.param('id');
+  const result = await runInTransaction(c.var.db, (tx, events) =>
+    new VoidCreditSale({
+      ledger: new DrizzleCustomerLedgerRepository(tx),
+      shifts: new DrizzleShiftRepository(tx),
+      events,
+    }).execute({ id }, buildContext(user)),
+  );
+  return sendResult(c, result);
+});
+
+transactionsRouter.post('/purchases', async (c) => {
+  const user = c.var.user;
+  if (!canRecordPurchase(user.role)) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions to record purchases' } }, 403);
+  }
+  const body = await c.req.json().catch(() => ({}));
+  const clock = await loadStationClock(c.var.db, body?.stationId);
+  const result = await runInTransaction(c.var.db, async (tx, events) => {
+    const ctx = buildContext(user, { stationId: body?.stationId, ...clock });
+    const r = await new RecordPurchase({
+      purchases: new DrizzlePurchaseRepository(tx),
+      purchaseItems: new DrizzlePurchaseItemRepository(tx),
+      stock: new DrizzleStockMovementRepository(tx),
+      supplierTxns: new DrizzleSupplierTransactionRepository(tx),
+      suppliers: new DrizzleSupplierRepository(tx),
+      products: new DrizzleProductRepository(tx),
+      stations: new DrizzleStationRepository(tx),
+      shifts: new DrizzleShiftRepository(tx),
+      businessDays: new DrizzleBusinessDayRepository(tx),
+      docNumbers,
+      events,
+    }).execute(body, ctx);
+
+    // Optional "pay now" — record a supplier payment atomically with the
+    // purchase (partial allowed). Same funding-account → paidFrom derivation as
+    // the standalone /supplier-payments route; both commit or roll back together.
+    if (r.success && body?.payment && Number(body.payment.amount) > 0) {
+      const accountId = body.payment.accountId || undefined;
+      const paymentBody: any = {
+        supplierId: body.supplierId,
+        amount: Number(body.payment.amount),
+        stationId: body?.stationId,
+        transactionDate: body?.transactionDate,
+        shiftId: body?.shiftId,
+        notes: body?.payment?.notes,
+      };
+      if (accountId) {
+        const [acc] = await tx
+          .select({ t: schema.financialAccounts.accountType })
+          .from(schema.financialAccounts)
+          .where(and(eq(schema.financialAccounts.id, accountId), eq(schema.financialAccounts.organizationId, user.organizationId)))
+          .limit(1);
+        const t = acc?.t;
+        if (t === 'BANK') { paymentBody.paidFrom = 'BANK'; paymentBody.affectsDrawer = false; }
+        else if (t === 'OWNER') { paymentBody.paidFrom = 'OWNER'; paymentBody.affectsDrawer = false; }
+        else if (t === 'PETTY_CASH') { paymentBody.paidFrom = 'SHIFT_CASH'; paymentBody.affectsDrawer = false; }
+        else if (t === 'CASH_IN_HAND') { paymentBody.paidFrom = 'SHIFT_CASH'; }
       }
-    } else {
-      const [cust] = await db
-        .select()
-        .from(schema.customers)
-        .where(and(eq(schema.customers.id, targetCustomerId), eq(schema.customers.organizationId, user.organizationId)))
+      const pr = await new RecordSupplierPayment({
+        supplierTxns: new DrizzleSupplierTransactionRepository(tx),
+        suppliers: new DrizzleSupplierRepository(tx),
+        shifts: new DrizzleShiftRepository(tx),
+        businessDays: new DrizzleBusinessDayRepository(tx),
+        events,
+      }).execute(paymentBody, ctx);
+      if (!pr.success) return pr; // roll the whole purchase back
+      await new LedgerPostingService(tx).postSupplierPayment(user.organizationId, pr.data, accountId);
+    }
+
+    return r;
+  });
+  return sendResult(c, result);
+});
+
+transactionsRouter.post('/supplier-payments', async (c) => {
+  const user = c.var.user;
+  if (!canRecordPurchase(user.role)) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions to record supplier payments' } }, 403);
+  }
+  const body = await c.req.json().catch(() => ({}));
+  const clock = await loadStationClock(c.var.db, body?.stationId);
+  const result = await runInTransaction(c.var.db, async (tx, events) => {
+    // Chosen pay-from account → derive paidFrom/affectsDrawer so drawer
+    // reconciliation stays correct (only the shift Cash-in-Hand affects it).
+    if (body?.accountId) {
+      const [acc] = await tx
+        .select({ t: schema.financialAccounts.accountType })
+        .from(schema.financialAccounts)
+        .where(and(eq(schema.financialAccounts.id, body.accountId), eq(schema.financialAccounts.organizationId, user.organizationId)))
         .limit(1);
-
-      if (!cust) {
-        return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Customer not found' } }, 404);
-      }
-      targetCustomer = cust;
+      const t = acc?.t;
+      if (t === 'BANK') { body.paidFrom = 'BANK'; body.affectsDrawer = false; }
+      else if (t === 'OWNER') { body.paidFrom = 'OWNER'; body.affectsDrawer = false; }
+      else if (t === 'PETTY_CASH') { body.paidFrom = 'SHIFT_CASH'; body.affectsDrawer = false; }
+      else if (t === 'CASH_IN_HAND') { body.paidFrom = 'SHIFT_CASH'; }
     }
+    const r = await new RecordSupplierPayment({
+      supplierTxns: new DrizzleSupplierTransactionRepository(tx),
+      suppliers: new DrizzleSupplierRepository(tx),
+      shifts: new DrizzleShiftRepository(tx),
+      businessDays: new DrizzleBusinessDayRepository(tx),
+      events,
+    }).execute(body, buildContext(user, { stationId: body?.stationId, ...clock }));
+    if (r.success) await new LedgerPostingService(tx).postSupplierPayment(user.organizationId, r.data, body?.accountId);
+    return r;
+  });
+  return sendResult(c, result);
+});
 
-    // For prepaid customers paying via prepaid method, validate balance from ledger
-    if (parsed.paymentMethod === 'Credit' && targetCustomer?.isPrepaid) {
-      // Compute current prepaid balance from ledger
-      const prepaidTxs = await db
-        .select({
-          transactionType: schema.customerTransactions.transactionType,
-          amount: schema.customerTransactions.amount,
-        })
-        .from(schema.customerTransactions)
-        .where(and(
-          eq(schema.customerTransactions.customerId, targetCustomerId),
-          inArray(schema.customerTransactions.transactionType, ['Prepaid Top-up', 'Prepaid Charge'])
-        ));
+transactionsRouter.post('/sales', async (c) => {
+  const user = c.var.user;
+  const body = await c.req.json().catch(() => ({}));
+  const rawBuyer = body.buyer && typeof body.buyer === 'object' ? body.buyer : null;
+  const saveAsCustomer = !!body.saveAsCustomer;
+  const result = await runInTransaction(c.var.db, async (tx, events) => {
+    let customerId: string | null = body.customerId ?? null;
+    let buyerDetails: { name: string; phone: string | null; gstin: string | null; stateCode: string | null } | null = null;
 
-      let prepaidBalance = 0;
-      for (const tx of prepaidTxs) {
-        const amount = Number(tx.amount);
-        if (tx.transactionType === 'Prepaid Top-up') {
-          prepaidBalance += amount;
-        } else if (tx.transactionType === 'Prepaid Charge') {
-          prepaidBalance -= amount;
-        }
-      }
-
-      if (prepaidBalance < parsed.amount) {
-        return c.json({ success: false, error: { code: 'BAD_REQUEST', message: 'Insufficient prepaid balance' } }, 400);
-      }
-    }
-
-    const [newCollection] = await db.transaction(async (tx) => {
-      const [createdCollection] = await tx
-        .insert(schema.collections)
-        .values({
-          documentNumber: docNum,
-          shiftId: parsed.shiftId,
-          customerId: targetCustomerId,
-          vehicleId: parsed.vehicleId ?? null,
-          amount: String(parsed.amount),
-          paymentMethod: parsed.paymentMethod,
-          notes: parsed.notes,
-          createdAt: new Date(),
-        })
-        .returning();
-
-      if (targetCustomerId) {
-        const quantityValue = parsed.quantity != null ? String(parsed.quantity) : null;
-        const unitPriceValue = parsed.unitPrice != null ? String(parsed.unitPrice) : null;
-
-        if (parsed.paymentMethod === 'Credit' && targetCustomer?.isPrepaid) {
-          // Insert prepaid charge ledger row (no cache update needed)
-          await tx.insert(schema.customerTransactions).values({
-            shiftId: parsed.shiftId,
-            customerId: targetCustomerId,
-            vehicleId: parsed.vehicleId ?? null,
-            productId: parsed.productId ?? null,
-            transactionType: 'Prepaid Charge',
-            amount: String(parsed.amount),
-            quantity: quantityValue,
-            unitPrice: unitPriceValue,
-            referenceType: 'COLLECTION',
-            referenceId: createdCollection.id,
-            notes: parsed.notes,
-            createdAt: new Date(),
-          });
+    // Ad-hoc walk-in buyer (no saved customer selected). Either save/dedup them
+    // into the customer registry (link customerId) or stash bill-to on the sale.
+    if (!customerId && rawBuyer && typeof rawBuyer.name === 'string' && rawBuyer.name.trim()) {
+      const name = rawBuyer.name.trim();
+      const phone = (typeof rawBuyer.phone === 'string' && rawBuyer.phone.trim()) || null;
+      const gstin = (typeof rawBuyer.gstin === 'string' && rawBuyer.gstin.trim()) || null;
+      const stateCode = (typeof rawBuyer.stateCode === 'string' && rawBuyer.stateCode.trim()) || null;
+      if (saveAsCustomer) {
+        const custRepo = new DrizzleCustomerRepository(tx);
+        const digits = (v: string | null) => (v ? v.replace(/\D/g, '') : '');
+        const existing = (await custRepo.listByOrganization(user.organizationId, false)).find((x) => {
+          const md = (x.metadata as Record<string, any>) || {};
+          if (gstin && md.gstin && String(md.gstin).toLowerCase() === gstin.toLowerCase()) return true;
+          if (phone && x.phone && digits(x.phone) === digits(phone)) return true;
+          return x.name.trim().toLowerCase() === name.toLowerCase();
+        });
+        if (existing) {
+          customerId = existing.id;
         } else {
-          await tx.insert(schema.customerTransactions).values({
-            shiftId: parsed.shiftId,
-            customerId: targetCustomerId,
-            vehicleId: parsed.vehicleId ?? null,
-            productId: parsed.productId ?? null,
-            transactionType: parsed.paymentMethod === 'Credit' ? 'Credit Sale' : 'Collection',
-            amount: String(parsed.amount),
-            quantity: quantityValue,
-            unitPrice: unitPriceValue,
-            referenceType: 'COLLECTION',
-            referenceId: createdCollection.id,
-            notes: parsed.notes,
-            createdAt: new Date(),
-          });
+          const created = await new CreateCustomer({ repository: custRepo, events }).execute(
+            { name, customerType: 'Regular', phone, metadata: { ...(gstin ? { gstin } : {}), ...(stateCode ? { stateCode } : {}) } },
+            buildContext(user),
+          );
+          if (!created.success) return created;
+          customerId = created.data.id;
         }
+      } else {
+        buyerDetails = { name, phone, gstin, stateCode };
       }
-
-      return [createdCollection] as any;
-    });
-
-    const [shift] = await db.select().from(schema.shifts).where(eq(schema.shifts.id, parsed.shiftId)).limit(1);
-    if (shift.status === 'CLOSED') {
-      await compileShiftSummary(db, parsed.shiftId);
     }
 
-    return c.json({ success: true, data: newCollection });
-  } catch (err: any) {
-    return c.json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }, 500);
-  }
+    return new CreateSale({
+      sales: new DrizzleSaleRepository(tx),
+      stock: new DrizzleStockMovementRepository(tx),
+      ledger: new DrizzleCustomerLedgerRepository(tx),
+      customers: new DrizzleCustomerRepository(tx),
+      shifts: new DrizzleShiftRepository(tx),
+      docNumbers,
+      events,
+    }).execute({ ...body, customerId, buyerDetails }, buildContext(user));
+  });
+  return sendResult(c, result);
 });
 
-// GET /api/transactions/expenses
+// ====================================================
+// TRANSACTION READ PROJECTIONS
+// ====================================================
+
 transactionsRouter.get('/expenses', async (c) => {
   const db = c.var.db;
   const user = c.var.user;
-  try {
-    const list = await db
-      .select()
-      .from(schema.expenses)
-      .innerJoin(schema.shifts, eq(schema.expenses.shiftId, schema.shifts.id))
-      .where(eq(schema.shifts.organizationId, user.organizationId));
-    
-    const enriched = await Promise.all(
-      list.map(async (row) => {
-        const e = row.expenses;
-        const [cat] = await db.select().from(schema.expenseCategories).where(eq(schema.expenseCategories.id, e.categoryId)).limit(1);
-        return {
-          ...e,
-          categoryName: cat?.name ?? 'General',
-          shiftDate: row.shifts.openedAt,
-        };
-      })
-    );
-    return c.json({ success: true, data: enriched });
-  } catch (err: any) {
-    return c.json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }, 500);
-  }
+  const rows = await db
+    .select({
+      expense: schema.expenses,
+      businessDate: schema.businessDays.businessDate,
+      categoryName: schema.expenseCategories.name,
+    })
+    .from(schema.expenses)
+    .innerJoin(schema.businessDays, eq(schema.expenses.businessDayId, schema.businessDays.id))
+    .leftJoin(schema.expenseCategories, eq(schema.expenses.categoryId, schema.expenseCategories.id))
+    .where(eq(schema.businessDays.organizationId, user.organizationId))
+    .orderBy(desc(schema.expenses.createdAt));
+  return c.json({ success: true, data: rows.map((r) => ({ ...r.expense, businessDate: r.businessDate, categoryName: r.categoryName ?? 'General' })) });
 });
 
-// GET /api/transactions/purchases
 transactionsRouter.get('/purchases', async (c) => {
   const db = c.var.db;
   const user = c.var.user;
-  try {
-    const list = await db
-      .select()
-      .from(schema.purchases)
-      .innerJoin(schema.shifts, eq(schema.purchases.shiftId, schema.shifts.id))
-      .where(eq(schema.shifts.organizationId, user.organizationId));
-    
-    const enriched = await Promise.all(
-      list.map(async (row) => {
-        const p = row.purchases;
-        const [sup] = await db.select().from(schema.suppliers).where(eq(schema.suppliers.id, p.supplierId)).limit(1);
-        return {
-          ...p,
-          supplierName: sup?.name ?? 'Unknown Supplier',
-          shiftDate: row.shifts.openedAt,
-        };
-      })
-    );
-    return c.json({ success: true, data: enriched });
-  } catch (err: any) {
-    return c.json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }, 500);
-  }
+  const rows = await db
+    .select({
+      purchase: schema.purchases,
+      businessDate: schema.businessDays.businessDate,
+      supplierName: schema.suppliers.name,
+      // Comma-joined distinct product names on the invoice — a quick "what was
+      // bought" hint for the list, without fetching each purchase's line items.
+      itemsSummary: sql<string | null>`(
+        SELECT string_agg(DISTINCT pr.name, ', ')
+        FROM purchase_items pi
+        LEFT JOIN products pr ON pr.id = pi.product_id
+        WHERE pi.purchase_id = ${schema.purchases.id}
+      )`,
+      itemCount: sql<number>`(
+        SELECT COUNT(*)::int FROM purchase_items pi WHERE pi.purchase_id = ${schema.purchases.id}
+      )`,
+    })
+    .from(schema.purchases)
+    .innerJoin(schema.businessDays, eq(schema.purchases.businessDayId, schema.businessDays.id))
+    .leftJoin(schema.suppliers, eq(schema.purchases.supplierId, schema.suppliers.id))
+    .where(eq(schema.businessDays.organizationId, user.organizationId))
+    .orderBy(desc(schema.purchases.createdAt));
+  return c.json({ success: true, data: rows.map((r) => ({ ...r.purchase, businessDate: r.businessDate, supplierName: r.supplierName ?? 'Unknown Supplier', itemsSummary: r.itemsSummary, itemCount: Number(r.itemCount || 0) })) });
 });
 
-// GET /api/transactions/collections
+transactionsRouter.get('/purchases/:id/items', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  const purchaseId = c.req.param('id');
+  const rows = await db
+    .select({
+      item: schema.purchaseItems,
+      productName: schema.products.name,
+      productCode: schema.products.code,
+      unit: schema.products.unit,
+    })
+    .from(schema.purchaseItems)
+    .innerJoin(schema.purchases, eq(schema.purchaseItems.purchaseId, schema.purchases.id))
+    .innerJoin(schema.businessDays, eq(schema.purchases.businessDayId, schema.businessDays.id))
+    .leftJoin(schema.products, eq(schema.purchaseItems.productId, schema.products.id))
+    .where(and(eq(schema.purchaseItems.purchaseId, purchaseId), eq(schema.businessDays.organizationId, user.organizationId)))
+    .orderBy(schema.purchaseItems.createdAt);
+  return c.json({ success: true, data: rows.map((r) => ({ ...r.item, productName: r.productName ?? 'Product', productCode: r.productCode ?? null, unit: r.unit ?? null })) });
+});
+
+// GST input-tax-credit (ITC) register: GST purchase lines over a date range.
+// Fuel (VAT) and exempt lines carry no input credit and are excluded.
+transactionsRouter.get('/purchases/gst-register', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  const from = c.req.query('from');
+  const to = c.req.query('to');
+  const conds = [eq(schema.businessDays.organizationId, user.organizationId), eq(schema.purchaseItems.taxCategory, 'GST')];
+  if (from) conds.push(gte(schema.businessDays.businessDate, from));
+  if (to) conds.push(lte(schema.businessDays.businessDate, to));
+  const rows = await db
+    .select({
+      item: schema.purchaseItems,
+      businessDate: schema.businessDays.businessDate,
+      supplierName: schema.suppliers.name,
+      supplierGstin: schema.suppliers.metadata,
+      invoiceNumber: schema.purchases.invoiceNumber,
+      documentNumber: schema.purchases.documentNumber,
+      productName: schema.products.name,
+      productCode: schema.products.code,
+    })
+    .from(schema.purchaseItems)
+    .innerJoin(schema.purchases, eq(schema.purchaseItems.purchaseId, schema.purchases.id))
+    .innerJoin(schema.businessDays, eq(schema.purchases.businessDayId, schema.businessDays.id))
+    .leftJoin(schema.suppliers, eq(schema.purchases.supplierId, schema.suppliers.id))
+    .leftJoin(schema.products, eq(schema.purchaseItems.productId, schema.products.id))
+    .where(and(...conds))
+    .orderBy(desc(schema.businessDays.businessDate));
+  const data = rows.map((r) => ({
+    ...r.item,
+    businessDate: r.businessDate,
+    supplierName: r.supplierName ?? 'Unknown Supplier',
+    supplierGstin: (r.supplierGstin as Record<string, unknown> | null)?.gstin ?? null,
+    invoiceNumber: r.invoiceNumber,
+    documentNumber: r.documentNumber,
+    productName: r.productName ?? 'Product',
+    productCode: r.productCode ?? null,
+  }));
+  return c.json({ success: true, data });
+});
+
 transactionsRouter.get('/collections', async (c) => {
   const db = c.var.db;
   const user = c.var.user;
-  try {
-    const list = await db
-      .select()
-      .from(schema.collections)
-      .innerJoin(schema.shifts, eq(schema.collections.shiftId, schema.shifts.id))
-      .where(eq(schema.shifts.organizationId, user.organizationId));
-    
-    const enriched = await Promise.all(
-      list.map(async (row) => {
-        const col = row.collections;
-        const [cust] = col.customerId
-          ? await db.select().from(schema.customers).where(eq(schema.customers.id, col.customerId)).limit(1)
-          : [null];
-        return {
-          ...col,
-          customerName: cust?.name ?? 'Walk-in Customer',
-          shiftDate: row.shifts.openedAt,
-        };
-      })
-    );
-    return c.json({ success: true, data: enriched });
-  } catch (err: any) {
-    return c.json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }, 500);
-  }
+  const rows = await db
+    .select({
+      collection: schema.collections,
+      businessDate: schema.businessDays.businessDate,
+      customerName: schema.customers.name,
+    })
+    .from(schema.collections)
+    .innerJoin(schema.businessDays, eq(schema.collections.businessDayId, schema.businessDays.id))
+    .leftJoin(schema.customers, eq(schema.collections.customerId, schema.customers.id))
+    .where(eq(schema.businessDays.organizationId, user.organizationId))
+    .orderBy(desc(schema.collections.createdAt));
+  return c.json({ success: true, data: rows.map((r) => ({ ...r.collection, businessDate: r.businessDate, customerName: r.customerName ?? 'Walk-in Customer' })) });
 });
 
-// GET /api/transactions/customers/:id/ledger
-transactionsRouter.get('/customers/:id/ledger', async (c) => {
+// GET /transactions/credit-sales — org-wide credit-sale ledger debits (fuel-on-
+// credit + merchandise on credit), each with customer / product / vehicle. Backs
+// the Customers → Sales tab. Credit sales are receivables (never touch the drawer).
+transactionsRouter.get('/credit-sales', async (c) => {
   const db = c.var.db;
   const user = c.var.user;
-  const customerId = c.req.param('id');
+  const rows = await db
+    .select({
+      id: schema.customerTransactions.id,
+      customerId: schema.customerTransactions.customerId,
+      customerName: schema.customers.name,
+      customerType: schema.customers.customerType,
+      amount: schema.customerTransactions.amount,
+      quantity: schema.customerTransactions.quantity,
+      unitPrice: schema.customerTransactions.unitPrice,
+      notes: schema.customerTransactions.notes,
+      shiftId: schema.customerTransactions.shiftId,
+      createdAt: schema.customerTransactions.createdAt,
+      businessDate: schema.businessDays.businessDate,
+      productName: schema.products.name,
+      productCode: schema.products.code,
+      vehicleReg: schema.customerVehicles.registrationNumber,
+    })
+    .from(schema.customerTransactions)
+    .innerJoin(schema.businessDays, eq(schema.customerTransactions.businessDayId, schema.businessDays.id))
+    .leftJoin(schema.customers, eq(schema.customerTransactions.customerId, schema.customers.id))
+    .leftJoin(schema.products, eq(schema.customerTransactions.productId, schema.products.id))
+    .leftJoin(schema.customerVehicles, eq(schema.customerTransactions.vehicleId, schema.customerVehicles.id))
+    .where(
+      and(
+        eq(schema.businessDays.organizationId, user.organizationId),
+        eq(schema.customerTransactions.transactionType, 'Credit Sale'),
+      ),
+    )
+    .orderBy(desc(schema.customerTransactions.createdAt));
+  return c.json({ success: true, data: rows.map((r) => ({ ...r, customerName: r.customerName ?? 'Unknown Customer' })) });
+});
 
-  try {
-    const [customer] = await db
-      .select()
-      .from(schema.customers)
-      .where(and(eq(schema.customers.id, customerId), eq(schema.customers.organizationId, user.organizationId)))
-      .limit(1);
+// GET /transactions/money-movements?stationId=&from=&to=
+// Money-account "payments & receipts" ledger (Phase L3/L6): discretely recorded
+// money movements — collections IN, expenses OUT, supplier payments OUT —
+// classified by the funding account (Cash / Bank / Owner). Cash & Bank drive the
+// Cash & Bank ledger tab; Owner-funded rows drive the Owner ledger tab. Always
+// EXCLUDES fuel/drawer sales (reconciled in the DSSR), so it never double-counts
+// the authoritative shift/DSSR figures.
+transactionsRouter.get('/money-movements', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  const stationId = c.req.query('stationId');
+  const from = c.req.query('from');
+  const to = c.req.query('to');
+  if (!stationId) return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Missing stationId' } }, 400);
+  if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId })) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+  }
+  const dateConds = [
+    eq(schema.businessDays.stationId, stationId),
+    eq(schema.businessDays.organizationId, user.organizationId),
+    ...(from ? [gte(schema.businessDays.businessDate, from)] : []),
+    ...(to ? [lte(schema.businessDays.businessDate, to)] : []),
+  ];
 
-    if (!customer) {
-      return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Customer not found' } }, 404);
-    }
+  const [collectionRows, expenseRows, paymentRows] = await Promise.all([
+    db
+      .select({ id: schema.collections.id, amount: schema.collections.amount, paymentMethod: schema.collections.paymentMethod, createdAt: schema.collections.createdAt, businessDate: schema.businessDays.businessDate, customerName: schema.customers.name })
+      .from(schema.collections)
+      .innerJoin(schema.businessDays, eq(schema.collections.businessDayId, schema.businessDays.id))
+      .leftJoin(schema.customers, eq(schema.customers.id, schema.collections.customerId))
+      .where(and(...dateConds)),
+    db
+      .select({ id: schema.expenses.id, amount: schema.expenses.amount, paidFrom: schema.expenses.paidFrom, description: schema.expenses.description, createdAt: schema.expenses.createdAt, businessDate: schema.businessDays.businessDate, categoryName: schema.expenseCategories.name })
+      .from(schema.expenses)
+      .innerJoin(schema.businessDays, eq(schema.expenses.businessDayId, schema.businessDays.id))
+      .leftJoin(schema.expenseCategories, eq(schema.expenseCategories.id, schema.expenses.categoryId))
+      .where(and(ne(schema.expenses.status, 'VOIDED'), ...dateConds)),
+    db
+      .select({ id: schema.supplierTransactions.id, amount: schema.supplierTransactions.amount, paidFrom: schema.supplierTransactions.paidFrom, notes: schema.supplierTransactions.notes, createdAt: schema.supplierTransactions.createdAt, businessDate: schema.businessDays.businessDate, supplierName: schema.suppliers.name })
+      .from(schema.supplierTransactions)
+      .innerJoin(schema.businessDays, eq(schema.supplierTransactions.businessDayId, schema.businessDays.id))
+      .leftJoin(schema.suppliers, eq(schema.suppliers.id, schema.supplierTransactions.supplierId))
+      .where(and(eq(schema.supplierTransactions.transactionType, 'Payment'), ...dateConds)),
+  ]);
 
-    const list = await db
+  const accountForPaidFrom = (pf: string): 'Cash' | 'Bank' | 'Owner' =>
+    pf === 'SHIFT_CASH' ? 'Cash' : pf === 'OWNER' ? 'Owner' : 'Bank';
+
+  type Movement = { id: string; date: string; createdAt: any; account: 'Cash' | 'Bank' | 'Owner'; direction: 'in' | 'out'; label: string; source: string; amount: number };
+  const movements: Movement[] = [];
+
+  for (const r of collectionRows) {
+    movements.push({
+      id: r.id,
+      date: r.businessDate,
+      createdAt: r.createdAt,
+      account: r.paymentMethod === 'Cash' ? 'Cash' : 'Bank',
+      direction: 'in',
+      label: r.customerName ? `Collection · ${r.customerName}` : 'Collection',
+      source: 'Collection',
+      amount: Number(r.amount),
+    });
+  }
+  for (const r of expenseRows) {
+    const account = accountForPaidFrom(r.paidFrom);
+    movements.push({ id: r.id, date: r.businessDate, createdAt: r.createdAt, account, direction: 'out', label: r.categoryName || r.description || 'Expense', source: 'Expense', amount: Number(r.amount) });
+  }
+  for (const r of paymentRows) {
+    const account = accountForPaidFrom(r.paidFrom);
+    movements.push({ id: r.id, date: r.businessDate, createdAt: r.createdAt, account, direction: 'out', label: r.supplierName ? `Payment · ${r.supplierName}` : 'Supplier payment', source: 'Supplier Payment', amount: Number(r.amount) });
+  }
+
+  movements.sort((a, b) => (b.date || '').localeCompare(a.date || '') || String(b.createdAt).localeCompare(String(a.createdAt)));
+
+  // Per-account opening balance = signed net (collections in − expenses/payments
+  // out) for business days strictly before `from`, so the ledger's running
+  // balance carries the historical opening instead of restarting at zero.
+  // Only computed when a range start is given.
+  const openings: Array<{ account: 'Cash' | 'Bank' | 'Owner'; opening: number }> = [];
+  if (from) {
+    const priorConds = [
+      eq(schema.businessDays.stationId, stationId),
+      eq(schema.businessDays.organizationId, user.organizationId),
+      lt(schema.businessDays.businessDate, from),
+    ];
+    const [priorCollections, priorExpenses, priorPayments] = await Promise.all([
+      db
+        .select({ paymentMethod: schema.collections.paymentMethod, total: sql<string>`COALESCE(SUM(${schema.collections.amount}), 0)` })
+        .from(schema.collections)
+        .innerJoin(schema.businessDays, eq(schema.collections.businessDayId, schema.businessDays.id))
+        .where(and(...priorConds))
+        .groupBy(schema.collections.paymentMethod),
+      db
+        .select({ paidFrom: schema.expenses.paidFrom, total: sql<string>`COALESCE(SUM(${schema.expenses.amount}), 0)` })
+        .from(schema.expenses)
+        .innerJoin(schema.businessDays, eq(schema.expenses.businessDayId, schema.businessDays.id))
+        .where(and(ne(schema.expenses.status, 'VOIDED'), ...priorConds))
+        .groupBy(schema.expenses.paidFrom),
+      db
+        .select({ paidFrom: schema.supplierTransactions.paidFrom, total: sql<string>`COALESCE(SUM(${schema.supplierTransactions.amount}), 0)` })
+        .from(schema.supplierTransactions)
+        .innerJoin(schema.businessDays, eq(schema.supplierTransactions.businessDayId, schema.businessDays.id))
+        .where(and(eq(schema.supplierTransactions.transactionType, 'Payment'), ...priorConds))
+        .groupBy(schema.supplierTransactions.paidFrom),
+    ]);
+
+    const openMap: Record<'Cash' | 'Bank' | 'Owner', number> = { Cash: 0, Bank: 0, Owner: 0 };
+    for (const r of priorCollections) openMap[r.paymentMethod === 'Cash' ? 'Cash' : 'Bank'] += Number(r.total);
+    for (const r of priorExpenses) openMap[accountForPaidFrom(r.paidFrom)] -= Number(r.total);
+    for (const r of priorPayments) openMap[accountForPaidFrom(r.paidFrom)] -= Number(r.total);
+    (['Cash', 'Bank', 'Owner'] as const).forEach((account) => openings.push({ account, opening: openMap[account] }));
+  }
+
+  return c.json({ success: true, data: { movements, openings } });
+});
+
+// ====================================================
+// INVOICING — GST tax invoices (Phase T4)
+// ====================================================
+
+const INVOICE_ROLES = new Set<Role>(['Owner', 'Manager', 'Accountant']);
+
+// POST /transactions/sales/:id/invoice — issue a GST tax invoice for a sale.
+// Idempotent: if the sale was already invoiced, the existing invoice is returned.
+transactionsRouter.post('/sales/:id/invoice', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  if (!INVOICE_ROLES.has(user.role)) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } }, 403);
+  }
+  const saleId = c.req.param('id');
+
+  const saleRows = await db
+    .select({
+      id: schema.sales.id,
+      customerId: schema.sales.customerId,
+      buyerDetails: schema.sales.buyerDetails,
+      businessDayId: schema.sales.businessDayId,
+      stationId: schema.businessDays.stationId,
+      businessDate: schema.businessDays.businessDate,
+      organizationId: schema.businessDays.organizationId,
+    })
+    .from(schema.sales)
+    .innerJoin(schema.businessDays, eq(schema.sales.businessDayId, schema.businessDays.id))
+    .where(eq(schema.sales.id, saleId))
+    .limit(1);
+  const sale = saleRows[0];
+  if (!sale || sale.organizationId !== user.organizationId) {
+    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Sale not found' } }, 404);
+  }
+  if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId: sale.stationId })) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+  }
+
+  const items = await db
+    .select({
+      productId: schema.saleItems.productId,
+      quantity: schema.saleItems.quantity,
+      unitPrice: schema.saleItems.unitPrice,
+      discountAmount: schema.saleItems.discountAmount,
+      name: schema.products.name,
+      taxCategory: schema.products.taxCategory,
+      taxConfig: schema.products.taxConfig,
+    })
+    .from(schema.saleItems)
+    .innerJoin(schema.products, eq(schema.products.id, schema.saleItems.productId))
+    .where(eq(schema.saleItems.saleId, saleId));
+  if (items.length === 0) {
+    return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Sale has no line items to invoice' } }, 400);
+  }
+
+  let buyer: { customerId: string | null; name: string | null; gstin: string | null; stateCode: string | null } = {
+    customerId: null, name: null, gstin: null, stateCode: null,
+  };
+  if (sale.customerId) {
+    const cust = await new DrizzleCustomerRepository(db).findById(sale.customerId);
+    const md = ((cust?.metadata as Record<string, any>) || {});
+    buyer = { customerId: sale.customerId, name: cust?.name ?? null, gstin: md.gstin ?? null, stateCode: md.stateCode ?? null };
+  } else if (sale.buyerDetails) {
+    // Ad-hoc walk-in buyer captured on the sale (not saved to the registry).
+    const bd = (sale.buyerDetails as Record<string, any>) || {};
+    buyer = { customerId: null, name: bd.name ?? null, gstin: bd.gstin ?? null, stateCode: bd.stateCode ?? null };
+  }
+  const station = await new DrizzleStationRepository(db).findById(sale.stationId);
+  const legal = ((station?.settings as any)?.legal) || {};
+
+  const lines = items.map((it) => {
+    const tc = (it.taxConfig as Record<string, any>) || {};
+    // Retail merchandise is usually MRP (tax-inclusive). Honour the product's
+    // price_inclusive flag; default GST lines to inclusive when unset.
+    const inclusive = it.taxCategory === 'GST' ? tc.price_inclusive !== false : false;
+    return {
+      productId: it.productId,
+      name: it.name,
+      hsnCode: tc.hsn_code ?? null,
+      taxCategory: it.taxCategory as any,
+      gstRate: tc.gst_rate ?? null,
+      vatRate: tc.vat_rate ?? null,
+      cessRate: tc.cess ?? null,
+      quantity: it.quantity,
+      unitPrice: it.unitPrice,
+      discount: it.discountAmount,
+      inclusive,
+    };
+  });
+
+  const result = await runInTransaction(db, (tx, events) =>
+    new GenerateInvoice({
+      invoices: new DrizzleInvoiceRepository(tx),
+      sequences: new DrizzleDocumentSequenceRepository(tx),
+      events,
+    }).execute(
+      {
+        saleId,
+        stationId: sale.stationId,
+        businessDayId: sale.businessDayId,
+        issuedDate: sale.businessDate,
+        supplierGstin: legal.gstin ?? null,
+        supplierStateCode: legal.stateCode ?? null,
+        buyerCustomerId: buyer.customerId,
+        buyerName: buyer.name,
+        buyerGstin: buyer.gstin,
+        buyerStateCode: buyer.stateCode,
+        placeOfSupply: buyer.stateCode ?? legal.stateCode ?? null,
+        lines,
+      },
+      buildContext(user, { stationId: sale.stationId, businessDayId: sale.businessDayId }),
+    ),
+  );
+  return sendResult(c, result);
+});
+
+// GET /transactions/invoices?stationId=&from=&to= — list issued invoices.
+transactionsRouter.get('/invoices', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  const stationId = c.req.query('stationId');
+  const from = c.req.query('from');
+  const to = c.req.query('to');
+  const conds = [
+    eq(schema.invoices.organizationId, user.organizationId),
+    ...(stationId ? [eq(schema.invoices.stationId, stationId)] : []),
+    ...(from ? [gte(schema.invoices.issuedDate, from)] : []),
+    ...(to ? [lte(schema.invoices.issuedDate, to)] : []),
+  ];
+  const rows = await db
+    .select({
+      id: schema.invoices.id,
+      invoiceNumber: schema.invoices.invoiceNumber,
+      issuedDate: schema.invoices.issuedDate,
+      saleId: schema.invoices.saleId,
+      buyerName: schema.invoices.buyerName,
+      buyerGstin: schema.invoices.buyerGstin,
+      interState: schema.invoices.interState,
+      taxableAmount: schema.invoices.taxableAmount,
+      totalAmount: schema.invoices.totalAmount,
+      createdAt: schema.invoices.createdAt,
+    })
+    .from(schema.invoices)
+    .where(and(...conds))
+    .orderBy(desc(schema.invoices.createdAt));
+  return c.json({ success: true, data: rows });
+});
+
+// GET /transactions/invoices/:id — full invoice (for PDF / reprint).
+transactionsRouter.get('/invoices/:id', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  const rows = await db.select().from(schema.invoices).where(eq(schema.invoices.id, c.req.param('id'))).limit(1);
+  const invoice = rows[0];
+  if (!invoice || invoice.organizationId !== user.organizationId) {
+    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Invoice not found' } }, 404);
+  }
+  return c.json({ success: true, data: invoice });
+});
+
+// GET /transactions/sales/:id/invoice — the invoice for a sale, if any.
+transactionsRouter.get('/sales/:id/invoice', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  const rows = await db.select().from(schema.invoices).where(eq(schema.invoices.saleId, c.req.param('id'))).limit(1);
+  const invoice = rows[0];
+  if (!invoice || invoice.organizationId !== user.organizationId) {
+    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'No invoice for this sale' } }, 404);
+  }
+  return c.json({ success: true, data: invoice });
+});
+
+// GET /transactions/sales?stationId=&from=&to= — non-fuel (merchandise) sales
+// with their invoice status, for the Invoices workspace. Fuel sales are excluded
+// (they're VAT, not GST-invoiceable here).
+transactionsRouter.get('/sales', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  const stationId = c.req.query('stationId');
+  const from = c.req.query('from');
+  const to = c.req.query('to');
+  if (!stationId) return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Missing stationId' } }, 400);
+  if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId })) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+  }
+  const rows = await db
+    .select({
+      id: schema.sales.id,
+      documentNumber: schema.sales.documentNumber,
+      saleType: schema.sales.saleType,
+      paymentMethod: schema.sales.paymentMethod,
+      customerId: schema.sales.customerId,
+      subtotalAmount: schema.sales.subtotalAmount,
+      taxAmount: schema.sales.taxAmount,
+      totalAmount: schema.sales.totalAmount,
+      createdAt: schema.sales.createdAt,
+      businessDate: schema.businessDays.businessDate,
+      customerName: schema.customers.name,
+      invoiceId: schema.invoices.id,
+      invoiceNumber: schema.invoices.invoiceNumber,
+    })
+    .from(schema.sales)
+    .innerJoin(schema.businessDays, eq(schema.sales.businessDayId, schema.businessDays.id))
+    .leftJoin(schema.customers, eq(schema.customers.id, schema.sales.customerId))
+    .leftJoin(schema.invoices, eq(schema.invoices.saleId, schema.sales.id))
+    .where(
+      and(
+        eq(schema.businessDays.stationId, stationId),
+        eq(schema.businessDays.organizationId, user.organizationId),
+        ne(schema.sales.saleType, 'Fuel'),
+        ...(from ? [gte(schema.businessDays.businessDate, from)] : []),
+        ...(to ? [lte(schema.businessDays.businessDate, to)] : []),
+      ),
+    )
+    .orderBy(desc(schema.sales.createdAt));
+  return c.json({ success: true, data: rows });
+});
+
+// ====================================================
+// MERCHANDISE HANDOVER (walk-in bulk, per employee) — Phase T4b
+// ====================================================
+
+// POST /transactions/shifts/:id/merchandise-handover — record/replace an
+// employee's itemized walk-in merchandise closing (a cash sale attributed to them).
+transactionsRouter.post('/shifts/:id/merchandise-handover', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  const shiftId = c.req.param('id');
+  const body = await c.req.json().catch(() => ({}));
+
+  const shiftRows = await db
+    .select({ stationId: schema.shifts.stationId })
+    .from(schema.shifts)
+    .where(and(eq(schema.shifts.id, shiftId), eq(schema.shifts.organizationId, user.organizationId)))
+    .limit(1);
+  if (!shiftRows[0]) return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Shift not found' } }, 404);
+  if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId: shiftRows[0].stationId })) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+  }
+
+  const result = await runInTransaction(db, (tx, events) =>
+    new RecordMerchandiseHandover({
+      sales: new DrizzleSaleRepository(tx),
+      handovers: new DrizzleMerchandiseHandoverRepository(tx),
+      stock: new DrizzleStockMovementRepository(tx),
+      products: new DrizzleProductRepository(tx),
+      shifts: new DrizzleShiftRepository(tx),
+      docNumbers: new TimestampDocumentNumberGenerator(),
+      events,
+    }).execute({ shiftId, attendantId: body.attendantId, lines: body.lines ?? [], nonCashAmount: body.nonCashAmount }, buildContext(user)),
+  );
+  return sendResult(c, result);
+});
+
+// GET /transactions/shifts/:id/merchandise-handovers — list per-employee handovers + items.
+transactionsRouter.get('/shifts/:id/merchandise-handovers', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  const shiftId = c.req.param('id');
+
+  const handovers = await db
+    .select({
+      id: schema.sales.id,
+      attendantId: schema.sales.attendantId,
+      attendantName: schema.users.fullName,
+      subtotalAmount: schema.sales.subtotalAmount,
+      taxAmount: schema.sales.taxAmount,
+      totalAmount: schema.sales.totalAmount,
+      nonCashAmount: schema.sales.nonCashAmount,
+      createdAt: schema.sales.createdAt,
+    })
+    .from(schema.sales)
+    .leftJoin(schema.users, eq(schema.users.id, schema.sales.attendantId))
+    .innerJoin(schema.businessDays, eq(schema.sales.businessDayId, schema.businessDays.id))
+    .where(
+      and(
+        eq(schema.sales.shiftId, shiftId),
+        eq(schema.sales.captureMechanism, 'MERCH_HANDOVER'),
+        eq(schema.businessDays.organizationId, user.organizationId),
+      ),
+    )
+    .orderBy(desc(schema.sales.createdAt));
+
+  const saleIds = handovers.map((h) => h.id);
+  let itemsBySale: Record<string, any[]> = {};
+  if (saleIds.length > 0) {
+    const items = await db
+      .select({
+        saleId: schema.saleItems.saleId,
+        productId: schema.saleItems.productId,
+        productName: schema.products.name,
+        quantity: schema.saleItems.quantity,
+        unitPrice: schema.saleItems.unitPrice,
+        lineTotal: schema.saleItems.lineTotal,
+      })
+      .from(schema.saleItems)
+      .leftJoin(schema.products, eq(schema.products.id, schema.saleItems.productId))
+      .where(inArray(schema.saleItems.saleId, saleIds));
+    itemsBySale = items.reduce((acc: Record<string, any[]>, it) => {
+      (acc[it.saleId] ||= []).push(it);
+      return acc;
+    }, {});
+  }
+
+  return c.json({ success: true, data: handovers.map((h) => ({ ...h, items: itemsBySale[h.id] ?? [] })) });
+});
+
+// GET /transactions/shifts/:id/merchandise-sales — the individual (quick-entry)
+// non-fuel "billed" sales for a shift: everything NOT recorded via the bulk
+// merchandise handover. Shown read-only inside the handover drawer so a
+// employee's full merchandise picture (bulk + billed) reconciles in one place.
+transactionsRouter.get('/shifts/:id/merchandise-sales', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  const shiftId = c.req.param('id');
+
+  const rows = await db
+    .select({
+      id: schema.sales.id,
+      documentNumber: schema.sales.documentNumber,
+      attendantId: schema.sales.attendantId,
+      attendantName: schema.users.fullName,
+      customerId: schema.sales.customerId,
+      customerName: schema.customers.name,
+      buyerDetails: schema.sales.buyerDetails,
+      paymentMethod: schema.sales.paymentMethod,
+      totalAmount: schema.sales.totalAmount,
+      createdAt: schema.sales.createdAt,
+    })
+    .from(schema.sales)
+    .leftJoin(schema.users, eq(schema.users.id, schema.sales.attendantId))
+    .leftJoin(schema.customers, eq(schema.customers.id, schema.sales.customerId))
+    .innerJoin(schema.businessDays, eq(schema.sales.businessDayId, schema.businessDays.id))
+    .where(
+      and(
+        eq(schema.sales.shiftId, shiftId),
+        ne(schema.sales.saleType, 'Fuel'),
+        ne(schema.sales.captureMechanism, 'MERCH_HANDOVER'),
+        eq(schema.businessDays.organizationId, user.organizationId),
+      ),
+    )
+    .orderBy(desc(schema.sales.createdAt));
+
+  const saleIds = rows.map((r) => r.id);
+  let itemsBySale: Record<string, any[]> = {};
+  if (saleIds.length > 0) {
+    const items = await db
+      .select({
+        saleId: schema.saleItems.saleId,
+        productName: schema.products.name,
+        quantity: schema.saleItems.quantity,
+        lineTotal: schema.saleItems.lineTotal,
+      })
+      .from(schema.saleItems)
+      .leftJoin(schema.products, eq(schema.products.id, schema.saleItems.productId))
+      .where(inArray(schema.saleItems.saleId, saleIds));
+    itemsBySale = items.reduce((acc: Record<string, any[]>, it) => {
+      (acc[it.saleId] ||= []).push(it);
+      return acc;
+    }, {});
+  }
+
+  return c.json({ success: true, data: rows.map((r) => ({ ...r, customerName: r.customerName ?? ((r.buyerDetails as any)?.name ?? null), items: itemsBySale[r.id] ?? [] })) });
+});
+
+// DELETE /transactions/merchandise-handovers/:saleId — remove a handover (shift must be OPEN).
+transactionsRouter.delete('/merchandise-handovers/:saleId', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  const saleId = c.req.param('saleId');
+
+  const rows = await db
+    .select({ shiftStatus: schema.shifts.status, orgId: schema.businessDays.organizationId, capture: schema.sales.captureMechanism })
+    .from(schema.sales)
+    .innerJoin(schema.shifts, eq(schema.shifts.id, schema.sales.shiftId))
+    .innerJoin(schema.businessDays, eq(schema.sales.businessDayId, schema.businessDays.id))
+    .where(eq(schema.sales.id, saleId))
+    .limit(1);
+  const row = rows[0];
+  if (!row || row.orgId !== user.organizationId || row.capture !== 'MERCH_HANDOVER') {
+    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Merchandise handover not found' } }, 404);
+  }
+  if (row.shiftStatus !== 'OPEN') {
+    return c.json({ success: false, error: { code: 'INVARIANT_VIOLATION', message: 'Cannot edit after the shift is closed' } }, 409);
+  }
+  await new DrizzleMerchandiseHandoverRepository(db).deleteHandoverSale(saleId);
+  return c.json({ success: true, data: { id: saleId } });
+});
+
+transactionsRouter.get('/shifts/:id/transactions', async (c) => {
+  const db = c.var.db;
+  const shiftId = c.req.param('id');
+  const [expenses, purchases, collections, sales, creditSales] = await Promise.all([
+    db.select().from(schema.expenses).where(eq(schema.expenses.shiftId, shiftId)),
+    db.select().from(schema.purchases).where(eq(schema.purchases.shiftId, shiftId)),
+    db.select().from(schema.collections).where(eq(schema.collections.shiftId, shiftId)),
+    db.select().from(schema.sales).where(eq(schema.sales.shiftId, shiftId)),
+    // Stage B fuel-on-credit sales live in customer_transactions (a receivable),
+    // not the collections table — surface them so totals/reconciliation/summary see them.
+    db
       .select({
         id: schema.customerTransactions.id,
         transactionType: schema.customerTransactions.transactionType,
         amount: schema.customerTransactions.amount,
+        quantity: schema.customerTransactions.quantity,
+        unitPrice: schema.customerTransactions.unitPrice,
         notes: schema.customerTransactions.notes,
         createdAt: schema.customerTransactions.createdAt,
         shiftId: schema.customerTransactions.shiftId,
-        shiftDate: schema.shifts.openedAt,
-        shiftName: schema.shiftTemplates.name,
+        duId: schema.customerTransactions.duId,
+        attendantId: schema.customerTransactions.attendantId,
+        customerId: schema.customerTransactions.customerId,
+        vehicleId: schema.customerTransactions.vehicleId,
+        productId: schema.customerTransactions.productId,
+        customerName: schema.customers.name,
+        productName: schema.products.name,
+        productCode: schema.products.code,
+        vehicleNumber: schema.customerVehicles.registrationNumber,
       })
       .from(schema.customerTransactions)
-      .innerJoin(schema.shifts, eq(schema.customerTransactions.shiftId, schema.shifts.id))
-      .innerJoin(schema.shiftTemplates, eq(schema.shifts.shiftTemplateId, schema.shiftTemplates.id))
-      .where(eq(schema.customerTransactions.customerId, customerId))
-      .orderBy(schema.customerTransactions.createdAt);
-
-    return c.json({ success: true, data: list });
-  } catch (err: any) {
-    return c.json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }, 500);
-  }
+      .leftJoin(schema.customers, eq(schema.customers.id, schema.customerTransactions.customerId))
+      .leftJoin(schema.products, eq(schema.products.id, schema.customerTransactions.productId))
+      .leftJoin(schema.customerVehicles, eq(schema.customerVehicles.id, schema.customerTransactions.vehicleId))
+      .where(
+        and(
+          eq(schema.customerTransactions.shiftId, shiftId),
+          eq(schema.customerTransactions.transactionType, 'Credit Sale'),
+          eq(schema.customerTransactions.referenceType, 'CREDIT_SALE'),
+        ),
+      ),
+  ]);
+  return c.json({ success: true, data: { expenses, purchases, collections, sales, creditSales } });
 });
 
-// GET /api/transactions/suppliers/:id/ledger
-transactionsRouter.get('/suppliers/:id/ledger', async (c) => {
-  const db = c.var.db;
-  const user = c.var.user;
-  const supplierId = c.req.param('id');
+// ====================================================
+// INVENTORY READ PROJECTIONS (business-day anchored)
+// ====================================================
 
-  try {
-    const [supplier] = await db
-      .select()
-      .from(schema.suppliers)
-      .where(and(eq(schema.suppliers.id, supplierId), eq(schema.suppliers.organizationId, user.organizationId)))
-      .limit(1);
-
-    if (!supplier) {
-      return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Supplier not found' } }, 404);
-    }
-
-    const list = await db
-      .select({
-        id: schema.supplierTransactions.id,
-        transactionType: schema.supplierTransactions.transactionType,
-        amount: schema.supplierTransactions.amount,
-        notes: schema.supplierTransactions.notes,
-        createdAt: schema.supplierTransactions.createdAt,
-        shiftId: schema.supplierTransactions.shiftId,
-        shiftDate: schema.shifts.openedAt,
-        shiftName: schema.shiftTemplates.name,
-      })
-      .from(schema.supplierTransactions)
-      .innerJoin(schema.shifts, eq(schema.supplierTransactions.shiftId, schema.shifts.id))
-      .innerJoin(schema.shiftTemplates, eq(schema.shifts.shiftTemplateId, schema.shiftTemplates.id))
-      .where(eq(schema.supplierTransactions.supplierId, supplierId))
-      .orderBy(schema.supplierTransactions.createdAt);
-
-    return c.json({ success: true, data: list });
-  } catch (err: any) {
-    return c.json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }, 500);
-  }
-});
-
-// POST /api/transactions/supplier-payments
-transactionsRouter.post('/supplier-payments', validateJson(supplierPaymentSchema), async (c) => {
-  const db = c.var.db;
-  const user = c.var.user;
-
-  const parsed = c.req.valid('json');
-
-  try {
-    const editable = await ensureShiftNotLocked(db, parsed.shiftId);
-    if (!editable) {
-      return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Target shift is locked' } }, 403);
-    }
-
-    const [supplier] = await db
-      .select()
-      .from(schema.suppliers)
-      .where(and(eq(schema.suppliers.id, parsed.supplierId), eq(schema.suppliers.organizationId, user.organizationId)))
-      .limit(1);
-
-    if (!supplier) {
-      return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Supplier not found' } }, 404);
-    }
-
-    const [newTx] = await db
-      .insert(schema.supplierTransactions)
-      .values({
-        shiftId: parsed.shiftId,
-        supplierId: parsed.supplierId,
-        transactionType: 'Payment',
-        amount: String(parsed.amount),
-        notes: parsed.notes,
-        createdAt: new Date(),
-      })
-      .returning();
-
-    const [shift] = await db.select().from(schema.shifts).where(eq(schema.shifts.id, parsed.shiftId)).limit(1);
-    if (shift.status === 'CLOSED') {
-      await compileShiftSummary(db, parsed.shiftId);
-    }
-
-    return c.json({ success: true, data: newTx });
-  } catch (err: any) {
-    return c.json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }, 500);
-  }
-});
-
-// Helper to check if user has access to station
-function hasStationAccess(user: any, stationId: string): boolean {
-  if (user.role === 'Owner') return true;
-  return user.assignedStationIds.includes(stationId);
-}
-
-// GET /api/transactions/inventory/status
 transactionsRouter.get('/inventory/status', async (c) => {
   const db = c.var.db;
   const user = c.var.user;
   const stationId = c.req.query('stationId');
-
-  if (!stationId) {
-    return c.json({ success: false, error: { code: 'BAD_REQUEST', message: 'Missing stationId' } }, 400);
-  }
-
-  if (!hasStationAccess(user, stationId)) {
+  if (!stationId) return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Missing stationId' } }, 400);
+  if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId })) {
     return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
   }
+  // Single query: per-tank current volume (Σ stock movements) + product info.
+  // Replaces the previous 1 + 2N round-trips (per-tank product + aggregate).
+  const rows = await db
+    .select({
+      id: schema.tanks.id,
+      name: schema.tanks.name,
+      productId: schema.tanks.productId,
+      capacity: schema.tanks.capacity,
+      productName: schema.products.name,
+      productCode: schema.products.code,
+      productUnit: schema.products.unit,
+      total: sql<string>`COALESCE(SUM(${schema.stockMovements.quantity}), 0)`,
+    })
+    .from(schema.tanks)
+    .leftJoin(schema.products, eq(schema.products.id, schema.tanks.productId))
+    .leftJoin(schema.stockMovements, eq(schema.stockMovements.tankId, schema.tanks.id))
+    .where(and(eq(schema.tanks.stationId, stationId), eq(schema.tanks.organizationId, user.organizationId)))
+    .groupBy(schema.tanks.id, schema.products.name, schema.products.code, schema.products.unit);
 
-  try {
-    const stationTanks = await db
-      .select()
-      .from(schema.tanks)
-      .where(and(eq(schema.tanks.stationId, stationId), eq(schema.tanks.organizationId, user.organizationId)));
-
-    const enrichedTanks = await Promise.all(
-      stationTanks.map(async (t) => {
-        const [prod] = await db
-          .select()
-          .from(schema.products)
-          .where(eq(schema.products.id, t.productId))
-          .limit(1);
-
-        const movements = await db
-          .select({
-            quantity: schema.stockMovements.quantity,
-          })
-          .from(schema.stockMovements)
-          .innerJoin(schema.shifts, eq(schema.stockMovements.shiftId, schema.shifts.id))
-          .where(
-            and(
-              eq(schema.shifts.stationId, stationId),
-              eq(schema.stockMovements.tankId, t.id)
-            )
-          );
-
-        const currentVolume = movements.reduce((sum, m) => sum + Number(m.quantity), 0);
-
-        return {
-          id: t.id,
-          name: t.name,
-          productId: t.productId,
-          productName: prod?.name ?? 'Unknown',
-          productCode: prod?.code ?? 'Unknown',
-          capacity: Number(t.capacity),
-          currentVolume: Math.max(0, currentVolume),
-        };
-      })
-    );
-
-    return c.json({ success: true, data: enrichedTanks });
-  } catch (err: any) {
-    return c.json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }, 500);
-  }
+  const enriched = rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    productId: r.productId,
+    productName: r.productName ?? 'Unknown',
+    productCode: r.productCode ?? 'Unknown',
+    productUnit: r.productUnit ?? 'L',
+    capacity: Number(r.capacity),
+    currentVolume: Math.max(0, Number(r.total ?? 0)),
+  }));
+  return c.json({ success: true, data: enriched });
 });
 
-// GET /api/transactions/inventory/movements
+transactionsRouter.get('/inventory/items', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  const stationId = c.req.query('stationId');
+  if (!stationId) return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Missing stationId' } }, 400);
+  if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId })) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+  }
+  // Merchandise (non-fuel) stock-on-hand. Item products are org-scoped (no tank);
+  // quantity = sum of all stock movements for the product (tankId is null for items).
+  const rows = await db
+    .select({
+      productId: schema.products.id,
+      name: schema.products.name,
+      code: schema.products.code,
+      unit: schema.products.unit,
+      productType: schema.products.productType,
+      quantity: sql<string>`COALESCE((SELECT SUM(sm.quantity) FROM stock_movements sm WHERE sm.product_id = "products"."id"), 0)`,
+    })
+    .from(schema.products)
+    .where(
+      and(
+        eq(schema.products.organizationId, user.organizationId),
+        eq(schema.products.inventoryType, 'ITEM'),
+        eq(schema.products.isActive, true),
+      ),
+    );
+  return c.json({
+    success: true,
+    data: rows.map((r) => ({ ...r, quantity: Number(r.quantity) })),
+  });
+});
+
+// POST /inventory/count — physical stock count / opening balance / adjustment.
+// Reconciles book stock to the measured actual (tankId for fuel, productId for items).
+transactionsRouter.post('/inventory/count', async (c) => {
+  const user = c.var.user;
+  const body = await c.req.json().catch(() => ({}));
+  if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId: body?.stationId })) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+  }
+  const stockClock = await loadStationClock(c.var.db, body?.stationId);
+  const result = await runInTransaction(c.var.db, (tx, events) =>
+    new RecordStockCount({
+      movements: new DrizzleStockMovementRepository(tx),
+      variances: new DrizzleStockVarianceRepository(tx),
+      businessDays: new DrizzleBusinessDayRepository(tx),
+      events,
+    }).execute(body, buildContext(user, { stationId: body?.stationId, ...stockClock })),
+  );
+  return sendResult(c, result);
+});
+
 transactionsRouter.get('/inventory/movements', async (c) => {
   const db = c.var.db;
   const user = c.var.user;
   const stationId = c.req.query('stationId');
-
-  if (!stationId) {
-    return c.json({ success: false, error: { code: 'BAD_REQUEST', message: 'Missing stationId' } }, 400);
-  }
-
-  if (!hasStationAccess(user, stationId)) {
+  if (!stationId) return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Missing stationId' } }, 400);
+  if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId })) {
     return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
   }
-
-  try {
-    const list = await db
-      .select({
-        movement: schema.stockMovements,
-        shift: schema.shifts,
-        tank: {
-          name: schema.tanks.name,
-        },
-      })
-      .from(schema.stockMovements)
-      .innerJoin(schema.shifts, eq(schema.stockMovements.shiftId, schema.shifts.id))
-      .leftJoin(schema.tanks, eq(schema.stockMovements.tankId, schema.tanks.id))
-      .where(
-        and(
-          eq(schema.shifts.stationId, stationId),
-          eq(schema.shifts.organizationId, user.organizationId)
-        )
-      )
-      .orderBy(desc(schema.stockMovements.createdAt));
-
-    const enriched = await Promise.all(
-      list.map(async (row) => {
-        const m = row.movement;
-        const [prod] = await db
-          .select()
-          .from(schema.products)
-          .where(eq(schema.products.id, m.productId))
-          .limit(1);
-
-        return {
-          ...m,
-          quantity: Number(m.quantity),
-          productName: prod?.name ?? 'Unknown',
-          productCode: prod?.code ?? 'Unknown',
-          tankName: row.tank?.name ?? null,
-          shiftDate: row.shift.openedAt,
-          shiftStatus: row.shift.status,
-        };
-      })
-    );
-
-    return c.json({ success: true, data: enriched });
-  } catch (err: any) {
-    return c.json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }, 500);
-  }
+  const rows = await db
+    .select({
+      movement: schema.stockMovements,
+      businessDate: schema.businessDays.businessDate,
+      tankName: schema.tanks.name,
+      productName: schema.products.name,
+      productCode: schema.products.code,
+      productUnit: schema.products.unit,
+    })
+    .from(schema.stockMovements)
+    .innerJoin(schema.businessDays, eq(schema.stockMovements.businessDayId, schema.businessDays.id))
+    .leftJoin(schema.tanks, eq(schema.stockMovements.tankId, schema.tanks.id))
+    .leftJoin(schema.products, eq(schema.stockMovements.productId, schema.products.id))
+    .where(and(eq(schema.businessDays.stationId, stationId), eq(schema.businessDays.organizationId, user.organizationId)))
+    .orderBy(desc(schema.stockMovements.createdAt));
+  return c.json({
+    success: true,
+    data: rows.map((r) => ({
+      ...r.movement,
+      quantity: Number(r.movement.quantity),
+      businessDate: r.businessDate,
+      tankName: r.tankName ?? null,
+      productName: r.productName ?? 'Unknown',
+      productCode: r.productCode ?? 'Unknown',
+      productUnit: r.productUnit ?? null,
+    })),
+  });
 });
 
-// GET /api/transactions/inventory/variances
 transactionsRouter.get('/inventory/variances', async (c) => {
   const db = c.var.db;
   const user = c.var.user;
   const stationId = c.req.query('stationId');
-
-  if (!stationId) {
-    return c.json({ success: false, error: { code: 'BAD_REQUEST', message: 'Missing stationId' } }, 400);
-  }
-
-  if (!hasStationAccess(user, stationId)) {
+  if (!stationId) return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Missing stationId' } }, 400);
+  if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId })) {
     return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
   }
-
-  try {
-    const list = await db
-      .select({
-        variance: schema.stockVariances,
-        shift: schema.shifts,
-        tank: {
-          name: schema.tanks.name,
-        },
-      })
-      .from(schema.stockVariances)
-      .innerJoin(schema.shifts, eq(schema.stockVariances.shiftId, schema.shifts.id))
-      .leftJoin(schema.tanks, eq(schema.stockVariances.tankId, schema.tanks.id))
-      .where(
-        and(
-          eq(schema.shifts.stationId, stationId),
-          eq(schema.shifts.organizationId, user.organizationId)
-        )
-      )
-      .orderBy(desc(schema.stockVariances.createdAt));
-
-    const enriched = await Promise.all(
-      list.map(async (row) => {
-        const v = row.variance;
-        const [prod] = await db
-          .select()
-          .from(schema.products)
-          .where(eq(schema.products.id, v.productId))
-          .limit(1);
-
-        return {
-          ...v,
-          expectedQuantity: Number(v.expectedQuantity),
-          actualQuantity: Number(v.actualQuantity),
-          varianceQuantity: Number(v.varianceQuantity),
-          productName: prod?.name ?? 'Unknown',
-          productCode: prod?.code ?? 'Unknown',
-          tankName: row.tank?.name ?? null,
-          shiftDate: row.shift.openedAt,
-          shiftStatus: row.shift.status,
-        };
-      })
-    );
-
-    return c.json({ success: true, data: enriched });
-  } catch (err: any) {
-    return c.json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }, 500);
-  }
+  const rows = await db
+    .select({
+      variance: schema.stockVariances,
+      businessDate: schema.businessDays.businessDate,
+      tankName: schema.tanks.name,
+      productName: schema.products.name,
+      productCode: schema.products.code,
+      productUnit: schema.products.unit,
+    })
+    .from(schema.stockVariances)
+    .innerJoin(schema.businessDays, eq(schema.stockVariances.businessDayId, schema.businessDays.id))
+    .leftJoin(schema.tanks, eq(schema.stockVariances.tankId, schema.tanks.id))
+    .leftJoin(schema.products, eq(schema.stockVariances.productId, schema.products.id))
+    .where(and(eq(schema.businessDays.stationId, stationId), eq(schema.businessDays.organizationId, user.organizationId)))
+    .orderBy(desc(schema.stockVariances.createdAt));
+  return c.json({
+    success: true,
+    data: rows.map((r) => ({
+      ...r.variance,
+      expectedQuantity: Number(r.variance.expectedQuantity),
+      actualQuantity: Number(r.variance.actualQuantity),
+      varianceQuantity: Number(r.variance.varianceQuantity),
+      businessDate: r.businessDate,
+      tankName: r.tankName ?? null,
+      productName: r.productName ?? 'Unknown',
+      productCode: r.productCode ?? 'Unknown',
+      productUnit: r.productUnit ?? null,
+    })),
+  });
 });
-
-
