@@ -200,6 +200,11 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Build workspace deps
+        # wrangler bundles apps/api from source, but its imports (@pump/db,
+        # @pump/core, @pump/shared) resolve to each package's dist/. Build them
+        # first — `tsc -b` follows the tsconfig project references.
+        run: npm run build:api
       - name: Deploy API
         working-directory: apps/api
         # main -> prod worker (pumpos-api-prod, prod Supabase via env.production).
