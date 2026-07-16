@@ -86,6 +86,30 @@ generate + commit migration → run migrate (dev) → verify → run migrate (pr
 → deploy API. RLS/policy SQL in `supabase/migrations/*.sql` is applied
 separately (supabase CLI / direct scripts).
 
+### Go-live domain switch (abdullahnettoor.com → pumpos.app)
+
+Hostnames are config-driven, so switching to the real prod domain is mostly
+setting variables — no code edits except the wrangler route strings (which
+can't read env vars):
+
+1. **Repo variables:** `MARKETING_SITE=https://pumpos.app`,
+   `CONSOLE_URL=https://console.pumpos.app` (marketing links + sitemap flip on
+   the next tag build).
+2. **Repo secrets:** `PROD_SUPABASE_URL`, `PROD_SUPABASE_PUBLISHABLE_KEY`,
+   `PROD_API_URL=https://api.pumpos.app` (frontends inject these on tag builds;
+   until set, they fall back to the current Supabase/API and warn).
+3. **Wrangler routes (the only code edit):** update the top-level `pattern` in
+   `apps/{console,marketing,mobile}/wrangler.toml` → `console.pumpos.app` /
+   `pumpos.app` / `m.pumpos.app`; uncomment `apps/api` `[env.production]` +
+   prod Hyperdrive id; set variable `API_DEPLOY_ENV=production`.
+4. **Supabase Auth:** add the `pumpos.app` hosts to Site URL + Redirect URLs.
+5. **Zone:** `pumpos.app` active in the Cloudflare account (routes then
+   auto-provision DNS + certs on the next tag deploy).
+
+The console's `resolveApiUrl` and marketing links carry current-domain
+defaults, so nothing breaks before the switch and there are no dead links in
+dev.
+
 ---
 
 ## Repository layout after this phase

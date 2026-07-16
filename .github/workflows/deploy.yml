@@ -22,8 +22,10 @@ name: Deploy
 #   API_DEPLOY_ENV  – leave UNSET to deploy the current top-level API on a tag.
 #                     Set to `production` once apps/api `[env.production]` (prod
 #                     Supabase + Hyperdrive) is live, to deploy the prod worker.
-#   MARKETING_SITE  – canonical host for the sitemap. Defaults to the dev apex;
-#                     set to https://pumpos.app once that domain is live.
+#   MARKETING_SITE  – canonical host for the sitemap/OG. Defaults to the current
+#                     apex; set to https://pumpos.app at go-live.
+#   CONSOLE_URL     – console link target in the marketing site. Defaults to the
+#                     current console; set to https://console.pumpos.app at go-live.
 
 on:
   push:
@@ -94,6 +96,7 @@ jobs:
         run: npm run build:marketing
         env:
           SITE: ${{ vars.MARKETING_SITE || 'https://pumpos.abdullahnettoor.com' }}
+          PUBLIC_CONSOLE_URL: ${{ vars.CONSOLE_URL || 'https://console.pumpos.abdullahnettoor.com' }}
       - name: Deploy marketing
         working-directory: apps/marketing
         run: |

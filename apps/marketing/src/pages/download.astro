@@ -1,5 +1,6 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
+import { CONSOLE_URL } from '../config.ts';
 
 // Static list drives the card layout; live availability + URLs come from
 // /downloads/manifest.json at runtime (see the client script below).
@@ -70,7 +71,7 @@ const platforms = [
     </div>
 
     <p class="mt-10 text-sm text-[var(--color-ink-muted)]">
-      Prefer the browser? <a href="https://console.pumpos.app" class="text-[var(--color-brand)] underline">Open the web console</a> from any desktop.
+      Prefer the browser? <a href={CONSOLE_URL} class="text-[var(--color-brand)] underline">Open the web console</a> from any desktop.
     </p>
   </section>
 </BaseLayout>
