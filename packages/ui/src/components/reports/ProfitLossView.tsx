@@ -1,14 +1,11 @@
 import React, { useMemo, useState } from 'react';
-import type { ColumnDef } from '@tanstack/react-table';
 import { useDailyDssrRange, useDailyDssrPreview, useShiftStatus } from '../../query/hooks.js';
-import { DataTable } from '../primitives/DataTable.js';
 import { computeRange } from '../primitives/DateRangeField.js';
 import type { DateRange } from '../primitives/DateRangeField.js';
-import { ReportRangeBar } from './ReportRangeBar.js';
-import { inr, formatDate } from '../../utils/format.js';
-import { KpiStrip, KpiTile, Panel, EmptyState, Chip, DateText } from '../../pump-ds/index.js';
-import { TrendingUp } from 'lucide-react';
+import { inr } from '../../utils/format.js';
 import { resolveBusinessDate } from '@pump/shared';
+import { KpiStrip, KpiTile, Panel, Chip, DateText, EmptyState } from '../../pump-ds/index.js';
+import { ReportRangeBar } from './ReportRangeBar.js';
 
 export interface ProfitLossViewProps {
   selectedStation: any | null;
@@ -48,35 +45,6 @@ function pnlFromSnapshot(date: string, snapshotData: any, live: boolean): DayPnl
     hasData: !!snapshotData,
   };
 }
-
-const monoCell = (v: any, opts: { color?: string; weight?: number } = {}) => (
-  <span style={{ fontFamily: 'var(--font-mono)', color: opts.color ?? 'var(--text-default)', fontWeight: opts.weight }}>{inr(v)}</span>
-);
-
-const pnlColumns: ColumnDef<DayPnl, any>[] = [
-  {
-    accessorKey: 'date',
-    header: 'Date',
-    cell: ({ row }) => (
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
-        <DateText value={row.original.date} />
-        {row.original.live && <Chip tone="warning" size="xs">Live</Chip>}
-      </span>
-    ),
-  },
-  { accessorKey: 'revenue', header: 'Revenue', cell: ({ getValue }) => monoCell(getValue()) },
-  { accessorKey: 'cogs', header: 'COGS', cell: ({ getValue }) => monoCell(getValue(), { color: 'var(--brand-warning)' }) },
-  { accessorKey: 'grossMargin', header: 'Gross Margin', cell: ({ getValue }) => monoCell(getValue()) },
-  { accessorKey: 'expenses', header: 'Expenses', cell: ({ getValue }) => monoCell(getValue(), { color: 'var(--brand-warning)' }) },
-  {
-    accessorKey: 'netProfit',
-    header: 'Net Profit',
-    cell: ({ getValue }) => {
-      const v = Number(getValue());
-      return monoCell(v, { color: v < 0 ? 'var(--state-danger-fg)' : 'var(--state-success-fg)', weight: 700 });
-    },
-  },
-];
 
 export const ProfitLossView: React.FC<ProfitLossViewProps> = ({ selectedStation }) => {
   const s = (selectedStation as any)?.settings || {};
@@ -128,6 +96,7 @@ export const ProfitLossView: React.FC<ProfitLossViewProps> = ({ selectedStation 
   const single = isSingleDay ? days[0] : null;
 
   const rowStyle: React.CSSProperties = { display: 'flex', justifyContent: 'space-between', padding: '11px 16px', borderBottom: '1px solid var(--border-soft)' };
+  const cell: React.CSSProperties = { padding: '8px 12px', fontSize: '13px', textAlign: 'right', fontFamily: 'var(--font-mono)' };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -163,15 +132,20 @@ export const ProfitLossView: React.FC<ProfitLossViewProps> = ({ selectedStation 
       )}
 
       {loading ? (
-        <Panel flush title="Profit & loss"><div style={{ padding: '16px' }}><EmptyState compact icon={<TrendingUp />} title="Loading…" description="Computing profit & loss." /></div></Panel>
+        <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)' }}>Loading…</div>
       ) : days.length === 0 ? (
-        <Panel flush title="Profit & loss"><div style={{ padding: '12px' }}><EmptyState compact icon={<TrendingUp />} title="No profit data" description="No profit data for this period. Generate the DSSR for closed days to include them." /></div></Panel>
+        <Panel flush>
+          <EmptyState
+            title="No profit data for this period"
+            description="Generate the DSSR for closed days to include them. The open day appears here live once it has sales."
+          />
+        </Panel>
       ) : isSingleDay && single ? (
         // --- Single-day P&L statement ---
         <Panel
           flush
-          title={`Profit & Loss — ${formatDate(single.date)}`}
-          action={<Chip tone={single.live ? 'warning' : 'success'} size="xs">{single.live ? 'Live · not finalized' : 'Final'}</Chip>}
+          title={<>Profit &amp; Loss — <DateText value={single.date} /></>}
+          action={<Chip tone={single.live ? 'warning' : 'success'} variant="soft">{single.live ? 'LIVE · not finalized' : 'FINAL'}</Chip>}
         >
           {([
             { label: 'Revenue — Fuel', value: inr(single.revenueFuel) },
@@ -193,16 +167,41 @@ export const ProfitLossView: React.FC<ProfitLossViewProps> = ({ selectedStation 
           </div>
         </Panel>
       ) : (
-        // --- Period breakdown: per-day table (period totals live in the KPI strip above) ---
-        <Panel flush title={`Profit & Loss — ${days.length} day${days.length === 1 ? '' : 's'}`}>
-          <DataTable
-            bare
-            columns={pnlColumns}
-            data={days}
-            getRowId={(r) => r.date}
-            emptyMessage="No profit data for this period."
-            initialSorting={[{ id: 'date', desc: true }]}
-          />
+        // --- Period breakdown: per-day table ---
+        <Panel flush title="Daily breakdown">
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+            <thead>
+              <tr style={{ backgroundColor: 'var(--bg-surface-alt)', textAlign: 'left' }}>
+                {['Date', 'Revenue', 'COGS', 'Gross Margin', 'Expenses', 'Net Profit'].map((h, i) => (
+                  <th key={h} style={{ padding: '8px 12px', fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', textAlign: i === 0 ? 'left' : 'right' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {days.map((d) => (
+                <tr key={d.date} style={{ borderTop: '1px solid var(--border-soft)' }}>
+                  <td style={{ padding: '8px 12px', whiteSpace: 'nowrap', color: 'var(--text-strong)' }}>
+                    <DateText value={d.date} /> {d.live && <Chip tone="warning" variant="soft" size="sm">LIVE</Chip>}
+                  </td>
+                  <td style={cell}>{inr(d.revenue)}</td>
+                  <td style={{ ...cell, color: 'var(--brand-warning)' }}>{inr(d.cogs)}</td>
+                  <td style={cell}>{inr(d.grossMargin)}</td>
+                  <td style={{ ...cell, color: 'var(--brand-warning)' }}>{inr(d.expenses)}</td>
+                  <td style={{ ...cell, fontWeight: 700, color: d.netProfit < 0 ? 'var(--state-danger-fg)' : 'var(--state-success-fg)' }}>{inr(d.netProfit)}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr style={{ backgroundColor: 'var(--bg-surface-alt)', borderTop: '1px solid var(--border-strong)' }}>
+                <td style={{ padding: '10px 12px', fontWeight: 700 }}>Total ({days.length} day{days.length === 1 ? '' : 's'})</td>
+                <td style={{ ...cell, fontWeight: 700 }}>{inr(totals.revenue)}</td>
+                <td style={{ ...cell, fontWeight: 700, color: 'var(--brand-warning)' }}>{inr(totals.cogs)}</td>
+                <td style={{ ...cell, fontWeight: 700 }}>{inr(totals.grossMargin)}</td>
+                <td style={{ ...cell, fontWeight: 700, color: 'var(--brand-warning)' }}>{inr(totals.expenses)}</td>
+                <td style={{ ...cell, fontWeight: 700, color: totals.netProfit < 0 ? 'var(--state-danger-fg)' : 'var(--state-success-fg)' }}>{inr(totals.netProfit)}</td>
+              </tr>
+            </tfoot>
+          </table>
         </Panel>
       )}
 
