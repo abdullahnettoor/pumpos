@@ -21,7 +21,7 @@
     { "path": "./packages/db" },
     { "path": "./packages/ui" },
     { "path": "./apps/api" },
-    { "path": "./apps/web" },
+    { "path": "./apps/console" },
     { "path": "./apps/desktop" }
   ]
 }

@@ -53,7 +53,10 @@ primitives; only if divergence proves justified do we split.
 
 Ships a clean topology with zero new features. Everything else builds on this.
 
-### M1.a — Rename `apps/web` → `apps/console`
+**Status: implemented (code).** Remaining M1 items are Cloudflare-dashboard /
+Supabase steps that can't be done from the repo — see "Manual steps" below.
+
+### M1.a — Rename `apps/web` → `apps/console` ✅
 - `mv apps/web apps/console`; update workspace globs in root `package.json`,
   `tsconfig.json`, and any `wrangler.toml` references.
 - Rename Worker: `pumpos-web` → `pumpos-console`; `dev-pumpos` → `dev-pumpos-console`.
@@ -86,6 +89,35 @@ Used for edge cases the UA gate misses (tablets in desktop-mode, etc.).
 **Exit criteria:** `console.pumpos.abdullahnettoor.com` serves the SPA on
 desktop, redirects on mobile. Old `pumpos.abdullahnettoor.com` route freed for
 Phase M2.
+
+### Manual steps (not doable from the repo)
+These must be done in the Cloudflare dashboard / Supabase once, then a deploy
+activates the split:
+1. **Deploy** the console: `npm run deploy --workspace=apps/console` (prod, uses
+   the `console.pumpos.abdullahnettoor.com` custom-domain route) or
+   `npm run deploy:dev --workspace=apps/console` (preview → workers.dev).
+2. **DNS/custom domain:** the top-level `[[routes]] custom_domain = true` in
+   `apps/console/wrangler.toml` auto-provisions the `console.` DNS record + cert
+   on the first prod deploy (zone `abdullahnettoor.com` must exist — it does).
+3. **Supabase Auth:** add `https://console.pumpos.abdullahnettoor.com` (and later
+   `https://console.pumpos.app`) to **Site URL** + **Redirect URLs**; remove the
+   bare apex once M2 marketing takes it over.
+4. **Mobile host:** the edge redirect targets `m.<zone>`, which only exists after
+   Phase M3. Until then, mobile visitors on the custom domain hit the in-app
+   gate's "open mobile app" link (harmless dead link) — or use `?desktop=1`.
+
+### What shipped in code
+- `apps/web` → `apps/console` (git-tracked rename); workspace globs, root
+  scripts (`dev:console`, `deploy:console`, `build:ui-console`), `tsconfig.json`
+  project ref, Tailwind `@source`, and `download-fonts.mjs` targets updated.
+- Worker renamed `pumpos-web` → `pumpos-console` (`dev-pumpos` →
+  `dev-pumpos-console`); custom-domain route added; preview pinned to
+  workers.dev via `routes = []`.
+- Edge mobile gate: `apps/console/worker/index.ts` runs before static assets
+  (`run_worker_first`), 302s mobile UAs to `m.<zone>`, honors `?desktop=1`.
+- In-app fallback: `apps/console/src/MobileBlock.tsx` +
+  `useIsUnsupportedMobile()` gate at the top of `App`.
+- Hostname/API resolution in `App.tsx` updated to the new console hosts.
 
 ---
 

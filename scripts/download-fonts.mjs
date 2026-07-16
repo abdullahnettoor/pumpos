@@ -15,7 +15,7 @@ const files = {
   'IBMPlexMono-Regular.ttf': `${base}/IBM-Plex-Mono/fonts/complete/ttf/IBMPlexMono-Regular.ttf`,
   'IBMPlexMono-Medium.ttf': `${base}/IBM-Plex-Mono/fonts/complete/ttf/IBMPlexMono-Medium.ttf`,
 };
-const targets = ['apps/web/public/fonts', 'apps/desktop/public/fonts'];
+const targets = ['apps/console/public/fonts', 'apps/desktop/public/fonts'];
 
 for (const t of targets) await mkdir(join(root, t), { recursive: true });
 for (const [name, url] of Object.entries(files)) {

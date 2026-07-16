@@ -49,7 +49,7 @@
  */
 @source "../";
 @source "../../../../apps/desktop/src/";
-@source "../../../../apps/web/src/";
+@source "../../../../apps/console/src/";
 
 @theme {
   /* -------- Colors -------- */

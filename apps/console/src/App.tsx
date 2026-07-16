@@ -27,12 +27,17 @@ import {
 } from '@pump/ui';
 import type { NavIntent } from '@pump/ui';
 import { Station } from '@pump/shared';
+import { MobileBlock, useIsUnsupportedMobile } from './MobileBlock.js';
 
 const resolveApiUrl = (): string | undefined => {
   if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL as string;
   if (typeof window !== 'undefined') {
     const { hostname } = window.location;
-    if (hostname === 'dev-pumpos.abdullahnettoor.workers.dev' || hostname === 'pumpos.abdullahnettoor.com') {
+    if (
+      hostname === 'dev-pumpos-console.abdullahnettoor.workers.dev' ||
+      hostname === 'console.pumpos.abdullahnettoor.com' ||
+      hostname === 'console.pumpos.app'
+    ) {
       return 'https://pumpos-api.abdullahnettoor.workers.dev';
     }
   }
@@ -53,7 +58,7 @@ const environmentTag = (() => {
     const hostname = window.location.hostname;
     // Dev domain or localhost
     if (hostname === 'localhost') return 'Local';
-    if (hostname === 'dev-pumpos.abdullahnettoor.workers.dev') return 'Dev';
+    if (hostname === 'dev-pumpos-console.abdullahnettoor.workers.dev') return 'Dev';
     // Cloudflare preview env deploys as <worker-name>-preview.<subdomain>.workers.dev
     if (hostname.includes('-preview.')) return 'Preview';
   }
@@ -109,6 +114,7 @@ export const App: React.FC = () => {
   const lastUserIdRef = useRef<string | null>(null);
   const resolvedRef = useRef(false);
   const qc = useQueryClient();
+  const isUnsupportedMobile = useIsUnsupportedMobile();
 
   useEffect(() => {
     // 1. Check current active session
@@ -525,6 +531,11 @@ export const App: React.FC = () => {
         return <div>Not found</div>;
     }
   };
+
+  // Unsupported-device gate (fallback to the edge Worker redirect).
+  if (isUnsupportedMobile) {
+    return <MobileBlock />;
+  }
 
   // Outer loading spinner before session checks resolve
   if (loading && !session) {
