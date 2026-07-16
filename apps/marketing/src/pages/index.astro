@@ -1,0 +1,127 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+
+const features = [
+  {
+    title: 'Shift & business-day anchoring',
+    body: 'Every operation belongs to a business day; cash accountability rolls up per shift. Timezone-aware, offline-resilient.',
+  },
+  {
+    title: 'Nozzle-derived fuel sales',
+    body: 'Sales come from opening/closing meter readings — not manual entry. Variance is a first-class, auditable number.',
+  },
+  {
+    title: 'Immutable snapshots & DSSR',
+    body: 'Shift summaries and the Daily Station Sales Report are frozen at close. Reports derive from snapshots, never guesswork.',
+  },
+  {
+    title: 'Credit, collections & ledgers',
+    body: 'Fleet fuel-on-credit, customer & supplier balances, cash/card/UPI/bank collections — reconciled the way stations actually run.',
+  },
+  {
+    title: 'Multi-tenant & secure',
+    body: 'Row-level security per organization and station. Your data never leaks across tenants.',
+  },
+  {
+    title: 'Fast desktop app, mobile insight',
+    body: 'A snappy desktop console for operations, plus an owner mobile view for live KPIs and reports on the go.',
+  },
+];
+
+const steps = [
+  { n: '01', t: 'Onboard your station', d: 'Tanks, dispensers, nozzles, products and prices — set up in minutes.' },
+  { n: '02', t: 'Run shifts', d: 'Open shifts, capture readings, record expenses, purchases and collections.' },
+  { n: '03', t: 'Close & report', d: 'Close shifts and the business day to generate immutable, audit-ready reports.' },
+];
+---
+
+<BaseLayout title="PumpOS — The operating system for fuel retail">
+  <!-- Hero -->
+  <section class="mx-auto max-w-6xl px-6 pb-16 pt-20 text-center sm:pt-28">
+    <span
+      class="inline-flex items-center gap-2 rounded-full border border-[var(--color-border-soft)] bg-[var(--color-surface)] px-3 py-1 text-xs font-medium text-[var(--color-ink-muted)]"
+    >
+      Built for Indian fuel stations
+    </span>
+    <h1 class="mx-auto mt-6 max-w-3xl text-4xl font-bold leading-tight tracking-tight sm:text-6xl">
+      The operating system for
+      <span class="text-[var(--color-brand)]">fuel retail</span>.
+    </h1>
+    <p class="mx-auto mt-6 max-w-2xl text-lg text-[var(--color-ink-muted)]">
+      Operational simplicity, offline resilience, and audit-ready reporting — one
+      platform to run shifts, inventory, credit and finance across every station.
+    </p>
+    <div class="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
+      <a
+        href="/download"
+        class="w-full rounded-lg bg-[var(--color-brand)] px-6 py-3 font-medium text-white transition hover:bg-[var(--color-brand-dark)] sm:w-auto"
+        >Download the desktop app</a
+      >
+      <a
+        href="https://console.pumpos.app"
+        class="w-full rounded-lg border border-[var(--color-border-soft)] bg-[var(--color-surface)] px-6 py-3 font-medium text-[var(--color-ink)] transition hover:border-[var(--color-brand)] sm:w-auto"
+        >Open the web console</a
+      >
+    </div>
+  </section>
+
+  <!-- Features -->
+  <section id="features" class="mx-auto max-w-6xl px-6 py-16">
+    <h2 class="text-center text-3xl font-semibold tracking-tight">Everything a station needs</h2>
+    <p class="mx-auto mt-3 max-w-2xl text-center text-[var(--color-ink-muted)]">
+      Not a POS. Not an accounting package. An operational OS focused on how fuel
+      stations really work.
+    </p>
+    <div class="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+      {
+        features.map((f) => (
+          <div class="rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-surface)] p-6">
+            <h3 class="text-lg font-semibold">{f.title}</h3>
+            <p class="mt-2 text-sm leading-relaxed text-[var(--color-ink-muted)]">{f.body}</p>
+          </div>
+        ))
+      }
+    </div>
+  </section>
+
+  <!-- How it works -->
+  <section class="mx-auto max-w-6xl px-6 py-16">
+    <h2 class="text-center text-3xl font-semibold tracking-tight">How it works</h2>
+    <div class="mt-12 grid gap-6 sm:grid-cols-3">
+      {
+        steps.map((s) => (
+          <div class="rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-surface)] p-6">
+            <span class="font-mono text-sm text-[var(--color-brand)]">{s.n}</span>
+            <h3 class="mt-2 text-lg font-semibold">{s.t}</h3>
+            <p class="mt-2 text-sm leading-relaxed text-[var(--color-ink-muted)]">{s.d}</p>
+          </div>
+        ))
+      }
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="mx-auto max-w-6xl px-6 pb-24 pt-8">
+    <div
+      class="rounded-2xl bg-[var(--color-brand)] px-8 py-14 text-center text-white"
+    >
+      <h2 class="text-3xl font-semibold tracking-tight">Ready to run your station on PumpOS?</h2>
+      <p class="mx-auto mt-3 max-w-xl text-white/85">
+        Download the desktop app to get started, or open the web console from any
+        desktop browser.
+      </p>
+      <div class="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+        <a
+          href="/download"
+          class="w-full rounded-lg bg-white px-6 py-3 font-medium text-[var(--color-brand-dark)] transition hover:bg-white/90 sm:w-auto"
+          >Download</a
+        >
+        <a
+          href="https://console.pumpos.app"
+          class="w-full rounded-lg border border-white/40 px-6 py-3 font-medium text-white transition hover:bg-white/10 sm:w-auto"
+          >Open console</a
+        >
+      </div>
+    </div>
+  </section>
+</BaseLayout>

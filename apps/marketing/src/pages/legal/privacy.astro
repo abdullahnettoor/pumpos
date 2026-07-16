@@ -1,0 +1,20 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="Privacy Policy — PumpOS" path="/legal/privacy">
+  <article class="mx-auto max-w-3xl px-6 py-20">
+    <h1 class="text-3xl font-bold tracking-tight">Privacy Policy</h1>
+    <p class="mt-2 text-sm text-[var(--color-ink-muted)]">Last updated: {new Date().getFullYear()}</p>
+    <div class="mt-8 space-y-4 text-[var(--color-ink-muted)] leading-relaxed">
+      <p>
+        This is a placeholder privacy policy for PumpOS. Final legal copy will be
+        published before general availability.
+      </p>
+      <p>
+        PumpOS is a multi-tenant fuel station management platform. Operational
+        data is isolated per organization and station with row-level security.
+      </p>
+    </div>
+  </article>
+</BaseLayout>

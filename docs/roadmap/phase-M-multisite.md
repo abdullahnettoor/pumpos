@@ -96,9 +96,15 @@ activates the split:
 1. **Deploy** the console: `npm run deploy --workspace=apps/console` (prod, uses
    the `console.pumpos.abdullahnettoor.com` custom-domain route) or
    `npm run deploy:dev --workspace=apps/console` (preview → workers.dev).
-2. **DNS/custom domain:** the top-level `[[routes]] custom_domain = true` in
-   `apps/console/wrangler.toml` auto-provisions the `console.` DNS record + cert
-   on the first prod deploy (zone `abdullahnettoor.com` must exist — it does).
+2. **DNS / custom domain:** the top-level `[[routes]] custom_domain = true` in
+   `apps/console/wrangler.toml` provisions the `console.pumpos.abdullahnettoor.com`
+   hostname on the first prod deploy — Cloudflare creates the proxied DNS record
+   and issues the edge TLS cert automatically (zone `abdullahnettoor.com` must
+   already be active in the same account — it is). No manual DNS entry needed.
+   Verify after deploy under **Workers & Pages → pumpos-console → Settings →
+   Domains & Routes** (status `Active`); cert issuance can take a few minutes.
+   If the domain is already claimed by another Worker/Pages project, remove that
+   binding first or the deploy will fail.
 3. **Supabase Auth:** add `https://console.pumpos.abdullahnettoor.com` (and later
    `https://console.pumpos.app`) to **Site URL** + **Redirect URLs**; remove the
    bare apex once M2 marketing takes it over.
@@ -122,6 +128,10 @@ activates the split:
 ---
 
 ## M2 — Marketing site (`apps/marketing`)
+
+**Status: implemented (code).** Landing, download, legal, sitemap and robots all
+build to static HTML. Remaining: real OG raster image, analytics beacon, and the
+Cloudflare custom-domain deploy (manual, same pattern as M1).
 
 ### Stack
 - **Astro 4+** (static output, SSR possible via Workers if needed later).
@@ -167,6 +177,34 @@ GitHub Releases or R2 later is a URL change, not a UI change.**
 **Exit criteria:** apex serves marketing; Lighthouse ≥95 across perf/SEO/best
 practices; download page renders manifest correctly; console redirect from
 apex root removed.
+
+### What shipped in code
+- `apps/marketing` — Astro 5 (`output: 'static'`) + `@astrojs/mdx`,
+  `@astrojs/sitemap`, and Tailwind v4 via `@tailwindcss/vite`. Brand tokens
+  mirrored from `packages/ui` in `src/styles/global.css`.
+- Pages: `/` (hero + features + how-it-works + CTA), `/download` (OS-detected
+  recommended CTA + per-platform cards driven by a runtime manifest fetch),
+  `/legal/privacy`, `/legal/terms`. Shared `BaseLayout.astro` with canonical +
+  OG/Twitter tags, header/footer, `favicon.svg`, `og-default.svg`.
+- Download data contract: `public/downloads/manifest.json` (placeholder, all
+  URLs `null` → cards show "Coming soon"). The page only reads this file, so
+  M5 swaps in real artifact URLs without UI changes.
+- `content.config.ts` scaffolds `blog` + `docs` collections (empty) for M4.
+- `sitemap-index.xml` + `robots.txt` generated; `SITE` env overrides the apex
+  for dev vs prod sitemaps/canonicals.
+- Wired into the monorepo: `apps/marketing/wrangler.toml`
+  (`pumpos-marketing` / `dev-pumpos-marketing`, apex custom-domain route,
+  preview pinned to workers.dev), root scripts `dev:marketing`,
+  `deploy:marketing`, `build:marketing`; `.gitignore` ignores `.astro/`.
+
+### Manual / follow-up
+1. **Deploy:** `npm run deploy:dev --workspace=apps/marketing` (preview →
+   workers.dev) or `npm run deploy --workspace=apps/marketing` (prod → apex
+   custom domain, auto-provisions DNS + cert like M1).
+2. **Move console off the apex:** once marketing owns the apex, remove any old
+   `pumpos.abdullahnettoor.com` binding from the former web Worker.
+3. **Deferred polish:** real rasterized OG image (currently SVG), Cloudflare
+   Web Analytics beacon, and richer screenshots on the landing page.
 
 ---
 

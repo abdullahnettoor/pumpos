@@ -39,6 +39,9 @@ node_modules/
 dist/
 dist-ssr/
 
+# Astro generated types + build cache
+.astro/
+
 # Vite local logs and cache directories
 *.local
 .eslintcache
