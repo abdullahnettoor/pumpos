@@ -13,11 +13,13 @@ shippable and extends existing domain entities (per `AGENTS.md`) rather than red
 | [T](phase-T-tax.md) | Product tax restructure & GST invoicing | Planned | R, L |
 | [F](phase-F-financials.md) | Financials — money accounts (cash/bank/petty/clearing) + P&L/COGS | Planned (design locked) | L |
 | [U](phase-U-ui-uplift.md) | UI uplift & consistency | Planned | — |
+| [M](phase-M-multisite.md) | Multi-site topology (marketing + console + mobile) | Planned | — |
 | [O](phase-O-offline-sync.md) | Offline & sync (desktop) | Future | — |
 | [X](phase-X-expansion.md) | Expansion modules | Future | core stable |
 
 ## Suggested sequence
 R (finish) → L → T → F (FA money accounts → FB P&L) → U → O → X. R and U can run in parallel with L.
+Phase M (deployment topology) is independent of the domain-model phases and can run in parallel with any of them.
 
 ## Principles
 - `business_day_id` universal anchor; `shift_id` only when cash drawer involved.

@@ -77,7 +77,7 @@ export const Sparkline: React.FC<SparklineProps> = ({
           <path d={area} fill={`url(#${gradId})`} stroke="none" />
         </>
       )}
-      <path d={line} fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" />
+      <path d={line} fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
     </svg>
   );
 };
