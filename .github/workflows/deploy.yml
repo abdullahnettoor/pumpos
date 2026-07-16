@@ -26,6 +26,10 @@ name: Deploy
 #                     apex; set to https://pumpos.app at go-live.
 #   CONSOLE_URL     – console link target in the marketing site. Defaults to the
 #                     current console; set to https://console.pumpos.app at go-live.
+#   DOWNLOAD_MANIFEST_URL – where the download page fetches the installer
+#                     manifest. Leave UNSET (uses the bundled placeholder) until
+#                     desktop releases publish to R2, then set to
+#                     <R2_PUBLIC_BASE>/downloads/manifest.json.
 
 on:
   push:
@@ -97,6 +101,8 @@ jobs:
         env:
           SITE: ${{ vars.MARKETING_SITE || 'https://pumpos.abdullahnettoor.com' }}
           PUBLIC_CONSOLE_URL: ${{ vars.CONSOLE_URL || 'https://console.pumpos.abdullahnettoor.com' }}
+          # Empty until R2 downloads are live → page uses the bundled placeholder.
+          PUBLIC_DOWNLOAD_MANIFEST_URL: ${{ vars.DOWNLOAD_MANIFEST_URL }}
       - name: Deploy marketing
         working-directory: apps/marketing
         run: |
