@@ -44,7 +44,7 @@ function source(): DssrSourceData {
     sales: [{ paymentMethod: 'Cash', saleType: 'Product', totalAmount: 500 }, { paymentMethod: 'Credit', saleType: 'Product', totalAmount: 1180 }],
     creditSales: [{ customerType: 'Regular', amount: 1000 }, { customerType: 'Fleet', amount: 4000 }],
     stockVariances: [{ tankName: 'T1', productName: 'Petrol', unit: 'Litre', inventoryType: 'BULK', expectedQuantity: 5000, actualQuantity: 4990, varianceQuantity: -10, reason: null }],
-    saleItems: [{ productId: 'p2', quantity: 2 }],
+    saleItems: [{ productId: 'p2', quantity: 2, revenue: 1680 }],
     products: { p1: { name: 'Petrol', code: 'MS', costBasis: 88 }, p2: { name: 'Engine Oil', code: 'EO', costBasis: 400 } },
     nozzles: { n1: 'N1' },
   };
@@ -91,6 +91,13 @@ describe('GenerateDssr', () => {
       expect(d.pnl.grossMargin).toBe(12640);
       expect(d.pnl.expenses).toBe(5300);
       expect(d.pnl.netProfit).toBe(7340);
+      // Per-product margin (FB3): fuel 98000 - 86240 = 11760; merch 1680 - 800 = 880.
+      expect(d.pnl.byProduct).toHaveLength(2);
+      const fuelRow = d.pnl.byProduct.find((r: any) => r.kind === 'fuel');
+      const merchRow = d.pnl.byProduct.find((r: any) => r.kind === 'merchandise');
+      expect(fuelRow.margin).toBe(11760);
+      expect(merchRow.margin).toBe(880);
+      expect(d.pnl.byProduct[0].kind).toBe('fuel'); // sorted by margin desc
     }
     expect(store.events.map((e) => e.eventType)).toContain(BusinessEvents.DSSR_GENERATED);
   });

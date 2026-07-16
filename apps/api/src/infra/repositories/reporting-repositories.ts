@@ -121,9 +121,9 @@ export class DrizzleDssrDataReader implements DssrDataReader {
       .from(schema.sales)
       .where(eq(schema.sales.businessDayId, businessDayId));
 
-    // Merchandise sale line items (productId + qty) for merchandise COGS.
+    // Merchandise sale line items (productId + qty + revenue) for merch COGS + per-product margin.
     const saleItemRows = await this.db
-      .select({ productId: schema.saleItems.productId, quantity: schema.saleItems.quantity })
+      .select({ productId: schema.saleItems.productId, quantity: schema.saleItems.quantity, lineTotal: schema.saleItems.lineTotal })
       .from(schema.saleItems)
       .innerJoin(schema.sales, eq(schema.sales.id, schema.saleItems.saleId))
       .where(eq(schema.sales.businessDayId, businessDayId));
@@ -199,7 +199,7 @@ export class DrizzleDssrDataReader implements DssrDataReader {
         varianceQuantity: Number(r.varianceQuantity),
         reason: r.reason ?? null,
       })),
-      saleItems: saleItemRows.map((r) => ({ productId: r.productId, quantity: Number(r.quantity) })),
+      saleItems: saleItemRows.map((r) => ({ productId: r.productId, quantity: Number(r.quantity), revenue: Number(r.lineTotal) })),
       products,
       nozzles,
     };

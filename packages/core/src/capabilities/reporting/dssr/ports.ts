@@ -46,6 +46,8 @@ export interface DssrSale {
 export interface DssrSaleItem {
   productId: string;
   quantity: number;
+  /** Line revenue (net of nothing extra — the sale line total). */
+  revenue: number;
 }
 
 /** Customer-ledger credit sale (receivable) created during the business day. */

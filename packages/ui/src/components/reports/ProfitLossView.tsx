@@ -4,7 +4,7 @@ import { computeRange } from '../primitives/DateRangeField.js';
 import type { DateRange } from '../primitives/DateRangeField.js';
 import { inr } from '../../utils/format.js';
 import { resolveBusinessDate } from '@pump/shared';
-import { KpiStrip, KpiTile, Panel, Chip, DateText, EmptyState } from '../../pump-ds/index.js';
+import { KpiStrip, KpiTile, Panel, Chip, DateText, EmptyState, Sparkline } from '../../pump-ds/index.js';
 import { ReportRangeBar } from './ReportRangeBar.js';
 
 export interface ProfitLossViewProps {
@@ -25,6 +25,7 @@ interface DayPnl {
   grossMargin: number;
   expenses: number;
   netProfit: number;
+  byProduct: any[];
   hasData: boolean;
 }
 
@@ -42,6 +43,7 @@ function pnlFromSnapshot(date: string, snapshotData: any, live: boolean): DayPnl
     grossMargin: num(p.grossMargin),
     expenses: num(p.expenses),
     netProfit: num(p.netProfit),
+    byProduct: Array.isArray(p.byProduct) ? p.byProduct : [],
     hasData: !!snapshotData,
   };
 }
@@ -95,6 +97,27 @@ export const ProfitLossView: React.FC<ProfitLossViewProps> = ({ selectedStation 
   const marginPct = totals.revenue > 0 ? (totals.grossMargin / totals.revenue) * 100 : 0;
   const single = isSingleDay ? days[0] : null;
 
+  // Per-product margin aggregated across the selected days (FB3).
+  const productMargins = useMemo(() => {
+    const map = new Map<string, { productId: string; name: string; code: string; kind: string; quantity: number; revenue: number; cogs: number; margin: number }>();
+    for (const d of days) {
+      for (const bp of d.byProduct || []) {
+        const cur = map.get(bp.productId) ?? { productId: bp.productId, name: bp.name, code: bp.code, kind: bp.kind, quantity: 0, revenue: 0, cogs: 0, margin: 0 };
+        cur.quantity += num(bp.quantity);
+        cur.revenue += num(bp.revenue);
+        cur.cogs += num(bp.cogs);
+        cur.margin += num(bp.margin);
+        map.set(bp.productId, cur);
+      }
+    }
+    return Array.from(map.values())
+      .map((r) => ({ ...r, marginPct: r.revenue > 0 ? (r.margin / r.revenue) * 100 : 0 }))
+      .sort((a, b) => b.margin - a.margin);
+  }, [days]);
+
+  // Chronological (oldest→newest) net-profit series for the trend sparkline.
+  const trend = useMemo(() => [...days].reverse().map((d) => d.netProfit), [days]);
+
   const rowStyle: React.CSSProperties = { display: 'flex', justifyContent: 'space-between', padding: '11px 16px', borderBottom: '1px solid var(--border-soft)' };
   const cell: React.CSSProperties = { padding: '8px 12px', fontSize: '13px', textAlign: 'right', fontFamily: 'var(--font-mono)' };
 
@@ -115,6 +138,16 @@ export const ProfitLossView: React.FC<ProfitLossViewProps> = ({ selectedStation 
         <KpiTile dot="danger" valueTone="danger" label="Operating Expenses" value={inr(totals.expenses)} />
         <KpiTile dot={totals.netProfit < 0 ? 'danger' : 'success'} valueTone={totals.netProfit < 0 ? 'danger' : 'success'} label="Net Profit" value={inr(totals.netProfit)} />
       </KpiStrip>
+
+      {/* Net-profit trend across the period (FB3). */}
+      {!isSingleDay && trend.length > 1 && (
+        <Panel title="Net profit trend" action={<Chip tone={totals.netProfit < 0 ? 'danger' : 'success'} variant="soft">{inr(totals.netProfit)}</Chip>}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <Sparkline data={trend} tone={totals.netProfit < 0 ? 'danger' : 'success'} fill width={240} height={44} aria-label="Daily net profit trend" />
+            <span style={{ fontSize: '11px', color: 'var(--text-faint)' }}>{trend.length} days · oldest → newest</span>
+          </div>
+        </Panel>
+      )}
 
       {/* Live "as-of" context (Option 1): explain what the open day includes so
           fuel reading 0/partial before shift close is never mistaken for a bug. */}
@@ -201,6 +234,35 @@ export const ProfitLossView: React.FC<ProfitLossViewProps> = ({ selectedStation 
                 <td style={{ ...cell, fontWeight: 700, color: totals.netProfit < 0 ? 'var(--state-danger-fg)' : 'var(--state-success-fg)' }}>{inr(totals.netProfit)}</td>
               </tr>
             </tfoot>
+          </table>
+        </Panel>
+      )}
+
+      {/* Per-product margin (FB3) — which products actually make money. */}
+      {productMargins.length > 0 && (
+        <Panel flush title="Margin by product">
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+            <thead>
+              <tr style={{ backgroundColor: 'var(--bg-surface-alt)', textAlign: 'left' }}>
+                {['Product', 'Qty', 'Revenue', 'COGS', 'Margin', 'Margin %'].map((h, i) => (
+                  <th key={h} style={{ padding: '8px 12px', fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', textAlign: i === 0 ? 'left' : 'right' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {productMargins.map((p) => (
+                <tr key={p.productId} style={{ borderTop: '1px solid var(--border-soft)' }}>
+                  <td style={{ padding: '8px 12px', color: 'var(--text-strong)' }}>
+                    {p.name} <Chip tone={p.kind === 'fuel' ? 'brand' : 'neutral'} variant="soft" size="sm">{p.kind === 'fuel' ? 'Fuel' : 'Merch'}</Chip>
+                  </td>
+                  <td style={cell}>{p.quantity.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</td>
+                  <td style={cell}>{inr(p.revenue)}</td>
+                  <td style={{ ...cell, color: 'var(--brand-warning)' }}>{inr(p.cogs)}</td>
+                  <td style={{ ...cell, fontWeight: 700, color: p.margin < 0 ? 'var(--state-danger-fg)' : 'var(--state-success-fg)' }}>{inr(p.margin)}</td>
+                  <td style={{ ...cell, color: 'var(--text-muted)' }}>{p.marginPct.toFixed(1)}%</td>
+                </tr>
+              ))}
+            </tbody>
           </table>
         </Panel>
       )}

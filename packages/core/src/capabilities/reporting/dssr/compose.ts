@@ -147,6 +147,31 @@ export function composeDssr(source: DssrSourceData): Record<string, unknown> {
   const expensesTotal = round2(drawerExpenses + businessExpenses);
   const netProfit = round2(grossMargin - expensesTotal);
 
+  // Per-product margin (FB3): fuel from the nozzle roll-up, merchandise from the
+  // sale line items — each { revenue, cogs, margin }. Powers the P&L breakdown.
+  type ProductMargin = { productId: string; name: string; code: string; kind: 'fuel' | 'merchandise'; quantity: number; revenue: number; cogs: number; margin: number; marginPct: number };
+  const byProduct: ProductMargin[] = [];
+  for (const pa of Object.values(productAgg)) {
+    if (!pa.productId) continue;
+    const rev = round2(pa.salesValue);
+    const c = round2(pa.netVolume * costOf(pa.productId));
+    byProduct.push({ productId: pa.productId, name: pa.productName, code: pa.productCode, kind: 'fuel', quantity: round2(pa.netVolume), revenue: rev, cogs: c, margin: round2(rev - c), marginPct: rev > 0 ? round2(((rev - c) / rev) * 100) : 0 });
+  }
+  const merchAgg: Record<string, { qty: number; revenue: number }> = {};
+  for (const si of source.saleItems) {
+    const m = merchAgg[si.productId] ?? { qty: 0, revenue: 0 };
+    m.qty += si.quantity;
+    m.revenue += si.revenue;
+    merchAgg[si.productId] = m;
+  }
+  for (const [pid, m] of Object.entries(merchAgg)) {
+    const prod = source.products[pid];
+    const rev = round2(m.revenue);
+    const c = round2(m.qty * costOf(pid));
+    byProduct.push({ productId: pid, name: prod?.name ?? 'Unknown', code: prod?.code ?? '', kind: 'merchandise', quantity: round2(m.qty), revenue: rev, cogs: c, margin: round2(rev - c), marginPct: rev > 0 ? round2(((rev - c) / rev) * 100) : 0 });
+  }
+  byProduct.sort((a, b) => b.margin - a.margin);
+
   return {
     shiftsIncluded: source.shiftSummaries.length,
     fuel: {
@@ -185,6 +210,7 @@ export function composeDssr(source: DssrSourceData): Record<string, unknown> {
       grossMargin,
       expenses: expensesTotal,
       netProfit,
+      byProduct,
     },
     fuelStockVariance,
     merchandiseStockVariance,
