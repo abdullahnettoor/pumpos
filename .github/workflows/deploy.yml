@@ -1,89 +1,49 @@
 name: Deploy
 
-# One pipeline for the whole monorepo. Each app deploys only when its own files
-# (or a shared package it depends on) change, so a docs-only push won't redeploy
-# everything.
+# Deploys the web surfaces (console, marketing, mobile, api).
 #
-#   push to main  -> production   (custom domains: console./m./apex)
-#   push to dev   -> preview       (workers.dev: dev-pumpos-*)
+#   git tag vX.Y.Z + push        -> PRODUCTION release (all apps, top-level config)
+#   Actions → Deploy → Run        -> PREVIEW deploy on demand (workers.dev)
 #
-# One-time setup — REPOSITORY secrets (Settings → Secrets and variables →
-# Actions → Repository secrets). Environment secrets aren't available on the
-# Free plan for private repos, so we namespace by stage instead:
-#   CLOUDFLARE_API_TOKEN     – token with "Edit Cloudflare Workers" permission
-#   CLOUDFLARE_ACCOUNT_ID    – your Cloudflare account id
-#   # Production (used on `main`). Anon key is public-safe; kept as a secret
-#   # for tidiness. main deploys FAIL if PROD_SUPABASE_URL / PROD_API_URL unset.
-#   PROD_SUPABASE_URL        – https://<prod-ref>.supabase.co
-#   PROD_SUPABASE_PUBLISHABLE_KEY – prod project publishable key (sb_publishable_…)
-#   PROD_API_URL             – https://api.pumpos.app (prod API worker)
-#   # Dev/preview (used on `dev`). Optional — if unset, the app's baked-in dev
-#   # fallback is used. Set them to stop relying on the hardcoded fallback.
-#   DEV_SUPABASE_URL         – https://<dev-ref>.supabase.co
-#   DEV_SUPABASE_PUBLISHABLE_KEY – dev project publishable key (sb_publishable_…)
+# Plain branch pushes DO NOT build — so syncing WIP between machines is free.
+# Cut a release with `npm run release` (bumps versions + creates the tag).
 #
-# The `api` job on `main` runs `wrangler deploy --env production`, which needs
-# the `[env.production]` block in apps/api/wrangler.toml uncommented + a prod
-# Hyperdrive id + `wrangler secret put SUPABASE_JWT_SECRET --env production`.
+# One-time REPOSITORY secrets (Settings → Secrets and variables → Actions):
+#   CLOUDFLARE_API_TOKEN           – token with "Edit Cloudflare Workers"
+#   CLOUDFLARE_ACCOUNT_ID          – your Cloudflare account id
+#   # Production frontend config (used on tag builds). Optional until a separate
+#   # prod Supabase exists — if unset, the app's baked-in current Supabase is
+#   # used (a warning is emitted). Publishable key is public-safe.
+#   PROD_SUPABASE_URL, PROD_SUPABASE_PUBLISHABLE_KEY, PROD_API_URL
+#   # Preview/dev frontend config (used on manual runs). Optional (fallbacks).
+#   DEV_SUPABASE_URL, DEV_SUPABASE_PUBLISHABLE_KEY
 #
-# NOTE: disconnect the existing Cloudflare-managed build for the console Worker
-# (Workers & Pages → pumpos-console → Settings → Builds → disconnect) so it
-# doesn't deploy a second time alongside this workflow.
+# One-time REPOSITORY variables (not secret):
+#   API_DEPLOY_ENV  – leave UNSET to deploy the current top-level API on a tag.
+#                     Set to `production` once apps/api `[env.production]` (prod
+#                     Supabase + Hyperdrive) is live, to deploy the prod worker.
+#   MARKETING_SITE  – canonical host for the sitemap. Defaults to the dev apex;
+#                     set to https://pumpos.app once that domain is live.
 
 on:
   push:
-    branches: [main, dev]
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      app:
+        description: Which app(s) to deploy to PREVIEW (workers.dev)
+        type: choice
+        default: all
+        options: [all, console, marketing, mobile, api]
 
 concurrency:
   group: deploy-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  # Marketing sitemap/canonical host. Change to https://pumpos.app once the
-  # production domain is live.
-  MARKETING_SITE: https://pumpos.abdullahnettoor.com
-
 jobs:
-  changes:
-    runs-on: ubuntu-latest
-    outputs:
-      api: ${{ steps.filter.outputs.api }}
-      console: ${{ steps.filter.outputs.console }}
-      marketing: ${{ steps.filter.outputs.marketing }}
-      mobile: ${{ steps.filter.outputs.mobile }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dorny/paths-filter@v3
-        id: filter
-        with:
-          filters: |
-            api:
-              - 'apps/api/**'
-              - 'packages/core/**'
-              - 'packages/db/**'
-              - 'packages/shared/**'
-              - 'package-lock.json'
-              - '.github/workflows/deploy.yml'
-            console:
-              - 'apps/console/**'
-              - 'packages/ui/**'
-              - 'packages/shared/**'
-              - 'package-lock.json'
-              - '.github/workflows/deploy.yml'
-            marketing:
-              - 'apps/marketing/**'
-              - 'package-lock.json'
-              - '.github/workflows/deploy.yml'
-            mobile:
-              - 'apps/mobile/**'
-              - 'packages/ui/**'
-              - 'packages/shared/**'
-              - 'package-lock.json'
-              - '.github/workflows/deploy.yml'
-
   console:
-    needs: changes
-    if: needs.changes.outputs.console == 'true'
+    if: github.ref_type == 'tag' || contains(fromJSON('["all","console"]'), github.event.inputs.app)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -93,29 +53,25 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Select environment config
-        # Inject Supabase + API config per branch: prod on main, dev otherwise.
-        # An unset var still falls back to the app's baked-in default
-        # (`import.meta.env.X || default`), so dev tolerates missing DEV_* — but
-        # on main we fail fast if prod config is missing, to avoid silently
-        # shipping the production site pointed at the dev database.
         run: |
-          if [ "${{ github.ref_name }}" = "main" ]; then
-            if [ -z "${{ secrets.PROD_SUPABASE_URL }}" ] || [ -z "${{ secrets.PROD_API_URL }}" ]; then
-              echo "::error::PROD_SUPABASE_URL / PROD_API_URL secrets are required for main deploys"; exit 1
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            if [ -n "${{ secrets.PROD_SUPABASE_URL }}" ]; then
+              echo "VITE_SUPABASE_URL=${{ secrets.PROD_SUPABASE_URL }}" >> "$GITHUB_ENV"
+              echo "VITE_SUPABASE_PUBLISHABLE_KEY=${{ secrets.PROD_SUPABASE_PUBLISHABLE_KEY }}" >> "$GITHUB_ENV"
+              [ -n "${{ secrets.PROD_API_URL }}" ] && echo "VITE_API_URL=${{ secrets.PROD_API_URL }}" >> "$GITHUB_ENV"
+            else
+              echo "::warning::PROD_SUPABASE_URL unset — using the app's baked-in Supabase. Set PROD_* once the separate prod Supabase exists."
             fi
-            echo "VITE_SUPABASE_URL=${{ secrets.PROD_SUPABASE_URL }}" >> "$GITHUB_ENV"
-            echo "VITE_SUPABASE_PUBLISHABLE_KEY=${{ secrets.PROD_SUPABASE_PUBLISHABLE_KEY }}" >> "$GITHUB_ENV"
-            echo "VITE_API_URL=${{ secrets.PROD_API_URL }}" >> "$GITHUB_ENV"
           else
-            echo "VITE_SUPABASE_URL=${{ secrets.DEV_SUPABASE_URL }}" >> "$GITHUB_ENV"
-            echo "VITE_SUPABASE_PUBLISHABLE_KEY=${{ secrets.DEV_SUPABASE_PUBLISHABLE_KEY }}" >> "$GITHUB_ENV"
+            [ -n "${{ secrets.DEV_SUPABASE_URL }}" ] && echo "VITE_SUPABASE_URL=${{ secrets.DEV_SUPABASE_URL }}" >> "$GITHUB_ENV"
+            [ -n "${{ secrets.DEV_SUPABASE_PUBLISHABLE_KEY }}" ] && echo "VITE_SUPABASE_PUBLISHABLE_KEY=${{ secrets.DEV_SUPABASE_PUBLISHABLE_KEY }}" >> "$GITHUB_ENV"
           fi
       - name: Build console
         run: npm run build:ui-console
       - name: Deploy console
         working-directory: apps/console
         run: |
-          if [ "${{ github.ref_name }}" = "main" ]; then
+          if [ "${{ github.ref_type }}" = "tag" ]; then
             npx wrangler deploy
           else
             npx wrangler deploy --env preview
@@ -125,8 +81,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
   marketing:
-    needs: changes
-    if: needs.changes.outputs.marketing == 'true'
+    if: github.ref_type == 'tag' || contains(fromJSON('["all","marketing"]'), github.event.inputs.app)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -138,11 +93,11 @@ jobs:
       - name: Build marketing
         run: npm run build:marketing
         env:
-          SITE: ${{ env.MARKETING_SITE }}
+          SITE: ${{ vars.MARKETING_SITE || 'https://pumpos.abdullahnettoor.com' }}
       - name: Deploy marketing
         working-directory: apps/marketing
         run: |
-          if [ "${{ github.ref_name }}" = "main" ]; then
+          if [ "${{ github.ref_type }}" = "tag" ]; then
             npx wrangler deploy
           else
             npx wrangler deploy --env preview
@@ -152,8 +107,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
   mobile:
-    needs: changes
-    if: needs.changes.outputs.mobile == 'true'
+    if: github.ref_type == 'tag' || contains(fromJSON('["all","mobile"]'), github.event.inputs.app)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -164,23 +118,24 @@ jobs:
       - run: npm ci
       - name: Select environment config
         run: |
-          if [ "${{ github.ref_name }}" = "main" ]; then
-            if [ -z "${{ secrets.PROD_SUPABASE_URL }}" ] || [ -z "${{ secrets.PROD_API_URL }}" ]; then
-              echo "::error::PROD_SUPABASE_URL / PROD_API_URL secrets are required for main deploys"; exit 1
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            if [ -n "${{ secrets.PROD_SUPABASE_URL }}" ]; then
+              echo "VITE_SUPABASE_URL=${{ secrets.PROD_SUPABASE_URL }}" >> "$GITHUB_ENV"
+              echo "VITE_SUPABASE_PUBLISHABLE_KEY=${{ secrets.PROD_SUPABASE_PUBLISHABLE_KEY }}" >> "$GITHUB_ENV"
+              [ -n "${{ secrets.PROD_API_URL }}" ] && echo "VITE_API_URL=${{ secrets.PROD_API_URL }}" >> "$GITHUB_ENV"
+            else
+              echo "::warning::PROD_SUPABASE_URL unset — using the app's baked-in Supabase."
             fi
-            echo "VITE_SUPABASE_URL=${{ secrets.PROD_SUPABASE_URL }}" >> "$GITHUB_ENV"
-            echo "VITE_SUPABASE_PUBLISHABLE_KEY=${{ secrets.PROD_SUPABASE_PUBLISHABLE_KEY }}" >> "$GITHUB_ENV"
-            echo "VITE_API_URL=${{ secrets.PROD_API_URL }}" >> "$GITHUB_ENV"
           else
-            echo "VITE_SUPABASE_URL=${{ secrets.DEV_SUPABASE_URL }}" >> "$GITHUB_ENV"
-            echo "VITE_SUPABASE_PUBLISHABLE_KEY=${{ secrets.DEV_SUPABASE_PUBLISHABLE_KEY }}" >> "$GITHUB_ENV"
+            [ -n "${{ secrets.DEV_SUPABASE_URL }}" ] && echo "VITE_SUPABASE_URL=${{ secrets.DEV_SUPABASE_URL }}" >> "$GITHUB_ENV"
+            [ -n "${{ secrets.DEV_SUPABASE_PUBLISHABLE_KEY }}" ] && echo "VITE_SUPABASE_PUBLISHABLE_KEY=${{ secrets.DEV_SUPABASE_PUBLISHABLE_KEY }}" >> "$GITHUB_ENV"
           fi
       - name: Build mobile
         run: npm run build:ui-mobile
       - name: Deploy mobile
         working-directory: apps/mobile
         run: |
-          if [ "${{ github.ref_name }}" = "main" ]; then
+          if [ "${{ github.ref_type }}" = "tag" ]; then
             npx wrangler deploy
           else
             npx wrangler deploy --env preview
@@ -188,10 +143,9 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-  
+
   api:
-    needs: changes
-    if: needs.changes.outputs.api == 'true'
+    if: github.ref_type == 'tag' || contains(fromJSON('["all","api"]'), github.event.inputs.app)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -201,18 +155,17 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Build workspace deps
-        # wrangler bundles apps/api from source, but its imports (@pump/db,
-        # @pump/core, @pump/shared) resolve to each package's dist/. Build them
-        # first — `tsc -b` follows the tsconfig project references.
+        # wrangler bundles apps/api from source; its @pump/* imports resolve to
+        # each package's dist/. `tsc -b` follows the tsconfig project references.
         run: npm run build:api
       - name: Deploy API
         working-directory: apps/api
-        # main -> prod worker (pumpos-api-prod, prod Supabase via env.production).
-        # dev  -> the top-level pumpos-api (dev Supabase).
-        # NOTE: run a DB migration BEFORE a main deploy if the change needs one.
+        # On a tag: deploy prod. If API_DEPLOY_ENV is set (once the prod Supabase
+        # stack exists) use that wrangler env; otherwise deploy the top-level
+        # (current) worker. Manual/preview runs always hit the top-level worker.
         run: |
-          if [ "${{ github.ref_name }}" = "main" ]; then
-            npx wrangler deploy --env production
+          if [ "${{ github.ref_type }}" = "tag" ] && [ -n "${{ vars.API_DEPLOY_ENV }}" ]; then
+            npx wrangler deploy --env "${{ vars.API_DEPLOY_ENV }}"
           else
             npx wrangler deploy
           fi

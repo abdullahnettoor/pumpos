@@ -30,44 +30,50 @@ and mobile share the session.
 
 ## Deployment (CI/CD)
 
-All web surfaces deploy from one GitHub Actions workflow
-(`.github/workflows/deploy.yml`) — no per-project Cloudflare-managed builds:
+**Tag-driven releases.** Web surfaces deploy from `.github/workflows/deploy.yml`;
+the desktop app from `.github/workflows/desktop-release.yml`. Plain branch pushes
+never build — so syncing WIP between machines costs no CI minutes.
 
-- **push to `main`** → production (top-level custom-domain routes).
-- **push to `dev`** → preview (`--env preview`, workers.dev).
-- Per-app **path filters** (`dorny/paths-filter`) mean each app deploys only
-  when its files — or a shared package it depends on (`packages/ui`,
-  `packages/shared`) — change.
-- Deploys run `npx wrangler deploy` with `CLOUDFLARE_API_TOKEN` +
-  `CLOUDFLARE_ACCOUNT_ID` repo secrets.
-- The **API** job is included but commented out (still deployed manually; auto
-  API deploys can be risky when a change needs a migration first).
+- **`git tag vX.Y.Z` + push** → production release: all web apps deploy to their
+  top-level (custom-domain) config; desktop builds macOS + Windows installers
+  and attaches them to a **draft GitHub Release**.
+- **Actions → Deploy → Run** (`workflow_dispatch`, pick an app) → **preview**
+  deploy to workers.dev (`--env preview`). Manual, on demand.
+- Cut releases with **`npm run release -- patch|minor|major|X.Y.Z`** — one
+  unified version bumps every workspace `package.json` + `tauri.conf.json` +
+  `Cargo.toml`, commits, and creates the tag. Then `git push --follow-tags`.
+- The **API** job builds workspace deps (`npm run build:api`) before
+  `wrangler deploy` — wrangler bundles `apps/api` from source and needs
+  `@pump/{db,core,shared}/dist`.
 
-One-time setup:
-1. Add repo secrets `CLOUDFLARE_API_TOKEN` (Edit Workers) + `CLOUDFLARE_ACCOUNT_ID`.
-2. **Disconnect** the existing Cloudflare-managed console build so it doesn't
-   double-deploy alongside the workflow.
-3. Commit the updated `package-lock.json` (needed by `npm ci`).
+### GitHub Actions minute cost (Free plan, private repo = 2,000 min/mo)
+- Web jobs run on Linux (**1×**) and are short. Tag-only triggering keeps usage
+  low.
+- Desktop runners are billed at **macOS 10× / Windows 2×**, so desktop CI is
+  **tag-only** (never on push). Rust build cache (`Swatinem/rust-cache`) trims
+  repeat-build time. A release ≈ a few hundred billed minutes, mostly macOS.
 
 ### Environment isolation (dev vs prod Supabase)
 
-Two branch-selected stacks share the codebase:
+One codebase, config selected at build time:
 
-| | `dev` push → preview | `main` push → production |
+| | Preview (manual run) | Production (tag) |
 |---|---|---|
-| Frontends | `dev-pumpos-*` (workers.dev) | `console.` / `m.` / apex |
-| Supabase | dev project | separate **prod** project |
-| API worker | `pumpos-api` | `pumpos-api-prod` (`--env production`) |
-| Hyperdrive | dev config | prod config (own id) |
-| JWT secret | dev project's | prod project's |
+| Frontends | `dev-pumpos-*` (workers.dev) | top-level custom domains |
+| Supabase | dev (via `DEV_*` or fallback) | `PROD_*` if set, else current (warns) |
+| API worker | `pumpos-api` (top-level) | top-level, or `--env $API_DEPLOY_ENV` |
 
-- **Frontend** Supabase URL + anon key + API URL are injected per branch from
-  repo secrets (`PROD_SUPABASE_URL`, `PROD_SUPABASE_ANON_KEY`, `PROD_API_URL`)
-  on `main` builds; `dev` builds fall back to the baked-in dev defaults.
-- **API** prod is a separate worker: `apps/api/wrangler.toml` has a commented
-  `[env.production]` scaffold (prod route + prod Hyperdrive + prod JWT secret).
-  Deploy prod API deliberately with `wrangler deploy --env production` (not
-  auto-deployed).
+- **Frontend** Supabase URL + publishable key + API URL are injected from repo
+  secrets: `PROD_*` on tags, `DEV_*` on manual runs. Injection is **soft** —
+  an unset var falls back to the app's baked-in default (`X || default`), so it
+  works today with the single current Supabase; a warning fires on tags until
+  `PROD_*` is set.
+- **API** prod: `apps/api/wrangler.toml` has a commented `[env.production]`
+  scaffold (prod route + Hyperdrive + JWT secret). Once live, set the repo
+  variable `API_DEPLOY_ENV=production` and the tag deploy targets the prod
+  worker; until then it deploys the current top-level worker.
+- Secrets live in **repository** secrets (Environment secrets need Pro/Team on
+  private repos), namespaced `PROD_*` / `DEV_*`.
 
 ### Database migrations
 
