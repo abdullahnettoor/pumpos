@@ -1,0 +1,22 @@
+---
+import Section from './Section.astro';
+
+const people = [
+  ['Owner', 'I want to know what happened without calling every night.'],
+  ['Manager', 'I want every shift to close cleanly and every exception visible.'],
+  ['Accountant', 'I want reliable numbers without duplicate entry.'],
+  ['Shift Operator', 'I want simple daily workflows that do not slow the counter.'],
+  ['Multi-station Operator', 'I want control across locations from one view.'],
+];
+---
+
+<Section id="solutions" title="Built for everyone responsible for the station." lead="Each role gets the same source of truth, surfaced at the right level of detail.">
+  <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+    {people.map(([role, want]) => (
+      <div class="rounded-xl border border-[var(--color-border-soft)] bg-white p-5">
+        <h3 class="text-lg font-semibold text-[var(--color-ink)]">{role}</h3>
+        <p class="mt-3 text-sm leading-6 text-[var(--color-ink-muted)]">“{want}”</p>
+      </div>
+    ))}
+  </div>
+</Section>

@@ -1,0 +1,30 @@
+---
+import Section from './Section.astro';
+
+const flow = ['Operations', 'Inventory', 'Accounting', 'Analytics', 'Business Decisions'];
+---
+
+<Section
+  id="platform"
+  title="Built around how fuel stations actually work."
+  lead="PumpOS connects the daily operating flow instead of forcing your station into disconnected modules and duplicate entry."
+>
+  <div class="rounded-2xl border border-[var(--color-border-soft)] bg-white p-6 sm:p-8">
+    <div class="grid gap-3 md:grid-cols-5 md:items-center">
+      {flow.map((item, index) => (
+        <>
+          <div class="rounded-xl bg-[var(--color-canvas)] p-5 text-center">
+            <p class="font-semibold text-[var(--color-ink)]">{item}</p>
+            <p class="mt-1 text-xs text-[var(--color-ink-muted)]">
+              {index === 0 ? 'Shift, nozzle, cash' : index === 1 ? 'Stock and variance' : index === 2 ? 'Ledger and journals' : index === 3 ? 'DSSR and KPIs' : 'Owner control'}
+            </p>
+          </div>
+          {index < flow.length - 1 && <div class="hidden text-center text-[var(--color-brand)] md:block">→</div>}
+        </>
+      ))}
+    </div>
+    <p class="mx-auto mt-8 max-w-3xl text-center text-sm leading-6 text-[var(--color-ink-muted)]">
+      One workflow. One source of truth. Every sale, collection, purchase, expense, and variance is anchored to the right business day and becomes part of the same auditable record.
+    </p>
+  </div>
+</Section>

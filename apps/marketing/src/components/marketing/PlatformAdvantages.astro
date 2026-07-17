@@ -1,0 +1,24 @@
+---
+import Section from './Section.astro';
+
+const items = [
+  ['Offline First', 'The desktop app keeps station operations moving when the internet is unreliable.'],
+  ['Cloud Sync', 'Events reconcile safely when connectivity returns.'],
+  ['Role-Based Access', 'Owners, managers, accountants and staff see what they need.'],
+  ['Audit History', 'Closed reports and operational changes stay traceable.'],
+  ['Event History', 'The station timeline is built from business events, not guesswork.'],
+  ['Secure Backups', 'Cloud-authoritative data with operational local cache.'],
+  ['Cross Platform', 'Desktop operations, web console, and mobile owner visibility.'],
+];
+---
+
+<Section id="security" title="Platform advantages, explained as business control." lead="These are not engineering decorations. They protect continuity, accountability and owner visibility.">
+  <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    {items.map(([title, body]) => (
+      <div class="rounded-xl border border-[var(--color-border-soft)] bg-white p-5">
+        <h3 class="text-lg font-semibold text-[var(--color-ink)]">{title}</h3>
+        <p class="mt-2 text-sm leading-6 text-[var(--color-ink-muted)]">{body}</p>
+      </div>
+    ))}
+  </div>
+</Section>

@@ -91,3 +91,66 @@ body {
   color: var(--color-ink);
   font-weight: 600;
 }
+
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+}
+
+p {
+  text-wrap: pretty;
+}
+
+.product-frame {
+  overflow: hidden;
+  border: 1px solid var(--color-border-soft);
+  border-radius: 16px;
+  background: var(--color-surface);
+}
+
+.product-frame--compact {
+  font-size: 0.92rem;
+}
+
+.tour-tab {
+  white-space: nowrap;
+  border: 1px solid var(--color-border-soft);
+  border-radius: 999px;
+  background: white;
+  color: var(--color-ink-muted);
+  padding: 0.55rem 0.9rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  transition:
+    color 160ms ease,
+    border-color 160ms ease,
+    background-color 160ms ease;
+}
+
+.tour-tab:hover,
+.tour-tab.is-active {
+  border-color: var(--color-brand);
+  background: #e8f4ed;
+  color: var(--color-brand-dark);
+}
+
+.tour-panel {
+  display: none;
+}
+
+.tour-panel.is-active {
+  display: block;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.001ms !important;
+    animation-duration: 0.001ms !important;
+  }
+}

@@ -1,0 +1,27 @@
+---
+import Section from './Section.astro';
+
+const rows = [
+  ['Separate modules', 'One connected platform'],
+  ['Manual reconciliation', 'Automatic, event-linked flow'],
+  ['Internet required', 'Offline-first desktop operation'],
+  ['Reports after the fact', 'Live insights and immutable snapshots'],
+  ['Paper registers', 'Digital workflows with audit history'],
+  ['Excel exports', 'Real-time dashboards'],
+];
+---
+
+<Section id="different" title="Why PumpOS is different." lead="Most systems list modules. PumpOS connects the business events underneath those modules so the numbers stay trustworthy.">
+  <div class="overflow-hidden rounded-2xl border border-[var(--color-border-soft)] bg-white">
+    <div class="grid grid-cols-2 border-b border-[var(--color-border-soft)] bg-[var(--color-canvas)] text-sm font-semibold text-[var(--color-ink)]">
+      <div class="px-4 py-3 sm:px-6">Traditional software</div>
+      <div class="border-l border-[var(--color-border-soft)] px-4 py-3 sm:px-6">PumpOS</div>
+    </div>
+    {rows.map(([left, right]) => (
+      <div class="grid grid-cols-2 border-b border-[var(--color-border-soft)] last:border-b-0">
+        <div class="px-4 py-4 text-sm text-[var(--color-ink-muted)] sm:px-6">{left}</div>
+        <div class="border-l border-[var(--color-border-soft)] px-4 py-4 text-sm font-medium text-[var(--color-ink)] sm:px-6">{right}</div>
+      </div>
+    ))}
+  </div>
+</Section>

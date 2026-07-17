@@ -1,0 +1,27 @@
+---
+import Section from './Section.astro';
+import ProductFrame from './ProductFrame.astro';
+
+const capabilities = [
+  ['Close every shift with confidence.', 'Opening cash, collections, expenses, drops and variance in one reconciliation.'],
+  ['Know where every litre went.', 'Nozzle-derived sales, tank movements and variance tracked together.'],
+  ['Never lose track of credit.', 'Customer, fleet and vehicle ledgers stay current as sales and collections happen.'],
+  ['Run multiple stations from one dashboard.', 'Owners see exceptions, sales and cash position without waiting for a nightly call.'],
+  ['Manage fuel and lubricants together.', 'Fuel operations and merchandise sales share one business-day model.'],
+  ['Accounting without duplicate work.', 'Operational events become ledger movement instead of manual re-entry.'],
+];
+---
+
+<Section id="capabilities" title="Capabilities written as outcomes." lead="PumpOS is not a feature checklist. Each part of the system exists to remove a specific uncertainty from the business.">
+  <div class="grid gap-8">
+    {capabilities.map(([title, body], index) => (
+      <div class={`grid items-center gap-6 rounded-2xl border border-[var(--color-border-soft)] bg-white p-5 sm:p-6 lg:grid-cols-2 ${index % 2 ? 'lg:[&>*:first-child]:order-2' : ''}`}>
+        <div>
+          <h3 class="text-2xl font-semibold tracking-[-0.02em] text-[var(--color-ink)]">{title}</h3>
+          <p class="mt-3 max-w-xl text-base leading-7 text-[var(--color-ink-muted)]">{body}</p>
+        </div>
+        <ProductFrame compact title={title.replace('.', '')} subtitle="Representative operating view" />
+      </div>
+    ))}
+  </div>
+</Section>

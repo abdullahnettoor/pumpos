@@ -1,0 +1,26 @@
+---
+import Section from './Section.astro';
+
+const faqs = [
+  ['Can PumpOS work offline?', 'Yes. The desktop app is designed for offline station operations and syncs when connectivity returns.'],
+  ['Can I manage multiple stations?', 'Yes. The model supports multi-station ownership with role-based access and station-level reporting.'],
+  ['Can it handle lubricants and accessories?', 'Yes. Fuel sales come from nozzle readings; merchandise and lubricants are tracked as separate manual sales and stock movements.'],
+  ['Can my accountant use it?', 'Yes. Accountant access can review ledgers, DSSR snapshots, invoices and financial movements without exposing operator-only actions.'],
+  ['Can I import existing data?', 'The roadmap includes onboarding/import support. For early deployments, master data is migrated during setup.'],
+  ['How is pricing handled?', 'Pricing will be configured per deployment and module scope. The initial CTA is a live demo, not self-serve checkout.'],
+];
+---
+
+<Section id="faq" title="Questions owners ask before trusting a new system." lead="PumpOS is built for operational confidence, not a casual trial signup.">
+  <div class="mx-auto max-w-3xl divide-y divide-[var(--color-border-soft)] rounded-2xl border border-[var(--color-border-soft)] bg-white">
+    {faqs.map(([q, a]) => (
+      <details class="group p-5">
+        <summary class="flex cursor-pointer list-none items-center justify-between gap-4 font-semibold text-[var(--color-ink)]">
+          {q}
+          <span class="text-[var(--color-brand)] transition group-open:rotate-45">+</span>
+        </summary>
+        <p class="mt-3 text-sm leading-6 text-[var(--color-ink-muted)]">{a}</p>
+      </details>
+    ))}
+  </div>
+</Section>

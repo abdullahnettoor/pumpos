@@ -1,0 +1,99 @@
+---
+import Section from './Section.astro';
+
+const tabs = [
+  {
+    id: 'shift', label: 'Shift Management', title: 'Close every shift with confidence',
+    rows: ['Opening cash captured', 'Nozzle readings reconciled', 'Cash variance visible before close'],
+  },
+  {
+    id: 'inventory', label: 'Inventory', title: 'Know where every litre went',
+    rows: ['Tank stock by product', 'Variance alerts', 'Purchase-to-tank tracking'],
+  },
+  {
+    id: 'accounting', label: 'Accounting', title: 'Accounting without duplicate work',
+    rows: ['Collections posted', 'Supplier payments tracked', 'Customer ledgers updated'],
+  },
+  {
+    id: 'crm', label: 'CRM', title: 'Credit sales that stay under control',
+    rows: ['Fleet balances', 'Vehicle-wise sales', 'Overdue follow-up list'],
+  },
+  {
+    id: 'reports', label: 'Reports', title: 'DSSR snapshots that do not drift',
+    rows: ['Immutable shift summaries', 'Daily station sales report', 'Owner-ready exports'],
+  },
+];
+---
+
+<Section id="product-tour" title="See the connected station in motion." lead="A guided product tour for the workflows that matter most: shifts, stock, credit, accounting, and reporting.">
+  <div class="tour rounded-2xl border border-[var(--color-border-soft)] bg-white p-4 sm:p-6">
+    <div class="no-scrollbar flex gap-2 overflow-x-auto pb-4" role="tablist" aria-label="Product tour">
+      {tabs.map((tab, index) => (
+        <button
+          class={`tour-tab ${index === 0 ? 'is-active' : ''}`}
+          type="button"
+          role="tab"
+          aria-selected={index === 0 ? 'true' : 'false'}
+          data-tour-tab={tab.id}
+        >{tab.label}</button>
+      ))}
+    </div>
+    <div class="relative min-h-[460px] overflow-hidden rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-canvas)]">
+      {tabs.map((tab, index) => (
+        <div class={`tour-panel ${index === 0 ? 'is-active' : ''}`} data-tour-panel={tab.id}>
+          <div class="grid gap-6 p-5 lg:grid-cols-[0.85fr_1.15fr] lg:p-8">
+            <div>
+              <p class="text-sm font-semibold text-[var(--color-brand)]">{tab.label}</p>
+              <h3 class="mt-2 text-balance text-3xl font-semibold tracking-[-0.02em] text-[var(--color-ink)]">{tab.title}</h3>
+              <ul class="mt-6 space-y-3">
+                {tab.rows.map((row) => (
+                  <li class="flex items-center gap-3 text-sm text-[var(--color-ink-muted)]">
+                    <span class="h-2 w-2 rounded-full bg-[var(--color-brand)]"></span>
+                    {row}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div class="rounded-xl border border-[var(--color-border-soft)] bg-white p-4">
+              <div class="mb-4 flex items-center justify-between">
+                <div>
+                  <p class="text-sm font-semibold text-[var(--color-ink)]">{tab.label}</p>
+                  <p class="text-xs text-[var(--color-ink-muted)]">Live station workspace</p>
+                </div>
+                <span class="rounded-full bg-[#E8F4ED] px-2 py-0.5 text-xs font-medium text-[var(--color-brand)]">Synced</span>
+              </div>
+              <div class="grid gap-3 sm:grid-cols-3">
+                <div class="rounded-lg bg-[var(--color-canvas)] p-3"><p class="text-xs text-[var(--color-ink-muted)]">Today</p><p class="font-mono text-lg font-semibold">₹3.36L</p></div>
+                <div class="rounded-lg bg-[var(--color-canvas)] p-3"><p class="text-xs text-[var(--color-ink-muted)]">Variance</p><p class="font-mono text-lg font-semibold">₹0</p></div>
+                <div class="rounded-lg bg-[var(--color-canvas)] p-3"><p class="text-xs text-[var(--color-ink-muted)]">Status</p><p class="font-semibold">Open</p></div>
+              </div>
+              <div class="mt-5 space-y-2">
+                {tab.rows.map((row, i) => (
+                  <div class="flex items-center justify-between rounded-lg border border-[var(--color-border-soft)] px-3 py-2">
+                    <div><p class="text-sm font-medium text-[var(--color-ink)]">{row}</p><p class="text-xs text-[var(--color-ink-muted)]">Auto-linked to business day</p></div>
+                    <span class="font-mono text-sm text-[var(--color-ink)]">{i === 0 ? 'Live' : i === 1 ? 'OK' : 'Ready'}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+</Section>
+
+<script>
+  const root = document.currentScript?.previousElementSibling;
+  root?.querySelectorAll('[data-tour-tab]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const id = button.getAttribute('data-tour-tab');
+      root.querySelectorAll('[data-tour-tab]').forEach((b) => {
+        const active = b === button;
+        b.classList.toggle('is-active', active);
+        b.setAttribute('aria-selected', active ? 'true' : 'false');
+      });
+      root.querySelectorAll('[data-tour-panel]').forEach((p) => p.classList.toggle('is-active', p.getAttribute('data-tour-panel') === id));
+    });
+  });
+</script>
