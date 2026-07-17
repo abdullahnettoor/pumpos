@@ -3,34 +3,36 @@ import { CONSOLE_URL } from '../../config.ts';
 import ProductFrame from './ProductFrame.astro';
 ---
 
-<section class="mx-auto grid max-w-6xl items-center gap-10 px-6 pb-16 pt-16 sm:pb-20 sm:pt-24 lg:grid-cols-[0.95fr_1.05fr]">
+<section class="mx-auto grid max-w-6xl items-center gap-12 px-6 pb-20 pt-14 sm:pb-24 sm:pt-20 lg:grid-cols-[0.88fr_1.12fr]">
   <div>
-    <p class="inline-flex rounded-full border border-[var(--color-border-soft)] bg-white px-3 py-1 text-sm font-medium text-[var(--color-ink-muted)]">
+    <p class="inline-flex items-center gap-2 rounded-full border border-[var(--color-border-soft)] bg-white px-3 py-1 text-sm font-medium text-[var(--color-ink-muted)]">
+      <span class="h-1.5 w-1.5 rounded-full bg-[var(--color-brand)]"></span>
       Built for Indian fuel stations
     </p>
-    <h1 class="mt-6 text-balance text-5xl font-semibold leading-[1.02] tracking-[-0.03em] text-[var(--color-ink)] sm:text-6xl lg:text-7xl">
-      The Operating System for Modern Fuel Retail.
+    <h1 class="mt-6 text-balance text-5xl font-semibold leading-[1.03] tracking-[-0.035em] text-[var(--color-ink)] sm:text-6xl lg:text-[4.5rem]">
+      Every shift closes. Every number connects.
     </h1>
-    <p class="mt-6 max-w-2xl text-pretty text-lg leading-8 text-[var(--color-ink-muted)]">
-      Run your entire fuel station — from forecourt operations and shift reconciliation to inventory, accounting, and business insights — in one connected platform.
+    <p class="mt-6 max-w-xl text-pretty text-lg leading-8 text-[var(--color-ink-muted)]">
+      PumpOS gives fuel retailers one reliable operating record—from nozzle readings and drawer cash to stock, credit and the day-end report.
     </p>
     <div class="mt-8 flex flex-col gap-3 sm:flex-row">
       <a href="mailto:hello@pumpos.app?subject=Request%20PumpOS%20demo" class="inline-flex justify-center rounded-lg bg-[var(--color-brand)] px-5 py-3 font-semibold text-white transition hover:bg-[var(--color-brand-dark)]">
         Request Demo
       </a>
-      <a href="#product-tour" class="inline-flex justify-center rounded-lg border border-[var(--color-border-soft)] bg-white px-5 py-3 font-semibold text-[var(--color-ink)] transition hover:border-[var(--color-brand)]">
-        Watch Product Tour
+      <a href="#product-tour" class="inline-flex justify-center rounded-md border border-[var(--color-border-strong)] bg-white px-5 py-3 font-semibold text-[var(--color-ink)] transition hover:border-[var(--color-brand)]">
+        Explore workflows
       </a>
     </div>
-    <div class="mt-8 flex flex-wrap gap-2 text-sm text-[var(--color-ink-muted)]">
-      {['Works Offline', 'Multi Station', 'Cloud Sync', 'GST Ready', 'Real-Time Insights'].map((badge) => (
-        <span class="rounded-full border border-[var(--color-border-soft)] bg-white px-3 py-1">{badge}</span>
+    <div class="mt-9 flex flex-wrap gap-x-5 gap-y-2 text-sm text-[var(--color-ink-muted)]">
+      {['Offline-ready desktop', 'Audit-ready business days', 'Multi-station visibility'].map((badge) => (
+        <span class="inline-flex items-center gap-2"><span class="h-1 w-1 rounded-full bg-[var(--color-brand)]"></span>{badge}</span>
       ))}
     </div>
   </div>
 
-  <div class="relative">
-    <div class="absolute -inset-4 -z-10 rounded-[24px] bg-[#DDEBE5]"></div>
+  <div class="relative lg:pl-4">
+    <div class="absolute -inset-x-4 -inset-y-5 -z-10 bg-[#e3eee8]"></div>
+    <div class="absolute -right-3 -top-3 z-10 hidden border border-[var(--color-border-strong)] bg-white px-3 py-2 text-xs font-medium text-[var(--color-brand-dark)] shadow-[0_4px_8px_rgb(24_32_26_/_8%)] sm:block">Live business day</div>
     <ProductFrame
       title="Owner dashboard"
       subtitle="Kannur Station · live business day"
@@ -45,6 +47,6 @@ import ProductFrame from './ProductFrame.astro';
         { name: 'Fleet receivables', meta: '4 accounts crossed terms', value: '₹38,500', status: 'warn' },
       ]}
     />
-    <div class="mt-4 text-center text-xs text-[var(--color-ink-muted)]">Representative PumpOS product view. Replace with live captures before launch.</div>
+    <div class="mt-4 flex items-center justify-between border-t border-[var(--color-border-soft)] pt-3 text-xs text-[var(--color-ink-muted)]"><span>Representative operating view</span><span class="font-mono">17 JUL · 14:35 IST</span></div>
   </div>
 </section>

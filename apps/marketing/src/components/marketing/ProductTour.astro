@@ -26,7 +26,7 @@ const tabs = [
 ---
 
 <Section id="product-tour" title="See the connected station in motion." lead="A guided product tour for the workflows that matter most: shifts, stock, credit, accounting, and reporting.">
-  <div class="tour rounded-2xl border border-[var(--color-border-soft)] bg-white p-4 sm:p-6">
+  <div class="tour rounded-xl border border-[var(--color-border-strong)] bg-white p-4 sm:p-6" data-product-tour>
     <div class="no-scrollbar flex gap-2 overflow-x-auto pb-4" role="tablist" aria-label="Product tour">
       {tabs.map((tab, index) => (
         <button
@@ -34,13 +34,15 @@ const tabs = [
           type="button"
           role="tab"
           aria-selected={index === 0 ? 'true' : 'false'}
+          aria-controls={`tour-panel-${tab.id}`}
+          id={`tour-tab-${tab.id}`}
           data-tour-tab={tab.id}
         >{tab.label}</button>
       ))}
     </div>
     <div class="relative min-h-[460px] overflow-hidden rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-canvas)]">
       {tabs.map((tab, index) => (
-        <div class={`tour-panel ${index === 0 ? 'is-active' : ''}`} data-tour-panel={tab.id}>
+        <div class={`tour-panel ${index === 0 ? 'is-active' : ''}`} id={`tour-panel-${tab.id}`} role="tabpanel" aria-labelledby={`tour-tab-${tab.id}`} tabindex="0" data-tour-panel={tab.id}>
           <div class="grid gap-6 p-5 lg:grid-cols-[0.85fr_1.15fr] lg:p-8">
             <div>
               <p class="text-sm font-semibold text-[var(--color-brand)]">{tab.label}</p>
@@ -84,7 +86,7 @@ const tabs = [
 </Section>
 
 <script>
-  const root = document.currentScript?.previousElementSibling;
+  const root = document.querySelector('[data-product-tour]');
   root?.querySelectorAll('[data-tour-tab]').forEach((button) => {
     button.addEventListener('click', () => {
       const id = button.getAttribute('data-tour-tab');
@@ -94,6 +96,16 @@ const tabs = [
         b.setAttribute('aria-selected', active ? 'true' : 'false');
       });
       root.querySelectorAll('[data-tour-panel]').forEach((p) => p.classList.toggle('is-active', p.getAttribute('data-tour-panel') === id));
+    });
+    button.addEventListener('keydown', (event) => {
+      const keys = ['ArrowLeft', 'ArrowRight', 'Home', 'End'];
+      if (!keys.includes(event.key)) return;
+      event.preventDefault();
+      const tabs = [...root.querySelectorAll('[data-tour-tab]')];
+      const currentIndex = tabs.indexOf(button);
+      const nextIndex = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : (currentIndex + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+      (tabs[nextIndex] as HTMLButtonElement).focus();
+      (tabs[nextIndex] as HTMLButtonElement).click();
     });
   });
 </script>

@@ -50,16 +50,16 @@ const statusClass = {
       Synced
     </div>
   </div>
-  <div class="grid gap-3 p-4 sm:grid-cols-3">
+  <div class="grid gap-0 border-b border-[var(--color-border-soft)] sm:grid-cols-3">
     {metrics.map((m) => (
-      <div class="rounded-lg border border-[var(--color-border-soft)] bg-white p-3">
+      <div class="border-b border-[var(--color-border-soft)] p-4 last:border-b-0 sm:border-b-0 sm:border-r sm:last:border-r-0">
         <p class="text-xs text-[var(--color-ink-muted)]">{m.label}</p>
         <p class="mt-1 font-mono text-lg font-semibold tabular-nums text-[var(--color-ink)]">{m.value}</p>
         {m.sub && <p class="mt-0.5 text-xs text-[var(--color-ink-muted)]">{m.sub}</p>}
       </div>
     ))}
   </div>
-  <div class="border-t border-[var(--color-border-soft)] p-4 pt-2">
+  <div class="p-4 pt-2">
     {rows.map((row) => (
       <div class="flex items-center justify-between gap-3 border-b border-[var(--color-border-soft)] py-3 last:border-b-0">
         <div class="min-w-0">
