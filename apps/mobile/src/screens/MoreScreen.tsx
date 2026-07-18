@@ -3,9 +3,13 @@ import { useDailyDssrRange, useInventoryStatus, inr } from '@pump/ui';
 import { resolveBusinessDate } from '@pump/shared';
 import type { Station } from '@pump/shared';
 import { Kpi } from '../components/Kpi.js';
+import { AlertList } from '../components/AlertList.js';
+import { useMobileAlerts } from '../lib/alerts.js';
+import type { TabKey } from '../components/BottomNav.js';
 
 interface Props {
   station: Station;
+  onNavigate?: (tab: TabKey) => void;
 }
 
 function addDays(isoDate: string, delta: number): string {
@@ -23,13 +27,14 @@ const numberFmt = (n: number, dec = 0) =>
 
 const PRODUCT_BAR = ['var(--brand-primary)', '#0891b2', '#7c3aed', '#d97706', '#059669'];
 
-export const MoreScreen: React.FC<Props> = ({ station }) => {
+export const MoreScreen: React.FC<Props> = ({ station, onNavigate }) => {
   const settings: any = (station as any).settings || {};
   const todayBiz = resolveBusinessDate({
     timeZone: settings.timezone,
     dayStartsAt: settings.business_day_starts_at,
   });
 
+  const alerts = useMobileAlerts(station);
   const [days, setDays] = useState(7);
   const from = addDays(todayBiz, -(days - 1));
 
@@ -79,6 +84,14 @@ export const MoreScreen: React.FC<Props> = ({ station }) => {
 
   return (
     <div className="flex flex-col gap-4">
+      {/* Needs attention */}
+      <section className="flex flex-col gap-2">
+        <h3 className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
+          Needs attention
+        </h3>
+        <AlertList alerts={alerts} onNavigate={onNavigate} emptyText="All clear — nothing needs attention." />
+      </section>
+
       {/* Period toggle */}
       <div className="grid grid-cols-2 gap-1 rounded-lg p-1" style={{ backgroundColor: 'var(--bg-surface-alt)' }}>
         {[7, 30].map((d) => (

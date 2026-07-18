@@ -139,10 +139,10 @@ export const App: React.FC = () => {
         </p>
       );
     }
-    if (tab === 'home') return <HomeScreen station={selectedStation} businessDate={businessDate} />;
+    if (tab === 'home') return <HomeScreen station={selectedStation} businessDate={businessDate} onNavigate={setTab} />;
     if (tab === 'shifts') return <ShiftsScreen station={selectedStation} />;
     if (tab === 'dssr') return <DssrScreen station={selectedStation} businessDate={businessDate} />;
-    if (tab === 'more') return <MoreScreen station={selectedStation} />;
+    if (tab === 'more') return <MoreScreen station={selectedStation} onNavigate={setTab} />;
     return null;
   };
 

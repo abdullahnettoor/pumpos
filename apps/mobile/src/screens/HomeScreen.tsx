@@ -4,29 +4,26 @@ import {
   useCustomers,
   useSuppliers,
   useShiftStatus,
-  useStationAlerts,
   inr,
 } from '@pump/ui';
 import { resolveBusinessDate } from '@pump/shared';
 import type { Station } from '@pump/shared';
 import { Kpi } from '../components/Kpi.js';
+import { AlertList } from '../components/AlertList.js';
+import { useMobileAlerts } from '../lib/alerts.js';
+import type { TabKey } from '../components/BottomNav.js';
 
 interface Props {
   station: Station;
   /** Business day selected by the global pill (YYYY-MM-DD). */
   businessDate: string | null;
+  onNavigate?: (tab: TabKey) => void;
 }
 
 const numberFmt = (n: number, dec = 0) =>
   n.toLocaleString('en-IN', { minimumFractionDigits: dec, maximumFractionDigits: dec });
 
-const SEV_COLOR: Record<string, { bg: string; fg: string }> = {
-  danger: { bg: 'var(--state-danger-bg)', fg: 'var(--state-danger-fg)' },
-  warning: { bg: 'var(--state-warning-bg)', fg: 'var(--state-warning-fg)' },
-  info: { bg: 'var(--bg-surface-alt)', fg: 'var(--text-muted)' },
-};
-
-export const HomeScreen: React.FC<Props> = ({ station, businessDate }) => {
+export const HomeScreen: React.FC<Props> = ({ station, businessDate, onNavigate }) => {
   const settings: any = (station as any).settings || {};
   const todayBiz = resolveBusinessDate({
     timeZone: settings.timezone,
@@ -39,7 +36,7 @@ export const HomeScreen: React.FC<Props> = ({ station, businessDate }) => {
   const customersQ = useCustomers();
   const suppliersQ = useSuppliers();
   const statusQ = useShiftStatus(station.id, true, { enabled: isToday } as any);
-  const alerts = useStationAlerts(station.id, true);
+  const alerts = useMobileAlerts(station);
 
   const snap: any = previewQ.data?.snapshotData ?? previewQ.data ?? {};
   const fuel = snap.fuel || {};
@@ -71,7 +68,6 @@ export const HomeScreen: React.FC<Props> = ({ station, businessDate }) => {
   );
 
   const hasActiveShift = isToday && !!statusQ.data?.activeShift;
-  const topAlerts = alerts.slice(0, 3);
 
   if (previewQ.isLoading) {
     return <p className="py-10 text-center text-sm" style={{ color: 'var(--text-muted)' }}>Loading…</p>;
@@ -104,26 +100,7 @@ export const HomeScreen: React.FC<Props> = ({ station, businessDate }) => {
       </div>
 
       {/* Exceptions */}
-      {topAlerts.length > 0 && (
-        <div className="flex flex-col gap-2">
-          {topAlerts.map((a) => {
-            const c = SEV_COLOR[a.severity] ?? SEV_COLOR.info;
-            return (
-              <div
-                key={a.id}
-                className="flex items-center gap-2 rounded-lg px-3 py-2"
-                style={{ backgroundColor: c.bg }}
-              >
-                <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full" style={{ backgroundColor: c.fg }} />
-                <div className="min-w-0">
-                  <p className="truncate text-xs font-medium" style={{ color: c.fg }}>{a.title}</p>
-                  {a.meta && <p className="truncate text-[11px]" style={{ color: 'var(--text-muted)' }}>{a.meta}</p>}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
+      <AlertList alerts={alerts} onNavigate={onNavigate} limit={3} />
 
       {/* KPIs */}
       <div className="grid grid-cols-2 gap-3">
