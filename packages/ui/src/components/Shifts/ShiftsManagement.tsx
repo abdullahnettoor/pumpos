@@ -715,7 +715,6 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
               (t: any) => t.duId === selectedHandoverAssignment.duId || t.duId == null
             )}
             customers={handoverCreditCustomers}
-            searchVehicles={(q: string) => transactionService.searchVehicles(q)}
             merchandiseCash={
               Number(
                 (activeShift.staffAssignments || []).find(
