@@ -1,6 +1,7 @@
 import React from 'react';
 import {
   useDailyDssrPreview,
+  useDailyDssrRange,
   useCustomers,
   useSuppliers,
   useShiftStatus,
@@ -9,7 +10,6 @@ import {
 import { resolveBusinessDate } from '@pump/shared';
 import type { Station } from '@pump/shared';
 import { Kpi } from '../components/Kpi.js';
-import { AlertList } from '../components/AlertList.js';
 import { useMobileAlerts } from '../lib/alerts.js';
 import type { TabKey } from '../components/BottomNav.js';
 
@@ -22,6 +22,13 @@ interface Props {
 
 const numberFmt = (n: number, dec = 0) =>
   n.toLocaleString('en-IN', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+
+function addDays(isoDate: string, delta: number): string {
+  const [y, m, d] = isoDate.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + delta);
+  return dt.toISOString().slice(0, 10);
+}
 
 export const HomeScreen: React.FC<Props> = ({ station, businessDate, onNavigate }) => {
   const settings: any = (station as any).settings || {};
@@ -37,6 +44,13 @@ export const HomeScreen: React.FC<Props> = ({ station, businessDate, onNavigate 
   const suppliersQ = useSuppliers();
   const statusQ = useShiftStatus(station.id, true, { enabled: isToday } as any);
   const alerts = useMobileAlerts(station);
+
+  // Compact 7-day fuel-sales trend (closed-day snapshots ending at the selected day).
+  const trendQ = useDailyDssrRange(station.id, addDays(date, -6), date);
+  const trend = (trendQ.data || [])
+    .map((s: any) => ({ date: s.businessDate, sales: Number(s.snapshotData?.fuel?.totalSalesValue || 0) }))
+    .sort((a: any, b: any) => (a.date < b.date ? -1 : 1));
+  const maxTrend = Math.max(1, ...trend.map((t) => t.sales));
 
   const snap: any = previewQ.data?.snapshotData ?? previewQ.data ?? {};
   const fuel = snap.fuel || {};
@@ -99,8 +113,29 @@ export const HomeScreen: React.FC<Props> = ({ station, businessDate, onNavigate 
         </span>
       </div>
 
-      {/* Exceptions */}
-      <AlertList alerts={alerts} onNavigate={onNavigate} limit={3} />
+      {/* Compact attention chip (full feed lives in More → Needs attention) */}
+      {alerts.length > 0 && (
+        <button
+          type="button"
+          onClick={() => onNavigate?.('more')}
+          className="flex items-center justify-between rounded-lg px-3 py-2"
+          style={{
+            backgroundColor: alerts.some((a) => a.severity === 'danger') ? 'var(--state-danger-bg)' : 'var(--state-warning-bg)',
+          }}
+        >
+          <span
+            className="flex items-center gap-2 text-xs font-medium"
+            style={{ color: alerts.some((a) => a.severity === 'danger') ? 'var(--state-danger-fg)' : 'var(--state-warning-fg)' }}
+          >
+            <span
+              className="h-1.5 w-1.5 rounded-full"
+              style={{ backgroundColor: alerts.some((a) => a.severity === 'danger') ? 'var(--state-danger-fg)' : 'var(--state-warning-fg)' }}
+            />
+            {alerts.length} {alerts.length === 1 ? 'item needs' : 'items need'} attention
+          </span>
+          <span style={{ color: alerts.some((a) => a.severity === 'danger') ? 'var(--state-danger-fg)' : 'var(--state-warning-fg)' }}>›</span>
+        </button>
+      )}
 
       {/* KPIs */}
       <div className="grid grid-cols-2 gap-3">
@@ -124,6 +159,30 @@ export const HomeScreen: React.FC<Props> = ({ station, businessDate, onNavigate 
           tone={(hasCostBasis ? netProfit : 0) < 0 ? 'negative' : 'default'}
         />
       </div>
+
+      {/* 7-day trend (glance) — full analytics live in More */}
+      {trend.length > 1 && (
+        <section className="rounded-xl border p-4" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-soft)' }}>
+          <div className="mb-2 flex items-center justify-between">
+            <h3 className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
+              7-day fuel sales
+            </h3>
+            <button type="button" onClick={() => onNavigate?.('more')} className="text-[11px] font-medium" style={{ color: 'var(--brand-primary)' }}>
+              Details ›
+            </button>
+          </div>
+          <div className="flex h-16 items-end gap-1">
+            {trend.map((t) => (
+              <div key={t.date} className="flex-1" title={`${t.date} · ${inr(t.sales)}`}>
+                <div
+                  className="w-full rounded-t"
+                  style={{ height: `${Math.max(2, (t.sales / maxTrend) * 100)}%`, backgroundColor: 'var(--brand-primary)', opacity: 0.85 }}
+                />
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 };

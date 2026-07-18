@@ -3,6 +3,7 @@ import type { Station } from '@pump/shared';
 import { BottomNav, type TabKey } from './BottomNav.js';
 import { StationPicker } from './StationPicker.js';
 import { BusinessDayPill } from './BusinessDayPill.js';
+import { AccountMenu } from './AccountMenu.js';
 import { signOut } from '../lib/session.js';
 
 interface MobileShellProps {
@@ -45,30 +46,26 @@ export const MobileShell: React.FC<MobileShellProps> = ({
       style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-soft)' }}
     >
       <div className="flex items-center justify-between px-4 py-2">
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 items-center gap-2">
           <span
-            className="grid h-7 w-7 place-items-center rounded-lg text-sm font-bold text-white"
+            className="grid h-7 w-7 flex-shrink-0 place-items-center rounded-lg text-sm font-bold text-white"
             style={{ backgroundColor: 'var(--brand-primary)' }}
           >
             P
           </span>
-          <div className="leading-tight">
-            <p className="text-sm font-semibold" style={{ color: 'var(--text-strong)' }}>
-              {title}
+          <div className="min-w-0 leading-tight">
+            <p className="truncate text-sm font-semibold" style={{ color: 'var(--text-strong)' }}>
+              {stations.find((s) => s.id === selectedStationId)?.name ?? 'PumpOS'}
             </p>
-            <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
-              {userName} · {role}
-            </p>
+            <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>{title}</p>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={() => signOut()}
-          className="rounded-lg border px-3 py-1.5 text-xs font-medium"
-          style={{ borderColor: 'var(--border-soft)', color: 'var(--text-muted)' }}
-        >
-          Sign out
-        </button>
+        <AccountMenu
+          userName={userName}
+          role={role}
+          stationName={stations.find((s) => s.id === selectedStationId)?.name}
+          onSignOut={() => signOut()}
+        />
       </div>
       <StationPicker
         stations={stations}

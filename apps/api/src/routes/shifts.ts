@@ -1123,10 +1123,12 @@ shiftsRouter.get('/shift-summaries', async (c) => {
       snapshotData: schema.shiftSummaries.snapshotData,
       generatedAt: schema.shiftSummaries.generatedAt,
       businessDate: schema.businessDays.businessDate,
+      templateName: schema.shiftTemplates.name,
     })
     .from(schema.shiftSummaries)
     .innerJoin(schema.shifts, eq(schema.shifts.id, schema.shiftSummaries.shiftId))
     .leftJoin(schema.businessDays, eq(schema.businessDays.id, schema.shifts.businessDayId))
+    .leftJoin(schema.shiftTemplates, eq(schema.shiftTemplates.id, schema.shifts.shiftTemplateId))
     .where(and(eq(schema.shifts.stationId, stationId), eq(schema.shifts.organizationId, user.organizationId)))
     .orderBy(desc(schema.shiftSummaries.generatedAt));
 
@@ -1138,6 +1140,7 @@ shiftsRouter.get('/shift-summaries', async (c) => {
       closedAt: r.shift.closedAt,
       businessDayId: r.shift.businessDayId,
       businessDate: r.businessDate,
+      templateName: r.templateName ?? null,
       generatedAt: r.generatedAt,
       snapshotData: await projectShiftSummary(db, r.shift, r.snapshotData),
     })),

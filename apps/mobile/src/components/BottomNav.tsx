@@ -107,11 +107,16 @@ export const BottomNav: React.FC<BottomNavProps> = ({ active, onChange, allowed 
             key={key}
             type="button"
             onClick={() => onChange(key)}
-            className="flex flex-col items-center gap-0.5 py-1.5 text-[11px] font-medium transition"
+            className="flex flex-col items-center gap-1 py-1.5 text-[11px] font-medium transition"
             style={{ color: isActive ? 'var(--brand-primary)' : 'var(--text-muted)' }}
             aria-current={isActive ? 'page' : undefined}
           >
-            <Icon />
+            <span
+              className="flex h-7 w-12 items-center justify-center rounded-full transition-colors"
+              style={{ backgroundColor: isActive ? 'var(--bg-surface-alt)' : 'transparent' }}
+            >
+              <Icon size={20} />
+            </span>
             {label}
           </button>
         );
