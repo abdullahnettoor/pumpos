@@ -2,6 +2,7 @@ import React from 'react';
 import type { Station } from '@pump/shared';
 import { BottomNav, type TabKey } from './BottomNav.js';
 import { StationPicker } from './StationPicker.js';
+import { BusinessDayPill } from './BusinessDayPill.js';
 import { signOut } from '../lib/session.js';
 
 interface MobileShellProps {
@@ -14,6 +15,11 @@ interface MobileShellProps {
   onChangeTab: (key: TabKey) => void;
   allowedTabs: TabKey[];
   title: string;
+  /** Business-day navigator (shown only on day-scoped tabs). */
+  businessDate?: string | null;
+  maxBusinessDate?: string | null;
+  onChangeBusinessDate?: (date: string) => void;
+  showBusinessDay?: boolean;
   children: React.ReactNode;
 }
 
@@ -27,6 +33,10 @@ export const MobileShell: React.FC<MobileShellProps> = ({
   onChangeTab,
   allowedTabs,
   title,
+  businessDate,
+  maxBusinessDate,
+  onChangeBusinessDate,
+  showBusinessDay,
   children,
 }) => (
   <div className="flex h-[100dvh] flex-col" style={{ backgroundColor: 'var(--bg-canvas)' }}>
@@ -65,6 +75,11 @@ export const MobileShell: React.FC<MobileShellProps> = ({
         selectedId={selectedStationId}
         onSelect={onSelectStation}
       />
+      {showBusinessDay && businessDate && maxBusinessDate && onChangeBusinessDate && (
+        <div className="px-4 pb-2">
+          <BusinessDayPill value={businessDate} max={maxBusinessDate} onChange={onChangeBusinessDate} />
+        </div>
+      )}
     </header>
 
     <main className="flex-1 overflow-y-auto px-4 py-4">{children}</main>

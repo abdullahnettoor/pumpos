@@ -35,6 +35,8 @@ export { DesignSystem } from './components/DesignSystem.js';
 // Data layer (TanStack Query) + shared primitives
 export * from './query/queryClient.js';
 export * from './query/hooks.js';
+export { useStationAlerts } from './query/useStationAlerts.js';
+export type { StationAlert, AlertSeverity } from './query/useStationAlerts.js';
 export { PageLayout } from './components/primitives/PageLayout.js';
 export type { PageLayoutProps } from './components/primitives/PageLayout.js';
 export { DataTable } from './components/primitives/DataTable.js';

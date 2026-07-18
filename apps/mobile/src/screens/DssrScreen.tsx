@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useDailyDssrPreview, inr } from '@pump/ui';
 import { resolveBusinessDate } from '@pump/shared';
 import type { Station } from '@pump/shared';
@@ -6,18 +6,20 @@ import { Kpi } from '../components/Kpi.js';
 
 interface Props {
   station: Station;
+  /** Business day selected by the global pill (YYYY-MM-DD). */
+  businessDate: string | null;
 }
 
 const numberFmt = (n: number, dec = 2) =>
   n.toLocaleString('en-IN', { minimumFractionDigits: dec, maximumFractionDigits: dec });
 
-export const DssrScreen: React.FC<Props> = ({ station }) => {
+export const DssrScreen: React.FC<Props> = ({ station, businessDate }) => {
   const settings: any = (station as any).settings || {};
   const todayBiz = resolveBusinessDate({
     timeZone: settings.timezone,
     dayStartsAt: settings.business_day_starts_at,
   });
-  const [date, setDate] = useState(todayBiz);
+  const date = businessDate ?? todayBiz;
 
   const q = useDailyDssrPreview(station.id, date);
   const snapshot: any = q.data?.snapshotData ?? q.data ?? {};
@@ -29,18 +31,6 @@ export const DssrScreen: React.FC<Props> = ({ station }) => {
 
   return (
     <div className="flex flex-col gap-4">
-      <label className="flex flex-col gap-1">
-        <span className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Business date</span>
-        <input
-          type="date"
-          value={date}
-          max={todayBiz}
-          onChange={(e) => setDate(e.target.value)}
-          className="rounded-lg border px-3 py-2 text-sm"
-          style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-soft)', color: 'var(--text-strong)' }}
-        />
-      </label>
-
       {q.isLoading ? (
         <p className="py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>Loading…</p>
       ) : q.isError ? (

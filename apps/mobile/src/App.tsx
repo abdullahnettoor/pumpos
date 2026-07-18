@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Login, useStations, useMyAssignment } from '@pump/ui';
 import type { Station } from '@pump/shared';
+import { resolveBusinessDate } from '@pump/shared';
 import { useSession, signOut, type UserRole } from './lib/session.js';
 import { MobileShell } from './components/MobileShell.js';
 import type { TabKey } from './components/BottomNav.js';
@@ -62,6 +63,23 @@ export const App: React.FC = () => {
     [stations, selectedStationId],
   );
 
+  // Global business-day navigation (MB1). `todayBiz` is the station's current
+  // business date; the pill lets the user page back to any prior day.
+  const stationSettings: any = (selectedStation as any)?.settings || {};
+  const todayBiz = selectedStation
+    ? resolveBusinessDate({ timeZone: stationSettings.timezone, dayStartsAt: stationSettings.business_day_starts_at })
+    : undefined;
+  const [bizDate, setBizDate] = useState<string | null>(null);
+  useEffect(() => {
+    if (todayBiz && !bizDate) setBizDate(todayBiz);
+  }, [todayBiz, bizDate]);
+  // Clamp a stale selection if the day rolled over past what's now selectable.
+  useEffect(() => {
+    if (todayBiz && bizDate && bizDate > todayBiz) setBizDate(todayBiz);
+  }, [todayBiz, bizDate]);
+  const businessDate = bizDate ?? todayBiz ?? null;
+  const showBusinessDay = tab === 'home' || tab === 'dssr';
+
   if (status === 'loading') {
     return (
       <Centered>
@@ -119,9 +137,9 @@ export const App: React.FC = () => {
         </p>
       );
     }
-    if (tab === 'home') return <HomeScreen station={selectedStation} />;
+    if (tab === 'home') return <HomeScreen station={selectedStation} businessDate={businessDate} />;
     if (tab === 'shifts') return <ShiftsScreen station={selectedStation} />;
-    if (tab === 'dssr') return <DssrScreen station={selectedStation} />;
+    if (tab === 'dssr') return <DssrScreen station={selectedStation} businessDate={businessDate} />;
     return null;
   };
 
@@ -136,6 +154,10 @@ export const App: React.FC = () => {
       onChangeTab={setTab}
       allowedTabs={allowedTabs}
       title={titleByTab[tab]}
+      businessDate={businessDate}
+      maxBusinessDate={todayBiz ?? null}
+      onChangeBusinessDate={setBizDate}
+      showBusinessDay={showBusinessDay}
     >
       {renderScreen()}
     </MobileShell>
