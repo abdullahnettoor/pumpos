@@ -1,8 +1,9 @@
-import React from 'react';
-import { useDailyDssrPreview, inr } from '@pump/ui';
+import React, { useState } from 'react';
+import { useDailyDssrPreview, generateDssrPdf, inr } from '@pump/ui';
 import { resolveBusinessDate } from '@pump/shared';
 import type { Station } from '@pump/shared';
 import { Kpi } from '../components/Kpi.js';
+import { ShareButton } from '../components/ShareButton.js';
 
 interface Props {
   station: Station;
@@ -29,6 +30,10 @@ export const DssrScreen: React.FC<Props> = ({ station, businessDate }) => {
   const expenses = snapshot.expenses || {};
   const shiftsIncluded = (snapshot.shifts || []).length;
 
+  const [error, setError] = useState<string | null>(null);
+  const shareDssr = () =>
+    generateDssrPdf(station, { snapshotData: snapshot, businessDate: date, generatedAt: new Date().toISOString() });
+
   return (
     <div className="flex flex-col gap-4">
       {q.isLoading ? (
@@ -39,6 +44,16 @@ export const DssrScreen: React.FC<Props> = ({ station, businessDate }) => {
         </p>
       ) : (
         <>
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-semibold" style={{ color: 'var(--text-strong)' }}>
+              DSSR · {date}
+            </p>
+            <ShareButton label="PDF" onShare={shareDssr} onError={setError} />
+          </div>
+          {error && (
+            <p className="text-center text-xs" style={{ color: 'var(--state-danger-fg)' }}>{error}</p>
+          )}
+
           <div className="grid grid-cols-2 gap-3">
             <Kpi
               label="Fuel sales"

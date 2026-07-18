@@ -1,7 +1,8 @@
 import React from 'react';
-import { useShiftStatus, useShiftSummaries, inr } from '@pump/ui';
+import { useShiftStatus, useShiftSummaries, generateShiftSummaryPdf, inr } from '@pump/ui';
 import { resolveBusinessDate } from '@pump/shared';
 import type { Station } from '@pump/shared';
+import { ShareButton } from '../components/ShareButton.js';
 
 interface Props {
   station: Station;
@@ -180,13 +181,20 @@ export const ShiftsScreen: React.FC<Props> = ({ station }) => {
                   </p>
                   <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{timeFmt(s.openedAt)}</p>
                 </div>
-                <div className="text-right">
-                  <p className="font-mono text-sm font-semibold tabular-nums">
-                    {inr(Number(s.snapshotData?.totalFuelSalesValue || 0))}
-                  </p>
-                  <p className="text-xs font-medium" style={{ color: varColor(variance) }}>
-                    Var {inr(variance)}
-                  </p>
+                <div className="flex items-center gap-2">
+                  <div className="text-right">
+                    <p className="font-mono text-sm font-semibold tabular-nums">
+                      {inr(Number(s.snapshotData?.totalFuelSalesValue || 0))}
+                    </p>
+                    <p className="text-xs font-medium" style={{ color: varColor(variance) }}>
+                      Var {inr(variance)}
+                    </p>
+                  </div>
+                  <ShareButton
+                    iconOnly
+                    label="Shift summary PDF"
+                    onShare={() => generateShiftSummaryPdf(station, s.snapshotData, s.shiftId ?? s.id, s.templateName)}
+                  />
                 </div>
               </div>
             );

@@ -26,8 +26,10 @@ export { exportReportPdf, exportReactPdf, setPdfSaver } from './services/exportP
 export {
   DEFAULT_SHIFT_SUMMARY_CONFIG, DEFAULT_DSSR_CONFIG,
   SHIFT_SUMMARY_SECTION_LABELS, DSSR_SECTION_LABELS,
+  paperFromStation,
 } from './services/reports/reportConfig.js';
 export { letterheadFromStation } from './services/reports/letterhead.js';
+export { generateDssrPdf, generateShiftSummaryPdf } from './services/reports/generate.js';
 export { LedgerView, computeLedgerRows } from './components/ledger/LedgerView.js';
 export type { LedgerResolved, LedgerComputed, LedgerViewProps } from './components/ledger/LedgerView.js';
 export { DesignSystem } from './components/DesignSystem.js';
