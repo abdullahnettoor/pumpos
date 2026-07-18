@@ -123,7 +123,7 @@ export const App: React.FC = () => {
     home: 'Overview',
     shifts: 'Shifts',
     dssr: 'Daily report',
-    ledger: 'Ledger',
+    ledger: 'Money',
     handover: 'My handover',
   };
 

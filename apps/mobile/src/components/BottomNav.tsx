@@ -69,7 +69,7 @@ const ITEMS: NavItem[] = [
   { key: 'home', label: 'Home', Icon: HomeIcon },
   { key: 'shifts', label: 'Shifts', Icon: ShiftsIcon },
   { key: 'dssr', label: 'DSSR', Icon: DssrIcon },
-  { key: 'ledger', label: 'Ledger', Icon: LedgerIcon },
+  { key: 'ledger', label: 'Money', Icon: LedgerIcon },
   { key: 'handover', label: 'Handover', Icon: HandoverIcon },
 ];
 

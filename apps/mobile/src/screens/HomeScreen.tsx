@@ -62,11 +62,11 @@ export const HomeScreen: React.FC<Props> = ({ station, businessDate }) => {
   const hasCostBasis = Number(pnl.cogs || 0) > 0;
 
   const receivables = (customersQ.data || []).reduce(
-    (s: number, c: any) => s + Math.max(0, Number(c.balance || 0)),
+    (s: number, c: any) => s + Math.max(0, Number(c.currentBalance || 0)),
     0,
   );
   const payables = (suppliersQ.data || []).reduce(
-    (s: number, x: any) => s + Math.max(0, Number(x.balance || 0)),
+    (s: number, x: any) => s + Math.max(0, Number(x.currentBalance || 0)),
     0,
   );
 
