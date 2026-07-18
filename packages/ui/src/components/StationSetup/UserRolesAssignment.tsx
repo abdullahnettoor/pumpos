@@ -20,7 +20,7 @@ const userFormSchema = z.object({
   email: z.string().email('Invalid email address').or(z.literal('')).optional().nullable(),
   phone: z.string().optional().nullable(),
   status: z.enum(['ACTIVE', 'INACTIVE']),
-  role: z.enum(['Owner', 'Manager', 'Accountant', 'Staff']),
+  role: z.enum(['Owner', 'Manager', 'Accountant', 'Staff', 'Attendant']),
   stationIds: z.array(z.string()),
   enableAppAccess: z.boolean(),
 });
@@ -333,6 +333,7 @@ export const UserRolesAssignment: React.FC = () => {
                 <option value="Manager">Manager</option>
                 <option value="Accountant">Accountant</option>
                 <option value="Staff">Staff</option>
+                <option value="Attendant">Attendant (Mobile handover)</option>
               </select>
             </div>
           )}

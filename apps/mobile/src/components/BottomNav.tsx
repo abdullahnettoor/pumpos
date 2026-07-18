@@ -1,6 +1,6 @@
 import React from 'react';
 
-export type TabKey = 'home' | 'shifts' | 'dssr' | 'ledger';
+export type TabKey = 'home' | 'shifts' | 'dssr' | 'ledger' | 'handover';
 
 interface NavItem {
   key: TabKey;
@@ -13,6 +13,7 @@ const ITEMS: NavItem[] = [
   { key: 'shifts', label: 'Shifts', icon: '⛽' },
   { key: 'dssr', label: 'DSSR', icon: '▤' },
   { key: 'ledger', label: 'Ledger', icon: '₹' },
+  { key: 'handover', label: 'Handover', icon: '🧾' },
 ];
 
 interface BottomNavProps {

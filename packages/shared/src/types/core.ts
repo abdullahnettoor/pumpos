@@ -1,4 +1,4 @@
-export type Role = 'Owner' | 'Manager' | 'Accountant' | 'Staff';
+export type Role = 'Owner' | 'Manager' | 'Accountant' | 'Staff' | 'Attendant';
 
 export type ShiftState = 'OPEN' | 'CLOSED' | 'LOCKED';
 

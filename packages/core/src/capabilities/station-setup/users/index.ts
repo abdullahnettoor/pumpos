@@ -45,7 +45,7 @@ export interface UpdateUserCommand {
   stationIds?: string[];
 }
 
-const roleEnum = z.enum(['Owner', 'Manager', 'Accountant', 'Staff']);
+const roleEnum = z.enum(['Owner', 'Manager', 'Accountant', 'Staff', 'Attendant']);
 const createSchema = z.object({
   fullName: z.string().trim().min(1, 'fullName is required').max(255),
   email: z.string().email().nullish().or(z.literal('')),

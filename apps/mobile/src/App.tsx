@@ -1,13 +1,15 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Login, useStations } from '@pump/ui';
+import { Login, useStations, useMyAssignment } from '@pump/ui';
 import type { Station } from '@pump/shared';
-import { useSession, type UserRole } from './lib/session.js';
+import { useSession, signOut, type UserRole } from './lib/session.js';
 import { MobileShell } from './components/MobileShell.js';
 import type { TabKey } from './components/BottomNav.js';
 import { HomeScreen } from './screens/HomeScreen.js';
 import { ShiftsScreen } from './screens/ShiftsScreen.js';
 import { DssrScreen } from './screens/DssrScreen.js';
 import { LedgerScreen } from './screens/LedgerScreen.js';
+import { AttendantScreen } from './screens/AttendantScreen.js';
+import { HandoverPanel } from './components/HandoverPanel.js';
 
 /** Tabs each role may access on mobile. */
 const TABS_BY_ROLE: Record<UserRole, TabKey[]> = {
@@ -15,6 +17,7 @@ const TABS_BY_ROLE: Record<UserRole, TabKey[]> = {
   Manager: ['shifts', 'dssr', 'ledger'],
   Accountant: ['dssr', 'ledger'],
   Staff: [],
+  Attendant: [], // Attendants use their own dedicated handover shell, not tabs.
 };
 
 const Centered: React.FC<{ children: React.ReactNode }> = ({ children }) => (
@@ -31,10 +34,18 @@ export const App: React.FC = () => {
   const stationsQ = useStations({ enabled: status === 'ready' });
   const stations = (stationsQ.data || []) as Station[];
 
+  // Non-attendant roles who happen to be assigned to a DU on an open shift get an
+  // extra "My handover" tab with the same self-service UI as the Attendant shell.
+  const myAssignmentQ = useMyAssignment({ enabled: status === 'ready' && role !== 'Attendant' });
+  const hasHandoverTab = role !== 'Attendant' && !!myAssignmentQ.data;
+
   const [selectedStationId, setSelectedStationId] = useState<string | null>(null);
   const [tab, setTab] = useState<TabKey>('home');
 
-  const allowedTabs = role ? TABS_BY_ROLE[role] : [];
+  const allowedTabs = useMemo<TabKey[]>(() => {
+    const base = role ? TABS_BY_ROLE[role] : [];
+    return hasHandoverTab ? [...base, 'handover'] : base;
+  }, [role, hasHandoverTab]);
 
   // Default the station once loaded.
   useEffect(() => {
@@ -73,6 +84,11 @@ export const App: React.FC = () => {
     );
   }
 
+  // Attendants get a dedicated mobile-only handover shell (no owner tabs).
+  if (role === 'Attendant') {
+    return <AttendantScreen userName={userName} onSignOut={() => signOut()} />;
+  }
+
   if (allowedTabs.length === 0) {
     return (
       <Centered>
@@ -90,9 +106,11 @@ export const App: React.FC = () => {
     shifts: 'Shifts',
     dssr: 'Daily report',
     ledger: 'Ledger',
+    handover: 'My handover',
   };
 
   const renderScreen = () => {
+    if (tab === 'handover') return <HandoverPanel />;
     if (tab === 'ledger') return <LedgerScreen />;
     if (!selectedStation) {
       return (

@@ -39,6 +39,7 @@ const financeSvc = new CloudFinanceService();
 
 export const queryKeys = {
   shiftStatus: (stationId: string, lite = false) => ['shift-status', stationId, lite] as const,
+  myAssignment: () => ['my-assignment'] as const,
   shiftSummaries: (stationId: string) => ['shift-summaries', stationId] as const,
   shiftTransactions: (shiftId: string) => ['shift-transactions', shiftId] as const,
   merchandiseHandovers: (shiftId: string) => ['merchandise-handovers', shiftId] as const,
@@ -267,6 +268,15 @@ export function useShiftSummaries(stationId: string | null | undefined, options?
     queryKey: queryKeys.shiftSummaries(stationId ?? ''),
     queryFn: () => shiftService.getShiftSummaries(stationId!),
     enabled: !!stationId,
+    ...TIER.operational,
+    ...options,
+  });
+}
+
+export function useMyAssignment(options?: Options<any>) {
+  return useQuery({
+    queryKey: queryKeys.myAssignment(),
+    queryFn: () => shiftService.getMyAssignment(),
     ...TIER.operational,
     ...options,
   });

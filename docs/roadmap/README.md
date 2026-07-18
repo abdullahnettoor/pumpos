@@ -14,6 +14,7 @@ shippable and extends existing domain entities (per `AGENTS.md`) rather than red
 | [F](phase-F-financials.md) | Financials — money accounts (cash/bank/petty/clearing) + P&L/COGS | Planned (design locked) | L |
 | [U](phase-U-ui-uplift.md) | UI uplift & consistency | Planned | — |
 | [M](phase-M-multisite.md) | Multi-site topology (marketing + console + mobile) | Planned | — |
+| [MB](phase-MB-mobile-owner.md) | Mobile owner app (owner-first PWA) | Planned | M, R (R4), F, L |
 | [O](phase-O-offline-sync.md) | Offline & sync (desktop) | Future | — |
 | [X](phase-X-expansion.md) | Expansion modules | Future | core stable |
 

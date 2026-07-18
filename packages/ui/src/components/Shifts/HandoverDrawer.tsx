@@ -122,11 +122,11 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
     }
 
     // Initialize readings and testing maps. Closing keeps the opening reading as a
-    // helpful starting point; testing defaults blank (placeholder 0) so the field
-    // is empty for typing rather than pre-filled with a literal 0.
+    // helpful starting point; testing pre-fills from the previously-saved value so
+    // re-saving the handover doesn't silently zero the calibration volume.
     nozzles.forEach((nz) => {
       setValue(`nozzleReadings.${nz.nozzleId}`, Number(nz.closingReading ?? nz.openingReading ?? 0));
-      setValue(`nozzleTesting.${nz.nozzleId}`, '' as any);
+      setValue(`nozzleTesting.${nz.nozzleId}`, (Number(nz.testingVolume) || '') as any);
     });
 
     // Initialize per-terminal POS batch maps for THIS DU's terminals only

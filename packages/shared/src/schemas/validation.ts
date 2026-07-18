@@ -89,6 +89,7 @@ export const userSchema = z.object({
   fullName: z.string().min(2, 'Full name must be at least 2 characters'),
   email: z.string().email('Invalid email address').or(z.literal('')).optional().nullable(),
   phone: z.string().optional().nullable(),
+  role: z.enum(['Owner', 'Manager', 'Accountant', 'Staff', 'Attendant']).optional(),
   status: z.enum(['ACTIVE', 'INACTIVE']).default('ACTIVE'),
 });
 

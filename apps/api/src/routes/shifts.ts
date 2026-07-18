@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { and, desc, eq, inArray, ne, sql } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
-import { canOpenShift, canCloseShift, canReopenShift, isAuthorizedForStation, type Role } from '@pump/shared';
+import { canOpenShift, canCloseShift, canReopenShift, isAuthorizedForStation, isAttendant, type Role } from '@pump/shared';
 import {
   OpenShift,
   RecordNozzleReadings,
@@ -698,6 +698,137 @@ shiftsRouter.get('/status', async (c) => {
   return c.json({ success: true, data: { ...base, templates, nozzles, staff, dispensers, terminals } });
 });
 
+// GET /api/shifts/my-assignment — the caller's own active shift assignment(s):
+// assigned dispenser unit(s), their nozzles (opening readings) + linked
+// terminals, and any existing draft handover. Self-scoped: only the caller's
+// data is ever returned, so it is safe for the restricted Attendant role.
+shiftsRouter.get('/my-assignment', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+
+  // Active (OPEN) shifts where this user is assigned to at least one DU.
+  const assignmentRows = await db
+    .select({ sa: schema.shiftStaffAssignments, shift: schema.shifts, du: schema.dispenserUnits })
+    .from(schema.shiftStaffAssignments)
+    .innerJoin(schema.shifts, eq(schema.shifts.id, schema.shiftStaffAssignments.shiftId))
+    .leftJoin(schema.dispenserUnits, eq(schema.dispenserUnits.id, schema.shiftStaffAssignments.duId))
+    .where(
+      and(
+        eq(schema.shiftStaffAssignments.userId, user.id),
+        eq(schema.shifts.organizationId, user.organizationId),
+        eq(schema.shifts.status, 'OPEN'),
+      ),
+    );
+
+  if (assignmentRows.length === 0) {
+    return c.json({ success: true, data: null });
+  }
+
+  // An attendant works one active shift at a time; anchor on the first.
+  const shift = assignmentRows[0].shift;
+  const myRows = assignmentRows.filter((r) => r.sa.shiftId === shift.id && r.sa.duId);
+  const duIds = [...new Set(myRows.map((r) => r.sa.duId as string))];
+
+  const [templateRows, stationRows, nozzleRows, terminalRows, myHandovers, myEntries, creditSaleRows] = await Promise.all([
+    db.select().from(schema.shiftTemplates).where(eq(schema.shiftTemplates.id, shift.shiftTemplateId)).limit(1),
+    db.select().from(schema.stations).where(eq(schema.stations.id, shift.stationId)).limit(1),
+    duIds.length
+      ? db
+          .select({ nr: schema.nozzleReadings, nz: schema.nozzles, prod: schema.products, tnk: schema.tanks })
+          .from(schema.nozzleReadings)
+          .innerJoin(schema.nozzles, eq(schema.nozzles.id, schema.nozzleReadings.nozzleId))
+          .leftJoin(schema.products, eq(schema.products.id, schema.nozzles.productId))
+          .leftJoin(schema.tanks, eq(schema.tanks.id, schema.nozzles.tankId))
+          .where(and(eq(schema.nozzleReadings.shiftId, shift.id), inArray(schema.nozzles.duId, duIds)))
+      : Promise.resolve([] as any[]),
+    db
+      .select({ link: schema.shiftTerminalLinks, term: schema.paymentTerminals })
+      .from(schema.shiftTerminalLinks)
+      .leftJoin(schema.paymentTerminals, eq(schema.paymentTerminals.id, schema.shiftTerminalLinks.terminalId))
+      .where(eq(schema.shiftTerminalLinks.shiftId, shift.id)),
+    db
+      .select()
+      .from(schema.attendantHandovers)
+      .where(and(eq(schema.attendantHandovers.shiftId, shift.id), eq(schema.attendantHandovers.userId, user.id))),
+    db.select().from(schema.handoverTerminalEntries).where(eq(schema.handoverTerminalEntries.shiftId, shift.id)),
+    db
+      .select({ ct: schema.customerTransactions, customerName: schema.customers.name, productName: schema.products.name })
+      .from(schema.customerTransactions)
+      .leftJoin(schema.customers, eq(schema.customers.id, schema.customerTransactions.customerId))
+      .leftJoin(schema.products, eq(schema.products.id, schema.customerTransactions.productId))
+      .where(
+        and(
+          eq(schema.customerTransactions.shiftId, shift.id),
+          eq(schema.customerTransactions.attendantId, user.id),
+          eq(schema.customerTransactions.transactionType, 'Credit Sale'),
+          eq(schema.customerTransactions.referenceType, 'CREDIT_SALE'),
+        ),
+      ),
+  ]);
+
+  const dispenserUnits = duIds.map((duId) => {
+    const du = myRows.find((r) => r.sa.duId === duId)?.du;
+    const nozzles = (nozzleRows as any[])
+      .filter((r) => r.nz.duId === duId)
+      .map(({ nr, nz, prod, tnk }) => ({
+        nozzleId: nz.id,
+        nozzleName: nz.name,
+        productId: nz.productId,
+        productName: prod?.name ?? 'Unknown',
+        productCode: prod?.code ?? null,
+        unit: prod?.unit ?? 'L',
+        tankName: tnk?.name ?? null,
+        openingReading: Number(nr.openingReading),
+        closingReading: nr.closingReading != null ? Number(nr.closingReading) : null,
+        testingVolume: nr.testingVolume != null ? Number(nr.testingVolume) : null,
+        unitPrice: nr.unitPrice != null ? Number(nr.unitPrice) : null,
+      }));
+    // Only terminals bound to THIS dispenser unit — shift-wide / other-DU
+    // machines are not shown to the attendant (mirrors the desktop drawer).
+    const terminals = terminalRows
+      .filter((r) => r.link.duId === duId)
+      .map(({ link, term }) => ({
+        terminalId: link.terminalId,
+        label: term?.label ?? 'Terminal',
+        supportsCard: term?.supportsCard ?? true,
+        supportsUpi: term?.supportsUpi ?? true,
+      }));
+    const handover = myHandovers.find((h) => h.duId === duId) ?? null;
+    const terminalEntries = handover ? myEntries.filter((e) => e.handoverId === handover.id) : [];
+    const creditSales = (creditSaleRows as any[])
+      .filter((r) => r.ct.duId === duId)
+      .map(({ ct, customerName, productName }) => ({
+        id: ct.id,
+        customerId: ct.customerId,
+        customerName: customerName ?? 'Customer',
+        vehicleId: ct.vehicleId,
+        productId: ct.productId,
+        productName: productName ?? null,
+        quantity: ct.quantity != null ? Number(ct.quantity) : null,
+        unitPrice: ct.unitPrice != null ? Number(ct.unitPrice) : null,
+        amount: Number(ct.amount),
+        notes: ct.notes ?? null,
+      }));
+    return { duId, duName: du?.name ?? 'Unknown', duCode: du?.code ?? null, nozzles, terminals, handover, terminalEntries, creditSales };
+  });
+
+  return c.json({
+    success: true,
+    data: {
+      userId: user.id,
+      shift: {
+        id: shift.id,
+        status: shift.status,
+        openedAt: shift.openedAt,
+        stationId: shift.stationId,
+        templateName: templateRows[0]?.name ?? null,
+      },
+      station: stationRows[0] ? { id: stationRows[0].id, name: stationRows[0].name, code: stationRows[0].code } : null,
+      dispenserUnits,
+    },
+  });
+});
+
 // GET /api/shifts/handovers?shiftId=...  (legacy-compatible read)
 shiftsRouter.get('/handovers', async (c) => {
   const db = c.var.db;
@@ -724,7 +855,9 @@ shiftsRouter.post('/handovers', async (c) => {
   const user = c.var.user;
   const body = await c.req.json().catch(() => ({}));
   const { shiftId, userId, duId } = body ?? {};
-  if (!shiftId || !userId || !duId) {
+  // Attendants derive userId from their own session, so only shiftId + duId are
+  // required from them; operational roles must name the attendant (userId).
+  if (!shiftId || !duId || (!userId && !isAttendant(user.role))) {
     return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'shiftId, userId and duId are required' } }, 400);
   }
   const [shift] = await db.select().from(schema.shifts).where(eq(schema.shifts.id, shiftId)).limit(1);
@@ -733,6 +866,31 @@ shiftsRouter.post('/handovers', async (c) => {
   }
   if (shift.status === 'LOCKED') {
     return c.json({ success: false, error: { code: 'INVARIANT_VIOLATION', message: 'Shift is locked' } }, 409);
+  }
+  // Caller must be authorized for the shift's station.
+  if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId: shift.stationId })) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+  }
+  // Attendants may only record their OWN handover, and only for a dispenser unit
+  // they are assigned to on this shift. Operational roles may record on behalf of
+  // any attendant (the userId from the body stands).
+  let effectiveUserId: string = userId ?? user.id;
+  if (isAttendant(user.role)) {
+    effectiveUserId = user.id;
+    const [assigned] = await db
+      .select({ id: schema.shiftStaffAssignments.id })
+      .from(schema.shiftStaffAssignments)
+      .where(
+        and(
+          eq(schema.shiftStaffAssignments.shiftId, shiftId),
+          eq(schema.shiftStaffAssignments.userId, user.id),
+          eq(schema.shiftStaffAssignments.duId, duId),
+        ),
+      )
+      .limit(1);
+    if (!assigned) {
+      return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Not assigned to this dispenser unit' } }, 403);
+    }
   }
   // Per-terminal card/UPI breakdown. When present, the card/UPI aggregates are
   // derived from these rows so the two can never drift apart.
@@ -745,7 +903,7 @@ shiftsRouter.post('/handovers', async (c) => {
     organizationId: user.organizationId,
     stationId: shift.stationId,
     shiftId,
-    userId,
+    userId: effectiveUserId,
     duId,
     cashHandedOver: String(body.cashHandedOver ?? 0),
     cardHandedOver: String(hasTerminalEntries ? derivedCard : body.cardHandedOver ?? 0),
@@ -759,7 +917,7 @@ shiftsRouter.post('/handovers', async (c) => {
   // entries cascade-delete with the old handover row.
   await db
     .delete(schema.attendantHandovers)
-    .where(and(eq(schema.attendantHandovers.shiftId, shiftId), eq(schema.attendantHandovers.userId, userId), eq(schema.attendantHandovers.duId, duId)));
+    .where(and(eq(schema.attendantHandovers.shiftId, shiftId), eq(schema.attendantHandovers.userId, effectiveUserId), eq(schema.attendantHandovers.duId, duId)));
   const [row] = await db.insert(schema.attendantHandovers).values(values).returning();
 
   if (hasTerminalEntries) {
@@ -795,10 +953,19 @@ shiftsRouter.post('/handovers', async (c) => {
     const closing = Number(r.closingReading);
     if (closing < opening) continue;
     const gross = closing - opening;
-    const testing = Math.min(Math.max(Number(r.testingVolume ?? 0), 0), gross);
+    const setFields: { closingReading: string; volumeSold: string; testingVolume?: string } = {
+      closingReading: String(closing),
+      volumeSold: String(gross),
+    };
+    // Only overwrite testing when the caller explicitly sent a value; otherwise
+    // preserve the previously-saved testing (a reading-only re-save must not
+    // silently zero the calibration volume).
+    if (r.testingVolume !== undefined && r.testingVolume !== null) {
+      setFields.testingVolume = String(Math.min(Math.max(Number(r.testingVolume), 0), gross));
+    }
     await db
       .update(schema.nozzleReadings)
-      .set({ closingReading: String(closing), volumeSold: String(gross), testingVolume: String(testing) })
+      .set(setFields)
       .where(eq(schema.nozzleReadings.id, existing.id));
   }
 

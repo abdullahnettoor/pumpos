@@ -8,7 +8,7 @@ import {
   supabase,
 } from '@pump/ui';
 
-export type UserRole = 'Owner' | 'Manager' | 'Accountant' | 'Staff';
+export type UserRole = 'Owner' | 'Manager' | 'Accountant' | 'Staff' | 'Attendant';
 
 /** Resolve the API base URL from the current mobile host (mirrors console). */
 export function resolveApiUrl(): string | undefined {
