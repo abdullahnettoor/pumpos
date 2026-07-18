@@ -1,6 +1,6 @@
 import React from 'react';
 
-export type TabKey = 'home' | 'shifts' | 'dssr' | 'ledger' | 'handover';
+export type TabKey = 'home' | 'shifts' | 'dssr' | 'ledger' | 'handover' | 'more';
 
 type IconProps = { size?: number };
 const makeIcon = (children: React.ReactNode): React.FC<IconProps> =>
@@ -58,6 +58,14 @@ const HandoverIcon = makeIcon(
     <path d="M9 11h6M9 15h4" />
   </>,
 );
+const MoreIcon = makeIcon(
+  <>
+    <path d="M4 20V10" />
+    <path d="M10 20V4" />
+    <path d="M16 20v-7" />
+    <path d="M3 20h18" />
+  </>,
+);
 
 interface NavItem {
   key: TabKey;
@@ -70,6 +78,7 @@ const ITEMS: NavItem[] = [
   { key: 'shifts', label: 'Shifts', Icon: ShiftsIcon },
   { key: 'dssr', label: 'DSSR', Icon: DssrIcon },
   { key: 'ledger', label: 'Money', Icon: LedgerIcon },
+  { key: 'more', label: 'More', Icon: MoreIcon },
   { key: 'handover', label: 'Handover', Icon: HandoverIcon },
 ];
 

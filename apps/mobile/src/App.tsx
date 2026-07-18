@@ -9,13 +9,14 @@ import { HomeScreen } from './screens/HomeScreen.js';
 import { ShiftsScreen } from './screens/ShiftsScreen.js';
 import { DssrScreen } from './screens/DssrScreen.js';
 import { LedgerScreen } from './screens/LedgerScreen.js';
+import { MoreScreen } from './screens/MoreScreen.js';
 import { AttendantScreen } from './screens/AttendantScreen.js';
 import { HandoverPanel } from './components/HandoverPanel.js';
 
 /** Tabs each role may access on mobile. */
 const TABS_BY_ROLE: Record<UserRole, TabKey[]> = {
-  Owner: ['home', 'shifts', 'dssr', 'ledger'],
-  Manager: ['shifts', 'dssr', 'ledger'],
+  Owner: ['home', 'shifts', 'dssr', 'ledger', 'more'],
+  Manager: ['shifts', 'dssr', 'ledger', 'more'],
   Accountant: ['dssr', 'ledger'],
   Staff: [],
   Attendant: [], // Attendants use their own dedicated handover shell, not tabs.
@@ -125,6 +126,7 @@ export const App: React.FC = () => {
     dssr: 'Daily report',
     ledger: 'Money',
     handover: 'My handover',
+    more: 'Insights',
   };
 
   const renderScreen = () => {
@@ -140,6 +142,7 @@ export const App: React.FC = () => {
     if (tab === 'home') return <HomeScreen station={selectedStation} businessDate={businessDate} />;
     if (tab === 'shifts') return <ShiftsScreen station={selectedStation} />;
     if (tab === 'dssr') return <DssrScreen station={selectedStation} businessDate={businessDate} />;
+    if (tab === 'more') return <MoreScreen station={selectedStation} />;
     return null;
   };
 
