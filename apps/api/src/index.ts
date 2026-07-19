@@ -61,6 +61,7 @@ type Bindings = {
   // bypasses Hyperdrive. Use this to work around Hyperdrive daily-quota
   // outages. Set via: `wrangler secret put SUPABASE_DIRECT_URL`.
   SUPABASE_DIRECT_URL?: string;
+  ENVIRONMENT?: string;
 };
 
 type Variables = {
@@ -272,14 +273,15 @@ api.use('*', async (c, next) => {
             ['verify']
           );
           keyCache.set(kid, publicKey);
-          console.log(`[JWT JWKS CACHE] Imported and cached public key for kid: ${kid}`);
         }
 
         payload = await verify(token, publicKey, 'ES256');
       } catch (jwksError: any) {
         // Local-only fallback for workerd TLS trust chain issues when fetching JWKS.
-        // Keep production strict by only permitting this on localhost requests.
-        if (isLocalRequest(c.req.url) && decodedPayload?.sub) {
+        // Keep production strict by only permitting this in development/local environments
+        // AND for localhost requests.
+        const isDevelopment = c.env.ENVIRONMENT === 'development' || c.env.ENVIRONMENT === 'local';
+        if (isDevelopment && isLocalRequest(c.req.url) && decodedPayload?.sub) {
           console.warn('[JWT DEV FALLBACK] JWKS fetch/verify failed locally; using decoded token claims only.', {
             reason: jwksError?.message || String(jwksError),
           });
@@ -289,8 +291,9 @@ api.use('*', async (c, next) => {
         }
       }
     } else {
-      throw new Error(`Unsupported JWT algorithm: ${header.alg}`);
+      throw new Error(`Unsupported algorithm: ${header.alg}`);
     }
+
     const authId = payload.sub; // UUID from supabase auth.users
 
     // Serve from the per-isolate auth cache when warm — skips the 2 DB
