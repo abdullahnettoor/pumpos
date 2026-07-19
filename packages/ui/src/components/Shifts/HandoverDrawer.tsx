@@ -1,9 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Drawer } from '../Drawer.js';
 import { Button } from '../../pump-ds/index.js';
+import { Combobox } from '../primitives/Combobox.js';
+import { useAllVehicles } from '../../query/hooks.js';
 import { CloudShiftService, CloudTransactionService } from '../../services/cloud.js';
 import { inr } from '../../utils/format.js';
 
@@ -36,8 +38,6 @@ interface HandoverDrawerProps {
   terminals?: any[];
   /** Credit-eligible (non-prepaid Credit/Fleet) customers, each with currentBalance + creditLimit. */
   customers?: any[];
-  /** Combined search: returns vehicles (with their customer) matching a query. */
-  searchVehicles?: (q: string) => Promise<any[]>;
   /** Fuel-on-credit lines already recorded for this (attendant, DU). */
   creditSales?: any[];
   /** Walk-in merchandise cash this attendant collected (folds into expected). */
@@ -61,7 +61,6 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
   nozzles,
   terminals = [],
   customers = [],
-  searchVehicles,
   creditSales = [],
   merchandiseCash = 0,
   merchandiseNonCash = 0,
@@ -122,11 +121,11 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
     }
 
     // Initialize readings and testing maps. Closing keeps the opening reading as a
-    // helpful starting point; testing defaults blank (placeholder 0) so the field
-    // is empty for typing rather than pre-filled with a literal 0.
+    // helpful starting point; testing pre-fills from the previously-saved value so
+    // re-saving the handover doesn't silently zero the calibration volume.
     nozzles.forEach((nz) => {
       setValue(`nozzleReadings.${nz.nozzleId}`, Number(nz.closingReading ?? nz.openingReading ?? 0));
-      setValue(`nozzleTesting.${nz.nozzleId}`, '' as any);
+      setValue(`nozzleTesting.${nz.nozzleId}`, (Number(nz.testingVolume) || '') as any);
     });
 
     // Initialize per-terminal POS batch maps for THIS DU's terminals only
@@ -164,10 +163,7 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
   // ---- Fuel-on-credit (credit chits) declared for this (attendant, DU) ----
   const [creditLines, setCreditLines] = useState<any[]>([]);
   const [ccOpen, setCcOpen] = useState(false);
-  const [ccQuery, setCcQuery] = useState('');
-  const [ccResults, setCcResults] = useState<any[]>([]);
-  const [ccSearching, setCcSearching] = useState(false);
-  const [ccShowResults, setCcShowResults] = useState(false);
+  const [ccSelectValue, setCcSelectValue] = useState('');
   const [ccCustomerId, setCcCustomerId] = useState('');
   const [ccCustomerName, setCcCustomerName] = useState('');
   const [ccVehicleId, setCcVehicleId] = useState<string | null>(null);
@@ -178,9 +174,11 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
   const [ccAmount, setCcAmount] = useState('');
   const [ccNotes, setCcNotes] = useState('');
   const [ccBusy, setCcBusy] = useState(false);
+  // Cached vehicles (semi tier) for the client-side credit picker — no server search.
+  const { data: allVehiclesData } = useAllVehicles(true);
 
   const resetCcRow = () => {
-    setCcQuery(''); setCcResults([]); setCcShowResults(false);
+    setCcSelectValue('');
     setCcCustomerId(''); setCcCustomerName(''); setCcVehicleId(null); setCcVehicleLabel('');
     setCcProductId(''); setCcQty(''); setCcPrice(''); setCcAmount(''); setCcNotes('');
   };
@@ -197,49 +195,40 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
     ).values(),
   );
 
-  // Combined search: vehicle registration OR customer name. Vehicles autofill the
-  // customer (+ product/price when the vehicle's fuel is dispensed at this DU).
-  useEffect(() => {
-    if (!ccOpen || ccCustomerId) { setCcShowResults(false); return; }
-    const q = ccQuery.trim();
-    if (!q) { setCcResults([]); setCcShowResults(false); return; }
-    let active = true;
-    setCcSearching(true);
-    const t = window.setTimeout(async () => {
-      let vehicles: any[] = [];
-      try { vehicles = searchVehicles ? await searchVehicles(q) : []; } catch { vehicles = []; }
-      vehicles = vehicles.filter((v: any) => !v.isPrepaid && v.customerType !== 'Regular');
-      const ql = q.toLowerCase();
-      const custMatches = (customers || []).filter((c: any) => (c.name || '').toLowerCase().includes(ql));
-      if (!active) return;
-      setCcResults([
-        ...vehicles.map((v: any) => ({ kind: 'vehicle', ...v })),
-        ...custMatches.map((c: any) => ({ kind: 'customer', id: c.id, customerId: c.id, customerName: c.name, customerType: c.customerType })),
-      ]);
-      setCcShowResults(true);
-      setCcSearching(false);
-    }, 200);
-    return () => { active = false; window.clearTimeout(t); };
-  }, [ccQuery, ccOpen, ccCustomerId, searchVehicles, customers]);
+  // Credit-eligible vehicles = cached vehicles belonging to the credit customers
+  // passed in (already Credit/Fleet, non-prepaid). Combined with the customers
+  // into one client-side searchable option list — no server round-trips.
+  const allVehicles = allVehiclesData ?? [];
+  const creditOptions = useMemo(() => {
+    const customerIds = new Set(customers.map((c: any) => c.id));
+    const opts: { value: string; label: string; sublabel?: string }[] = [];
+    for (const v of allVehicles) {
+      if (!customerIds.has(v.customerId)) continue;
+      opts.push({ value: `v:${v.id}`, label: v.registrationNumber, sublabel: `${v.customerName ?? ''}${v.defaultProductName ? ` · ${v.defaultProductName}` : ''}` });
+    }
+    for (const c of customers) opts.push({ value: `c:${c.id}`, label: c.name, sublabel: c.customerType });
+    return opts;
+  }, [allVehicles, customers]);
 
-  const selectCcResult = (r: any) => {
-    setCcCustomerId(r.customerId);
-    setCcCustomerName(r.customerName);
-    if (r.kind === 'vehicle') {
-      setCcVehicleId(r.id);
-      setCcVehicleLabel(r.registrationNumber);
-      setCcQuery(r.registrationNumber);
-      const match = duProducts.find((p) => p.id === r.defaultProductId);
-      if (match) {
-        setCcProductId(match.id);
-        if (match.price > 0) setCcPrice(match.price.toFixed(2));
-      }
-    } else {
+  const handleCreditSelect = (value: string) => {
+    setCcSelectValue(value);
+    if (value.startsWith('v:')) {
+      const v = allVehicles.find((x: any) => `v:${x.id}` === value);
+      if (!v) return;
+      setCcCustomerId(v.customerId);
+      setCcCustomerName(v.customerName ?? 'Customer');
+      setCcVehicleId(v.id);
+      setCcVehicleLabel(v.registrationNumber);
+      const match = duProducts.find((p) => p.id === v.defaultProductId);
+      if (match) { setCcProductId(match.id); if (match.price > 0) setCcPrice(match.price.toFixed(2)); }
+    } else if (value.startsWith('c:')) {
+      const id = value.slice(2);
+      const c = customers.find((x: any) => x.id === id);
+      setCcCustomerId(id);
+      setCcCustomerName(c?.name ?? 'Customer');
       setCcVehicleId(null);
       setCcVehicleLabel('');
-      setCcQuery(r.customerName);
     }
-    setCcShowResults(false);
   };
 
   const ccSelectedCustomer = customers.find((c: any) => c.id === ccCustomerId);
@@ -668,53 +657,21 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
             </Button>
           ) : (
             <div style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', padding: '10px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {/* Combined search: customer name OR vehicle number */}
-              {!ccCustomerId ? (
-                <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                  <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Search customer name or vehicle number</label>
-                  <input
-                    type="text"
-                    value={ccQuery}
-                    autoFocus
-                    onChange={(e) => setCcQuery(e.target.value)}
-                    onFocus={() => ccResults.length > 0 && setCcShowResults(true)}
-                    placeholder="e.g. Star Logistics or KA01AB1234"
-                    style={{ height: '30px', padding: '0 8px', width: '100%', minWidth: 0, border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-input)', fontSize: '12px' }}
-                  />
-                  {ccShowResults && ccResults.length > 0 && (
-                    <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, marginTop: '2px', maxHeight: '200px', overflowY: 'auto', backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-input)', boxShadow: '0 4px 12px rgba(0,0,0,0.08)', zIndex: 20 }}>
-                      {ccResults.map((r, i) => (
-                        <div
-                          key={(r.kind === 'vehicle' ? 'v' : 'c') + (r.id ?? i)}
-                          onMouseDown={(e) => { e.preventDefault(); selectCcResult(r); }}
-                          style={{ padding: '6px 8px', cursor: 'pointer', borderBottom: i === ccResults.length - 1 ? 'none' : '1px solid var(--border-soft)', fontSize: '12px' }}
-                        >
-                          <div style={{ fontWeight: 600, color: 'var(--text-default)' }}>
-                            {r.kind === 'vehicle' ? r.registrationNumber : r.customerName}
-                            <span style={{ marginLeft: '6px', fontSize: '9px', fontWeight: 600, color: r.kind === 'vehicle' ? 'var(--state-info-fg)' : 'var(--text-muted)', textTransform: 'uppercase' }}>{r.kind}</span>
-                          </div>
-                          <div style={{ color: 'var(--text-muted)', marginTop: '1px' }}>
-                            {r.kind === 'vehicle' ? `${r.customerName} · ${r.vehicleType ?? ''}${r.defaultProductName ? ` · ${r.defaultProductName}` : ''}` : r.customerType}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {ccShowResults && !ccSearching && ccResults.length === 0 && ccQuery.trim() && (
-                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', padding: '4px 2px' }}>No credit customer or vehicle matches "{ccQuery}".</div>
-                  )}
-                </div>
-              ) : (
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', padding: '6px 8px', border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-input)', backgroundColor: 'var(--bg-surface-alt)' }}>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-default)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {ccCustomerName}{ccVehicleLabel ? ` · ${ccVehicleLabel}` : ''}
-                    </div>
-                    {ccAvailable != null && <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Available credit {inr(ccAvailable)}</div>}
-                  </div>
-                  <button type="button" onClick={resetCcRow} disabled={ccBusy} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '11px', flexShrink: 0 }}>Change</button>
-                </div>
-              )}
+              {/* Combined picker: customer name OR vehicle number (cached, client-side) */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Customer or vehicle</label>
+                <Combobox
+                  options={creditOptions}
+                  value={ccSelectValue}
+                  onChange={handleCreditSelect}
+                  placeholder="Select customer or vehicle…"
+                  searchPlaceholder="Search name or vehicle no.…"
+                  emptyMessage="No credit customer or vehicle found."
+                />
+                {ccCustomerId && ccAvailable != null && (
+                  <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Available credit {inr(ccAvailable)}</span>
+                )}
+              </div>
 
               {ccCustomerId && (
                 <>

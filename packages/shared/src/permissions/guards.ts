@@ -44,12 +44,26 @@ export function canReopenShift(role: Role): boolean {
   return role === 'Owner' || role === 'Manager';
 }
 
+/** True for the mobile-only, self-scoped Attendant role. */
+export function isAttendant(role: Role): boolean {
+  return role === 'Attendant';
+}
+
+/**
+ * Who may record an attendant handover. Attendants may record only their OWN
+ * handover (enforced at the route by forcing userId = self); operational roles
+ * may record on behalf of any attendant.
+ */
+export function canRecordHandover(role: Role): boolean {
+  return role === 'Owner' || role === 'Manager' || role === 'Staff' || role === 'Attendant';
+}
+
 // ----------------------------------------------------
 // Expense Permissions
 // ----------------------------------------------------
 
 export function canCreateExpense(role: Role): boolean {
-  return true; // All roles (Owner, Manager, Accountant, Staff)
+  return role !== 'Attendant'; // All roles except the mobile-only Attendant
 }
 
 export function canEditExpense(role: Role, shiftState: ShiftState): boolean {
@@ -60,7 +74,7 @@ export function canEditExpense(role: Role, shiftState: ShiftState): boolean {
     // Closed shifts cannot be edited directly; only Owners, Managers, Accountants can create adjustments
     return false;
   }
-  return true; // Any role during an open shift
+  return role !== 'Attendant'; // Any operational role during an open shift
 }
 
 export function canCreateExpenseAdjustment(role: Role): boolean {
@@ -131,14 +145,14 @@ export function canArchiveSupplier(role: Role): boolean {
 // ----------------------------------------------------
 
 export function canRecordCollection(role: Role): boolean {
-  return true; // All roles
+  return role !== 'Attendant'; // All roles except the mobile-only Attendant
 }
 
 export function canEditCollection(role: Role, shiftState: ShiftState): boolean {
   if (shiftState === 'LOCKED' || shiftState === 'CLOSED') {
     return false;
   }
-  return true; // All roles can edit collections in open shifts
+  return role !== 'Attendant'; // All operational roles can edit collections in open shifts
 }
 
 export function canCreateCollectionAdjustment(role: Role): boolean {

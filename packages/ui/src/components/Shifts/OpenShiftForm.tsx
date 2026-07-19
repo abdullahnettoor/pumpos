@@ -106,6 +106,29 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
           </div>
         </Panel>
 
+        {!lastShift && nozzles && nozzles.length > 0 && (
+          <Panel title="Opening nozzle readings">
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', backgroundColor: 'var(--state-info-bg)', color: 'var(--state-info-fg)', padding: '10px 12px', borderRadius: 'var(--radius-input)', fontSize: '12px', marginBottom: '12px' }}>
+              <Info size={14} style={{ flexShrink: 0, marginTop: '1px' }} />
+              <span><strong>First operational shift:</strong> no previous history for this station, so enter the initial opening readings for all nozzles.</span>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px' }}>
+              {[...nozzles].sort((a: any, b: any) => {
+                const du = String(a.duCode || a.duName || '').localeCompare(String(b.duCode || b.duName || ''), undefined, { numeric: true });
+                if (du !== 0) return du;
+                return String(a.name || '').localeCompare(String(b.name || ''), undefined, { numeric: true });
+              }).map((nz: any) => {
+                const initial = initialReadings.find((r) => r.nozzleId === nz.id);
+                return (
+                  <Field key={nz.id} label={`Nozzle ${nz.name} — ${nz.productCode} (${nz.unit || 'L'})`}>
+                    <NumberInput step="0.001" min="0" placeholder="0" value={(initial?.openingReading || '') as any} onChange={(e) => onInitialReadingChange(nz.id, Number(e.target.value))} />
+                  </Field>
+                );
+              })}
+            </div>
+          </Panel>
+        )}
+
         {dispensers && dispensers.length > 0 && (
           <Panel title="Staff assignment">
             <p style={sectionNote}>Assign attendants to dispenser units (optional).</p>
@@ -142,29 +165,6 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
                         <option key={du.id} value={du.id}>Dispenser {du.code || du.name}</option>
                       ))}
                     </Select>
-                  </Field>
-                );
-              })}
-            </div>
-          </Panel>
-        )}
-
-        {!lastShift && nozzles && nozzles.length > 0 && (
-          <Panel title="Opening nozzle readings">
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', backgroundColor: 'var(--state-info-bg)', color: 'var(--state-info-fg)', padding: '10px 12px', borderRadius: 'var(--radius-input)', fontSize: '12px', marginBottom: '12px' }}>
-              <Info size={14} style={{ flexShrink: 0, marginTop: '1px' }} />
-              <span><strong>First operational shift:</strong> no previous history for this station, so enter the initial opening readings for all nozzles.</span>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px' }}>
-              {[...nozzles].sort((a: any, b: any) => {
-                const du = String(a.duCode || a.duName || '').localeCompare(String(b.duCode || b.duName || ''), undefined, { numeric: true });
-                if (du !== 0) return du;
-                return String(a.name || '').localeCompare(String(b.name || ''), undefined, { numeric: true });
-              }).map((nz: any) => {
-                const initial = initialReadings.find((r) => r.nozzleId === nz.id);
-                return (
-                  <Field key={nz.id} label={`Nozzle ${nz.name} — ${nz.productCode} (${nz.unit || 'L'})`}>
-                    <NumberInput step="0.001" min="0" value={initial?.openingReading ?? 0} onChange={(e) => onInitialReadingChange(nz.id, Number(e.target.value))} />
                   </Field>
                 );
               })}

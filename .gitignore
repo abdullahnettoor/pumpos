@@ -1,6 +1,8 @@
 node_modules
 
 .env
+.env.prod
+.env.local
 
 .dev.vars
 .dev.vars*

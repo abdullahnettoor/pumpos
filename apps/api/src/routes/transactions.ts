@@ -8,6 +8,7 @@ import {
   canArchiveParty,
   canRecordPurchase,
   canManageExpenseCategory,
+  isAttendant,
   type Role,
 } from '@pump/shared';
 import {
@@ -1297,6 +1298,9 @@ transactionsRouter.post('/shifts/:id/merchandise-handover', async (c) => {
     return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
   }
 
+  // Attendants may only record their OWN merchandise handover.
+  const attendantId = isAttendant(user.role) ? user.id : body.attendantId;
+
   const result = await runInTransaction(db, (tx, events) =>
     new RecordMerchandiseHandover({
       sales: new DrizzleSaleRepository(tx),
@@ -1306,7 +1310,7 @@ transactionsRouter.post('/shifts/:id/merchandise-handover', async (c) => {
       shifts: new DrizzleShiftRepository(tx),
       docNumbers: new TimestampDocumentNumberGenerator(),
       events,
-    }).execute({ shiftId, attendantId: body.attendantId, lines: body.lines ?? [], nonCashAmount: body.nonCashAmount }, buildContext(user)),
+    }).execute({ shiftId, attendantId, lines: body.lines ?? [], nonCashAmount: body.nonCashAmount }, buildContext(user)),
   );
   return sendResult(c, result);
 });

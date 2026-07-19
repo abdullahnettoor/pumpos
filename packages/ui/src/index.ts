@@ -26,8 +26,10 @@ export { exportReportPdf, exportReactPdf, setPdfSaver } from './services/exportP
 export {
   DEFAULT_SHIFT_SUMMARY_CONFIG, DEFAULT_DSSR_CONFIG,
   SHIFT_SUMMARY_SECTION_LABELS, DSSR_SECTION_LABELS,
+  paperFromStation,
 } from './services/reports/reportConfig.js';
 export { letterheadFromStation } from './services/reports/letterhead.js';
+export { generateDssrPdf, generateShiftSummaryPdf } from './services/reports/generate.js';
 export { LedgerView, computeLedgerRows } from './components/ledger/LedgerView.js';
 export type { LedgerResolved, LedgerComputed, LedgerViewProps } from './components/ledger/LedgerView.js';
 export { DesignSystem } from './components/DesignSystem.js';
@@ -35,6 +37,8 @@ export { DesignSystem } from './components/DesignSystem.js';
 // Data layer (TanStack Query) + shared primitives
 export * from './query/queryClient.js';
 export * from './query/hooks.js';
+export { useStationAlerts } from './query/useStationAlerts.js';
+export type { StationAlert, AlertSeverity } from './query/useStationAlerts.js';
 export { PageLayout } from './components/primitives/PageLayout.js';
 export type { PageLayoutProps } from './components/primitives/PageLayout.js';
 export { DataTable } from './components/primitives/DataTable.js';

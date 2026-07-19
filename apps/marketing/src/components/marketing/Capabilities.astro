@@ -1,0 +1,62 @@
+---
+import Section from './Section.astro';
+
+const capabilities = [
+  {
+    code: '01',
+    title: 'Close every shift with confidence.',
+    body: 'Opening cash, collections, expenses, drops and variance arrive in one clear reconciliation—before the drawer is handed over.',
+    label: 'Shift close',
+    rows: [['Expected drawer', '₹1,42,880'], ['Counted cash', '₹1,42,880'], ['Variance', '₹0 · matched']],
+  },
+  {
+    code: '02',
+    title: 'Know where every litre went.',
+    body: 'Nozzle-derived sales, tank movements and stock variance stay linked to the business day instead of disappearing across registers.',
+    label: 'Stock position',
+    rows: [['Petrol available', '11,240 L'], ['Metered volume', '3,318 L'], ['Variance watch', '2.1%']],
+  },
+  {
+    code: '03',
+    title: 'Keep credit from becoming a blind spot.',
+    body: 'Fleet, customer and vehicle ledgers update as sales and collections happen, so the follow-up list is ready when you need it.',
+    label: 'Receivables',
+    rows: [['Due this week', '₹38,500'], ['Accounts on terms', '04'], ['Collection status', 'Review']],
+  },
+  {
+    code: '04',
+    title: 'Give owners the signal, not another phone call.',
+    body: 'See stations, exceptions and business-day position in one place—without waiting for manual consolidation at night.',
+    label: 'Station overview',
+    rows: [['Open shifts', '02'], ['Sync status', 'Up to date'], ['Exceptions', '01 review']],
+  },
+];
+---
+
+<Section id="capabilities" title="Four operating truths. One reliable record." lead="PumpOS is built around the questions a station has to answer every day—not a disconnected feature checklist.">
+  <div class="border-y border-[var(--color-border-strong)] bg-white">
+    {capabilities.map((capability, index) => (
+      <article class={`grid gap-6 border-b border-[var(--color-border-soft)] px-1 py-8 last:border-b-0 sm:px-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-center lg:gap-16 ${index % 2 ? 'lg:[&>*:first-child]:order-2' : ''}`}>
+        <div class="px-4 sm:px-0">
+          <p class="font-mono text-xs font-semibold tracking-[0.12em] text-[var(--color-brand)]">{capability.code} / {capability.label}</p>
+          <h3 class="mt-4 max-w-xl text-2xl font-semibold tracking-[-0.02em] text-[var(--color-ink)] sm:text-3xl">{capability.title}</h3>
+          <p class="mt-3 max-w-xl text-base leading-7 text-[var(--color-ink-muted)]">{capability.body}</p>
+        </div>
+        <div class="mx-4 border border-[var(--color-border-strong)] bg-[var(--color-canvas)] sm:mx-0">
+          <div class="flex items-center justify-between border-b border-[var(--color-border-soft)] bg-white px-4 py-3">
+            <p class="text-sm font-semibold text-[var(--color-ink)]">{capability.label}</p>
+            <span class="rounded-full bg-[#e8f4ed] px-2 py-0.5 text-xs font-medium text-[var(--color-brand-dark)]">Live</span>
+          </div>
+          <dl class="divide-y divide-[var(--color-border-soft)] px-4">
+            {capability.rows.map(([label, value]) => (
+              <div class="flex items-center justify-between gap-4 py-3">
+                <dt class="text-sm text-[var(--color-ink-muted)]">{label}</dt>
+                <dd class="font-mono text-sm font-semibold tabular-nums text-[var(--color-ink)]">{value}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      </article>
+    ))}
+  </div>
+</Section>

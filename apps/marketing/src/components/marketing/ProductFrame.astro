@@ -1,0 +1,76 @@
+---
+interface Row {
+  name: string;
+  meta: string;
+  value: string;
+  status?: 'ok' | 'warn' | 'info';
+}
+interface Metric {
+  label: string;
+  value: string;
+  sub?: string;
+}
+interface Props {
+  title?: string;
+  subtitle?: string;
+  metrics?: Metric[];
+  rows?: Row[];
+  compact?: boolean;
+}
+const {
+  title = 'Station command center',
+  subtitle = 'Today · live business day',
+  metrics = [
+    { label: 'Fuel sales', value: '₹3,36,161', sub: '3,318 L' },
+    { label: 'Cash variance', value: '₹0', sub: 'matched' },
+    { label: 'Receivables', value: '₹1,28,400', sub: '12 customers' },
+  ],
+  rows = [
+    { name: 'Morning Shift', meta: 'Open · 6 nozzles', value: '₹1,42,880', status: 'ok' },
+    { name: 'Tank 1 · Petrol', meta: '11,240 L available', value: '62%', status: 'info' },
+    { name: 'Credit due today', meta: 'Fleet accounts', value: '₹38,500', status: 'warn' },
+  ],
+  compact = false,
+} = Astro.props;
+const statusClass = {
+  ok: 'bg-[var(--state-success-bg,#E8F4ED)] text-[var(--state-success-fg,#1F6A53)]',
+  warn: 'bg-[var(--state-warning-bg,#FFF4D8)] text-[var(--state-warning-fg,#8A5A00)]',
+  info: 'bg-[#E8F1F8] text-[var(--color-brand-secondary)]',
+};
+---
+
+<div class={`product-frame ${compact ? 'product-frame--compact' : ''}`}>
+  <div class="flex items-center justify-between border-b border-[var(--color-border-soft)] px-4 py-3">
+    <div>
+      <p class="text-sm font-semibold text-[var(--color-ink)]">{title}</p>
+      <p class="text-xs text-[var(--color-ink-muted)]">{subtitle}</p>
+    </div>
+    <div class="flex items-center gap-1.5 rounded-full border border-[var(--color-border-soft)] bg-[var(--color-canvas)] px-2.5 py-1 text-xs text-[var(--color-ink-muted)]">
+      <span class="h-1.5 w-1.5 rounded-full bg-[var(--color-brand)]"></span>
+      Synced
+    </div>
+  </div>
+  <div class="grid gap-0 border-b border-[var(--color-border-soft)] sm:grid-cols-3">
+    {metrics.map((m) => (
+      <div class="border-b border-[var(--color-border-soft)] p-4 last:border-b-0 sm:border-b-0 sm:border-r sm:last:border-r-0">
+        <p class="text-xs text-[var(--color-ink-muted)]">{m.label}</p>
+        <p class="mt-1 font-mono text-lg font-semibold tabular-nums text-[var(--color-ink)]">{m.value}</p>
+        {m.sub && <p class="mt-0.5 text-xs text-[var(--color-ink-muted)]">{m.sub}</p>}
+      </div>
+    ))}
+  </div>
+  <div class="p-4 pt-2">
+    {rows.map((row) => (
+      <div class="flex items-center justify-between gap-3 border-b border-[var(--color-border-soft)] py-3 last:border-b-0">
+        <div class="min-w-0">
+          <p class="truncate text-sm font-medium text-[var(--color-ink)]">{row.name}</p>
+          <p class="truncate text-xs text-[var(--color-ink-muted)]">{row.meta}</p>
+        </div>
+        <div class="flex shrink-0 items-center gap-3">
+          <span class={`rounded-full px-2 py-0.5 text-xs font-medium ${statusClass[row.status ?? 'info']}`}>{row.status === 'warn' ? 'Review' : row.status === 'ok' ? 'OK' : 'Live'}</span>
+          <span class="font-mono text-sm font-semibold tabular-nums text-[var(--color-ink)]">{row.value}</span>
+        </div>
+      </div>
+    ))}
+  </div>
+</div>

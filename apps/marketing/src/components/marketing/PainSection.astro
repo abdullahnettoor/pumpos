@@ -1,0 +1,28 @@
+---
+import Section from './Section.astro';
+
+const pains = [
+  'Manual DSR',
+  'Shift mismatches',
+  'Fuel variance',
+  'Cash confusion',
+  'Credit tracking',
+  'Inventory errors',
+  'Calling your manager every night',
+];
+---
+
+<Section
+  id="problems"
+  title="Is your station still running on paper, Excel and WhatsApp?"
+  lead="That stack works until it doesn't — usually at shift close, during a shortage investigation, or when the owner asks for today's numbers."
+>
+  <div class="grid gap-px overflow-hidden border border-[var(--color-border-strong)] bg-[var(--color-border-soft)] sm:grid-cols-2 lg:grid-cols-4">
+    {pains.map((pain) => (
+      <div class="flex items-center gap-3 bg-white px-4 py-4">
+        <span class="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-[#f8e3e0] text-xs font-semibold text-[var(--color-alert)]">×</span>
+        <span class="text-sm font-medium text-[var(--color-ink)]">{pain}</span>
+      </div>
+    ))}
+  </div>
+</Section>

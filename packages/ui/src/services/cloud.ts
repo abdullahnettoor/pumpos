@@ -359,6 +359,15 @@ export class CloudShiftService {
     return request<any>(`/shifts/status?stationId=${stationId}${lite ? '&lite=true' : ''}`);
   }
 
+  /**
+   * The signed-in attendant's own active shift assignment: assigned DU(s), their
+   * nozzles (opening readings) + linked terminals, and any draft handover.
+   * Returns null when the attendant has no open assigned shift.
+   */
+  async getMyAssignment(): Promise<any | null> {
+    return request<any | null>('/shifts/my-assignment');
+  }
+
   async openShift(payload: ShiftOpenPayload): Promise<any> {
     return request<any>('/shifts/open', {
       method: 'POST',
@@ -706,7 +715,7 @@ export class CloudTransactionService {
   }
 
   /** Record/replace an employee's itemized walk-in merchandise handover for a shift. */
-  async recordMerchandiseHandover(shiftId: string, payload: { attendantId: string; lines: { productId: string; quantity: number }[]; nonCashAmount?: number }): Promise<any> {
+  async recordMerchandiseHandover(shiftId: string, payload: { attendantId?: string; lines: { productId: string; quantity: number }[]; nonCashAmount?: number }): Promise<any> {
     return request<any>(`/transactions/shifts/${shiftId}/merchandise-handover`, { method: 'POST', body: JSON.stringify(payload) });
   }
 
