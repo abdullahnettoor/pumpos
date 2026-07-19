@@ -1,4 +1,5 @@
-import { pgTable, uuid, varchar, timestamp, boolean, integer, numeric, jsonb, primaryKey } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, timestamp, boolean, integer, numeric, jsonb, primaryKey, index, uniqueIndex } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 
 // ----------------------------------------------------
 // CORE DOMAIN
@@ -163,7 +164,9 @@ export const businessDays = pgTable('business_days', {
   closedAt: timestamp('closed_at'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
-});
+}, (t) => ({
+  orgStationDateUniq: uniqueIndex('business_days_org_station_date_uniq').on(t.organizationId, t.stationId, t.businessDate),
+}));
 
 export const shiftTemplates = pgTable('shift_templates', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -293,7 +296,10 @@ export const customerTransactions = pgTable('customer_transactions', {
   referenceId: uuid('reference_id'),
   notes: varchar('notes', { length: 500 }),
   createdAt: timestamp('created_at').defaultNow().notNull(),
-});
+}, (t) => ({
+  shiftAttendantIdx: index('customer_txn_shift_attendant_idx').on(t.shiftId, t.attendantId),
+  shiftDuIdx: index('customer_txn_shift_du_idx').on(t.shiftId, t.duId),
+}));
 
 export const suppliers = pgTable('suppliers', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -344,7 +350,9 @@ export const financialAccounts = pgTable('financial_accounts', {
   isActive: boolean('is_active').default(true).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
-});
+}, (t) => ({
+  orgStationIdx: index('financial_accounts_org_station_idx').on(t.organizationId, t.stationId),
+}));
 
 // Single-entry, signed money ledger. Balance = opening + Σin − Σout. A transfer
 // is two linked rows sharing transferId (out of A, in to B) that net to zero.
@@ -366,7 +374,13 @@ export const ledgerEntries = pgTable('ledger_entries', {
   reconciled: boolean('reconciled').default(false).notNull(),
   notes: varchar('notes', { length: 500 }),
   createdAt: timestamp('created_at').defaultNow().notNull(),
-});
+}, (t) => ({
+  accountDateIdx: index('ledger_entries_account_date_idx').on(t.accountId, t.entryDate),
+  orgStationIdx: index('ledger_entries_org_station_idx').on(t.organizationId, t.stationId),
+  orgStationDateIdx: index('ledger_entries_org_station_date_idx').on(t.organizationId, t.stationId, t.entryDate),
+  sourceIdx: index('ledger_entries_source_idx').on(t.sourceType, t.sourceId),
+  transferIdx: index('ledger_entries_transfer_idx').on(t.transferId),
+}));
 
 // ----------------------------------------------------
 // TRANSACTION & INVENTORY DOMAINS
@@ -402,7 +416,9 @@ export const sales = pgTable('sales', {
   notes: varchar('notes', { length: 500 }),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
-});
+}, (t) => ({
+  shiftAttendantIdx: index('sales_shift_attendant_idx').on(t.shiftId, t.attendantId),
+}));
 
 export const saleItems = pgTable('sale_items', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -457,7 +473,9 @@ export const expenseCategories = pgTable('expense_categories', {
   organizationId: uuid('organization_id').references(() => organizations.id).notNull(),
   name: varchar('name', { length: 100 }).notNull(),
   isSystem: boolean('is_system').default(false).notNull(),
-});
+}, (t) => ({
+  orgNameUniq: uniqueIndex('expense_categories_org_name_idx').on(t.organizationId, t.name),
+}));
 
 export const expenses = pgTable('expenses', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -537,7 +555,10 @@ export const purchaseItems = pgTable('purchase_items', {
   lineTotal: numeric('line_total', { precision: 12, scale: 2 }).notNull(),
   tankAllocations: jsonb('tank_allocations'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
-});
+}, (t) => ({
+  purchaseIdIdx: index('purchase_items_purchase_id_idx').on(t.purchaseId),
+  productIdIdx: index('purchase_items_product_id_idx').on(t.productId),
+}));
 
 // ----------------------------------------------------
 // INVOICING DOMAIN (Phase T4)
@@ -569,7 +590,12 @@ export const invoices = pgTable('invoices', {
   totalAmount: numeric('total_amount', { precision: 12, scale: 2 }).default('0').notNull(),
   snapshotData: jsonb('snapshot_data').notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
-});
+}, (t) => ({
+  orgNumberUniq: uniqueIndex('invoices_org_number_uniq').on(t.organizationId, t.invoiceNumber),
+  saleUniq: uniqueIndex('invoices_sale_uniq').on(t.saleId).where(sql`"sale_id" IS NOT NULL`),
+  orgFyIdx: index('invoices_org_fy_idx').on(t.organizationId, t.financialYear),
+  stationIdx: index('invoices_station_idx').on(t.stationId),
+}));
 
 // Generic gapless document numbering store (per org + doc type + scope + FY).
 // `scope` is the sub-series key (e.g. supplier GSTIN for invoices), '' if N/A.
@@ -637,7 +663,9 @@ export const idempotencyKeys = pgTable('idempotency_keys', {
   responseStatus: integer('response_status'),
   responseBody: jsonb('response_body'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
-});
+}, (t) => ({
+  orgIdx: index('idempotency_keys_org_idx').on(t.organizationId),
+}));
 
 export const fuelPrices = pgTable('fuel_prices', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -680,4 +708,7 @@ export const handoverTerminalEntries = pgTable('handover_terminal_entries', {
   upiAmount: numeric('upi_amount', { precision: 12, scale: 2 }).default('0').notNull(),
   batchRef: varchar('batch_ref', { length: 100 }),
   createdAt: timestamp('created_at').defaultNow().notNull(),
-});
+}, (t) => ({
+  handoverIdx: index('handover_terminal_entries_handover_idx').on(t.handoverId),
+  shiftIdx: index('handover_terminal_entries_shift_idx').on(t.shiftId),
+}));
