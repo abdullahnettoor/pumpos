@@ -129,8 +129,13 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   const todayCollections = sumToday(collections);
   const todayExpenses = sumToday(expenses);
   const todayPurchases = sumToday(purchases);
-  const receivables = (customers || []).reduce((s: number, c: any) => s + Math.max(0, Number(c.balance || 0)), 0);
-  const payables = (suppliers || []).reduce((s: number, x: any) => s + Math.max(0, Number(x.balance || 0)), 0);
+  const receivables = (customers || []).reduce((s: number, c: any) => s + Math.max(0, Number(c.currentBalance || 0)), 0);
+  const payables = (suppliers || []).reduce((s: number, x: any) => s + Math.max(0, Number(x.currentBalance || 0)), 0);
+  // EOD-cycle customers whose receivable is expected cleared by day close.
+  const eodDueCustomers = (customers || []).filter(
+    (c: any) => c.settlementCycle === 'EOD' && Number(c.currentBalance || 0) > 0,
+  );
+  const eodDue = eodDueCustomers.reduce((s: number, c: any) => s + Number(c.currentBalance || 0), 0);
 
   // Fuel sales today come from the immutable closed-shift summary snapshots
   // (each shift's business day is resolved from its open instant).
@@ -395,6 +400,9 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
             <KpiTile dot="danger" valueTone="danger" label="Expenses Today" value={inr(todayExpenses)} />
             <KpiTile dot="brand" label="Purchases Today" value={inr(todayPurchases)} />
             <KpiTile dot="warning" valueTone="warning" label="Receivables" value={inr(receivables)} hint="Customer dues" />
+            {eodDue > 0 && (
+              <KpiTile dot="danger" valueTone="danger" label="EOD collections due" value={inr(eodDue)} hint={`${eodDueCustomers.length} customer${eodDueCustomers.length === 1 ? '' : 's'} · clear by day close`} />
+            )}
             <KpiTile dot="neutral" label="Payables" value={inr(payables)} hint="Supplier dues" />
           </KpiStrip>
           <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>

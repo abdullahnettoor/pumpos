@@ -21,13 +21,15 @@ interface VehicleDrawerProps {
   /** Active fuel products for the default-product picker. */
   fuelProducts: any[];
   onClose: () => void;
+  /** Fired with the newly-created (enriched) vehicle in create mode, e.g. to auto-select it. */
+  onCreated?: (vehicle: any) => void;
 }
 
 /**
  * Add / edit a customer vehicle. Self-contained: owns its form state, resets on
  * open, and performs the save + `['vehicles']` cache invalidation + toast.
  */
-export const VehicleDrawer: React.FC<VehicleDrawerProps> = ({ isOpen, editingVehicle, defaultCustomerId, eligibleCustomers, fuelProducts, onClose }) => {
+export const VehicleDrawer: React.FC<VehicleDrawerProps> = ({ isOpen, editingVehicle, defaultCustomerId, eligibleCustomers, fuelProducts, onClose, onCreated }) => {
   const qc = useQueryClient();
   const toast = useToast();
   const [error, setError] = useState<string | null>(null);
@@ -75,7 +77,18 @@ export const VehicleDrawer: React.FC<VehicleDrawerProps> = ({ isOpen, editingVeh
       if (editingVehicle) {
         await transactionService.updateCustomerVehicle(editingVehicle.id, payload);
       } else {
-        await transactionService.createCustomerVehicle(form.customerId, payload);
+        const created = await transactionService.createCustomerVehicle(form.customerId, payload);
+        const cust = eligibleCustomers.find((c: any) => c.id === form.customerId);
+        const prod = fuelProducts.find((p: any) => p.id === form.defaultProductId);
+        onCreated?.({
+          ...created,
+          customerId: form.customerId,
+          customerName: cust?.name ?? null,
+          customerType: cust?.customerType ?? null,
+          registrationNumber: payload.registrationNumber,
+          defaultProductId: payload.defaultProductId,
+          defaultProductName: prod?.name ?? null,
+        });
       }
       qc.invalidateQueries({ queryKey: ['vehicles'] });
       toast.success(editingVehicle ? 'Vehicle updated.' : 'Vehicle added.');

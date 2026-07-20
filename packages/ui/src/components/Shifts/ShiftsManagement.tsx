@@ -709,6 +709,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
               setSelectedHandoverAssignment(null);
             }}
             shiftId={activeShift.id}
+            stationId={stationId}
             userId={selectedHandoverAssignment.userId}
             userName={selectedHandoverAssignment.userName}
             duId={selectedHandoverAssignment.duId}

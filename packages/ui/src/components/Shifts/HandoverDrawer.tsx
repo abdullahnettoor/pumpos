@@ -5,12 +5,18 @@ import { z } from 'zod';
 import { Drawer } from '../Drawer.js';
 import { Button } from '../../pump-ds/index.js';
 import { Combobox } from '../primitives/Combobox.js';
+import { CustomerFormDrawer } from '../customers/CustomerFormDrawer.js';
+import { VehicleDrawer } from '../customers/VehicleDrawer.js';
 import { useAllVehicles } from '../../query/hooks.js';
 import { CloudShiftService, CloudTransactionService } from '../../services/cloud.js';
 import { inr } from '../../utils/format.js';
 
 const shiftService = new CloudShiftService();
 const transactionService = new CloudTransactionService();
+
+// Sentinel option values for the "＋ New …" inline-create entries in the picker.
+const NEW_CUSTOMER = '__new_customer__';
+const NEW_VEHICLE = '__new_vehicle__';
 
 // Define form validation schema using Zod
 const handoverFormSchema = z.object({
@@ -30,6 +36,7 @@ interface HandoverDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   shiftId: string;
+  stationId: string | null;
   userId: string;
   userName: string;
   duId: string;
@@ -54,6 +61,7 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
   isOpen,
   onClose,
   shiftId,
+  stationId,
   userId,
   userName,
   duId,
@@ -175,6 +183,11 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
   const [ccAmount, setCcAmount] = useState('');
   const [ccNotes, setCcNotes] = useState('');
   const [ccBusy, setCcBusy] = useState(false);
+  // Inline create ("＋ New …") drawer state + optimistically-added records.
+  const [newCustomerOpen, setNewCustomerOpen] = useState(false);
+  const [newVehicleOpen, setNewVehicleOpen] = useState(false);
+  const [extraCustomers, setExtraCustomers] = useState<any[]>([]);
+  const [extraVehicles, setExtraVehicles] = useState<any[]>([]);
   // Cached vehicles (semi tier) for the client-side credit picker — no server search.
   const { data: allVehiclesData } = useAllVehicles(true);
 
@@ -184,7 +197,7 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
     setCcProductId(''); setCcQty(''); setCcPrice(''); setCcAmount(''); setCcNotes('');
   };
   useEffect(() => {
-    if (isOpen) { setCreditLines(creditSales ?? []); setCcOpen(false); resetCcRow(); }
+    if (isOpen) { setCreditLines(creditSales ?? []); setCcOpen(false); resetCcRow(); setExtraCustomers([]); setExtraVehicles([]); }
   }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fuel products dispensed at this DU (from its nozzles).
@@ -199,34 +212,41 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
   // Credit-eligible vehicles = cached vehicles belonging to the credit customers
   // passed in (already Credit/Fleet, non-prepaid). Combined with the customers
   // into one client-side searchable option list — no server round-trips.
-  const allVehicles = allVehiclesData ?? [];
+  // Records created inline (via the "＋ New …" options) are merged in optimistically.
+  const allCustomers = useMemo(() => [...customers, ...extraCustomers], [customers, extraCustomers]);
+  const allVehicles = useMemo(() => [...(allVehiclesData ?? []), ...extraVehicles], [allVehiclesData, extraVehicles]);
   const creditOptions = useMemo(() => {
-    const customerIds = new Set(customers.map((c: any) => c.id));
-    const opts: { value: string; label: string; sublabel?: string }[] = [];
+    const customerIds = new Set(allCustomers.map((c: any) => c.id));
+    const opts: { value: string; label: string; sublabel?: string }[] = [
+      { value: NEW_CUSTOMER, label: '＋ New customer', sublabel: 'Create and bill in one step' },
+      { value: NEW_VEHICLE, label: '＋ New vehicle', sublabel: 'Add a vehicle to a customer' },
+    ];
     for (const v of allVehicles) {
       if (!customerIds.has(v.customerId)) continue;
       const parts = [v.customerName ?? '', v.customerType, v.defaultProductName].filter(Boolean);
       opts.push({ value: `v:${v.id}`, label: v.registrationNumber, sublabel: parts.join(' · ') });
     }
-    for (const c of customers) opts.push({ value: `c:${c.id}`, label: c.name, sublabel: c.customerType });
+    for (const c of allCustomers) opts.push({ value: `c:${c.id}`, label: c.name, sublabel: c.customerType });
     return opts;
-  }, [allVehicles, customers]);
+  }, [allVehicles, allCustomers]);
 
   const handleCreditSelect = (value: string) => {
+    if (value === NEW_CUSTOMER) { setNewCustomerOpen(true); return; }
+    if (value === NEW_VEHICLE) { setNewVehicleOpen(true); return; }
     setCcSelectValue(value);
     if (value.startsWith('v:')) {
       const v = allVehicles.find((x: any) => `v:${x.id}` === value);
       if (!v) return;
       setCcCustomerId(v.customerId);
       setCcCustomerName(v.customerName ?? 'Customer');
-      setCcCustomerType(v.customerType ?? customers.find((c: any) => c.id === v.customerId)?.customerType ?? null);
+      setCcCustomerType(v.customerType ?? allCustomers.find((c: any) => c.id === v.customerId)?.customerType ?? null);
       setCcVehicleId(v.id);
       setCcVehicleLabel(v.registrationNumber);
       const match = duProducts.find((p) => p.id === v.defaultProductId);
       if (match) { setCcProductId(match.id); if (match.price > 0) setCcPrice(match.price.toFixed(2)); }
     } else if (value.startsWith('c:')) {
       const id = value.slice(2);
-      const c = customers.find((x: any) => x.id === id);
+      const c = allCustomers.find((x: any) => x.id === id);
       setCcCustomerId(id);
       setCcCustomerName(c?.name ?? 'Customer');
       setCcCustomerType(c?.customerType ?? null);
@@ -235,7 +255,33 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
     }
   };
 
-  const ccSelectedCustomer = customers.find((c: any) => c.id === ccCustomerId);
+  // Auto-select a record created inline via the "＋ New …" options.
+  const handleCustomerCreated = (c: any) => {
+    if (!c?.id) { setNewCustomerOpen(false); return; }
+    setExtraCustomers((prev) => (prev.some((x) => x.id === c.id) ? prev : [...prev, c]));
+    setNewCustomerOpen(false);
+    setCcSelectValue(`c:${c.id}`);
+    setCcCustomerId(c.id);
+    setCcCustomerName(c.name ?? 'Customer');
+    setCcCustomerType(c.customerType ?? null);
+    setCcVehicleId(null);
+    setCcVehicleLabel('');
+  };
+  const handleVehicleCreated = (v: any) => {
+    if (!v?.id) { setNewVehicleOpen(false); return; }
+    setExtraVehicles((prev) => (prev.some((x) => x.id === v.id) ? prev : [...prev, v]));
+    setNewVehicleOpen(false);
+    setCcSelectValue(`v:${v.id}`);
+    setCcCustomerId(v.customerId);
+    setCcCustomerName(v.customerName ?? 'Customer');
+    setCcCustomerType(v.customerType ?? null);
+    setCcVehicleId(v.id);
+    setCcVehicleLabel(v.registrationNumber ?? '');
+    const match = duProducts.find((p) => p.id === v.defaultProductId);
+    if (match) { setCcProductId(match.id); if (match.price > 0) setCcPrice(match.price.toFixed(2)); }
+  };
+
+  const ccSelectedCustomer = allCustomers.find((c: any) => c.id === ccCustomerId);
   const ccLimit = Number(ccSelectedCustomer?.creditLimit ?? 0);
   const ccBalance = Number(ccSelectedCustomer?.currentBalance ?? 0);
   const ccAvailable = ccLimit > 0 ? ccLimit - ccBalance : null;
@@ -452,6 +498,7 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
   };
 
   return (
+    <>
     <Drawer
       isOpen={isOpen}
       onClose={onClose}
@@ -877,5 +924,24 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
         </div>
       </form>
     </Drawer>
+
+    {/* Inline create: reuse the standard customer / vehicle drawers, auto-select on save. */}
+    <CustomerFormDrawer
+      isOpen={newCustomerOpen}
+      editingCustomer={null}
+      stationId={stationId}
+      onClose={() => setNewCustomerOpen(false)}
+      onCreated={handleCustomerCreated}
+    />
+    <VehicleDrawer
+      isOpen={newVehicleOpen}
+      editingVehicle={null}
+      defaultCustomerId={ccCustomerId || ''}
+      eligibleCustomers={allCustomers}
+      fuelProducts={duProducts.map((p) => ({ id: p.id, name: p.name, code: p.code }))}
+      onClose={() => setNewVehicleOpen(false)}
+      onCreated={handleVehicleCreated}
+    />
+    </>
   );
 };

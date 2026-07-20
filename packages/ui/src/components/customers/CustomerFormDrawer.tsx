@@ -18,6 +18,8 @@ interface CustomerFormDrawerProps {
   editingCustomer: any | null;
   stationId: string | null;
   onClose: () => void;
+  /** Fired with the newly-created customer (create mode only), e.g. to auto-select it. */
+  onCreated?: (customer: any) => void;
 }
 
 /**
@@ -26,7 +28,7 @@ interface CustomerFormDrawerProps {
  * cache invalidation + toast itself. The container only toggles `isOpen` and
  * passes the customer to edit (or null to create).
  */
-export const CustomerFormDrawer: React.FC<CustomerFormDrawerProps> = ({ isOpen, editingCustomer, stationId, onClose }) => {
+export const CustomerFormDrawer: React.FC<CustomerFormDrawerProps> = ({ isOpen, editingCustomer, stationId, onClose, onCreated }) => {
   const invalidateOperational = useInvalidateOperational();
   const toast = useToast();
   const [drawerError, setDrawerError] = useState<string | null>(null);
@@ -116,7 +118,8 @@ export const CustomerFormDrawer: React.FC<CustomerFormDrawerProps> = ({ isOpen, 
       if (editingCustomer) {
         await transactionService.updateCustomer(editingCustomer.id, payload);
       } else {
-        await transactionService.createCustomer(payload);
+        const created = await transactionService.createCustomer(payload);
+        onCreated?.(created);
       }
       invalidateOperational(stationId);
       toast.success(editingCustomer ? 'Customer updated.' : 'Customer created.');
