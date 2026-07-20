@@ -400,6 +400,7 @@ shiftsRouter.get('/status', async (c) => {
         .select({
           ct: schema.customerTransactions,
           customerName: schema.customers.name,
+          customerType: schema.customers.customerType,
           productName: schema.products.name,
           productCode: schema.products.code,
         })
@@ -444,6 +445,7 @@ shiftsRouter.get('/status', async (c) => {
         id: r.ct.id,
         customerId: r.ct.customerId,
         customerName: r.customerName ?? 'Customer',
+        customerType: r.customerType ?? null,
         vehicleId: r.ct.vehicleId,
         productId: r.ct.productId,
         productName: r.productName ?? null,

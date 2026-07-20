@@ -166,6 +166,7 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
   const [ccSelectValue, setCcSelectValue] = useState('');
   const [ccCustomerId, setCcCustomerId] = useState('');
   const [ccCustomerName, setCcCustomerName] = useState('');
+  const [ccCustomerType, setCcCustomerType] = useState<string | null>(null);
   const [ccVehicleId, setCcVehicleId] = useState<string | null>(null);
   const [ccVehicleLabel, setCcVehicleLabel] = useState('');
   const [ccProductId, setCcProductId] = useState('');
@@ -179,7 +180,7 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
 
   const resetCcRow = () => {
     setCcSelectValue('');
-    setCcCustomerId(''); setCcCustomerName(''); setCcVehicleId(null); setCcVehicleLabel('');
+    setCcCustomerId(''); setCcCustomerName(''); setCcCustomerType(null); setCcVehicleId(null); setCcVehicleLabel('');
     setCcProductId(''); setCcQty(''); setCcPrice(''); setCcAmount(''); setCcNotes('');
   };
   useEffect(() => {
@@ -204,7 +205,8 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
     const opts: { value: string; label: string; sublabel?: string }[] = [];
     for (const v of allVehicles) {
       if (!customerIds.has(v.customerId)) continue;
-      opts.push({ value: `v:${v.id}`, label: v.registrationNumber, sublabel: `${v.customerName ?? ''}${v.defaultProductName ? ` · ${v.defaultProductName}` : ''}` });
+      const parts = [v.customerName ?? '', v.customerType, v.defaultProductName].filter(Boolean);
+      opts.push({ value: `v:${v.id}`, label: v.registrationNumber, sublabel: parts.join(' · ') });
     }
     for (const c of customers) opts.push({ value: `c:${c.id}`, label: c.name, sublabel: c.customerType });
     return opts;
@@ -217,6 +219,7 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
       if (!v) return;
       setCcCustomerId(v.customerId);
       setCcCustomerName(v.customerName ?? 'Customer');
+      setCcCustomerType(v.customerType ?? customers.find((c: any) => c.id === v.customerId)?.customerType ?? null);
       setCcVehicleId(v.id);
       setCcVehicleLabel(v.registrationNumber);
       const match = duProducts.find((p) => p.id === v.defaultProductId);
@@ -226,6 +229,7 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
       const c = customers.find((x: any) => x.id === id);
       setCcCustomerId(id);
       setCcCustomerName(c?.name ?? 'Customer');
+      setCcCustomerType(c?.customerType ?? null);
       setCcVehicleId(null);
       setCcVehicleLabel('');
     }
@@ -282,6 +286,7 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
         id: entry?.id,
         customerId: ccCustomerId,
         customerName: ccCustomerName || ccSelectedCustomer?.name || 'Customer',
+        customerType: ccCustomerType ?? ccSelectedCustomer?.customerType ?? null,
         vehicleId: ccVehicleId,
         vehicleLabel: ccVehicleLabel || null,
         productId: ccProductId || null,
@@ -354,6 +359,21 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
   // sits on the DECLARED side — the fuel is already metered in the nozzle reading,
   // so credit is NOT added to expected (that would double-count).
   const creditTotal = creditLines.reduce((sum, l) => sum + Number(l.amount || 0), 0);
+  // Recorded customer-sale lines grouped by receivable type (Credit / Fleet /
+  // Regular), each with its own subtotal. Station-prepaid customers never reach
+  // this list (they draw down a balance instead of accruing a receivable).
+  const creditGroups = useMemo(() => {
+    const ORDER = ['Credit', 'Fleet', 'Regular'];
+    const LABELS: Record<string, string> = { Credit: 'Credit', Fleet: 'Fleet', Regular: 'Regular', Other: 'Other' };
+    const map = new Map<string, any[]>();
+    for (const l of creditLines) {
+      const t = ORDER.includes(l.customerType) ? l.customerType : 'Other';
+      (map.get(t) ?? map.set(t, []).get(t)!).push(l);
+    }
+    return [...ORDER, 'Other']
+      .filter((t) => map.has(t))
+      .map((t) => ({ type: t, label: LABELS[t] ?? t, lines: map.get(t)!, subtotal: map.get(t)!.reduce((s, l) => s + Number(l.amount || 0), 0) }));
+  }, [creditLines]);
   const totalDeclared = Number(formCash) + Number(effectiveCard) + Number(effectiveUpi) + creditTotal;
   // Walk-in merchandise cash this attendant collected (net of any card/UPI
   // portion) is part of what they hand over, so it's added to the expected side.
@@ -614,14 +634,14 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
           </div>
         )}
 
-        {/* 3. Fuel-on-credit sales (credit chits) for this DU */}
+        {/* 3. Customer sales (on-account fuel) for this DU */}
         <div>
           <h3 style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px', display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-            <span>3. Fuel-on-Credit Sales</span>
+            <span>3. Customer Sales</span>
             {creditTotal > 0 && <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-strong)' }}>₹{creditTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>}
           </h3>
           <p style={{ fontSize: '11px', color: 'var(--text-faint)', marginBottom: '10px' }}>
-            Fuel dispensed at this pump and billed to a customer's account. Each line is recorded immediately and feeds the credit chits total below.
+            Fuel dispensed at this pump and billed to a customer's account (Credit, Fleet, or Regular). Each line is recorded immediately as a receivable and feeds the customer-sales total below.
           </p>
 
           {volumeOverages.length > 0 && (
@@ -630,22 +650,30 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
             </div>
           )}
 
-          {creditLines.length > 0 && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '10px' }}>
-              {creditLines.map((l, idx) => (
-                <div key={l.id ?? idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', backgroundColor: 'var(--bg-surface-alt)', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', padding: '8px 10px' }}>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-strong)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {l.customerName}{l.vehicleLabel ? ` · ${l.vehicleLabel}` : ''}
-                    </div>
-                    <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                      {l.productName ?? 'Fuel'}{l.quantity ? ` · ${Number(l.quantity).toLocaleString('en-IN')} L` : ''}{l.notes ? ` · ${l.notes}` : ''}
-                    </div>
+          {creditGroups.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '10px' }}>
+              {creditGroups.map((g) => (
+                <div key={g.type} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: '10px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                    <span>{g.label}</span>
+                    <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-strong)' }}>₹{g.subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
-                    <strong style={{ fontFamily: 'var(--font-mono)', fontSize: '13px' }}>₹{Number(l.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
-                    <button type="button" onClick={() => removeCreditLine(l.id)} disabled={ccBusy} title="Void this credit sale" style={{ background: 'transparent', border: 'none', color: 'var(--brand-danger)', cursor: 'pointer', fontSize: '12px', padding: '2px 4px' }}>✕</button>
-                  </div>
+                  {g.lines.map((l, idx) => (
+                    <div key={l.id ?? idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', backgroundColor: 'var(--bg-surface-alt)', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', padding: '8px 10px' }}>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-strong)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {l.customerName}{l.vehicleLabel ? ` · ${l.vehicleLabel}` : ''}
+                        </div>
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                          {l.productName ?? 'Fuel'}{l.quantity ? ` · ${Number(l.quantity).toLocaleString('en-IN')} L` : ''}{l.notes ? ` · ${l.notes}` : ''}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
+                        <strong style={{ fontFamily: 'var(--font-mono)', fontSize: '13px' }}>₹{Number(l.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
+                        <button type="button" onClick={() => removeCreditLine(l.id)} disabled={ccBusy} title="Void this credit sale" style={{ background: 'transparent', border: 'none', color: 'var(--brand-danger)', cursor: 'pointer', fontSize: '12px', padding: '2px 4px' }}>✕</button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               ))}
             </div>
@@ -653,7 +681,7 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
 
           {!ccOpen ? (
             <Button type="button" variant="secondary" size="sm" onClick={() => setCcOpen(true)} style={{ alignSelf: 'flex-start' }}>
-              + Add credit sale
+              + Add customer sale
             </Button>
           ) : (
             <div style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', padding: '10px', display: 'flex', flexDirection: 'column', gap: '8px' }}>

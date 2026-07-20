@@ -16,7 +16,7 @@ import { BusinessDayTab } from './BusinessDayTab.js';
 import { OpenShiftForm } from './OpenShiftForm.js';
 import { Tabs } from '../primitives/Tabs.js';
 import { useToast } from '../primitives/ToastProvider.js';
-import { useShiftStatus, useShiftTransactions, useInvalidateOperational, queryKeys, TIER } from '../../query/hooks.js';
+import { useShiftStatus, useShiftTransactions, useInvalidateOperational, queryKeys } from '../../query/hooks.js';
 import { openQuickEntry, useQuickEntry, type QuickEntryType } from '../../quick-entry/store.js';
 import { Station, resolveBusinessDate } from '@pump/shared';
 import { FileText, User, Lock, AlertTriangle, Check, Fuel, Info, Play, History, Clock3, CalendarRange } from 'lucide-react';
@@ -127,10 +127,15 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   const handleOpenHandoverDrawer = async (assignment: any) => {
     setSelectedHandoverAssignment(assignment);
     setHandoverDrawerOpen(true);
-    // Load credit-eligible customers for the in-handover fuel-on-credit section.
+    // Refresh the vehicle/customer caches so newly-added records (created in
+    // another tab/session) are pickable in the Customer Sales section.
+    qc.invalidateQueries({ queryKey: ['vehicles'] });
+    // Load customers eligible for on-account (Customer Sales) billing: any
+    // non-station-prepaid customer (Regular, Credit, or Fleet). Station-prepaid
+    // customers draw down a balance instead of accruing a receivable.
     try {
-      const custList = await qc.ensureQueryData({ queryKey: queryKeys.customers(true), queryFn: () => transactionService.getCustomers(true), staleTime: TIER.semi.staleTime });
-      setHandoverCreditCustomers((custList || []).filter((c: any) => !c.isPrepaid && (c.customerType === 'Credit' || c.customerType === 'Fleet')));
+      const custList = await qc.fetchQuery({ queryKey: queryKeys.customers(true), queryFn: () => transactionService.getCustomers(true), staleTime: 0 });
+      setHandoverCreditCustomers((custList || []).filter((c: any) => !c.isPrepaid));
     } catch {
       setHandoverCreditCustomers([]);
     }
