@@ -14,6 +14,7 @@ export interface Customer {
   fleetCode: string | null;
   isPrepaid: boolean;
   prepaidBalance: string;
+  settlementCycle: 'OPEN' | 'EOD';
   metadata: Record<string, unknown> | null;
   isActive: boolean;
   createdAt: string;
@@ -44,6 +45,7 @@ export interface UpdateCustomerCommand {
   creditLimit?: number | string | null;
   fleetCode?: string | null;
   isPrepaid?: boolean;
+  settlementCycle?: 'OPEN' | 'EOD';
   metadata?: Record<string, unknown> | null;
   isActive?: boolean;
 }
@@ -57,6 +59,7 @@ const createSchema = z.object({
   creditLimit: z.union([z.coerce.number(), z.string()]).nullish(),
   fleetCode: z.string().max(100).nullish(),
   isPrepaid: z.boolean().optional(),
+  settlementCycle: z.enum(['OPEN', 'EOD']).optional(),
   metadata: z.record(z.any()).nullish(),
 });
 const updateSchema = z.object({
@@ -67,6 +70,7 @@ const updateSchema = z.object({
   creditLimit: z.union([z.coerce.number(), z.string()]).nullish(),
   fleetCode: z.string().max(100).nullish(),
   isPrepaid: z.boolean().optional(),
+  settlementCycle: z.enum(['OPEN', 'EOD']).optional(),
   metadata: z.record(z.any()).nullish(),
   isActive: z.boolean().optional(),
 });
@@ -101,6 +105,7 @@ export class CreateCustomer implements UseCase<CreateCustomerCommand, Customer> 
       fleetCode: p.data.fleetCode ?? null,
       isPrepaid: p.data.isPrepaid ?? false,
       prepaidBalance: '0',
+      settlementCycle: p.data.settlementCycle ?? 'OPEN',
       metadata: p.data.metadata ?? null,
       isActive: true,
       createdAt: now,
@@ -138,6 +143,7 @@ export class UpdateCustomer implements UseCase<UpdateCustomerCommand, Customer> 
       creditLimit: p.data.creditLimit !== undefined ? nz(p.data.creditLimit) : existing.creditLimit,
       fleetCode: p.data.fleetCode !== undefined ? p.data.fleetCode : existing.fleetCode,
       isPrepaid: p.data.isPrepaid ?? existing.isPrepaid,
+      settlementCycle: p.data.settlementCycle ?? existing.settlementCycle,
       metadata: p.data.metadata !== undefined ? p.data.metadata : existing.metadata,
       isActive: p.data.isActive ?? existing.isActive,
       updatedAt: ctx.clock.now().toISOString(),

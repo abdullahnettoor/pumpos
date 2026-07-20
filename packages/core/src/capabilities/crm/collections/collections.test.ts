@@ -53,7 +53,7 @@ function ctx(): ExecutionContext {
   return { organizationId: 'org-1', stationId: 'st-1', businessDayId: null, actorId: 'u', correlationId: null, clock: new FixedClock(new Date('2026-03-15T10:00:00Z')), ids: new SequentialIdGenerator('c') };
 }
 function customer(): Customer {
-  return { id: 'cust-1', organizationId: 'org-1', stationId: null, customerType: 'Credit', name: 'Ravi', phone: null, creditLimit: '100000', fleetCode: null, isPrepaid: false, prepaidBalance: '0', metadata: null, isActive: true, createdAt: '', updatedAt: '' };
+  return { id: 'cust-1', organizationId: 'org-1', stationId: null, customerType: 'Credit', name: 'Ravi', phone: null, creditLimit: '100000', fleetCode: null, isPrepaid: false, prepaidBalance: '0', settlementCycle: 'OPEN', metadata: null, isActive: true, createdAt: '', updatedAt: '' };
 }
 function shift(): Shift {
   return { id: 'sh-1', organizationId: 'org-1', stationId: 'st-1', businessDayId: 'bd-1', shiftTemplateId: 't', status: 'OPEN', openedBy: 'u', openedAt: '', closedBy: null, closedAt: null, lockedAt: null, openingCash: '0', closingCash: null, createdAt: '', updatedAt: '' };

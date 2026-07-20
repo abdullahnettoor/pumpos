@@ -1022,6 +1022,13 @@
           "notNull": true,
           "default": "'0'"
         },
+        "settlement_cycle": {
+          "name": "settlement_cycle",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'OPEN'"
+        },
         "metadata": {
           "name": "metadata",
           "type": "jsonb",

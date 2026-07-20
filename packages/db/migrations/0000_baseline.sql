@@ -99,6 +99,7 @@ CREATE TABLE "customers" (
 	"fleet_code" varchar(100),
 	"is_prepaid" boolean DEFAULT false NOT NULL,
 	"prepaid_balance" numeric(14, 2) DEFAULT '0' NOT NULL,
+	"settlement_cycle" varchar(20) DEFAULT 'OPEN' NOT NULL,
 	"metadata" jsonb,
 	"is_active" boolean DEFAULT true NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL,

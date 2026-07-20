@@ -386,6 +386,7 @@ export interface Customer {
   phone?: string | null;
   creditLimit?: number | null;
   fleetCode?: string | null;
+  settlementCycle?: 'OPEN' | 'EOD';
   metadata?: Record<string, any> | null;
   isActive: boolean;
   createdAt: string;

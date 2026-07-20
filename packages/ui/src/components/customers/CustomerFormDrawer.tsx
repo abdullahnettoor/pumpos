@@ -47,6 +47,7 @@ export const CustomerFormDrawer: React.FC<CustomerFormDrawerProps> = ({ isOpen, 
       creditLimit: 50000 as any,
       fleetCode: '',
       isPrepaid: false,
+      settlementCycle: 'OPEN' as const,
       isActive: true,
       metadata: { gstin: '', pan: '', tradeName: '', billingAddress: '' },
     },
@@ -66,6 +67,7 @@ export const CustomerFormDrawer: React.FC<CustomerFormDrawerProps> = ({ isOpen, 
         creditLimit: editingCustomer.creditLimit ? Number(editingCustomer.creditLimit) : (editingCustomer.customerType === 'Regular' ? null : 50000) as any,
         fleetCode: editingCustomer.fleetCode || '',
         isPrepaid: Boolean(editingCustomer.isPrepaid),
+        settlementCycle: editingCustomer.settlementCycle === 'EOD' ? 'EOD' : 'OPEN',
         isActive: editingCustomer.isActive,
         metadata: {
           gstin: meta.gstin || '',
@@ -83,6 +85,7 @@ export const CustomerFormDrawer: React.FC<CustomerFormDrawerProps> = ({ isOpen, 
         creditLimit: 50000 as any,
         fleetCode: '',
         isPrepaid: false,
+        settlementCycle: 'OPEN',
         isActive: true,
         metadata: { gstin: '', pan: '', tradeName: '', billingAddress: '' },
       });
@@ -99,7 +102,8 @@ export const CustomerFormDrawer: React.FC<CustomerFormDrawerProps> = ({ isOpen, 
         customerType: data.customerType,
         creditLimit: (data.customerType === 'Credit' || data.customerType === 'Fleet') && data.creditLimit ? Number(data.creditLimit) : null,
         fleetCode: data.customerType === 'Fleet' ? data.fleetCode : null,
-        isPrepaid: Boolean(data.isPrepaid),
+        isPrepaid: data.customerType === 'Fleet' ? Boolean(data.isPrepaid) : false,
+        settlementCycle: (data.settlementCycle === 'EOD' ? 'EOD' : 'OPEN') as 'OPEN' | 'EOD',
         isActive: data.isActive,
         metadata: {
           gstin: data.metadata?.gstin || null,
@@ -147,6 +151,13 @@ export const CustomerFormDrawer: React.FC<CustomerFormDrawerProps> = ({ isOpen, 
           </Select>
         </Field>
 
+        <Field label="Settlement Cycle" error={errors.settlementCycle?.message} hint="How on-account (Customer Sales) receivables are expected to clear.">
+          <Select {...register('settlementCycle')} disabled={isSubmitting} invalid={!!errors.settlementCycle}>
+            <option value="OPEN">Open (Running account, collected over time)</option>
+            <option value="EOD">End of Day (Expected cleared by day close)</option>
+          </Select>
+        </Field>
+
         {(custType === 'Credit' || custType === 'Fleet') && (
           <Field label="Credit Limit" error={errors.creditLimit?.message}>
             <MoneyInput placeholder="50000" {...register('creditLimit', { valueAsNumber: true })} disabled={isSubmitting} invalid={!!errors.creditLimit} />
@@ -157,6 +168,10 @@ export const CustomerFormDrawer: React.FC<CustomerFormDrawerProps> = ({ isOpen, 
           <Field label="Fleet Code / Card Reference" error={errors.fleetCode?.message}>
             <TextInput placeholder="e.g. FL-9923" {...register('fleetCode')} disabled={isSubmitting} invalid={!!errors.fleetCode} />
           </Field>
+        )}
+
+        {custType === 'Fleet' && (
+          <Checkbox label="Enable Prepaid Wallet Mode" {...register('isPrepaid')} disabled={isSubmitting} />
         )}
 
         <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: '12px', marginTop: '4px' }}>
@@ -186,7 +201,6 @@ export const CustomerFormDrawer: React.FC<CustomerFormDrawerProps> = ({ isOpen, 
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '4px' }}>
-          <Checkbox label="Enable Prepaid Wallet Mode" {...register('isPrepaid')} disabled={isSubmitting} />
           <Checkbox label="Account Active (Clear for operational logging)" {...register('isActive')} disabled={isSubmitting} />
         </div>
 

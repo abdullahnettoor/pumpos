@@ -1,6 +1,6 @@
 {
-  "id": "b19664ea-c635-4311-b009-ffa72497dfcf",
-  "prevId": "00000000-0000-0000-0000-000000000000",
+  "id": "4f75a694-d7be-440c-b227-64e35d3b71a7",
+  "prevId": "b19664ea-c635-4311-b009-ffa72497dfcf",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1021,6 +1021,13 @@
           "primaryKey": false,
           "notNull": true,
           "default": "'0'"
+        },
+        "settlement_cycle": {
+          "name": "settlement_cycle",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'OPEN'"
         },
         "metadata": {
           "name": "metadata",

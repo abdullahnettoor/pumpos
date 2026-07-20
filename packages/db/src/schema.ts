@@ -239,6 +239,10 @@ export const customers = pgTable('customers', {
   fleetCode: varchar('fleet_code', { length: 100 }),
   isPrepaid: boolean('is_prepaid').default(false).notNull(),
   prepaidBalance: numeric('prepaid_balance', { precision: 14, scale: 2 }).default('0').notNull(),
+  // How the customer's receivable is settled: 'OPEN' = running account collected
+  // over time; 'EOD' = expected to be cleared by end of the business day (common
+  // for regular walk-in-on-account customers). Informational for reminders/reports.
+  settlementCycle: varchar('settlement_cycle', { length: 20 }).default('OPEN').notNull(),
   metadata: jsonb('metadata'),
   isActive: boolean('is_active').default(true).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),

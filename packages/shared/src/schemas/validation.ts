@@ -203,6 +203,7 @@ export const customerCreateSchema = z.object({
   creditLimit: z.number().nonnegative().optional().nullable(),
   fleetCode: z.string().max(100).optional().nullable(),
   isPrepaid: z.boolean().default(false),
+  settlementCycle: z.enum(['OPEN', 'EOD']).default('OPEN'),
   isActive: z.boolean().default(true),
   metadata: z.object({
     gstin: z.string().max(15).optional().nullable(),
