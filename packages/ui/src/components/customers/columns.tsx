@@ -48,6 +48,7 @@ export const buildCustomerColumns = (openLedger: (c: any) => void, openEdit: (c:
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '2px' }}>
           <Chip tone={typeTone(t)} size="xs">{t}</Chip>
           {t === 'Fleet' && c.fleetCode && <span style={{ fontSize: '10px', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{c.fleetCode}</span>}
+          {c.settlementCycle === 'EOD' && <span style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 600, letterSpacing: '0.03em' }}>EOD settle</span>}
         </div>
       );
     },

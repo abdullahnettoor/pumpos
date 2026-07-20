@@ -117,6 +117,17 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
 
   const eligibleCustomers = allCustomers.filter((c: any) => c.customerType === 'Credit' || c.customerType === 'Fleet');
 
+  // --- Registry (list + EOD-due filter) ---
+  const [registryEodOnly, setRegistryEodOnly] = useState(false);
+  const eodDueCount = useMemo(
+    () => allCustomers.filter((c: any) => c.settlementCycle === 'EOD' && Number(c.currentBalance || 0) > 0).length,
+    [allCustomers],
+  );
+  const registryCustomers = useMemo(
+    () => (registryEodOnly ? allCustomers.filter((c: any) => c.settlementCycle === 'EOD' && Number(c.currentBalance || 0) > 0) : allCustomers),
+    [allCustomers, registryEodOnly],
+  );
+
   // --- Vehicles (list + filter) ---
   const allVehicles = vehiclesQ.data ?? [];
   const loadingVehicles = vehiclesQ.isLoading;
@@ -423,12 +434,32 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
         )}
 
         {activeTab === 'registry' && (
-          <DataTable
-            columns={buildCustomerColumns(setStatementCustomer, openEditCustomer, anyPrepaid)}
-            data={allCustomers}
-            emptyMessage="No customers registered."
-            getRowId={(r: any) => r.id}
-          />
+          <Panel
+            flush
+            title="Customer registry"
+            action={
+              eodDueCount > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => setRegistryEodOnly((v) => !v)}
+                  title="Show only end-of-day customers with an outstanding balance"
+                  style={{ border: 'none', background: 'transparent', padding: 0, cursor: 'pointer' }}
+                >
+                  <Chip tone={registryEodOnly ? 'danger' : 'neutral'} size="xs">
+                    EOD due · {eodDueCount}{registryEodOnly ? ' ✕' : ''}
+                  </Chip>
+                </button>
+              ) : undefined
+            }
+          >
+            <DataTable
+              bare
+              columns={buildCustomerColumns(setStatementCustomer, openEditCustomer, anyPrepaid)}
+              data={registryCustomers}
+              emptyMessage={registryEodOnly ? 'No EOD customers with outstanding dues.' : 'No customers registered.'}
+              getRowId={(r: any) => r.id}
+            />
+          </Panel>
         )}
 
         {activeTab === 'vehicles' && (
