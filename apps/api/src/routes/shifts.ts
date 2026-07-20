@@ -381,6 +381,7 @@ shiftsRouter.get('/status', async (c) => {
     const [
       attributedSaleRows,
       creditLineRows,
+      omcLineRows,
       assignmentRows,
       handoverRows,
       handoverEntryRows,
@@ -412,6 +413,24 @@ shiftsRouter.get('/status', async (c) => {
             eq(schema.customerTransactions.shiftId, dbActiveShift.id),
             eq(schema.customerTransactions.transactionType, 'Credit Sale'),
             eq(schema.customerTransactions.referenceType, 'CREDIT_SALE'),
+          ),
+        ),
+      db
+        .select({
+          ct: schema.customerTransactions,
+          customerName: schema.customers.name,
+          customerType: schema.customers.customerType,
+          productName: schema.products.name,
+          productCode: schema.products.code,
+        })
+        .from(schema.customerTransactions)
+        .leftJoin(schema.customers, eq(schema.customers.id, schema.customerTransactions.customerId))
+        .leftJoin(schema.products, eq(schema.products.id, schema.customerTransactions.productId))
+        .where(
+          and(
+            eq(schema.customerTransactions.shiftId, dbActiveShift.id),
+            eq(schema.customerTransactions.transactionType, 'OMC Sale'),
+            eq(schema.customerTransactions.referenceType, 'OMC_CARD_SALE'),
           ),
         ),
       db
@@ -460,6 +479,33 @@ shiftsRouter.get('/status', async (c) => {
     const creditSalesFor = (userId: string | null | undefined, duId: string | null | undefined) =>
       creditByUserDu.get(`${userId ?? ''}::${duId ?? ''}`) ?? [];
 
+    // Per-(attendant, DU) OMC fleet-card sale LINE ITEMS declared in the DU
+    // handover. Like credit, the fuel is metered via the nozzle so it is NOT
+    // added to expectedSales — it sits on the declared side as a non-drawer
+    // channel (the Oil Company settles it to the station's CMS account).
+    const omcByUserDu = new Map<string, any[]>();
+    for (const r of omcLineRows) {
+      const key = `${r.ct.attendantId ?? ''}::${r.ct.duId ?? ''}`;
+      const list = omcByUserDu.get(key) ?? [];
+      list.push({
+        id: r.ct.id,
+        customerId: r.ct.customerId,
+        customerName: r.customerName ?? null,
+        customerType: r.customerType ?? null,
+        vehicleId: r.ct.vehicleId,
+        productId: r.ct.productId,
+        productName: r.productName ?? null,
+        productCode: r.productCode ?? null,
+        quantity: r.ct.quantity != null ? Number(r.ct.quantity) : null,
+        unitPrice: r.ct.unitPrice != null ? Number(r.ct.unitPrice) : null,
+        amount: Number(r.ct.amount),
+        notes: r.ct.notes ?? null,
+      });
+      omcByUserDu.set(key, list);
+    }
+    const omcSalesFor = (userId: string | null | undefined, duId: string | null | undefined) =>
+      omcByUserDu.get(`${userId ?? ''}::${duId ?? ''}`) ?? [];
+
     // Merchandise (standalone) attribution per attendant. Merchandise reconciles
     // at shift close (drawer), NOT in the DU handover, so expectedExtra carries
     // merchandise only — fuel credit is handled via the credit lines above.
@@ -495,6 +541,7 @@ shiftsRouter.get('/status', async (c) => {
 
     const staffAssignments = assignmentRows.map(({ sa, staffUser, du }) => {
       const creditSales = creditSalesFor(sa.userId, sa.duId);
+      const omcSales = omcSalesFor(sa.userId, sa.duId);
       return {
         ...sa,
         userName: staffUser?.fullName ?? 'Unknown',
@@ -503,6 +550,8 @@ shiftsRouter.get('/status', async (c) => {
         attributed: attributedFor(sa.userId),
         creditSales,
         creditTotal: creditSales.reduce((s: number, l: any) => s + Number(l.amount), 0),
+        omcSales,
+        omcTotal: omcSales.reduce((s: number, l: any) => s + Number(l.amount), 0),
       };
     });
 
@@ -514,6 +563,8 @@ shiftsRouter.get('/status', async (c) => {
       attributed: attributedFor(h.userId),
       creditSales: creditSalesFor(h.userId, h.duId),
       creditTotal: creditSalesFor(h.userId, h.duId).reduce((s: number, l: any) => s + Number(l.amount), 0),
+      omcSales: omcSalesFor(h.userId, h.duId),
+      omcTotal: omcSalesFor(h.userId, h.duId).reduce((s: number, l: any) => s + Number(l.amount), 0),
     }));
 
     const terminalLinks = terminalLinkRows.map(({ link, term, du }) => ({

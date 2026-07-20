@@ -1,11 +1,10 @@
-import React, { useState } from 'react';
-import { Plus, Edit, Wallet } from 'lucide-react';
+import React from 'react';
+import { Edit, Wallet } from 'lucide-react';
 import { Drawer } from '../Drawer.js';
 import { LedgerView } from '../ledger/LedgerView.js';
 import { Button } from '../../pump-ds/index.js';
 import { inr, formatDate, formatTime } from '../../utils/format.js';
 import { useCustomerLedger } from '../../query/hooks.js';
-import { TopupDrawer } from './TopupDrawer.js';
 
 interface StatementDrawerProps {
   /** Selected customer; null closes the drawer. */
@@ -25,7 +24,6 @@ interface StatementDrawerProps {
  */
 export const StatementDrawer: React.FC<StatementDrawerProps> = ({ customer, stationId, onClose, onEdit, onRecordCollection }) => {
   const ledgerQ = useCustomerLedger(customer?.id);
-  const [topupOpen, setTopupOpen] = useState(false);
 
   return (
     <>
@@ -52,21 +50,19 @@ export const StatementDrawer: React.FC<StatementDrawerProps> = ({ customer, stat
                 </div>
                 <div style={{ textAlign: 'right' }}>
                   <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                    {customer.isPrepaid ? 'Prepaid Wallet Balance' : 'Outstanding Balance'}
+                    Outstanding Balance
                   </div>
                   <div style={{
                     fontSize: '18px',
                     fontWeight: 700,
                     fontFamily: 'var(--font-mono)',
-                    color: customer.isPrepaid
-                      ? 'var(--state-success-fg)'
-                      : customer.creditLimit > 0 && customer.currentBalance > customer.creditLimit
-                        ? 'var(--brand-danger)'
-                        : customer.currentBalance > 0
-                          ? 'var(--brand-warning)'
-                          : 'var(--state-success-fg)',
+                    color: customer.creditLimit > 0 && customer.currentBalance > customer.creditLimit
+                      ? 'var(--brand-danger)'
+                      : customer.currentBalance > 0
+                        ? 'var(--brand-warning)'
+                        : 'var(--state-success-fg)',
                   }}>
-                    {inr(customer.isPrepaid ? customer.prepaidBalance : customer.currentBalance || 0)}
+                    {inr(customer.currentBalance || 0)}
                   </div>
                 </div>
               </div>
@@ -89,9 +85,8 @@ export const StatementDrawer: React.FC<StatementDrawerProps> = ({ customer, stat
               </div>
 
               {customer.isPrepaid && (
-                <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Top-up prepaid wallet for this customer.</div>
-                  <Button variant="secondary" size="sm" leftIcon={<Plus />} onClick={() => setTopupOpen(true)}>Top Up</Button>
+                <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: '10px', fontSize: '11px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Wallet size={13} /> OMC fleet card — fuel is settled to the OMC (CMS account), not billed to this customer.
                 </div>
               )}
 
@@ -142,14 +137,6 @@ export const StatementDrawer: React.FC<StatementDrawerProps> = ({ customer, stat
           </div>
         )}
       </Drawer>
-
-      <TopupDrawer
-        isOpen={topupOpen}
-        customer={customer}
-        stationId={stationId}
-        onClose={() => setTopupOpen(false)}
-        onDone={() => ledgerQ.refetch()}
-      />
     </>
   );
 };

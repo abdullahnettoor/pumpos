@@ -158,7 +158,7 @@ export class DrizzleFinancialAccountReader {
     accountId: string,
     from?: string,
     to?: string,
-  ): Promise<{ account: FinancialAccount; periodOpeningBalance: string; entries: LedgerEntry[] } | null> {
+  ): Promise<{ account: FinancialAccount; periodOpeningBalance: string; entries: any[] } | null> {
     const accRows = await this.db
       .select()
       .from(schema.financialAccounts)
@@ -180,13 +180,37 @@ export class DrizzleFinancialAccountReader {
     const rangeConds = [eq(schema.ledgerEntries.accountId, accountId)];
     if (from) rangeConds.push(gte(schema.ledgerEntries.entryDate, from));
     if (to) rangeConds.push(lte(schema.ledgerEntries.entryDate, to));
+    // Enrich each entry with its originating OMC sale (when sourceType is
+    // SALE_OMC, sourceId → customer_transactions.id) so the statement can show
+    // which customer / vehicle / fuel each CMS receipt came from. Non-OMC rows
+    // don't match (UUIDs are globally unique) and simply carry nulls.
     const entryRows = await this.db
-      .select()
+      .select({
+        e: schema.ledgerEntries,
+        omcCustomerName: schema.customers.name,
+        omcVehicle: schema.customerVehicles.registrationNumber,
+        omcProduct: schema.products.name,
+        omcQuantity: schema.customerTransactions.quantity,
+        omcNotes: schema.customerTransactions.notes,
+      })
       .from(schema.ledgerEntries)
+      .leftJoin(schema.customerTransactions, eq(schema.customerTransactions.id, schema.ledgerEntries.sourceId))
+      .leftJoin(schema.customers, eq(schema.customers.id, schema.customerTransactions.customerId))
+      .leftJoin(schema.customerVehicles, eq(schema.customerVehicles.id, schema.customerTransactions.vehicleId))
+      .leftJoin(schema.products, eq(schema.products.id, schema.customerTransactions.productId))
       .where(and(...rangeConds))
       .orderBy(asc(schema.ledgerEntries.entryDate), asc(schema.ledgerEntries.createdAt));
 
-    return { account: toAccount(accRows[0]), periodOpeningBalance, entries: entryRows.map(toEntry) };
+    const entries = entryRows.map((r) => ({
+      ...toEntry(r.e),
+      omcCustomerName: r.omcCustomerName ?? null,
+      omcVehicle: r.omcVehicle ?? null,
+      omcProduct: r.omcProduct ?? null,
+      omcQuantity: r.omcQuantity != null ? Number(r.omcQuantity) : null,
+      omcNotes: r.omcNotes ?? null,
+    })) as any[];
+
+    return { account: toAccount(accRows[0]), periodOpeningBalance, entries };
   }
 
   /** Station-wide ledger movements in [from,to], joined with account type/name,

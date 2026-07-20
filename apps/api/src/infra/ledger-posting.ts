@@ -195,14 +195,32 @@ export class LedgerPostingService {
 
   /** OMC fleet-card sale → money IN to the station's CMS (card-settlement) account.
    *  Not a receivable and not drawer cash: the Oil Company settles the value to
-   *  the station's CMS account. Idempotent per sale id (reversible on void). */
+   *  the station's CMS account. Idempotent per sale id (reversible on void).
+   *  The ledger note carries the selected customer's identity when one is linked,
+   *  otherwise the free-text remarks captured on the sale (so an anonymous OMC
+   *  swipe still keeps its slip/driver details). */
   async postOmcCardSale(
     organizationId: string,
-    sale: { id: string; amount: string; businessDayId: string; shiftId: string | null },
+    sale: { id: string; amount: string; businessDayId: string; shiftId: string | null; customerId?: string | null; notes?: string | null },
   ): Promise<void> {
     const meta = await this.businessDayMeta(sale.businessDayId);
     if (!meta) return;
     const target = await this.ensureAccount(organizationId, meta.stationId, 'CMS');
+
+    let note = 'OMC card';
+    if (sale.customerId) {
+      const [cust] = await this.db
+        .select({ name: schema.customers.name, fleetCode: schema.customers.fleetCode })
+        .from(schema.customers)
+        .where(eq(schema.customers.id, sale.customerId))
+        .limit(1);
+      const label = cust ? `${cust.name}${cust.fleetCode ? ` (${cust.fleetCode})` : ''}` : 'Customer';
+      note = `OMC card · ${label}`;
+      if (sale.notes) note += ` · ${sale.notes}`;
+    } else if (sale.notes) {
+      note = `OMC card · ${sale.notes}`;
+    }
+
     await this.postEntry({
       organizationId,
       stationId: meta.stationId,
@@ -214,7 +232,7 @@ export class LedgerPostingService {
       sourceId: sale.id,
       businessDayId: sale.businessDayId,
       shiftId: sale.shiftId,
-      notes: 'OMC fleet-card sale',
+      notes: note,
     });
   }
 

@@ -130,12 +130,12 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     // Refresh the vehicle/customer caches so newly-added records (created in
     // another tab/session) are pickable in the Customer Sales section.
     qc.invalidateQueries({ queryKey: ['vehicles'] });
-    // Load customers eligible for on-account (Customer Sales) billing: any
-    // non-station-prepaid customer (Regular, Credit, or Fleet). Station-prepaid
-    // customers draw down a balance instead of accruing a receivable.
+    // Load customers pickable for on-account (Customer Sales) billing: all
+    // customers except legacy station-prepaid non-fleet wallets. Prepaid Fleet
+    // customers ARE included — they're OMC fleet cards (settled to CMS).
     try {
       const custList = await qc.fetchQuery({ queryKey: queryKeys.customers(true), queryFn: () => transactionService.getCustomers(true), staleTime: 0 });
-      setHandoverCreditCustomers((custList || []).filter((c: any) => !c.isPrepaid));
+      setHandoverCreditCustomers((custList || []).filter((c: any) => c.customerType === 'Fleet' || !c.isPrepaid));
     } catch {
       setHandoverCreditCustomers([]);
     }
@@ -740,6 +740,11 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
               (activeShift.staffAssignments || []).find(
                 (sa: any) => sa.userId === selectedHandoverAssignment.userId && sa.duId === selectedHandoverAssignment.duId,
               )?.creditSales || selectedHandoverAssignment.creditSales || []
+            }
+            omcSales={
+              (activeShift.staffAssignments || []).find(
+                (sa: any) => sa.userId === selectedHandoverAssignment.userId && sa.duId === selectedHandoverAssignment.duId,
+              )?.omcSales || selectedHandoverAssignment.omcSales || []
             }
             onCreditChanged={async () => {
               await loadShiftStatus();

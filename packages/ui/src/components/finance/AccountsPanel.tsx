@@ -41,6 +41,7 @@ const SOURCE_LABEL: Record<string, string> = {
   OPENING: 'Opening balance',
   SALE_CASH: 'Cash sale',
   SALE_CARD: 'Card/UPI sale',
+  SALE_OMC: 'OMC card sale',
   COLLECTION: 'Collection',
   EXPENSE: 'Expense',
   SUPPLIER_PAYMENT: 'Supplier payment',
@@ -417,7 +418,9 @@ export const AccountsPanel: React.FC<AccountsPanelProps> = ({ selectedStation })
               date: e.entryDate,
               dateLabel: e.entryDate,
               type: SOURCE_LABEL[e.sourceType] ?? e.sourceType,
-              notes: e.notes ?? undefined,
+              notes: e.sourceType === 'SALE_OMC'
+                ? ([e.omcCustomerName, e.omcVehicle, e.omcQuantity ? `${e.omcQuantity} L` : null, e.omcNotes].filter(Boolean).join(' · ') || e.notes || 'OMC card (no customer)')
+                : (e.notes ?? undefined),
               amount: Number(e.amount || 0),
               direction: e.direction === 'in' ? 'debit' : 'credit',
             })}

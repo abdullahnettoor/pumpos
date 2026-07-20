@@ -632,7 +632,7 @@ export class CloudTransactionService {
     quantity?: number | null;
     unitPrice?: number | null;
     amount: number;
-    paymentMethod: 'Cash' | 'Card' | 'UPI' | 'BankTransfer' | 'Credit';
+    paymentMethod: 'Cash' | 'Card' | 'UPI' | 'BankTransfer' | 'Credit' | 'OMC';
     attendantId?: string | null;
     duId?: string | null;
     notes?: string;
@@ -646,6 +646,10 @@ export class CloudTransactionService {
 
   async voidCreditSale(id: string): Promise<any> {
     return request<any>(`/transactions/credit-sales/${id}`, { method: 'DELETE' });
+  }
+
+  async voidOmcCardSale(id: string): Promise<any> {
+    return request<any>(`/transactions/omc-card-sales/${id}`, { method: 'DELETE' });
   }
 
   async getInventoryStatus(stationId: string): Promise<any[]> {
