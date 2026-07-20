@@ -782,7 +782,7 @@ shiftsRouter.get('/my-assignment', async (c) => {
   const myRows = assignmentRows.filter((r) => r.sa.shiftId === shift.id && r.sa.duId);
   const duIds = [...new Set(myRows.map((r) => r.sa.duId as string))];
 
-  const [templateRows, stationRows, nozzleRows, terminalRows, myHandovers, myEntries, creditSaleRows] = await Promise.all([
+  const [templateRows, stationRows, nozzleRows, terminalRows, myHandovers, myEntries, creditSaleRows, omcSaleRows] = await Promise.all([
     db.select().from(schema.shiftTemplates).where(eq(schema.shiftTemplates.id, shift.shiftTemplateId)).limit(1),
     db.select().from(schema.stations).where(eq(schema.stations.id, shift.stationId)).limit(1),
     duIds.length
@@ -815,6 +815,19 @@ shiftsRouter.get('/my-assignment', async (c) => {
           eq(schema.customerTransactions.attendantId, user.id),
           eq(schema.customerTransactions.transactionType, 'Credit Sale'),
           eq(schema.customerTransactions.referenceType, 'CREDIT_SALE'),
+        ),
+      ),
+    db
+      .select({ ct: schema.customerTransactions, customerName: schema.customers.name, productName: schema.products.name })
+      .from(schema.customerTransactions)
+      .leftJoin(schema.customers, eq(schema.customers.id, schema.customerTransactions.customerId))
+      .leftJoin(schema.products, eq(schema.products.id, schema.customerTransactions.productId))
+      .where(
+        and(
+          eq(schema.customerTransactions.shiftId, shift.id),
+          eq(schema.customerTransactions.attendantId, user.id),
+          eq(schema.customerTransactions.transactionType, 'OMC Sale'),
+          eq(schema.customerTransactions.referenceType, 'OMC_CARD_SALE'),
         ),
       ),
   ]);
@@ -862,7 +875,21 @@ shiftsRouter.get('/my-assignment', async (c) => {
         amount: Number(ct.amount),
         notes: ct.notes ?? null,
       }));
-    return { duId, duName: du?.name ?? 'Unknown', duCode: du?.code ?? null, nozzles, terminals, handover, terminalEntries, creditSales };
+    const omcSales = (omcSaleRows as any[])
+      .filter((r) => r.ct.duId === duId)
+      .map(({ ct, customerName, productName }) => ({
+        id: ct.id,
+        customerId: ct.customerId,
+        customerName: customerName ?? null,
+        vehicleId: ct.vehicleId,
+        productId: ct.productId,
+        productName: productName ?? null,
+        quantity: ct.quantity != null ? Number(ct.quantity) : null,
+        unitPrice: ct.unitPrice != null ? Number(ct.unitPrice) : null,
+        amount: Number(ct.amount),
+        notes: ct.notes ?? null,
+      }));
+    return { duId, duName: du?.name ?? 'Unknown', duCode: du?.code ?? null, nozzles, terminals, handover, terminalEntries, creditSales, omcSales };
   });
 
   return c.json({
