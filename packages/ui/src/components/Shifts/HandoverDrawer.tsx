@@ -18,6 +18,13 @@ const transactionService = new CloudTransactionService();
 const NEW_CUSTOMER = '__new_customer__';
 const NEW_VEHICLE = '__new_vehicle__';
 
+// A fresh idempotency key per customer-sale line, so a retry of the SAME line
+// (e.g. after a network blip) de-dupes server-side instead of double-posting.
+const genIdemKey = (): string =>
+  (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
+    ? crypto.randomUUID()
+    : `idem-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
 // Define form validation schema using Zod
 const handoverFormSchema = z.object({
   cashHandedOver: z.coerce.number().nonnegative('Cash must be non-negative'),
@@ -190,6 +197,9 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
   const [ccAmount, setCcAmount] = useState('');
   const [ccNotes, setCcNotes] = useState('');
   const [ccBusy, setCcBusy] = useState(false);
+  // Idempotency key for the line currently being added — held across a failed
+  // retry (same key → server de-dupes) and cleared on success or any edit.
+  const ccIdemKeyRef = useRef<string | null>(null);
   // Inline create ("＋ New …") drawer state + optimistically-added records.
   const [newCustomerOpen, setNewCustomerOpen] = useState(false);
   const [newVehicleOpen, setNewVehicleOpen] = useState(false);
@@ -199,6 +209,7 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
   const { data: allVehiclesData } = useAllVehicles(true);
 
   const resetCcRow = () => {
+    ccIdemKeyRef.current = null;
     setCcSelectValue('');
     setCcChannel('credit');
     setCcCustomerId(''); setCcCustomerName(''); setCcCustomerType(null); setCcVehicleId(null); setCcVehicleLabel('');
@@ -246,6 +257,7 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
   const handleCreditSelect = (value: string) => {
     if (value === NEW_CUSTOMER) { setNewCustomerOpen(true); return; }
     if (value === NEW_VEHICLE) { setNewVehicleOpen(true); return; }
+    ccIdemKeyRef.current = null;
     setCcSelectValue(value);
     if (value.startsWith('v:')) {
       const v = allVehicles.find((x: any) => `v:${x.id}` === value);
@@ -306,6 +318,7 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
   const ccExceeds = ccAvailable != null && Number(ccAmount) > ccAvailable;
 
   const handleCcProductChange = (pid: string) => {
+    ccIdemKeyRef.current = null;
     setCcProductId(pid);
     // Price is fixed per nozzle — keep it internal (drives qty↔amount), no manual entry.
     const p = duProducts.find((x) => x.id === pid);
@@ -315,11 +328,13 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
     if (q > 0 && price > 0) setCcAmount((q * price).toFixed(2));
   };
   const handleCcQtyChange = (v: string) => {
+    ccIdemKeyRef.current = null;
     setCcQty(v);
     const q = Number(v); const pr = Number(ccPrice);
     if (q > 0 && pr > 0) setCcAmount((q * pr).toFixed(2));
   };
   const handleCcAmountChange = (v: string) => {
+    ccIdemKeyRef.current = null;
     setCcAmount(v);
     const a = Number(v); const pr = Number(ccPrice);
     if (a > 0 && pr > 0) setCcQty((a / pr).toFixed(3));
@@ -333,6 +348,7 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
     if (!(amt > 0)) { setError('Enter a valid amount.'); return; }
     try {
       setCcBusy(true);
+      const idempotencyKey = ccIdemKeyRef.current ?? (ccIdemKeyRef.current = genIdemKey());
       const entry = await transactionService.recordCollection({
         shiftId,
         customerId: ccCustomerId || undefined,
@@ -345,7 +361,7 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
         attendantId: userId,
         duId,
         notes: ccNotes || undefined,
-      });
+      }, { idempotencyKey });
       const prod = duProducts.find((p) => p.id === ccProductId);
       const line = {
         id: entry?.id,

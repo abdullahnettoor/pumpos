@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   useMyAssignment,
@@ -63,6 +63,13 @@ const num = (v: string | number | null | undefined) => {
   return Number.isFinite(n) ? n : 0;
 };
 
+// A fresh idempotency key per customer-sale line, so a retry of the SAME line
+// (e.g. after a flaky-network blip) de-dupes server-side instead of double-posting.
+const genIdemKey = (): string =>
+  (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
+    ? crypto.randomUUID()
+    : `idem-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
 const fieldStyle = {
   backgroundColor: 'var(--bg-surface)',
   borderColor: 'var(--border-soft)',
@@ -120,7 +127,7 @@ const CustomerSaleForm: React.FC<{
   credit: CreditLine[];
   omc: CreditLine[];
   busy: boolean;
-  onAdd: (channel: 'credit' | 'omc', line: Omit<CreditLine, 'id'>) => Promise<void>;
+  onAdd: (channel: 'credit' | 'omc', line: Omit<CreditLine, 'id'>, idempotencyKey: string) => Promise<void>;
   onRemove: (channel: 'credit' | 'omc', id: string) => Promise<void>;
 }> = ({ duProducts, customers, allVehicles, credit, omc, busy, onAdd, onRemove }) => {
   const [open, setOpen] = useState(false);
@@ -137,8 +144,12 @@ const CustomerSaleForm: React.FC<{
   const [amount, setAmount] = useState('');
   const [notes, setNotes] = useState('');
   const [adding, setAdding] = useState(false);
+  // Idempotency key for the line being added — kept across a failed retry
+  // (same key → server de-dupes), cleared on success or any edit.
+  const idemKeyRef = useRef<string | null>(null);
 
   const reset = () => {
+    idemKeyRef.current = null;
     setSelectValue(''); setChannel('credit');
     setCustomerId(''); setCustomerName(''); setCustomerType(null); setVehicleId(null); setVehicleLabel('');
     setProductId(''); setQty(''); setPrice(''); setAmount(''); setNotes('');
@@ -161,6 +172,7 @@ const CustomerSaleForm: React.FC<{
     (cust?.customerType === 'Fleet' && cust?.isPrepaid) ? 'omc' : 'credit';
 
   const onSelect = (value: string) => {
+    idemKeyRef.current = null;
     setSelectValue(value);
     if (value.startsWith('v:')) {
       const v = allVehicles.find((x: any) => `v:${x.id}` === value);
@@ -187,6 +199,7 @@ const CustomerSaleForm: React.FC<{
   };
 
   const onProduct = (pid: string) => {
+    idemKeyRef.current = null;
     setProductId(pid);
     const p = duProducts.find((x) => x.id === pid);
     const pr = p && p.price > 0 ? p.price : 0;
@@ -195,11 +208,13 @@ const CustomerSaleForm: React.FC<{
     if (q > 0 && pr > 0) setAmount((q * pr).toFixed(2));
   };
   const onQty = (v: string) => {
+    idemKeyRef.current = null;
     setQty(v);
     const q = Number(v); const pr = Number(price);
     if (q > 0 && pr > 0) setAmount((q * pr).toFixed(2));
   };
   const onAmount = (v: string) => {
+    idemKeyRef.current = null;
     setAmount(v);
     const a = Number(v); const pr = Number(price);
     if (a > 0 && pr > 0) setQty((a / pr).toFixed(3));
@@ -211,6 +226,7 @@ const CustomerSaleForm: React.FC<{
     if ((!isOmc && !customerId) || !(amt > 0)) return;
     setAdding(true);
     try {
+      const idempotencyKey = idemKeyRef.current ?? (idemKeyRef.current = genIdemKey());
       await onAdd(channel, {
         customerId: customerId || null,
         customerName: customerId ? customerName : null,
@@ -223,7 +239,7 @@ const CustomerSaleForm: React.FC<{
         unitPrice: price && Number(price) >= 0 ? Number(price) : null,
         amount: amt,
         notes: notes || null,
-      });
+      }, idempotencyKey);
       reset();
       setOpen(false);
     } finally {
@@ -522,7 +538,7 @@ export const HandoverPanel: React.FC = () => {
       [duId]: { ...f[duId], terminals: { ...f[duId].terminals, [terminalId]: { ...f[duId].terminals[terminalId], [field]: v } } },
     }));
 
-  const addCredit = async (duId: string, channel: 'credit' | 'omc', line: Omit<CreditLine, 'id'>) => {
+  const addCredit = async (duId: string, channel: 'credit' | 'omc', line: Omit<CreditLine, 'id'>, idempotencyKey?: string) => {
     if (!shiftId) return;
     setError(null);
     setCcBusy(true);
@@ -539,7 +555,7 @@ export const HandoverPanel: React.FC = () => {
         attendantId: attendantId ?? null,
         duId,
         notes: line.notes ?? undefined,
-      });
+      }, { idempotencyKey });
       const stamped = { ...line, id: entry?.id };
       if (channel === 'omc') setOmcByDu((c) => ({ ...c, [duId]: [...(c[duId] || []), stamped] }));
       else setCreditByDu((c) => ({ ...c, [duId]: [...(c[duId] || []), stamped] }));
@@ -805,7 +821,7 @@ export const HandoverPanel: React.FC = () => {
               credit={credit}
               omc={omc}
               busy={ccBusy}
-              onAdd={(channel, line) => addCredit(du.duId, channel, line)}
+              onAdd={(channel, line, key) => addCredit(du.duId, channel, line, key)}
               onRemove={(channel, id) => removeCredit(du.duId, channel, id)}
             />
           </section>

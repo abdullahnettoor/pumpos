@@ -637,11 +637,11 @@ export class CloudTransactionService {
     duId?: string | null;
     notes?: string;
     accountId?: string | null;
-  }): Promise<any> {
+  }, opts?: { idempotencyKey?: string }): Promise<any> {
     return request<any>('/transactions/collections', {
       method: 'POST',
       body: JSON.stringify(payload),
-    });
+    }, { idempotencyKey: opts?.idempotencyKey });
   }
 
   async voidCreditSale(id: string): Promise<any> {
