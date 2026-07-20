@@ -30,7 +30,8 @@ export interface CustomerLedgerEntry {
   id: string;
   shiftId: string | null;
   businessDayId: string;
-  customerId: string;
+  /** Null only for an anonymous OMC fleet-card sale (settled to CMS, not a receivable). */
+  customerId: string | null;
   vehicleId: string | null;
   productId: string | null;
   /** Operator who recorded the entry (attendant accountability); null for back-office entries. */

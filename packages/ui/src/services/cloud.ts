@@ -732,7 +732,7 @@ export class CloudTransactionService {
     return request<any>(`/transactions/merchandise-handovers/${saleId}`, { method: 'DELETE' });
   }
 
-  async recordSupplierPayment(payload: { shiftId?: string; stationId?: string; transactionDate?: string; paidFrom?: 'SHIFT_CASH' | 'BANK' | 'OWNER'; supplierId: string; amount: number; notes?: string; accountId?: string | null }): Promise<any> {
+  async recordSupplierPayment(payload: { shiftId?: string; stationId?: string; transactionDate?: string; paidFrom?: 'SHIFT_CASH' | 'BANK' | 'OWNER' | 'CMS'; supplierId: string; amount: number; notes?: string; accountId?: string | null }): Promise<any> {
     return request<any>('/transactions/supplier-payments', {
       method: 'POST',
       body: JSON.stringify(payload),
@@ -817,7 +817,7 @@ export class CloudFinanceService {
 
   async createAccount(payload: {
     stationId?: string | null;
-    accountType: 'CASH_IN_HAND' | 'PETTY_CASH' | 'BANK' | 'MERCHANT_CLEARING' | 'OWNER';
+    accountType: 'CASH_IN_HAND' | 'PETTY_CASH' | 'BANK' | 'MERCHANT_CLEARING' | 'CMS' | 'OWNER';
     name: string;
     openingBalance?: number;
     openingDate?: string | null;

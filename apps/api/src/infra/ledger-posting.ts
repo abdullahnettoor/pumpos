@@ -193,6 +193,38 @@ export class LedgerPostingService {
     });
   }
 
+  /** OMC fleet-card sale → money IN to the station's CMS (card-settlement) account.
+   *  Not a receivable and not drawer cash: the Oil Company settles the value to
+   *  the station's CMS account. Idempotent per sale id (reversible on void). */
+  async postOmcCardSale(
+    organizationId: string,
+    sale: { id: string; amount: string; businessDayId: string; shiftId: string | null },
+  ): Promise<void> {
+    const meta = await this.businessDayMeta(sale.businessDayId);
+    if (!meta) return;
+    const target = await this.ensureAccount(organizationId, meta.stationId, 'CMS');
+    await this.postEntry({
+      organizationId,
+      stationId: meta.stationId,
+      accountId: target,
+      direction: 'in',
+      amount: sale.amount,
+      entryDate: meta.businessDate,
+      sourceType: 'SALE_OMC',
+      sourceId: sale.id,
+      businessDayId: sale.businessDayId,
+      shiftId: sale.shiftId,
+      notes: 'OMC fleet-card sale',
+    });
+  }
+
+  /** Reverse the CMS money-in for a voided OMC card sale. */
+  async reverseOmcCardSale(sourceId: string): Promise<void> {
+    await this.db
+      .delete(schema.ledgerEntries)
+      .where(and(eq(schema.ledgerEntries.sourceType, 'SALE_OMC'), eq(schema.ledgerEntries.sourceId, sourceId)));
+  }
+
   // ---- FA3: shift-close sales posting -------------------------------------
 
   /** Ledger source types produced by shift close (used for idempotent replace). */

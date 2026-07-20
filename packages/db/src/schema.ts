@@ -282,7 +282,10 @@ export const customerTransactions = pgTable('customer_transactions', {
   // to the business day; a shift link exists only for drawer-affecting cash.
   shiftId: uuid('shift_id').references(() => shifts.id),
   businessDayId: uuid('business_day_id').references(() => businessDays.id).notNull(),
-  customerId: uuid('customer_id').references(() => customers.id).notNull(),
+  // Nullable: an OMC fleet-card sale ('OMC Sale') may be anonymous (paid via the
+  // Oil Company's card, settled to the CMS account — not a station receivable),
+  // so it can be recorded without a customer. Credit sales always carry one.
+  customerId: uuid('customer_id').references(() => customers.id),
   vehicleId: uuid('vehicle_id').references(() => customerVehicles.id),
   productId: uuid('product_id').references(() => products.id),
   // Operator who recorded the credit sale (attendant accountability). Set when

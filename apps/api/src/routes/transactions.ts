@@ -22,6 +22,8 @@ import {
   RecordCollection,
   RecordCreditSale,
   VoidCreditSale,
+  RecordOmcCardSale,
+  VoidOmcCardSale,
   RecordPurchase,
   RecordSupplierPayment,
   CreateSale,
@@ -202,13 +204,15 @@ transactionsRouter.get('/customers', async (c) => {
   const activeOnly = c.req.query('activeOnly') !== 'false';
 
   // Receivable = Σ credit sales/adjustments − Σ collections, scoped via business_days.
+  // OMC fleet-card sales are a CMS-settled payment channel (never a receivable),
+  // so they are excluded from the customer balance.
   // Aggregated in SQL (one row per customer) + run alongside the list query.
   const [list, balanceRows] = await Promise.all([
     new DrizzleCustomerRepository(db).listByOrganization(user.organizationId, activeOnly),
     db
       .select({
         customerId: schema.customerTransactions.customerId,
-        balance: sql<string>`COALESCE(SUM(CASE WHEN ${schema.customerTransactions.transactionType} = 'Collection' THEN -${schema.customerTransactions.amount} ELSE ${schema.customerTransactions.amount} END), 0)`,
+        balance: sql<string>`COALESCE(SUM(CASE WHEN ${schema.customerTransactions.transactionType} = 'Collection' THEN -${schema.customerTransactions.amount} WHEN ${schema.customerTransactions.transactionType} = 'OMC Sale' THEN 0 ELSE ${schema.customerTransactions.amount} END), 0)`,
       })
       .from(schema.customerTransactions)
       .innerJoin(schema.businessDays, eq(schema.customerTransactions.businessDayId, schema.businessDays.id))
@@ -217,7 +221,7 @@ transactionsRouter.get('/customers', async (c) => {
   ]);
 
   const balances: Record<string, number> = {};
-  for (const r of balanceRows) balances[r.customerId] = Number(r.balance);
+  for (const r of balanceRows) if (r.customerId) balances[r.customerId] = Number(r.balance);
   return c.json({ success: true, data: list.map((cust) => ({ ...cust, currentBalance: balances[cust.id] ?? 0 })) });
 });
 
@@ -282,7 +286,7 @@ transactionsRouter.get('/customers/:id/ledger', async (c) => {
     })
     .from(schema.customerTransactions)
     .innerJoin(schema.businessDays, eq(schema.customerTransactions.businessDayId, schema.businessDays.id))
-    .where(eq(schema.customerTransactions.customerId, customerId))
+    .where(and(eq(schema.customerTransactions.customerId, customerId), ne(schema.customerTransactions.transactionType, 'OMC Sale')))
     .orderBy(schema.customerTransactions.createdAt);
   return c.json({ success: true, data: list });
 });
@@ -594,6 +598,22 @@ transactionsRouter.post('/collections', async (c) => {
     );
     return sendResult(c, result);
   }
+  // An "OMC" sale is paid by the Oil Company's fleet card and settled to the
+  // station's CMS account (money IN to CMS) — not a receivable, not drawer cash.
+  if (body?.paymentMethod === 'OMC') {
+    const result = await runInTransaction(c.var.db, async (tx, events) => {
+      const r = await new RecordOmcCardSale({
+        ledger: new DrizzleCustomerLedgerRepository(tx),
+        customers: new DrizzleCustomerRepository(tx),
+        shifts: new DrizzleShiftRepository(tx),
+        businessDays: new DrizzleBusinessDayRepository(tx),
+        events,
+      }).execute(body, buildContext(user, { stationId: body?.stationId, ...clock }));
+      if (r.success) await new LedgerPostingService(tx).postOmcCardSale(user.organizationId, r.data);
+      return r;
+    });
+    return sendResult(c, result);
+  }
   const result = await runInTransaction(c.var.db, async (tx, events) => {
     const r = await new RecordCollection({
       collections: new DrizzleCollectionRepository(tx),
@@ -622,6 +642,23 @@ transactionsRouter.delete('/credit-sales/:id', async (c) => {
       events,
     }).execute({ id }, buildContext(user)),
   );
+  return sendResult(c, result);
+});
+
+// Void an OMC fleet-card sale (correction while the shift is still open). Removes
+// the sale row AND reverses the CMS money-in posting.
+transactionsRouter.delete('/omc-card-sales/:id', async (c) => {
+  const user = c.var.user;
+  const id = c.req.param('id');
+  const result = await runInTransaction(c.var.db, async (tx, events) => {
+    const r = await new VoidOmcCardSale({
+      ledger: new DrizzleCustomerLedgerRepository(tx),
+      shifts: new DrizzleShiftRepository(tx),
+      events,
+    }).execute({ id }, buildContext(user));
+    if (r.success) await new LedgerPostingService(tx).reverseOmcCardSale(id);
+    return r;
+  });
   return sendResult(c, result);
 });
 

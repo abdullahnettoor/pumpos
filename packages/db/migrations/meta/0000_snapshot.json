@@ -625,7 +625,7 @@
           "name": "customer_id",
           "type": "uuid",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "vehicle_id": {
           "name": "vehicle_id",

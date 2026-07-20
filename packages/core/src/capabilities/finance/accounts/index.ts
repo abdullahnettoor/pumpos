@@ -3,12 +3,13 @@ import { resolveBusinessDate } from '@pump/shared';
 import { BusinessEvents, conflictError, err, eventFromContext, forbiddenError, notFoundError, ok, validationError } from '../../../kernel/index.js';
 import type { EventPublisher, ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
 
-export type FinancialAccountType = 'CASH_IN_HAND' | 'PETTY_CASH' | 'BANK' | 'MERCHANT_CLEARING' | 'OWNER';
+export type FinancialAccountType = 'CASH_IN_HAND' | 'PETTY_CASH' | 'BANK' | 'MERCHANT_CLEARING' | 'CMS' | 'OWNER';
 export type LedgerDirection = 'in' | 'out';
 export type LedgerSourceType =
   | 'OPENING'
   | 'SALE_CASH'
   | 'SALE_CARD'
+  | 'SALE_OMC'
   | 'COLLECTION'
   | 'EXPENSE'
   | 'SUPPLIER_PAYMENT'
@@ -63,6 +64,7 @@ export const DEFAULT_ACCOUNT_NAME: Record<FinancialAccountType, string> = {
   PETTY_CASH: 'Petty Cash',
   BANK: 'Bank',
   MERCHANT_CLEARING: 'Card/UPI Clearing',
+  CMS: 'OMC Card Settlement (CMS)',
   OWNER: 'Owner',
 };
 
@@ -75,6 +77,7 @@ export function accountTypeForPaymentMethod(method: string): FinancialAccountTyp
 export function accountTypeForPaidFrom(paidFrom: string): FinancialAccountType {
   if (paidFrom === 'SHIFT_CASH') return 'CASH_IN_HAND';
   if (paidFrom === 'OWNER') return 'OWNER';
+  if (paidFrom === 'CMS') return 'CMS';
   return 'BANK';
 }
 
@@ -84,7 +87,7 @@ export interface LedgerEntryRepository {
   deleteByAccountAndSource(accountId: string, sourceType: LedgerSourceType): Promise<void>;
 }
 
-const accountTypeEnum = z.enum(['CASH_IN_HAND', 'PETTY_CASH', 'BANK', 'MERCHANT_CLEARING', 'OWNER']);
+const accountTypeEnum = z.enum(['CASH_IN_HAND', 'PETTY_CASH', 'BANK', 'MERCHANT_CLEARING', 'CMS', 'OWNER']);
 
 const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 

@@ -17,13 +17,14 @@ import { Plus, Wallet, ArrowLeft, ArrowLeftRight, Banknote } from 'lucide-react'
 
 const financeSvc = new CloudFinanceService();
 
-type AccountType = 'CASH_IN_HAND' | 'PETTY_CASH' | 'BANK' | 'MERCHANT_CLEARING' | 'OWNER';
+type AccountType = 'CASH_IN_HAND' | 'PETTY_CASH' | 'BANK' | 'MERCHANT_CLEARING' | 'CMS' | 'OWNER';
 
 const TYPE_LABEL: Record<AccountType, string> = {
   CASH_IN_HAND: 'Cash in Hand',
   PETTY_CASH: 'Petty Cash',
   BANK: 'Bank',
   MERCHANT_CLEARING: 'Card/UPI Clearing',
+  CMS: 'OMC Card Settlement (CMS)',
   OWNER: 'Owner',
 };
 
@@ -32,6 +33,7 @@ const TYPE_TONE: Record<AccountType, 'brand' | 'info' | 'success' | 'warning' | 
   PETTY_CASH: 'neutral',
   BANK: 'info',
   MERCHANT_CLEARING: 'warning',
+  CMS: 'info',
   OWNER: 'brand',
 };
 
@@ -557,6 +559,7 @@ export const AccountsPanel: React.FC<AccountsPanelProps> = ({ selectedStation })
               <option value="PETTY_CASH">Petty Cash</option>
               <option value="CASH_IN_HAND">Cash in Hand</option>
               <option value="MERCHANT_CLEARING">Card/UPI Clearing</option>
+              <option value="CMS">OMC Card Settlement (CMS)</option>
               <option value="OWNER">Owner</option>
             </Select>
           </Field>

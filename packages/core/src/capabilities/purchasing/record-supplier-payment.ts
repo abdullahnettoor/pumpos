@@ -7,7 +7,7 @@ import { ensureBusinessDayForDate, type BusinessDayRepository } from '../station
 import type { SupplierRepository } from '../crm/suppliers/index.js';
 import type { SupplierTransaction, SupplierTransactionRepository } from './ports.js';
 
-export type SupplierPaidFrom = 'SHIFT_CASH' | 'BANK' | 'OWNER';
+export type SupplierPaidFrom = 'SHIFT_CASH' | 'BANK' | 'OWNER' | 'CMS';
 
 export interface RecordSupplierPaymentCommand {
   supplierId: string;
@@ -23,7 +23,7 @@ export interface RecordSupplierPaymentCommand {
 const schema = z.object({
   supplierId: z.string().min(1, 'supplierId is required'),
   amount: z.coerce.number().positive('amount must be positive'),
-  paidFrom: z.enum(['SHIFT_CASH', 'BANK', 'OWNER']).optional(),
+  paidFrom: z.enum(['SHIFT_CASH', 'BANK', 'OWNER', 'CMS']).optional(),
   affectsDrawer: z.boolean().optional(),
   shiftId: z.string().min(1).optional(),
   stationId: z.string().min(1).optional(),

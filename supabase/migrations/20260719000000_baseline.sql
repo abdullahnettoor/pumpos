@@ -61,7 +61,7 @@ CREATE TABLE "customer_transactions" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"shift_id" uuid,
 	"business_day_id" uuid NOT NULL,
-	"customer_id" uuid NOT NULL,
+	"customer_id" uuid,
 	"vehicle_id" uuid,
 	"product_id" uuid,
 	"attendant_id" uuid,

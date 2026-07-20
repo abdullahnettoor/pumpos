@@ -366,7 +366,7 @@ export class DrizzleCreditSalesReader implements CreditSalesReader {
       notes: r.ct.notes ?? null,
       duId: r.ct.duId ?? null,
       attendantId: r.ct.attendantId ?? null,
-      customerId: r.ct.customerId,
+      customerId: r.ct.customerId ?? '',
       vehicleId: r.ct.vehicleId ?? null,
       productId: r.ct.productId ?? null,
       customerName: r.customerName ?? 'Customer',
