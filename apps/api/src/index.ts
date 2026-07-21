@@ -55,7 +55,9 @@ function setCachedAuthUser(authId: string, user: CachedAuthUser): void {
 
 type Bindings = {
   HYPERDRIVE: Hyperdrive;
-  SUPABASE_JWT_SECRET: string;
+  // Optional legacy fallback for Supabase HS256 JWT projects. New Supabase
+  // projects should use asymmetric JWTs (ES256) and JWKS verification instead.
+  SUPABASE_JWT_SECRET?: string;
   // Optional fallback: when set, the worker connects directly to this
   // Postgres URL (typically Supabase's Supavisor pooler on port 6543) and
   // bypasses Hyperdrive. Use this to work around Hyperdrive daily-quota
@@ -148,9 +150,35 @@ function tripHyperdriveBreaker(reason: string): void {
   hyperdriveDisabledUntilMs = until;
 }
 
-// Enable CORS
+const allowedCorsOrigins = new Set([
+  'https://pumpos.app',
+  'https://console.pumpos.app',
+  'https://m.pumpos.app',
+  'https://pumpos.abdullahnettoor.com',
+  'https://console.pumpos.abdullahnettoor.com',
+  'https://m.pumpos.abdullahnettoor.com',
+  'http://localhost:1420',
+  'http://127.0.0.1:1420',
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+  'http://localhost:3100',
+  'http://127.0.0.1:3100',
+  'http://localhost:4321',
+  'http://127.0.0.1:4321',
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'tauri://localhost',
+  'http://tauri.localhost',
+  'https://tauri.localhost',
+]);
+
+// Enable CORS for known browser/Tauri origins. Non-browser clients are not
+// blocked by CORS; requests without an Origin header are allowed through.
 app.use('*', cors({
-  origin: '*',
+  origin: (origin) => {
+    if (!origin) return null;
+    return allowedCorsOrigins.has(origin) ? origin : null;
+  },
   allowHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key'],
   allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   exposeHeaders: ['Content-Length', 'Server-Timing'],
@@ -201,7 +229,6 @@ api.use('*', async (c, next) => {
     return await next();
   }
 
-  const secret = c.env.SUPABASE_JWT_SECRET || 'placeholder-jwt-secret-replace-in-prod';
   const authHeader = c.req.header('Authorization');
   
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -236,10 +263,17 @@ api.use('*', async (c, next) => {
 
 
 
-    // Verify token using JWT signature
+    // Verify token using JWT signature. Supabase's current recommendation is
+    // asymmetric JWT signing (ES256) verified via the project's JWKS endpoint.
+    // HS256 is kept only as an optional legacy fallback when the shared secret
+    // is still configured.
     const { header, payload: decodedPayload } = decode(token);
     
     if (header.alg === 'HS256') {
+      const secret = c.env.SUPABASE_JWT_SECRET;
+      if (!secret) {
+        throw new Error('Received legacy HS256 token but SUPABASE_JWT_SECRET is not configured. Enable asymmetric JWTs or set the legacy secret.');
+      }
       payload = await verify(token, secret, 'HS256');
     } else if (header.alg === 'ES256') {
       const kid = header.kid;

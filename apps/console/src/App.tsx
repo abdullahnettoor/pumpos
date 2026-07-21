@@ -34,13 +34,9 @@ const resolveApiUrl = (): string | undefined => {
   if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL as string;
   if (typeof window !== 'undefined') {
     const { hostname } = window.location;
-    if (
-      hostname === 'dev-pumpos-console.abdullahnettoor.workers.dev' ||
-      hostname === 'console.pumpos.abdullahnettoor.com' ||
-      hostname === 'console.pumpos.app'
-    ) {
-      return 'https://pumpos-api.abdullahnettoor.workers.dev';
-    }
+    if (hostname === 'console.pumpos.app') return 'https://api.pumpos.app';
+    if (hostname === 'console.pumpos.abdullahnettoor.com') return 'https://api.pumpos.abdullahnettoor.com';
+    if (hostname === 'dev-pumpos-console.abdullahnettoor.workers.dev') return 'https://pumpos-api.abdullahnettoor.workers.dev';
   }
   return undefined;
 };
@@ -59,6 +55,7 @@ const environmentTag = (() => {
     const hostname = window.location.hostname;
     // Dev domain or localhost
     if (hostname === 'localhost') return 'Local';
+    if (hostname === 'console.pumpos.abdullahnettoor.com') return 'Preview';
     if (hostname === 'dev-pumpos-console.abdullahnettoor.workers.dev') return 'Dev';
     // Cloudflare preview env deploys as <worker-name>-preview.<subdomain>.workers.dev
     if (hostname.includes('-preview.')) return 'Preview';

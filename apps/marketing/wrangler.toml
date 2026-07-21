@@ -1,9 +1,7 @@
 name = "pumpos-marketing"
 compatibility_date = "2026-06-24"
 
-# Marketing owns the apex. Custom domain + cert auto-provisioned on first prod
-# deploy (zone must be active in the account). Until pumpos.app is purchased,
-# this targets the dev apex.
+# Marketing owns the production apex.
 [[routes]]
 pattern = "pumpos.app"
 custom_domain = true
@@ -14,11 +12,14 @@ directory = "./dist"
 # SPA fallback (this is a multi-page static site, not an SPA).
 not_found_handling = "404-page"
 
-# Preview / dev deploy — served on workers.dev.
+# Preview / dev deploy — stable custom preview domain.
 [env.preview]
-name = "dev-pumpos-marketing"
-workers_dev = true
-routes = []
+name = "preview-pumpos-marketing"
+workers_dev = false
+
+[[env.preview.routes]]
+pattern = "pumpos.abdullahnettoor.com"
+custom_domain = true
 
 [env.preview.assets]
 directory = "./dist"

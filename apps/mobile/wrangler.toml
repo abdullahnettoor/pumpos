@@ -1,8 +1,7 @@
 name = "pumpos-mobile"
 compatibility_date = "2026-06-24"
 
-# Mobile PWA lives on the `m.` subdomain. Custom domain + cert auto-provisioned
-# on first prod deploy (zone must be active in the account).
+# Mobile PWA lives on the `m.` subdomain.
 [[routes]]
 pattern = "m.pumpos.app"
 custom_domain = true
@@ -12,11 +11,14 @@ directory = "./dist"
 # Single-page app: unmatched routes fall back to index.html.
 not_found_handling = "single-page-application"
 
-# Preview / dev deploy — served on workers.dev.
+# Preview / dev deploy — stable custom preview domain.
 [env.preview]
-name = "dev-pumpos-mobile"
-workers_dev = true
-routes = []
+name = "preview-pumpos-mobile"
+workers_dev = false
+
+[[env.preview.routes]]
+pattern = "m.pumpos.abdullahnettoor.com"
+custom_domain = true
 
 [env.preview.assets]
 directory = "./dist"

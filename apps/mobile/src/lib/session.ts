@@ -15,13 +15,9 @@ export function resolveApiUrl(): string | undefined {
   if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL as string;
   if (typeof window !== 'undefined') {
     const { hostname } = window.location;
-    if (
-      hostname === 'dev-pumpos-mobile.abdullahnettoor.workers.dev' ||
-      hostname === 'm.pumpos.abdullahnettoor.com' ||
-      hostname === 'm.pumpos.app'
-    ) {
-      return 'https://pumpos-api.abdullahnettoor.workers.dev';
-    }
+    if (hostname === 'm.pumpos.app') return 'https://api.pumpos.app';
+    if (hostname === 'm.pumpos.abdullahnettoor.com') return 'https://api.pumpos.abdullahnettoor.com';
+    if (hostname === 'dev-pumpos-mobile.abdullahnettoor.workers.dev') return 'https://pumpos-api.abdullahnettoor.workers.dev';
   }
   return undefined;
 }

@@ -7,7 +7,8 @@
     "dev": "node scripts/dev-remote.mjs",
     "dev:local": "wrangler dev src/index.ts",
     "dev:remote": "npm run dev",
-    "deploy": "wrangler deploy src/index.ts",
+    "deploy": "wrangler deploy",
+    "deploy:dev": "wrangler deploy --env preview",
     "build": "tsc -b"
   },
   "dependencies": {

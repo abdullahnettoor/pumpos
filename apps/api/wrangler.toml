@@ -1,11 +1,19 @@
-name = "pumpos-api"
+# Top-level deploy is production. Preview/dev deploys use `[env.preview]` below.
+name = "pumpos-api-prod"
 main = "src/index.ts"
 compatibility_date = "2026-06-24"
 compatibility_flags = [ "nodejs_compat_v2" ]
 
+[[routes]]
+pattern = "api.pumpos.app"
+custom_domain = true
+
 [[hyperdrive]]
 binding = "HYPERDRIVE"
 id = "44db8c2a98344989a2a2c572638deb63"
+# TODO(prod-db): replace the id above with the dedicated production Hyperdrive
+# id when you are ready for true DB isolation. Keeping the current id lets you
+# temporarily use the preview/dev Supabase from production for initial testing.
 # Local default for Docker-based Supabase.
 # Remote Supabase users should override with:
 # CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE=<DIRECT_DATABASE_URL>
@@ -37,40 +45,22 @@ invocation_logs = true
 enabled = false
 head_sampling_rate = 0.1
 
-[secrets]
-required = [ "SUPABASE_JWT_SECRET" ]
+# SUPABASE_JWT_SECRET is intentionally NOT required. New Supabase JWTs should be
+# ES256 and are verified through JWKS. If a project still issues legacy HS256
+# tokens, set this secret as an optional fallback:
+#   wrangler secret put SUPABASE_JWT_SECRET
 
-# ---------------------------------------------------------------------------
-# PRODUCTION API (separate Supabase instance)
-# ---------------------------------------------------------------------------
-# The top-level config above is the DEV stack (dev Supabase). Production uses a
-# DIFFERENT Supabase project, so it needs its own worker, its own Hyperdrive
-# config (pointing at the prod DB), and the prod project's JWT secret.
-#
-# Deploy prod explicitly (kept out of auto-deploy):   wrangler deploy --env production
-#
-# Setup checklist when the prod Supabase project exists:
-#   1. Create a Hyperdrive config for the prod DB direct connection:
-#        wrangler hyperdrive create pumpos-prod \
-#          --connection-string "postgresql://postgres.<ref>:<pwd>@<host>:5432/postgres"
-#      then paste the returned id below.
-#   2. Set the prod JWT secret on the prod worker:
-#        wrangler secret put SUPABASE_JWT_SECRET --env production
-#   3. Point the frontends at this worker via PROD_API_URL (api.pumpos.app).
+[env.preview]
+name = "preview-pumpos-api"
+workers_dev = false
 
-[env.production]
-name = "pumpos-api-prod"
-[[env.production.routes]]
-pattern = "api.pumpos.app"
+[[env.preview.routes]]
+pattern = "api.pumpos.abdullahnettoor.com"
 custom_domain = true
 
-[[env.production.hyperdrive]]
+[[env.preview.hyperdrive]]
 binding = "HYPERDRIVE"
 id = "44db8c2a98344989a2a2c572638deb63"
-# id = "e444eafcebee4e889dae8917701a4b02"
 
-[env.production.observability]
+[env.preview.observability]
 enabled = true
-
-# [env.production.secrets]
-# required = [ "SUPABASE_JWT_SECRET" ]
