@@ -240,6 +240,7 @@ export class DrizzleShiftReconciliationReader implements ShiftReconciliationRead
     const supplierTxns = await this.db.select().from(schema.supplierTransactions).where(eq(schema.supplierTransactions.shiftId, shiftId));
     const sales = await this.db.select().from(schema.sales).where(eq(schema.sales.shiftId, shiftId));
     const handovers = await this.db.select().from(schema.attendantHandovers).where(eq(schema.attendantHandovers.shiftId, shiftId));
+    const incomeRows = await this.db.select().from(schema.otherIncome).where(eq(schema.otherIncome.shiftId, shiftId));
 
     const sumBy = (rows: { amount: string; paymentMethod?: string }[], method: string) =>
       rows.filter((r) => r.paymentMethod === method).reduce((acc, r) => acc + Number(r.amount), 0);
@@ -289,6 +290,9 @@ export class DrizzleShiftReconciliationReader implements ShiftReconciliationRead
       cardCollections: sumBy(collections, 'Card'),
       upiCollections: sumBy(collections, 'UPI'),
       creditCollections: sumBy(collections, 'Credit'),
+      cashIncome: incomeRows
+        .filter((i) => i.affectsDrawer && i.status !== 'VOIDED')
+        .reduce((acc, i) => acc + Number(i.amount), 0),
       drawerExpenses: expenses
         .filter((e) => e.affectsDrawer && e.status !== 'VOIDED')
         .reduce((acc, e) => acc + Number(e.amount), 0),

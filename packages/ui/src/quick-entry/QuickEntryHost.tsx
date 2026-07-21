@@ -30,6 +30,7 @@ interface QuickEntryHostProps {
 
 const TITLE: Record<QuickEntryType, string> = {
   expense: 'Add Expense',
+  income: 'Add Income',
   collection: 'Log Collection',
   purchase: 'Add Purchase',
   'merchandise-sale': 'Merchandise Sale',
@@ -79,6 +80,9 @@ export const QuickEntryHost: React.FC<QuickEntryHostProps> = ({ selectedStation 
         setError(null);
         if (type === 'expense') {
           const cats = await qc.ensureQueryData({ queryKey: queryKeys.expenseCategories(), queryFn: () => txService.getExpenseCategories(), staleTime: TIER.semi.staleTime });
+          if (!cancelled) setCategories(cats || []);
+        } else if (type === 'income') {
+          const cats = await qc.ensureQueryData({ queryKey: queryKeys.incomeCategories(), queryFn: () => txService.getIncomeCategories(), staleTime: TIER.semi.staleTime });
           if (!cancelled) setCategories(cats || []);
         } else if (type === 'collection') {
           const custs = await qc.ensureQueryData({ queryKey: queryKeys.customers(true), queryFn: () => txService.getCustomers(true), staleTime: TIER.semi.staleTime });
@@ -133,6 +137,19 @@ export const QuickEntryHost: React.FC<QuickEntryHostProps> = ({ selectedStation 
       );
       done('Expense recorded.');
     } catch (err: any) { setError(err.message || 'Failed to record expense'); } finally { setSubmitting(false); }
+  };
+
+  const handleIncome = async (values: ExpenseEntryFormValues) => {
+    try {
+      setSubmitting(true); setError(null);
+      const shiftId = values.targetShiftId || activeShiftId;
+      await txService.recordIncome(
+        shiftId
+          ? { shiftId, categoryId: values.categoryId, amount: Number(values.amount), description: values.description || undefined, accountId: values.accountId || undefined }
+          : { stationId: stationId ?? undefined, transactionDate: businessDate, receivedInto: 'BANK', categoryId: values.categoryId, amount: Number(values.amount), description: values.description || undefined, accountId: values.accountId || undefined },
+      );
+      done('Income recorded.');
+    } catch (err: any) { setError(err.message || 'Failed to record income'); } finally { setSubmitting(false); }
   };
 
   const handleCollection = async (values: CollectionEntryFormValues) => {
@@ -214,6 +231,25 @@ export const QuickEntryHost: React.FC<QuickEntryHostProps> = ({ selectedStation 
           onCancel={close}
           onSubmit={handleExpense}
           submitLabel="Add Expense"
+        />
+      ) : type === 'income' ? (
+        <ExpenseEntryForm
+          shiftOptions={shiftOptions}
+          categories={categories}
+          stationId={stationId}
+          defaultValues={{ targetShiftId: activeShiftId ?? '', categoryId: categories[0]?.id ?? '', ...extra }}
+          showDateField={!activeShiftId}
+          dateLabel="Income Date"
+          showShiftHintWhenSingle={!!activeShiftId}
+          submitting={submitting}
+          error={error}
+          amountLabel="Amount (₹)"
+          categoryLabel="Income Category"
+          categoryEmptyMessage="No income categories yet — defaults will be created automatically."
+          accountLabel="Received into"
+          onCancel={close}
+          onSubmit={handleIncome}
+          submitLabel="Add Income"
         />
       ) : type === 'collection' ? (
         <CollectionEntryForm

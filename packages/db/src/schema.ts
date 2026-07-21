@@ -502,6 +502,49 @@ export const expenses = pgTable('expenses', {
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
 
+// ----------------------------------------------------
+// OTHER / INDIRECT INCOME (Phase FI)
+// ----------------------------------------------------
+
+// Income categories mirror expense categories, plus an optional per-category
+// tax_config (GST treatment) so income tax handling is extensible without a
+// schema change. Keep the seeded set minimal (Rental, Parking, Commission, …).
+export const incomeCategories = pgTable('income_categories', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  organizationId: uuid('organization_id').references(() => organizations.id).notNull(),
+  name: varchar('name', { length: 100 }).notNull(),
+  // Optional GST/tax treatment, e.g. { gst_rate: 18, hsn_code: '996601', price_inclusive: true }.
+  taxConfig: jsonb('tax_config'),
+  isSystem: boolean('is_system').default(false).notNull(),
+  isActive: boolean('is_active').default(true).notNull(),
+}, (t) => ({
+  orgNameUniq: uniqueIndex('income_categories_org_name_idx').on(t.organizationId, t.name),
+}));
+
+// Non-operating / indirect income (tanker rental, truck parking, commission,
+// scrap, interest, …). Mirrors `expenses`: business-day anchored, shift_id set
+// only when the cash hits the drawer (received_into = SHIFT_CASH).
+export const otherIncome = pgTable('other_income', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  shiftId: uuid('shift_id').references(() => shifts.id),
+  businessDayId: uuid('business_day_id').references(() => businessDays.id).notNull(),
+  categoryId: uuid('category_id').references(() => incomeCategories.id).notNull(),
+  amount: numeric('amount', { precision: 12, scale: 2 }).notNull(),
+  receivedInto: varchar('received_into', { length: 20 }).default('SHIFT_CASH').notNull(), // 'SHIFT_CASH' | 'BANK' | 'OWNER'
+  affectsDrawer: boolean('affects_drawer').default(true).notNull(),
+  payer: varchar('payer', { length: 255 }),
+  referenceType: varchar('reference_type', { length: 50 }),
+  referenceId: uuid('reference_id'),
+  description: varchar('description', { length: 500 }),
+  status: varchar('status', { length: 20 }).default('ACTIVE').notNull(), // 'ACTIVE' | 'VOIDED'
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (t) => ({
+  bdIdx: index('other_income_business_day_idx').on(t.businessDayId),
+  shiftIdx: index('other_income_shift_idx').on(t.shiftId),
+  categoryIdx: index('other_income_category_idx').on(t.categoryId),
+}));
+
 export const collections = pgTable('collections', {
   id: uuid('id').defaultRandom().primaryKey(),
   documentNumber: varchar('document_number', { length: 100 }).notNull(),

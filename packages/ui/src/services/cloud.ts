@@ -463,6 +463,24 @@ export class CloudTransactionService {
     });
   }
 
+  async getIncomeCategories(): Promise<any> {
+    return request<any>('/transactions/income-categories');
+  }
+
+  async createIncomeCategory(payload: { name: string; taxConfig?: Record<string, unknown> | null }): Promise<any> {
+    return request<any>('/transactions/income-categories', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async updateIncomeCategory(id: string, payload: { name?: string; taxConfig?: Record<string, unknown> | null; isActive?: boolean }): Promise<any> {
+    return request<any>(`/transactions/income-categories/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+  }
+
   async getSuppliers(activeOnly: boolean = true): Promise<any> {
     return request<any>(`/transactions/suppliers?activeOnly=${activeOnly}`);
   }
@@ -598,6 +616,26 @@ export class CloudTransactionService {
       method: 'POST',
       body: JSON.stringify(payload),
     });
+  }
+
+  async getIncome(params?: { stationId?: string; from?: string; to?: string }): Promise<any[]> {
+    const qs = new URLSearchParams();
+    if (params?.stationId) qs.set('stationId', params.stationId);
+    if (params?.from) qs.set('from', params.from);
+    if (params?.to) qs.set('to', params.to);
+    const suffix = qs.toString() ? `?${qs.toString()}` : '';
+    return request<any[]>(`/transactions/income${suffix}`);
+  }
+
+  async recordIncome(payload: { shiftId?: string; stationId?: string; transactionDate?: string; receivedInto?: 'SHIFT_CASH' | 'BANK' | 'OWNER'; categoryId: string; amount: number; description?: string; accountId?: string | null }): Promise<any> {
+    return request<any>('/transactions/income', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async voidIncome(id: string): Promise<any> {
+    return request<any>(`/transactions/income/${id}/void`, { method: 'POST' });
   }
 
   async recordPurchase(payload: {

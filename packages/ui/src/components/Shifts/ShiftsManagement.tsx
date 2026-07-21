@@ -174,7 +174,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   // non-attendant merchandise cash and reads the true station-level short/surplus.
   const recon = data?.activeShift?.reconciliation;
   const expectedCash = recon
-    ? openingCashNum + Number(recon.cashSales || 0) + Number(recon.cashCollections || 0) - Number(recon.drawerExpenses || 0) - Number(recon.drawerSupplierPayments || 0)
+    ? openingCashNum + Number(recon.cashSales || 0) + Number(recon.cashCollections || 0) + Number(recon.cashIncome || 0) - Number(recon.drawerExpenses || 0) - Number(recon.drawerSupplierPayments || 0)
     : openingCashNum + activeCashCollections - shiftTotals.cashExpenses;
   const cashVariance = closingCash - expectedCash;
 
@@ -187,6 +187,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         handoverCash: Number(recon.handoverCash || 0),
         merchCashOutsideHandover: Number(recon.merchCashOutsideHandover || 0),
         cashCollections: Number(recon.cashCollections || 0),
+        cashIncome: Number(recon.cashIncome || 0),
         drawerExpenses: Number(recon.drawerExpenses || 0),
         drawerSupplierPayments: Number(recon.drawerSupplierPayments || 0),
         expectedDrawer: expectedCash,

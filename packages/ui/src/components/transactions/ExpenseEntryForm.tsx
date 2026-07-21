@@ -31,6 +31,8 @@ export interface ExpenseEntryFormProps {
   /** When true, a date input is shown (standalone business-day expenses). */
   showDateField?: boolean;
   dateLabel?: string;
+  /** Label for the money-account picker (e.g. 'Paid from' / 'Received into'). */
+  accountLabel?: string;
 }
 
 const EMPTY_DEFAULTS: ExpenseEntryFormValues = {
@@ -61,6 +63,7 @@ export const ExpenseEntryForm: React.FC<ExpenseEntryFormProps> = ({
   showShiftHintWhenSingle = true,
   showDateField = false,
   dateLabel = 'Expense Date',
+  accountLabel = 'Paid from',
 }) => {
   const hasMultipleShiftOptions = shiftOptions.length > 1;
 
@@ -123,7 +126,7 @@ export const ExpenseEntryForm: React.FC<ExpenseEntryFormProps> = ({
         <TextInput placeholder={descriptionPlaceholder} disabled={submitting} {...register('description')} />
       </Field>
 
-      <Field label="Paid from">
+      <Field label={accountLabel}>
         <AccountSelect stationId={stationId} value={watch('accountId') || ''} onChange={(v) => setValue('accountId', v, { shouldValidate: true })} disabled={submitting} />
       </Field>
 

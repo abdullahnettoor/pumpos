@@ -28,6 +28,7 @@ export interface CloseShiftWizardProps {
     handoverCash: number;
     merchCashOutsideHandover: number;
     cashCollections: number;
+    cashIncome: number;
     drawerExpenses: number;
     drawerSupplierPayments: number;
     expectedDrawer: number;
@@ -208,6 +209,12 @@ export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
                     <span>(+) Cash Collections</span>
                     <span className="font-mono">+ {inr(cashSummary.cashCollections)}</span>
                   </div>
+                  {cashSummary.cashIncome > 0 && (
+                    <div className="close-wizard-row" style={{ color: 'var(--state-success-fg)' }}>
+                      <span>(+) Other Income (cash)</span>
+                      <span className="font-mono">+ {inr(cashSummary.cashIncome)}</span>
+                    </div>
+                  )}
                   <div className="close-wizard-row" style={{ color: 'var(--brand-danger)' }}>
                     <span>(−) Drawer Expenses</span>
                     <span className="font-mono">− {inr(cashSummary.drawerExpenses)}</span>

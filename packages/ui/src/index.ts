@@ -15,6 +15,7 @@ export { ShiftsManagement } from './components/Shifts/ShiftsManagement.js';
 export { ShiftSummaryView } from './components/Shifts/ShiftSummaryView.js';
 export { ShiftTransactionsPanel } from './components/Shifts/ShiftTransactionsPanel.js';
 export { ExpensesList } from './components/ExpensesList.js';
+export { IncomeList } from './components/IncomeList.js';
 export { PurchasesList } from './components/PurchasesList.js';
 export { CustomersList } from './components/CustomersList.js';
 export { InventoryList } from './components/InventoryList.js';

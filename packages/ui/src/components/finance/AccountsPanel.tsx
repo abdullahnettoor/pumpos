@@ -43,6 +43,7 @@ const SOURCE_LABEL: Record<string, string> = {
   SALE_CARD: 'Card/UPI sale',
   SALE_OMC: 'OMC card sale',
   COLLECTION: 'Collection',
+  INCOME: 'Other income',
   EXPENSE: 'Expense',
   SUPPLIER_PAYMENT: 'Supplier payment',
   DEPOSIT: 'Cash deposit',

@@ -564,6 +564,32 @@ CREATE TABLE "users" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+CREATE TABLE "income_categories" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"organization_id" uuid NOT NULL,
+	"name" varchar(100) NOT NULL,
+	"tax_config" jsonb,
+	"is_system" boolean DEFAULT false NOT NULL,
+	"is_active" boolean DEFAULT true NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "other_income" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"shift_id" uuid,
+	"business_day_id" uuid NOT NULL,
+	"category_id" uuid NOT NULL,
+	"amount" numeric(12, 2) NOT NULL,
+	"received_into" varchar(20) DEFAULT 'SHIFT_CASH' NOT NULL,
+	"affects_drawer" boolean DEFAULT true NOT NULL,
+	"payer" varchar(255),
+	"reference_type" varchar(50),
+	"reference_id" uuid,
+	"description" varchar(500),
+	"status" varchar(20) DEFAULT 'ACTIVE' NOT NULL,
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	"updated_at" timestamp DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
 ALTER TABLE "attendant_handovers" ADD CONSTRAINT "attendant_handovers_organization_id_organizations_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "attendant_handovers" ADD CONSTRAINT "attendant_handovers_station_id_stations_id_fk" FOREIGN KEY ("station_id") REFERENCES "public"."stations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "attendant_handovers" ADD CONSTRAINT "attendant_handovers_shift_id_shifts_id_fk" FOREIGN KEY ("shift_id") REFERENCES "public"."shifts"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
@@ -681,6 +707,10 @@ ALTER TABLE "tanks" ADD CONSTRAINT "tanks_station_id_stations_id_fk" FOREIGN KEY
 ALTER TABLE "user_station_assignments" ADD CONSTRAINT "user_station_assignments_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "user_station_assignments" ADD CONSTRAINT "user_station_assignments_station_id_stations_id_fk" FOREIGN KEY ("station_id") REFERENCES "public"."stations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "users" ADD CONSTRAINT "users_organization_id_organizations_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "income_categories" ADD CONSTRAINT "income_categories_organization_id_organizations_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "other_income" ADD CONSTRAINT "other_income_shift_id_shifts_id_fk" FOREIGN KEY ("shift_id") REFERENCES "public"."shifts"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "other_income" ADD CONSTRAINT "other_income_business_day_id_business_days_id_fk" FOREIGN KEY ("business_day_id") REFERENCES "public"."business_days"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "other_income" ADD CONSTRAINT "other_income_category_id_income_categories_id_fk" FOREIGN KEY ("category_id") REFERENCES "public"."income_categories"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 CREATE UNIQUE INDEX "business_days_org_station_date_uniq" ON "business_days" USING btree ("organization_id","station_id","business_date");--> statement-breakpoint
 CREATE INDEX "customer_txn_shift_attendant_idx" ON "customer_transactions" USING btree ("shift_id","attendant_id");--> statement-breakpoint
 CREATE INDEX "customer_txn_shift_du_idx" ON "customer_transactions" USING btree ("shift_id","du_id");--> statement-breakpoint
@@ -700,4 +730,8 @@ CREATE INDEX "ledger_entries_source_idx" ON "ledger_entries" USING btree ("sourc
 CREATE INDEX "ledger_entries_transfer_idx" ON "ledger_entries" USING btree ("transfer_id");--> statement-breakpoint
 CREATE INDEX "purchase_items_purchase_id_idx" ON "purchase_items" USING btree ("purchase_id");--> statement-breakpoint
 CREATE INDEX "purchase_items_product_id_idx" ON "purchase_items" USING btree ("product_id");--> statement-breakpoint
-CREATE INDEX "sales_shift_attendant_idx" ON "sales" USING btree ("shift_id","attendant_id");
+CREATE INDEX "sales_shift_attendant_idx" ON "sales" USING btree ("shift_id","attendant_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "income_categories_org_name_idx" ON "income_categories" USING btree ("organization_id","name");--> statement-breakpoint
+CREATE INDEX "other_income_business_day_idx" ON "other_income" USING btree ("business_day_id");--> statement-breakpoint
+CREATE INDEX "other_income_shift_idx" ON "other_income" USING btree ("shift_id");--> statement-breakpoint
+CREATE INDEX "other_income_category_idx" ON "other_income" USING btree ("category_id");--> statement-breakpoint

@@ -19,6 +19,8 @@ import {
   AddVehicle,
   UpdateVehicle,
   RecordExpense,
+  RecordIncome,
+  VoidIncome,
   RecordCollection,
   RecordCreditSale,
   VoidCreditSale,
@@ -48,7 +50,7 @@ import {
   DrizzlePurchaseItemRepository,
   DrizzleSupplierTransactionRepository,
 } from '../infra/repositories/purchasing-repositories.js';
-import { DrizzleExpenseRepository } from '../infra/repositories/finance-repositories.js';
+import { DrizzleExpenseRepository, DrizzleIncomeRepository } from '../infra/repositories/finance-repositories.js';
 import { DrizzleStockMovementRepository, DrizzleStockVarianceRepository } from '../infra/repositories/inventory-repositories.js';
 import { DrizzleSaleRepository, DrizzleMerchandiseHandoverRepository } from '../infra/repositories/retail-repositories.js';
 import { DrizzleInvoiceRepository, DrizzleDocumentSequenceRepository } from '../infra/repositories/invoicing-repositories.js';
@@ -96,6 +98,15 @@ const DEFAULT_EXPENSE_CATEGORIES = [
   'Generator Diesel',
   'Cleaning & Hygiene',
   'General Miscellaneous',
+];
+
+const DEFAULT_INCOME_CATEGORIES = [
+  'Tanker Rental',
+  'Truck Parking',
+  'Commission',
+  'Scrap Sale',
+  'Interest',
+  'Other Income',
 ];
 
 // ====================================================
@@ -547,6 +558,149 @@ transactionsRouter.put('/expense-categories/:id', async (c) => {
 // ====================================================
 // OPERATIONAL TRANSACTIONS (write via use-cases)
 // ====================================================
+
+// ---- Income categories (mirror expense categories + per-category tax_config) ----
+transactionsRouter.get('/income-categories', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  let list = await db.select().from(schema.incomeCategories).where(eq(schema.incomeCategories.organizationId, user.organizationId));
+  if (list.length === 0) {
+    await db
+      .insert(schema.incomeCategories)
+      .values(DEFAULT_INCOME_CATEGORIES.map((name) => ({ organizationId: user.organizationId, name, isSystem: true })))
+      .onConflictDoNothing();
+    list = await db.select().from(schema.incomeCategories).where(eq(schema.incomeCategories.organizationId, user.organizationId));
+  }
+  return c.json({ success: true, data: list });
+});
+
+transactionsRouter.post('/income-categories', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  if (!canManageExpenseCategory(user.role)) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } }, 403);
+  }
+  const body = await c.req.json().catch(() => ({}));
+  const name = String(body?.name ?? '').trim();
+  if (!name || name.length > 100) {
+    return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Category name is required (max 100)' } }, 400);
+  }
+  const [dupe] = await db
+    .select({ id: schema.incomeCategories.id })
+    .from(schema.incomeCategories)
+    .where(and(eq(schema.incomeCategories.organizationId, user.organizationId), ilike(schema.incomeCategories.name, name)))
+    .limit(1);
+  if (dupe) return c.json({ success: false, error: { code: 'CONFLICT', message: 'A category with this name already exists' } }, 409);
+  const [created] = await db
+    .insert(schema.incomeCategories)
+    .values({ organizationId: user.organizationId, name, taxConfig: body?.taxConfig ?? null, isSystem: false })
+    .returning();
+  return c.json({ success: true, data: created });
+});
+
+transactionsRouter.put('/income-categories/:id', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  if (!canManageExpenseCategory(user.role)) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } }, 403);
+  }
+  const id = c.req.param('id');
+  const body = await c.req.json().catch(() => ({}));
+  const set: Record<string, unknown> = {};
+  if (body?.name != null) {
+    const name = String(body.name).trim();
+    if (!name || name.length > 100) return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Invalid name' } }, 400);
+    set.name = name;
+  }
+  if (body?.taxConfig !== undefined) set.taxConfig = body.taxConfig;
+  if (body?.isActive !== undefined) set.isActive = !!body.isActive;
+  if (Object.keys(set).length === 0) return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Nothing to update' } }, 400);
+  const [updated] = await db
+    .update(schema.incomeCategories)
+    .set(set)
+    .where(and(eq(schema.incomeCategories.id, id), eq(schema.incomeCategories.organizationId, user.organizationId)))
+    .returning();
+  if (!updated) return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Category not found' } }, 404);
+  return c.json({ success: true, data: updated });
+});
+
+// ---- Other income (indirect income; money IN to drawer/bank/owner) ----
+transactionsRouter.post('/income', async (c) => {
+  const user = c.var.user;
+  const body = await c.req.json().catch(() => ({}));
+  const clock = await loadStationClock(c.var.db, body?.stationId);
+  const result = await runInTransaction(c.var.db, async (tx, events) => {
+    // A chosen account overrides receivedInto/affectsDrawer by its type, so
+    // drawer reconciliation stays correct (only shift Cash-in-Hand hits drawer).
+    if (body?.accountId) {
+      const [acc] = await tx
+        .select({ t: schema.financialAccounts.accountType })
+        .from(schema.financialAccounts)
+        .where(and(eq(schema.financialAccounts.id, body.accountId), eq(schema.financialAccounts.organizationId, user.organizationId)))
+        .limit(1);
+      const t = acc?.t;
+      if (t === 'BANK') { body.receivedInto = 'BANK'; body.affectsDrawer = false; }
+      else if (t === 'OWNER') { body.receivedInto = 'OWNER'; body.affectsDrawer = false; }
+      else if (t === 'PETTY_CASH') { body.receivedInto = 'SHIFT_CASH'; body.affectsDrawer = false; }
+      else if (t === 'CASH_IN_HAND') { body.receivedInto = 'SHIFT_CASH'; }
+    }
+    const r = await new RecordIncome({
+      income: new DrizzleIncomeRepository(tx),
+      shifts: new DrizzleShiftRepository(tx),
+      businessDays: new DrizzleBusinessDayRepository(tx),
+      events,
+    }).execute(body, buildContext(user, { stationId: body?.stationId, ...clock }));
+    if (r.success) await new LedgerPostingService(tx).postIncome(user.organizationId, r.data, body?.accountId);
+    return r;
+  });
+  return sendResult(c, result);
+});
+
+transactionsRouter.post('/income/:id/void', async (c) => {
+  const user = c.var.user;
+  const id = c.req.param('id');
+  const body = await c.req.json().catch(() => ({}));
+  const result = await runInTransaction(c.var.db, async (tx, events) => {
+    const r = await new VoidIncome({ income: new DrizzleIncomeRepository(tx), events }).execute({ id, reason: body?.reason }, buildContext(user));
+    if (r.success) await new LedgerPostingService(tx).reverseIncome(id);
+    return r;
+  });
+  return sendResult(c, result);
+});
+
+transactionsRouter.get('/income', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  const from = c.req.query('from');
+  const to = c.req.query('to');
+  const conds = [eq(schema.businessDays.organizationId, user.organizationId)];
+  const stationId = c.req.query('stationId');
+  if (stationId) conds.push(eq(schema.businessDays.stationId, stationId));
+  if (from) conds.push(gte(schema.businessDays.businessDate, from));
+  if (to) conds.push(lte(schema.businessDays.businessDate, to));
+  const rows = await db
+    .select({
+      id: schema.otherIncome.id,
+      amount: schema.otherIncome.amount,
+      categoryId: schema.otherIncome.categoryId,
+      categoryName: schema.incomeCategories.name,
+      receivedInto: schema.otherIncome.receivedInto,
+      affectsDrawer: schema.otherIncome.affectsDrawer,
+      payer: schema.otherIncome.payer,
+      description: schema.otherIncome.description,
+      status: schema.otherIncome.status,
+      shiftId: schema.otherIncome.shiftId,
+      businessDate: schema.businessDays.businessDate,
+      createdAt: schema.otherIncome.createdAt,
+    })
+    .from(schema.otherIncome)
+    .innerJoin(schema.businessDays, eq(schema.otherIncome.businessDayId, schema.businessDays.id))
+    .leftJoin(schema.incomeCategories, eq(schema.incomeCategories.id, schema.otherIncome.categoryId))
+    .where(and(...conds))
+    .orderBy(desc(schema.otherIncome.createdAt));
+  return c.json({ success: true, data: rows });
+});
+
 
 transactionsRouter.post('/expenses', async (c) => {
   const user = c.var.user;

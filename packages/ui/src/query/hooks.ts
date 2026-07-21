@@ -45,6 +45,7 @@ export const queryKeys = {
   merchandiseHandovers: (shiftId: string) => ['merchandise-handovers', shiftId] as const,
   merchandiseSales: (shiftId: string) => ['merchandise-sales', shiftId] as const,
   expenses: () => ['expenses'] as const,
+  income: (stationId = '', from = '', to = '') => ['income', stationId, from, to] as const,
   purchases: () => ['purchases'] as const,
   collections: () => ['collections'] as const,
   creditSales: () => ['credit-sales'] as const,
@@ -61,6 +62,7 @@ export const queryKeys = {
   dssrPreview: (stationId: string, date: string) => ['dssr-preview', stationId, date] as const,
   dssrRange: (stationId: string, from: string, to: string) => ['dssr-range', stationId, from, to] as const,
   expenseCategories: () => ['expense-categories'] as const,
+  incomeCategories: () => ['income-categories'] as const,
   products: () => ['products'] as const,
   tanks: (stationId: string) => ['tanks', stationId] as const,
   stations: () => ['stations'] as const,
@@ -332,6 +334,19 @@ export function useSupplierLedger(supplierId: string | null | undefined, options
 
 export function useExpenseCategories(options?: Options<any[]>) {
   return useQuery({ queryKey: queryKeys.expenseCategories(), queryFn: () => txService.getExpenseCategories(), ...TIER.semi, ...options });
+}
+
+export function useIncome(params?: { stationId?: string; from?: string; to?: string }, options?: Options<any[]>) {
+  return useQuery({
+    queryKey: queryKeys.income(params?.stationId ?? '', params?.from ?? '', params?.to ?? ''),
+    queryFn: () => txService.getIncome(params),
+    ...TIER.operational,
+    ...options,
+  });
+}
+
+export function useIncomeCategories(options?: Options<any[]>) {
+  return useQuery({ queryKey: queryKeys.incomeCategories(), queryFn: () => txService.getIncomeCategories(), ...TIER.semi, ...options });
 }
 
 export function useInventoryStatus(stationId: string | null | undefined, options?: Options<any[]>) {

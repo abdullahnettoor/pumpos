@@ -64,6 +64,8 @@ export interface ShiftReconciliationTotals {
   cardCollections: number;
   upiCollections: number;
   creditCollections: number;
+  /** Indirect income received as drawer cash (adds to expected drawer). */
+  cashIncome?: number;
   drawerExpenses: number;
   drawerSupplierPayments: number;
   /** Breakdown of cashSales (optional; for the closing cash summary). */

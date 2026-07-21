@@ -10,7 +10,7 @@ import { useSyncExternalStore } from 'react';
  * the caller navigates instead. A single `QuickEntryHost` mounted at the app
  * shell renders the active drawer.
  */
-export type QuickEntryType = 'expense' | 'collection' | 'purchase' | 'merchandise-sale';
+export type QuickEntryType = 'expense' | 'income' | 'collection' | 'purchase' | 'merchandise-sale';
 
 export interface QuickEntryState {
   open: boolean;

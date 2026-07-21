@@ -143,7 +143,7 @@ export class CloseShift implements UseCase<CloseShiftCommand, CloseShiftResult> 
     const closingCash = cmd.closingCash;
     const cashDrops = Number(cmd.cashDrops ?? 0);
     const expectedDrawerCash =
-      openingCash + totals.cashSales + totals.cashCollections - totals.drawerExpenses - totals.drawerSupplierPayments - cashDrops;
+      openingCash + totals.cashSales + totals.cashCollections + (totals.cashIncome ?? 0) - totals.drawerExpenses - totals.drawerSupplierPayments - cashDrops;
     const cashVariance = closingCash - expectedDrawerCash;
 
     // Fetch credit sales with vehicle information for immutable snapshot.

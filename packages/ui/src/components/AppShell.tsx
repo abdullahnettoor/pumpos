@@ -25,7 +25,7 @@ export interface NavIntent {
   focusInventoryTab?: 'tanks' | 'items';
   focusInventoryId?: string;
   /** Open a drawer immediately on arrival at the destination page. */
-  open?: 'customer-statement' | 'new-customer' | 'new-collection' | 'supplier-statement' | 'supplier-payment' | 'new-expense';
+  open?: 'customer-statement' | 'new-customer' | 'new-collection' | 'supplier-statement' | 'supplier-payment' | 'new-expense' | 'new-income';
   /** Open a specific past business day's DSSR summary (Reports page). */
   openDssrDate?: string;
 }
@@ -133,6 +133,14 @@ const getIconSvg = (label: string) => {
           <line x1="2" y1="10" x2="22" y2="10" />
         </svg>
       );
+    case 'income':
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="2" y="6" width="20" height="12" rx="2" ry="2" />
+          <circle cx="12" cy="12" r="2" />
+          <path d="M6 12h.01M18 12h.01" />
+        </svg>
+      );
     case 'purchases':
       return (
         <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -211,7 +219,7 @@ const NAV_GROUPS: { heading: string; paths: string[] }[] = [
   { heading: 'Operations', paths: ['/dashboard', '/shifts', '/inventory', '/pricing'] },
   { heading: 'Sales & CRM', paths: ['/customers'] },
   { heading: 'Purchasing', paths: ['/purchases'] },
-  { heading: 'Finance', paths: ['/accounts', '/expenses', '/reports'] },
+  { heading: 'Finance', paths: ['/accounts', '/expenses', '/income', '/reports'] },
   { heading: 'Setup', paths: ['/setup/station', '/organization'] },
 ];
 

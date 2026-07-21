@@ -169,6 +169,30 @@ export class LedgerPostingService {
     });
   }
 
+  /** Other/indirect income → money IN to drawer / bank / owner (by receivedInto). */
+  async postIncome(
+    organizationId: string,
+    income: { id: string; amount: string; receivedInto: string; businessDayId: string; shiftId: string | null },
+    accountId?: string | null,
+  ): Promise<void> {
+    const meta = await this.businessDayMeta(income.businessDayId);
+    if (!meta) return;
+    const target = await this.resolveTarget(organizationId, meta.stationId, accountId, accountTypeForPaidFrom(income.receivedInto));
+    await this.postEntry({
+      organizationId,
+      stationId: meta.stationId,
+      accountId: target,
+      direction: 'in',
+      amount: income.amount,
+      entryDate: meta.businessDate,
+      sourceType: 'INCOME',
+      sourceId: income.id,
+      businessDayId: income.businessDayId,
+      shiftId: income.shiftId,
+      notes: 'Other income',
+    });
+  }
+
   /** Supplier payment → money OUT of drawer / petty / bank / owner (chosen account or by paidFrom). */
   async postSupplierPayment(
     organizationId: string,
@@ -241,6 +265,13 @@ export class LedgerPostingService {
     await this.db
       .delete(schema.ledgerEntries)
       .where(and(eq(schema.ledgerEntries.sourceType, 'SALE_OMC'), eq(schema.ledgerEntries.sourceId, sourceId)));
+  }
+
+  /** Reverse the money-in for a voided income entry. */
+  async reverseIncome(sourceId: string): Promise<void> {
+    await this.db
+      .delete(schema.ledgerEntries)
+      .where(and(eq(schema.ledgerEntries.sourceType, 'INCOME'), eq(schema.ledgerEntries.sourceId, sourceId)));
   }
 
   // ---- FA3: shift-close sales posting -------------------------------------

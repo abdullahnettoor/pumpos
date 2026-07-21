@@ -12,6 +12,7 @@ export type LedgerSourceType =
   | 'SALE_OMC'
   | 'COLLECTION'
   | 'EXPENSE'
+  | 'INCOME'
   | 'SUPPLIER_PAYMENT'
   | 'DEPOSIT'
   | 'TRANSFER'
