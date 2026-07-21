@@ -124,7 +124,7 @@ export const CashCountPopover: React.FC<CashCountPopoverProps> = ({
         transform: pos.placement === 'top' ? 'translateY(-100%)' : undefined,
         background: 'var(--bg-surface)', border: '1px solid var(--border-strong)',
         borderRadius: 'var(--radius-card)', boxShadow: '0 8px 24px rgba(24,32,26,0.16)',
-        zIndex: 1000, padding: '10px', display: 'flex', flexDirection: 'column', gap: '6px',
+        zIndex: 1100, padding: '10px', display: 'flex', flexDirection: 'column', gap: '6px',
       }}
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
