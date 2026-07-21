@@ -12,7 +12,9 @@ import {
   CloudTransactionService,
   queryKeys,
   inr,
+  type CashBreakdown,
 } from '@pump/ui';
+import { CashCountSheet } from './CashCountSheet.js';
 
 /**
  * Shared self-service handover UI — mirrors the desktop HandoverDrawer. Loads the
@@ -85,6 +87,16 @@ const TrashIcon: React.FC<{ size?: number }> = ({ size = 15 }) => (
   </svg>
 );
 
+const CalculatorIcon: React.FC<{ size?: number }> = ({ size = 18 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <rect x="4" y="2" width="16" height="20" rx="2" />
+    <line x1="8" y1="6" x2="16" y2="6" />
+    <line x1="8" y1="10" x2="8" y2="10" /><line x1="12" y1="10" x2="12" y2="10" /><line x1="16" y1="10" x2="16" y2="10" />
+    <line x1="8" y1="14" x2="8" y2="14" /><line x1="12" y1="14" x2="12" y2="14" /><line x1="16" y1="14" x2="16" y2="18" />
+    <line x1="8" y1="18" x2="12" y2="18" />
+  </svg>
+);
+
 const NumberField: React.FC<{
   label: string;
   value: string;
@@ -93,21 +105,25 @@ const NumberField: React.FC<{
   placeholder?: string;
   min?: number;
   error?: string;
-}> = ({ label, value, onChange, sub, placeholder, min = 0, error }) => (
+  trailing?: React.ReactNode;
+}> = ({ label, value, onChange, sub, placeholder, min = 0, error, trailing }) => (
   <label className="flex flex-col gap-1">
     <span className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
       {label}
     </span>
-    <input
-      type="number"
-      inputMode="decimal"
-      min={min}
-      value={value}
-      placeholder={placeholder ?? '0'}
-      onChange={(e) => onChange(e.target.value)}
-      className="rounded-lg border px-3 py-2 text-sm font-mono tabular-nums"
-      style={{ ...fieldStyle, borderColor: error ? 'var(--state-danger-fg)' : fieldStyle.borderColor }}
-    />
+    <div className="flex items-center gap-2">
+      <input
+        type="number"
+        inputMode="decimal"
+        min={min}
+        value={value}
+        placeholder={placeholder ?? '0'}
+        onChange={(e) => onChange(e.target.value)}
+        className="min-w-0 flex-1 rounded-lg border px-3 py-2 text-sm font-mono tabular-nums"
+        style={{ ...fieldStyle, borderColor: error ? 'var(--state-danger-fg)' : fieldStyle.borderColor }}
+      />
+      {trailing}
+    </div>
     {error ? (
       <span className="text-[11px]" style={{ color: 'var(--state-danger-fg)' }}>{error}</span>
     ) : sub ? (
@@ -419,6 +435,10 @@ export const HandoverPanel: React.FC = () => {
   const [merchNonCash, setMerchNonCash] = useState('');
   const [merchSeeded, setMerchSeeded] = useState(false);
   const [ccBusy, setCcBusy] = useState(false);
+  // Cash denomination counter (bottom sheet): which DU's sheet is open + per-DU
+  // counts (parent-held so re-opening preserves them; future backend = drop-in).
+  const [sheetDuId, setSheetDuId] = useState<string | null>(null);
+  const [cashBreakdownByDu, setCashBreakdownByDu] = useState<Record<string, CashBreakdown>>({});
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -906,6 +926,17 @@ export const HandoverPanel: React.FC = () => {
             value={forms[du.duId]?.cash ?? ''}
             onChange={(v) => setCash(du.duId, v)}
             error={num(forms[du.duId]?.cash) < 0 ? 'No negatives' : undefined}
+            trailing={
+              <button
+                type="button"
+                onClick={() => setSheetDuId(du.duId)}
+                className="grid h-[38px] w-[38px] flex-shrink-0 place-items-center rounded-lg border"
+                style={{ borderColor: 'var(--border-soft)', color: 'var(--brand-primary)' }}
+                aria-label="Count cash by denomination"
+              >
+                <CalculatorIcon />
+              </button>
+            }
           />
         ))}
         <p className="text-[11px]" style={{ color: 'var(--text-faint)' }}>Confirm physical cash at close.</p>
@@ -949,6 +980,15 @@ export const HandoverPanel: React.FC = () => {
           {saving ? 'Saving…' : 'Save handover'}
         </button>
       </div>
+
+      <CashCountSheet
+        open={sheetDuId != null}
+        onClose={() => setSheetDuId(null)}
+        breakdown={sheetDuId ? (cashBreakdownByDu[sheetDuId] || {}) : {}}
+        onBreakdownChange={(b) => { if (sheetDuId) setCashBreakdownByDu((prev) => ({ ...prev, [sheetDuId]: b })); }}
+        onApply={(t) => { if (sheetDuId) setCash(sheetDuId, String(t)); }}
+        currentValue={sheetDuId ? num(forms[sheetDuId]?.cash) : 0}
+      />
     </div>
   );
 };
