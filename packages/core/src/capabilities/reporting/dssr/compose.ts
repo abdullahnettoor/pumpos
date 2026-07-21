@@ -118,6 +118,17 @@ export function composeDssr(source: DssrSourceData): Record<string, unknown> {
   const drawerExpenses = sum(liveExpenses.filter((e) => e.affectsDrawer).map((e) => e.amount));
   const businessExpenses = sum(liveExpenses.filter((e) => !e.affectsDrawer).map((e) => e.amount));
 
+  // --- Other/indirect income (exclude voided), drawer vs non-drawer + by category ---
+  const liveIncome = source.income.filter((i) => isLive(i.status));
+  const drawerIncome = sum(liveIncome.filter((i) => i.affectsDrawer).map((i) => i.amount));
+  const businessIncome = sum(liveIncome.filter((i) => !i.affectsDrawer).map((i) => i.amount));
+  const incomeByCategoryMap: Record<string, number> = {};
+  for (const i of liveIncome) {
+    const key = i.categoryName || 'Other Income';
+    incomeByCategoryMap[key] = (incomeByCategoryMap[key] ?? 0) + i.amount;
+  }
+  const incomeByCategory = Object.entries(incomeByCategoryMap).map(([name, amount]) => ({ name, amount: round2(amount) }));
+
   // --- Purchases & supplier payments ---
   const purchasesTotal = sum(source.purchases.map((p) => p.amount));
   const drawerSupplierPayments = sum(source.supplierPayments.filter((p) => p.affectsDrawer).map((p) => p.amount));
@@ -145,7 +156,8 @@ export function composeDssr(source: DssrSourceData): Record<string, unknown> {
   const cogs = round2(cogsFuel + cogsMerch);
   const grossMargin = round2(revenue - cogs);
   const expensesTotal = round2(drawerExpenses + businessExpenses);
-  const netProfit = round2(grossMargin - expensesTotal);
+  const otherIncome = round2(drawerIncome + businessIncome);
+  const netProfit = round2(grossMargin - expensesTotal + otherIncome);
 
   // Per-product margin (FB3): fuel from the nozzle roll-up, merchandise from the
   // sale line items — each { revenue, cogs, margin }. Powers the P&L breakdown.
@@ -198,6 +210,7 @@ export function composeDssr(source: DssrSourceData): Record<string, unknown> {
       total: normalCredit + fleetCredit,
     },
     expenses: { drawer: drawerExpenses, business: businessExpenses, total: drawerExpenses + businessExpenses },
+    income: { drawer: round2(drawerIncome), business: round2(businessIncome), total: otherIncome, byCategory: incomeByCategory },
     purchases: { total: purchasesTotal },
     supplierPayments: { drawer: drawerSupplierPayments, bank: bankSupplierPayments, total: drawerSupplierPayments + bankSupplierPayments },
     pnl: {
@@ -209,6 +222,7 @@ export function composeDssr(source: DssrSourceData): Record<string, unknown> {
       cogs,
       grossMargin,
       expenses: expensesTotal,
+      otherIncome,
       netProfit,
       byProduct,
     },

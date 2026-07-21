@@ -463,6 +463,24 @@ export class CloudTransactionService {
     });
   }
 
+  async getIncomeCategories(): Promise<any> {
+    return request<any>('/transactions/income-categories');
+  }
+
+  async createIncomeCategory(payload: { name: string; taxConfig?: Record<string, unknown> | null }): Promise<any> {
+    return request<any>('/transactions/income-categories', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async updateIncomeCategory(id: string, payload: { name?: string; taxConfig?: Record<string, unknown> | null; isActive?: boolean }): Promise<any> {
+    return request<any>(`/transactions/income-categories/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+  }
+
   async getSuppliers(activeOnly: boolean = true): Promise<any> {
     return request<any>(`/transactions/suppliers?activeOnly=${activeOnly}`);
   }
@@ -491,14 +509,14 @@ export class CloudTransactionService {
     return request<any>(`/transactions/customers?activeOnly=${activeOnly}`);
   }
 
-  async createCustomer(payload: { name: string; phone?: string | null; customerType: 'Regular' | 'Credit' | 'Fleet'; creditLimit?: number | null; fleetCode?: string | null; isPrepaid?: boolean; isActive?: boolean; metadata?: { gstin?: string | null; stateCode?: string | null; pan?: string | null; tradeName?: string | null; billingAddress?: string | null } | null }): Promise<any> {
+  async createCustomer(payload: { name: string; phone?: string | null; customerType: 'Regular' | 'Credit' | 'Fleet'; creditLimit?: number | null; fleetCode?: string | null; isPrepaid?: boolean; settlementCycle?: 'OPEN' | 'EOD'; isActive?: boolean; metadata?: { gstin?: string | null; stateCode?: string | null; pan?: string | null; tradeName?: string | null; billingAddress?: string | null } | null }): Promise<any> {
     return request<any>('/transactions/customers', {
       method: 'POST',
       body: JSON.stringify(payload),
     });
   }
 
-  async updateCustomer(id: string, payload: { name: string; phone?: string | null; customerType: 'Regular' | 'Credit' | 'Fleet'; creditLimit?: number | null; fleetCode?: string | null; isPrepaid?: boolean; isActive?: boolean; metadata?: { gstin?: string | null; stateCode?: string | null; pan?: string | null; tradeName?: string | null; billingAddress?: string | null } | null }): Promise<any> {
+  async updateCustomer(id: string, payload: { name: string; phone?: string | null; customerType: 'Regular' | 'Credit' | 'Fleet'; creditLimit?: number | null; fleetCode?: string | null; isPrepaid?: boolean; settlementCycle?: 'OPEN' | 'EOD'; isActive?: boolean; metadata?: { gstin?: string | null; stateCode?: string | null; pan?: string | null; tradeName?: string | null; billingAddress?: string | null } | null }): Promise<any> {
     return request<any>(`/transactions/customers/${id}`, {
       method: 'PUT',
       body: JSON.stringify(payload),
@@ -600,6 +618,26 @@ export class CloudTransactionService {
     });
   }
 
+  async getIncome(params?: { stationId?: string; from?: string; to?: string }): Promise<any[]> {
+    const qs = new URLSearchParams();
+    if (params?.stationId) qs.set('stationId', params.stationId);
+    if (params?.from) qs.set('from', params.from);
+    if (params?.to) qs.set('to', params.to);
+    const suffix = qs.toString() ? `?${qs.toString()}` : '';
+    return request<any[]>(`/transactions/income${suffix}`);
+  }
+
+  async recordIncome(payload: { shiftId?: string; stationId?: string; transactionDate?: string; receivedInto?: 'SHIFT_CASH' | 'BANK' | 'OWNER'; categoryId: string; amount: number; description?: string; accountId?: string | null }): Promise<any> {
+    return request<any>('/transactions/income', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async voidIncome(id: string): Promise<any> {
+    return request<any>(`/transactions/income/${id}/void`, { method: 'POST' });
+  }
+
   async recordPurchase(payload: {
     shiftId?: string;
     stationId?: string;
@@ -632,20 +670,24 @@ export class CloudTransactionService {
     quantity?: number | null;
     unitPrice?: number | null;
     amount: number;
-    paymentMethod: 'Cash' | 'Card' | 'UPI' | 'BankTransfer' | 'Credit';
+    paymentMethod: 'Cash' | 'Card' | 'UPI' | 'BankTransfer' | 'Credit' | 'OMC';
     attendantId?: string | null;
     duId?: string | null;
     notes?: string;
     accountId?: string | null;
-  }): Promise<any> {
+  }, opts?: { idempotencyKey?: string }): Promise<any> {
     return request<any>('/transactions/collections', {
       method: 'POST',
       body: JSON.stringify(payload),
-    });
+    }, { idempotencyKey: opts?.idempotencyKey });
   }
 
   async voidCreditSale(id: string): Promise<any> {
     return request<any>(`/transactions/credit-sales/${id}`, { method: 'DELETE' });
+  }
+
+  async voidOmcCardSale(id: string): Promise<any> {
+    return request<any>(`/transactions/omc-card-sales/${id}`, { method: 'DELETE' });
   }
 
   async getInventoryStatus(stationId: string): Promise<any[]> {
@@ -732,7 +774,7 @@ export class CloudTransactionService {
     return request<any>(`/transactions/merchandise-handovers/${saleId}`, { method: 'DELETE' });
   }
 
-  async recordSupplierPayment(payload: { shiftId?: string; stationId?: string; transactionDate?: string; paidFrom?: 'SHIFT_CASH' | 'BANK' | 'OWNER'; supplierId: string; amount: number; notes?: string; accountId?: string | null }): Promise<any> {
+  async recordSupplierPayment(payload: { shiftId?: string; stationId?: string; transactionDate?: string; paidFrom?: 'SHIFT_CASH' | 'BANK' | 'OWNER' | 'CMS'; supplierId: string; amount: number; notes?: string; accountId?: string | null }): Promise<any> {
     return request<any>('/transactions/supplier-payments', {
       method: 'POST',
       body: JSON.stringify(payload),
@@ -817,7 +859,7 @@ export class CloudFinanceService {
 
   async createAccount(payload: {
     stationId?: string | null;
-    accountType: 'CASH_IN_HAND' | 'PETTY_CASH' | 'BANK' | 'MERCHANT_CLEARING' | 'OWNER';
+    accountType: 'CASH_IN_HAND' | 'PETTY_CASH' | 'BANK' | 'MERCHANT_CLEARING' | 'CMS' | 'OWNER';
     name: string;
     openingBalance?: number;
     openingDate?: string | null;

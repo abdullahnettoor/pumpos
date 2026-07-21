@@ -165,9 +165,179 @@ export class VoidCreditSale implements UseCase<VoidCreditSaleCommand, { id: stri
       eventFromContext(ctx, {
         eventType: BusinessEvents.CREDIT_SALE_VOIDED,
         aggregateType: 'Customer',
-        aggregateId: entry.customerId,
+        aggregateId: entry.customerId ?? entry.id,
         businessDayId: entry.businessDayId,
         payload: { creditSaleId: input.id, customerId: entry.customerId, amount: entry.amount, duId: entry.duId ?? null },
+      }),
+    ]);
+
+    return ok({ id: input.id });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// OMC fleet-card sales (settled to the CMS account, NOT a customer receivable)
+// ---------------------------------------------------------------------------
+
+export interface RecordOmcCardSaleCommand {
+  /** Optional — an OMC card sale may be anonymous (no station-tracked customer). */
+  customerId?: string | null;
+  amount: number | string;
+  shiftId?: string;
+  stationId?: string;
+  vehicleId?: string | null;
+  productId?: string | null;
+  quantity?: number | string | null;
+  unitPrice?: number | string | null;
+  attendantId?: string | null;
+  duId?: string | null;
+  notes?: string;
+  transactionDate?: string;
+}
+
+const omcSchema = z.object({
+  customerId: z.string().min(1).nullish(),
+  amount: z.coerce.number().positive('amount must be positive'),
+  shiftId: z.string().min(1).optional(),
+  stationId: z.string().min(1).optional(),
+  vehicleId: z.string().nullish(),
+  productId: z.string().nullish(),
+  quantity: z.coerce.number().positive().nullish(),
+  unitPrice: z.coerce.number().nonnegative().nullish(),
+  attendantId: z.string().nullish(),
+  duId: z.string().nullish(),
+  notes: z.string().max(500).optional(),
+  transactionDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'transactionDate must be YYYY-MM-DD').optional(),
+});
+
+export interface RecordOmcCardSaleDeps {
+  ledger: CustomerLedgerRepository;
+  customers: CustomerRepository;
+  shifts: ShiftRepository;
+  businessDays: BusinessDayRepository;
+  events: EventPublisher;
+}
+
+/**
+ * Record an OMC fleet-card fuel sale. Unlike a credit sale, this is NOT a
+ * customer receivable: the Oil Marketing Company settles the value to the
+ * station's CMS (card-settlement) account, so the money is posted IN to CMS by
+ * the caller (LedgerPostingService.postOmcCardSale) — it never touches the cash
+ * drawer and never debits a customer balance. A customer link is optional (MIS
+ * only). The fuel is already metered via nozzle readings, so no stock moves.
+ * Run inside runInTransaction.
+ */
+export class RecordOmcCardSale implements UseCase<RecordOmcCardSaleCommand, CustomerLedgerEntry> {
+  constructor(private readonly deps: RecordOmcCardSaleDeps) {}
+
+  async execute(input: RecordOmcCardSaleCommand, ctx: ExecutionContext): Promise<Result<CustomerLedgerEntry>> {
+    const p = omcSchema.safeParse(input);
+    if (!p.success) return err(validationError('Invalid RecordOmcCardSale command', { issues: p.error.flatten() }));
+    const cmd = p.data;
+
+    let customerId: string | null = null;
+    if (cmd.customerId) {
+      const customer = await this.deps.customers.findById(cmd.customerId);
+      if (!customer || customer.organizationId !== ctx.organizationId) return err(notFoundError('Customer', cmd.customerId));
+      customerId = customer.id;
+    }
+
+    let businessDayId: string;
+    let shiftId: string | null = null;
+    if (cmd.shiftId) {
+      const shift = await this.deps.shifts.findById(cmd.shiftId);
+      if (!shift || shift.organizationId !== ctx.organizationId) return err(notFoundError('Shift', cmd.shiftId));
+      if (shift.status === 'LOCKED') return err(invariantViolation('Shift is locked', { shiftId: shift.id }));
+      businessDayId = shift.businessDayId;
+      shiftId = shift.id;
+    } else if (cmd.stationId) {
+      const date = cmd.transactionDate ?? resolveBusinessDate({ now: ctx.clock.now(), timeZone: ctx.timeZone, dayStartsAt: ctx.businessDayStartsAt });
+      const bd = await ensureBusinessDayForDate(this.deps.businessDays, ctx, cmd.stationId, date);
+      businessDayId = bd.id;
+    } else {
+      return err(validationError('Either shiftId or stationId is required'));
+    }
+
+    const now = ctx.clock.now().toISOString();
+    const attendantId = shiftId ? (cmd.attendantId ?? ctx.actorId ?? null) : null;
+    const entry: CustomerLedgerEntry = {
+      id: ctx.ids.newId(),
+      shiftId,
+      businessDayId,
+      customerId,
+      vehicleId: cmd.vehicleId ?? null,
+      productId: cmd.productId ?? null,
+      attendantId,
+      duId: shiftId ? (cmd.duId ?? null) : null,
+      transactionType: 'OMC Sale',
+      amount: String(cmd.amount),
+      quantity: cmd.quantity != null ? String(cmd.quantity) : null,
+      unitPrice: cmd.unitPrice != null ? String(cmd.unitPrice) : null,
+      referenceType: 'OMC_CARD_SALE',
+      referenceId: null,
+      notes: cmd.notes ?? null,
+      createdAt: now,
+    };
+    await this.deps.ledger.save(entry);
+
+    await this.deps.events.publish([
+      eventFromContext(ctx, {
+        eventType: BusinessEvents.OMC_CARD_SALE_CREATED,
+        aggregateType: 'Customer',
+        aggregateId: customerId ?? entry.id,
+        businessDayId,
+        payload: { omcSaleId: entry.id, customerId, vehicleId: entry.vehicleId, amount: entry.amount, duId: entry.duId ?? null },
+      }),
+    ]);
+
+    return ok(entry);
+  }
+}
+
+export interface VoidOmcCardSaleCommand {
+  /** The customer_transactions id of the OMC-card-sale entry to void. */
+  id: string;
+}
+
+export interface VoidOmcCardSaleDeps {
+  ledger: CustomerLedgerRepository;
+  shifts: ShiftRepository;
+  events: EventPublisher;
+}
+
+/**
+ * Void an OMC fleet-card sale (correction while the originating shift is still
+ * OPEN). Only an 'OMC Sale' entry may be voided here; the caller also reverses
+ * the CMS money-in posting. Run inside runInTransaction.
+ */
+export class VoidOmcCardSale implements UseCase<VoidOmcCardSaleCommand, { id: string }> {
+  constructor(private readonly deps: VoidOmcCardSaleDeps) {}
+
+  async execute(input: VoidOmcCardSaleCommand, ctx: ExecutionContext): Promise<Result<{ id: string }>> {
+    if (!input?.id) return err(validationError('id is required'));
+    if (!this.deps.ledger.findById || !this.deps.ledger.delete) {
+      return err(invariantViolation('Ledger repository does not support void'));
+    }
+    const entry = await this.deps.ledger.findById(input.id);
+    if (!entry) return err(notFoundError('OmcCardSale', input.id));
+    if (entry.transactionType !== 'OMC Sale' || entry.referenceType !== 'OMC_CARD_SALE') {
+      return err(invariantViolation('Only an OMC card sale can be voided', { id: input.id, type: entry.transactionType }));
+    }
+    if (entry.shiftId) {
+      const shift = await this.deps.shifts.findById(entry.shiftId);
+      if (!shift || shift.organizationId !== ctx.organizationId) return err(notFoundError('Shift', entry.shiftId));
+      if (shift.status !== 'OPEN') return err(invariantViolation('Cannot void an OMC card sale after its shift is closed', { shiftId: shift.id, status: shift.status }));
+    }
+
+    await this.deps.ledger.delete(input.id);
+
+    await this.deps.events.publish([
+      eventFromContext(ctx, {
+        eventType: BusinessEvents.OMC_CARD_SALE_VOIDED,
+        aggregateType: 'Customer',
+        aggregateId: entry.customerId ?? entry.id,
+        businessDayId: entry.businessDayId,
+        payload: { omcSaleId: input.id, customerId: entry.customerId, amount: entry.amount, duId: entry.duId ?? null },
       }),
     ]);
 

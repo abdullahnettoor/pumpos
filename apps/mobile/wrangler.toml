@@ -4,7 +4,7 @@ compatibility_date = "2026-06-24"
 # Mobile PWA lives on the `m.` subdomain. Custom domain + cert auto-provisioned
 # on first prod deploy (zone must be active in the account).
 [[routes]]
-pattern = "m.pumpos.abdullahnettoor.com"
+pattern = "m.pumpos.app"
 custom_domain = true
 
 [assets]

@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 
 export interface DrawerProps {
@@ -10,6 +10,11 @@ export interface DrawerProps {
   widthVariant?: 'default' | 'wide';
 }
 
+// Tracks the stack of currently-open drawers so that pressing Escape only
+// dismisses the topmost one (drawers can be nested, e.g. an inline "New
+// customer" drawer opened from within the handover drawer).
+const escapeStack: symbol[] = [];
+
 export const Drawer: React.FC<DrawerProps> = ({
   isOpen,
   onClose,
@@ -18,14 +23,22 @@ export const Drawer: React.FC<DrawerProps> = ({
   footer,
   widthVariant = 'default',
 }) => {
+  const idRef = useRef<symbol>(Symbol('drawer'));
   useEffect(() => {
+    if (!isOpen) return;
+    const id = idRef.current;
+    escapeStack.push(id);
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isOpen) {
+      if (e.key === 'Escape' && escapeStack[escapeStack.length - 1] === id) {
         onClose();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      const i = escapeStack.lastIndexOf(id);
+      if (i >= 0) escapeStack.splice(i, 1);
+    };
   }, [isOpen, onClose]);
 
   if (!isOpen) return null;

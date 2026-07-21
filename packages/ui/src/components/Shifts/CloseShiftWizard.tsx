@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Drawer } from '../Drawer.js';
 import { Checkbox } from '../primitives/Toggle.js';
+import { CashCountPopover, type CashBreakdown } from '../primitives/CashCountPopover.js';
 import { Button } from '../../pump-ds/index.js';
 import { inr } from '../../utils/format.js';
 import { AlertTriangle, Check, ChevronLeft, ChevronRight, Lock, Wallet, Droplet, FileText } from 'lucide-react';
@@ -28,6 +29,7 @@ export interface CloseShiftWizardProps {
     handoverCash: number;
     merchCashOutsideHandover: number;
     cashCollections: number;
+    cashIncome: number;
     drawerExpenses: number;
     drawerSupplierPayments: number;
     expectedDrawer: number;
@@ -92,6 +94,10 @@ export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
   const [step, setStep] = useState<Step>(1);
   const [recordDip, setRecordDip] = useState(false);
   const [showVarianceWhy, setShowVarianceWhy] = useState(false);
+  // Denomination counts for the counted safe cash (held here so re-opening the
+  // popover / navigating steps preserves them). Reset when the drawer closes.
+  const [cashBreakdown, setCashBreakdown] = useState<CashBreakdown>({});
+  React.useEffect(() => { if (!isOpen) setCashBreakdown({}); }, [isOpen]);
 
   const cashVariance = closingCash - expectedCash;
   const hasWarnings = warnings.length > 0;
@@ -208,6 +214,12 @@ export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
                     <span>(+) Cash Collections</span>
                     <span className="font-mono">+ {inr(cashSummary.cashCollections)}</span>
                   </div>
+                  {cashSummary.cashIncome > 0 && (
+                    <div className="close-wizard-row" style={{ color: 'var(--state-success-fg)' }}>
+                      <span>(+) Other Income (cash)</span>
+                      <span className="font-mono">+ {inr(cashSummary.cashIncome)}</span>
+                    </div>
+                  )}
                   <div className="close-wizard-row" style={{ color: 'var(--brand-danger)' }}>
                     <span>(−) Drawer Expenses</span>
                     <span className="font-mono">− {inr(cashSummary.drawerExpenses)}</span>
@@ -282,14 +294,24 @@ export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
               Physical counted safe cash (float + deposited)
             </label>
 
-            <input
-              type="number" min="0"
-              value={closingCash || ''}
-              onChange={(e) => onClosingCashChange(Number(e.target.value))}
-              className="close-wizard-input close-wizard-input--num"
-              placeholder="0"
-              autoFocus
-            />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <input
+                type="number" min="0"
+                value={closingCash || ''}
+                onChange={(e) => onClosingCashChange(Number(e.target.value))}
+                className="close-wizard-input close-wizard-input--num"
+                placeholder="0"
+                autoFocus
+                style={{ flex: 1 }}
+              />
+              <CashCountPopover
+                breakdown={cashBreakdown}
+                onBreakdownChange={setCashBreakdown}
+                onApply={(t) => onClosingCashChange(t)}
+                currentValue={closingCash}
+                title="Count safe cash by denomination"
+              />
+            </div>
 
             <div
               className="close-wizard-variance"

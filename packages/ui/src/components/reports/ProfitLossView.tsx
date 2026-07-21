@@ -24,6 +24,7 @@ interface DayPnl {
   cogs: number;
   grossMargin: number;
   expenses: number;
+  otherIncome: number;
   netProfit: number;
   byProduct: any[];
   hasData: boolean;
@@ -42,6 +43,7 @@ function pnlFromSnapshot(date: string, snapshotData: any, live: boolean): DayPnl
     cogs: num(p.cogs),
     grossMargin: num(p.grossMargin),
     expenses: num(p.expenses),
+    otherIncome: num(p.otherIncome),
     netProfit: num(p.netProfit),
     byProduct: Array.isArray(p.byProduct) ? p.byProduct : [],
     hasData: !!snapshotData,
@@ -85,11 +87,11 @@ export const ProfitLossView: React.FC<ProfitLossViewProps> = ({ selectedStation 
   }, [snapshots, preview, todayInRange, todayBiz]);
 
   const totals = useMemo(() => {
-    const acc = { revenueFuel: 0, revenueMerch: 0, revenue: 0, cogsFuel: 0, cogsMerch: 0, cogs: 0, grossMargin: 0, expenses: 0, netProfit: 0 };
+    const acc = { revenueFuel: 0, revenueMerch: 0, revenue: 0, cogsFuel: 0, cogsMerch: 0, cogs: 0, grossMargin: 0, expenses: 0, otherIncome: 0, netProfit: 0 };
     for (const d of days) {
       acc.revenueFuel += d.revenueFuel; acc.revenueMerch += d.revenueMerch; acc.revenue += d.revenue;
       acc.cogsFuel += d.cogsFuel; acc.cogsMerch += d.cogsMerch; acc.cogs += d.cogs;
-      acc.grossMargin += d.grossMargin; acc.expenses += d.expenses; acc.netProfit += d.netProfit;
+      acc.grossMargin += d.grossMargin; acc.expenses += d.expenses; acc.otherIncome += d.otherIncome; acc.netProfit += d.netProfit;
     }
     return acc;
   }, [days]);
@@ -136,6 +138,7 @@ export const ProfitLossView: React.FC<ProfitLossViewProps> = ({ selectedStation 
         <KpiTile dot="warning" valueTone="warning" label="COGS" value={inr(totals.cogs)} />
         <KpiTile dot="success" valueTone="success" label="Gross Margin" value={inr(totals.grossMargin)} hint={`${marginPct.toFixed(1)}% of revenue`} />
         <KpiTile dot="danger" valueTone="danger" label="Operating Expenses" value={inr(totals.expenses)} />
+        {totals.otherIncome > 0 && <KpiTile dot="success" valueTone="success" label="Other Income" value={inr(totals.otherIncome)} />}
         <KpiTile dot={totals.netProfit < 0 ? 'danger' : 'success'} valueTone={totals.netProfit < 0 ? 'danger' : 'success'} label="Net Profit" value={inr(totals.netProfit)} />
       </KpiStrip>
 
@@ -192,6 +195,7 @@ export const ProfitLossView: React.FC<ProfitLossViewProps> = ({ selectedStation 
             { label: 'COGS — Merchandise', value: `(${inr(single.cogsMerch)})`, color: 'var(--brand-warning)' },
             { label: 'Gross Margin', value: inr(single.grossMargin), strong: true },
             { label: 'Operating Expenses', value: `(${inr(single.expenses)})`, color: 'var(--brand-warning)' },
+            ...(single.otherIncome > 0 ? [{ label: 'Other Income', value: inr(single.otherIncome), color: 'var(--brand-success)' }] : []),
           ] as Array<{ label: string; value: string; color?: string; strong?: boolean }>).map((r, i) => (
             <div key={i} style={{ ...rowStyle, backgroundColor: r.strong ? 'var(--bg-surface-alt)' : 'transparent' }}>
               <span style={{ fontWeight: r.strong ? 700 : 400 }}>{r.label}</span>

@@ -1,8 +1,14 @@
 # Phase MB — Mobile owner app (owner-first PWA)
 
-**Status:** Planned. **Goal:** turn the current read-only mobile MVP into the
-owner's primary daily surface — a fast, glanceable cockpit for **reports, live
-shift status, money health, and exceptions**, navigable across **any business
+**Status:** 🟡 Partial. The read-only owner MVP (Home / Shifts / DSSR / Ledger /
+More + role gating) exists, and the **attendant track (MB8) is largely done** — the
+mobile `HandoverPanel` now has full **Customer Sales + OMC fleet-card** parity with
+desktop (cached customers/vehicles, channel toggle, per-line idempotency keys),
+backed by `GET /shifts/my-assignment`. **Remaining:** the owner-cockpit expansion
+(MB1–MB7 — global business-day pill, Money-health tiles, trends, alerts/push,
+team/org) is mostly still planned. **Goal:** turn the current read-only mobile MVP
+into the owner's primary daily surface — a fast, glanceable cockpit for **reports,
+live shift status, money health, and exceptions**, navigable across **any business
 day**, with report downloads and alerts. Owners will rarely open the desktop
 console; the phone is where they check the station's pulse. A second track adds
 a **mobile-only attendant experience** so pump attendants self-record their

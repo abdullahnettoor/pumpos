@@ -93,6 +93,18 @@ export class DrizzleDssrDataReader implements DssrDataReader {
       .from(schema.expenses)
       .where(eq(schema.expenses.businessDayId, businessDayId));
 
+    const incomeRows = await this.db
+      .select({
+        affectsDrawer: schema.otherIncome.affectsDrawer,
+        receivedInto: schema.otherIncome.receivedInto,
+        amount: schema.otherIncome.amount,
+        status: schema.otherIncome.status,
+        categoryName: schema.incomeCategories.name,
+      })
+      .from(schema.otherIncome)
+      .leftJoin(schema.incomeCategories, eq(schema.incomeCategories.id, schema.otherIncome.categoryId))
+      .where(eq(schema.otherIncome.businessDayId, businessDayId));
+
     const purchaseRows = await this.db
       .select({ amount: schema.purchases.amount })
       .from(schema.purchases)
@@ -185,6 +197,7 @@ export class DrizzleDssrDataReader implements DssrDataReader {
       })),
       collections: collectionRows.map((r) => ({ paymentMethod: r.paymentMethod, amount: Number(r.amount) })),
       expenses: expenseRows.map((r) => ({ affectsDrawer: r.affectsDrawer, paidFrom: r.paidFrom, amount: Number(r.amount), status: r.status })),
+      income: incomeRows.map((r) => ({ affectsDrawer: r.affectsDrawer, receivedInto: r.receivedInto, amount: Number(r.amount), status: r.status, categoryName: r.categoryName ?? null })),
       purchases: purchaseRows.map((r) => ({ amount: Number(r.amount) })),
       supplierPayments: supplierPaymentRows.map((r) => ({ affectsDrawer: r.affectsDrawer, paidFrom: r.paidFrom, amount: Number(r.amount) })),
       sales: saleRows.map((r) => ({ paymentMethod: r.paymentMethod, saleType: r.saleType, totalAmount: Number(r.totalAmount) })),

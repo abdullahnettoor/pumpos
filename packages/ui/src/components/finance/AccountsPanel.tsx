@@ -17,13 +17,14 @@ import { Plus, Wallet, ArrowLeft, ArrowLeftRight, Banknote } from 'lucide-react'
 
 const financeSvc = new CloudFinanceService();
 
-type AccountType = 'CASH_IN_HAND' | 'PETTY_CASH' | 'BANK' | 'MERCHANT_CLEARING' | 'OWNER';
+type AccountType = 'CASH_IN_HAND' | 'PETTY_CASH' | 'BANK' | 'MERCHANT_CLEARING' | 'CMS' | 'OWNER';
 
 const TYPE_LABEL: Record<AccountType, string> = {
   CASH_IN_HAND: 'Cash in Hand',
   PETTY_CASH: 'Petty Cash',
   BANK: 'Bank',
   MERCHANT_CLEARING: 'Card/UPI Clearing',
+  CMS: 'OMC Card Settlement (CMS)',
   OWNER: 'Owner',
 };
 
@@ -32,6 +33,7 @@ const TYPE_TONE: Record<AccountType, 'brand' | 'info' | 'success' | 'warning' | 
   PETTY_CASH: 'neutral',
   BANK: 'info',
   MERCHANT_CLEARING: 'warning',
+  CMS: 'info',
   OWNER: 'brand',
 };
 
@@ -39,7 +41,9 @@ const SOURCE_LABEL: Record<string, string> = {
   OPENING: 'Opening balance',
   SALE_CASH: 'Cash sale',
   SALE_CARD: 'Card/UPI sale',
+  SALE_OMC: 'OMC card sale',
   COLLECTION: 'Collection',
+  INCOME: 'Other income',
   EXPENSE: 'Expense',
   SUPPLIER_PAYMENT: 'Supplier payment',
   DEPOSIT: 'Cash deposit',
@@ -415,7 +419,9 @@ export const AccountsPanel: React.FC<AccountsPanelProps> = ({ selectedStation })
               date: e.entryDate,
               dateLabel: e.entryDate,
               type: SOURCE_LABEL[e.sourceType] ?? e.sourceType,
-              notes: e.notes ?? undefined,
+              notes: e.sourceType === 'SALE_OMC'
+                ? ([e.omcCustomerName, e.omcVehicle, e.omcQuantity ? `${e.omcQuantity} L` : null, e.omcNotes].filter(Boolean).join(' · ') || e.notes || 'OMC card (no customer)')
+                : (e.notes ?? undefined),
               amount: Number(e.amount || 0),
               direction: e.direction === 'in' ? 'debit' : 'credit',
             })}
@@ -557,6 +563,7 @@ export const AccountsPanel: React.FC<AccountsPanelProps> = ({ selectedStation })
               <option value="PETTY_CASH">Petty Cash</option>
               <option value="CASH_IN_HAND">Cash in Hand</option>
               <option value="MERCHANT_CLEARING">Card/UPI Clearing</option>
+              <option value="CMS">OMC Card Settlement (CMS)</option>
               <option value="OWNER">Owner</option>
             </Select>
           </Field>

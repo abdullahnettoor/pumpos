@@ -169,6 +169,30 @@ export class LedgerPostingService {
     });
   }
 
+  /** Other/indirect income → money IN to drawer / bank / owner (by receivedInto). */
+  async postIncome(
+    organizationId: string,
+    income: { id: string; amount: string; receivedInto: string; businessDayId: string; shiftId: string | null },
+    accountId?: string | null,
+  ): Promise<void> {
+    const meta = await this.businessDayMeta(income.businessDayId);
+    if (!meta) return;
+    const target = await this.resolveTarget(organizationId, meta.stationId, accountId, accountTypeForPaidFrom(income.receivedInto));
+    await this.postEntry({
+      organizationId,
+      stationId: meta.stationId,
+      accountId: target,
+      direction: 'in',
+      amount: income.amount,
+      entryDate: meta.businessDate,
+      sourceType: 'INCOME',
+      sourceId: income.id,
+      businessDayId: income.businessDayId,
+      shiftId: income.shiftId,
+      notes: 'Other income',
+    });
+  }
+
   /** Supplier payment → money OUT of drawer / petty / bank / owner (chosen account or by paidFrom). */
   async postSupplierPayment(
     organizationId: string,
@@ -191,6 +215,63 @@ export class LedgerPostingService {
       shiftId: txn.shiftId,
       notes: 'Supplier payment',
     });
+  }
+
+  /** OMC fleet-card sale → money IN to the station's CMS (card-settlement) account.
+   *  Not a receivable and not drawer cash: the Oil Company settles the value to
+   *  the station's CMS account. Idempotent per sale id (reversible on void).
+   *  The ledger note carries the selected customer's identity when one is linked,
+   *  otherwise the free-text remarks captured on the sale (so an anonymous OMC
+   *  swipe still keeps its slip/driver details). */
+  async postOmcCardSale(
+    organizationId: string,
+    sale: { id: string; amount: string; businessDayId: string; shiftId: string | null; customerId?: string | null; notes?: string | null },
+  ): Promise<void> {
+    const meta = await this.businessDayMeta(sale.businessDayId);
+    if (!meta) return;
+    const target = await this.ensureAccount(organizationId, meta.stationId, 'CMS');
+
+    let note = 'OMC card';
+    if (sale.customerId) {
+      const [cust] = await this.db
+        .select({ name: schema.customers.name, fleetCode: schema.customers.fleetCode })
+        .from(schema.customers)
+        .where(eq(schema.customers.id, sale.customerId))
+        .limit(1);
+      const label = cust ? `${cust.name}${cust.fleetCode ? ` (${cust.fleetCode})` : ''}` : 'Customer';
+      note = `OMC card · ${label}`;
+      if (sale.notes) note += ` · ${sale.notes}`;
+    } else if (sale.notes) {
+      note = `OMC card · ${sale.notes}`;
+    }
+
+    await this.postEntry({
+      organizationId,
+      stationId: meta.stationId,
+      accountId: target,
+      direction: 'in',
+      amount: sale.amount,
+      entryDate: meta.businessDate,
+      sourceType: 'SALE_OMC',
+      sourceId: sale.id,
+      businessDayId: sale.businessDayId,
+      shiftId: sale.shiftId,
+      notes: note,
+    });
+  }
+
+  /** Reverse the CMS money-in for a voided OMC card sale. */
+  async reverseOmcCardSale(sourceId: string): Promise<void> {
+    await this.db
+      .delete(schema.ledgerEntries)
+      .where(and(eq(schema.ledgerEntries.sourceType, 'SALE_OMC'), eq(schema.ledgerEntries.sourceId, sourceId)));
+  }
+
+  /** Reverse the money-in for a voided income entry. */
+  async reverseIncome(sourceId: string): Promise<void> {
+    await this.db
+      .delete(schema.ledgerEntries)
+      .where(and(eq(schema.ledgerEntries.sourceType, 'INCOME'), eq(schema.ledgerEntries.sourceId, sourceId)));
   }
 
   // ---- FA3: shift-close sales posting -------------------------------------

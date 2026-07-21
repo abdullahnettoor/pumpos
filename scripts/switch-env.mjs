@@ -13,6 +13,7 @@ const files = [
   { src: `apps/mobile/.env.${env}`, dest: 'apps/mobile/.env' },
   { src: `apps/console/.env.${env}`, dest: 'apps/console/.env' },
   { src: `apps/desktop/.env.${env}`, dest: 'apps/desktop/.env' },
+  { src: `apps/marketing/.env.${env}`, dest: 'apps/marketing/.env' },
 ];
 
 for (const file of files) {

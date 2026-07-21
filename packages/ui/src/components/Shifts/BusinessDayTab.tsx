@@ -9,7 +9,7 @@ import { useToast } from '../primitives/ToastProvider.js';
 import { useConfirm } from '../primitives/ConfirmDialog.js';
 import { CloudShiftService } from '../../services/cloud.js';
 import { inr, formatQty, formatTime } from '../../utils/format.js';
-import { useDailyDssrPreview, useShiftStatus, useInvalidateOperational } from '../../query/hooks.js';
+import { useDailyDssrPreview, useShiftStatus, useInvalidateOperational, useCustomers } from '../../query/hooks.js';
 
 const shiftService = new CloudShiftService();
 
@@ -55,6 +55,15 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({ selectedStation,
   const previewQ = useDailyDssrPreview(stationId, businessDate, { enabled: !!stationId } as any);
   const { data: shiftStatus } = useShiftStatus(stationId, true, { enabled: !!stationId } as any);
   const hasOpenShift = !!(shiftStatus as any)?.activeShift;
+
+  // EOD-cycle customers still carrying a receivable that's expected cleared by
+  // day close — surfaced as a (non-blocking) reminder before closing the day.
+  const { data: dayCustomers } = useCustomers(true, { enabled: !!stationId && canClose } as any);
+  const eodDueCustomers = useMemo(
+    () => (dayCustomers || []).filter((c: any) => c.settlementCycle === 'EOD' && Number(c.currentBalance || 0) > 0),
+    [dayCustomers],
+  );
+  const eodDueTotal = eodDueCustomers.reduce((s: number, c: any) => s + Number(c.currentBalance || 0), 0);
 
   const preview = previewQ.data as any;
   const snap = preview?.snapshotData ?? null;
@@ -120,9 +129,12 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({ selectedStation,
 
   const handleCloseDay = async () => {
     if (!snap?.businessDayId || !stationId) return;
+    const eodNote = eodDueCustomers.length > 0
+      ? `\n\n${eodDueCustomers.length} end-of-day customer${eodDueCustomers.length === 1 ? '' : 's'} still owe ${inr(eodDueTotal)} that was expected to be collected today.`
+      : '';
     const ok = await confirm({
       title: 'Close this business day?',
-      message: `This generates the immutable DSSR snapshot for ${businessDate} and locks the day. Day-level entries can't be added afterwards.`,
+      message: `This generates the immutable DSSR snapshot for ${businessDate} and locks the day. Day-level entries can't be added afterwards.${eodNote}`,
       confirmLabel: 'Close day',
     });
     if (!ok) return;
@@ -185,6 +197,17 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({ selectedStation,
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center', padding: '8px 12px', backgroundColor: 'var(--state-warning-bg)', color: 'var(--state-warning-fg)', borderRadius: 'var(--radius-input)', fontSize: '12px', border: '1px solid var(--border-soft)' }}>
           <Info size={14} style={{ flexShrink: 0 }} />
           <span>A shift is still open. Close the active shift before closing the business day.</span>
+        </div>
+      )}
+
+      {status !== 'CLOSED' && canClose && eodDueCustomers.length > 0 && (
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', padding: '8px 12px', backgroundColor: 'var(--state-warning-bg)', color: 'var(--state-warning-fg)', borderRadius: 'var(--radius-input)', fontSize: '12px', border: '1px solid var(--border-soft)' }}>
+          <Info size={14} style={{ flexShrink: 0, marginTop: '1px' }} />
+          <span>
+            {eodDueCustomers.length} end-of-day customer{eodDueCustomers.length === 1 ? '' : 's'} still owe{eodDueCustomers.length === 1 ? 's' : ''}{' '}
+            <strong style={{ fontFamily: 'var(--font-mono)' }}>{inr(eodDueTotal)}</strong> expected to be collected before day close
+            {' — '}{eodDueCustomers.slice(0, 3).map((c: any) => c.name).join(', ')}{eodDueCustomers.length > 3 ? ` +${eodDueCustomers.length - 3} more` : ''}. You can still close the day.
+          </span>
         </div>
       )}
 

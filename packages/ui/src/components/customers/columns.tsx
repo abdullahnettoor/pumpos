@@ -48,6 +48,7 @@ export const buildCustomerColumns = (openLedger: (c: any) => void, openEdit: (c:
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '2px' }}>
           <Chip tone={typeTone(t)} size="xs">{t}</Chip>
           {t === 'Fleet' && c.fleetCode && <span style={{ fontSize: '10px', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{c.fleetCode}</span>}
+          {c.settlementCycle === 'EOD' && <span style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 600, letterSpacing: '0.03em' }}>EOD settle</span>}
         </div>
       );
     },
@@ -59,7 +60,8 @@ export const buildCustomerColumns = (openLedger: (c: any) => void, openEdit: (c:
     cell: ({ row }) => {
       const limit = Number(row.original.creditLimit || 0);
       const balance = Number(row.original.currentBalance || 0);
-      if (limit <= 0) return <span style={{ color: 'var(--text-faint)' }}>—</span>;
+      // OMC (prepaid) customers settle via the Oil Company — no station credit line.
+      if (row.original.isPrepaid || limit <= 0) return <span style={{ color: 'var(--text-faint)' }}>—</span>;
       const pct = Math.min(100, (balance / limit) * 100);
       const barColor = balance > limit ? 'var(--brand-danger)' : balance >= limit * 0.75 ? 'var(--brand-warning)' : 'var(--brand-primary)';
       return (
@@ -78,16 +80,8 @@ export const buildCustomerColumns = (openLedger: (c: any) => void, openEdit: (c:
     cols.push(
       {
         accessorKey: 'isPrepaid',
-        header: 'Prepaid',
-        cell: ({ getValue }) => (getValue() ? <Chip tone="info" size="xs">Enabled</Chip> : <span style={{ color: 'var(--text-faint)' }}>—</span>),
-      },
-      {
-        accessorKey: 'prepaidBalance',
-        header: 'Prepaid Balance',
-        cell: ({ row }) => {
-          const c = row.original;
-          return <span style={{ fontWeight: 700, color: c.isPrepaid ? 'var(--state-success-fg)' : 'var(--text-faint)', fontFamily: 'var(--font-mono)' }}>{inr(c.prepaidBalance || 0)}</span>;
-        },
+        header: 'OMC Card',
+        cell: ({ getValue }) => (getValue() ? <Chip tone="info" size="xs">OMC</Chip> : <span style={{ color: 'var(--text-faint)' }}>—</span>),
       },
     );
   }

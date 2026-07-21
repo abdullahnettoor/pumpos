@@ -13,6 +13,7 @@
 
 ## X4 — Prepaid fleet top-up (OMC-CMS)
 - Extend prepaid customers; `paymentMethod: FleetCard`; balance draw-down; reconcile vs OMC settlement; ledger via Phase L.
+- **🟡 Partially shipped:** the OMC-CMS settlement side is done — a `CMS` money account, OMC fleet-card fuel sales posting **money-in to CMS** (payment channel, not a receivable) with per-line customer/vehicle/remarks traceability for reconciling against the OMC's account, and supplier pay-from-CMS. **Still deferred:** *station*-held prepaid wallet drawdown (top-up + balance debit); `TopupDrawer.tsx` is retained for it.
 
 ## X5 — Hardware / POS integrations
 - Dispenser/ATG/forecourt controller feeds → nozzle readings/dips; printer/cash-drawer; POS pass-through. Keep nozzle-derived sales authoritative.

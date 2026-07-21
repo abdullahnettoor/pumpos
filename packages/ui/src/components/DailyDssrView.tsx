@@ -25,6 +25,7 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
   const expenses = snapshot.expenses || {};
   const purchases = snapshot.purchases || {};
   const supplierPayments = snapshot.supplierPayments || {};
+  const income = snapshot.income || {};
   const fuelStockVariance = (snapshot.fuelStockVariance || []) as Array<any>;
   const merchandiseStockVariance = (snapshot.merchandiseStockVariance || []) as Array<any>;
   const shifts = snapshot.shifts || [];
@@ -51,6 +52,7 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
   const normalCredit = Number(credit.normalCredit || 0);
   const fleetCredit = Number(credit.fleetCredit || 0);
   const totalExpenses = Number(expenses.total || 0);
+  const totalOtherIncome = Number(income.total || 0);
   const pnl = snapshot.pnl || {};
   const inr = (n: number) => `₹${n.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
 
@@ -203,6 +205,7 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
           { label: 'COGS — Merchandise', value: `(${inr(Number(pnl.cogsMerch || 0))})`, color: 'var(--brand-warning)' },
           { label: 'Gross Margin', value: inr(Number(pnl.grossMargin || 0)), strong: true },
           { label: 'Operating Expenses', value: `(${inr(Number(pnl.expenses ?? totalExpenses))})`, color: 'var(--brand-warning)' },
+          ...(Number(pnl.otherIncome ?? totalOtherIncome) > 0 ? [{ label: 'Other Income', value: inr(Number(pnl.otherIncome ?? totalOtherIncome)), color: 'var(--brand-success)' }] : []),
         ] as Array<{ label: string; value: string; color?: string; strong?: boolean }>).map((r, i) => (
           <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '11px 16px', borderBottom: '1px solid var(--border-soft)', backgroundColor: r.strong ? 'var(--bg-surface-alt)' : 'transparent' }}>
             <span style={{ fontWeight: r.strong ? 700 : 400 }}>{r.label}</span>
@@ -246,6 +249,7 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
           { label: 'Supplier Payments (Drawer / Bank)', value: `${inr(Number(supplierPayments.drawer || 0))} / ${inr(Number(supplierPayments.bank || 0))}` },
           { label: 'Drawer Expenses', value: inr(Number(expenses.drawer || 0)) },
           { label: 'Business Expenses', value: inr(Number(expenses.business || 0)) },
+          ...(totalOtherIncome > 0 ? [{ label: 'Other Income (Cash / Bank)', value: `${inr(Number(income.drawer || 0))} / ${inr(Number(income.business || 0))}`, color: 'var(--brand-success)' }] : []),
         ] as Array<{ label: string; value: string; color?: string }>).map((r, i) => (
           <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '11px 16px', borderBottom: '1px solid var(--border-soft)' }}>
             <span>{r.label}</span>

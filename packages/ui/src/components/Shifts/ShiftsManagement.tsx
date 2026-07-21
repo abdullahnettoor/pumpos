@@ -16,7 +16,7 @@ import { BusinessDayTab } from './BusinessDayTab.js';
 import { OpenShiftForm } from './OpenShiftForm.js';
 import { Tabs } from '../primitives/Tabs.js';
 import { useToast } from '../primitives/ToastProvider.js';
-import { useShiftStatus, useShiftTransactions, useInvalidateOperational, queryKeys, TIER } from '../../query/hooks.js';
+import { useShiftStatus, useShiftTransactions, useInvalidateOperational, queryKeys } from '../../query/hooks.js';
 import { openQuickEntry, useQuickEntry, type QuickEntryType } from '../../quick-entry/store.js';
 import { Station, resolveBusinessDate } from '@pump/shared';
 import { FileText, User, Lock, AlertTriangle, Check, Fuel, Info, Play, History, Clock3, CalendarRange } from 'lucide-react';
@@ -127,10 +127,15 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   const handleOpenHandoverDrawer = async (assignment: any) => {
     setSelectedHandoverAssignment(assignment);
     setHandoverDrawerOpen(true);
-    // Load credit-eligible customers for the in-handover fuel-on-credit section.
+    // Refresh the vehicle/customer caches so newly-added records (created in
+    // another tab/session) are pickable in the Customer Sales section.
+    qc.invalidateQueries({ queryKey: ['vehicles'] });
+    // Load customers pickable for on-account (Customer Sales) billing: all
+    // customers except legacy station-prepaid non-fleet wallets. Prepaid Fleet
+    // customers ARE included — they're OMC fleet cards (settled to CMS).
     try {
-      const custList = await qc.ensureQueryData({ queryKey: queryKeys.customers(true), queryFn: () => transactionService.getCustomers(true), staleTime: TIER.semi.staleTime });
-      setHandoverCreditCustomers((custList || []).filter((c: any) => !c.isPrepaid && (c.customerType === 'Credit' || c.customerType === 'Fleet')));
+      const custList = await qc.fetchQuery({ queryKey: queryKeys.customers(true), queryFn: () => transactionService.getCustomers(true), staleTime: 0 });
+      setHandoverCreditCustomers((custList || []).filter((c: any) => c.customerType === 'Fleet' || !c.isPrepaid));
     } catch {
       setHandoverCreditCustomers([]);
     }
@@ -169,7 +174,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   // non-attendant merchandise cash and reads the true station-level short/surplus.
   const recon = data?.activeShift?.reconciliation;
   const expectedCash = recon
-    ? openingCashNum + Number(recon.cashSales || 0) + Number(recon.cashCollections || 0) - Number(recon.drawerExpenses || 0) - Number(recon.drawerSupplierPayments || 0)
+    ? openingCashNum + Number(recon.cashSales || 0) + Number(recon.cashCollections || 0) + Number(recon.cashIncome || 0) - Number(recon.drawerExpenses || 0) - Number(recon.drawerSupplierPayments || 0)
     : openingCashNum + activeCashCollections - shiftTotals.cashExpenses;
   const cashVariance = closingCash - expectedCash;
 
@@ -182,6 +187,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         handoverCash: Number(recon.handoverCash || 0),
         merchCashOutsideHandover: Number(recon.merchCashOutsideHandover || 0),
         cashCollections: Number(recon.cashCollections || 0),
+        cashIncome: Number(recon.cashIncome || 0),
         drawerExpenses: Number(recon.drawerExpenses || 0),
         drawerSupplierPayments: Number(recon.drawerSupplierPayments || 0),
         expectedDrawer: expectedCash,
@@ -704,6 +710,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
               setSelectedHandoverAssignment(null);
             }}
             shiftId={activeShift.id}
+            stationId={stationId}
             userId={selectedHandoverAssignment.userId}
             userName={selectedHandoverAssignment.userName}
             duId={selectedHandoverAssignment.duId}
@@ -734,6 +741,11 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
               (activeShift.staffAssignments || []).find(
                 (sa: any) => sa.userId === selectedHandoverAssignment.userId && sa.duId === selectedHandoverAssignment.duId,
               )?.creditSales || selectedHandoverAssignment.creditSales || []
+            }
+            omcSales={
+              (activeShift.staffAssignments || []).find(
+                (sa: any) => sa.userId === selectedHandoverAssignment.userId && sa.duId === selectedHandoverAssignment.duId,
+              )?.omcSales || selectedHandoverAssignment.omcSales || []
             }
             onCreditChanged={async () => {
               await loadShiftStatus();

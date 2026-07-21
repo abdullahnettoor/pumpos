@@ -9,6 +9,7 @@ import {
   OrganizationOverview,
   ShiftsManagement,
   ExpensesList,
+  IncomeList,
   PurchasesList,
   CustomersList,
   InventoryList,
@@ -17,7 +18,7 @@ import {
   AccountsPanel,
   DesignSystem,
   QuickEntryHost,
-  CloudStationService, 
+  CloudStationService,
   queryKeys,
   setApiBaseUrl,
   setAuthToken, 
@@ -253,6 +254,7 @@ export const App: React.FC = () => {
         { label: 'Shifts', path: '/shifts', roles: ['Owner', 'Manager', 'Staff'] },
         { label: 'Station Overview', path: '/setup/station', roles: ['Owner', 'Manager'] },
         { label: 'Expenses', path: '/expenses' },
+        { label: 'Income', path: '/income' },
         { label: 'Purchases', path: '/purchases', roles: ['Owner', 'Manager', 'Accountant'] },
         { label: 'Inventory', path: '/inventory', roles: ['Owner', 'Manager', 'Accountant'] },
         { label: 'Pricing', path: '/pricing', roles: ['Owner', 'Manager'] },
@@ -473,6 +475,15 @@ export const App: React.FC = () => {
       case '/expenses':
         return (
           <ExpensesList
+            selectedStation={selectedStation}
+            userRole={userRole || 'Staff'}
+            intent={navIntent}
+            onIntentConsumed={() => setNavIntent(null)}
+          />
+        );
+      case '/income':
+        return (
+          <IncomeList
             selectedStation={selectedStation}
             userRole={userRole || 'Staff'}
             intent={navIntent}

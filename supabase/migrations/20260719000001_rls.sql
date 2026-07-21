@@ -143,6 +143,8 @@ ALTER TABLE "idempotency_keys"              ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "fuel_prices"                   ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "attendant_handovers"           ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "handover_terminal_entries"     ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "income_categories"             ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "other_income"                  ENABLE ROW LEVEL SECURITY;
 
 -- =====================================================================
 -- 4. Tenant policies

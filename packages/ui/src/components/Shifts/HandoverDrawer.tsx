@@ -5,12 +5,26 @@ import { z } from 'zod';
 import { Drawer } from '../Drawer.js';
 import { Button } from '../../pump-ds/index.js';
 import { Combobox } from '../primitives/Combobox.js';
+import { CashCountPopover, type CashBreakdown } from '../primitives/CashCountPopover.js';
+import { CustomerFormDrawer } from '../customers/CustomerFormDrawer.js';
+import { VehicleDrawer } from '../customers/VehicleDrawer.js';
 import { useAllVehicles } from '../../query/hooks.js';
 import { CloudShiftService, CloudTransactionService } from '../../services/cloud.js';
 import { inr } from '../../utils/format.js';
 
 const shiftService = new CloudShiftService();
 const transactionService = new CloudTransactionService();
+
+// Sentinel option values for the "＋ New …" inline-create entries in the picker.
+const NEW_CUSTOMER = '__new_customer__';
+const NEW_VEHICLE = '__new_vehicle__';
+
+// A fresh idempotency key per customer-sale line, so a retry of the SAME line
+// (e.g. after a network blip) de-dupes server-side instead of double-posting.
+const genIdemKey = (): string =>
+  (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
+    ? crypto.randomUUID()
+    : `idem-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
 // Define form validation schema using Zod
 const handoverFormSchema = z.object({
@@ -30,6 +44,7 @@ interface HandoverDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   shiftId: string;
+  stationId: string | null;
   userId: string;
   userName: string;
   duId: string;
@@ -40,6 +55,8 @@ interface HandoverDrawerProps {
   customers?: any[];
   /** Fuel-on-credit lines already recorded for this (attendant, DU). */
   creditSales?: any[];
+  /** OMC fleet-card sale lines already recorded for this (attendant, DU). */
+  omcSales?: any[];
   /** Walk-in merchandise cash this attendant collected (folds into expected). */
   merchandiseCash?: number;
   /** Walk-in merchandise paid by card/UPI on a terminal (informational; not in cash expected). */
@@ -54,6 +71,7 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
   isOpen,
   onClose,
   shiftId,
+  stationId,
   userId,
   userName,
   duId,
@@ -62,6 +80,7 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
   terminals = [],
   customers = [],
   creditSales = [],
+  omcSales = [],
   merchandiseCash = 0,
   merchandiseNonCash = 0,
   onCreditChanged,
@@ -70,7 +89,9 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
 }) => {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
+  // Denomination counts for the handover cash (held here so re-opening the
+  // popover preserves them). Reset when the drawer opens.
+  const [cashBreakdown, setCashBreakdown] = useState<CashBreakdown>({});
   const {
     register,
     handleSubmit,
@@ -162,10 +183,15 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
 
   // ---- Fuel-on-credit (credit chits) declared for this (attendant, DU) ----
   const [creditLines, setCreditLines] = useState<any[]>([]);
+  // ---- OMC fleet-card sales (settled to CMS, not a receivable) ----
+  const [omcLines, setOmcLines] = useState<any[]>([]);
   const [ccOpen, setCcOpen] = useState(false);
+  // Channel for a new line: 'credit' = station receivable, 'omc' = OMC card → CMS.
+  const [ccChannel, setCcChannel] = useState<'credit' | 'omc'>('credit');
   const [ccSelectValue, setCcSelectValue] = useState('');
   const [ccCustomerId, setCcCustomerId] = useState('');
   const [ccCustomerName, setCcCustomerName] = useState('');
+  const [ccCustomerType, setCcCustomerType] = useState<string | null>(null);
   const [ccVehicleId, setCcVehicleId] = useState<string | null>(null);
   const [ccVehicleLabel, setCcVehicleLabel] = useState('');
   const [ccProductId, setCcProductId] = useState('');
@@ -174,16 +200,26 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
   const [ccAmount, setCcAmount] = useState('');
   const [ccNotes, setCcNotes] = useState('');
   const [ccBusy, setCcBusy] = useState(false);
+  // Idempotency key for the line currently being added — held across a failed
+  // retry (same key → server de-dupes) and cleared on success or any edit.
+  const ccIdemKeyRef = useRef<string | null>(null);
+  // Inline create ("＋ New …") drawer state + optimistically-added records.
+  const [newCustomerOpen, setNewCustomerOpen] = useState(false);
+  const [newVehicleOpen, setNewVehicleOpen] = useState(false);
+  const [extraCustomers, setExtraCustomers] = useState<any[]>([]);
+  const [extraVehicles, setExtraVehicles] = useState<any[]>([]);
   // Cached vehicles (semi tier) for the client-side credit picker — no server search.
   const { data: allVehiclesData } = useAllVehicles(true);
 
   const resetCcRow = () => {
+    ccIdemKeyRef.current = null;
     setCcSelectValue('');
-    setCcCustomerId(''); setCcCustomerName(''); setCcVehicleId(null); setCcVehicleLabel('');
+    setCcChannel('credit');
+    setCcCustomerId(''); setCcCustomerName(''); setCcCustomerType(null); setCcVehicleId(null); setCcVehicleLabel('');
     setCcProductId(''); setCcQty(''); setCcPrice(''); setCcAmount(''); setCcNotes('');
   };
   useEffect(() => {
-    if (isOpen) { setCreditLines(creditSales ?? []); setCcOpen(false); resetCcRow(); }
+    if (isOpen) { setCreditLines(creditSales ?? []); setOmcLines(omcSales ?? []); setCcOpen(false); resetCcRow(); setExtraCustomers([]); setExtraVehicles([]); setCashBreakdown({}); }
   }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fuel products dispensed at this DU (from its nozzles).
@@ -198,46 +234,94 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
   // Credit-eligible vehicles = cached vehicles belonging to the credit customers
   // passed in (already Credit/Fleet, non-prepaid). Combined with the customers
   // into one client-side searchable option list — no server round-trips.
-  const allVehicles = allVehiclesData ?? [];
+  // Records created inline (via the "＋ New …" options) are merged in optimistically.
+  const allCustomers = useMemo(() => [...customers, ...extraCustomers], [customers, extraCustomers]);
+  const allVehicles = useMemo(() => [...(allVehiclesData ?? []), ...extraVehicles], [allVehiclesData, extraVehicles]);
   const creditOptions = useMemo(() => {
-    const customerIds = new Set(customers.map((c: any) => c.id));
-    const opts: { value: string; label: string; sublabel?: string }[] = [];
+    const customerIds = new Set(allCustomers.map((c: any) => c.id));
+    const opts: { value: string; label: string; sublabel?: string }[] = [
+      { value: NEW_CUSTOMER, label: '＋ New customer', sublabel: 'Create and bill in one step' },
+      { value: NEW_VEHICLE, label: '＋ New vehicle', sublabel: 'Add a vehicle to a customer' },
+    ];
     for (const v of allVehicles) {
       if (!customerIds.has(v.customerId)) continue;
-      opts.push({ value: `v:${v.id}`, label: v.registrationNumber, sublabel: `${v.customerName ?? ''}${v.defaultProductName ? ` · ${v.defaultProductName}` : ''}` });
+      const parts = [v.customerName ?? '', v.customerType, v.defaultProductName].filter(Boolean);
+      opts.push({ value: `v:${v.id}`, label: v.registrationNumber, sublabel: parts.join(' · ') });
     }
-    for (const c of customers) opts.push({ value: `c:${c.id}`, label: c.name, sublabel: c.customerType });
+    for (const c of allCustomers) opts.push({ value: `c:${c.id}`, label: c.name, sublabel: c.customerType });
     return opts;
-  }, [allVehicles, customers]);
+  }, [allVehicles, allCustomers]);
+
+  // Default channel for a selected customer: a prepaid Fleet account is an OMC
+  // fleet card (settled to CMS); everything else is a station receivable.
+  const defaultChannelFor = (cust: any): 'credit' | 'omc' =>
+    (cust?.customerType === 'Fleet' && cust?.isPrepaid) ? 'omc' : 'credit';
 
   const handleCreditSelect = (value: string) => {
+    if (value === NEW_CUSTOMER) { setNewCustomerOpen(true); return; }
+    if (value === NEW_VEHICLE) { setNewVehicleOpen(true); return; }
+    ccIdemKeyRef.current = null;
     setCcSelectValue(value);
     if (value.startsWith('v:')) {
       const v = allVehicles.find((x: any) => `v:${x.id}` === value);
       if (!v) return;
+      const cust = allCustomers.find((c: any) => c.id === v.customerId);
       setCcCustomerId(v.customerId);
       setCcCustomerName(v.customerName ?? 'Customer');
+      setCcCustomerType(v.customerType ?? cust?.customerType ?? null);
+      setCcChannel(defaultChannelFor(cust ?? { customerType: v.customerType, isPrepaid: v.isPrepaid }));
       setCcVehicleId(v.id);
       setCcVehicleLabel(v.registrationNumber);
       const match = duProducts.find((p) => p.id === v.defaultProductId);
       if (match) { setCcProductId(match.id); if (match.price > 0) setCcPrice(match.price.toFixed(2)); }
     } else if (value.startsWith('c:')) {
       const id = value.slice(2);
-      const c = customers.find((x: any) => x.id === id);
+      const c = allCustomers.find((x: any) => x.id === id);
       setCcCustomerId(id);
       setCcCustomerName(c?.name ?? 'Customer');
+      setCcCustomerType(c?.customerType ?? null);
+      setCcChannel(defaultChannelFor(c));
       setCcVehicleId(null);
       setCcVehicleLabel('');
     }
   };
 
-  const ccSelectedCustomer = customers.find((c: any) => c.id === ccCustomerId);
+  // Auto-select a record created inline via the "＋ New …" options.
+  const handleCustomerCreated = (c: any) => {
+    if (!c?.id) { setNewCustomerOpen(false); return; }
+    setExtraCustomers((prev) => (prev.some((x) => x.id === c.id) ? prev : [...prev, c]));
+    setNewCustomerOpen(false);
+    setCcSelectValue(`c:${c.id}`);
+    setCcCustomerId(c.id);
+    setCcCustomerName(c.name ?? 'Customer');
+    setCcCustomerType(c.customerType ?? null);
+    setCcChannel(defaultChannelFor(c));
+    setCcVehicleId(null);
+    setCcVehicleLabel('');
+  };
+  const handleVehicleCreated = (v: any) => {
+    if (!v?.id) { setNewVehicleOpen(false); return; }
+    setExtraVehicles((prev) => (prev.some((x) => x.id === v.id) ? prev : [...prev, v]));
+    setNewVehicleOpen(false);
+    setCcSelectValue(`v:${v.id}`);
+    setCcCustomerId(v.customerId);
+    setCcCustomerName(v.customerName ?? 'Customer');
+    setCcCustomerType(v.customerType ?? null);
+    setCcChannel(defaultChannelFor(allCustomers.find((c: any) => c.id === v.customerId) ?? v));
+    setCcVehicleId(v.id);
+    setCcVehicleLabel(v.registrationNumber ?? '');
+    const match = duProducts.find((p) => p.id === v.defaultProductId);
+    if (match) { setCcProductId(match.id); if (match.price > 0) setCcPrice(match.price.toFixed(2)); }
+  };
+
+  const ccSelectedCustomer = allCustomers.find((c: any) => c.id === ccCustomerId);
   const ccLimit = Number(ccSelectedCustomer?.creditLimit ?? 0);
   const ccBalance = Number(ccSelectedCustomer?.currentBalance ?? 0);
   const ccAvailable = ccLimit > 0 ? ccLimit - ccBalance : null;
   const ccExceeds = ccAvailable != null && Number(ccAmount) > ccAvailable;
 
   const handleCcProductChange = (pid: string) => {
+    ccIdemKeyRef.current = null;
     setCcProductId(pid);
     // Price is fixed per nozzle — keep it internal (drives qty↔amount), no manual entry.
     const p = duProducts.find((x) => x.id === pid);
@@ -247,11 +331,13 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
     if (q > 0 && price > 0) setCcAmount((q * price).toFixed(2));
   };
   const handleCcQtyChange = (v: string) => {
+    ccIdemKeyRef.current = null;
     setCcQty(v);
     const q = Number(v); const pr = Number(ccPrice);
     if (q > 0 && pr > 0) setCcAmount((q * pr).toFixed(2));
   };
   const handleCcAmountChange = (v: string) => {
+    ccIdemKeyRef.current = null;
     setCcAmount(v);
     const a = Number(v); const pr = Number(ccPrice);
     if (a > 0 && pr > 0) setCcQty((a / pr).toFixed(3));
@@ -260,28 +346,31 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
   const addCreditLine = async () => {
     setError(null);
     const amt = Number(ccAmount);
-    if (!ccCustomerId) { setError('Search and select a customer or vehicle for the credit sale.'); return; }
-    if (!(amt > 0)) { setError('Enter a valid credit amount.'); return; }
+    const isOmc = ccChannel === 'omc';
+    if (!isOmc && !ccCustomerId) { setError('Search and select a customer or vehicle for the credit sale.'); return; }
+    if (!(amt > 0)) { setError('Enter a valid amount.'); return; }
     try {
       setCcBusy(true);
+      const idempotencyKey = ccIdemKeyRef.current ?? (ccIdemKeyRef.current = genIdemKey());
       const entry = await transactionService.recordCollection({
         shiftId,
-        customerId: ccCustomerId,
+        customerId: ccCustomerId || undefined,
         vehicleId: ccVehicleId,
         productId: ccProductId || null,
         quantity: Number(ccQty) > 0 ? Number(ccQty) : null,
         unitPrice: ccPrice && Number(ccPrice) >= 0 ? Number(ccPrice) : null,
         amount: amt,
-        paymentMethod: 'Credit',
+        paymentMethod: isOmc ? 'OMC' : 'Credit',
         attendantId: userId,
         duId,
         notes: ccNotes || undefined,
-      });
+      }, { idempotencyKey });
       const prod = duProducts.find((p) => p.id === ccProductId);
-      setCreditLines((prev) => [...prev, {
+      const line = {
         id: entry?.id,
-        customerId: ccCustomerId,
-        customerName: ccCustomerName || ccSelectedCustomer?.name || 'Customer',
+        customerId: ccCustomerId || null,
+        customerName: ccCustomerId ? (ccCustomerName || ccSelectedCustomer?.name || 'Customer') : null,
+        customerType: ccCustomerType ?? ccSelectedCustomer?.customerType ?? null,
         vehicleId: ccVehicleId,
         vehicleLabel: ccVehicleLabel || null,
         productId: ccProductId || null,
@@ -290,11 +379,13 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
         unitPrice: Number(ccPrice) || null,
         amount: amt,
         notes: ccNotes || null,
-      }]);
+      };
+      if (isOmc) setOmcLines((prev) => [...prev, line]);
+      else setCreditLines((prev) => [...prev, line]);
       resetCcRow();
       await onCreditChanged?.();
     } catch (e: any) {
-      setError(e.message || 'Failed to add credit sale');
+      setError(e.message || 'Failed to add sale');
     } finally {
       setCcBusy(false);
     }
@@ -310,6 +401,21 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
       await onCreditChanged?.();
     } catch (e: any) {
       setError(e.message || 'Failed to remove credit sale');
+    } finally {
+      setCcBusy(false);
+    }
+  };
+
+  const removeOmcLine = async (id: string) => {
+    if (!id) return;
+    setError(null);
+    try {
+      setCcBusy(true);
+      await transactionService.voidOmcCardSale(id);
+      setOmcLines((prev) => prev.filter((l) => l.id !== id));
+      await onCreditChanged?.();
+    } catch (e: any) {
+      setError(e.message || 'Failed to remove OMC card sale');
     } finally {
       setCcBusy(false);
     }
@@ -354,7 +460,25 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
   // sits on the DECLARED side — the fuel is already metered in the nozzle reading,
   // so credit is NOT added to expected (that would double-count).
   const creditTotal = creditLines.reduce((sum, l) => sum + Number(l.amount || 0), 0);
-  const totalDeclared = Number(formCash) + Number(effectiveCard) + Number(effectiveUpi) + creditTotal;
+  // OMC fleet-card sales — settled to CMS (a non-drawer channel), never a
+  // receivable. Like credit, the fuel is metered so it sits on the declared side.
+  const omcTotal = omcLines.reduce((sum, l) => sum + Number(l.amount || 0), 0);
+  // Recorded customer-sale lines grouped by receivable type (Credit / Fleet /
+  // Regular), each with its own subtotal. Station-prepaid customers never reach
+  // this list (they draw down a balance instead of accruing a receivable).
+  const creditGroups = useMemo(() => {
+    const ORDER = ['Credit', 'Fleet', 'Regular'];
+    const LABELS: Record<string, string> = { Credit: 'Credit', Fleet: 'Fleet', Regular: 'Regular', Other: 'Other' };
+    const map = new Map<string, any[]>();
+    for (const l of creditLines) {
+      const t = ORDER.includes(l.customerType) ? l.customerType : 'Other';
+      (map.get(t) ?? map.set(t, []).get(t)!).push(l);
+    }
+    return [...ORDER, 'Other']
+      .filter((t) => map.has(t))
+      .map((t) => ({ type: t, label: LABELS[t] ?? t, lines: map.get(t)!, subtotal: map.get(t)!.reduce((s, l) => s + Number(l.amount || 0), 0) }));
+  }, [creditLines]);
+  const totalDeclared = Number(formCash) + Number(effectiveCard) + Number(effectiveUpi) + creditTotal + omcTotal;
   // Walk-in merchandise cash this attendant collected (net of any card/UPI
   // portion) is part of what they hand over, so it's added to the expected side.
   const merchandiseCashNum = Number(merchandiseCash) || 0;
@@ -373,7 +497,7 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
   const unitByProduct = new Map<string, string>();
   for (const n of calculatedNozzles) { if (n.productId) unitByProduct.set(n.productId, n.unit || 'L'); }
   const creditLitresByProduct = new Map<string, number>();
-  for (const l of creditLines) {
+  for (const l of [...creditLines, ...omcLines]) {
     if (l.productId && l.quantity) creditLitresByProduct.set(l.productId, (creditLitresByProduct.get(l.productId) ?? 0) + Number(l.quantity));
   }
   const volumeOverages = Array.from(creditLitresByProduct.entries())
@@ -432,6 +556,7 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
   };
 
   return (
+    <>
     <Drawer
       isOpen={isOpen}
       onClose={onClose}
@@ -614,14 +739,14 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
           </div>
         )}
 
-        {/* 3. Fuel-on-credit sales (credit chits) for this DU */}
+        {/* 3. Customer sales (on-account fuel) for this DU */}
         <div>
           <h3 style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px', display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-            <span>3. Fuel-on-Credit Sales</span>
-            {creditTotal > 0 && <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-strong)' }}>₹{creditTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>}
+            <span>3. Customer Sales</span>
+            {creditTotal + omcTotal > 0 && <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-strong)' }}>₹{(creditTotal + omcTotal).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>}
           </h3>
           <p style={{ fontSize: '11px', color: 'var(--text-faint)', marginBottom: '10px' }}>
-            Fuel dispensed at this pump and billed to a customer's account. Each line is recorded immediately and feeds the credit chits total below.
+            Fuel billed to a customer's account (Credit / Fleet / Regular receivable) or paid by an OMC fleet card (settled to the CMS account — not a receivable). Each line is recorded immediately; the fuel is already metered, so it sits on the declared side.
           </p>
 
           {volumeOverages.length > 0 && (
@@ -630,13 +755,46 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
             </div>
           )}
 
-          {creditLines.length > 0 && (
+          {creditGroups.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '10px' }}>
+              {creditGroups.map((g) => (
+                <div key={g.type} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: '10px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                    <span>{g.label}</span>
+                    <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-strong)' }}>₹{g.subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                  {g.lines.map((l, idx) => (
+                    <div key={l.id ?? idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', backgroundColor: 'var(--bg-surface-alt)', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', padding: '8px 10px' }}>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-strong)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {l.customerName}{l.vehicleLabel ? ` · ${l.vehicleLabel}` : ''}
+                        </div>
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                          {l.productName ?? 'Fuel'}{l.quantity ? ` · ${Number(l.quantity).toLocaleString('en-IN')} L` : ''}{l.notes ? ` · ${l.notes}` : ''}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
+                        <strong style={{ fontFamily: 'var(--font-mono)', fontSize: '13px' }}>₹{Number(l.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
+                        <button type="button" onClick={() => removeCreditLine(l.id)} disabled={ccBusy} title="Void this credit sale" style={{ background: 'transparent', border: 'none', color: 'var(--brand-danger)', cursor: 'pointer', fontSize: '12px', padding: '2px 4px' }}>✕</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {omcLines.length > 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '10px' }}>
-              {creditLines.map((l, idx) => (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: '10px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                <span>OMC card · CMS</span>
+                <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-strong)' }}>₹{omcTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+              </div>
+              {omcLines.map((l, idx) => (
                 <div key={l.id ?? idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', backgroundColor: 'var(--bg-surface-alt)', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', padding: '8px 10px' }}>
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-strong)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {l.customerName}{l.vehicleLabel ? ` · ${l.vehicleLabel}` : ''}
+                      {l.customerName || 'OMC card (no customer)'}{l.vehicleLabel ? ` · ${l.vehicleLabel}` : ''}
                     </div>
                     <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
                       {l.productName ?? 'Fuel'}{l.quantity ? ` · ${Number(l.quantity).toLocaleString('en-IN')} L` : ''}{l.notes ? ` · ${l.notes}` : ''}
@@ -644,7 +802,7 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
                     <strong style={{ fontFamily: 'var(--font-mono)', fontSize: '13px' }}>₹{Number(l.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
-                    <button type="button" onClick={() => removeCreditLine(l.id)} disabled={ccBusy} title="Void this credit sale" style={{ background: 'transparent', border: 'none', color: 'var(--brand-danger)', cursor: 'pointer', fontSize: '12px', padding: '2px 4px' }}>✕</button>
+                    <button type="button" onClick={() => removeOmcLine(l.id)} disabled={ccBusy} title="Void this OMC card sale" style={{ background: 'transparent', border: 'none', color: 'var(--brand-danger)', cursor: 'pointer', fontSize: '12px', padding: '2px 4px' }}>✕</button>
                   </div>
                 </div>
               ))}
@@ -653,13 +811,44 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
 
           {!ccOpen ? (
             <Button type="button" variant="secondary" size="sm" onClick={() => setCcOpen(true)} style={{ alignSelf: 'flex-start' }}>
-              + Add credit sale
+              + Add customer sale
             </Button>
           ) : (
             <div style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', padding: '10px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {/* Channel: station receivable (Credit) vs OMC fleet card (→ CMS) */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Payment channel</label>
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  {(['credit', 'omc'] as const).map((ch) => (
+                    <button
+                      key={ch}
+                      type="button"
+                      onClick={() => setCcChannel(ch)}
+                      disabled={ccBusy}
+                      style={{
+                        flex: 1,
+                        height: '30px',
+                        borderRadius: 'var(--radius-input)',
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        border: `1px solid ${ccChannel === ch ? 'var(--brand-primary)' : 'var(--border-strong)'}`,
+                        background: ccChannel === ch ? 'var(--bg-surface-alt)' : 'var(--bg-surface)',
+                        color: ccChannel === ch ? 'var(--brand-primary)' : 'var(--text-muted)',
+                      }}
+                    >
+                      {ch === 'credit' ? 'Credit (receivable)' : 'OMC card → CMS'}
+                    </button>
+                  ))}
+                </div>
+                {ccChannel === 'omc' && (
+                  <span style={{ fontSize: '10px', color: 'var(--text-faint)' }}>Settled to CMS by the Oil Company — not a receivable. Customer is optional.</span>
+                )}
+              </div>
+
               {/* Combined picker: customer name OR vehicle number (cached, client-side) */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Customer or vehicle</label>
+                <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Customer or vehicle{ccChannel === 'omc' ? ' (optional)' : ''}</label>
                 <Combobox
                   options={creditOptions}
                   value={ccSelectValue}
@@ -668,12 +857,12 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
                   searchPlaceholder="Search name or vehicle no.…"
                   emptyMessage="No credit customer or vehicle found."
                 />
-                {ccCustomerId && ccAvailable != null && (
+                {ccChannel === 'credit' && ccCustomerId && ccAvailable != null && (
                   <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Available credit {inr(ccAvailable)}</span>
                 )}
               </div>
 
-              {ccCustomerId && (
+              {(ccCustomerId || ccChannel === 'omc') && (
                 <>
                   <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr', gap: '8px' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
@@ -696,7 +885,7 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
                     <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Remarks (driver, slip no., notes)</label>
                     <input type="text" value={ccNotes} onChange={(e) => setCcNotes(e.target.value)} disabled={ccBusy} placeholder="e.g. driver name / phone / slip ref" style={{ height: '30px', padding: '0 8px', width: '100%', minWidth: 0, border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-input)', fontSize: '12px' }} />
                   </div>
-                  {ccExceeds && (
+                  {ccChannel === 'credit' && ccExceeds && (
                     <div style={{ fontSize: '11px', color: 'var(--state-warning-fg)' }}>
                       Exceeds available credit{ccAvailable != null ? ` (${inr(ccAvailable)})` : ''} — you can still record it.
                     </div>
@@ -705,8 +894,8 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
               )}
 
               <div style={{ display: 'flex', gap: '8px' }}>
-                <Button type="button" variant="primary" size="sm" onClick={addCreditLine} disabled={!ccCustomerId || !(Number(ccAmount) > 0)} loading={ccBusy}>
-                  + Add credit sale
+                <Button type="button" variant="primary" size="sm" onClick={addCreditLine} disabled={(ccChannel === 'credit' && !ccCustomerId) || !(Number(ccAmount) > 0)} loading={ccBusy}>
+                  {ccChannel === 'omc' ? '+ Add OMC card sale' : '+ Add credit sale'}
                 </Button>
                 <Button type="button" variant="secondary" size="sm" onClick={() => { resetCcRow(); setCcOpen(false); }} disabled={ccBusy}>Done</Button>
               </div>
@@ -722,14 +911,23 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 }}>
               <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-default)' }}>Cash Handed Over (₹)</label>
-              <input
-                type="number"
-                step="any"
-                min="0"
-                placeholder="0"
-                {...register('cashHandedOver')}
-                style={{ height: '32px', padding: '0 8px', width: '100%', minWidth: 0, border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-input)', fontFamily: 'var(--font-mono)', fontSize: '13px', textAlign: 'right' }}
-              />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <input
+                  type="number"
+                  step="any"
+                  min="0"
+                  placeholder="0"
+                  {...register('cashHandedOver')}
+                  style={{ height: '32px', padding: '0 8px', flex: 1, minWidth: 0, border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-input)', fontFamily: 'var(--font-mono)', fontSize: '13px', textAlign: 'right' }}
+                />
+                <CashCountPopover
+                  breakdown={cashBreakdown}
+                  onBreakdownChange={setCashBreakdown}
+                  onApply={(t) => setValue('cashHandedOver', t as any, { shouldValidate: true, shouldDirty: true })}
+                  currentValue={Number(formCash) || 0}
+                  title="Count handover cash by denomination"
+                />
+              </div>
               {errors.cashHandedOver && (
                 <span style={{ color: 'var(--brand-danger)', fontSize: '10px' }}>{errors.cashHandedOver.message}</span>
               )}
@@ -798,6 +996,12 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
               <strong style={{ fontFamily: 'var(--font-mono)' }}>₹{creditTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
             </div>
           )}
+          {omcTotal > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: 'var(--text-muted)' }}>
+              <span>of which OMC card (→ CMS):</span>
+              <strong style={{ fontFamily: 'var(--font-mono)' }}>₹{omcTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
+            </div>
+          )}
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
             <span>Declared Deposit Sum:</span>
             <strong style={{ fontFamily: 'var(--font-mono)' }}>₹{totalDeclared.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
@@ -849,5 +1053,24 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
         </div>
       </form>
     </Drawer>
+
+    {/* Inline create: reuse the standard customer / vehicle drawers, auto-select on save. */}
+    <CustomerFormDrawer
+      isOpen={newCustomerOpen}
+      editingCustomer={null}
+      stationId={stationId}
+      onClose={() => setNewCustomerOpen(false)}
+      onCreated={handleCustomerCreated}
+    />
+    <VehicleDrawer
+      isOpen={newVehicleOpen}
+      editingVehicle={null}
+      defaultCustomerId={ccCustomerId || ''}
+      eligibleCustomers={allCustomers}
+      fuelProducts={duProducts.map((p) => ({ id: p.id, name: p.name, code: p.code }))}
+      onClose={() => setNewVehicleOpen(false)}
+      onCreated={handleVehicleCreated}
+    />
+    </>
   );
 };

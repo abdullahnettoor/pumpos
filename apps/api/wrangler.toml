@@ -5,8 +5,7 @@ compatibility_flags = [ "nodejs_compat_v2" ]
 
 [[hyperdrive]]
 binding = "HYPERDRIVE"
-# id = "44db8c2a98344989a2a2c572638deb63"
-id = "e444eafcebee4e889dae8917701a4b02"
+id = "44db8c2a98344989a2a2c572638deb63"
 # Local default for Docker-based Supabase.
 # Remote Supabase users should override with:
 # CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE=<DIRECT_DATABASE_URL>
@@ -62,12 +61,13 @@ required = [ "SUPABASE_JWT_SECRET" ]
 [env.production]
 name = "pumpos-api-prod"
 [[env.production.routes]]
-pattern = "api-pumpos.abdullahnettoor.com"
+pattern = "api.pumpos.app"
 custom_domain = true
 
 [[env.production.hyperdrive]]
 binding = "HYPERDRIVE"
-id = "e444eafcebee4e889dae8917701a4b02"
+id = "44db8c2a98344989a2a2c572638deb63"
+# id = "e444eafcebee4e889dae8917701a4b02"
 
 [env.production.observability]
 enabled = true

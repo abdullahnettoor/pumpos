@@ -1,9 +1,10 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   useMyAssignment,
   useProducts,
   useCustomers,
+  useAllVehicles,
   useInventoryItems,
   useMerchandiseHandovers,
   Combobox,
@@ -11,7 +12,9 @@ import {
   CloudTransactionService,
   queryKeys,
   inr,
+  type CashBreakdown,
 } from '@pump/ui';
+import { CashCountSheet } from './CashCountSheet.js';
 
 /**
  * Shared self-service handover UI — mirrors the desktop HandoverDrawer. Loads the
@@ -36,9 +39,12 @@ interface DuFormState {
 
 interface CreditLine {
   id?: string;
-  customerId: string;
-  customerName: string;
+  /** Null for an anonymous OMC card sale. */
+  customerId: string | null;
+  customerName: string | null;
+  customerType?: string | null;
   vehicleId: string | null;
+  vehicleLabel?: string | null;
   productId: string | null;
   productName: string | null;
   quantity: number | null;
@@ -59,6 +65,13 @@ const num = (v: string | number | null | undefined) => {
   return Number.isFinite(n) ? n : 0;
 };
 
+// A fresh idempotency key per customer-sale line, so a retry of the SAME line
+// (e.g. after a flaky-network blip) de-dupes server-side instead of double-posting.
+const genIdemKey = (): string =>
+  (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
+    ? crypto.randomUUID()
+    : `idem-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
 const fieldStyle = {
   backgroundColor: 'var(--bg-surface)',
   borderColor: 'var(--border-soft)',
@@ -74,6 +87,16 @@ const TrashIcon: React.FC<{ size?: number }> = ({ size = 15 }) => (
   </svg>
 );
 
+const CalculatorIcon: React.FC<{ size?: number }> = ({ size = 18 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <rect x="4" y="2" width="16" height="20" rx="2" />
+    <line x1="8" y1="6" x2="16" y2="6" />
+    <line x1="8" y1="10" x2="8" y2="10" /><line x1="12" y1="10" x2="12" y2="10" /><line x1="16" y1="10" x2="16" y2="10" />
+    <line x1="8" y1="14" x2="8" y2="14" /><line x1="12" y1="14" x2="12" y2="14" /><line x1="16" y1="14" x2="16" y2="18" />
+    <line x1="8" y1="18" x2="12" y2="18" />
+  </svg>
+);
+
 const NumberField: React.FC<{
   label: string;
   value: string;
@@ -82,21 +105,25 @@ const NumberField: React.FC<{
   placeholder?: string;
   min?: number;
   error?: string;
-}> = ({ label, value, onChange, sub, placeholder, min = 0, error }) => (
+  trailing?: React.ReactNode;
+}> = ({ label, value, onChange, sub, placeholder, min = 0, error, trailing }) => (
   <label className="flex flex-col gap-1">
     <span className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
       {label}
     </span>
-    <input
-      type="number"
-      inputMode="decimal"
-      min={min}
-      value={value}
-      placeholder={placeholder ?? '0'}
-      onChange={(e) => onChange(e.target.value)}
-      className="rounded-lg border px-3 py-2 text-sm font-mono tabular-nums"
-      style={{ ...fieldStyle, borderColor: error ? 'var(--state-danger-fg)' : fieldStyle.borderColor }}
-    />
+    <div className="flex items-center gap-2">
+      <input
+        type="number"
+        inputMode="decimal"
+        min={min}
+        value={value}
+        placeholder={placeholder ?? '0'}
+        onChange={(e) => onChange(e.target.value)}
+        className="min-w-0 flex-1 rounded-lg border px-3 py-2 text-sm font-mono tabular-nums"
+        style={{ ...fieldStyle, borderColor: error ? 'var(--state-danger-fg)' : fieldStyle.borderColor }}
+      />
+      {trailing}
+    </div>
     {error ? (
       <span className="text-[11px]" style={{ color: 'var(--state-danger-fg)' }}>{error}</span>
     ) : sub ? (
@@ -105,77 +132,90 @@ const NumberField: React.FC<{
   </label>
 );
 
-/** Inline fuel-on-credit recorder for one DU — searches a credit/fleet customer
- *  or vehicle, prices from the DU's own fuels, and saves each chit immediately. */
-const CreditSaleForm: React.FC<{
+/** Inline customer-sale recorder for one DU. A single client-side picker (cached
+ *  customers + vehicles — no server search) drives both channels: Credit (a
+ *  station receivable) and OMC card (settled to the CMS account, optional
+ *  customer). Prices from the DU's own fuels; each line saves immediately. */
+const CustomerSaleForm: React.FC<{
   duProducts: DuProduct[];
   customers: any[];
-  existing: CreditLine[];
+  allVehicles: any[];
+  credit: CreditLine[];
+  omc: CreditLine[];
   busy: boolean;
-  onAdd: (line: Omit<CreditLine, 'id'>) => Promise<void>;
-  onRemove: (id: string) => Promise<void>;
-}> = ({ duProducts, customers, existing, busy, onAdd, onRemove }) => {
+  onAdd: (channel: 'credit' | 'omc', line: Omit<CreditLine, 'id'>, idempotencyKey: string) => Promise<void>;
+  onRemove: (channel: 'credit' | 'omc', id: string) => Promise<void>;
+}> = ({ duProducts, customers, allVehicles, credit, omc, busy, onAdd, onRemove }) => {
   const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState('');
-  const [results, setResults] = useState<any[]>([]);
-  const [showResults, setShowResults] = useState(false);
+  const [channel, setChannel] = useState<'credit' | 'omc'>('credit');
+  const [selectValue, setSelectValue] = useState('');
   const [customerId, setCustomerId] = useState('');
   const [customerName, setCustomerName] = useState('');
+  const [customerType, setCustomerType] = useState<string | null>(null);
   const [vehicleId, setVehicleId] = useState<string | null>(null);
+  const [vehicleLabel, setVehicleLabel] = useState('');
   const [productId, setProductId] = useState('');
   const [qty, setQty] = useState('');
   const [price, setPrice] = useState('');
   const [amount, setAmount] = useState('');
   const [notes, setNotes] = useState('');
   const [adding, setAdding] = useState(false);
+  // Idempotency key for the line being added — kept across a failed retry
+  // (same key → server de-dupes), cleared on success or any edit.
+  const idemKeyRef = useRef<string | null>(null);
 
   const reset = () => {
-    setQuery(''); setResults([]); setShowResults(false);
-    setCustomerId(''); setCustomerName(''); setVehicleId(null);
+    idemKeyRef.current = null;
+    setSelectValue(''); setChannel('credit');
+    setCustomerId(''); setCustomerName(''); setCustomerType(null); setVehicleId(null); setVehicleLabel('');
     setProductId(''); setQty(''); setPrice(''); setAmount(''); setNotes('');
   };
 
-  // Combined search: vehicle registration OR customer name (credit/fleet only).
-  useEffect(() => {
-    if (customerId) { setShowResults(false); return; }
-    const q = query.trim();
-    if (!q) { setResults([]); setShowResults(false); return; }
-    let active = true;
-    const t = window.setTimeout(async () => {
-      let vehicles: any[] = [];
-      try { vehicles = await txService.searchVehicles(q); } catch { vehicles = []; }
-      vehicles = vehicles.filter((v: any) => !v.isPrepaid && v.customerType !== 'Regular');
-      const ql = q.toLowerCase();
-      const custMatches = customers.filter((c: any) => (c.name || '').toLowerCase().includes(ql));
-      if (!active) return;
-      setResults([
-        ...vehicles.map((v: any) => ({ kind: 'vehicle', ...v })),
-        ...custMatches.map((c: any) => ({ kind: 'customer', id: c.id, customerId: c.id, customerName: c.name })),
-      ]);
-      setShowResults(true);
-    }, 250);
-    return () => { active = false; window.clearTimeout(t); };
-  }, [query, customerId, customers]);
-
-  const selectResult = (r: any) => {
-    setCustomerId(r.customerId);
-    setCustomerName(r.customerName);
-    if (r.kind === 'vehicle') {
-      setVehicleId(r.id);
-      setQuery(r.registrationNumber);
-      const match = duProducts.find((p) => p.id === r.defaultProductId);
-      if (match) {
-        setProductId(match.id);
-        if (match.price > 0) setPrice(match.price.toFixed(2));
-      }
-    } else {
-      setVehicleId(null);
-      setQuery(r.customerName);
+  // Combined, cached option list: vehicles (scoped to the passed customers) + customers.
+  const options = useMemo(() => {
+    const customerIds = new Set(customers.map((c: any) => c.id));
+    const opts: { value: string; label: string; sublabel?: string }[] = [];
+    for (const v of allVehicles) {
+      if (!customerIds.has(v.customerId)) continue;
+      const parts = [v.customerName, v.customerType, v.defaultProductName].filter(Boolean);
+      opts.push({ value: `v:${v.id}`, label: v.registrationNumber, sublabel: parts.join(' · ') });
     }
-    setShowResults(false);
+    for (const c of customers) opts.push({ value: `c:${c.id}`, label: c.name, sublabel: c.customerType });
+    return opts;
+  }, [allVehicles, customers]);
+
+  const defaultChannelFor = (cust: any): 'credit' | 'omc' =>
+    (cust?.customerType === 'Fleet' && cust?.isPrepaid) ? 'omc' : 'credit';
+
+  const onSelect = (value: string) => {
+    idemKeyRef.current = null;
+    setSelectValue(value);
+    if (value.startsWith('v:')) {
+      const v = allVehicles.find((x: any) => `v:${x.id}` === value);
+      if (!v) return;
+      const cust = customers.find((c: any) => c.id === v.customerId);
+      setCustomerId(v.customerId);
+      setCustomerName(v.customerName ?? 'Customer');
+      setCustomerType(v.customerType ?? cust?.customerType ?? null);
+      setChannel(defaultChannelFor(cust ?? { customerType: v.customerType, isPrepaid: v.isPrepaid }));
+      setVehicleId(v.id);
+      setVehicleLabel(v.registrationNumber);
+      const match = duProducts.find((p) => p.id === v.defaultProductId);
+      if (match) { setProductId(match.id); if (match.price > 0) setPrice(match.price.toFixed(2)); }
+    } else if (value.startsWith('c:')) {
+      const id = value.slice(2);
+      const c = customers.find((x: any) => x.id === id);
+      setCustomerId(id);
+      setCustomerName(c?.name ?? 'Customer');
+      setCustomerType(c?.customerType ?? null);
+      setChannel(defaultChannelFor(c));
+      setVehicleId(null);
+      setVehicleLabel('');
+    }
   };
 
   const onProduct = (pid: string) => {
+    idemKeyRef.current = null;
     setProductId(pid);
     const p = duProducts.find((x) => x.id === pid);
     const pr = p && p.price > 0 ? p.price : 0;
@@ -184,32 +224,38 @@ const CreditSaleForm: React.FC<{
     if (q > 0 && pr > 0) setAmount((q * pr).toFixed(2));
   };
   const onQty = (v: string) => {
+    idemKeyRef.current = null;
     setQty(v);
     const q = Number(v); const pr = Number(price);
     if (q > 0 && pr > 0) setAmount((q * pr).toFixed(2));
   };
   const onAmount = (v: string) => {
+    idemKeyRef.current = null;
     setAmount(v);
     const a = Number(v); const pr = Number(price);
     if (a > 0 && pr > 0) setQty((a / pr).toFixed(3));
   };
 
+  const isOmc = channel === 'omc';
   const submit = async () => {
     const amt = Number(amount);
-    if (!customerId || !(amt > 0)) return;
+    if ((!isOmc && !customerId) || !(amt > 0)) return;
     setAdding(true);
     try {
-      await onAdd({
-        customerId,
-        customerName,
+      const idempotencyKey = idemKeyRef.current ?? (idemKeyRef.current = genIdemKey());
+      await onAdd(channel, {
+        customerId: customerId || null,
+        customerName: customerId ? customerName : null,
+        customerType,
         vehicleId,
+        vehicleLabel: vehicleLabel || null,
         productId: productId || null,
         productName: duProducts.find((p) => p.id === productId)?.name ?? null,
         quantity: Number(qty) > 0 ? Number(qty) : null,
         unitPrice: price && Number(price) >= 0 ? Number(price) : null,
         amount: amt,
         notes: notes || null,
-      });
+      }, idempotencyKey);
       reset();
       setOpen(false);
     } finally {
@@ -217,41 +263,34 @@ const CreditSaleForm: React.FC<{
     }
   };
 
-  return (
-    <div>
-      <p className="mb-2 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
-        Fuel on credit
-      </p>
-
-      {existing.length > 0 && (
-        <ul className="mb-2 flex flex-col gap-1">
-          {existing.map((l, i) => (
-            <li
-              key={l.id ?? i}
-              className="flex items-center justify-between rounded-lg border px-3 py-2"
-              style={{ borderColor: 'var(--border-soft)' }}
-            >
+  const renderList = (label: string, lines: CreditLine[], ch: 'credit' | 'omc') =>
+    lines.length > 0 ? (
+      <div className="mb-2">
+        <div className="mb-1 flex items-center justify-between text-[11px] font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
+          <span>{label}</span>
+          <span className="font-mono tabular-nums" style={{ color: 'var(--text-strong)' }}>{inr(lines.reduce((s, l) => s + Number(l.amount || 0), 0))}</span>
+        </div>
+        <ul className="flex flex-col gap-1">
+          {lines.map((l, i) => (
+            <li key={l.id ?? i} className="flex items-center justify-between rounded-lg border px-3 py-2" style={{ borderColor: 'var(--border-soft)' }}>
               <div className="min-w-0">
                 <p className="truncate text-sm" style={{ color: 'var(--text-default)' }}>
-                  {l.customerName}
+                  {l.customerName || 'OMC card (no customer)'}{l.vehicleLabel ? ` · ${l.vehicleLabel}` : ''}
                 </p>
                 <p className="text-[11px]" style={{ color: 'var(--text-faint)' }}>
-                  {l.productName ?? 'Fuel'}
-                  {l.quantity ? ` · ${l.quantity}` : ''}
+                  {l.productName ?? 'Fuel'}{l.quantity ? ` · ${l.quantity}` : ''}{l.notes ? ` · ${l.notes}` : ''}
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                <span className="font-mono text-sm tabular-nums" style={{ color: 'var(--text-strong)' }}>
-                  {inr(l.amount)}
-                </span>
+                <span className="font-mono text-sm tabular-nums" style={{ color: 'var(--text-strong)' }}>{inr(l.amount)}</span>
                 {l.id && (
                   <button
                     type="button"
-                    onClick={() => onRemove(l.id!)}
+                    onClick={() => onRemove(ch, l.id!)}
                     disabled={busy}
                     className="grid h-7 w-7 place-items-center rounded-lg border disabled:opacity-50"
                     style={{ borderColor: 'var(--border-soft)', color: 'var(--state-danger-fg)' }}
-                    aria-label="Remove credit sale"
+                    aria-label="Remove sale"
                   >
                     <TrashIcon />
                   </button>
@@ -260,7 +299,17 @@ const CreditSaleForm: React.FC<{
             </li>
           ))}
         </ul>
-      )}
+      </div>
+    ) : null;
+
+  return (
+    <div>
+      <p className="mb-2 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
+        Customer sales
+      </p>
+
+      {renderList('Credit', credit, 'credit')}
+      {renderList('OMC card · CMS', omc, 'omc')}
 
       {!open ? (
         <button
@@ -269,42 +318,43 @@ const CreditSaleForm: React.FC<{
           className="w-full rounded-lg border border-dashed py-2 text-sm font-medium"
           style={{ borderColor: 'var(--border-soft)', color: 'var(--text-muted)' }}
         >
-          + Add credit sale
+          + Add customer sale
         </button>
       ) : (
         <div className="flex flex-col gap-2 rounded-lg border p-3" style={{ borderColor: 'var(--border-soft)' }}>
-          <div className="relative">
-            <input
-              type="text"
-              value={query}
-              placeholder="Search customer or vehicle no."
-              onChange={(e) => { setQuery(e.target.value); setCustomerId(''); }}
-              className="w-full rounded-lg border px-3 py-2 text-sm"
-              style={fieldStyle}
-            />
-            {showResults && results.length > 0 && (
-              <ul
-                className="absolute z-10 mt-1 max-h-48 w-full overflow-y-auto rounded-lg border shadow-lg"
-                style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-soft)' }}
+          {/* Channel toggle */}
+          <div className="flex gap-2">
+            {(['credit', 'omc'] as const).map((ch) => (
+              <button
+                key={ch}
+                type="button"
+                onClick={() => setChannel(ch)}
+                className="flex-1 rounded-lg border py-2 text-xs font-semibold"
+                style={{
+                  borderColor: channel === ch ? 'var(--brand-primary)' : 'var(--border-soft)',
+                  color: channel === ch ? 'var(--brand-primary)' : 'var(--text-muted)',
+                  backgroundColor: channel === ch ? 'var(--bg-surface-alt)' : 'var(--bg-surface)',
+                }}
               >
-                {results.map((r, i) => (
-                  <li key={`${r.kind}-${r.id}-${i}`}>
-                    <button
-                      type="button"
-                      onClick={() => selectResult(r)}
-                      className="flex w-full items-center justify-between px-3 py-2 text-left text-sm"
-                      style={{ color: 'var(--text-default)' }}
-                    >
-                      <span>{r.kind === 'vehicle' ? r.registrationNumber : r.customerName}</span>
-                      <span className="text-[11px]" style={{ color: 'var(--text-faint)' }}>
-                        {r.kind === 'vehicle' ? r.customerName : 'Customer'}
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
+                {ch === 'credit' ? 'Credit (receivable)' : 'OMC card → CMS'}
+              </button>
+            ))}
           </div>
+          {isOmc && (
+            <p className="text-[11px]" style={{ color: 'var(--text-faint)' }}>Settled to CMS by the Oil Company — not a receivable. Customer optional.</p>
+          )}
+
+          <label className="flex flex-col gap-1">
+            <span className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Customer or vehicle{isOmc ? ' (optional)' : ''}</span>
+            <Combobox
+              options={options}
+              value={selectValue}
+              onChange={onSelect}
+              placeholder="Select customer or vehicle…"
+              searchPlaceholder="Search name or vehicle no.…"
+              emptyMessage="No customer or vehicle found."
+            />
+          </label>
 
           <label className="flex flex-col gap-1">
             <span className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Fuel</span>
@@ -326,6 +376,18 @@ const CreditSaleForm: React.FC<{
             <NumberField label="Amount (₹)" value={amount} onChange={onAmount} />
           </div>
 
+          <label className="flex flex-col gap-1">
+            <span className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Remarks (driver, slip no.)</span>
+            <input
+              type="text"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="e.g. driver / slip ref"
+              className="rounded-lg border px-3 py-2 text-sm"
+              style={fieldStyle}
+            />
+          </label>
+
           <div className="flex gap-2">
             <button
               type="button"
@@ -338,11 +400,11 @@ const CreditSaleForm: React.FC<{
             <button
               type="button"
               onClick={submit}
-              disabled={adding || busy || !customerId || !(Number(amount) > 0)}
+              disabled={adding || busy || (!isOmc && !customerId) || !(Number(amount) > 0)}
               className="flex-1 rounded-lg py-2 text-sm font-semibold text-white disabled:opacity-60"
               style={{ backgroundColor: 'var(--brand-primary)' }}
             >
-              {adding ? 'Adding…' : 'Add'}
+              {adding ? 'Adding…' : isOmc ? 'Add OMC sale' : 'Add credit sale'}
             </button>
           </div>
         </div>
@@ -355,6 +417,7 @@ export const HandoverPanel: React.FC = () => {
   const assignmentQ = useMyAssignment();
   const productsQ = useProducts();
   const customersQ = useCustomers(true);
+  const vehiclesQ = useAllVehicles(true);
   const qc = useQueryClient();
 
   const data = assignmentQ.data;
@@ -367,10 +430,15 @@ export const HandoverPanel: React.FC = () => {
 
   const [forms, setForms] = useState<Record<string, DuFormState>>({});
   const [creditByDu, setCreditByDu] = useState<Record<string, CreditLine[]>>({});
+  const [omcByDu, setOmcByDu] = useState<Record<string, CreditLine[]>>({});
   const [merchRows, setMerchRows] = useState<{ productId: string; quantity: string }[]>([{ productId: '', quantity: '' }]);
   const [merchNonCash, setMerchNonCash] = useState('');
   const [merchSeeded, setMerchSeeded] = useState(false);
   const [ccBusy, setCcBusy] = useState(false);
+  // Cash denomination counter (bottom sheet): which DU's sheet is open + per-DU
+  // counts (parent-held so re-opening preserves them; future backend = drop-in).
+  const [sheetDuId, setSheetDuId] = useState<string | null>(null);
+  const [cashBreakdownByDu, setCashBreakdownByDu] = useState<Record<string, CashBreakdown>>({});
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -405,6 +473,12 @@ export const HandoverPanel: React.FC = () => {
       if (Object.keys(prev).length) return prev;
       const next: Record<string, CreditLine[]> = {};
       for (const du of dus) next[du.duId] = (du.creditSales || []) as CreditLine[];
+      return next;
+    });
+    setOmcByDu((prev) => {
+      if (Object.keys(prev).length) return prev;
+      const next: Record<string, CreditLine[]> = {};
+      for (const du of dus) next[du.duId] = (du.omcSales || []) as CreditLine[];
       return next;
     });
   }, [dus]);
@@ -454,11 +528,14 @@ export const HandoverPanel: React.FC = () => {
     setMerchSeeded(true);
   }, [merchHandoversQ.data, attendantId, merchSeeded]);
 
-  // Credit-eligible customers (non-prepaid Credit/Fleet).
+  // Customers pickable for on-account sales: all except legacy station-prepaid
+  // non-fleet wallets. Prepaid Fleet ARE included (OMC fleet cards → CMS).
   const creditCustomers = useMemo(
-    () => (customersQ.data || []).filter((c: any) => !c.isPrepaid && (c.customerType === 'Credit' || c.customerType === 'Fleet')),
+    () => (customersQ.data || []).filter((c: any) => c.customerType === 'Fleet' || !c.isPrepaid),
     [customersQ.data],
   );
+  // Cached vehicles (semi tier, persisted) — no server search.
+  const allVehicles = useMemo(() => vehiclesQ.data ?? [], [vehiclesQ.data]);
 
   const duProductsFor = (du: any): DuProduct[] =>
     Array.from(
@@ -481,40 +558,47 @@ export const HandoverPanel: React.FC = () => {
       [duId]: { ...f[duId], terminals: { ...f[duId].terminals, [terminalId]: { ...f[duId].terminals[terminalId], [field]: v } } },
     }));
 
-  const addCredit = async (duId: string, line: Omit<CreditLine, 'id'>) => {
+  const addCredit = async (duId: string, channel: 'credit' | 'omc', line: Omit<CreditLine, 'id'>, idempotencyKey?: string) => {
     if (!shiftId) return;
     setError(null);
     setCcBusy(true);
     try {
       const entry = await txService.recordCollection({
         shiftId,
-        customerId: line.customerId,
+        customerId: line.customerId || undefined,
         vehicleId: line.vehicleId,
         productId: line.productId,
         quantity: line.quantity,
         unitPrice: line.unitPrice,
         amount: line.amount,
-        paymentMethod: 'Credit',
+        paymentMethod: channel === 'omc' ? 'OMC' : 'Credit',
         attendantId: attendantId ?? null,
         duId,
         notes: line.notes ?? undefined,
-      });
-      setCreditByDu((c) => ({ ...c, [duId]: [...(c[duId] || []), { ...line, id: entry?.id }] }));
+      }, { idempotencyKey });
+      const stamped = { ...line, id: entry?.id };
+      if (channel === 'omc') setOmcByDu((c) => ({ ...c, [duId]: [...(c[duId] || []), stamped] }));
+      else setCreditByDu((c) => ({ ...c, [duId]: [...(c[duId] || []), stamped] }));
     } catch (e: any) {
-      setError(e?.message ?? 'Failed to add credit sale');
+      setError(e?.message ?? 'Failed to add sale');
     } finally {
       setCcBusy(false);
     }
   };
 
-  const removeCredit = async (duId: string, id: string) => {
+  const removeCredit = async (duId: string, channel: 'credit' | 'omc', id: string) => {
     setError(null);
     setCcBusy(true);
     try {
-      await txService.voidCreditSale(id);
-      setCreditByDu((c) => ({ ...c, [duId]: (c[duId] || []).filter((l) => l.id !== id) }));
+      if (channel === 'omc') {
+        await txService.voidOmcCardSale(id);
+        setOmcByDu((c) => ({ ...c, [duId]: (c[duId] || []).filter((l) => l.id !== id) }));
+      } else {
+        await txService.voidCreditSale(id);
+        setCreditByDu((c) => ({ ...c, [duId]: (c[duId] || []).filter((l) => l.id !== id) }));
+      }
     } catch (e: any) {
-      setError(e?.message ?? 'Failed to remove credit sale');
+      setError(e?.message ?? 'Failed to remove sale');
     } finally {
       setCcBusy(false);
     }
@@ -642,7 +726,8 @@ export const HandoverPanel: React.FC = () => {
     const cardTotal = du.terminals.reduce((s: number, t: any) => s + num(form.terminals[t.terminalId]?.card), 0);
     const upiTotal = du.terminals.reduce((s: number, t: any) => s + num(form.terminals[t.terminalId]?.upi), 0);
     const creditTotal = (creditByDu[du.duId] || []).reduce((s, l) => s + Number(l.amount || 0), 0);
-    declaredTotal += num(form.cash) + cardTotal + upiTotal + creditTotal;
+    const omcTotal = (omcByDu[du.duId] || []).reduce((s, l) => s + Number(l.amount || 0), 0);
+    declaredTotal += num(form.cash) + cardTotal + upiTotal + creditTotal + omcTotal;
   }
   const merchTotal = merchRows.reduce((s, r) => s + num(r.quantity) * Number(merchById[r.productId]?.sellingPrice || 0), 0);
   const merchCash = Math.max(0, merchTotal - num(merchNonCash));
@@ -666,6 +751,7 @@ export const HandoverPanel: React.FC = () => {
         if (!form) return null;
         const duProducts = duProductsFor(du);
         const credit = creditByDu[du.duId] || [];
+        const omc = omcByDu[du.duId] || [];
 
         return (
           <section
@@ -747,14 +833,16 @@ export const HandoverPanel: React.FC = () => {
               </div>
             )}
 
-            {/* Fuel on credit */}
-            <CreditSaleForm
+            {/* Customer sales — credit (receivable) + OMC card (→ CMS) */}
+            <CustomerSaleForm
               duProducts={duProducts}
               customers={creditCustomers}
-              existing={credit}
+              allVehicles={allVehicles}
+              credit={credit}
+              omc={omc}
               busy={ccBusy}
-              onAdd={(line) => addCredit(du.duId, line)}
-              onRemove={(id) => removeCredit(du.duId, id)}
+              onAdd={(channel, line, key) => addCredit(du.duId, channel, line, key)}
+              onRemove={(channel, id) => removeCredit(du.duId, channel, id)}
             />
           </section>
         );
@@ -838,6 +926,17 @@ export const HandoverPanel: React.FC = () => {
             value={forms[du.duId]?.cash ?? ''}
             onChange={(v) => setCash(du.duId, v)}
             error={num(forms[du.duId]?.cash) < 0 ? 'No negatives' : undefined}
+            trailing={
+              <button
+                type="button"
+                onClick={() => setSheetDuId(du.duId)}
+                className="grid h-[38px] w-[38px] flex-shrink-0 place-items-center rounded-lg border"
+                style={{ borderColor: 'var(--border-soft)', color: 'var(--brand-primary)' }}
+                aria-label="Count cash by denomination"
+              >
+                <CalculatorIcon />
+              </button>
+            }
           />
         ))}
         <p className="text-[11px]" style={{ color: 'var(--text-faint)' }}>Confirm physical cash at close.</p>
@@ -881,6 +980,15 @@ export const HandoverPanel: React.FC = () => {
           {saving ? 'Saving…' : 'Save handover'}
         </button>
       </div>
+
+      <CashCountSheet
+        open={sheetDuId != null}
+        onClose={() => setSheetDuId(null)}
+        breakdown={sheetDuId ? (cashBreakdownByDu[sheetDuId] || {}) : {}}
+        onBreakdownChange={(b) => { if (sheetDuId) setCashBreakdownByDu((prev) => ({ ...prev, [sheetDuId]: b })); }}
+        onApply={(t) => { if (sheetDuId) setCash(sheetDuId, String(t)); }}
+        currentValue={sheetDuId ? num(forms[sheetDuId]?.cash) : 0}
+      />
     </div>
   );
 };

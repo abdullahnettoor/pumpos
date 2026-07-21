@@ -6,7 +6,7 @@ compatibility_date = "2026-06-24"
 # its DNS record + cert) is provisioned by this route on deploy once the zone
 # exists. Until `pumpos.app` is purchased, deploy targets the dev custom domain.
 [[routes]]
-pattern = "console.pumpos.abdullahnettoor.com"
+pattern = "console.pumpos.app"
 custom_domain = true
 
 [assets]

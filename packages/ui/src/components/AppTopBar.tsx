@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import {
-  Receipt, Wallet, ShoppingCart, ShoppingBag, CreditCard, Users, Truck, Package, FileText,
+  Receipt, Wallet, ShoppingCart, ShoppingBag, CreditCard, Users, Truck, Package, FileText, Banknote,
   ArrowUpRight, LogOut, TriangleAlert, Clock, LayoutDashboard,
 } from 'lucide-react';
 import { resolveBusinessDate, type Station } from '@pump/shared';
@@ -122,6 +122,7 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
   const quickCreate: QuickCreateAction[] = useMemo(() => {
     const items: QuickCreateAction[] = [
       { id: 'expense', label: 'Expense', icon: <Receipt />, onSelect: () => openQuickEntry('expense') },
+      { id: 'income', label: 'Income', icon: <Banknote />, onSelect: () => openQuickEntry('income') },
       { id: 'collection', label: 'Collection', icon: <Wallet />, onSelect: () => openQuickEntry('collection') },
       { id: 'merchandise-sale', label: 'Merchandise sale', icon: <ShoppingBag />, onSelect: () => openQuickEntry('merchandise-sale') },
       { id: 'purchase', label: 'Purchase', icon: <ShoppingCart />, onSelect: () => openQuickEntry('purchase') },

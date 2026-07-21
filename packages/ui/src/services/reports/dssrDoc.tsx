@@ -56,6 +56,7 @@ const builders: Record<DssrSection, (d: any, cfg: DssrReportConfig) => React.Rea
     const col = d.collections || {};
     const credit = d.credit || {};
     const exp = d.expenses || {};
+    const inc = d.income || {};
     const pur = d.purchases || {};
     const sup = d.supplierPayments || {};
     const merch = d.merchandise || {};
@@ -75,6 +76,7 @@ const builders: Record<DssrSection, (d: any, cfg: DssrReportConfig) => React.Rea
           <ReconRow label="Drawer Expenses" value={inr(exp.drawer)} />
           <ReconRow label="Business Expenses" value={inr(exp.business)} />
           <ReconRow label="Total Expenses" value={inr(exp.total)} color={C.danger} />
+          {Number(inc.total || 0) > 0 && <ReconRow label="Other Income (Cash / Bank)" value={`${inr(inc.drawer)} / ${inr(inc.business)}`} color={C.green} />}
         </View>
       </View>
     );

@@ -3,13 +3,14 @@ import { useFinancialAccounts } from '../../query/hooks.js';
 import { Combobox } from './Combobox.js';
 import { inr } from '../../utils/format.js';
 
-type AccountType = 'CASH_IN_HAND' | 'PETTY_CASH' | 'BANK' | 'MERCHANT_CLEARING' | 'OWNER';
+type AccountType = 'CASH_IN_HAND' | 'PETTY_CASH' | 'BANK' | 'MERCHANT_CLEARING' | 'CMS' | 'OWNER';
 
 const TYPE_LABEL: Record<AccountType, string> = {
   CASH_IN_HAND: 'Cash in Hand',
   PETTY_CASH: 'Petty Cash',
   BANK: 'Bank',
   MERCHANT_CLEARING: 'Card/UPI Clearing',
+  CMS: 'OMC Card Settlement',
   OWNER: 'Owner',
 };
 
@@ -30,7 +31,7 @@ export interface AccountSelectProps {
  */
 export const AccountSelect: React.FC<AccountSelectProps> = ({ stationId, value, onChange, types, disabled, autoLabel = 'Auto (by default)' }) => {
   const { data: accounts } = useFinancialAccounts(stationId);
-  const allowed = types ?? (['CASH_IN_HAND', 'PETTY_CASH', 'BANK', 'OWNER'] as AccountType[]);
+  const allowed = types ?? (['CASH_IN_HAND', 'PETTY_CASH', 'BANK', 'CMS', 'OWNER'] as AccountType[]);
   const opts = (accounts || [])
     .filter((a: any) => allowed.includes(a.accountType) && a.isActive !== false)
     .map((a: any) => ({ value: a.id, label: a.name, sublabel: `${TYPE_LABEL[a.accountType as AccountType] ?? a.accountType} · ${inr(a.balance)}` }));
