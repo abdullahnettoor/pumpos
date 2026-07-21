@@ -28,6 +28,14 @@ export interface DssrExpense {
   amount: number;
   status: string;
 }
+/** Other/indirect income (rentals, commission, scrap, interest). */
+export interface DssrIncome {
+  affectsDrawer: boolean;
+  receivedInto: string;
+  amount: number;
+  status: string;
+  categoryName?: string | null;
+}
 export interface DssrPurchase {
   amount: number;
 }
@@ -75,6 +83,7 @@ export interface DssrSourceData {
   shiftSummaries: DssrShiftSummary[];
   collections: DssrCollection[];
   expenses: DssrExpense[];
+  income: DssrIncome[];
   purchases: DssrPurchase[];
   supplierPayments: DssrSupplierPayment[];
   sales: DssrSale[];

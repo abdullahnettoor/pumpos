@@ -39,6 +39,7 @@ function source(): DssrSourceData {
     ],
     collections: [{ paymentMethod: 'Cash', amount: 2000 }, { paymentMethod: 'UPI', amount: 1000 }],
     expenses: [{ affectsDrawer: true, paidFrom: 'SHIFT_CASH', amount: 300, status: 'ACTIVE' }, { affectsDrawer: false, paidFrom: 'BANK', amount: 5000, status: 'ACTIVE' }, { affectsDrawer: true, paidFrom: 'SHIFT_CASH', amount: 999, status: 'VOIDED' }],
+    income: [{ affectsDrawer: true, receivedInto: 'SHIFT_CASH', amount: 500, status: 'ACTIVE', categoryName: 'Tanker Rental' }, { affectsDrawer: false, receivedInto: 'BANK', amount: 1500, status: 'ACTIVE', categoryName: 'Commission' }, { affectsDrawer: true, receivedInto: 'SHIFT_CASH', amount: 999, status: 'VOIDED', categoryName: 'Scrap Sale' }],
     purchases: [{ amount: 450000 }],
     supplierPayments: [{ affectsDrawer: false, paidFrom: 'BANK', amount: 200000 }],
     sales: [{ paymentMethod: 'Cash', saleType: 'Product', totalAmount: 500 }, { paymentMethod: 'Credit', saleType: 'Product', totalAmount: 1180 }],
@@ -76,6 +77,9 @@ describe('GenerateDssr', () => {
       expect(d.credit.fleetCredit).toBe(4000);
       expect(d.expenses.drawer).toBe(300); // voided excluded
       expect(d.expenses.business).toBe(5000);
+      expect(d.income.drawer).toBe(500); // voided excluded
+      expect(d.income.business).toBe(1500);
+      expect(d.income.total).toBe(2000);
       expect(d.purchases.total).toBe(450000);
       expect(d.supplierPayments.bank).toBe(200000);
       expect(d.fuelStockVariance[0].status).toBe('Loss');
@@ -90,7 +94,8 @@ describe('GenerateDssr', () => {
       expect(d.pnl.cogs).toBe(87040);
       expect(d.pnl.grossMargin).toBe(12640);
       expect(d.pnl.expenses).toBe(5300);
-      expect(d.pnl.netProfit).toBe(7340);
+      expect(d.pnl.otherIncome).toBe(2000);
+      expect(d.pnl.netProfit).toBe(9340);
       // Per-product margin (FB3): fuel 98000 - 86240 = 11760; merch 1680 - 800 = 880.
       expect(d.pnl.byProduct).toHaveLength(2);
       const fuelRow = d.pnl.byProduct.find((r: any) => r.kind === 'fuel');
