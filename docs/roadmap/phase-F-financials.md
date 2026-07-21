@@ -1,5 +1,16 @@
 # Phase F — Financials (Money Accounts + P&L)
 
+> **Status: 🟡 Mostly done (shipped + deployed).** Layer A **FA1–FA7** (accounts +
+> signed `ledger_entries`, live posting, shift-close posting, transfers, merchant
+> settlement + MDR, statements, Accounts UI), Layer B **FB1–FB3** (product
+> `cost_basis`, DSSR P&L, per-product margin/trend), and **FI1–FI3** (Other Income)
+> are all built. Also shipped on top: a **`CMS` money-account type**, **OMC
+> fleet-card sales** posting money-in to CMS (with per-line customer/vehicle/remarks
+> traceability on the CMS statement), and **supplier payment pay-from-CMS**.
+> **Remaining:** FI4 (GST-on-income), a **Void action in the Expenses/Income UI**
+> (backend `VoidExpense`/`VoidIncome` + routes + client methods exist; no UI trigger
+> yet), and FG1 GL (deferred by design).
+
 **Goal:** a real financial picture on top of the operational data — first the
 **money layer** (where cash actually is: drawer, petty cash, banks, card/UPI
 in-transit, owner), then the **P&L layer** (revenue − COGS − expenses). A path to

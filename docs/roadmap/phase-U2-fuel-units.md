@@ -1,5 +1,12 @@
 # Phase U2 — Unit-aware fuels (kg for CNG / Auto-LPG)
 
+> **Status: 🟡 Mostly done (implemented; QA pass pending).** Despite the plan-style
+> wording below, this is substantially built: `projectShiftSummary` carries `unit` on
+> nozzle readings / `fuelByProduct` / credit lines, `ShiftSummaryView` handles L/kg,
+> the Dashboard + ReportsOverview render per-unit subtotals, and `formatQty(value,
+> decimals, unit?)` takes a unit. **Remaining:** Phase 5 QA — verify onboarding/setup
+> unit labels and render a real mixed-unit (CNG kg) station end to end.
+
 Make fuel quantities unit-aware across PumpOS so a CNG / Auto-LPG station reads in
 **kg** while liquid fuels stay in **L**. Petrol/Diesel are unaffected.
 
