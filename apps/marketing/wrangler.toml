@@ -5,7 +5,7 @@ compatibility_date = "2026-06-24"
 # deploy (zone must be active in the account). Until pumpos.app is purchased,
 # this targets the dev apex.
 [[routes]]
-pattern = "pumpos.abdullahnettoor.com"
+pattern = "pumpos.app"
 custom_domain = true
 
 [assets]

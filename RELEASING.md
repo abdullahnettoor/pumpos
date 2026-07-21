@@ -56,17 +56,17 @@ Preview a bump without writing anything: `npm run release -- patch --dry`.
 
 Goal: isolate prod data from the current (dev) Supabase.
 
-- [ ] Create the production Supabase project.
-- [ ] Run **migrate** workflow → target `prod` (needs secret
+- [x] Create the production Supabase project.
+- [x] Run **migrate** workflow → target `prod` (needs secret
       `PROD_DIRECT_DATABASE_URL`, the direct 5432 URL — not the pooler).
-- [ ] Apply RLS/policy SQL (`supabase/migrations/*.sql`) to prod.
-- [ ] `wrangler hyperdrive create pumpos-prod --connection-string "<prod direct URL>"`.
-- [ ] Uncomment `[env.production]` in
+- [x] Apply RLS/policy SQL (`supabase/migrations/*.sql`) to prod.
+- [x] `wrangler hyperdrive create pumpos-prod --connection-string "<prod direct URL>"`.
+- [x] Uncomment `[env.production]` in
       [`apps/api/wrangler.toml`](apps/api/wrangler.toml); paste the Hyperdrive id.
-- [ ] `wrangler secret put SUPABASE_JWT_SECRET --env production`.
-- [ ] Repo secrets: `PROD_SUPABASE_URL`, `PROD_SUPABASE_PUBLISHABLE_KEY`,
+- [x] `wrangler secret put SUPABASE_JWT_SECRET --env production`.
+- [x] Repo secrets: `PROD_SUPABASE_URL`, `PROD_SUPABASE_PUBLISHABLE_KEY`,
       `PROD_API_URL`.
-- [ ] Repo variable `API_DEPLOY_ENV=production` (tag deploys then hit the prod
+- [x] Repo variable `API_DEPLOY_ENV=production` (tag deploys then hit the prod
       API worker).
 
 Until this is done, a tag deploys to the **current** Supabase + API and the

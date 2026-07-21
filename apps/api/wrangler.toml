@@ -61,7 +61,7 @@ required = [ "SUPABASE_JWT_SECRET" ]
 [env.production]
 name = "pumpos-api-prod"
 [[env.production.routes]]
-pattern = "api-pumpos.abdullahnettoor.com"
+pattern = "api.pumpos.app"
 custom_domain = true
 
 [[env.production.hyperdrive]]
