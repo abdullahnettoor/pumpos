@@ -52,32 +52,53 @@ export const CashCountSheet: React.FC<CashCountSheetProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col justify-end">
-      <div className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={onClose} aria-hidden />
+      <div className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.5)' }} onClick={onClose} aria-hidden />
       <div
         role="dialog"
         aria-label="Cash denomination counter"
-        className="relative z-10 flex max-h-[85vh] flex-col rounded-t-2xl border-t"
-        style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-soft)' }}
+        className="relative z-10 flex max-h-[92vh] flex-col rounded-t-2xl"
+        style={{ backgroundColor: 'var(--bg-surface)', boxShadow: '0 -8px 32px rgba(0,0,0,0.24)' }}
       >
-        <div className="flex items-center justify-between border-b px-4 py-3" style={{ borderColor: 'var(--border-soft)' }}>
-          <span className="text-sm font-semibold" style={{ color: 'var(--text-strong)' }}>{title}</span>
+        {/* Grab handle */}
+        <div className="flex justify-center pb-1 pt-2.5">
+          <span className="h-1 w-10 rounded-full" style={{ backgroundColor: 'var(--border-strong)' }} />
+        </div>
+
+        {/* Header */}
+        <div className="flex items-start justify-between px-4 pb-3 pt-1">
+          <div>
+            <h3 className="text-[15px] font-semibold" style={{ color: 'var(--text-strong)' }}>{title}</h3>
+            <p className="text-[11px]" style={{ color: 'var(--text-faint)' }}>Enter the number of notes &amp; coins</p>
+          </div>
           <button
             type="button"
             onClick={onClose}
-            className="grid h-8 w-8 place-items-center rounded-lg text-lg"
-            style={{ color: 'var(--text-muted)' }}
+            className="-mr-1 grid h-9 w-9 place-items-center rounded-full text-base"
+            style={{ backgroundColor: 'var(--bg-surface-alt)', color: 'var(--text-muted)' }}
             aria-label="Close"
           >
             ✕
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-4 py-2">
+        {/* Denomination rows — all shown, no inner scroll */}
+        <div className="flex flex-col gap-1.5 px-4 pb-1">
           {DENOMS.map((d) => {
             const count = Number(breakdown[String(d)]) || 0;
+            const active = count > 0;
             return (
-              <div key={d} className="grid grid-cols-[56px_1fr_96px] items-center gap-3 border-b py-2" style={{ borderColor: 'var(--border-soft)' }}>
-                <span className="text-sm font-semibold" style={{ color: 'var(--text-strong)' }}>₹{d}</span>
+              <div
+                key={d}
+                className="flex items-center gap-2.5 rounded-xl border px-2.5 py-1.5"
+                style={{ borderColor: active ? 'var(--brand-primary)' : 'var(--border-soft)', backgroundColor: active ? 'var(--bg-surface-alt)' : 'var(--bg-surface)' }}
+              >
+                <span
+                  className="grid h-8 w-12 flex-shrink-0 place-items-center rounded-lg text-[13px] font-bold tabular-nums"
+                  style={{ backgroundColor: active ? 'var(--brand-primary)' : 'var(--bg-surface-alt)', color: active ? '#fff' : 'var(--text-muted)' }}
+                >
+                  ₹{d}
+                </span>
+                <span className="text-xs" style={{ color: 'var(--text-faint)' }}>×</span>
                 <input
                   type="number"
                   inputMode="numeric"
@@ -87,35 +108,40 @@ export const CashCountSheet: React.FC<CashCountSheetProps> = ({
                   placeholder="0"
                   onChange={(e) => setCount(d, e.target.value)}
                   aria-label={`Count of ₹${d}`}
-                  className="rounded-lg border px-3 py-2 text-right text-sm font-mono tabular-nums"
+                  className="w-16 rounded-lg border py-1.5 text-center text-[15px] font-mono tabular-nums"
                   style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-soft)', color: 'var(--text-strong)' }}
                 />
-                <span className="text-right text-sm font-mono tabular-nums" style={{ color: count > 0 ? 'var(--text-default)' : 'var(--text-faint)' }}>
-                  {inr(d * count)}
+                <span
+                  className="flex-1 text-right text-sm font-mono tabular-nums"
+                  style={{ color: active ? 'var(--text-strong)' : 'var(--text-faint)' }}
+                >
+                  {active ? inr(d * count) : '—'}
                 </span>
               </div>
             );
           })}
         </div>
 
+        {/* Footer */}
         <div
-          className="flex flex-col gap-2 border-t px-4 pt-3"
-          style={{ borderColor: 'var(--border-soft)', paddingBottom: 'calc(12px + env(safe-area-inset-bottom))' }}
+          className="mt-1 flex flex-col gap-2 px-4 pt-2"
+          style={{ paddingBottom: 'calc(12px + env(safe-area-inset-bottom))' }}
         >
           {hasMismatch && (
             <p className="text-[11px]" style={{ color: 'var(--state-warning-fg)' }}>
-              Field shows {inr(currentValue!)} — Apply to replace with the counted total.
+              Field shows {inr(currentValue!)} — Apply to replace it.
             </p>
           )}
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-semibold" style={{ color: 'var(--text-strong)' }}>Total</span>
-            <span className="text-base font-bold font-mono tabular-nums" style={{ color: 'var(--text-strong)' }}>{inr(total)}</span>
+          <div className="flex items-center justify-between rounded-xl px-3 py-2.5" style={{ backgroundColor: 'var(--bg-surface-alt)' }}>
+            <span className="text-[13px] font-medium" style={{ color: 'var(--text-muted)' }}>Total counted</span>
+            <span className="font-mono text-lg font-bold tabular-nums" style={{ color: 'var(--text-strong)' }}>{inr(total)}</span>
           </div>
           <div className="flex gap-2">
             <button
               type="button"
               onClick={() => onBreakdownChange({})}
-              className="rounded-xl border px-4 py-3 text-sm font-medium"
+              disabled={total === 0}
+              className="rounded-xl border px-5 py-3 text-sm font-medium disabled:opacity-40"
               style={{ borderColor: 'var(--border-soft)', color: 'var(--text-muted)' }}
             >
               Clear
