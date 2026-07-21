@@ -18,6 +18,7 @@ const TXN_LABEL: Record<string, string> = {
   'Credit Sale': 'Credit sale',
   Collection: 'Payment received',
   Adjustment: 'Adjustment',
+  'Opening Balance': 'Opening balance',
   Purchase: 'Purchase',
   Payment: 'Payment made',
 };

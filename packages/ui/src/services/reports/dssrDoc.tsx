@@ -13,7 +13,7 @@ export { DEFAULT_DSSR_CONFIG, DSSR_SECTION_LABELS } from './reportConfig.js';
 const ReconRow = ({ label, value, color }: { label: string; value: string; color?: string }) => (
   <View style={s.reconRow}>
     <Text style={{ fontSize: 8.5, color: C.body }}>{label}</Text>
-    <Text style={{ fontSize: 8.5, fontFamily: 'IBM Plex Mono', color: color ?? C.ink, fontWeight: 700 }}>{value}</Text>
+    <Text style={{ fontSize: 8.5, fontFamily: 'Geist Mono', color: color ?? C.ink, fontWeight: 700 }}>{value}</Text>
   </View>
 );
 

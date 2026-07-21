@@ -14,8 +14,12 @@ import {
 import {
   CreateCustomer,
   UpdateCustomer,
+  SetCustomerOpeningBalance,
   CreateSupplier,
   UpdateSupplier,
+  SetSupplierOpeningBalance,
+  err,
+  validationError,
   AddVehicle,
   UpdateVehicle,
   RecordExpense,
@@ -144,9 +148,24 @@ transactionsRouter.post('/suppliers', async (c) => {
     return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } }, 403);
   }
   const body = await c.req.json().catch(() => ({}));
-  const result = await runInTransaction(c.var.db, (tx, events) =>
-    new CreateSupplier({ repository: new DrizzleSupplierRepository(tx), events }).execute(body, buildContext(user)),
-  );
+  const openingDue = Number(body?.openingDue ?? 0);
+  const openingStationId: string | undefined = body?.openingStationId ?? body?.stationId ?? undefined;
+  const clock = openingDue > 0 && openingStationId ? await loadStationClock(c.var.db, openingStationId) : {};
+  const result = await runInTransaction(c.var.db, async (tx, events) => {
+    const created = await new CreateSupplier({ repository: new DrizzleSupplierRepository(tx), events }).execute(body, buildContext(user));
+    if (!created.success || !(openingDue > 0)) return created;
+    if (!openingStationId) return err(validationError('A station is required to record an opening balance.'));
+    const ob = await new SetSupplierOpeningBalance({
+      supplierTxns: new DrizzleSupplierTransactionRepository(tx),
+      suppliers: new DrizzleSupplierRepository(tx),
+      businessDays: new DrizzleBusinessDayRepository(tx),
+      events,
+    }).execute(
+      { supplierId: created.data.id, amount: openingDue, stationId: openingStationId, asOfDate: body?.openingAsOf },
+      buildContext(user, { stationId: openingStationId, ...clock }),
+    );
+    return ob.success ? created : ob;
+  });
   return sendResult(c, result);
 });
 
@@ -242,9 +261,24 @@ transactionsRouter.post('/customers', async (c) => {
     return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } }, 403);
   }
   const body = await c.req.json().catch(() => ({}));
-  const result = await runInTransaction(c.var.db, (tx, events) =>
-    new CreateCustomer({ repository: new DrizzleCustomerRepository(tx), events }).execute(body, buildContext(user)),
-  );
+  const openingDue = Number(body?.openingDue ?? 0);
+  const openingStationId: string | undefined = body?.openingStationId ?? body?.stationId ?? undefined;
+  const clock = openingDue > 0 && openingStationId ? await loadStationClock(c.var.db, openingStationId) : {};
+  const result = await runInTransaction(c.var.db, async (tx, events) => {
+    const created = await new CreateCustomer({ repository: new DrizzleCustomerRepository(tx), events }).execute(body, buildContext(user));
+    if (!created.success || !(openingDue > 0)) return created;
+    if (!openingStationId) return err(validationError('A station is required to record an opening balance.'));
+    const ob = await new SetCustomerOpeningBalance({
+      ledger: new DrizzleCustomerLedgerRepository(tx),
+      customers: new DrizzleCustomerRepository(tx),
+      businessDays: new DrizzleBusinessDayRepository(tx),
+      events,
+    }).execute(
+      { customerId: created.data.id, amount: openingDue, stationId: openingStationId, asOfDate: body?.openingAsOf },
+      buildContext(user, { stationId: openingStationId, ...clock }),
+    );
+    return ob.success ? created : ob;
+  });
   return sendResult(c, result);
 });
 

@@ -78,7 +78,7 @@ export const SupplierStatementDrawer: React.FC<SupplierStatementDrawerProps> = (
                 emptyText="No transaction ledger events found."
                 resolve={(tx: any) => {
                   const type = tx.transactionType;
-                  const direction: 'debit' | 'credit' = type === 'Purchase' || type === 'Adjustment' ? 'debit' : 'credit';
+                  const direction: 'debit' | 'credit' = type === 'Purchase' || type === 'Adjustment' || type === 'Opening Balance' ? 'debit' : 'credit';
                   return {
                     id: tx.id,
                     date: tx.createdAt,

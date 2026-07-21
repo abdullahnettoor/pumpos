@@ -59,8 +59,8 @@ If there is tension between beauty and speed, preserve speed.
 
 ## Typography And Visual Defaults
 
-- Primary font: `IBM Plex Sans`
-- Numeric/data font: `IBM Plex Mono`
+- Primary font: `Plus Jakarta Sans`
+- Numeric/data font: `Geist Mono`
 - Default body size: `14px`
 - Dense tables may use `12px` to `13px`
 - Compact button heights: `30px`, `36px`, `40px`

@@ -485,7 +485,7 @@ export class CloudTransactionService {
     return request<any>(`/transactions/suppliers?activeOnly=${activeOnly}`);
   }
 
-  async createSupplier(payload: { name: string; phone?: string | null; isActive?: boolean; metadata?: { gstin?: string | null; pan?: string | null; tradeName?: string | null; billingAddress?: string | null } | null }): Promise<any> {
+  async createSupplier(payload: { name: string; phone?: string | null; isActive?: boolean; metadata?: { gstin?: string | null; pan?: string | null; tradeName?: string | null; billingAddress?: string | null } | null; openingDue?: number; openingAsOf?: string; openingStationId?: string | null }): Promise<any> {
     return request<any>('/transactions/suppliers', {
       method: 'POST',
       body: JSON.stringify(payload),
@@ -509,7 +509,7 @@ export class CloudTransactionService {
     return request<any>(`/transactions/customers?activeOnly=${activeOnly}`);
   }
 
-  async createCustomer(payload: { name: string; phone?: string | null; customerType: 'Regular' | 'Credit' | 'Fleet'; creditLimit?: number | null; fleetCode?: string | null; isPrepaid?: boolean; settlementCycle?: 'OPEN' | 'EOD'; isActive?: boolean; metadata?: { gstin?: string | null; stateCode?: string | null; pan?: string | null; tradeName?: string | null; billingAddress?: string | null } | null }): Promise<any> {
+  async createCustomer(payload: { name: string; phone?: string | null; customerType: 'Regular' | 'Credit' | 'Fleet'; creditLimit?: number | null; fleetCode?: string | null; isPrepaid?: boolean; settlementCycle?: 'OPEN' | 'EOD'; isActive?: boolean; metadata?: { gstin?: string | null; stateCode?: string | null; pan?: string | null; tradeName?: string | null; billingAddress?: string | null } | null; openingDue?: number; openingAsOf?: string; openingStationId?: string | null }): Promise<any> {
     return request<any>('/transactions/customers', {
       method: 'POST',
       body: JSON.stringify(payload),

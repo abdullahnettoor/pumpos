@@ -32,6 +32,10 @@ export const CustomerFormDrawer: React.FC<CustomerFormDrawerProps> = ({ isOpen, 
   const invalidateOperational = useInvalidateOperational();
   const toast = useToast();
   const [drawerError, setDrawerError] = useState<string | null>(null);
+  // Opening receivable at onboarding — local state (kept out of the shared zod
+  // schema). Only offered on create for non-prepaid Credit/Fleet customers.
+  const [openingDue, setOpeningDue] = useState('');
+  const [openingAsOf, setOpeningAsOf] = useState('');
 
   const {
     register,
@@ -56,6 +60,7 @@ export const CustomerFormDrawer: React.FC<CustomerFormDrawerProps> = ({ isOpen, 
   });
 
   const custType = watch('customerType');
+  const isPrepaid = watch('isPrepaid');
 
   useEffect(() => {
     if (!isOpen) return;
@@ -92,6 +97,8 @@ export const CustomerFormDrawer: React.FC<CustomerFormDrawerProps> = ({ isOpen, 
         metadata: { gstin: '', pan: '', tradeName: '', billingAddress: '' },
       });
     }
+    setOpeningDue('');
+    setOpeningAsOf('');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, editingCustomer]);
 
@@ -118,7 +125,12 @@ export const CustomerFormDrawer: React.FC<CustomerFormDrawerProps> = ({ isOpen, 
       if (editingCustomer) {
         await transactionService.updateCustomer(editingCustomer.id, payload);
       } else {
-        const created = await transactionService.createCustomer(payload);
+        const created = await transactionService.createCustomer({
+          ...payload,
+          ...(Number(openingDue) > 0
+            ? { openingDue: Number(openingDue), openingAsOf: openingAsOf || undefined, openingStationId: stationId || undefined }
+            : {}),
+        });
         onCreated?.(created);
       }
       invalidateOperational(stationId);
@@ -175,6 +187,25 @@ export const CustomerFormDrawer: React.FC<CustomerFormDrawerProps> = ({ isOpen, 
 
         {custType === 'Fleet' && (
           <Checkbox label="Enable Prepaid Wallet Mode" {...register('isPrepaid')} disabled={isSubmitting} />
+        )}
+
+        {!editingCustomer && (custType === 'Credit' || custType === 'Fleet') && !isPrepaid && (
+          <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: '12px', marginTop: '4px' }}>
+            <h4 style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-strong)', margin: '0 0 4px' }}>
+              Opening Balance (Optional)
+            </h4>
+            <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '0 0 12px' }}>
+              Amount this customer already owed before PumpOS. Recorded as an opening receivable (not a sale), so it counts toward their balance but stays out of sales &amp; P&amp;L. <strong>Enter carefully — it can’t be edited later</strong> (correct it with a ledger adjustment instead).
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 12px' }}>
+              <Field label="Opening Due (₹)">
+                <TextInput type="number" min="0" step="0.01" placeholder="0" value={openingDue} onChange={(e) => setOpeningDue(e.target.value)} disabled={isSubmitting} />
+              </Field>
+              <Field label="As of Date" hint="Defaults to today">
+                <TextInput type="date" max={new Date().toLocaleDateString('en-CA')} value={openingAsOf} onChange={(e) => setOpeningAsOf(e.target.value)} disabled={isSubmitting} />
+              </Field>
+            </div>
+          </div>
         )}
 
         <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: '12px', marginTop: '4px' }}>

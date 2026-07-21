@@ -46,7 +46,7 @@ export interface PurchaseItemRepository {
   saveMany(items: PurchaseItem[]): Promise<void>;
 }
 
-export type SupplierTransactionType = 'Purchase' | 'Payment' | 'Adjustment';
+export type SupplierTransactionType = 'Purchase' | 'Payment' | 'Adjustment' | 'Opening Balance';
 
 export interface SupplierTransaction {
   id: string;

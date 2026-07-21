@@ -1,19 +1,26 @@
 #!/usr/bin/env node
-// Vendors IBM Plex Sans + Mono TTFs into the apps' public/fonts so the web app,
-// desktop app, and PDF reports all use the same local fonts (offline, no CDN).
-// Run once: `node scripts/download-fonts.mjs`
+// Vendors Plus Jakarta Sans + Geist Mono TTFs into the apps' public/fonts so
+// the console, desktop, and mobile apps plus the react-pdf reports all use the
+// same local fonts (offline, no CDN at runtime). Run once: `node scripts/download-fonts.mjs`.
+//
+// Note: react-pdf has NO glyph fallback and the reports render the Indian Rupee
+// sign (₹, U+20B9) in the MONO font, so the mono MUST include it. Geist Mono and
+// Plus Jakarta Sans both do; JetBrains/Roboto/Spline mono do NOT — don't use them.
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const base = 'https://cdn.jsdelivr.net/gh/IBM/plex';
+// Static-weight TTFs (react-pdf needs static TTF, not woff2 or variable fonts).
+const expo = 'https://cdn.jsdelivr.net/npm/@expo-google-fonts';
+const geist = 'https://cdn.jsdelivr.net/npm/geist/dist/fonts/geist-mono';
 const files = {
-  'IBMPlexSans-Regular.ttf': `${base}/IBM-Plex-Sans/fonts/complete/ttf/IBMPlexSans-Regular.ttf`,
-  'IBMPlexSans-Medium.ttf': `${base}/IBM-Plex-Sans/fonts/complete/ttf/IBMPlexSans-Medium.ttf`,
-  'IBMPlexSans-SemiBold.ttf': `${base}/IBM-Plex-Sans/fonts/complete/ttf/IBMPlexSans-SemiBold.ttf`,
-  'IBMPlexMono-Regular.ttf': `${base}/IBM-Plex-Mono/fonts/complete/ttf/IBMPlexMono-Regular.ttf`,
-  'IBMPlexMono-Medium.ttf': `${base}/IBM-Plex-Mono/fonts/complete/ttf/IBMPlexMono-Medium.ttf`,
+  'PlusJakartaSans-Regular.ttf': `${expo}/plus-jakarta-sans/PlusJakartaSans_400Regular.ttf`,
+  'PlusJakartaSans-Medium.ttf': `${expo}/plus-jakarta-sans/PlusJakartaSans_500Medium.ttf`,
+  'PlusJakartaSans-SemiBold.ttf': `${expo}/plus-jakarta-sans/PlusJakartaSans_600SemiBold.ttf`,
+  'PlusJakartaSans-Bold.ttf': `${expo}/plus-jakarta-sans/PlusJakartaSans_700Bold.ttf`,
+  'GeistMono-Regular.ttf': `${geist}/GeistMono-Regular.ttf`,
+  'GeistMono-Medium.ttf': `${geist}/GeistMono-Medium.ttf`,
 };
 const targets = ['apps/console/public/fonts', 'apps/mobile/public/fonts', 'apps/desktop/public/fonts'];
 

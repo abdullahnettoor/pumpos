@@ -181,15 +181,15 @@ const TokensPanel: React.FC = () => (
       </div>
     </Section>
 
-    <Section title="Typography" description="IBM Plex Sans for UI, IBM Plex Mono for all numbers/currency/data. Mono keeps figures aligned in tables and KPIs.">
+    <Section title="Typography" description="Plus Jakarta Sans for UI, Geist Mono for all numbers/currency/data. Mono keeps figures aligned in tables and KPIs.">
       <Card>
         <div style={{ marginBottom: 'var(--space-4)', display: 'flex', gap: 'var(--space-6)', flexWrap: 'wrap' }}>
           <div>
-            <div style={{ fontFamily: 'var(--font-sans)', fontSize: '18px', color: 'var(--text-strong)' }}>IBM Plex Sans</div>
+            <div style={{ fontFamily: 'var(--font-sans)', fontSize: '18px', color: 'var(--text-strong)' }}>Plus Jakarta Sans</div>
             <Mono>--font-sans</Mono>
           </div>
           <div>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '18px', color: 'var(--text-strong)' }}>IBM Plex Mono 1234567890</div>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '18px', color: 'var(--text-strong)' }}>Geist Mono 1234567890</div>
             <Mono>--font-mono</Mono>
           </div>
         </div>

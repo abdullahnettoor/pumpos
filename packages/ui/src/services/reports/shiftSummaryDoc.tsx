@@ -1,20 +1,21 @@
 import React from 'react';
 import { Document, Page, View, Text, StyleSheet, Font, Image } from '@react-pdf/renderer';
 
-// Embed IBM Plex Sans + Mono (matches the app type, include the rupee glyph; Mono
-// is used for all numeric/currency cells). TTFs vendored locally (npm run fonts).
+// Embed Plus Jakarta Sans + Geist Mono (matches the app type; Mono is used
+// for all numeric/currency cells and MUST carry the rupee glyph ₹ — Noto Sans
+// Mono does, unlike JetBrains/Roboto Mono). TTFs vendored locally (npm run fonts).
 Font.register({
-  family: 'IBM Plex Sans',
+  family: 'Plus Jakarta Sans',
   fonts: [
-    { src: '/fonts/IBMPlexSans-Regular.ttf' },
-    { src: '/fonts/IBMPlexSans-SemiBold.ttf', fontWeight: 700 },
+    { src: '/fonts/PlusJakartaSans-Regular.ttf' },
+    { src: '/fonts/PlusJakartaSans-Bold.ttf', fontWeight: 700 },
   ],
 });
 Font.register({
-  family: 'IBM Plex Mono',
+  family: 'Geist Mono',
   fonts: [
-    { src: '/fonts/IBMPlexMono-Regular.ttf' },
-    { src: '/fonts/IBMPlexMono-Medium.ttf', fontWeight: 700 },
+    { src: '/fonts/GeistMono-Regular.ttf' },
+    { src: '/fonts/GeistMono-Medium.ttf', fontWeight: 700 },
   ],
 });
 
@@ -49,7 +50,7 @@ export const fmtTime = (iso?: string) => { if (!iso) return '—'; try { return 
 export const fmtDateTime = (iso?: string) => { if (!iso) return '—'; try { return new Date(iso).toLocaleString('en-IN'); } catch { return '—'; } };
 
 export const s = StyleSheet.create({
-  page: { paddingTop: 30, paddingHorizontal: 32, paddingBottom: 46, fontSize: 9, color: C.body, fontFamily: 'IBM Plex Sans' },
+  page: { paddingTop: 30, paddingHorizontal: 32, paddingBottom: 46, fontSize: 9, color: C.body, fontFamily: 'Plus Jakarta Sans' },
   band: { backgroundColor: C.green, paddingVertical: 12, paddingHorizontal: 16, borderRadius: 6 },
   brand: { fontSize: 15, color: C.white, fontWeight: 700 },
   title: { fontSize: 11, color: C.white, marginTop: 3, letterSpacing: 1.5, fontWeight: 700 },
@@ -58,7 +59,7 @@ export const s = StyleSheet.create({
   metaCell: { width: '22%', minWidth: 110 },
   label: { fontSize: 7, color: C.muted },
   val: { fontSize: 10, color: C.ink, fontWeight: 700, marginTop: 2 },
-  valMono: { fontSize: 10, color: C.ink, fontFamily: 'IBM Plex Mono', marginTop: 2 },
+  valMono: { fontSize: 10, color: C.ink, fontFamily: 'Geist Mono', marginTop: 2 },
   h2: { fontSize: 9.5, color: C.green, fontWeight: 700, marginTop: 16, marginBottom: 6, letterSpacing: 0.5 },
   warn: { backgroundColor: C.warnBg, borderRadius: 6, padding: 10, marginTop: 12 },
   warnTitle: { fontSize: 8.5, color: C.warnFg, fontWeight: 700, marginBottom: 4 },
@@ -68,8 +69,8 @@ export const s = StyleSheet.create({
   th: { color: C.white, fontSize: 7.5, fontWeight: 700, paddingVertical: 5, paddingHorizontal: 6 },
   cell: { fontSize: 8.5, paddingVertical: 4, paddingHorizontal: 6, color: C.body },
   cellStrong: { fontSize: 8.5, paddingVertical: 4, paddingHorizontal: 6, color: C.ink, fontWeight: 700 },
-  cellMono: { fontSize: 8.5, paddingVertical: 4, paddingHorizontal: 6, color: C.body, fontFamily: 'IBM Plex Mono' },
-  cellMonoStrong: { fontSize: 8.5, paddingVertical: 4, paddingHorizontal: 6, color: C.ink, fontFamily: 'IBM Plex Mono', fontWeight: 700 },
+  cellMono: { fontSize: 8.5, paddingVertical: 4, paddingHorizontal: 6, color: C.body, fontFamily: 'Geist Mono' },
+  cellMonoStrong: { fontSize: 8.5, paddingVertical: 4, paddingHorizontal: 6, color: C.ink, fontFamily: 'Geist Mono', fontWeight: 700 },
   zebra: { backgroundColor: C.surfaceAlt },
   totalRow: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: C.line, backgroundColor: C.surfaceAlt },
   totalLabel: { flex: 1, fontSize: 8, paddingVertical: 5, paddingHorizontal: 6, color: C.muted, fontWeight: 700 },
@@ -78,7 +79,7 @@ export const s = StyleSheet.create({
   kpiRow: { flexDirection: 'row', gap: 8, marginTop: 4 },
   kpi: { flex: 1, backgroundColor: C.surfaceAlt, borderRadius: 6, padding: 8 },
   kpiLabel: { fontSize: 7, color: C.muted },
-  kpiVal: { fontSize: 12, fontFamily: 'IBM Plex Mono', marginTop: 3 },
+  kpiVal: { fontSize: 12, fontFamily: 'Geist Mono', marginTop: 3 },
   signRow: { flexDirection: 'row', gap: 40, marginTop: 36 },
   sign: { flex: 1, fontSize: 8.5, color: C.muted, textAlign: 'center', borderTopWidth: 0.5, borderTopColor: C.muted, paddingTop: 4 },
   foot: { position: 'absolute', bottom: 22, left: 32, right: 32, flexDirection: 'row', justifyContent: 'space-between', fontSize: 7, color: C.muted },
@@ -371,12 +372,12 @@ const builders: Record<ShiftSummarySection, (d: any, cfg: ReportConfig) => React
         ].map((r, i) => (
           <View key={i} style={s.reconRow}>
             <Text style={{ fontSize: 9, color: r.c }}>{r.l}</Text>
-            <Text style={{ fontSize: 9, color: r.c, fontFamily: 'IBM Plex Mono', fontWeight: 700 }}>{r.v}</Text>
+            <Text style={{ fontSize: 9, color: r.c, fontFamily: 'Geist Mono', fontWeight: 700 }}>{r.v}</Text>
           </View>
         ))}
         <View style={[s.reconRow, { borderBottomWidth: 0, backgroundColor: Math.abs(Number(d.cashVariance || 0)) > 100 ? '#F8E3E0' : C.surfaceAlt }]}>
           <Text style={{ fontSize: 10, fontWeight: 700, color: Math.abs(Number(d.cashVariance || 0)) > 100 ? C.danger : C.ink }}>Cash Variance</Text>
-          <Text style={{ fontSize: 10, fontFamily: 'IBM Plex Mono', fontWeight: 700, color: Math.abs(Number(d.cashVariance || 0)) > 100 ? C.danger : C.ink }}>
+          <Text style={{ fontSize: 10, fontFamily: 'Geist Mono', fontWeight: 700, color: Math.abs(Number(d.cashVariance || 0)) > 100 ? C.danger : C.ink }}>
             {Number(d.cashVariance || 0) > 0 ? '+' : ''}{inr0(d.cashVariance)}{Number(d.cashVariance || 0) === 0 ? ' (Perfect Match)' : Math.abs(Number(d.cashVariance || 0)) > 100 ? ' (Discrepancy)' : ''}
           </Text>
         </View>

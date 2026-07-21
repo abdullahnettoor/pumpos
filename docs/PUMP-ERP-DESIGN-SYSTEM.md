@@ -293,8 +293,8 @@ Use:
 
 Use:
 
-- **Primary UI font:** `IBM Plex Sans`
-- **Data/number font:** `IBM Plex Mono`
+- **Primary UI font:** `Plus Jakarta Sans`
+- **Data/number font:** `Geist Mono`
 
 Why:
 
