@@ -134,7 +134,7 @@ export const CashCountPopover: React.FC<CashCountPopoverProps> = ({
         <span style={{ fontSize: '10px', color: 'var(--text-faint)' }}>{countedCount} note{countedCount === 1 ? '' : 's'}/coins</span>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', maxHeight: '260px', overflowY: 'auto' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
         {denominations.map((d, i) => {
           const count = Number(breakdown[String(d)]) || 0;
           return (
