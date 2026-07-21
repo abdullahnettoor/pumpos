@@ -161,6 +161,59 @@ fee = net deposited, and clearing zeroes out.
 
 ---
 
+## Layer I — Other / Indirect Income (FI1–FI4)
+
+Non-fuel, non-merchandise income (tanker rental, truck parking, commission, scrap
+sale, interest, misc). **Money IN** to drawer / bank / owner, anchored to the
+business day (shift only when it lands in the drawer as cash). One extensible
+"Other Income" bucket with per-category `tax_config`.
+
+### Design decisions (2026-07-21, user-confirmed)
+1. **`tax_config` on the category** (not per entry) so categories stay minimal yet
+   GST-extensible.
+2. **`received_into` symmetric** with expenses' `paid_from`: `SHIFT_CASH | BANK |
+   OWNER`; a chosen account overrides it by account type so drawer reconciliation
+   stays correct (only shift Cash-in-Hand touches the drawer).
+3. **Single "Other Income" bucket** (one `other_income` table), not a per-type
+   schema.
+4. **Recurring income — out of scope.**
+
+### FI1 — Income core (money-correctness) ✅
+- `income_categories` (name, `tax_config` jsonb, is_system, is_active) +
+  `other_income` (shift?, business_day, category, amount, `received_into`,
+  affects_drawer, payer, ref, description, status). `RecordIncome` / `VoidIncome`
+  use-cases; `INCOME_RECORDED` / `INCOME_VOIDED` events; ledger posting (direction
+  **in**, source `INCOME`, account by `received_into`) + reversal. Shift-close
+  drawer reconciliation adds cash income (`expected += cashIncome`). Routes:
+  `income-categories` CRUD (+`tax_config`), `POST /income`,
+  `POST /income/:id/void`, `GET /income`. `ledger_entries.source_type` is varchar
+  → no DB enum change. Tables folded into the `0000` baseline.
+
+### FI2 — DSSR + P&L ✅
+- DSSR income block (`{ drawer, business, total, byCategory }`) composed from the
+  business day's `other_income` (excl. voided). P&L: **`netProfit = grossMargin −
+  expenses + otherIncome`**; `pnl.otherIncome` surfaced. Rendered in
+  `DailyDssrView`, `ProfitLossView` (KPI + statement line) and the DSSR PDF.
+
+### FI3 — Entry + management UI ✅
+- Quick-entry "Add Income" + a dedicated **Income** screen (ledger, KPIs, filters)
+  under Finance (console + desktop). Category manager with add/rename and a
+  **GST % + HSN/SAC editor** writing `tax_config` (captured now; read in FI4).
+  Ledger sources labelled "Other income" in Cash & Bank / Accounts.
+
+### FI4 — GST-on-income (pending)
+- Read `income_categories.tax_config` (`gst_rate` + `hsn_code`/SAC) at income
+  capture: split each entry into taxable value + CGST/SGST/IGST (intra- vs
+  inter-state, reusing the purchase/`phase-T-tax` tax engine). Persist the tax
+  components on `other_income` (or a snapshot) so they never drift.
+- Surface income GST in the DSSR tax lines and a **GST-on-income register**
+  (mirrors the purchase GST register); fold into GST-output totals / returns
+  exports.
+- Optional: GST-inclusive vs exclusive entry toggle; SAC-vs-HSN handling for
+  services. Recurring income stays out of scope.
+
+---
+
 ## Later — GL
 ### FG1 — Double-entry general ledger
 - `chart_of_accounts`, `journal_entries` (debit/credit) posted off the existing
@@ -170,6 +223,7 @@ fee = net deposited, and clearing zeroes out.
 
 ## Build order
 FA1 → FA2 → FA3 → FA4 → FA5 → FA6 → FA7 → FB1 → FB2 → FB3 → (FG1 later).
+Income: FI1 → FI2 → FI3 (done) → **FI4 (GST-on-income, next)**.
 
 ## Expansion
 - Budgets vs actual, cost centers, GST P&L, depreciation/fixed assets, tax-ready

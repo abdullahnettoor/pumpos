@@ -58,6 +58,9 @@
 
 ## T5 — Reports
 - DSSR/shift summary tax breakup (output VAT vs output GST) for the day.
+- **GST on other/indirect income** (tanker rental, commission, scrap, etc.) is tracked as **FI4** in
+  `phase-F-financials.md` — it reuses the T3 tax engine to split income into taxable + CGST/SGST/IGST and adds a
+  GST-on-income register + DSSR income tax lines. Categories already carry `tax_config` (GST% + HSN/SAC).
 
 ## Tax-inclusive (MRP) pricing ✅ done + deployed
 - Retail merchandise/lubes are priced MRP (tax-inclusive) — tax is extracted, not added. `computeLineTax` gained
