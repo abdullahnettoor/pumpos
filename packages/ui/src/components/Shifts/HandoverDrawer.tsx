@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { Drawer } from '../Drawer.js';
 import { Button } from '../../pump-ds/index.js';
 import { Combobox } from '../primitives/Combobox.js';
+import { CashCountPopover, type CashBreakdown } from '../primitives/CashCountPopover.js';
 import { CustomerFormDrawer } from '../customers/CustomerFormDrawer.js';
 import { VehicleDrawer } from '../customers/VehicleDrawer.js';
 import { useAllVehicles } from '../../query/hooks.js';
@@ -88,7 +89,9 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
 }) => {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
+  // Denomination counts for the handover cash (held here so re-opening the
+  // popover preserves them). Reset when the drawer opens.
+  const [cashBreakdown, setCashBreakdown] = useState<CashBreakdown>({});
   const {
     register,
     handleSubmit,
@@ -216,7 +219,7 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
     setCcProductId(''); setCcQty(''); setCcPrice(''); setCcAmount(''); setCcNotes('');
   };
   useEffect(() => {
-    if (isOpen) { setCreditLines(creditSales ?? []); setOmcLines(omcSales ?? []); setCcOpen(false); resetCcRow(); setExtraCustomers([]); setExtraVehicles([]); }
+    if (isOpen) { setCreditLines(creditSales ?? []); setOmcLines(omcSales ?? []); setCcOpen(false); resetCcRow(); setExtraCustomers([]); setExtraVehicles([]); setCashBreakdown({}); }
   }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fuel products dispensed at this DU (from its nozzles).
@@ -908,14 +911,23 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 }}>
               <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-default)' }}>Cash Handed Over (₹)</label>
-              <input
-                type="number"
-                step="any"
-                min="0"
-                placeholder="0"
-                {...register('cashHandedOver')}
-                style={{ height: '32px', padding: '0 8px', width: '100%', minWidth: 0, border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-input)', fontFamily: 'var(--font-mono)', fontSize: '13px', textAlign: 'right' }}
-              />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <input
+                  type="number"
+                  step="any"
+                  min="0"
+                  placeholder="0"
+                  {...register('cashHandedOver')}
+                  style={{ height: '32px', padding: '0 8px', flex: 1, minWidth: 0, border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-input)', fontFamily: 'var(--font-mono)', fontSize: '13px', textAlign: 'right' }}
+                />
+                <CashCountPopover
+                  breakdown={cashBreakdown}
+                  onBreakdownChange={setCashBreakdown}
+                  onApply={(t) => setValue('cashHandedOver', t as any, { shouldValidate: true, shouldDirty: true })}
+                  currentValue={Number(formCash) || 0}
+                  title="Count handover cash by denomination"
+                />
+              </div>
               {errors.cashHandedOver && (
                 <span style={{ color: 'var(--brand-danger)', fontSize: '10px' }}>{errors.cashHandedOver.message}</span>
               )}

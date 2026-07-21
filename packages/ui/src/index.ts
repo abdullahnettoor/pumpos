@@ -65,6 +65,8 @@ export { Segmented } from './components/primitives/Segmented.js';
 export type { SegmentedProps, SegmentedOption } from './components/primitives/Segmented.js';
 export { Combobox } from './components/primitives/Combobox.js';
 export type { ComboboxProps, ComboboxOption } from './components/primitives/Combobox.js';
+export { CashCountPopover } from './components/primitives/CashCountPopover.js';
+export type { CashCountPopoverProps, CashBreakdown } from './components/primitives/CashCountPopover.js';
 export { Banner } from './components/primitives/Banner.js';
 export type { BannerProps, BannerSeverity } from './components/primitives/Banner.js';
 export { useZodForm } from './forms/useZodForm.js';
