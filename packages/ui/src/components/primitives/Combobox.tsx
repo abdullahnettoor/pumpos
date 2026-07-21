@@ -9,6 +9,13 @@ export interface ComboboxOption {
   sublabel?: string;
 }
 
+/** An action (e.g. “＋ New customer”) shown only when the search has no matches. */
+export interface ComboboxCreateAction {
+  label: string;
+  sublabel?: string;
+  onSelect: () => void;
+}
+
 export interface ComboboxProps {
   options: ComboboxOption[];
   value: string;
@@ -16,6 +23,8 @@ export interface ComboboxProps {
   placeholder?: string;
   searchPlaceholder?: string;
   emptyMessage?: string;
+  /** Create actions surfaced only when no option matches — keeps the list tidy. */
+  createActions?: ComboboxCreateAction[];
   disabled?: boolean;
   invalid?: boolean;
   id?: string;
@@ -35,6 +44,7 @@ export const Combobox: React.FC<ComboboxProps> = ({
   placeholder = 'Select…',
   searchPlaceholder = 'Search…',
   emptyMessage = 'No matches',
+  createActions,
   disabled,
   invalid,
   id,
@@ -155,7 +165,21 @@ export const Combobox: React.FC<ComboboxProps> = ({
           </div>
           <ul ref={listRef} role="listbox" style={{ listStyle: 'none', margin: 0, padding: 4, maxHeight: 240, overflowY: 'auto' }}>
             {filtered.length === 0 ? (
-              <li style={{ padding: '8px 10px', fontSize: 12, color: 'var(--text-muted)' }}>{emptyMessage}</li>
+              <>
+                <li style={{ padding: '8px 10px', fontSize: 12, color: 'var(--text-muted)' }}>{emptyMessage}</li>
+                {createActions?.map((a, i) => (
+                  <li
+                    key={`__create_${i}`}
+                    role="option"
+                    aria-selected={false}
+                    onMouseDown={(e) => { e.preventDefault(); a.onSelect(); setOpen(false); }}
+                    style={{ padding: '7px 10px', borderRadius: 'var(--radius-input)', cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 1 }}
+                  >
+                    <span style={{ fontSize: 13, color: 'var(--brand-primary)', fontWeight: 600 }}>{a.label}</span>
+                    {a.sublabel && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{a.sublabel}</span>}
+                  </li>
+                ))}
+              </>
             ) : (
               filtered.map((opt, i) => {
                 const active = i === activeIndex;

@@ -195,14 +195,14 @@ export const CustomerFormDrawer: React.FC<CustomerFormDrawerProps> = ({ isOpen, 
               Opening Balance (Optional)
             </h4>
             <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '0 0 12px' }}>
-              Amount this customer already owed before PumpOS. Recorded as an opening receivable (not a sale), so it counts toward their balance but stays out of sales &amp; P&amp;L.
+              Amount this customer already owed before PumpOS. Recorded as an opening receivable (not a sale), so it counts toward their balance but stays out of sales &amp; P&amp;L. <strong>Enter carefully — it can’t be edited later</strong> (correct it with a ledger adjustment instead).
             </p>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 12px' }}>
               <Field label="Opening Due (₹)">
                 <TextInput type="number" min="0" step="0.01" placeholder="0" value={openingDue} onChange={(e) => setOpeningDue(e.target.value)} disabled={isSubmitting} />
               </Field>
               <Field label="As of Date" hint="Defaults to today">
-                <TextInput type="date" value={openingAsOf} onChange={(e) => setOpeningAsOf(e.target.value)} disabled={isSubmitting} />
+                <TextInput type="date" max={new Date().toLocaleDateString('en-CA')} value={openingAsOf} onChange={(e) => setOpeningAsOf(e.target.value)} disabled={isSubmitting} />
               </Field>
             </div>
           </div>

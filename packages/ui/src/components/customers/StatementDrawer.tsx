@@ -112,7 +112,7 @@ export const StatementDrawer: React.FC<StatementDrawerProps> = ({ customer, stat
                 resolve={(tx: any) => {
                   const type = tx.transactionType;
                   const direction: 'debit' | 'credit' =
-                    type === 'Credit Sale' || type === 'Adjustment' || type === 'Prepaid Top-up' ? 'debit' : 'credit';
+                    type === 'Credit Sale' || type === 'Adjustment' || type === 'Prepaid Top-up' || type === 'Opening Balance' ? 'debit' : 'credit';
                   const typeColor =
                     type === 'Credit Sale' ? 'var(--brand-warning)' : type === 'Prepaid Top-up' ? 'var(--state-success-fg)' : undefined;
                   return {

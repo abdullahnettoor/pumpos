@@ -239,10 +239,7 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
   const allVehicles = useMemo(() => [...(allVehiclesData ?? []), ...extraVehicles], [allVehiclesData, extraVehicles]);
   const creditOptions = useMemo(() => {
     const customerIds = new Set(allCustomers.map((c: any) => c.id));
-    const opts: { value: string; label: string; sublabel?: string }[] = [
-      { value: NEW_CUSTOMER, label: '＋ New customer', sublabel: 'Create and bill in one step' },
-      { value: NEW_VEHICLE, label: '＋ New vehicle', sublabel: 'Add a vehicle to a customer' },
-    ];
+    const opts: { value: string; label: string; sublabel?: string }[] = [];
     for (const v of allVehicles) {
       if (!customerIds.has(v.customerId)) continue;
       const parts = [v.customerName ?? '', v.customerType, v.defaultProductName].filter(Boolean);
@@ -856,6 +853,10 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
                   placeholder="Select customer or vehicle…"
                   searchPlaceholder="Search name or vehicle no.…"
                   emptyMessage="No credit customer or vehicle found."
+                  createActions={[
+                    { label: '＋ New customer', sublabel: 'Create and bill in one step', onSelect: () => setNewCustomerOpen(true) },
+                    { label: '＋ New vehicle', sublabel: 'Add a vehicle to a customer', onSelect: () => setNewVehicleOpen(true) },
+                  ]}
                 />
                 {ccChannel === 'credit' && ccCustomerId && ccAvailable != null && (
                   <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Available credit {inr(ccAvailable)}</span>

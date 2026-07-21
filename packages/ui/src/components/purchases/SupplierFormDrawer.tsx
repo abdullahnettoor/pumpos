@@ -131,14 +131,14 @@ export const SupplierFormDrawer: React.FC<SupplierFormDrawerProps> = ({ isOpen, 
               Opening Balance (Optional)
             </h4>
             <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '0 0 12px' }}>
-              Amount already owed to this supplier before PumpOS. Recorded as an opening payable (not a purchase), so it counts toward their balance but stays out of purchases &amp; P&amp;L.
+              Amount already owed to this supplier before PumpOS. Recorded as an opening payable (not a purchase), so it counts toward their balance but stays out of purchases &amp; P&amp;L. <strong>Enter carefully — it can’t be edited later</strong> (correct it with a ledger adjustment instead).
             </p>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 12px' }}>
               <Field label="Opening Due (₹)">
                 <TextInput type="number" min="0" step="0.01" placeholder="0" value={openingDue} onChange={(e) => setOpeningDue(e.target.value)} disabled={submitting} />
               </Field>
               <Field label="As of Date" hint="Defaults to today">
-                <TextInput type="date" value={openingAsOf} onChange={(e) => setOpeningAsOf(e.target.value)} disabled={submitting} />
+                <TextInput type="date" max={new Date().toLocaleDateString('en-CA')} value={openingAsOf} onChange={(e) => setOpeningAsOf(e.target.value)} disabled={submitting} />
               </Field>
             </div>
           </div>
