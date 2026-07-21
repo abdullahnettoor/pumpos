@@ -39,7 +39,7 @@ Tasks:
   ONLY static + semi-static tiers (never operational/auth).
 - Bump a `buster` (app version) to invalidate stale persisted cache on deploy.
 - Effect: instant paint of shell + dropdowns from cache; infra fetched only when missing/edited.
-- Synergy: groundwork for Phase O (offline desktop).
+- Synergy: groundwork for Phase O (Level 2 resilience — warm-cache reads on desktop).
 
 ## P3 — Invalidation map
 - On each mutation, invalidate ONLY related keys (not blanket). Examples:
