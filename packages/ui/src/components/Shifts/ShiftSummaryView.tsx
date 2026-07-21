@@ -8,6 +8,7 @@ import { ShiftTransactionsPanel } from './ShiftTransactionsPanel.js';
 import { useConfirm } from '../primitives/ConfirmDialog.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import { inr } from '../../utils/format.js';
+import { isDesktopApp } from '../../utils/platform.js';
 
 const shiftService = new CloudShiftService();
 
@@ -128,9 +129,12 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
           >
             Save PDF
           </Button>
-          <Button variant="secondary" size="sm" leftIcon={<Printer size={13} />} onClick={() => window.print()}>
-            Print Shift Summary
-          </Button>
+          {/* window.print() is a no-op in the Tauri webview — desktop uses Save PDF. */}
+          {!isDesktopApp() && (
+            <Button variant="secondary" size="sm" leftIcon={<Printer size={13} />} onClick={() => window.print()}>
+              Print Shift Summary
+            </Button>
+          )}
 
           {canReopen && (
             <Button
