@@ -28,6 +28,8 @@ export const SupplierFormDrawer: React.FC<SupplierFormDrawerProps> = ({ isOpen, 
   const [pan, setPan] = useState('');
   const [tradeName, setTradeName] = useState('');
   const [billingAddress, setBillingAddress] = useState('');
+  const [openingDue, setOpeningDue] = useState('');
+  const [openingAsOf, setOpeningAsOf] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -42,6 +44,8 @@ export const SupplierFormDrawer: React.FC<SupplierFormDrawerProps> = ({ isOpen, 
     setPan(meta.pan || '');
     setTradeName(meta.tradeName || '');
     setBillingAddress(meta.billingAddress || '');
+    setOpeningDue('');
+    setOpeningAsOf('');
   }, [isOpen, editingSupplier]);
 
   const onSubmit = async (e: React.FormEvent) => {
@@ -64,7 +68,12 @@ export const SupplierFormDrawer: React.FC<SupplierFormDrawerProps> = ({ isOpen, 
       if (editingSupplier) {
         await transactionService.updateSupplier(editingSupplier.id, payload);
       } else {
-        await transactionService.createSupplier(payload);
+        await transactionService.createSupplier({
+          ...payload,
+          ...(Number(openingDue) > 0
+            ? { openingDue: Number(openingDue), openingAsOf: openingAsOf || undefined, openingStationId: stationId || undefined }
+            : {}),
+        });
       }
       invalidateOperational(stationId);
       toast.success(editingSupplier ? 'Supplier updated.' : 'Supplier created.');
@@ -115,6 +124,25 @@ export const SupplierFormDrawer: React.FC<SupplierFormDrawerProps> = ({ isOpen, 
             <Textarea rows={2} value={billingAddress} onChange={(e) => setBillingAddress(e.target.value)} disabled={submitting} placeholder="Full Billing Address" />
           </Field>
         </div>
+
+        {!editingSupplier && (
+          <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: '12px', marginTop: '4px' }}>
+            <h4 style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-strong)', margin: '0 0 4px' }}>
+              Opening Balance (Optional)
+            </h4>
+            <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '0 0 12px' }}>
+              Amount already owed to this supplier before PumpOS. Recorded as an opening payable (not a purchase), so it counts toward their balance but stays out of purchases &amp; P&amp;L.
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 12px' }}>
+              <Field label="Opening Due (₹)">
+                <TextInput type="number" min="0" step="0.01" placeholder="0" value={openingDue} onChange={(e) => setOpeningDue(e.target.value)} disabled={submitting} />
+              </Field>
+              <Field label="As of Date" hint="Defaults to today">
+                <TextInput type="date" value={openingAsOf} onChange={(e) => setOpeningAsOf(e.target.value)} disabled={submitting} />
+              </Field>
+            </div>
+          </div>
+        )}
 
         <div style={{ marginTop: '4px' }}>
           <Checkbox label="Supplier Active" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} disabled={submitting} />
