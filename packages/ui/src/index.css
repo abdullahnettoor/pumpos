@@ -84,6 +84,9 @@
  */
 button, input, optgroup, select, textarea {
   border: 0 solid;
+  /* Form controls don't inherit font-family by default — force it so buttons
+   * (sidebar nav, etc.), inputs and selects use --font-sans, not system Arial. */
+  font-family: inherit;
 }
 button {
   background-color: transparent;
