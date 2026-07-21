@@ -187,7 +187,8 @@ business day (shift only when it lands in the drawer as cash). One extensible
   drawer reconciliation adds cash income (`expected += cashIncome`). Routes:
   `income-categories` CRUD (+`tax_config`), `POST /income`,
   `POST /income/:id/void`, `GET /income`. `ledger_entries.source_type` is varchar
-  → no DB enum change. Tables folded into the `0000` baseline.
+  → no DB enum change. Tables folded into the `0000` baseline. (Void endpoint is
+  wired but has no UI yet — see **Voids & reversals** below.)
 
 ### FI2 — DSSR + P&L ✅
 - DSSR income block (`{ drawer, business, total, byCategory }`) composed from the
@@ -211,6 +212,36 @@ business day (shift only when it lands in the drawer as cash). One extensible
   exports.
 - Optional: GST-inclusive vs exclusive entry toggle; SAC-vs-HSN handling for
   services. Recurring income stays out of scope.
+
+---
+
+## Voids & reversals (cross-cutting — backend done, UI pending)
+
+Corrections are never edits: a financial entry is **voided** (status →
+`VOIDED`) and its ledger impact reversed, keeping history append-only (see the
+ledger rule under Layer A).
+
+- **Backend ready (both expense + income):** `VoidExpense` / `VoidIncome`
+  use-cases, `EXPENSE_VOIDED` / `INCOME_VOIDED` events, and ledger reversal
+  (`reverseExpense` / `reverseIncome` remove the source's `ledger_entries`).
+  Routes: `POST /transactions/expenses/:id/void` and
+  `POST /transactions/income/:id/void`. Client services `voidExpense` /
+  `voidIncome` exist. Reads already exclude `VOIDED` everywhere (Expenses/Income
+  KPIs, DSSR/P&L compose, shift-close drawer reconciliation).
+- **Permission:** `canVoidExpense(role)` guard (reuse the same for income).
+- **Pending (take-over scope):** there is **no void action in the UI** on either
+  the **Expenses** or the **Income** ledger. To finish:
+  1. Add a row action / drawer (confirm + optional `adjustment_reason`) → the
+     void endpoint, gated by the permission guard.
+  2. On success call `useInvalidateOperational(stationId)` so the ledger, KPIs,
+     Cash & Bank, Accounts and the drawer all refresh.
+  3. Render voided rows struck-through with a **"Voided"** chip — the expense and
+     income columns already support this — so they stay visible but excluded.
+  4. Consider a **same-shift-only** guard for drawer-cash (`SHIFT_CASH`) entries
+     so a closed/reconciled drawer can't be retro-changed; bank/owner/business
+     entries can void any time within the business day.
+  Do expense + income together for a consistent pattern (neither has a void UI
+  today).
 
 ---
 
