@@ -88,7 +88,7 @@ const Field = ({ label, value }: { label: string; value?: string | null }) => (
 const SummaryRow = ({ label, value, strong }: { label: string; value: string; strong?: boolean }) => (
   <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 2 }}>
     <Text style={{ fontSize: strong ? 9 : 8.5, color: strong ? C.ink : C.body, fontWeight: strong ? 700 : 400 }}>{label}</Text>
-    <Text style={{ fontSize: strong ? 9.5 : 8.5, color: strong ? C.ink : C.body, fontFamily: 'IBM Plex Mono', fontWeight: strong ? 700 : 400 }}>{value}</Text>
+    <Text style={{ fontSize: strong ? 9.5 : 8.5, color: strong ? C.ink : C.body, fontFamily: 'Geist Mono', fontWeight: strong ? 700 : 400 }}>{value}</Text>
   </View>
 );
 

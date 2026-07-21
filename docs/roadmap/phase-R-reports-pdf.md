@@ -6,7 +6,7 @@
 - Scoped print CSS (`.print-area`/`.no-print`) — `window.print()` captures only the report.
 - Client PDF: `@react-pdf/renderer` for Shift Summary (`packages/ui/src/services/reports/shiftSummaryDoc.tsx`) **and DSSR** (`dssrDoc.tsx`, reuses the shared primitive kit). `html2pdf` retained only as a generic fallback.
 - Pluggable saver `exportPdf.ts` (web download / desktop Tauri dialog+fs).
-- Self-hosted IBM Plex Sans/Mono (`scripts/download-fonts.mjs`, run `npm run fonts`).
+- Self-hosted Plus Jakarta Sans/Geist Mono (`scripts/download-fonts.mjs`, run `npm run fonts`).
 - Tauri plugins (dialog, fs) wired; capabilities set.
 
 ## R1 — Shift Summary polish ✅ done
