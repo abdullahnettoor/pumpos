@@ -1,6 +1,6 @@
 [package]
 name = "pumpos"
-version = "1.0.3"
+version = "1.0.4"
 description = "PumpOS Desktop Shell"
 authors = ["DeepMind Team"]
 edition = "2021"
