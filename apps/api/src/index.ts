@@ -64,6 +64,13 @@ type Bindings = {
   // outages. Set via: `wrangler secret put SUPABASE_DIRECT_URL`.
   SUPABASE_DIRECT_URL?: string;
   ENVIRONMENT?: string;
+  // Supabase Auth Admin (Phase A). Server-only secrets used to provision staff
+  // login accounts, reset passwords, and ban/unban users. Set via:
+  //   wrangler secret put SUPABASE_SECRET_KEY
+  // Use the modern Supabase secret key (prefixed `sb_secret_`); it works as a
+  // drop-in for the legacy service_role key in the apikey/Authorization headers.
+  SUPABASE_URL?: string;
+  SUPABASE_SECRET_KEY?: string;
 };
 
 type Variables = {

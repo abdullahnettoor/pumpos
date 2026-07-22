@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
+import { looksLikePhone, phoneToAuthEmail } from '@pump/shared';
 import { supabase } from '../../services/supabase.js';
 
 export const Login: React.FC = () => {
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -12,6 +13,13 @@ export const Login: React.FC = () => {
     setLoading(true);
     setErrorMsg(null);
     try {
+      // Accept either an email or a phone number. Phone logins are backed by a
+      // synthetic email handle derived deterministically from the phone.
+      const trimmed = identifier.trim();
+      const email = looksLikePhone(trimmed) ? phoneToAuthEmail(trimmed) : trimmed.toLowerCase();
+      if (!email) {
+        throw new Error('Enter a valid email or phone number');
+      }
       const { error } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -88,16 +96,18 @@ export const Login: React.FC = () => {
         <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           <div className="form-group">
             <label className="form-label" style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600, color: 'var(--text-muted)' }}>
-              Email address
+              Email or phone
             </label>
             <input
-              type="email"
+              type="text"
               className="form-input"
-              placeholder="e.g. manager@pump.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              placeholder="email@pump.com or 98765 43210"
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value)}
               required
               disabled={loading}
+              autoCapitalize="none"
+              autoCorrect="off"
               style={{
                 width: '100%',
                 height: '36px',

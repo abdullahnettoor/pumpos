@@ -4,6 +4,14 @@ main = "src/index.ts"
 compatibility_date = "2026-06-24"
 compatibility_flags = [ "nodejs_compat_v2" ]
 
+# --- Plaintext vars (NOT secrets) ----------------------------------------
+# SUPABASE_URL is the public project URL (same one the frontend anon client
+# uses), so it is safe to commit here. It is read by the Auth Admin adapter
+# (Phase A). The matching SUPABASE_SERVICE_ROLE_KEY is a SECRET and must be set
+# with `wrangler secret put SUPABASE_SERVICE_ROLE_KEY` — never put it in [vars].
+[vars]
+SUPABASE_URL = "https://sniubtppskopxkpznfkh.supabase.co"
+
 [[routes]]
 pattern = "api.pumpos.app"
 custom_domain = true
@@ -53,6 +61,12 @@ head_sampling_rate = 0.1
 [env.preview]
 name = "preview-pumpos-api"
 workers_dev = false
+
+# Preview currently shares the same Supabase project as prod. When you split
+# environments, point this at the dedicated preview/dev project URL (and set a
+# separate SUPABASE_SERVICE_ROLE_KEY via `wrangler secret put ... --env preview`).
+[env.preview.vars]
+SUPABASE_URL = "https://sniubtppskopxkpznfkh.supabase.co"
 
 [[env.preview.routes]]
 pattern = "api.pumpos.abdullahnettoor.com"

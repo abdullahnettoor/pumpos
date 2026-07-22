@@ -202,6 +202,20 @@ export function canManageUsers(role: Role): boolean {
   return role === 'Owner';
 }
 
+/**
+ * Manage Staff/Attendant accounts (create, reset password, deactivate) — scoped
+ * to the manager's own stations at the route layer. Owner has full
+ * `canManageUsers`; Manager is limited to the two lowest roles.
+ */
+export function canManageStaff(role: Role): boolean {
+  return role === 'Owner' || role === 'Manager';
+}
+
+/** Roles a Manager (not Owner) is allowed to create/act on. */
+export function isManageableByManager(targetRole: Role): boolean {
+  return targetRole === 'Staff' || targetRole === 'Attendant';
+}
+
 // ----------------------------------------------------
 // Reporting
 // ----------------------------------------------------

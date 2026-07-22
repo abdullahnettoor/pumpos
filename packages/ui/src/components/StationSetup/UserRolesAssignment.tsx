@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { CloudUserAssignmentService, CloudStationService } from '../../services/cloud.js';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys, TIER } from '../../query/hooks.js';
-import { Station, userSchema } from '@pump/shared';
+import { Station } from '@pump/shared';
 import { Drawer } from '../Drawer.js';
 import { DataTable } from '../primitives/DataTable.js';
 import { Checkbox } from '../primitives/Toggle.js';
@@ -17,8 +17,10 @@ const stationService = new CloudStationService();
 
 const userFormSchema = z.object({
   fullName: z.string().min(2, 'Full name must be at least 2 characters'),
+  identityType: z.enum(['Email', 'Phone']),
   email: z.string().email('Invalid email address').or(z.literal('')).optional().nullable(),
   phone: z.string().optional().nullable(),
+  password: z.string().optional().nullable(),
   status: z.enum(['ACTIVE', 'INACTIVE']),
   role: z.enum(['Owner', 'Manager', 'Accountant', 'Staff', 'Attendant']),
   stationIds: z.array(z.string()),
@@ -27,21 +29,89 @@ const userFormSchema = z.object({
 
 type UserFormValues = z.infer<typeof userFormSchema>;
 
-const buildUserColumns = (stations: any[], startEdit: (u: any) => void): ColumnDef<any, any>[] => [
+// --- helpers ---------------------------------------------------------------
+function generatePassword(): string {
+  // Readable, strong: avoids ambiguous chars (0/O, 1/l/I).
+  const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+  const lower = 'abcdefghijkmnpqrstuvwxyz';
+  const digits = '23456789';
+  const all = upper + lower + digits;
+  const pick = (set: string) => set[Math.floor(Math.random() * set.length)];
+  let out = pick(upper) + pick(lower) + pick(digits);
+  for (let i = 0; i < 7; i++) out += pick(all);
+  return out
+    .split('')
+    .sort(() => Math.random() - 0.5)
+    .join('');
+}
+
+async function copyText(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const inputStyle: React.CSSProperties = {
+  height: '32px',
+  padding: '0 8px',
+  borderRadius: 'var(--radius-input)',
+  border: '1px solid var(--border-strong)',
+  fontSize: '13px',
+};
+
+type StatusKind = 'active' | 'inactive' | 'nologin';
+function statusOf(u: any): StatusKind {
+  if (u.status === 'INACTIVE') return 'inactive';
+  if (!u.authUserId) return 'nologin';
+  return 'active';
+}
+const STATUS_META: Record<StatusKind, { label: string; bg: string; fg: string }> = {
+  active: { label: 'Active', bg: 'rgba(16, 185, 129, 0.15)', fg: 'rgb(5, 150, 105)' },
+  inactive: { label: 'Inactive', bg: 'rgba(239, 68, 68, 0.15)', fg: 'rgb(220, 38, 38)' },
+  nologin: { label: 'No login', bg: 'rgba(148, 163, 184, 0.18)', fg: 'var(--text-muted)' },
+};
+
+function loginIdentity(u: any): string {
+  if (u.email) return u.email;
+  if (u.phone) return u.phone;
+  return '—';
+}
+
+const buildUserColumns = (
+  stations: any[],
+  startEdit: (u: any) => void,
+  onReset: (u: any) => void,
+  onToggleActive: (u: any) => void,
+): ColumnDef<any, any>[] => [
   { accessorKey: 'fullName', header: 'Name', cell: ({ getValue }) => <span style={{ fontWeight: 600, color: 'var(--text-strong)' }}>{getValue() as string}</span> },
   {
-    accessorKey: 'email',
-    header: 'Email / Type',
-    cell: ({ getValue }) => (getValue() as string) || <span style={{ color: 'var(--text-muted)', fontSize: '12px', fontStyle: 'italic' }}>Offline Attendant</span>,
+    id: 'identity',
+    header: 'Login',
+    cell: ({ row }) => {
+      const u = row.original;
+      const id = loginIdentity(u);
+      return <span style={{ fontSize: '12px', color: u.authUserId ? 'var(--text-default)' : 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{id}</span>;
+    },
   },
   {
     accessorKey: 'role',
     header: 'Role',
     cell: ({ row }) => {
       const u = row.original;
-      const bg = !u.email ? 'rgba(245, 158, 11, 0.15)' : u.role === 'Owner' ? 'rgba(99, 102, 241, 0.15)' : u.role === 'Manager' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(46, 94, 136, 0.15)';
-      const fg = !u.email ? '#f59e0b' : u.role === 'Owner' ? '#6366f1' : u.role === 'Manager' ? 'rgb(52, 211, 153)' : '#2e5e88';
-      return <span style={{ fontSize: '11px', fontWeight: 650, padding: '2px 6px', borderRadius: '4px', backgroundColor: bg, color: fg }}>{!u.email ? 'Attendant' : u.role}</span>;
+      const bg = u.role === 'Owner' ? 'rgba(99, 102, 241, 0.15)' : u.role === 'Manager' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(46, 94, 136, 0.15)';
+      const fg = u.role === 'Owner' ? '#6366f1' : u.role === 'Manager' ? 'rgb(52, 211, 153)' : '#2e5e88';
+      return <span style={{ fontSize: '11px', fontWeight: 650, padding: '2px 6px', borderRadius: '4px', backgroundColor: bg, color: fg }}>{u.role}</span>;
+    },
+  },
+  {
+    id: 'status',
+    header: 'Status',
+    cell: ({ row }) => {
+      const meta = STATUS_META[statusOf(row.original)];
+      return <span style={{ fontSize: '11px', fontWeight: 650, padding: '2px 6px', borderRadius: '4px', backgroundColor: meta.bg, color: meta.fg }}>{meta.label}</span>;
     },
   },
   {
@@ -56,9 +126,26 @@ const buildUserColumns = (stations: any[], startEdit: (u: any) => void): ColumnD
   {
     id: 'actions',
     header: '',
-    cell: ({ row }) => (
-      <button onClick={() => startEdit(row.original)} style={{ height: '24px', padding: '0 8px', fontSize: '11px', backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-strong)', color: 'var(--text-default)', borderRadius: '4px', cursor: 'pointer' }}>Edit</button>
-    ),
+    cell: ({ row }) => {
+      const u = row.original;
+      const btn: React.CSSProperties = { height: '24px', padding: '0 8px', fontSize: '11px', backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-strong)', color: 'var(--text-default)', borderRadius: '4px', cursor: 'pointer' };
+      return (
+        <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+          <button onClick={() => startEdit(u)} style={btn}>Edit</button>
+          {u.authUserId && (
+            <button onClick={() => onReset(u)} style={btn}>Reset</button>
+          )}
+          {u.authUserId && (
+            <button
+              onClick={() => onToggleActive(u)}
+              style={{ ...btn, color: u.status === 'INACTIVE' ? 'rgb(5, 150, 105)' : 'rgb(220, 38, 38)' }}
+            >
+              {u.status === 'INACTIVE' ? 'Reactivate' : 'Deactivate'}
+            </button>
+          )}
+        </div>
+      );
+    },
   },
 ];
 
@@ -68,10 +155,18 @@ export const UserRolesAssignment: React.FC = () => {
   const [users, setUsers] = useState<any[]>([]);
   const [stations, setStations] = useState<Station[]>([]);
   const [loading, setLoading] = useState(true);
-  
+
   // Drawer visibility state
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<any | null>(null);
+
+  // Credentials card shown after provisioning a login account.
+  const [credentials, setCredentials] = useState<{ login: string; password: string } | null>(null);
+
+  // Reset-password dialog state.
+  const [resetTarget, setResetTarget] = useState<any | null>(null);
+  const [resetPassword, setResetPassword] = useState('');
+  const [resetBusy, setResetBusy] = useState(false);
 
   const {
     register,
@@ -84,8 +179,10 @@ export const UserRolesAssignment: React.FC = () => {
     resolver: zodResolver(userFormSchema),
     defaultValues: {
       fullName: '',
+      identityType: 'Phone',
       email: '',
       phone: '',
+      password: '',
       status: 'ACTIVE' as const,
       role: 'Staff',
       stationIds: [] as string[],
@@ -94,8 +191,10 @@ export const UserRolesAssignment: React.FC = () => {
   });
 
   const watchEnableAppAccess = watch('enableAppAccess');
+  const watchIdentityType = watch('identityType');
   const watchRole = watch('role');
   const watchStationIds = watch('stationIds') || [];
+  const watchPassword = watch('password') || '';
 
   useEffect(() => {
     loadData();
@@ -121,47 +220,70 @@ export const UserRolesAssignment: React.FC = () => {
     }
   };
 
-  const handleCreateOrUpdate = async (values: any) => {
-    // Custom check: if app access is enabled, email is required
-    if (values.enableAppAccess && (!values.email || values.email.trim() === '')) {
-      toast.error('Email address is required for application login access.');
-      return;
+  const mergeUser = (row: any) => {
+    const merge = (list: any[] = []) => (list.some((u) => u.id === row.id)
+      ? list.map((u) => (u.id === row.id ? { ...u, ...row } : u))
+      : [...list, row]);
+    setUsers((prev) => merge(prev));
+    qc.setQueryData(queryKeys.users(), (prev: any[] | undefined) => merge(prev));
+    qc.invalidateQueries({ queryKey: queryKeys.users(), refetchType: 'none' });
+  };
+
+  const handleCreateOrUpdate = async (values: UserFormValues) => {
+    const wantsLogin = !!values.enableAppAccess;
+    const isPhone = values.identityType === 'Phone';
+
+    if (!editingUser && wantsLogin) {
+      // Provisioning a new login account requires an identity + password.
+      if (isPhone && (!values.phone || values.phone.trim() === '')) {
+        toast.error('A phone number is required for phone login.');
+        return;
+      }
+      if (!isPhone && (!values.email || values.email.trim() === '')) {
+        toast.error('An email address is required for email login.');
+        return;
+      }
+      if (!values.password || values.password.length < 8) {
+        toast.error('Set a password of at least 8 characters (use Generate).');
+        return;
+      }
     }
 
     try {
-      const payload = {
+      const payload: any = {
         fullName: values.fullName,
-        email: values.enableAppAccess ? values.email : null,
+        // For a phone identity we deliberately clear email so the server uses
+        // the synthetic phone handle as the login identity.
+        email: wantsLogin && !isPhone ? values.email : (editingUser ? values.email || null : null),
         phone: values.phone || null,
         status: values.status,
-        role: values.enableAppAccess ? values.role : 'Staff',
+        role: wantsLogin ? values.role : 'Staff',
         stationIds: values.stationIds,
       };
+      if (!editingUser && wantsLogin) {
+        payload.enableAppAccess = true;
+        payload.password = values.password;
+      }
 
       const saved = editingUser
         ? await userService.updateUser(editingUser.id, payload)
         : await userService.createUser(payload);
 
-      resetForm();
-      setIsFormOpen(false);
+      // Show credentials to hand over when a fresh login was provisioned.
+      if (!editingUser && wantsLogin) {
+        const login = isPhone ? (values.phone || '').trim() : (values.email || '').trim();
+        setCredentials({ login, password: values.password || '' });
+      } else {
+        setIsFormOpen(false);
+      }
 
-      // Optimistically reflect the change immediately. The authoritative read
-      // path can lag briefly behind the write (connection-level query caching),
-      // which previously left the freshly added member missing until a later
-      // refetch. Seed both local state and the query cache, then mark the query
-      // stale so it reconciles on the next natural access.
       const rowId = editingUser?.id ?? (saved as any)?.id;
       if (rowId) {
-        const optimisticRow = { ...(editingUser || {}), id: rowId, ...payload };
-        const merge = (list: any[] = []) => (list.some((u) => u.id === rowId)
-          ? list.map((u) => (u.id === rowId ? { ...u, ...optimisticRow } : u))
-          : [...list, optimisticRow]);
-        setUsers((prev) => merge(prev));
-        qc.setQueryData(queryKeys.users(), (prev: any[] | undefined) => merge(prev));
-        qc.invalidateQueries({ queryKey: queryKeys.users(), refetchType: 'none' });
+        mergeUser({ ...(editingUser || {}), id: rowId, ...(saved as any), ...payload });
       } else {
         loadData(true);
       }
+      resetForm();
       toast.success(editingUser ? 'Team member updated.' : 'Team member added.');
     } catch (err: any) {
       toast.error(err.message || 'Failed to save team member');
@@ -169,12 +291,15 @@ export const UserRolesAssignment: React.FC = () => {
   };
 
   const startEdit = (u: any) => {
+    setCredentials(null);
     setEditingUser(u);
     reset({
       fullName: u.fullName,
-      enableAppAccess: !!u.email,
+      enableAppAccess: !!u.authUserId,
+      identityType: u.email ? 'Email' : 'Phone',
       email: u.email || '',
       phone: u.phone || '',
+      password: '',
       status: u.status || 'ACTIVE',
       role: u.role || 'Staff',
       stationIds: u.stationIds || [],
@@ -187,12 +312,20 @@ export const UserRolesAssignment: React.FC = () => {
     reset({
       fullName: '',
       enableAppAccess: true,
+      identityType: 'Phone',
       email: '',
       phone: '',
+      password: '',
       status: 'ACTIVE',
       role: 'Staff',
       stationIds: [],
     });
+  };
+
+  const closeForm = () => {
+    resetForm();
+    setCredentials(null);
+    setIsFormOpen(false);
   };
 
   const handleStationCheckbox = (stationId: string, checked: boolean) => {
@@ -203,21 +336,62 @@ export const UserRolesAssignment: React.FC = () => {
     }
   };
 
+  const openReset = (u: any) => {
+    setResetTarget(u);
+    setResetPassword(generatePassword());
+  };
+
+  const confirmReset = async () => {
+    if (!resetTarget || resetPassword.length < 8) return;
+    setResetBusy(true);
+    try {
+      await userService.resetUserPassword(resetTarget.id, resetPassword);
+      setCredentials({ login: loginIdentity(resetTarget), password: resetPassword });
+      toast.success('Password reset. Share the new credentials.');
+      setResetTarget(null);
+      setIsFormOpen(true);
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to reset password');
+    } finally {
+      setResetBusy(false);
+    }
+  };
+
+  const toggleActive = async (u: any) => {
+    try {
+      const updated = u.status === 'INACTIVE'
+        ? await userService.reactivateUser(u.id)
+        : await userService.deactivateUser(u.id);
+      mergeUser({ ...u, ...(updated as any) });
+      toast.success(u.status === 'INACTIVE' ? 'Member reactivated.' : 'Member deactivated.');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to update member');
+    }
+  };
+
   if (loading) return <div style={{ color: '#9ca3af', fontFamily: 'var(--font-mono)' }}>Loading team assignments...</div>;
+
+  const radioLabel = (value: 'Email' | 'Phone', label: string) => (
+    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', cursor: 'pointer' }}>
+      <input type="radio" value={value} checked={watchIdentityType === value} onChange={() => setValue('identityType', value)} />
+      {label}
+    </label>
+  );
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }} className="animate-fade-in">
-      
+
       {/* Header section with + Add Button */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <h2 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-strong)' }}>Team</h2>
-          <p style={{ color: 'var(--text-muted)', fontSize: '12px' }}>Manage user access permissions, station scoping, and offline pump attendants.</p>
+          <p style={{ color: 'var(--text-muted)', fontSize: '12px' }}>Add members with an email or phone, set their password, and manage access.</p>
         </div>
         {!isFormOpen && (
           <button
             onClick={() => {
               resetForm();
+              setCredentials(null);
               setIsFormOpen(true);
             }}
             style={{
@@ -239,7 +413,7 @@ export const UserRolesAssignment: React.FC = () => {
 
       {/* List / Table */}
       <DataTable
-        columns={buildUserColumns(stations, startEdit)}
+        columns={buildUserColumns(stations, startEdit, openReset, toggleActive)}
         data={users}
         emptyMessage="No team members yet."
         getRowId={(r: any) => r.id}
@@ -248,131 +422,202 @@ export const UserRolesAssignment: React.FC = () => {
       {/* Form Drawer */}
       <Drawer
         isOpen={isFormOpen}
-        onClose={() => {
-          resetForm();
-          setIsFormOpen(false);
-        }}
-        title={editingUser ? 'Edit Team Member Profile' : 'New Team Member / Attendant'}
+        onClose={closeForm}
+        title={editingUser ? 'Edit Team Member' : 'New Team Member'}
       >
-        <form onSubmit={handleSubmit(handleCreateOrUpdate)} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Full Name *</label>
-            <input
-              type="text"
-              style={{
-                height: '32px',
-                padding: '0 8px',
-                borderRadius: 'var(--radius-input)',
-                border: '1px solid var(--border-strong)',
-                fontSize: '13px',
-              }}
-              placeholder="e.g. John Doe"
-              {...register('fullName')}
-            />
-            {errors.fullName && <span style={{ color: 'var(--state-danger-fg)', fontSize: '11px' }}>{errors.fullName.message}</span>}
-          </div>
-
-          <div style={{ margin: '4px 0' }}>
-            <Checkbox
-              label="Enable App Access (allows login)"
-              {...register('enableAppAccess')}
-            />
-          </div>
-
-          {watchEnableAppAccess && (
+        {credentials ? (
+          <CredentialsCard credentials={credentials} onDone={closeForm} onCopy={copyText} toast={toast} />
+        ) : (
+          <form onSubmit={handleSubmit(handleCreateOrUpdate)} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Email Address *</label>
-              <input
-                type="email"
-                style={{
-                  height: '32px',
-                  padding: '0 8px',
-                  borderRadius: 'var(--radius-input)',
-                  border: '1px solid var(--border-strong)',
-                  fontSize: '13px',
-                }}
-                placeholder="e.g. john@station.com"
-                {...register('email')}
-              />
-              {errors.email && <span style={{ color: 'var(--state-danger-fg)', fontSize: '11px' }}>{errors.email.message}</span>}
+              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Full Name *</label>
+              <input type="text" style={inputStyle} placeholder="e.g. John Doe" {...register('fullName')} />
+              {errors.fullName && <span style={{ color: 'var(--state-danger-fg)', fontSize: '11px' }}>{errors.fullName.message}</span>}
             </div>
-          )}
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Phone Number</label>
-            <input
-              type="text"
+            {!editingUser && (
+              <div style={{ margin: '4px 0' }}>
+                <Checkbox label="Enable app access (allows login)" {...register('enableAppAccess')} />
+              </div>
+            )}
+
+            {/* Identity picker — only when provisioning a new login */}
+            {!editingUser && watchEnableAppAccess && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', padding: '12px', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', backgroundColor: 'var(--bg-canvas)' }}>
+                <div style={{ display: 'flex', gap: '20px' }}>
+                  <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Login with</span>
+                  {radioLabel('Phone', 'Phone')}
+                  {radioLabel('Email', 'Email')}
+                </div>
+
+                {watchIdentityType === 'Email' ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Email Address *</label>
+                    <input type="email" style={inputStyle} placeholder="e.g. john@station.com" {...register('email')} />
+                    {errors.email && <span style={{ color: 'var(--state-danger-fg)', fontSize: '11px' }}>{errors.email.message}</span>}
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Phone Number *</label>
+                    <input type="tel" style={inputStyle} placeholder="e.g. 98765 43210" {...register('phone')} />
+                    <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>They sign in with this phone number + password. No SMS is sent.</span>
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Password *</label>
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    <input type="text" style={{ ...inputStyle, flex: 1, fontFamily: 'var(--font-mono)' }} placeholder="At least 8 characters" {...register('password')} />
+                    <button type="button" onClick={() => setValue('password', generatePassword())} style={{ ...inputStyle, cursor: 'pointer', backgroundColor: 'var(--bg-surface)', fontWeight: 600 }}>Generate</button>
+                    <button type="button" onClick={async () => (await copyText(watchPassword)) ? toast.success('Password copied.') : toast.error('Copy failed.')} disabled={!watchPassword} style={{ ...inputStyle, cursor: watchPassword ? 'pointer' : 'not-allowed', backgroundColor: 'var(--bg-surface)', fontWeight: 600, opacity: watchPassword ? 1 : 0.5 }}>Copy</button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Profile phone for record-only / edit (non-login) */}
+            {(editingUser || !watchEnableAppAccess) && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Phone Number</label>
+                <input type="tel" style={inputStyle} placeholder="e.g. 98765 43210" {...register('phone')} />
+              </div>
+            )}
+
+            {(editingUser ? !!editingUser.authUserId : watchEnableAppAccess) && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>System Role</label>
+                <select style={{ ...inputStyle, color: 'var(--text-strong)' }} {...register('role')}>
+                  <option value="Owner">Owner (Global Admin)</option>
+                  <option value="Manager">Manager</option>
+                  <option value="Accountant">Accountant</option>
+                  <option value="Staff">Staff</option>
+                  <option value="Attendant">Attendant (Mobile handover)</option>
+                </select>
+              </div>
+            )}
+
+            {watchRole !== 'Owner' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Assign Stations</label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '6px' }}>
+                  {stations.map((s) => (
+                    <Checkbox
+                      key={s.id}
+                      label={`${s.name} (${s.code})`}
+                      checked={watchStationIds.includes(s.id)}
+                      onChange={(e) => handleStationCheckbox(s.id, e.target.checked)}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {editingUser && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Status</label>
+                <select style={{ ...inputStyle, color: 'var(--text-strong)' }} {...register('status')}>
+                  <option value="ACTIVE">Active</option>
+                  <option value="INACTIVE">Inactive</option>
+                </select>
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={isSubmitting}
               style={{
-                height: '32px',
-                padding: '0 8px',
-                borderRadius: 'var(--radius-input)',
-                border: '1px solid var(--border-strong)',
-                fontSize: '13px',
+                height: '36px',
+                backgroundColor: 'var(--brand-primary)',
+                border: 'none',
+                color: '#ffffff',
+                borderRadius: 'var(--radius-button)',
+                fontWeight: 600,
+                cursor: 'pointer',
+                marginTop: '12px',
+                opacity: isSubmitting ? 0.6 : 1,
               }}
-              placeholder="e.g. +91 9999999999"
-              {...register('phone')}
-            />
-            {errors.phone && <span style={{ color: 'var(--state-danger-fg)', fontSize: '11px' }}>{errors.phone.message}</span>}
-          </div>
+            >
+              {isSubmitting ? 'Saving...' : (editingUser ? 'Save Changes' : 'Add Member')}
+            </button>
+          </form>
+        )}
+      </Drawer>
 
-          {watchEnableAppAccess && (
+      {/* Reset password dialog */}
+      <Drawer
+        isOpen={!!resetTarget}
+        onClose={() => setResetTarget(null)}
+        title="Reset password"
+      >
+        {resetTarget && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <p style={{ fontSize: '13px', color: 'var(--text-default)' }}>
+              Set a new password for <strong>{resetTarget.fullName}</strong> ({loginIdentity(resetTarget)}). The old password stops working immediately.
+            </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>System Role</label>
-              <select
-                style={{
-                  height: '32px',
-                  padding: '0 8px',
-                  borderRadius: 'var(--radius-input)',
-                  border: '1px solid var(--border-strong)',
-                  fontSize: '13px',
-                  color: 'var(--text-strong)'
-                }}
-                {...register('role')}
-              >
-                <option value="Owner">Owner (Global Admin)</option>
-                <option value="Manager">Manager</option>
-                <option value="Accountant">Accountant</option>
-                <option value="Staff">Staff</option>
-                <option value="Attendant">Attendant (Mobile handover)</option>
-              </select>
-            </div>
-          )}
-
-          {(!watchEnableAppAccess || watchRole !== 'Owner') && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Assign Stations</label>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '6px' }}>
-                {stations.map((s) => (
-                  <Checkbox
-                    key={s.id}
-                    label={`${s.name} (${s.code})`}
-                    checked={watchStationIds.includes(s.id)}
-                    onChange={(e) => handleStationCheckbox(s.id, e.target.checked)}
-                  />
-                ))}
+              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>New Password *</label>
+              <div style={{ display: 'flex', gap: '6px' }}>
+                <input type="text" style={{ ...inputStyle, flex: 1, fontFamily: 'var(--font-mono)' }} value={resetPassword} onChange={(e) => setResetPassword(e.target.value)} />
+                <button type="button" onClick={() => setResetPassword(generatePassword())} style={{ ...inputStyle, cursor: 'pointer', backgroundColor: 'var(--bg-surface)', fontWeight: 600 }}>Generate</button>
+                <button type="button" onClick={async () => (await copyText(resetPassword)) ? toast.success('Password copied.') : toast.error('Copy failed.')} style={{ ...inputStyle, cursor: 'pointer', backgroundColor: 'var(--bg-surface)', fontWeight: 600 }}>Copy</button>
               </div>
             </div>
-          )}
-
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            style={{
-              height: '36px',
-              backgroundColor: 'var(--brand-primary)',
-              border: 'none',
-              color: '#ffffff',
-              borderRadius: 'var(--radius-button)',
-              fontWeight: 600,
-              cursor: 'pointer',
-              marginTop: '12px',
-              opacity: isSubmitting ? 0.6 : 1,
-            }}
-          >
-            {isSubmitting ? 'Saving...' : (editingUser ? 'Save Profile Changes' : 'Add Member')}
-          </button>
-        </form>
+            <button
+              type="button"
+              onClick={confirmReset}
+              disabled={resetBusy || resetPassword.length < 8}
+              style={{ height: '36px', backgroundColor: 'var(--brand-primary)', border: 'none', color: '#fff', borderRadius: 'var(--radius-button)', fontWeight: 600, cursor: 'pointer', opacity: resetBusy || resetPassword.length < 8 ? 0.6 : 1 }}
+            >
+              {resetBusy ? 'Resetting...' : 'Set New Password'}
+            </button>
+          </div>
+        )}
       </Drawer>
+    </div>
+  );
+};
+
+const CredentialsCard: React.FC<{
+  credentials: { login: string; password: string };
+  onDone: () => void;
+  onCopy: (text: string) => Promise<boolean>;
+  toast: ReturnType<typeof useToast>;
+}> = ({ credentials, onDone, onCopy, toast }) => {
+  const rowStyle: React.CSSProperties = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', padding: '8px 10px', borderRadius: 'var(--radius-input)', backgroundColor: 'var(--bg-canvas)', border: '1px solid var(--border-soft)' };
+  const copyBtn: React.CSSProperties = { height: '26px', padding: '0 8px', fontSize: '11px', backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-strong)', borderRadius: '4px', cursor: 'pointer', fontWeight: 600 };
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+      <div style={{ padding: '10px 12px', borderRadius: 'var(--radius-input)', backgroundColor: 'rgba(16, 185, 129, 0.12)', color: 'rgb(5, 150, 105)', fontSize: '12px', fontWeight: 600 }}>
+        ✓ Login ready. Copy and hand these over — the password is shown only once.
+      </div>
+      <div style={rowStyle}>
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <span style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)' }}>Login</span>
+          <span style={{ fontSize: '13px', fontFamily: 'var(--font-mono)', color: 'var(--text-strong)' }}>{credentials.login}</span>
+        </div>
+        <button type="button" style={copyBtn} onClick={async () => (await onCopy(credentials.login)) ? toast.success('Login copied.') : toast.error('Copy failed.')}>Copy</button>
+      </div>
+      <div style={rowStyle}>
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <span style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)' }}>Password</span>
+          <span style={{ fontSize: '13px', fontFamily: 'var(--font-mono)', color: 'var(--text-strong)' }}>{credentials.password}</span>
+        </div>
+        <button type="button" style={copyBtn} onClick={async () => (await onCopy(credentials.password)) ? toast.success('Password copied.') : toast.error('Copy failed.')}>Copy</button>
+      </div>
+      <button
+        type="button"
+        onClick={async () => { await onCopy(`Login: ${credentials.login}\nPassword: ${credentials.password}`); toast.success('Credentials copied.'); }}
+        style={{ height: '32px', backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-strong)', color: 'var(--text-default)', borderRadius: 'var(--radius-button)', fontWeight: 600, cursor: 'pointer', fontSize: '12px' }}
+      >
+        Copy both
+      </button>
+      <button
+        type="button"
+        onClick={onDone}
+        style={{ height: '36px', backgroundColor: 'var(--brand-primary)', border: 'none', color: '#fff', borderRadius: 'var(--radius-button)', fontWeight: 600, cursor: 'pointer' }}
+      >
+        Done
+      </button>
     </div>
   );
 };

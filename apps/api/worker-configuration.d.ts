@@ -4,6 +4,8 @@
 interface __BaseEnv_Env {
 	HYPERDRIVE: Hyperdrive;
 	SUPABASE_JWT_SECRET: string;
+	SUPABASE_URL: string;
+	SUPABASE_SECRET_KEY: string;
 }
 declare namespace Cloudflare {
 	interface GlobalProps {
