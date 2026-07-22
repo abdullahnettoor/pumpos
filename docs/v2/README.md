@@ -16,7 +16,7 @@ docs win. The root [`AGENTS.md`](../../AGENTS.md) is the short, authoritative ru
 | [frontend-patterns.md](frontend-patterns.md) | `apps/web` + `packages/ui` — query layer, primitives, design system, navigation |
 | [desktop-patterns.md](desktop-patterns.md) | `apps/desktop` — Tauri shell, web-first strategy, platform seams |
 | [ui-assessment.md](ui-assessment.md) | Current UI gaps, design-quality review, refactor roadmap |
-| [open-questions.md](open-questions.md) | Decisions still pending (prepaid top-up CMS, offline sync, double-entry) |
+| [open-questions.md](open-questions.md) | Decisions still pending (prepaid top-up CMS, Level 2 resilience/sync, double-entry) |
 
 ## The one rule that matters most
 

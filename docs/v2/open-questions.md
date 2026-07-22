@@ -23,17 +23,27 @@ Decisions required:
 `CreateSale` (settles like card, no drawer impact) rather than a dealer wallet — unless
 discovery shows dealers genuinely run their own prepaid.
 
-## 2. Offline-first + sync (deferred)
+## 2. Resilience (Level 2 — graceful degradation, deferred)
 
-PostgreSQL is authoritative; SQLite is a planned operational cache (desktop only; mobile
-does not get offline). The event backbone + idempotency keys are designed so offline slots
+Target is **Level 2**: the app is used **mostly online** and must degrade gracefully
+on connectivity drops — never blocking the operator — then reconcile when back. It is
+**not** cold-start offline-first, and **not** multi-day disconnected operation
+(that is Level 3, future, gated behind real customer demand).
+
+PostgreSQL is authoritative; the local store is a durable **write outbox + warm read
+cache** (desktop = Tauri SQLite, web = IndexedDB), never the source of truth (mobile
+stays online-only). The event backbone + idempotency keys are designed so this slots
 in later with **no domain change**:
-- Create event locally → store → retry sync → cloud confirmation.
-- Every sync operation must be idempotent (the `Idempotency-Key` mechanism + unique
+- Optimistic write → durable local outbox → retry/backoff → cloud confirmation.
+- Core actions (incl. shift / business-day **close**) **queue and reconcile** — never
+  blocked on the network.
+- Every sync operation is idempotent (the `Idempotency-Key` mechanism + unique
   `event_id` already support replay-safety).
 
-Open: conflict resolution policy, local store schema, sync cursor/queue, and the Tauri
-SQLite seam (see [desktop-patterns.md](desktop-patterns.md)).
+Open: conflict-resolution policy (light: last-writer-wins on projections, flag only
+drawer/shift-close collisions), local store schema, sync cursor/queue, real network
+detection, and the Tauri SQLite seam (see [desktop-patterns.md](desktop-patterns.md)
+and [../roadmap/phase-O-offline-sync.md](../roadmap/phase-O-offline-sync.md)).
 
 ## 3. Double-entry ledger (deferred)
 

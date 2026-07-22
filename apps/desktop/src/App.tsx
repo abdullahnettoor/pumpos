@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { 
+import {
   AppShell, 
   Login, 
-  OnboardingWizard, 
+  WebOnboardingNotice,
   StationOverview, 
   DashboardOverview,
   OrganizationOverview,
@@ -29,6 +29,11 @@ import {
 import { Station } from '@pump/shared';
 
 setApiBaseUrl(import.meta.env.VITE_API_URL);
+
+// Onboarding is done on the web console only; the desktop app links users there
+// and unlocks automatically once the station is READY_FOR_OPERATIONS. Override
+// the target with VITE_WEB_URL for dev/preview builds.
+const webConsoleUrl = (import.meta.env.VITE_WEB_URL as string | undefined) || 'https://console.pumpos.app';
 
 const stationService = new CloudStationService();
 
@@ -86,6 +91,7 @@ const App: React.FC = () => {
   const [stations, setStations] = useState<Station[]>([]);
   const [selectedStation, setSelectedStation] = useState<Station | null>(null);
   const [loading, setLoading] = useState(true);
+  const [rechecking, setRechecking] = useState(false);
 
   // Supabase Auth and Backend user context states
   const [session, setSession] = useState<any>(null);
@@ -196,24 +202,22 @@ const App: React.FC = () => {
 
   const handleStationChange = (station: Station) => {
     setSelectedStation(station);
-    if (station.onboardingStatus !== 'READY_FOR_OPERATIONS') {
-      setCurrentPath('/onboarding');
-    } else {
-      setCurrentPath('/dashboard');
-    }
+    setCurrentPath('/dashboard');
   };
 
-  const handleOnboardingComplete = async (completedStation: Station) => {
+  const handleOnboardingRecheck = async () => {
     try {
+      setRechecking(true);
       await qc.invalidateQueries({ queryKey: queryKeys.stations() });
       const list = await stationService.getStations();
       qc.setQueryData(queryKeys.stations(), list);
       setStations(list);
-      setSelectedStation(list.find((station) => station.id === completedStation.id) || completedStation);
+      setSelectedStation((prev) => list.find((s) => s.id === prev?.id) || list[0] || prev);
     } catch (err) {
       console.error(err);
+    } finally {
+      setRechecking(false);
     }
-    setCurrentPath('/dashboard');
   };
 
   const handleLogout = async () => {
@@ -358,49 +362,23 @@ const App: React.FC = () => {
       );
     }
 
-    // 4. Gating check: Block operators/staff if station setup is not completed
-    if (!isStationReady && ((userRole as string) === 'Staff' || (userRole as string) === 'Accountant')) {
+    // 4. Gating: station not onboarded yet. Onboarding is web-console only, so
+    //    the desktop app shows a "finish on the web" notice (role-aware copy)
+    //    and unlocks automatically once the station is READY_FOR_OPERATIONS.
+    if (!isStationReady) {
       return (
-        <div style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          minHeight: '60vh',
-          textAlign: 'center',
-          padding: '24px',
-          backgroundColor: 'var(--bg-surface)',
-          border: '1px solid var(--border-soft)',
-          borderRadius: 'var(--radius-card)',
-          maxWidth: '500px',
-          margin: '40px auto'
-        }} className="animate-fade-in">
-          <h2 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-strong)' }}>Station Onboarding In Progress</h2>
-          <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '8px' }}>
-            The fuel station configuration is currently being finalized by the Owner or Manager. Operations will be unlocked automatically once complete.
-          </p>
-        </div>
-      );
-    }
-
-    // 5. Gating check: Force Owner/Manager into the Onboarding Wizard
-    if (!isStationReady && currentPath !== '/onboarding') {
-      return (
-        <OnboardingWizard
-          onOnboardingComplete={handleOnboardingComplete}
+        <WebOnboardingNotice
+          webUrl={webConsoleUrl}
+          role={(userRole as string) || 'Staff'}
           userName={userName}
+          onRecheck={handleOnboardingRecheck}
+          onSignOut={handleLogout}
+          rechecking={rechecking}
         />
       );
     }
 
     switch (currentPath) {
-      case '/onboarding':
-        return (
-          <OnboardingWizard
-            onOnboardingComplete={handleOnboardingComplete}
-            userName={userName}
-          />
-        );
       case '/dashboard':
         return (
           <DashboardOverview

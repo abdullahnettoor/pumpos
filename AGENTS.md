@@ -13,7 +13,7 @@ PumpOS is a multi-tenant fuel station management platform designed primarily for
 Primary goals:
 
 * Operational simplicity
-* Offline resilience
+* Network resilience (graceful degradation, not offline-first)
 * Strong auditability
 * Multi-tenant isolation
 * Fast desktop experience
@@ -134,18 +134,21 @@ Source of truth:
 Supabase PostgreSQL
 ```
 
-Offline cache:
+Local durability (resilience only, not a full offline store):
 
 ```text
-SQLite
+Write outbox — Tauri SQLite (desktop) / IndexedDB (web)
 ```
 
 Rules:
 
-* PostgreSQL is authoritative.
-* SQLite is an operational cache.
-* SQLite is never the final source of truth.
-* Sync eventually reconciles local events to cloud.
+* PostgreSQL is always authoritative.
+* The local store is a durable **write outbox + warm read cache**, never the
+  final source of truth.
+* The product target is **Level 2 resilience** (online-primary, graceful
+  degradation on connectivity drops) — NOT cold-start offline-first and NOT
+  multi-day disconnected operation. See `docs/roadmap/phase-O-offline-sync.md`.
+* Sync eventually reconciles queued local events to cloud; replay is idempotent.
 
 ---
 
@@ -531,23 +534,28 @@ Full plan + audit: `docs/roadmap/phase-P-performance.md`. Practice + review chec
 
 ---
 
-# Offline Rules
+# Resilience Rules (Level 2 — online-primary, graceful degradation)
 
-Desktop supports offline mode.
+PumpOS is used **mostly online**. Connectivity problems must never block the
+operator: the app degrades gracefully and reconciles when the network returns.
+This is **not** offline-first (cold start with no internet) and **not** multi-day
+disconnected operation — those are an explicitly-future **Level 3** (see
+`docs/roadmap/phase-O-offline-sync.md`).
 
-Mobile does not.
+Desktop (Tauri) is the resilience tier: its UI, code, and assets (incl. fonts)
+are bundled locally via `frontendDist`, so the shell always loads — only data/API
+calls need the network. Mobile is online-only.
 
-Offline workflow:
+Rules when connectivity drops mid-session:
 
-```text
-Create Event
- ↓
-Store Locally
- ↓
-Retry Sync
- ↓
-Cloud Confirmation
-```
+* Never block a core operator action (sale, expense, collection, shift
+  open/**close**) on the network — queue it, don't gate it.
+* Writes: optimistic apply → durable local outbox → retry/backoff → idempotent
+  replay (via `idempotency_keys` + unique `event_id`).
+* Reads: serve from the warm TanStack Query cache; show honest sync state
+  (online / pending N / failed).
+* Cloud stays authoritative; last-writer-wins on projections; flag only
+  money-sensitive collisions (drawer / shift-close) for review.
 
 Every sync operation must be idempotent.
 

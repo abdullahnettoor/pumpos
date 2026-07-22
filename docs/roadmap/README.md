@@ -16,7 +16,7 @@ shippable and extends existing domain entities (per `AGENTS.md`) rather than red
 | [M](phase-M-multisite.md) | Multi-site topology (marketing + console + mobile) | 🟡 Code done; deploy/ops remain | — |
 | [MB](phase-MB-mobile-owner.md) | Mobile owner app (owner-first PWA) | 🟡 Partial (attendant handover done) | M, R (R4), F, L |
 | [D](phase-D-data-pagination.md) | Data access & pagination | ⬜ Planned (not started) | P (complementary) |
-| [O](phase-O-offline-sync.md) | Offline & sync (desktop) | ⬜ Foundations only (idempotency + outbox) | — |
+| [O](phase-O-offline-sync.md) | Resilience & sync (Level 2, desktop) | ⬜ Foundations only (idempotency + outbox) | — |
 | [X](phase-X-expansion.md) | Expansion modules | ⬜ Future (X4 prepaid/OMC partly seeded) | core stable |
 
 Recently shipped (this line supersedes the old sequence): **Customer Sales** in the

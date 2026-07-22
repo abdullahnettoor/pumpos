@@ -262,11 +262,15 @@ This preserves operational history and accountability.
 
 ---
 
-# Offline Operations
+# Network Resilience (Level 2 — graceful degradation)
 
-The desktop application must continue operating during internet outages.
+PumpOS is used **mostly online**. The goal is that a temporary internet outage or
+connectivity blip **does not block the operator** mid-session — work continues and
+reconciles to the cloud when the network returns. This is resilience, **not**
+cold-start offline-first.
 
-Users should be able to:
+During a connectivity drop, the desktop app should let users continue an
+**in-progress** flow:
 
 - Open shifts
     
@@ -279,21 +283,19 @@ Users should be able to:
 - Record collections
     
 
-without internet access.
+These queue locally (durable write outbox) and sync when back online, rather than
+being blocked on the network.
 
 ---
 
-# Offline Usage Expectations
+# Resilience Expectations
 
-Recommended usage:
+The primary mode is **online**. Short outages are tolerated transparently;
+prolonged disconnection surfaces a clear sync warning (online / pending / failed).
 
-```text
-Up to 7 Days
-```
-
-The system should warn users when prolonged offline operation occurs.
-
-The objective is to encourage synchronization while preserving operational continuity.
+> Multi-day standalone operation (e.g. "up to 7 days offline") is a **future
+> Level 3** capability, not the current target. See
+> `docs/roadmap/phase-O-offline-sync.md`.
 
 ---
 

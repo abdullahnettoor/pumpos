@@ -5,6 +5,7 @@ import { DEFAULT_DSSR_CONFIG, paperFromStation } from '../services/reports/repor
 import { letterheadFromStation } from '../services/reports/letterhead.js';
 import { Button } from '../pump-ds/index.js';
 import { formatDateTime } from '../utils/format.js';
+import { isDesktopApp } from '../utils/platform.js';
 
 interface DailyDssrViewProps {
   dailyDssr: any;
@@ -85,9 +86,12 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
           }}>
             Save PDF
           </Button>
-          <Button variant="secondary" size="sm" leftIcon={<Printer />} onClick={() => window.print()}>
-            Print Daily DSSR
-          </Button>
+          {/* window.print() is a no-op in the Tauri webview — desktop uses Save PDF. */}
+          {!isDesktopApp() && (
+            <Button variant="secondary" size="sm" leftIcon={<Printer />} onClick={() => window.print()}>
+              Print Daily DSSR
+            </Button>
+          )}
         </div>
       </div>
 

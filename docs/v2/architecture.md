@@ -21,7 +21,7 @@ built as a TypeScript monorepo with a **ports & adapters** (hexagonal) core.
 │ @pump/shared              Zod schemas, types, guards, Result  │
 │ @pump/db                  Drizzle schema + migrations         │
 ├─────────────────────────────────────────────────────────────┤
-│ Supabase PostgreSQL (authoritative)  ·  SQLite (future cache) │
+│ Supabase PostgreSQL (authoritative)  ·  local outbox/cache (future) │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -118,8 +118,12 @@ is explicit and idempotent (`GenerateDssr` returns the existing snapshot unless 
   [`docs/initial/Permissions & Authorization Matrix (v1).md`](../initial/Permissions%20&%20Authorization%20Matrix%20(v1).md)).
   Guards live in `@pump/shared/permissions/guards.ts` and are applied in routes.
 
-## Offline (deferred)
+## Resilience (Level 2 — graceful degradation, deferred)
 
-PostgreSQL is authoritative; SQLite is a future operational cache. The event backbone
-+ idempotency keys make offline a later phase with no domain change. See
-[open-questions.md](open-questions.md).
+PostgreSQL is authoritative. The target is **Level 2**: online-primary, tolerate
+transient connectivity drops (optimistic writes → durable outbox → retry;
+warm-cache reads; reconcile on reconnect) — **not** cold-start offline-first and
+**not** multi-day disconnected operation (Level 3, future). The event backbone +
+idempotency keys make this a later phase with no domain change. See
+[open-questions.md](open-questions.md) and
+[../roadmap/phase-O-offline-sync.md](../roadmap/phase-O-offline-sync.md).

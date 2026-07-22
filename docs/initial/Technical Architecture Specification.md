@@ -27,7 +27,9 @@ Cloud PostgreSQL is the authoritative source of truth.
 
 ## Principle 2
 
-SQLite acts as a durable offline operational cache.
+A local store provides **resilience** (a durable write outbox + warm read cache),
+not a full offline database. Target is Level 2 (graceful degradation), not
+cold-start offline-first — see `docs/roadmap/phase-O-offline-sync.md`.
 
 ---
 

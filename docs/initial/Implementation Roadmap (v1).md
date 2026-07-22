@@ -53,19 +53,25 @@ must be fully operational before significant mobile development.
 
 ---
 
-## Principle 3: Offline From Day One
+## Principle 3: Resilience, Not Offline-First (Level 2)
 
-Offline capability is not a future enhancement.
+The app is used **mostly online**. Resilience means a connectivity drop never
+blocks the operator — work is queued and reconciled when the network returns.
 
-It is a core requirement.
+This is **not** cold-start offline-first, and **not** multi-day disconnected
+operation (that is Level 3, explicitly future).
 
 Every milestone should consider:
 
 ```text
-Online
-Offline
-Sync Recovery
+Online (primary)
+Graceful degradation on drop (queue + retry, never block)
+Sync Recovery (idempotent replay)
 ```
+
+> Note: earlier drafts framed this as "offline from day one / up to 7 days."
+> The product target is Level 2 (graceful degradation). See
+> `docs/roadmap/phase-O-offline-sync.md`.
 
 ---
 
