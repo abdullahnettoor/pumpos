@@ -235,7 +235,10 @@ in the client) and emit audit events; routes are rate-limited.
 >    `SUPABASE_SECRET_KEY` (modern `sb_secret_...`) goes in `.dev.vars` for local dev and, per deployed
 >    env, `wrangler secret put SUPABASE_SECRET_KEY` (add `--env preview` for the
 >    preview worker). Never commit the service-role key. Redeploy the API after setting it.
-> The A0 trigger change ships as `supabase/migrations/20260722000000_owner_signup_gate.sql`.
+> The A0 trigger gate lives in `supabase/migrations/20260719000001_rls.sql` (`handle_new_user()`
+> self-signup branch fires only when `raw_user_meta_data.signup_intent = 'owner'`); the same file
+> also adds a partial unique index on `users(auth_user_id)` (section 2b) so one auth user can never
+> map to two profile rows.
 
 ### A0 — Safety (tiny, do first) — **done**
 - Disable public Supabase sign-ups; gate the self-signup trigger branch behind

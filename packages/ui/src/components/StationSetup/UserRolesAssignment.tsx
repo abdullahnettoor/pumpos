@@ -17,13 +17,11 @@ const stationService = new CloudStationService();
 
 const userFormSchema = z.object({
   fullName: z.string().min(2, 'Full name must be at least 2 characters'),
-  identityType: z.enum(['Email', 'Phone']),
   email: z.string().email('Invalid email address').or(z.literal('')).optional().nullable(),
   phone: z.string().optional().nullable(),
   password: z.string().optional().nullable(),
   status: z.enum(['ACTIVE', 'INACTIVE']),
   role: z.enum(['Owner', 'Manager', 'Accountant', 'Staff', 'Attendant']),
-  stationIds: z.array(z.string()),
   enableAppAccess: z.boolean(),
 });
 
@@ -168,6 +166,13 @@ export const UserRolesAssignment: React.FC = () => {
   const [resetPassword, setResetPassword] = useState('');
   const [resetBusy, setResetBusy] = useState(false);
 
+  // Station assignments + identity type are managed outside react-hook-form: an
+  // unregistered RHF field (set only via setValue) can be dropped from the
+  // submitted payload, which previously left new members with no station
+  // assignments and could mis-detect the identity type.
+  const [stationIds, setStationIds] = useState<string[]>([]);
+  const [identityType, setIdentityType] = useState<'Email' | 'Phone'>('Phone');
+
   const {
     register,
     handleSubmit,
@@ -179,21 +184,17 @@ export const UserRolesAssignment: React.FC = () => {
     resolver: zodResolver(userFormSchema),
     defaultValues: {
       fullName: '',
-      identityType: 'Phone',
       email: '',
       phone: '',
       password: '',
       status: 'ACTIVE' as const,
       role: 'Staff',
-      stationIds: [] as string[],
       enableAppAccess: true,
     }
   });
 
   const watchEnableAppAccess = watch('enableAppAccess');
-  const watchIdentityType = watch('identityType');
   const watchRole = watch('role');
-  const watchStationIds = watch('stationIds') || [];
   const watchPassword = watch('password') || '';
 
   useEffect(() => {
@@ -231,7 +232,7 @@ export const UserRolesAssignment: React.FC = () => {
 
   const handleCreateOrUpdate = async (values: UserFormValues) => {
     const wantsLogin = !!values.enableAppAccess;
-    const isPhone = values.identityType === 'Phone';
+    const isPhone = identityType === 'Phone';
 
     if (!editingUser && wantsLogin) {
       // Provisioning a new login account requires an identity + password.
@@ -258,7 +259,7 @@ export const UserRolesAssignment: React.FC = () => {
         phone: values.phone || null,
         status: values.status,
         role: wantsLogin ? values.role : 'Staff',
-        stationIds: values.stationIds,
+        stationIds,
       };
       if (!editingUser && wantsLogin) {
         payload.enableAppAccess = true;
@@ -293,32 +294,32 @@ export const UserRolesAssignment: React.FC = () => {
   const startEdit = (u: any) => {
     setCredentials(null);
     setEditingUser(u);
+    setStationIds(u.stationIds || []);
+    setIdentityType(u.email ? 'Email' : 'Phone');
     reset({
       fullName: u.fullName,
       enableAppAccess: !!u.authUserId,
-      identityType: u.email ? 'Email' : 'Phone',
       email: u.email || '',
       phone: u.phone || '',
       password: '',
       status: u.status || 'ACTIVE',
       role: u.role || 'Staff',
-      stationIds: u.stationIds || [],
     });
     setIsFormOpen(true);
   };
 
   const resetForm = () => {
     setEditingUser(null);
+    setStationIds([]);
+    setIdentityType('Phone');
     reset({
       fullName: '',
       enableAppAccess: true,
-      identityType: 'Phone',
       email: '',
       phone: '',
       password: '',
       status: 'ACTIVE',
       role: 'Staff',
-      stationIds: [],
     });
   };
 
@@ -329,11 +330,7 @@ export const UserRolesAssignment: React.FC = () => {
   };
 
   const handleStationCheckbox = (stationId: string, checked: boolean) => {
-    if (checked) {
-      setValue('stationIds', [...watchStationIds, stationId]);
-    } else {
-      setValue('stationIds', watchStationIds.filter((id) => id !== stationId));
-    }
+    setStationIds((prev) => (checked ? [...prev, stationId] : prev.filter((id) => id !== stationId)));
   };
 
   const openReset = (u: any) => {
@@ -373,7 +370,7 @@ export const UserRolesAssignment: React.FC = () => {
 
   const radioLabel = (value: 'Email' | 'Phone', label: string) => (
     <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', cursor: 'pointer' }}>
-      <input type="radio" value={value} checked={watchIdentityType === value} onChange={() => setValue('identityType', value)} />
+      <input type="radio" value={value} checked={identityType === value} onChange={() => setIdentityType(value)} />
       {label}
     </label>
   );
@@ -450,7 +447,7 @@ export const UserRolesAssignment: React.FC = () => {
                   {radioLabel('Email', 'Email')}
                 </div>
 
-                {watchIdentityType === 'Email' ? (
+                {identityType === 'Email' ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                     <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Email Address *</label>
                     <input type="email" style={inputStyle} placeholder="e.g. john@station.com" {...register('email')} />
@@ -504,7 +501,7 @@ export const UserRolesAssignment: React.FC = () => {
                     <Checkbox
                       key={s.id}
                       label={`${s.name} (${s.code})`}
-                      checked={watchStationIds.includes(s.id)}
+                      checked={stationIds.includes(s.id)}
                       onChange={(e) => handleStationCheckbox(s.id, e.target.checked)}
                     />
                   ))}

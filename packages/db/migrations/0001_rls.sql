@@ -75,7 +75,6 @@ BEGIN
   END IF;
 
   IF v_existing_user_id IS NOT NULL THEN
-    -- Invitation flow: attach auth identity to the pre-created user
     UPDATE public.users
     SET
       auth_user_id = NEW.id,
@@ -86,9 +85,6 @@ BEGIN
     WHERE id = v_existing_user_id;
 
   ELSIF COALESCE(NEW.raw_user_meta_data->>'signup_intent', '') = 'owner' THEN
-    -- Owner-invite flow ONLY: create organization + owner user.
-    -- Gated behind an explicit signup_intent so stray/unmatched inserts
-    -- (including synthetic staff handles) never provision a tenant.
     v_org_name := COALESCE(NEW.raw_user_meta_data->>'organization_name', NEW.raw_user_meta_data->>'company_name', SPLIT_PART(NEW.email, '@', 1) || '''s Station');
 
     INSERT INTO public.organizations (id, name, subscription_plan, subscription_status, created_at, updated_at)
@@ -101,9 +97,7 @@ BEGIN
     v_new_user_id := gen_random_uuid();
     INSERT INTO public.users (id, organization_id, auth_user_id, full_name, email, role, status, created_at, updated_at)
     VALUES (v_new_user_id, v_new_org_id, NEW.id, v_full_name, NEW.email, v_default_role, 'ACTIVE', now(), now());
-
   END IF;
-  -- Any other unmatched insert: no-op (no org created).
 
   RETURN NEW;
 END;
@@ -113,6 +107,20 @@ DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+-- =====================================================================
+-- 2b. One auth user ↔ one profile row (guard against duplicate/rogue rows)
+--
+-- A synthetic phone-login handle (`…@users.pumpos.app`) is an auth-only
+-- identifier and must NEVER be stored as a public.users.email (phone staff
+-- keep email = NULL). Remove any such rogue rows, then enforce that a single
+-- auth user maps to at most one profile row. Partial index because
+-- record-only users (no login) legitimately have auth_user_id = NULL.
+-- Idempotent: safe to re-run.
+-- =====================================================================
+CREATE UNIQUE INDEX IF NOT EXISTS users_auth_user_id_uniq
+  ON public.users (auth_user_id)
+  WHERE auth_user_id IS NOT NULL;
 
 -- =====================================================================
 -- 3. Enable RLS on every business table (41)
