@@ -10,7 +10,10 @@ const PERSIST_PREFIXES = new Set([
   'tanks', 'products', 'customers', 'suppliers', 'expense-categories',
   'stations', 'dispensers', 'nozzles', 'users', 'shift-templates', 'pricing', 'organization',
 ]);
-const CACHE_BUSTER = 'v2';
+// Bump to invalidate all persisted client caches on next load. v3 drops stale
+// empty `stations` lists cached while a user briefly resolved to a wrong/empty
+// org (Phase A duplicate-auth-user bug).
+const CACHE_BUSTER = 'v3';
 
 /** localStorage key the persisted static/semi cache is written to. */
 export const PERSISTED_QUERY_CACHE_KEY = 'pumpos-rq-cache';
