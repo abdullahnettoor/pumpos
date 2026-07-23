@@ -12,6 +12,7 @@ import {
 import { CloudStationService } from '../../services/cloud.js';
 import { Drawer } from '../Drawer.js';
 import { Button, Chip } from '../../pump-ds/index.js';
+import { Check } from 'lucide-react';
 import { useConfirm } from '../primitives/ConfirmDialog.js';
 import {
   clearStoredOnboardingDraft,
@@ -180,6 +181,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     failedStage: null,
     completed: false,
   });
+  const [provisionedStation, setProvisionedStation] = useState<Station | null>(null);
 
   useEffect(() => {
     const stored = loadStoredOnboardingDraft();
@@ -654,8 +656,9 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
       await wait(150);
       setProvisioning((prev) => ({ ...prev, completed: true }));
       clearStoredOnboardingDraft();
-      await wait(300);
-      onOnboardingComplete(result.station);
+      // Hold on a success screen instead of jumping straight to the dashboard —
+      // the owner sees what they built and continues when ready.
+      setProvisionedStation(result.station);
     } catch (err: any) {
       const stageName = err?.details?.stage || provisioningStages[1];
       setProvisioning((prev) => ({
@@ -1622,6 +1625,61 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
           zIndex: 9999,
           padding: '24px',
         }}>
+          {provisioning.completed && !provisioning.failedMessage ? (
+            <div style={{
+              width: '100%',
+              maxWidth: '520px',
+              backgroundColor: 'var(--bg-surface)',
+              borderRadius: 'var(--radius-card)',
+              border: '1px solid var(--border-soft)',
+              boxShadow: '0 20px 48px rgba(15, 23, 42, 0.15)',
+              padding: '28px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '18px',
+            }} className="animate-fade-in">
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', textAlign: 'center' }}>
+                <div style={{ width: '48px', height: '48px', borderRadius: '999px', backgroundColor: 'var(--state-success-bg)', color: 'var(--state-success-fg)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Check size={26} />
+                </div>
+                <h3 style={{ fontSize: '19px', fontWeight: 700, color: 'var(--text-strong)', margin: 0 }}>Your station is live</h3>
+                <p style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.5, margin: 0 }}>
+                  {provisionedStation?.name
+                    ? <><strong style={{ color: 'var(--text-strong)' }}>{provisionedStation.name}</strong> is set up and ready for operations.</>
+                    : 'Your station is set up and ready for operations.'}
+                </p>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+                {[
+                  { label: 'Fuels', value: draft.products.length },
+                  { label: 'Tanks', value: draft.tanks.length },
+                  { label: 'Dispensers', value: draft.dispensers.length },
+                  { label: 'Nozzles', value: draft.nozzles.length },
+                  { label: 'Shift templates', value: draft.shiftTemplates.length },
+                  { label: 'Terminals', value: draft.paymentTerminals?.length ?? 0 },
+                ].map((t) => (
+                  <div key={t.label} style={{ backgroundColor: 'var(--bg-surface-alt)', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-card)', padding: '12px', textAlign: 'center' }}>
+                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: '18px', fontWeight: 700, color: 'var(--text-strong)' }}>{t.value}</div>
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{t.label}</div>
+                  </div>
+                ))}
+              </div>
+
+              <p style={{ fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center', margin: 0 }}>
+                You can fine-tune fuels, pricing and infrastructure anytime from Station Overview.
+              </p>
+
+              <Button
+                type="button"
+                variant="primary"
+                size="md"
+                onClick={() => { if (provisionedStation) onOnboardingComplete(provisionedStation); }}
+              >
+                Go to dashboard
+              </Button>
+            </div>
+          ) : (
           <div style={{
             width: '100%',
             maxWidth: '520px',
@@ -1759,6 +1817,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
               </div>
             )}
           </div>
+          )}
         </div>
       )}
     </div>

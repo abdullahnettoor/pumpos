@@ -326,8 +326,9 @@ station is READY — so an owner **cannot add team members until onboarding is f
 accidental gate we want to remove).
 
 **Target hub model:**
-- After login: `≥1 READY station` → Dashboard; else → **Organization hub** (rendered **inside
-  the `AppShell`**, not a bare wizard).
+- After login: `≥1 READY station` → Dashboard; else → the **Dashboard home** with a getting-started
+  **hero + checklist** (rendered **inside the `AppShell`**, not a bare wizard). The **Organization**
+  tab is the station/team management hub.
 - **Organization hub** = stations list (each with its onboarding-status badge + "Continue /
   Onboard" action) + **Team** section + org settings. Station onboarding + team addition are
   **launched from here** — station #1 is identical to station #N (aligns with Phase M multisite).
@@ -364,7 +365,10 @@ accidental gate we want to remove).
   enabled only for _additional_ stations** (multisite), with the auto-assign fix.
 
 ### 11.4 Build order (A3)
-1. **Resend SMTP** + Supabase Invite template + redirect allow-list (config only). — ⬜ manual/env
+1. **Resend SMTP** + Supabase Invite template + redirect allow-list (config only). — ✅ done
+   (Resend SMTP + verified sender + Invite template configured; `PLATFORM_ADMIN_EMAILS` +
+   `INVITE_REDIRECT_URL` set for preview + prod in `wrangler.toml`). ⬜ verify the **prod**
+   `console.pumpos.app/accept-invite` is in the Supabase redirect allow-list.
 2. **`/accept-invite`** landing page (responsive; sets password; role/onboarding-aware routing;
    reuse `WebOnboardingNotice` for the "finish on desktop" case). — ✅ `packages/ui/.../Auth/AcceptInvite.tsx`
    (wired in `apps/console/src/App.tsx`; console edge worker exempts `/accept-invite` from the mobile
