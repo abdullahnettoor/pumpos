@@ -443,6 +443,7 @@ export const App: React.FC = () => {
         return (
           <OnboardingWizard
             onOnboardingComplete={handleOnboardingComplete}
+            onExit={() => navigate('/dashboard')}
             userName={userName}
           />
         );

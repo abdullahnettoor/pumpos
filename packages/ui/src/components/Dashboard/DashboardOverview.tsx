@@ -99,6 +99,14 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   const canManageOnboarding = userRole === 'Owner' || userRole === 'Manager';
   const gsSteps: ChecklistStep[] = [
     {
+      id: 'org',
+      label: 'Create your organization',
+      description: 'Your account and organization are set up.',
+      done: true,
+      actionLabel: 'Done',
+      onAction: () => {},
+    },
+    {
       id: 'station',
       label: 'Onboard your station',
       description: 'Set up fuels, tanks, dispensers and opening values.',
@@ -159,11 +167,11 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
         <PageHeader title="Dashboard" subtitle={subtitle} />
         <div
           className="card card-default"
-          style={{ padding: '28px', display: 'flex', flexDirection: 'column', gap: '16px', alignItems: 'flex-start', maxWidth: '580px' }}
+          style={{ padding: '28px', display: 'flex', flexDirection: 'column', gap: '16px', alignItems: 'flex-start' }}
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
             <span style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text-strong)' }}>Welcome, {firstName}</span>
-            <span style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+            <span style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.5, maxWidth: '620px' }}>
               {stationInProgress
                 ? 'Your station setup is in progress. Pick up where you left off to bring it online.'
                 : 'Bring your station online to unlock shifts, sales, inventory and reports. Setup takes a few minutes and is done right here.'}
@@ -178,9 +186,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
             </Button>
           </div>
         </div>
-        <div style={{ maxWidth: '580px' }}>
-          <GettingStartedChecklist steps={gsSteps} />
-        </div>
+        <GettingStartedChecklist steps={gsSteps} />
       </div>
     );
   }

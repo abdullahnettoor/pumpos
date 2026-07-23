@@ -44,6 +44,8 @@ const stationService = new CloudStationService();
 
 interface OnboardingWizardProps {
   onOnboardingComplete: (station: Station) => void;
+  /** Leave onboarding (e.g. after discarding the draft) — host routes home. */
+  onExit?: () => void;
   userName: string;
 }
 
@@ -146,6 +148,7 @@ function wait(ms: number) {
 
 export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
   onOnboardingComplete,
+  onExit,
   userName,
 }) => {
   const [draft, setDraft] = useState<OnboardingDraft>(createEmptyOnboardingDraft());
@@ -599,6 +602,9 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     setDraft(createEmptyOnboardingDraft());
     setCurrentStep(1);
     setErrorMsg(null);
+    // Leave onboarding and return home (dashboard) when the host provides a
+    // route out; otherwise stay and start over from step 1.
+    onExit?.();
   };
 
   const moveToStep = (step: number) => {
