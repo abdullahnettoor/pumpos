@@ -90,20 +90,13 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
     }
   };
 
-  if (!selectedStation) {
-    return (
-      <div className="animate-fade-in flex flex-col gap-5">
-        <PageHeader title="Dashboard" />
-        <EmptyState icon={<TriangleAlert />} title="No station selected" description="Configure or select a station to continue." />
-      </div>
-    );
-  }
-
   // Getting-started steps (data-driven; shared by the pre-ready hero and the
-  // post-ready "Get started" checklist). Customer/supplier steps only unlock
-  // once the station is live (those screens are hidden pre-ready).
-  const isReadyStation = (selectedStation as any).onboardingStatus === 'READY_FOR_OPERATIONS';
-  const stationInProgress = (selectedStation as any).onboardingStatus === 'IN_PROGRESS';
+  // post-ready "Get started" checklist). Null-safe so a fresh org with NO
+  // station yet still shows the hero. Customer/supplier steps only unlock once
+  // the station is live (those screens are hidden pre-ready).
+  const isReadyStation = !!selectedStation && (selectedStation as any).onboardingStatus === 'READY_FOR_OPERATIONS';
+  const stationInProgress = !!selectedStation && (selectedStation as any).onboardingStatus === 'IN_PROGRESS';
+  const canManageOnboarding = userRole === 'Owner' || userRole === 'Manager';
   const gsSteps: ChecklistStep[] = [
     {
       id: 'station',
@@ -143,14 +136,27 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
     },
   ];
 
-  // Pre-ready: the station exists but isn't operational yet. Show a native
-  // getting-started hero on the dashboard (home) rather than the operational
-  // layout, with the primary path into onboarding.
+  // No station yet OR a station that isn't operational → native getting-started
+  // hero on the dashboard (home). Owner/Manager can act on it; other roles just
+  // wait for the Owner to finish setup.
   if (!isReadyStation) {
+    if (!canManageOnboarding) {
+      return (
+        <div className="animate-fade-in flex flex-col gap-5">
+          <PageHeader title="Dashboard" />
+          <EmptyState
+            icon={<TriangleAlert />}
+            title="Station setup in progress"
+            description="Operations unlock automatically once the Owner completes onboarding."
+          />
+        </div>
+      );
+    }
     const firstName = (userName || '').trim().split(/\s+/)[0] || 'there';
+    const subtitle = selectedStation ? `${selectedStation.name} · ${selectedStation.code}` : undefined;
     return (
       <div className="animate-fade-in flex flex-col gap-5">
-        <PageHeader title="Dashboard" subtitle={`${selectedStation.name} · ${selectedStation.code}`} />
+        <PageHeader title="Dashboard" subtitle={subtitle} />
         <div
           className="card card-default"
           style={{ padding: '28px', display: 'flex', flexDirection: 'column', gap: '16px', alignItems: 'flex-start', maxWidth: '580px' }}
@@ -178,6 +184,9 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
       </div>
     );
   }
+
+  // Past this point the station is operational — narrow for TypeScript.
+  if (!selectedStation) return null;
 
   if (loading) {
     return (
