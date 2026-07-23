@@ -420,10 +420,16 @@ authenticates (platform-admin password grant → JWT) and calls it. A richer sta
   counts, enriched with Supabase auth state (`email_confirmed_at`, `invited_at`,
   `last_sign_in_at`, `banned_until`) and a derived **status**
   (`invited | active | deactivated | unlinked`). Owner status is **derived**, no new column.
-- `POST /platform/owners/:orgId/resend` — re-send the invite; refused once accepted. Deletes
-  the pending auth user first (Supabase 422s on re-invite) and re-links the new `auth_user_id`.
-- `POST /platform/owners/:orgId/revoke` — hard-delete a **never-accepted** invite **and its
-  empty org**; refused if accepted or if any station exists (no cascade of operational data).
+  Revoked orgs are hidden unless `?includeRevoked=1`.
+- `POST /platform/owners/:orgId/resend` — re-send the invite; refused once the owner has
+  **signed in** (`last_sign_in_at`, not `email_confirmed_at` — password-mode accounts are
+  confirmed at creation). Deletes the pending auth user first (Supabase 422s on re-invite)
+  and re-links the new `auth_user_id`.
+- `POST /platform/owners/:orgId/revoke` — **soft-cancel** a never-signed-in owner: delete the
+  pending Supabase auth user, mark the org `Revoked` + owner `INACTIVE` and clear
+  `auth_user_id` (email re-invitable). Rows + audit event are kept (per AGENTS.md: no physical
+  deletion; also `events.organization_id` is a NOT NULL FK, so a hard delete + audit event is
+  impossible). Refused once the owner has signed in or if any station exists.
 - `POST /platform/owners/:orgId/deactivate` / `reactivate` — ban/unban the owner auth user +
   flip `organizations.subscription_status` Active↔Deactivated.
 - `POST /platform/owners/invite` — email invite (default) **or** no-SMTP password mode

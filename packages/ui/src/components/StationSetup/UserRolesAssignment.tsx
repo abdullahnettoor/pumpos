@@ -8,9 +8,10 @@ import { queryKeys, TIER } from '../../query/hooks.js';
 import { Station } from '@pump/shared';
 import { Drawer } from '../Drawer.js';
 import { DataTable } from '../primitives/DataTable.js';
-import { Checkbox } from '../primitives/Toggle.js';
+import { Checkbox, Switch } from '../primitives/Toggle.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import type { ColumnDef } from '@tanstack/react-table';
+import { Edit, KeyRound } from 'lucide-react';
 
 const userService = new CloudUserAssignmentService();
 const stationService = new CloudStationService();
@@ -126,20 +127,29 @@ const buildUserColumns = (
     header: '',
     cell: ({ row }) => {
       const u = row.original;
-      const btn: React.CSSProperties = { height: '24px', padding: '0 8px', fontSize: '11px', backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-strong)', color: 'var(--text-default)', borderRadius: '4px', cursor: 'pointer' };
+      const iconBtn: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', height: '26px', width: '26px', background: 'none', border: 'none', borderRadius: '4px', cursor: 'pointer', color: 'var(--text-muted)', padding: 0 };
+      const isActive = u.status !== 'INACTIVE';
       return (
-        <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
-          <button onClick={() => startEdit(u)} style={btn}>Edit</button>
+        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', alignItems: 'center' }}>
+          <button onClick={() => startEdit(u)} title="Edit member" style={iconBtn}>
+            <Edit size={14} />
+          </button>
           {u.authUserId && (
-            <button onClick={() => onReset(u)} style={btn}>Reset</button>
+            <button onClick={() => onReset(u)} title="Reset password" style={iconBtn}>
+              <KeyRound size={14} />
+            </button>
           )}
           {u.authUserId && (
-            <button
-              onClick={() => onToggleActive(u)}
-              style={{ ...btn, color: u.status === 'INACTIVE' ? 'rgb(5, 150, 105)' : 'rgb(220, 38, 38)' }}
+            <span
+              title={isActive ? 'Deactivate login' : 'Activate login'}
+              style={{ display: 'inline-flex', alignItems: 'center' }}
             >
-              {u.status === 'INACTIVE' ? 'Reactivate' : 'Deactivate'}
-            </button>
+              <Switch
+                checked={isActive}
+                onChange={() => onToggleActive(u)}
+                aria-label={isActive ? 'Deactivate login' : 'Activate login'}
+              />
+            </span>
           )}
         </div>
       );
