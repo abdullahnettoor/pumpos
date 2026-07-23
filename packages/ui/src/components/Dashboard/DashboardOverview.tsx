@@ -2,10 +2,11 @@ import React, { useState } from 'react';
 import { CloudShiftService } from '../../services/cloud.js';
 import {
   useShiftStatus, useInvalidateOperational, useInventoryStatus, usePricing, useProducts,
-  useExpenses, usePurchases, useCollections, useCustomers, useSuppliers, useShiftSummaries, useDailyDssrPreview,
+  useExpenses, usePurchases, useCollections, useCustomers, useSuppliers, useShiftSummaries, useDailyDssrPreview, useUsers,
 } from '../../query/hooks.js';
 import { useStationAlerts } from '../../query/useStationAlerts.js';
 import { SkeletonGrid } from '../primitives/Skeleton.js';
+import { GettingStartedChecklist, type ChecklistStep } from './GettingStartedChecklist.js';
 import {
   KpiStrip, KpiTile, Button, PageHeader, Panel, EmptyState, MeterRow, StatusChip, Chip,
 } from '../../pump-ds/index.js';
@@ -17,7 +18,7 @@ import { Station, resolveBusinessDate } from '@pump/shared';
 import type { NavIntent } from '../AppShell.js';
 import {
   Play, Plus, FileText, Unlock, AlertTriangle, Lock, Droplet, ClipboardList,
-  CircleCheckBig, ChevronRight, TriangleAlert, Clock, Fuel, Users, Truck, UserPlus,
+  CircleCheckBig, ChevronRight, TriangleAlert, Clock, Fuel, Users,
 } from 'lucide-react';
 
 const shiftService = new CloudShiftService();
@@ -46,6 +47,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   const { data: collections } = useCollections({ enabled: canSeeFinancials });
   const { data: customers } = useCustomers(true, { enabled: canSeeFinancials });
   const { data: suppliers } = useSuppliers(true, { enabled: canSeeFinancials });
+  const { data: users } = useUsers();
   const { data: shiftSummaries } = useShiftSummaries(selectedStation?.id, { enabled: canSeeFinancials });
   const isOwner = userRole === 'Owner';
   // Live "Today's P&L" for the owner — recomputed on demand (no snapshot written).
@@ -58,6 +60,13 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   const confirm = useConfirm();
   const toast = useToast();
   const [isReopening, setIsReopening] = useState(false);
+  const [gsDismissed, setGsDismissed] = useState(() => {
+    try { return localStorage.getItem('pumpos_gs_dismissed') === '1'; } catch { return false; }
+  });
+  const dismissGettingStarted = () => {
+    try { localStorage.setItem('pumpos_gs_dismissed', '1'); } catch { /* storage blocked */ }
+    setGsDismissed(true);
+  };
 
   const handleReopen = async (shiftId: string) => {
     if (!(await confirm({
@@ -90,10 +99,54 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
     );
   }
 
+  // Getting-started steps (data-driven; shared by the pre-ready hero and the
+  // post-ready "Get started" checklist). Customer/supplier steps only unlock
+  // once the station is live (those screens are hidden pre-ready).
+  const isReadyStation = (selectedStation as any).onboardingStatus === 'READY_FOR_OPERATIONS';
+  const stationInProgress = (selectedStation as any).onboardingStatus === 'IN_PROGRESS';
+  const gsSteps: ChecklistStep[] = [
+    {
+      id: 'station',
+      label: 'Onboard your station',
+      description: 'Set up fuels, tanks, dispensers and opening values.',
+      done: isReadyStation,
+      actionLabel: stationInProgress ? 'Resume' : 'Onboard',
+      onAction: () => onNavigate('/onboarding'),
+    },
+    {
+      id: 'team',
+      label: 'Invite your team',
+      description: 'Add managers and staff so they can log in.',
+      done: (users?.length ?? 0) > 1,
+      actionLabel: 'Invite',
+      onAction: () => onNavigate('/organization'),
+    },
+    {
+      id: 'suppliers',
+      label: 'Add suppliers',
+      description: 'Record fuel and merchandise suppliers.',
+      done: (suppliers?.length ?? 0) > 0,
+      locked: !isReadyStation,
+      lockedHint: 'Available once your station is live.',
+      actionLabel: 'Add',
+      onAction: () => onNavigate('/purchases'),
+    },
+    {
+      id: 'customers',
+      label: 'Add customers',
+      description: 'Track credit customers and fleet accounts.',
+      done: (customers?.length ?? 0) > 0,
+      locked: !isReadyStation,
+      lockedHint: 'Available once your station is live.',
+      actionLabel: 'Add',
+      onAction: () => onNavigate('/customers', { open: 'new-customer' }),
+    },
+  ];
+
   // Pre-ready: the station exists but isn't operational yet. Show a native
   // getting-started hero on the dashboard (home) rather than the operational
   // layout, with the primary path into onboarding.
-  if ((selectedStation as any).onboardingStatus !== 'READY_FOR_OPERATIONS') {
+  if (!isReadyStation) {
     const firstName = (userName || '').trim().split(/\s+/)[0] || 'there';
     return (
       <div className="animate-fade-in flex flex-col gap-5">
@@ -105,18 +158,22 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
             <span style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text-strong)' }}>Welcome, {firstName}</span>
             <span style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-              Bring your station online to unlock shifts, sales, inventory and reports. Setup takes a few
-              minutes and is done right here.
+              {stationInProgress
+                ? 'Your station setup is in progress. Pick up where you left off to bring it online.'
+                : 'Bring your station online to unlock shifts, sales, inventory and reports. Setup takes a few minutes and is done right here.'}
             </span>
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
             <Button variant="primary" size="sm" leftIcon={<Fuel size={14} />} onClick={() => onNavigate('/onboarding')}>
-              Onboard your station
+              {stationInProgress ? 'Resume setup' : 'Onboard your station'}
             </Button>
             <Button variant="secondary" size="sm" leftIcon={<Users size={14} />} onClick={() => onNavigate('/organization')}>
               Invite your team
             </Button>
           </div>
+        </div>
+        <div style={{ maxWidth: '580px' }}>
+          <GettingStartedChecklist steps={gsSteps} />
         </div>
       </div>
     );
@@ -148,16 +205,10 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   const { activeShift, lastShift, lastDssr, canReopenLastShift, gracePeriodExpiresAt } = summary || {};
   const isAccountant = userRole === 'Accountant';
 
-  // A freshly-onboarded (but ready) station with no operational history yet.
-  // Surface a small "get started" panel so the owner/manager can add the first
-  // customers/suppliers/team or onboard another station without hunting the nav.
+  // A freshly-onboarded (but ready) station: show the getting-started checklist
+  // until the essentials are done or the user dismisses it.
   const canManage = userRole === 'Owner' || userRole === 'Manager';
-  const isFreshStation =
-    canManage &&
-    !activeShift &&
-    (shiftSummaries?.length ?? 0) === 0 &&
-    (customers?.length ?? 0) === 0 &&
-    (suppliers?.length ?? 0) === 0;
+  const showGettingStarted = canManage && !gsDismissed && gsSteps.some((s) => !s.done);
 
   // Business-day-aware "today so far" rollups (client-summed; timezone honoured).
   const stationSettings: any = (selectedStation as any).settings || {};
@@ -231,29 +282,9 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
         }
       />
 
-      {/* Get started — quick actions for a freshly-onboarded station. */}
-      {isFreshStation && (
-        <Panel title="Get started" icon={<CircleCheckBig />} flush>
-          <div className="flex flex-col gap-2 p-4">
-            <span className="text-[12.5px] text-ink-muted">
-              Your station is ready. Add your parties and team, or bring another station online.
-            </span>
-            <div className="flex flex-wrap gap-2">
-              <Button variant="secondary" size="sm" leftIcon={<UserPlus size={14} />} onClick={() => onNavigate('/customers', { open: 'new-customer' })}>
-                Add customer
-              </Button>
-              <Button variant="secondary" size="sm" leftIcon={<Truck size={14} />} onClick={() => onNavigate('/purchases')}>
-                Add supplier
-              </Button>
-              <Button variant="secondary" size="sm" leftIcon={<Users size={14} />} onClick={() => onNavigate('/organization')}>
-                Invite team
-              </Button>
-              <Button variant="secondary" size="sm" leftIcon={<Fuel size={14} />} onClick={() => onNavigate('/onboarding')}>
-                Onboard station
-              </Button>
-            </div>
-          </div>
-        </Panel>
+      {/* Get started — progressive checklist until the essentials are done. */}
+      {showGettingStarted && (
+        <GettingStartedChecklist steps={gsSteps} dismissible onDismiss={dismissGettingStarted} />
       )}
 
       {/* Needs attention — shared station alerts + variance (financial roles) */}
