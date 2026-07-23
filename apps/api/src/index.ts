@@ -2,8 +2,9 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { verify, decode } from 'hono/jwt';
 import { createDb, DbClient, schema } from '@pump/db';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, inArray, count } from 'drizzle-orm';
 import { Role, canManageUsers, organizationUpdateSchema } from '@pump/shared';
+import { BusinessEvents, SystemClock, UuidGenerator, createEvent, type DomainEvent } from '@pump/core';
 import { stationSetupRouter } from './routes/station-setup.js';
 import { paymentTerminalsRouter } from './routes/payment-terminals.js';
 import { productsRouter } from './routes/products.js';
@@ -13,6 +14,7 @@ import { dssrRouter } from './routes/dssr.js';
 import { financeRouter } from './routes/finance.js';
 import { idempotency } from './infra/idempotency.js';
 import { SupabaseAdmin } from './infra/supabase-admin.js';
+import { DrizzleEventStore } from './infra/events.js';
 import { rateLimit } from './infra/rate-limit.js';
 
 
@@ -535,13 +537,19 @@ platform.use('*', async (c, next) => {
   if (!email || allow.length === 0 || !allow.includes(email)) {
     return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Not a platform administrator' } }, 403);
   }
+  (c as any).set('platformAdminEmail', email);
   await next();
 });
 
-// POST /platform/owners/invite — invite a fuel-station owner + bootstrap their
-// org. Sends a Resend-backed invite email; the owner sets their own password.
-// The metadata drives the gated `handle_new_user()` trigger to create the
-// organization + Owner `public.users` row and link `auth_user_id`.
+// POST /platform/owners/invite — provision a fuel-station owner + bootstrap
+// their org. Two modes drive the gated `handle_new_user()` trigger (which
+// creates the organization + Owner `public.users` row and links
+// `auth_user_id`):
+//   - default (email invite): Resend-backed link; the owner sets their own
+//     password via /accept-invite. No password crosses the wire.
+//   - password mode (`mode: 'password'`, no-SMTP fallback): create a verified
+//     account with an owner-set/generated password and return the credentials
+//     to hand over. Use when email delivery is unavailable.
 platform.post('/owners/invite', async (c) => {
   const admin = c.env.SUPABASE_URL && c.env.SUPABASE_SECRET_KEY
     ? new SupabaseAdmin({ url: c.env.SUPABASE_URL, secretKey: c.env.SUPABASE_SECRET_KEY })
@@ -559,15 +567,35 @@ platform.post('/owners/invite', async (c) => {
   if (fullName.length < 2 || organizationName.length < 2) {
     return c.json({ success: false, error: { code: 'BAD_REQUEST', message: 'fullName and organizationName are required' } }, 400);
   }
+  const ownerMetadata = {
+    signup_intent: 'owner',
+    organization_name: organizationName,
+    full_name: fullName,
+    role: 'Owner',
+  };
+
+  // No-SMTP fallback: create a verified account with a password and return it.
+  const passwordMode = body?.mode === 'password' || typeof body?.password === 'string';
+  if (passwordMode) {
+    const password = typeof body?.password === 'string' && body.password.trim()
+      ? String(body.password)
+      : generateOwnerPassword();
+    if (password.length < 8) {
+      return c.json({ success: false, error: { code: 'BAD_REQUEST', message: 'Password must be at least 8 characters' } }, 400);
+    }
+    try {
+      const created = await admin.createUser({ email, password, userMetadata: ownerMetadata });
+      return c.json({ success: true, data: { authUserId: created.id, email, password } });
+    } catch (e: any) {
+      const status = e?.status === 422 ? 409 : 400;
+      return c.json({ success: false, error: { code: 'PROVISION_FAILED', message: e?.message ?? 'Could not provision owner' } }, status);
+    }
+  }
+
   try {
     const invited = await admin.inviteUserByEmail(email, {
       redirectTo: c.env.INVITE_REDIRECT_URL,
-      data: {
-        signup_intent: 'owner',
-        organization_name: organizationName,
-        full_name: fullName,
-        role: 'Owner',
-      },
+      data: ownerMetadata,
     });
     return c.json({ success: true, data: { authUserId: invited.id, email } });
   } catch (e: any) {
@@ -575,6 +603,332 @@ platform.post('/owners/invite', async (c) => {
     return c.json({ success: false, error: { code: 'INVITE_FAILED', message: e?.message ?? 'Could not send invite' } }, status);
   }
 });
+
+// ---------------------------------------------------------------------------
+// Platform back-office: list + row actions on owners (Phase A / Option 1).
+//
+// The list joins organizations + their Owner `public.users` row + station
+// counts, then augments each row with the Supabase auth state (invite
+// accepted, banned, last sign-in). N is small (# of orgs), so per-owner
+// Supabase reads are fine.
+// ---------------------------------------------------------------------------
+
+// Generate a strong, human-transcribable owner password (ambiguous chars
+// excluded). Used by the no-SMTP password mode when none is supplied.
+function generateOwnerPassword(): string {
+  const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+  const lower = 'abcdefghijkmnpqrstuvwxyz';
+  const digits = '23456789';
+  const all = upper + lower + digits;
+  const pick = (set: string) => set[Math.floor(Math.random() * set.length)];
+  let out = pick(upper) + pick(lower) + pick(digits);
+  for (let i = 0; i < 9; i++) out += pick(all);
+  return out.split('').sort(() => Math.random() - 0.5).join('');
+}
+
+async function appendPlatformEvent(
+  db: DbClient,
+  event: DomainEvent<any, unknown>,
+): Promise<void> {
+  await new DrizzleEventStore(db).append([event]);
+}
+
+function buildPlatformEvent<TType extends string, TPayload>(
+  eventType: TType,
+  organizationId: string,
+  aggregateId: string,
+  payload: TPayload,
+  actorEmail: string,
+): DomainEvent<TType, TPayload> {
+  return createEvent<TType, TPayload>(
+    {
+      eventType,
+      aggregateType: 'organization',
+      aggregateId,
+      payload,
+      organizationId,
+      actorId: null,
+      metadata: { platformActorEmail: actorEmail },
+    },
+    { ids: new UuidGenerator(), clock: new SystemClock() },
+  );
+}
+
+type OwnerStatus = 'invited' | 'active' | 'deactivated' | 'unlinked' | 'unknown';
+
+function deriveOwnerStatus(
+  userStatus: string,
+  authUser: { email_confirmed_at?: string | null; banned_until?: string | null; last_sign_in_at?: string | null } | null,
+): OwnerStatus {
+  if (userStatus === 'INACTIVE') return 'deactivated';
+  if (!authUser) return 'unlinked';
+  const bannedUntilMs = authUser.banned_until ? Date.parse(authUser.banned_until) : 0;
+  if (bannedUntilMs && bannedUntilMs > Date.now()) return 'deactivated';
+  if (authUser.email_confirmed_at || authUser.last_sign_in_at) return 'active';
+  return 'invited';
+}
+
+// GET /platform/owners — one row per org (its Owner user), enriched with auth
+// state. Revoked orgs are hidden by default; pass ?includeRevoked=1 to show them.
+platform.get('/owners', async (c) => {
+  const db = c.var.db;
+  const includeRevoked = ['1', 'true', 'yes'].includes((c.req.query('includeRevoked') ?? '').toLowerCase());
+  // Pull all orgs + their Owner user (there is exactly one Owner per org in the
+  // current model; if a legacy org has 0 or >1 Owners we still show it).
+  const allOrgs = await db.select().from(schema.organizations).orderBy(desc(schema.organizations.createdAt));
+  const orgs = includeRevoked ? allOrgs : allOrgs.filter((o) => o.subscriptionStatus !== 'Revoked');
+  if (orgs.length === 0) {
+    return c.json({ success: true, data: [] });
+  }
+  const orgIds = orgs.map((o) => o.id);
+  const owners = await db
+    .select()
+    .from(schema.users)
+    .where(and(inArray(schema.users.organizationId, orgIds), eq(schema.users.role, 'Owner')));
+  const stationRows = await db
+    .select({
+      organizationId: schema.stations.organizationId,
+      onboardingStatus: schema.stations.onboardingStatus,
+      isActive: schema.stations.isActive,
+    })
+    .from(schema.stations)
+    .where(inArray(schema.stations.organizationId, orgIds));
+
+  const ownersByOrg = new Map<string, typeof owners[number]>();
+  for (const u of owners) {
+    // If multiple Owner rows exist, prefer the linked (authUserId set) one.
+    const prev = ownersByOrg.get(u.organizationId);
+    if (!prev || (!prev.authUserId && u.authUserId)) ownersByOrg.set(u.organizationId, u);
+  }
+  const stationCounts = new Map<string, { total: number; ready: number }>();
+  for (const s of stationRows) {
+    const bucket = stationCounts.get(s.organizationId) ?? { total: 0, ready: 0 };
+    bucket.total += 1;
+    if (s.onboardingStatus === 'READY_FOR_OPERATIONS' && s.isActive) bucket.ready += 1;
+    stationCounts.set(s.organizationId, bucket);
+  }
+
+  const admin = c.env.SUPABASE_URL && c.env.SUPABASE_SECRET_KEY
+    ? new SupabaseAdmin({ url: c.env.SUPABASE_URL, secretKey: c.env.SUPABASE_SECRET_KEY })
+    : null;
+
+  const data = await Promise.all(orgs.map(async (org) => {
+    const owner = ownersByOrg.get(org.id) ?? null;
+    let authUser: Awaited<ReturnType<SupabaseAdmin['getUserById']>> | null = null;
+    if (admin && owner?.authUserId) {
+      try {
+        authUser = await admin.getUserById(owner.authUserId);
+      } catch {
+        authUser = null;
+      }
+    }
+    const stations = stationCounts.get(org.id) ?? { total: 0, ready: 0 };
+    return {
+      organizationId: org.id,
+      organizationName: org.name,
+      subscriptionPlan: org.subscriptionPlan,
+      subscriptionStatus: org.subscriptionStatus,
+      createdAt: org.createdAt,
+      owner: owner
+        ? {
+            userId: owner.id,
+            authUserId: owner.authUserId,
+            email: owner.email,
+            fullName: owner.fullName,
+            userStatus: owner.status,
+            emailConfirmedAt: authUser?.email_confirmed_at ?? null,
+            invitedAt: authUser?.invited_at ?? null,
+            lastSignInAt: authUser?.last_sign_in_at ?? null,
+            bannedUntil: authUser?.banned_until ?? null,
+            status: deriveOwnerStatus(owner.status, authUser),
+          }
+        : null,
+      stationCount: stations.total,
+      readyStationCount: stations.ready,
+    };
+  }));
+
+  return c.json({ success: true, data });
+});
+
+// Resolve an org id + its Owner (must be linked to auth) for a row-action route.
+async function loadOwnerForOrg(db: DbClient, orgId: string) {
+  const [org] = await db.select().from(schema.organizations).where(eq(schema.organizations.id, orgId)).limit(1);
+  if (!org) return { org: null as null, owner: null as null };
+  const [owner] = await db
+    .select()
+    .from(schema.users)
+    .where(and(eq(schema.users.organizationId, orgId), eq(schema.users.role, 'Owner')))
+    .orderBy(desc(schema.users.createdAt))
+    .limit(1);
+  return { org, owner: owner ?? null };
+}
+
+// "Has the owner actually used the account?" — the only reliable cross-mode
+// signal is a real sign-in. `email_confirmed_at` is set immediately for the
+// no-SMTP password mode (createUser + email_confirm), so it cannot distinguish
+// a never-used password owner from an accepted email invite; `last_sign_in_at`
+// can. resend/revoke are refused only once the owner has signed in.
+function ownerHasSignedIn(
+  authUser: { last_sign_in_at?: string | null } | null,
+): boolean {
+  return !!authUser?.last_sign_in_at;
+}
+
+// POST /platform/owners/:orgId/resend — re-send the invite email. Only useful
+// while the owner has not signed in; refuse once they have.
+platform.post('/owners/:orgId/resend', async (c) => {
+  const admin = c.env.SUPABASE_URL && c.env.SUPABASE_SECRET_KEY
+    ? new SupabaseAdmin({ url: c.env.SUPABASE_URL, secretKey: c.env.SUPABASE_SECRET_KEY })
+    : null;
+  if (!admin) {
+    return c.json({ success: false, error: { code: 'CONFIG_ERROR', message: 'Auth provisioning is not configured on the server' } }, 500);
+  }
+  const orgId = c.req.param('orgId');
+  const { org, owner } = await loadOwnerForOrg(c.var.db, orgId);
+  if (!org || !owner) {
+    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Organization or owner not found' } }, 404);
+  }
+  if (!owner.email) {
+    return c.json({ success: false, error: { code: 'BAD_REQUEST', message: 'Owner has no email on file' } }, 400);
+  }
+  if (owner.authUserId) {
+    const authUser = await admin.getUserById(owner.authUserId);
+    if (ownerHasSignedIn(authUser)) {
+      return c.json({ success: false, error: { code: 'ALREADY_ACCEPTED', message: 'Owner has already signed in' } }, 409);
+    }
+    // Delete the pending auth user so the re-invite goes through cleanly
+    // (Supabase 422s on re-invite for an existing auth user).
+    try {
+      await admin.deleteUser(owner.authUserId);
+    } catch (e: any) {
+      return c.json({ success: false, error: { code: 'INVITE_FAILED', message: e?.message ?? 'Could not clear pending invite' } }, 400);
+    }
+  }
+  try {
+    const invited = await admin.inviteUserByEmail(owner.email, {
+      redirectTo: c.env.INVITE_REDIRECT_URL,
+      data: {
+        signup_intent: 'owner',
+        organization_name: org.name,
+        full_name: owner.fullName,
+        role: 'Owner',
+      },
+    });
+    // The gated handle_new_user() trigger only fires on brand-new orgs; the
+    // profile row already exists, so link the new auth id back to it here.
+    await c.var.db
+      .update(schema.users)
+      .set({ authUserId: invited.id, updatedAt: new Date() })
+      .where(eq(schema.users.id, owner.id));
+    const actorEmail = String((c as any).get?.('platformAdminEmail') ?? '') || '';
+    await appendPlatformEvent(
+      c.var.db,
+      buildPlatformEvent(BusinessEvents.OWNER_INVITE_RESENT, org.id, owner.id, { email: owner.email }, actorEmail),
+    );
+    return c.json({ success: true, data: { authUserId: invited.id, email: owner.email } });
+  } catch (e: any) {
+    return c.json({ success: false, error: { code: 'INVITE_FAILED', message: e?.message ?? 'Could not send invite' } }, 400);
+  }
+});
+
+// POST /platform/owners/:orgId/revoke — cancel a never-signed-in owner invite.
+// Deletes the pending Supabase auth user (so the invite/credentials can no
+// longer be used), then SOFT-cancels the org: marks it `Revoked` and the owner
+// `INACTIVE` (per AGENTS.md we avoid physical deletion — historical data and
+// the audit event are preserved). Refused once the owner has signed in or if
+// any station has been onboarded.
+platform.post('/owners/:orgId/revoke', async (c) => {
+  const admin = c.env.SUPABASE_URL && c.env.SUPABASE_SECRET_KEY
+    ? new SupabaseAdmin({ url: c.env.SUPABASE_URL, secretKey: c.env.SUPABASE_SECRET_KEY })
+    : null;
+  const db = c.var.db;
+  const orgId = c.req.param('orgId');
+  const { org, owner } = await loadOwnerForOrg(db, orgId);
+  if (!org) {
+    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Organization not found' } }, 404);
+  }
+  // Refuse if any station already exists — operator data must not be touched.
+  const [{ n }] = await db
+    .select({ n: count() })
+    .from(schema.stations)
+    .where(eq(schema.stations.organizationId, orgId));
+  if (Number(n) > 0) {
+    return c.json({ success: false, error: { code: 'ORG_NOT_EMPTY', message: 'Organization has stations; use deactivate instead of revoke' } }, 409);
+  }
+  if (owner?.authUserId && admin) {
+    const authUser = await admin.getUserById(owner.authUserId);
+    if (ownerHasSignedIn(authUser)) {
+      return c.json({ success: false, error: { code: 'ALREADY_ACCEPTED', message: 'Owner has already signed in; use deactivate instead of revoke' } }, 409);
+    }
+    try {
+      await admin.deleteUser(owner.authUserId);
+    } catch (e: any) {
+      return c.json({ success: false, error: { code: 'AUTH_DELETE_FAILED', message: e?.message ?? 'Could not delete auth user' } }, 400);
+    }
+  }
+  // Soft-cancel: keep rows (+ audit) but make the invite dead and drop it from
+  // the active list. Clearing authUserId lets the same email be re-invited.
+  if (owner) {
+    await db
+      .update(schema.users)
+      .set({ status: 'INACTIVE', authUserId: null, updatedAt: new Date() })
+      .where(eq(schema.users.id, owner.id));
+  }
+  await db
+    .update(schema.organizations)
+    .set({ subscriptionStatus: 'Revoked', updatedAt: new Date() })
+    .where(eq(schema.organizations.id, org.id));
+  const actorEmail = String((c as any).get?.('platformAdminEmail') ?? '') || '';
+  await appendPlatformEvent(
+    db,
+    buildPlatformEvent(BusinessEvents.OWNER_INVITE_REVOKED, org.id, owner?.id ?? org.id, { organizationName: org.name, email: owner?.email ?? null }, actorEmail),
+  );
+  return c.json({ success: true, data: { organizationId: org.id, revoked: true } });
+});
+
+async function setOwnerActive(c: any, active: boolean): Promise<Response> {
+  const admin = c.env.SUPABASE_URL && c.env.SUPABASE_SECRET_KEY
+    ? new SupabaseAdmin({ url: c.env.SUPABASE_URL, secretKey: c.env.SUPABASE_SECRET_KEY })
+    : null;
+  const db = c.var.db as DbClient;
+  const orgId = c.req.param('orgId');
+  const { org, owner } = await loadOwnerForOrg(db, orgId);
+  if (!org || !owner) {
+    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Organization or owner not found' } }, 404);
+  }
+  if (owner.authUserId && admin) {
+    try {
+      if (active) await admin.unbanUser(owner.authUserId);
+      else await admin.banUser(owner.authUserId);
+    } catch (e: any) {
+      return c.json({ success: false, error: { code: 'AUTH_BAN_FAILED', message: e?.message ?? 'Could not update login account' } }, 400);
+    }
+  }
+  await db
+    .update(schema.users)
+    .set({ status: active ? 'ACTIVE' : 'INACTIVE', updatedAt: new Date() })
+    .where(eq(schema.users.id, owner.id));
+  await db
+    .update(schema.organizations)
+    .set({ subscriptionStatus: active ? 'Active' : 'Deactivated', updatedAt: new Date() })
+    .where(eq(schema.organizations.id, org.id));
+  const actorEmail = String(c.get?.('platformAdminEmail') ?? '') || '';
+  await appendPlatformEvent(
+    db,
+    buildPlatformEvent(
+      active ? BusinessEvents.ORGANIZATION_REACTIVATED : BusinessEvents.ORGANIZATION_DEACTIVATED,
+      org.id,
+      org.id,
+      { organizationName: org.name, ownerEmail: owner.email },
+      actorEmail,
+    ),
+  );
+  return c.json({ success: true, data: { organizationId: org.id, active } });
+}
+
+platform.post('/owners/:orgId/deactivate', (c) => setOwnerActive(c, false));
+platform.post('/owners/:orgId/reactivate', (c) => setOwnerActive(c, true));
 
 app.route('/platform', platform);
 

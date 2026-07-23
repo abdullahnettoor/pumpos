@@ -14,12 +14,28 @@ export interface SupabaseAdminUser {
   id: string;
   email: string | null;
   phone: string | null;
+  /** ISO timestamp; null until the invite is accepted (password set). */
+  email_confirmed_at?: string | null;
+  /** ISO timestamp when the invite email was sent. */
+  invited_at?: string | null;
+  /** ISO timestamp of last sign-in, or null. */
+  last_sign_in_at?: string | null;
+  /** ISO timestamp — set to a far-future date while the user is banned. */
+  banned_until?: string | null;
+  user_metadata?: Record<string, unknown>;
+  created_at?: string | null;
 }
 
 export interface CreateAuthUserInput {
   /** Real email, OR the synthetic phone handle. Provisioned as confirmed. */
   email: string;
   password: string;
+  /**
+   * Optional auth-user metadata (`raw_user_meta_data`). Read by the gated
+   * `handle_new_user()` trigger — e.g. `signup_intent`, `organization_name`,
+   * `full_name`, `role` for owner provisioning. Omit for staff accounts.
+   */
+  userMetadata?: Record<string, unknown>;
 }
 
 export class SupabaseAdminError extends Error {
@@ -79,6 +95,7 @@ export class SupabaseAdmin {
       email: input.email,
       password: input.password,
       email_confirm: true,
+      ...(input.userMetadata ? { user_metadata: input.userMetadata } : {}),
     });
     return user;
   }
@@ -117,6 +134,24 @@ export class SupabaseAdmin {
   /** Lift a ban (`"none"` clears `banned_until`). */
   async unbanUser(authUserId: string): Promise<void> {
     await this.request('PUT', `/admin/users/${authUserId}`, { ban_duration: 'none' });
+  }
+
+  /** Fetch a Supabase auth user by id (includes invite / ban / sign-in state). */
+  async getUserById(authUserId: string): Promise<SupabaseAdminUser | null> {
+    try {
+      return await this.request<SupabaseAdminUser>('GET', `/admin/users/${authUserId}`);
+    } catch (err) {
+      if (err instanceof SupabaseAdminError && err.status === 404) return null;
+      throw err;
+    }
+  }
+
+  /**
+   * Permanently delete an auth user. Only used by the platform back-office to
+   * revoke a never-accepted owner invite; for accepted users prefer banUser.
+   */
+  async deleteUser(authUserId: string): Promise<void> {
+    await this.request('DELETE', `/admin/users/${authUserId}`);
   }
 }
 

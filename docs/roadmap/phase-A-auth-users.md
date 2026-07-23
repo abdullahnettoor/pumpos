@@ -221,7 +221,7 @@ in the client) and emit audit events; routes are rate-limited.
 | Login UI | `packages/ui/src/components/Auth/Login.tsx` | email **or** phone + password (phone → derive handle) |
 | Team UI | `packages/ui/src/components/StationSetup/UserRolesAssignment.tsx` | identity radio, password+generate/copy, credentials card, reset/deactivate, status badges |
 | Services | `packages/ui/src/services/cloud.ts` | `resetUserPassword`, `deactivateUser`, password in `createUser` |
-| Back-office | separate app or `packages/db/*.mjs` script | owner-invite trigger (`packages/db/invite-owner.mjs`, done) |
+| Back-office | `packages/db/platform.mjs` CLI over `/platform/*` | owner invite (email or no-SMTP password), list, resend, revoke, (de/re)activate (A4, done) |
 
 ---
 
@@ -258,10 +258,11 @@ in the client) and emit audit events; routes are rate-limited.
   login immediately.
 
 ### A2 — Owner provisioning
-- **Phase 1 (done):** `packages/db/invite-owner.mjs` provisions an owner + org with no manual
-  DB edits and no email/SMS — it calls the Supabase Auth Admin API with `signup_intent='owner'`
-  metadata so the gated `handle_new_user()` trigger creates the org + Owner row and links
-  `auth_user_id`; the script prints the login + password to hand over.
+- **Phase 1 (done, since folded into A4):** owner provisioning without manual DB edits — the
+  gated `handle_new_user()` trigger creates the org + Owner row and links `auth_user_id` from
+  `signup_intent='owner'` metadata. The original standalone `packages/db/invite-owner.mjs`
+  script has been **removed**; both its no-SMTP password mode and the email-invite mode now
+  live behind `POST /platform/owners/invite` and the `packages/db/platform.mjs` CLI (see §12).
 - **Pending → superseded by section 11 (A3):** the productized owner flow moves to a
   **Resend-backed `inviteUserByEmail`** link (owner sets their own password) behind a
   **`/platform/owners/invite`** route in the **existing** API (env-var platform-admin
@@ -310,12 +311,11 @@ supersedes the A2 "pending" bullet in section 8.
 | # | Decision |
 |---|---|
 | E1 | **Email transport = Resend** (Supabase Auth → custom SMTP). Config only, no app code beyond the `redirectTo` URL + `/accept-invite` page. Requires domain verification (SPF/DKIM/DMARC) + verified sender + customized **Invite** email template. |
-| E2 | **Owner provisioning = `admin.inviteUserByEmail(email, { data, redirectTo })`** — the owner receives an email and **sets their own password** (replaces the owner-set-password script path for the productized flow; `invite-owner.mjs` stays as a no-SMTP fallback). Metadata (`signup_intent='owner'`, `organization_name`, `full_name`, `role='Owner'`) still drives the gated `handle_new_user()` self-signup branch → creates org + Owner row + links `auth_user_id`. |
+| E2 | **Owner provisioning = `admin.inviteUserByEmail(email, { data, redirectTo })`** — the owner receives an email and **sets their own password**. The no-SMTP fallback (owner-set/generated password via `admin.createUser`) is retained as `mode: 'password'` on the same `/platform/owners/invite` route (A4). Metadata (`signup_intent='owner'`, `organization_name`, `full_name`, `role='Owner'`) drives the gated `handle_new_user()` self-signup branch → creates org + Owner row + links `auth_user_id`. |
 | E3 | **Platform admins = env-var allowlist** (`PLATFORM_ADMIN_EMAILS`, comma-separated, in `apps/api` `[vars]`). No DB table, no new tenant role. Small team → good enough. |
 | E4 | **No new API deployment.** Add a **`/platform/*` route group to the existing Worker**, mounted **before/outside** the tenant-resolution middleware (platform admins have **no `public.users` row**, so the normal middleware would 403 them). Its own guard: verify the Supabase JWT → check email ∈ `PLATFORM_ADMIN_EMAILS` → skip org/role lookup. |
 | E5 | **Back-office = owner-invite only for now.** Manager/staff invites stay in the **in-org Team UI** (already shipped in A1). Manager-invite-from-back-office is deferred. |
-| E6 | **Back-office UI:** keep the **`invite-owner.mjs` script** short-term (zero UI). A small **separate static deploy** later if a screen is wanted — **never** embedded in the customer console. |
-| E7 | **Invite lands on mobile too.** The `/accept-invite` set-password page is responsive; after setting the password, if the user is Owner/Manager and no station is `READY_FOR_OPERATIONS`, show the **"finish setup on desktop"** notice (reuse `WebOnboardingNotice` copy). No native deep-link from email in v1 — the link always opens the web page. |
+| E6 | **Back-office UI:** the **`packages/db/platform.mjs` CLI** (A4) is the interim zero-UI surface. A small **separate static deploy** later if a screen is wanted — **never** embedded in the customer console. || E7 | **Invite lands on mobile too.** The `/accept-invite` set-password page is responsive; after setting the password, if the user is Owner/Manager and no station is `READY_FOR_OPERATIONS`, show the **"finish setup on desktop"** notice (reuse `WebOnboardingNotice` copy). No native deep-link from email in v1 — the link always opens the web page. |
 
 ### 11.2 The onboarding hub (replaces the wizard-takeover app mode)
 **Today:** when no station is `READY_FOR_OPERATIONS`, the console renders the **bare
@@ -374,7 +374,7 @@ accidental gate we want to remove).
    (wired in `apps/console/src/App.tsx`; console edge worker exempts `/accept-invite` from the mobile
    redirect so phones can set a password).
 3. **`/platform/owners/invite`** route in the existing API (env-var allowlist guard,
-   `inviteUserByEmail`); switch `invite-owner.mjs` to call it (or keep the script direct). — ✅ route +
+   `inviteUserByEmail`). — ✅ route +
    `SupabaseAdmin.inviteUserByEmail` done (mounted before tenant middleware; JWT verify extracted to a
    shared `verifySupabaseJwt`). ⬜ optional: switch the script to call the route.
 4. **Provisioner auto-assign actor** to the new station (small; future-proofs Manager/multisite). — ✅
@@ -405,4 +405,43 @@ accidental gate we want to remove).
 - A Manager onboarding an **additional** station is **auto-assigned** to it and can operate it.
 - The top bar shows no dead operational affordances while no station is READY.
 - Platform-admin routes reject any caller whose email is not in `PLATFORM_ADMIN_EMAILS`.
+
+---
+
+## 12. A4 — Platform back-office CLI (owner lifecycle) — **done (2026-07-23)**
+
+Option 1 from the back-office discussion: a **CLI over the existing `/platform/*` API** —
+no new frontend, no new deploy. The API is the single choke point; the CLI only
+authenticates (platform-admin password grant → JWT) and calls it. A richer static UI
+(`platform.pumpos.app`) can reuse the exact same endpoints later.
+
+### 12.1 New API surface (all under the existing platform group, allowlist-guarded)
+- `GET /platform/owners` — one row per org: org + its Owner `public.users` row + station
+  counts, enriched with Supabase auth state (`email_confirmed_at`, `invited_at`,
+  `last_sign_in_at`, `banned_until`) and a derived **status**
+  (`invited | active | deactivated | unlinked`). Owner status is **derived**, no new column.
+- `POST /platform/owners/:orgId/resend` — re-send the invite; refused once accepted. Deletes
+  the pending auth user first (Supabase 422s on re-invite) and re-links the new `auth_user_id`.
+- `POST /platform/owners/:orgId/revoke` — hard-delete a **never-accepted** invite **and its
+  empty org**; refused if accepted or if any station exists (no cascade of operational data).
+- `POST /platform/owners/:orgId/deactivate` / `reactivate` — ban/unban the owner auth user +
+  flip `organizations.subscription_status` Active↔Deactivated.
+- `POST /platform/owners/invite` — email invite (default) **or** no-SMTP password mode
+  (`mode: 'password'`, optional owner-set `password`; returns generated credentials). This
+  absorbed the deleted `invite-owner.mjs` script.
+
+### 12.2 Other changes
+- `SupabaseAdmin` gains `getUserById` (invite/ban/sign-in state) and `deleteUser` (revoke only).
+- New audit events: `OWNER_INVITE_RESENT`, `OWNER_INVITE_REVOKED`,
+  `ORGANIZATION_DEACTIVATED`, `ORGANIZATION_REACTIVATED` (carry the acting platform-admin email
+  in metadata). The platform middleware stashes that email on the context.
+- **CLI:** `packages/db/platform.mjs` — `owners list | invite | resend | revoke | deactivate |
+  reactivate`. `invite` supports `--no-email [--password …]` (no-SMTP fallback that prints the
+  credentials to hand over). Auth via `SUPABASE_URL` + `SUPABASE_ANON_KEY` +
+  `PLATFORM_ADMIN_EMAIL/PASSWORD`; target API via `PUMP_API_URL`. Replaces the removed
+  `invite-owner.mjs`.
+
+### 12.3 Deliberately out of scope (future static UI)
+Billing/plans, feature flags, impersonation, audit-log viewer, manager-invite from back-office
+(stays in the in-org Team UI). The endpoints above are UI-ready when a screen is wanted.
 
