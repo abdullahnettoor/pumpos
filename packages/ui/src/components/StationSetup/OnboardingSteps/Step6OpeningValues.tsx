@@ -80,7 +80,7 @@ export const Step6OpeningValues: React.FC<Step6OpeningValuesProps> = ({
                     min={0}
                     step="0.01"
                     placeholder="0.00"
-                    value={product.currentPrice ?? 0}
+                    value={product.currentPrice || ''}
                     onChange={(e) => handlePriceChange(product.draftId, Number(e.target.value))}
                     style={{ ...inputStyle, width: '100%', height: '30px' }}
                   />
@@ -124,7 +124,7 @@ export const Step6OpeningValues: React.FC<Step6OpeningValuesProps> = ({
                       max={tank.capacity}
                       step="0.1"
                       placeholder="e.g. 5000"
-                      value={tank.openingQuantity ?? 0}
+                      value={tank.openingQuantity || ''}
                       onChange={(e) => handleTankStockChange(tank.draftId, Number(e.target.value))}
                       style={{ ...inputStyle, width: '100%', height: '30px' }}
                     />
@@ -136,7 +136,7 @@ export const Step6OpeningValues: React.FC<Step6OpeningValuesProps> = ({
                       min={0}
                       step="0.01"
                       placeholder="e.g. 88.50"
-                      value={tank.openingCostRate ?? 0}
+                      value={tank.openingCostRate || ''}
                       onChange={(e) => handleTankCostChange(tank.draftId, Number(e.target.value))}
                       style={{ ...inputStyle, width: '100%', height: '30px' }}
                     />
