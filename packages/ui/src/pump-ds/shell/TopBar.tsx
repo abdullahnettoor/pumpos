@@ -66,6 +66,8 @@ export interface TopBarProps {
 
   businessDate: string;
   businessDayStatus: 'open' | 'closed';
+  /** Hide the business-day anchor entirely (e.g. pre-onboarding hub). */
+  showBusinessDay?: boolean;
   /** Navigate to today's live view (dashboard). */
   onBusinessDay?: () => void;
   /** Recent past business days shown in the anchor dropdown. */
@@ -121,6 +123,7 @@ export const TopBar: React.FC<TopBarProps> = ({
   brand,
   businessDate,
   businessDayStatus,
+  showBusinessDay = true,
   onBusinessDay,
   businessDays = [],
   onSelectBusinessDay,
@@ -152,35 +155,37 @@ export const TopBar: React.FC<TopBarProps> = ({
         <div className="select-none pl-0.5 pr-1 text-[15px] font-bold tracking-[-0.01em] text-brand">{brand}</div>
       )}
 
-      <Menu onOpenChange={onBusinessDayMenuOpenChange}>
-        <MenuTrigger asChild>
-          <BusinessDayChip date={businessDate} status={businessDayStatus} />
-        </MenuTrigger>
-        <MenuContent align="start">
-          <MenuLabel>Business day</MenuLabel>
-          <MenuItem onSelect={onBusinessDay}>
-            <span className="flex flex-1 items-center justify-between gap-3">
-              <span>Today · {businessDate}</span>
-              <span className={cn('text-[11px] font-medium', businessDayStatus === 'open' ? 'text-brand' : 'text-ink-muted')}>
-                {businessDayStatus === 'open' ? 'Open' : 'Closed'}
-              </span>
-            </span>
-          </MenuItem>
-          {businessDays.length > 0 && <MenuSeparator />}
-          {businessDays.map((d) => (
-            <MenuItem key={d.date} onSelect={() => onSelectBusinessDay?.(d.date)}>
+      {showBusinessDay && (
+        <Menu onOpenChange={onBusinessDayMenuOpenChange}>
+          <MenuTrigger asChild>
+            <BusinessDayChip date={businessDate} status={businessDayStatus} />
+          </MenuTrigger>
+          <MenuContent align="start">
+            <MenuLabel>Business day</MenuLabel>
+            <MenuItem onSelect={onBusinessDay}>
               <span className="flex flex-1 items-center justify-between gap-3">
-                <span>{d.label}</span>
-                {d.status && (
-                  <span className={cn('text-[11px]', d.status === 'open' ? 'text-brand' : 'text-ink-faint')}>
-                    {d.status === 'open' ? 'Open' : 'Closed'}
-                  </span>
-                )}
+                <span>Today · {businessDate}</span>
+                <span className={cn('text-[11px] font-medium', businessDayStatus === 'open' ? 'text-brand' : 'text-ink-muted')}>
+                  {businessDayStatus === 'open' ? 'Open' : 'Closed'}
+                </span>
               </span>
             </MenuItem>
-          ))}
-        </MenuContent>
-      </Menu>
+            {businessDays.length > 0 && <MenuSeparator />}
+            {businessDays.map((d) => (
+              <MenuItem key={d.date} onSelect={() => onSelectBusinessDay?.(d.date)}>
+                <span className="flex flex-1 items-center justify-between gap-3">
+                  <span>{d.label}</span>
+                  {d.status && (
+                    <span className={cn('text-[11px]', d.status === 'open' ? 'text-brand' : 'text-ink-faint')}>
+                      {d.status === 'open' ? 'Open' : 'Closed'}
+                    </span>
+                  )}
+                </span>
+              </MenuItem>
+            ))}
+          </MenuContent>
+        </Menu>
+      )}
 
       {stationLabel && (
         <div className="hidden items-center gap-1.5 rounded-button px-2 text-[12px] text-ink-muted lg:inline-flex" title="Single station">

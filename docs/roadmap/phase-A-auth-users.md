@@ -376,7 +376,16 @@ accidental gate we want to remove).
 4. **Provisioner auto-assign actor** to the new station (small; future-proofs Manager/multisite). — ✅
    `apps/api/src/infra/onboarding-provisioner.ts` inserts a `user_station_assignments` row for the actor.
 5. **Onboarding hub + readiness-aware top bar:** render the shell pre-ready, land in the
-   Organization hub, hide operational tabs, launch the wizard from the hub, scope the top bar. — ⬜ next
+   Organization hub, hide operational tabs, launch the wizard from the hub, scope the top bar. — ✅
+   done. Pre-ready renders the full shell and **lands on the Dashboard** (its home), which shows a
+   getting-started **hero** ("Welcome … · Onboard your station / Invite your team") until a station is
+   READY; the nav shows only **Dashboard + Organization** (operational tabs hidden). The
+   `OrganizationOverview` hub also carries a getting-started welcome + always-available **Onboard
+   station**; the wizard stays a focused full-screen takeover launched from either. `AppShell`/`AppTopBar`
+   take a `stationReady` flag (hides business-day, station alerts, operational quick-create; `+ New` scoped
+   to Onboard station / Team member). `DashboardOverview` also shows a **Get started** quick-actions panel
+   for a fresh **ready** station (Add customer/supplier, Invite team, Onboard station). Desktop unchanged
+   (pre-ready shows `WebOnboardingNotice`; onboarding is web-only).
 6. **Rate-limit** the auth/admin + `/platform` routes. — ✅ `apps/api/src/infra/rate-limit.ts` applied to
    `/platform/*`, `POST /users`, reset-password, (de/re)activate.
 

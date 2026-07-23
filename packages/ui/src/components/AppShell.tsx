@@ -44,6 +44,10 @@ export interface AppShellProps {
   selectedStation?: Station | null;
   onStationChange?: (station: Station) => void;
   environmentTag?: string | null;
+  /** When false, the active station isn't operational yet (pre-onboarding hub):
+   *  the top bar hides operational affordances (business day, quick-create,
+   *  station alerts) and scopes search to org actions + navigation. */
+  stationReady?: boolean;
 }
 
 // Inline SVGs for Navigation
@@ -235,6 +239,7 @@ export const AppShell: React.FC<AppShellProps> = ({
   onLogout,
   selectedStation = null,
   environmentTag = null,
+  stationReady = true,
 }) => {
   // Sidebar expanded by default; the top-bar hamburger collapses it to an icon rail.
   const [collapsed, setCollapsed] = useState(false);
@@ -302,6 +307,7 @@ export const AppShell: React.FC<AppShellProps> = ({
           onNavigate={onNavigate}
           onLogout={onLogout}
           onToggleSidebar={() => setCollapsed((c) => !c)}
+          stationReady={stationReady}
         />
       </div>
 

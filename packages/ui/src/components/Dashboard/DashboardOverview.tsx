@@ -17,7 +17,7 @@ import { Station, resolveBusinessDate } from '@pump/shared';
 import type { NavIntent } from '../AppShell.js';
 import {
   Play, Plus, FileText, Unlock, AlertTriangle, Lock, Droplet, ClipboardList,
-  CircleCheckBig, ChevronRight, TriangleAlert, Clock,
+  CircleCheckBig, ChevronRight, TriangleAlert, Clock, Fuel, Users, Truck, UserPlus,
 } from 'lucide-react';
 
 const shiftService = new CloudShiftService();
@@ -90,6 +90,38 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
     );
   }
 
+  // Pre-ready: the station exists but isn't operational yet. Show a native
+  // getting-started hero on the dashboard (home) rather than the operational
+  // layout, with the primary path into onboarding.
+  if ((selectedStation as any).onboardingStatus !== 'READY_FOR_OPERATIONS') {
+    const firstName = (userName || '').trim().split(/\s+/)[0] || 'there';
+    return (
+      <div className="animate-fade-in flex flex-col gap-5">
+        <PageHeader title="Dashboard" subtitle={`${selectedStation.name} · ${selectedStation.code}`} />
+        <div
+          className="card card-default"
+          style={{ padding: '28px', display: 'flex', flexDirection: 'column', gap: '16px', alignItems: 'flex-start', maxWidth: '580px' }}
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <span style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text-strong)' }}>Welcome, {firstName}</span>
+            <span style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+              Bring your station online to unlock shifts, sales, inventory and reports. Setup takes a few
+              minutes and is done right here.
+            </span>
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+            <Button variant="primary" size="sm" leftIcon={<Fuel size={14} />} onClick={() => onNavigate('/onboarding')}>
+              Onboard your station
+            </Button>
+            <Button variant="secondary" size="sm" leftIcon={<Users size={14} />} onClick={() => onNavigate('/organization')}>
+              Invite your team
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (loading) {
     return (
       <div className="animate-fade-in flex flex-col gap-5">
@@ -115,6 +147,17 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
 
   const { activeShift, lastShift, lastDssr, canReopenLastShift, gracePeriodExpiresAt } = summary || {};
   const isAccountant = userRole === 'Accountant';
+
+  // A freshly-onboarded (but ready) station with no operational history yet.
+  // Surface a small "get started" panel so the owner/manager can add the first
+  // customers/suppliers/team or onboard another station without hunting the nav.
+  const canManage = userRole === 'Owner' || userRole === 'Manager';
+  const isFreshStation =
+    canManage &&
+    !activeShift &&
+    (shiftSummaries?.length ?? 0) === 0 &&
+    (customers?.length ?? 0) === 0 &&
+    (suppliers?.length ?? 0) === 0;
 
   // Business-day-aware "today so far" rollups (client-summed; timezone honoured).
   const stationSettings: any = (selectedStation as any).settings || {};
@@ -187,6 +230,31 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
           </>
         }
       />
+
+      {/* Get started — quick actions for a freshly-onboarded station. */}
+      {isFreshStation && (
+        <Panel title="Get started" icon={<CircleCheckBig />} flush>
+          <div className="flex flex-col gap-2 p-4">
+            <span className="text-[12.5px] text-ink-muted">
+              Your station is ready. Add your parties and team, or bring another station online.
+            </span>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="secondary" size="sm" leftIcon={<UserPlus size={14} />} onClick={() => onNavigate('/customers', { open: 'new-customer' })}>
+                Add customer
+              </Button>
+              <Button variant="secondary" size="sm" leftIcon={<Truck size={14} />} onClick={() => onNavigate('/purchases')}>
+                Add supplier
+              </Button>
+              <Button variant="secondary" size="sm" leftIcon={<Users size={14} />} onClick={() => onNavigate('/organization')}>
+                Invite team
+              </Button>
+              <Button variant="secondary" size="sm" leftIcon={<Fuel size={14} />} onClick={() => onNavigate('/onboarding')}>
+                Onboard station
+              </Button>
+            </div>
+          </div>
+        </Panel>
+      )}
 
       {/* Needs attention — shared station alerts + variance (financial roles) */}
       {/* Needs attention — collapsible; compact by default so many alerts
