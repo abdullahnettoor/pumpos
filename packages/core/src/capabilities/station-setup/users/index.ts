@@ -106,6 +106,18 @@ export class CreateUser implements UseCase<CreateUserCommand, User> {
         aggregateId: user.id,
         payload: { userId: user.id, role: user.role, email: user.email },
       }),
+      // A login account was provisioned server-side (email or phone handle) —
+      // a distinct audit signal from a record-only user (authUserId NULL).
+      ...(user.authUserId
+        ? [
+            eventFromContext(ctx, {
+              eventType: BusinessEvents.USER_INVITED,
+              aggregateType: 'User',
+              aggregateId: user.id,
+              payload: { userId: user.id, role: user.role, hasPhone: !!user.phone, hasEmail: !!user.email },
+            }),
+          ]
+        : []),
     ]);
     return ok(user);
   }

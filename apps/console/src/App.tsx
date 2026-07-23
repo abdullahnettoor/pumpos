@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { 
   AppShell, 
   Login, 
+  AcceptInvite,
   OnboardingWizard, 
   StationOverview, 
   DashboardOverview,
@@ -540,12 +541,21 @@ export const App: React.FC = () => {
     }
   };
 
+  // Invite / set-password landing. Handled before any device or session gate so
+  // an owner can open the emailed invite on a phone and set their password. The
+  // client parses the token from the URL; on completion we return to `/` where
+  // the normal session bootstrap routes them (Organization hub / desktop notice
+  // when no station is ready yet).
+  const isAcceptInvite =
+    typeof window !== 'undefined' && window.location.pathname.replace(/\/+$/, '') === '/accept-invite';
+  if (isAcceptInvite) {
+    return <AcceptInvite onDone={() => window.location.assign('/')} />;
+  }
+
   // Unsupported-device gate (fallback to the edge Worker redirect).
   if (isUnsupportedMobile) {
     return <MobileBlock />;
   }
-
-  // Outer loading spinner before session checks resolve
   if (loading && !session) {
     return (
       <div style={{

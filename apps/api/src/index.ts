@@ -12,6 +12,8 @@ import { transactionsRouter } from './routes/transactions.js';
 import { dssrRouter } from './routes/dssr.js';
 import { financeRouter } from './routes/finance.js';
 import { idempotency } from './infra/idempotency.js';
+import { SupabaseAdmin } from './infra/supabase-admin.js';
+import { rateLimit } from './infra/rate-limit.js';
 
 
 const keyCache = new Map<string, CryptoKey>();
@@ -71,6 +73,14 @@ type Bindings = {
   // drop-in for the legacy service_role key in the apikey/Authorization headers.
   SUPABASE_URL?: string;
   SUPABASE_SECRET_KEY?: string;
+  // Platform back-office (Phase A / A3). Comma-separated allow-list of platform
+  // admin emails permitted to call /platform/* routes (owner provisioning).
+  // Emails aren't secret, so this is a plaintext [vars] entry. Callers still
+  // present a valid Supabase JWT; the email claim must be in this list.
+  PLATFORM_ADMIN_EMAILS?: string;
+  // Optional destination for owner-invite links (must be in the Supabase
+  // redirect allow-list). When unset, Supabase falls back to the Site URL.
+  INVITE_REDIRECT_URL?: string;
 };
 
 type Variables = {
@@ -95,6 +105,76 @@ function isLocalRequest(url: string): boolean {
     return false;
   }
 }
+
+/**
+ * Verify a Supabase-issued JWT and return its payload. Supports asymmetric
+ * ES256 (verified via the project's JWKS, cached per-isolate) with an optional
+ * legacy HS256 fallback. In local/dev only, a JWKS-fetch failure falls back to
+ * the decoded claims. Shared by the tenant auth middleware and the platform-admin
+ * middleware so JWT verification has a single source of truth.
+ */
+async function verifySupabaseJwt(token: string, env: Bindings, reqUrl: string): Promise<any> {
+  const { header, payload: decodedPayload } = decode(token);
+
+  if (header.alg === 'HS256') {
+    const secret = env.SUPABASE_JWT_SECRET;
+    if (!secret) {
+      throw new Error('Received legacy HS256 token but SUPABASE_JWT_SECRET is not configured. Enable asymmetric JWTs or set the legacy secret.');
+    }
+    return await verify(token, secret, 'HS256');
+  }
+
+  if (header.alg === 'ES256') {
+    const kid = header.kid;
+    if (!kid) {
+      throw new Error('Missing key ID (kid) in token header');
+    }
+    try {
+      let publicKey = keyCache.get(kid);
+      if (!publicKey) {
+        const iss = decodedPayload.iss;
+        if (!iss) {
+          throw new Error('Missing issuer (iss) in token payload');
+        }
+        const jwksUrl = iss.endsWith('/') ? `${iss}.well-known/jwks.json` : `${iss}/.well-known/jwks.json`;
+        console.log(`[JWT JWKS FETCH] Fetching JWKS from: ${jwksUrl}`);
+        const response = await fetch(jwksUrl);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch JWKS from ${jwksUrl}: ${response.statusText}`);
+        }
+        const jwks = await response.json() as { keys: any[] };
+        const jwk = jwks.keys.find((k: any) => k.kid === kid);
+        if (!jwk) {
+          throw new Error(`Key with ID ${kid} not found in JWKS`);
+        }
+        publicKey = await crypto.subtle.importKey(
+          'jwk',
+          jwk,
+          { name: 'ECDSA', namedCurve: 'P-256' },
+          true,
+          ['verify']
+        );
+        keyCache.set(kid, publicKey);
+      }
+      return await verify(token, publicKey, 'ES256');
+    } catch (jwksError: any) {
+      // Local-only fallback for workerd TLS trust chain issues when fetching JWKS.
+      // Keep production strict by only permitting this in development/local environments
+      // AND for localhost requests.
+      const isDevelopment = env.ENVIRONMENT === 'development' || env.ENVIRONMENT === 'local';
+      if (isDevelopment && isLocalRequest(reqUrl) && decodedPayload?.sub) {
+        console.warn('[JWT DEV FALLBACK] JWKS fetch/verify failed locally; using decoded token claims only.', {
+          reason: jwksError?.message || String(jwksError),
+        });
+        return decodedPayload;
+      }
+      throw jwksError;
+    }
+  }
+
+  throw new Error(`Unsupported algorithm: ${header.alg}`);
+}
+
 
 function getDbFromHyperdrive(env: Bindings): DbClient {
   // Primary path: Hyperdrive (edge query cache + pooled connection).
@@ -268,72 +348,11 @@ api.use('*', async (c, next) => {
   try {
     let payload: any;
 
-
-
     // Verify token using JWT signature. Supabase's current recommendation is
     // asymmetric JWT signing (ES256) verified via the project's JWKS endpoint.
     // HS256 is kept only as an optional legacy fallback when the shared secret
     // is still configured.
-    const { header, payload: decodedPayload } = decode(token);
-    
-    if (header.alg === 'HS256') {
-      const secret = c.env.SUPABASE_JWT_SECRET;
-      if (!secret) {
-        throw new Error('Received legacy HS256 token but SUPABASE_JWT_SECRET is not configured. Enable asymmetric JWTs or set the legacy secret.');
-      }
-      payload = await verify(token, secret, 'HS256');
-    } else if (header.alg === 'ES256') {
-      const kid = header.kid;
-      if (!kid) {
-        throw new Error('Missing key ID (kid) in token header');
-      }
-      
-      try {
-        let publicKey = keyCache.get(kid);
-        if (!publicKey) {
-          const iss = decodedPayload.iss;
-          if (!iss) {
-            throw new Error('Missing issuer (iss) in token payload');
-          }
-          const jwksUrl = iss.endsWith('/') ? `${iss}.well-known/jwks.json` : `${iss}/.well-known/jwks.json`;
-          console.log(`[JWT JWKS FETCH] Fetching JWKS from: ${jwksUrl}`);
-          const response = await fetch(jwksUrl);
-          if (!response.ok) {
-            throw new Error(`Failed to fetch JWKS from ${jwksUrl}: ${response.statusText}`);
-          }
-          const jwks = await response.json() as { keys: any[] };
-          const jwk = jwks.keys.find((k: any) => k.kid === kid);
-          if (!jwk) {
-            throw new Error(`Key with ID ${kid} not found in JWKS`);
-          }
-          publicKey = await crypto.subtle.importKey(
-            'jwk',
-            jwk,
-            { name: 'ECDSA', namedCurve: 'P-256' },
-            true,
-            ['verify']
-          );
-          keyCache.set(kid, publicKey);
-        }
-
-        payload = await verify(token, publicKey, 'ES256');
-      } catch (jwksError: any) {
-        // Local-only fallback for workerd TLS trust chain issues when fetching JWKS.
-        // Keep production strict by only permitting this in development/local environments
-        // AND for localhost requests.
-        const isDevelopment = c.env.ENVIRONMENT === 'development' || c.env.ENVIRONMENT === 'local';
-        if (isDevelopment && isLocalRequest(c.req.url) && decodedPayload?.sub) {
-          console.warn('[JWT DEV FALLBACK] JWKS fetch/verify failed locally; using decoded token claims only.', {
-            reason: jwksError?.message || String(jwksError),
-          });
-          payload = decodedPayload;
-        } else {
-          throw jwksError;
-        }
-      }
-    } else {
-      throw new Error(`Unsupported algorithm: ${header.alg}`);
-    }
+    payload = await verifySupabaseJwt(token, c.env, c.req.url);
 
     const authId = payload.sub; // UUID from supabase auth.users
 
@@ -480,5 +499,83 @@ api.route('/finance', financeRouter);
 
 // Mount authenticated group
 app.route('/api', api);
+
+// ---------------------------------------------------------------------------
+// Platform back-office group (A3). Separate from the tenant `/api` group and
+// mounted OUTSIDE its auth middleware, because platform admins have no
+// `public.users` row and would be rejected by the tenant lookup. Its guard
+// verifies the Supabase JWT and checks the email claim against the
+// PLATFORM_ADMIN_EMAILS allow-list. No org/role resolution.
+// ---------------------------------------------------------------------------
+const platform = new Hono<{ Bindings: Bindings; Variables: Variables }>();
+
+// Blunt brute-force / invite-spam bursts before the JWT + allow-list checks.
+platform.use('*', rateLimit({ scope: 'platform', max: 20, windowMs: 60_000 }));
+
+platform.use('*', async (c, next) => {
+  if (c.req.method === 'OPTIONS') {
+    return await next();
+  }
+  const authHeader = c.req.header('Authorization');
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return c.json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Missing or invalid authentication token' } }, 401);
+  }
+  const token = authHeader.split(' ')[1];
+  let payload: any;
+  try {
+    payload = await verifySupabaseJwt(token, c.env, c.req.url);
+  } catch (err: any) {
+    return c.json({ success: false, error: { code: 'UNAUTHORIZED', message: `Token validation failed: ${err.message}` } }, 401);
+  }
+  const email = String(payload?.email ?? '').trim().toLowerCase();
+  const allow = (c.env.PLATFORM_ADMIN_EMAILS ?? '')
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+  if (!email || allow.length === 0 || !allow.includes(email)) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Not a platform administrator' } }, 403);
+  }
+  await next();
+});
+
+// POST /platform/owners/invite — invite a fuel-station owner + bootstrap their
+// org. Sends a Resend-backed invite email; the owner sets their own password.
+// The metadata drives the gated `handle_new_user()` trigger to create the
+// organization + Owner `public.users` row and link `auth_user_id`.
+platform.post('/owners/invite', async (c) => {
+  const admin = c.env.SUPABASE_URL && c.env.SUPABASE_SECRET_KEY
+    ? new SupabaseAdmin({ url: c.env.SUPABASE_URL, secretKey: c.env.SUPABASE_SECRET_KEY })
+    : null;
+  if (!admin) {
+    return c.json({ success: false, error: { code: 'CONFIG_ERROR', message: 'Auth provisioning is not configured on the server' } }, 500);
+  }
+  const body = await c.req.json().catch(() => ({}));
+  const email = String(body?.email ?? '').trim().toLowerCase();
+  const fullName = String(body?.fullName ?? '').trim();
+  const organizationName = String(body?.organizationName ?? '').trim();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    return c.json({ success: false, error: { code: 'BAD_REQUEST', message: 'A valid email is required' } }, 400);
+  }
+  if (fullName.length < 2 || organizationName.length < 2) {
+    return c.json({ success: false, error: { code: 'BAD_REQUEST', message: 'fullName and organizationName are required' } }, 400);
+  }
+  try {
+    const invited = await admin.inviteUserByEmail(email, {
+      redirectTo: c.env.INVITE_REDIRECT_URL,
+      data: {
+        signup_intent: 'owner',
+        organization_name: organizationName,
+        full_name: fullName,
+        role: 'Owner',
+      },
+    });
+    return c.json({ success: true, data: { authUserId: invited.id, email } });
+  } catch (e: any) {
+    const status = e?.status === 422 ? 409 : 400;
+    return c.json({ success: false, error: { code: 'INVITE_FAILED', message: e?.message ?? 'Could not send invite' } }, status);
+  }
+});
+
+app.route('/platform', platform);
 
 export default app;

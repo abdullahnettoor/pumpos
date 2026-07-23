@@ -74,7 +74,7 @@ is no plan/billing gating yet.
 | D5 | Password reset | **Admin/direct** (`updateUserById`), owner/manager sets a new one, no email/SMS |
 | D6 | Who can manage users | **Owner + Manager** (Manager may add/reset **Staff+Attendant** on own stations, `canManageStaff`); Owner = full |
 | D7 | Deactivate | Sets `status=INACTIVE` **and** bans the auth user (token dies immediately, not just 60s cache) |
-| D8 | Phone handling | Store **normalized E.164 digits** (no `+`/spaces) on `users.phone`; auth identifier = deterministic synthetic email `<phone>@staff.<domain>`; login derives it from the typed phone |
+| D8 | Phone handling | Store **normalized E.164 digits** (no `+`/spaces) on `users.phone`; auth identifier = deterministic synthetic email `<phone>@users.pumpos.app`; login derives it from the typed phone |
 
 ---
 
@@ -141,7 +141,7 @@ UI shows the new password to copy. Deactivate: `status=INACTIVE` + ban.
   and `auth_user_id` is set directly server-side. The `handle_new_user()` trigger only needs
   the A0 gate (self-signup branch behind `signup_intent='owner'`) for the owner-invite flow.
 - **Phone ↔ handle helper** in `@pump/shared`: `normalizePhone(raw)` (E.164 digits) and
-  `phoneToAuthEmail(phone)` = `<digits>@staff.<domain>` (domain from config).
+  `phoneToAuthEmail(phone)` = `<digits>@users.pumpos.app` (domain = `PHONE_AUTH_DOMAIN`).
 - **Admin adapter** (`apps/api/src/infra/supabase-admin.ts`): `createUser`, `updateUserById`,
   `inviteUserByEmail`.
 - **API routes** (`apps/api/src/routes/station-setup.ts`, service-role, role-guarded):
@@ -221,7 +221,7 @@ in the client) and emit audit events; routes are rate-limited.
 | Login UI | `packages/ui/src/components/Auth/Login.tsx` | email **or** phone + password (phone → derive handle) |
 | Team UI | `packages/ui/src/components/StationSetup/UserRolesAssignment.tsx` | identity radio, password+generate/copy, credentials card, reset/deactivate, status badges |
 | Services | `packages/ui/src/services/cloud.ts` | `resetUserPassword`, `deactivateUser`, password in `createUser` |
-| Back-office | separate app or `packages/db/*.mjs` script | owner-invite trigger |
+| Back-office | separate app or `packages/db/*.mjs` script | owner-invite trigger (`packages/db/invite-owner.mjs`, done) |
 
 ---
 
@@ -258,16 +258,22 @@ in the client) and emit audit events; routes are rate-limited.
   login immediately.
 
 ### A2 — Owner provisioning
-- `POST /platform/owners/invite` (platform-admin guarded) → org + Owner + `inviteUserByEmail`.
-- Start via admin script; graduate to a small internal back-office app.
-- Optional: email-invite link path for email staff (in addition to owner-set password).
-- **Done when:** inviting an owner email provisions the org and the owner completes web
+- **Phase 1 (done):** `packages/db/invite-owner.mjs` provisions an owner + org with no manual
+  DB edits and no email/SMS — it calls the Supabase Auth Admin API with `signup_intent='owner'`
+  metadata so the gated `handle_new_user()` trigger creates the org + Owner row and links
+  `auth_user_id`; the script prints the login + password to hand over.
+- **Pending → superseded by section 11 (A3):** the productized owner flow moves to a
+  **Resend-backed `inviteUserByEmail`** link (owner sets their own password) behind a
+  **`/platform/owners/invite`** route in the **existing** API (env-var platform-admin
+  allowlist), plus an `/accept-invite` landing page and the post-onboarding **Organization
+  hub**. See section 11 for the agreed design.
+- **Done when:** inviting an owner provisions the org and the owner completes web
   onboarding end-to-end without any manual DB edits.
 
 ---
 
 ## 9. Confirmed decisions (ready to build)
-- **D3/D8:** phone identity is implemented as a **synthetic email handle** (`<phone>@staff.<domain>`)
+- **D3/D8:** phone identity is implemented as a **synthetic email handle** (`<phone>@users.pumpos.app`)
   because the hosted dashboard blocks native phone auth without Twilio. Operator UX is unchanged
   (log in with phone + password).
 - **D4:** email staff default to **owner-set password**; email-invite is an optional later toggle.
@@ -292,4 +298,98 @@ auth later is a one-time server-side batch, **not** per-user re-onboarding:
 Prerequisites we lock in A1 so this stays painless: normalized-E.164 phone storage, the single shared
 handle helper (reused by the migration script), and phone-staff being inferable (`users.phone` set,
 real email null). No schema change is required for the future migration.
+
+---
+
+## 11. A3 — Owner email-invite, platform back-office & the onboarding hub (2026-07-23)
+
+Revised, agreed direction for the productized owner flow + the post-onboarding home. This
+supersedes the A2 "pending" bullet in section 8.
+
+### 11.1 Decisions locked
+| # | Decision |
+|---|---|
+| E1 | **Email transport = Resend** (Supabase Auth → custom SMTP). Config only, no app code beyond the `redirectTo` URL + `/accept-invite` page. Requires domain verification (SPF/DKIM/DMARC) + verified sender + customized **Invite** email template. |
+| E2 | **Owner provisioning = `admin.inviteUserByEmail(email, { data, redirectTo })`** — the owner receives an email and **sets their own password** (replaces the owner-set-password script path for the productized flow; `invite-owner.mjs` stays as a no-SMTP fallback). Metadata (`signup_intent='owner'`, `organization_name`, `full_name`, `role='Owner'`) still drives the gated `handle_new_user()` self-signup branch → creates org + Owner row + links `auth_user_id`. |
+| E3 | **Platform admins = env-var allowlist** (`PLATFORM_ADMIN_EMAILS`, comma-separated, in `apps/api` `[vars]`). No DB table, no new tenant role. Small team → good enough. |
+| E4 | **No new API deployment.** Add a **`/platform/*` route group to the existing Worker**, mounted **before/outside** the tenant-resolution middleware (platform admins have **no `public.users` row**, so the normal middleware would 403 them). Its own guard: verify the Supabase JWT → check email ∈ `PLATFORM_ADMIN_EMAILS` → skip org/role lookup. |
+| E5 | **Back-office = owner-invite only for now.** Manager/staff invites stay in the **in-org Team UI** (already shipped in A1). Manager-invite-from-back-office is deferred. |
+| E6 | **Back-office UI:** keep the **`invite-owner.mjs` script** short-term (zero UI). A small **separate static deploy** later if a screen is wanted — **never** embedded in the customer console. |
+| E7 | **Invite lands on mobile too.** The `/accept-invite` set-password page is responsive; after setting the password, if the user is Owner/Manager and no station is `READY_FOR_OPERATIONS`, show the **"finish setup on desktop"** notice (reuse `WebOnboardingNotice` copy). No native deep-link from email in v1 — the link always opens the web page. |
+
+### 11.2 The onboarding hub (replaces the wizard-takeover app mode)
+**Today:** when no station is `READY_FOR_OPERATIONS`, the console renders the **bare
+`OnboardingWizard` with no `AppShell`** (`apps/console/src/App.tsx` ~L565 `if (!session ||
+!isStationReady) return renderContent()`), and the nav collapses to a single "Onboarding
+Setup" item. Team management lives **inside** the Organization tab, which only appears once a
+station is READY — so an owner **cannot add team members until onboarding is finished** (an
+accidental gate we want to remove).
+
+**Target hub model:**
+- After login: `≥1 READY station` → Dashboard; else → **Organization hub** (rendered **inside
+  the `AppShell`**, not a bare wizard).
+- **Organization hub** = stations list (each with its onboarding-status badge + "Continue /
+  Onboard" action) + **Team** section + org settings. Station onboarding + team addition are
+  **launched from here** — station #1 is identical to station #N (aligns with Phase M multisite).
+- Operational tabs are **hidden** (agreed: hide, not lock — avoids dead/disabled tabs) until a
+  station is READY.
+- The **wizard becomes a launched route/flow from the hub**, not a global app mode → lets us
+  delete the nav-collapse special case.
+
+**Top bar becomes readiness-aware** (`AppTopBar` gains a `stationReady` signal). In the hub
+(no READY station) state:
+- **Quick-create:** hide operational items (expense/income/collection/purchase/credit…); show
+  only org actions (Onboard station, Add member) or hide entirely.
+- **Command palette / search:** Actions → org-level only; Customers/Suppliers/Products groups
+  are naturally empty pre-onboarding; **Go-to** → hub nav only.
+- **Business-day anchor** and **station alerts**: hidden (no shift/business day).
+- **Station switcher:** keep — list stations **with onboarding-status badges** (how you resume
+  / add). User menu + sync: unchanged.
+
+### 11.3 Who onboards a station
+- **Known gap:** `POST /onboarding/finalize` is **Owner-only** (`station-setup.ts` ~L723) while
+  the UI (`WebOnboardingNotice`) offers it to **Owner + Manager**, and per-entity infra POSTs
+  already allow `canManageInfrastructure` (Owner+Manager). Mismatch to resolve.
+- **Onboarding *creates* the station** (the draft carries station basics →
+  `DrizzleOnboardingProvisioner` provisions station + infra atomically). "No station" is the
+  normal starting state — the wizard **is** how the first station is born.
+- **Provisioner does NOT assign the actor** to the new station today. Owners bypass station
+  scoping so it never mattered; a **Manager** who onboarded would create a station they then
+  **can't access**. → **Fix: auto-create the `user_station_assignments` row for the actor** on
+  finalize (harmless for Owners, unblocks Manager/multisite onboarding).
+- **Chicken-and-egg (invite a manager before a station exists):** avoided by keeping the
+  **first** station **owner-driven** (the org bootstraps with only an Owner). Invite managers
+  **after** the first station exists → station assignment is trivial. Inviting a *Manager* stays
+  **Owner-only** (`canManageUsers`); Staff/Attendant stay Owner+Manager. **Manager onboarding is
+  enabled only for _additional_ stations** (multisite), with the auto-assign fix.
+
+### 11.4 Build order (A3)
+1. **Resend SMTP** + Supabase Invite template + redirect allow-list (config only). — ⬜ manual/env
+2. **`/accept-invite`** landing page (responsive; sets password; role/onboarding-aware routing;
+   reuse `WebOnboardingNotice` for the "finish on desktop" case). — ✅ `packages/ui/.../Auth/AcceptInvite.tsx`
+   (wired in `apps/console/src/App.tsx`; console edge worker exempts `/accept-invite` from the mobile
+   redirect so phones can set a password).
+3. **`/platform/owners/invite`** route in the existing API (env-var allowlist guard,
+   `inviteUserByEmail`); switch `invite-owner.mjs` to call it (or keep the script direct). — ✅ route +
+   `SupabaseAdmin.inviteUserByEmail` done (mounted before tenant middleware; JWT verify extracted to a
+   shared `verifySupabaseJwt`). ⬜ optional: switch the script to call the route.
+4. **Provisioner auto-assign actor** to the new station (small; future-proofs Manager/multisite). — ✅
+   `apps/api/src/infra/onboarding-provisioner.ts` inserts a `user_station_assignments` row for the actor.
+5. **Onboarding hub + readiness-aware top bar:** render the shell pre-ready, land in the
+   Organization hub, hide operational tabs, launch the wizard from the hub, scope the top bar. — ⬜ next
+6. **Rate-limit** the auth/admin + `/platform` routes. — ✅ `apps/api/src/infra/rate-limit.ts` applied to
+   `/platform/*`, `POST /users`, reset-password, (de/re)activate.
+
+> **Config still required for step 1/3 to work in an env:** Resend SMTP + verified sender in Supabase
+> Auth; add invite `redirectTo` to the redirect allow-list; set `PLATFORM_ADMIN_EMAILS` (comma-separated)
+> and `INVITE_REDIRECT_URL` in `apps/api/wrangler.toml` `[vars]` per env; redeploy the API.
+
+### 11.5 Acceptance criteria (A3)
+- Inviting an owner sends a Resend email; the owner clicks it (desktop **or** mobile), sets their
+  own password, and lands in the **Organization hub** with operational tabs hidden.
+- From the hub the owner onboards the first station and adds team members **before** any station
+  is READY.
+- A Manager onboarding an **additional** station is **auto-assigned** to it and can operate it.
+- The top bar shows no dead operational affordances while no station is READY.
+- Platform-admin routes reject any caller whose email is not in `PLATFORM_ADMIN_EMAILS`.
 

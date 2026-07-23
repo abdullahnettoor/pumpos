@@ -34,6 +34,7 @@ import {
 import { buildContext } from '../infra/context.js';
 import { createDispatcher } from '../infra/events.js';
 import { SupabaseAdmin } from '../infra/supabase-admin.js';
+import { rateLimit } from '../infra/rate-limit.js';
 import { DrizzleOnboardingProvisioner } from '../infra/onboarding-provisioner.js';
 import {
   DrizzleStationRepository,
@@ -319,7 +320,7 @@ function canActOnTarget(
   return targetStationIds.some((s) => actor.assignedStationIds.includes(s));
 }
 
-stationSetupRouter.post('/users', validateJson(userSchema, 'BAD_REQUEST'), async (c) => {
+stationSetupRouter.post('/users', rateLimit({ scope: 'users-write', max: 30, windowMs: 60_000 }), validateJson(userSchema, 'BAD_REQUEST'), async (c) => {
   const user = c.var.user;
   if (!canManageStaff(user.role)) {
     return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Not allowed to manage users' } }, 403);
@@ -393,7 +394,7 @@ stationSetupRouter.put('/users/:id', validateJson(userUpdateSchema, 'BAD_REQUEST
   return sendResult(c, result);
 });
 
-stationSetupRouter.post('/users/:id/reset-password', async (c) => {
+stationSetupRouter.post('/users/:id/reset-password', rateLimit({ scope: 'password-reset', max: 15, windowMs: 60_000 }), async (c) => {
   const user = c.var.user;
   const id = c.req.param('id');
   const body = await c.req.json().catch(() => ({}));
@@ -427,11 +428,11 @@ stationSetupRouter.post('/users/:id/reset-password', async (c) => {
   return sendResult(c, result);
 });
 
-stationSetupRouter.post('/users/:id/deactivate', async (c) => {
+stationSetupRouter.post('/users/:id/deactivate', rateLimit({ scope: 'user-status', max: 30, windowMs: 60_000 }), async (c) => {
   return setUserActive(c, false);
 });
 
-stationSetupRouter.post('/users/:id/reactivate', async (c) => {
+stationSetupRouter.post('/users/:id/reactivate', rateLimit({ scope: 'user-status', max: 30, windowMs: 60_000 }), async (c) => {
   return setUserActive(c, true);
 });
 

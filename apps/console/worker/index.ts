@@ -48,6 +48,13 @@ export default {
     const forcedDesktop =
       url.searchParams.get('desktop') === '1' || cookies.includes(BYPASS_COOKIE);
 
+    // The invite / set-password page must load on ANY device (an owner may open
+    // the emailed invite on a phone). It's a standalone responsive page, and the
+    // mobile redirect would strip the invite token, so serve it directly.
+    if (url.pathname.replace(/\/+$/, '') === '/accept-invite') {
+      return env.ASSETS.fetch(request);
+    }
+
     if (!forcedDesktop && isMobileRequest(request)) {
       const mobileHost = mobileHostFor(url.hostname);
       if (mobileHost !== url.hostname) {

@@ -89,6 +89,24 @@ export class SupabaseAdmin {
   }
 
   /**
+   * Send an invite email so the recipient sets their own password. Carries
+   * `data` into the auth user's metadata (read by the gated `handle_new_user()`
+   * trigger, e.g. `signup_intent`, `organization_name`). `redirectTo` becomes
+   * the link's destination (must be in the Supabase redirect allow-list).
+   */
+  async inviteUserByEmail(
+    email: string,
+    options: { data?: Record<string, unknown>; redirectTo?: string } = {},
+  ): Promise<SupabaseAdminUser> {
+    const qs = options.redirectTo ? `?redirect_to=${encodeURIComponent(options.redirectTo)}` : '';
+    const user = await this.request<SupabaseAdminUser>('POST', `/invite${qs}`, {
+      email,
+      data: options.data ?? {},
+    });
+    return user;
+  }
+
+  /**
    * Ban (disable) a user so existing tokens are rejected immediately.
    * `ban_duration` accepts a GoTrue duration string, e.g. `"876000h"` (~100y).
    */

@@ -11,6 +11,11 @@ compatibility_flags = [ "nodejs_compat_v2" ]
 # with `wrangler secret put SUPABASE_SERVICE_ROLE_KEY` — never put it in [vars].
 [vars]
 SUPABASE_URL = "https://sniubtppskopxkpznfkh.supabase.co"
+# Comma-separated allow-list of platform-admin emails permitted to call
+# /platform/* (owner provisioning). Emails aren't secret, so this is plaintext.
+PLATFORM_ADMIN_EMAILS = "abdullahnettoor@gmail.com"
+# Destination for owner-invite links (must be in the Supabase redirect allow-list).
+INVITE_REDIRECT_URL = "https://console.pumpos.app/accept-invite"
 
 [[routes]]
 pattern = "api.pumpos.app"
@@ -67,6 +72,8 @@ workers_dev = false
 # separate SUPABASE_SERVICE_ROLE_KEY via `wrangler secret put ... --env preview`).
 [env.preview.vars]
 SUPABASE_URL = "https://sniubtppskopxkpznfkh.supabase.co"
+PLATFORM_ADMIN_EMAILS = "abdullahnettoor@gmail.com"
+INVITE_REDIRECT_URL = "https://console.pumpos.abdullahnettoor.com/accept-invite"
 
 [[env.preview.routes]]
 pattern = "api.pumpos.abdullahnettoor.com"
