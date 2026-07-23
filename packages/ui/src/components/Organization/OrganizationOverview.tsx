@@ -6,7 +6,7 @@ import { Chip, Button } from '../../pump-ds/index.js';
 import { UserRolesAssignment } from '../StationSetup/UserRolesAssignment.js';
 import { OrgProfile } from './OrgProfile.js';
 import { ActivityFeed } from './ActivityFeed.js';
-import { Check } from 'lucide-react';
+import { Check, Fuel, Users, Plus } from 'lucide-react';
 
 export interface OrganizationOverviewProps {
   stations: Station[];
@@ -40,6 +40,8 @@ export const OrganizationOverview: React.FC<OrganizationOverviewProps> = ({
 }) => {
   const [tab, setTab] = useState<'stations' | 'team' | 'activity' | 'profile'>('stations');
 
+  const hasReadyStation = stations.some((s) => (s as any).onboardingStatus === 'READY_FOR_OPERATIONS');
+
   return (
     <PageLayout
       title="Organization"
@@ -60,7 +62,43 @@ export const OrganizationOverview: React.FC<OrganizationOverviewProps> = ({
       }
     >
       {tab === 'stations' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          {/* Getting-started welcome — shown until the first station is operational. */}
+          {!hasReadyStation && (
+            <div
+              className="card card-default"
+              style={{ display: 'flex', flexDirection: 'column', gap: '12px', padding: '20px', backgroundColor: 'var(--bg-surface-alt)' }}
+            >
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <span style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-strong)' }}>
+                  {stations.length === 0 ? 'Welcome to PumpOS' : 'Finish setting up your station'}
+                </span>
+                <span style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                  Get your station operational to unlock shifts, sales and reports. It takes a few minutes and
+                  can be done here on desktop.
+                </span>
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                <Button variant="primary" size="sm" leftIcon={<Fuel size={14} />} onClick={() => onNavigate('/onboarding')}>
+                  Onboard station
+                </Button>
+                <Button variant="secondary" size="sm" leftIcon={<Users size={14} />} onClick={() => setTab('team')}>
+                  Invite your team
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Stations list header with an always-available onboard action. */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+            <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Stations
+            </span>
+            <Button variant="secondary" size="sm" leftIcon={<Plus size={14} />} onClick={() => onNavigate('/onboarding')}>
+              Onboard station
+            </Button>
+          </div>
+
           {stations.length === 0 ? (
             <div style={{ color: 'var(--text-muted)', fontSize: '13px' }}>No stations yet.</div>
           ) : (

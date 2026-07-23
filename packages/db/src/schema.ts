@@ -45,7 +45,13 @@ export const users = pgTable('users', {
   status: varchar('status', { length: 20 }).default('ACTIVE').notNull(), // 'ACTIVE', 'INACTIVE'
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
-});
+}, (table) => ({
+  // One Supabase auth user maps to at most one profile row (nullable for
+  // record-only users, so the uniqueness is partial).
+  authUserIdUniq: uniqueIndex('users_auth_user_id_uniq')
+    .on(table.authUserId)
+    .where(sql`${table.authUserId} IS NOT NULL`),
+}));
 
 export const userStationAssignments = pgTable('user_station_assignments', {
   id: uuid('id').defaultRandom().primaryKey(),

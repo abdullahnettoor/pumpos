@@ -2,10 +2,11 @@ import React, { useState } from 'react';
 import { CloudShiftService } from '../../services/cloud.js';
 import {
   useShiftStatus, useInvalidateOperational, useInventoryStatus, usePricing, useProducts,
-  useExpenses, usePurchases, useCollections, useCustomers, useSuppliers, useShiftSummaries, useDailyDssrPreview,
+  useExpenses, usePurchases, useCollections, useCustomers, useSuppliers, useShiftSummaries, useDailyDssrPreview, useUsers,
 } from '../../query/hooks.js';
 import { useStationAlerts } from '../../query/useStationAlerts.js';
 import { SkeletonGrid } from '../primitives/Skeleton.js';
+import { GettingStartedChecklist, type ChecklistStep } from './GettingStartedChecklist.js';
 import {
   KpiStrip, KpiTile, Button, PageHeader, Panel, EmptyState, MeterRow, StatusChip, Chip,
 } from '../../pump-ds/index.js';
@@ -17,7 +18,7 @@ import { Station, resolveBusinessDate } from '@pump/shared';
 import type { NavIntent } from '../AppShell.js';
 import {
   Play, Plus, FileText, Unlock, AlertTriangle, Lock, Droplet, ClipboardList,
-  CircleCheckBig, ChevronRight, TriangleAlert, Clock,
+  CircleCheckBig, ChevronRight, TriangleAlert, Clock, Fuel, Users,
 } from 'lucide-react';
 
 const shiftService = new CloudShiftService();
@@ -46,6 +47,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   const { data: collections } = useCollections({ enabled: canSeeFinancials });
   const { data: customers } = useCustomers(true, { enabled: canSeeFinancials });
   const { data: suppliers } = useSuppliers(true, { enabled: canSeeFinancials });
+  const { data: users } = useUsers();
   const { data: shiftSummaries } = useShiftSummaries(selectedStation?.id, { enabled: canSeeFinancials });
   const isOwner = userRole === 'Owner';
   // Live "Today's P&L" for the owner — recomputed on demand (no snapshot written).
@@ -58,6 +60,13 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   const confirm = useConfirm();
   const toast = useToast();
   const [isReopening, setIsReopening] = useState(false);
+  const [gsDismissed, setGsDismissed] = useState(() => {
+    try { return localStorage.getItem('pumpos_gs_dismissed') === '1'; } catch { return false; }
+  });
+  const dismissGettingStarted = () => {
+    try { localStorage.setItem('pumpos_gs_dismissed', '1'); } catch { /* storage blocked */ }
+    setGsDismissed(true);
+  };
 
   const handleReopen = async (shiftId: string) => {
     if (!(await confirm({
@@ -81,14 +90,109 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
     }
   };
 
-  if (!selectedStation) {
+  // Getting-started steps (data-driven; shared by the pre-ready hero and the
+  // post-ready "Get started" checklist). Null-safe so a fresh org with NO
+  // station yet still shows the hero. Customer/supplier steps only unlock once
+  // the station is live (those screens are hidden pre-ready).
+  const isReadyStation = !!selectedStation && (selectedStation as any).onboardingStatus === 'READY_FOR_OPERATIONS';
+  const stationInProgress = !!selectedStation && (selectedStation as any).onboardingStatus === 'IN_PROGRESS';
+  const canManageOnboarding = userRole === 'Owner' || userRole === 'Manager';
+  const gsSteps: ChecklistStep[] = [
+    {
+      id: 'org',
+      label: 'Create your organization',
+      description: 'Your account and organization are set up.',
+      done: true,
+      actionLabel: 'Done',
+      onAction: () => {},
+    },
+    {
+      id: 'station',
+      label: 'Onboard your station',
+      description: 'Set up fuels, tanks, dispensers and opening values.',
+      done: isReadyStation,
+      actionLabel: stationInProgress ? 'Resume' : 'Onboard',
+      onAction: () => onNavigate('/onboarding'),
+    },
+    {
+      id: 'team',
+      label: 'Invite your team',
+      description: 'Add managers and staff so they can log in.',
+      done: (users?.length ?? 0) > 1,
+      actionLabel: 'Invite',
+      onAction: () => onNavigate('/organization'),
+    },
+    {
+      id: 'suppliers',
+      label: 'Add suppliers',
+      description: 'Record fuel and merchandise suppliers.',
+      done: (suppliers?.length ?? 0) > 0,
+      locked: !isReadyStation,
+      lockedHint: 'Available once your station is live.',
+      actionLabel: 'Add',
+      onAction: () => onNavigate('/purchases'),
+    },
+    {
+      id: 'customers',
+      label: 'Add customers',
+      description: 'Track credit customers and fleet accounts.',
+      done: (customers?.length ?? 0) > 0,
+      locked: !isReadyStation,
+      lockedHint: 'Available once your station is live.',
+      actionLabel: 'Add',
+      onAction: () => onNavigate('/customers', { open: 'new-customer' }),
+    },
+  ];
+
+  // No station yet OR a station that isn't operational → native getting-started
+  // hero on the dashboard (home). Owner/Manager can act on it; other roles just
+  // wait for the Owner to finish setup.
+  if (!isReadyStation) {
+    if (!canManageOnboarding) {
+      return (
+        <div className="animate-fade-in flex flex-col gap-5">
+          <PageHeader title="Dashboard" />
+          <EmptyState
+            icon={<TriangleAlert />}
+            title="Station setup in progress"
+            description="Operations unlock automatically once the Owner completes onboarding."
+          />
+        </div>
+      );
+    }
+    const firstName = (userName || '').trim().split(/\s+/)[0] || 'there';
+    const subtitle = selectedStation ? `${selectedStation.name} · ${selectedStation.code}` : undefined;
     return (
       <div className="animate-fade-in flex flex-col gap-5">
-        <PageHeader title="Dashboard" />
-        <EmptyState icon={<TriangleAlert />} title="No station selected" description="Configure or select a station to continue." />
+        <PageHeader title="Dashboard" subtitle={subtitle} />
+        <div
+          className="card card-default"
+          style={{ padding: '28px', display: 'flex', flexDirection: 'column', gap: '16px', alignItems: 'flex-start' }}
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <span style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text-strong)' }}>Welcome, {firstName}</span>
+            <span style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.5, maxWidth: '620px' }}>
+              {stationInProgress
+                ? 'Your station setup is in progress. Pick up where you left off to bring it online.'
+                : 'Bring your station online to unlock shifts, sales, inventory and reports. Setup takes a few minutes and is done right here.'}
+            </span>
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+            <Button variant="primary" size="sm" leftIcon={<Fuel size={14} />} onClick={() => onNavigate('/onboarding')}>
+              {stationInProgress ? 'Resume setup' : 'Onboard your station'}
+            </Button>
+            <Button variant="secondary" size="sm" leftIcon={<Users size={14} />} onClick={() => onNavigate('/organization')}>
+              Invite your team
+            </Button>
+          </div>
+        </div>
+        <GettingStartedChecklist steps={gsSteps} />
       </div>
     );
   }
+
+  // Past this point the station is operational — narrow for TypeScript.
+  if (!selectedStation) return null;
 
   if (loading) {
     return (
@@ -115,6 +219,11 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
 
   const { activeShift, lastShift, lastDssr, canReopenLastShift, gracePeriodExpiresAt } = summary || {};
   const isAccountant = userRole === 'Accountant';
+
+  // A freshly-onboarded (but ready) station: show the getting-started checklist
+  // until the essentials are done or the user dismisses it.
+  const canManage = userRole === 'Owner' || userRole === 'Manager';
+  const showGettingStarted = canManage && !gsDismissed && gsSteps.some((s) => !s.done);
 
   // Business-day-aware "today so far" rollups (client-summed; timezone honoured).
   const stationSettings: any = (selectedStation as any).settings || {};
@@ -187,6 +296,11 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
           </>
         }
       />
+
+      {/* Get started — progressive checklist until the essentials are done. */}
+      {showGettingStarted && (
+        <GettingStartedChecklist steps={gsSteps} dismissible onDismiss={dismissGettingStarted} />
+      )}
 
       {/* Needs attention — shared station alerts + variance (financial roles) */}
       {/* Needs attention — collapsible; compact by default so many alerts

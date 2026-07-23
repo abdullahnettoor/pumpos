@@ -12,6 +12,7 @@ import {
 import { CloudStationService } from '../../services/cloud.js';
 import { Drawer } from '../Drawer.js';
 import { Button, Chip } from '../../pump-ds/index.js';
+import { Check } from 'lucide-react';
 import { useConfirm } from '../primitives/ConfirmDialog.js';
 import {
   clearStoredOnboardingDraft,
@@ -44,6 +45,8 @@ const stationService = new CloudStationService();
 
 interface OnboardingWizardProps {
   onOnboardingComplete: (station: Station) => void;
+  /** Leave onboarding (e.g. after discarding the draft) — host routes home. */
+  onExit?: () => void;
   userName: string;
 }
 
@@ -146,12 +149,14 @@ function wait(ms: number) {
 
 export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
   onOnboardingComplete,
+  onExit,
   userName,
 }) => {
   const [draft, setDraft] = useState<OnboardingDraft>(createEmptyOnboardingDraft());
   const [currentStep, setCurrentStep] = useState(1);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isHydrated, setIsHydrated] = useState(false);
+  const [showIntro, setShowIntro] = useState(false);
   const confirm = useConfirm();
 
   // Modal Drawers
@@ -176,12 +181,18 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     failedStage: null,
     completed: false,
   });
+  const [provisionedStation, setProvisionedStation] = useState<Station | null>(null);
 
   useEffect(() => {
     const stored = loadStoredOnboardingDraft();
     if (stored?.draft) {
       setDraft(stored.draft);
       setCurrentStep(Math.min(Math.max(stored.currentStep || 1, 1), steps.length));
+      // Resuming an existing draft — go straight to the steps.
+      setShowIntro(false);
+    } else {
+      // Fresh start — show the prep/intro screen first.
+      setShowIntro(true);
     }
     setIsHydrated(true);
   }, []);
@@ -599,6 +610,9 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     setDraft(createEmptyOnboardingDraft());
     setCurrentStep(1);
     setErrorMsg(null);
+    // Leave onboarding and return home (dashboard) when the host provides a
+    // route out; otherwise stay and start over from step 1.
+    onExit?.();
   };
 
   const moveToStep = (step: number) => {
@@ -642,8 +656,9 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
       await wait(150);
       setProvisioning((prev) => ({ ...prev, completed: true }));
       clearStoredOnboardingDraft();
-      await wait(300);
-      onOnboardingComplete(result.station);
+      // Hold on a success screen instead of jumping straight to the dashboard —
+      // the owner sees what they built and continues when ready.
+      setProvisionedStation(result.station);
     } catch (err: any) {
       const stageName = err?.details?.stage || provisioningStages[1];
       setProvisioning((prev) => ({
@@ -659,6 +674,96 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', color: 'var(--text-muted)' }}>
         Preparing onboarding workspace...
+      </div>
+    );
+  }
+
+  if (showIntro) {
+    const prepItems: { t: string; d: string }[] = [
+      { t: 'Station details', d: 'Name, address, timezone and when your business day starts.' },
+      { t: 'Fuels & selling rates', d: 'The fuels you sell (Petrol, Diesel, …) and their current prices.' },
+      { t: 'Tanks', d: "Each tank's capacity, the fuel it holds, and its current stock." },
+      { t: 'Dispensers & nozzles', d: 'Your dispenser layout and which tank each nozzle draws from.' },
+      { t: 'Opening meter readings', d: 'The current cumulative reading on each nozzle.' },
+      { t: 'Shift timings', d: 'Your operating shifts (for example, day and night).' },
+      { t: 'Payment terminals', d: 'Card / UPI machines — optional, and easy to add later.' },
+    ];
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', backgroundColor: 'var(--bg-canvas)', overflow: 'hidden' }}>
+        <header style={{
+          height: '68px', backgroundColor: 'var(--bg-surface)', borderBottom: '1px solid var(--border-soft)',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 24px', gap: '16px', flexShrink: 0,
+        }}>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-strong)' }}>PumpOS Setup</span>
+            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Let's bring your station online</span>
+          </div>
+          {onExit && (
+            <Button type="button" variant="secondary" size="sm" onClick={() => onExit()}>Back to dashboard</Button>
+          )}
+        </header>
+
+        <main style={{ flex: 1, overflowY: 'auto', padding: '24px', display: 'flex', justifyContent: 'center' }}>
+          <div style={{ width: '100%', maxWidth: '760px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <div>
+              <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--text-strong)', margin: 0 }}>Let's set up your station</h1>
+              <p style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.6, marginTop: '6px' }}>
+                PumpOS is built around your station's real infrastructure. Have these details handy so setup is
+                quick and accurate — it usually takes about 5–7 minutes.
+              </p>
+            </div>
+
+            <div style={panelStyle}>
+              <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-strong)' }}>What to have ready</span>
+              <ul style={{ display: 'flex', flexDirection: 'column', gap: '12px', margin: 0, padding: 0, listStyle: 'none' }}>
+                {prepItems.map((item, i) => (
+                  <li key={item.t} style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                    <span
+                      aria-hidden="true"
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                        width: '22px', height: '22px', borderRadius: '999px', fontSize: '11px', fontWeight: 700,
+                        backgroundColor: 'var(--bg-surface-alt)', color: 'var(--text-muted)', border: '1px solid var(--border-strong)',
+                      }}
+                    >
+                      {i + 1}
+                    </span>
+                    <span style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: '1px' }}>
+                      <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-strong)' }}>{item.t}</span>
+                      <span style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.45 }}>{item.d}</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div style={{
+              padding: '14px 16px', borderRadius: 'var(--radius-card)', border: '1px solid var(--border-soft)',
+              backgroundColor: 'var(--bg-surface-alt)', fontSize: '12.5px', color: 'var(--text-muted)', lineHeight: 1.55,
+            }}>
+              <span style={{ fontWeight: 600, color: 'var(--text-strong)' }}>Set the infrastructure carefully. </span>
+              Your tanks, dispensers and nozzles are linked and drive every sale, so getting them right now saves
+              rework — editing them later ripples across the system. Details like payment terminals are easy to
+              change anytime.
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: 'var(--text-muted)' }}>
+              <Chip tone="neutral" size="xs">Saved automatically</Chip>
+              <span>Your progress is saved as you go — you can leave and pick up where you left off.</span>
+            </div>
+          </div>
+        </main>
+
+        <footer style={{
+          height: '72px', backgroundColor: 'var(--bg-surface)', borderTop: '1px solid var(--border-soft)',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 24px', flexShrink: 0,
+        }}>
+          {onExit ? (
+            <Button type="button" variant="secondary" size="sm" onClick={() => onExit()}>Back to dashboard</Button>
+          ) : <span />}
+          <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>~5–7 minutes · editable later</div>
+          <Button type="button" variant="primary" size="md" onClick={() => setShowIntro(false)}>Start setup</Button>
+        </footer>
       </div>
     );
   }
@@ -680,7 +785,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
         <div style={{ display: 'flex', flexDirection: 'column' }}>
           <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-strong)' }}>PumpOS Setup</span>
           <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-            Smooth station provisioning for {userName}
+            Setting up your station · saved automatically as you go
           </span>
         </div>
 
@@ -713,14 +818,17 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
           </div>
         </div>
 
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          onClick={discardDraft}
-        >
-          Discard Draft
-        </Button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <Chip tone="neutral" size="xs">Draft saved</Chip>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={discardDraft}
+          >
+            Discard Draft
+          </Button>
+        </div>
 
         {/* Global Progress Bar */}
         <div style={{
@@ -880,15 +988,16 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
 
         <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
           Step {currentStep} of {steps.length}
+          {currentStep < steps.length ? ` · ${steps.length - currentStep} left` : ' · last step'}
         </div>
 
         {currentStep === steps.length ? (
           <Button type="button" variant="primary" size="md" onClick={handleProvision}>
-            Provision Station
+            Go live
           </Button>
         ) : (
           <Button type="button" variant="primary" size="md" onClick={handleNext}>
-            Next Step
+            Continue
           </Button>
         )}
       </footer>
@@ -1516,6 +1625,61 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
           zIndex: 9999,
           padding: '24px',
         }}>
+          {provisioning.completed && !provisioning.failedMessage ? (
+            <div style={{
+              width: '100%',
+              maxWidth: '520px',
+              backgroundColor: 'var(--bg-surface)',
+              borderRadius: 'var(--radius-card)',
+              border: '1px solid var(--border-soft)',
+              boxShadow: '0 20px 48px rgba(15, 23, 42, 0.15)',
+              padding: '28px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '18px',
+            }} className="animate-fade-in">
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', textAlign: 'center' }}>
+                <div style={{ width: '48px', height: '48px', borderRadius: '999px', backgroundColor: 'var(--state-success-bg)', color: 'var(--state-success-fg)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Check size={26} />
+                </div>
+                <h3 style={{ fontSize: '19px', fontWeight: 700, color: 'var(--text-strong)', margin: 0 }}>Your station is live</h3>
+                <p style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.5, margin: 0 }}>
+                  {provisionedStation?.name
+                    ? <><strong style={{ color: 'var(--text-strong)' }}>{provisionedStation.name}</strong> is set up and ready for operations.</>
+                    : 'Your station is set up and ready for operations.'}
+                </p>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+                {[
+                  { label: 'Fuels', value: draft.products.length },
+                  { label: 'Tanks', value: draft.tanks.length },
+                  { label: 'Dispensers', value: draft.dispensers.length },
+                  { label: 'Nozzles', value: draft.nozzles.length },
+                  { label: 'Shift templates', value: draft.shiftTemplates.length },
+                  { label: 'Terminals', value: draft.paymentTerminals?.length ?? 0 },
+                ].map((t) => (
+                  <div key={t.label} style={{ backgroundColor: 'var(--bg-surface-alt)', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-card)', padding: '12px', textAlign: 'center' }}>
+                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: '18px', fontWeight: 700, color: 'var(--text-strong)' }}>{t.value}</div>
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{t.label}</div>
+                  </div>
+                ))}
+              </div>
+
+              <p style={{ fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center', margin: 0 }}>
+                You can fine-tune fuels, pricing and infrastructure anytime from Station Overview.
+              </p>
+
+              <Button
+                type="button"
+                variant="primary"
+                size="md"
+                onClick={() => { if (provisionedStation) onOnboardingComplete(provisionedStation); }}
+              >
+                Go to dashboard
+              </Button>
+            </div>
+          ) : (
           <div style={{
             width: '100%',
             maxWidth: '520px',
@@ -1653,6 +1817,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
               </div>
             )}
           </div>
+          )}
         </div>
       )}
     </div>

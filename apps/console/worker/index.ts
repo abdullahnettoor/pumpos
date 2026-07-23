@@ -12,7 +12,9 @@
  */
 
 interface Env {
-  ASSETS: Fetcher;
+  // Static-assets binding. Typed structurally so the worker needs no
+  // Cloudflare Workers type package (it only ever calls `.fetch`).
+  ASSETS: { fetch: (request: Request) => Promise<Response> };
 }
 
 const MOBILE_UA =
@@ -48,7 +50,24 @@ export default {
     const forcedDesktop =
       url.searchParams.get('desktop') === '1' || cookies.includes(BYPASS_COOKIE);
 
-    if (!forcedDesktop && isMobileRequest(request)) {
+    // The invite / set-password page must load on ANY device (an owner may open
+    // the emailed invite on a phone). It's a standalone responsive page, and the
+    // mobile redirect would strip the invite token, so serve it directly.
+    if (url.pathname.replace(/\/+$/, '') === '/accept-invite') {
+      return env.ASSETS.fetch(request);
+    }
+
+    // Only redirect *top-level page navigations* to the mobile host — never
+    // sub-resource requests (JS/CSS/fonts). Otherwise an exempt page such as
+    // /accept-invite would load its HTML but have its bundle requests redirected
+    // to m.<zone>, so the SPA never boots (blank page). Modern browsers send
+    // Sec-Fetch-Mode; fall back to the Accept header for older ones.
+    const secFetchMode = request.headers.get('Sec-Fetch-Mode');
+    const isNavigation = secFetchMode
+      ? secFetchMode === 'navigate'
+      : (request.headers.get('Accept') || '').includes('text/html');
+
+    if (!forcedDesktop && isNavigation && isMobileRequest(request)) {
       const mobileHost = mobileHostFor(url.hostname);
       if (mobileHost !== url.hostname) {
         const target = `https://${mobileHost}/`;

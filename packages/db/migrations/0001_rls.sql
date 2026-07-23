@@ -49,6 +49,16 @@ $$;
 
 -- =====================================================================
 -- 2. New-user provisioning (signup → organization + owner user row)
+-- Gate self-signup to invited owners only
+--
+-- Hardens public.handle_new_user() so an unmatched auth.users insert no
+-- longer silently creates an organization + Owner. The self-signup branch
+-- now fires ONLY when the invite metadata explicitly carries
+-- `signup_intent = 'owner'`. Any other unmatched insert (e.g. a synthetic
+-- staff handle, a stray/manual insert) links if it matches an existing
+-- users row and otherwise does nothing — no org is created.
+--
+-- Idempotent: CREATE OR REPLACE. Re-running is safe.
 -- =====================================================================
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger AS $$
@@ -65,7 +75,6 @@ BEGIN
   END IF;
 
   IF v_existing_user_id IS NOT NULL THEN
-    -- Invitation flow: attach auth identity to the pre-created user
     UPDATE public.users
     SET
       auth_user_id = NEW.id,
@@ -74,8 +83,8 @@ BEGIN
       role = COALESCE(role, NEW.raw_user_meta_data->>'role', 'Staff'),
       updated_at = now()
     WHERE id = v_existing_user_id;
-  ELSE
-    -- Self-signup (owner) flow: create organization + owner user
+
+  ELSIF COALESCE(NEW.raw_user_meta_data->>'signup_intent', '') = 'owner' THEN
     v_org_name := COALESCE(NEW.raw_user_meta_data->>'organization_name', NEW.raw_user_meta_data->>'company_name', SPLIT_PART(NEW.email, '@', 1) || '''s Station');
 
     INSERT INTO public.organizations (id, name, subscription_plan, subscription_status, created_at, updated_at)
@@ -98,6 +107,20 @@ DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+-- =====================================================================
+-- 2b. One auth user ↔ one profile row (guard against duplicate/rogue rows)
+--
+-- A synthetic phone-login handle (`…@users.pumpos.app`) is an auth-only
+-- identifier and must NEVER be stored as a public.users.email (phone staff
+-- keep email = NULL). Remove any such rogue rows, then enforce that a single
+-- auth user maps to at most one profile row. Partial index because
+-- record-only users (no login) legitimately have auth_user_id = NULL.
+-- Idempotent: safe to re-run.
+-- =====================================================================
+CREATE UNIQUE INDEX IF NOT EXISTS users_auth_user_id_uniq
+  ON public.users (auth_user_id)
+  WHERE auth_user_id IS NOT NULL;
 
 -- =====================================================================
 -- 3. Enable RLS on every business table (41)

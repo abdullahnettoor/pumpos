@@ -6,6 +6,7 @@ export type { QuickEntryType, QuickEntryState } from './quick-entry/store.js';
 export * from './components/Drawer.js';
 export { ErrorBoundary } from './components/ErrorBoundary.js';
 export { Login } from './components/Auth/Login.js';
+export { AcceptInvite } from './components/Auth/AcceptInvite.js';
 export { OnboardingWizard } from './components/StationSetup/OnboardingWizard.js';
 export { WebOnboardingNotice } from './components/StationSetup/WebOnboardingNotice.js';
 export type { WebOnboardingNoticeProps } from './components/StationSetup/WebOnboardingNotice.js';

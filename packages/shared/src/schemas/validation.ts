@@ -85,13 +85,41 @@ export const stationSchema = z.object({
   isActive: z.boolean().default(true),
 });
 
-export const userSchema = z.object({
+export const userBaseSchema = z.object({
   fullName: z.string().min(2, 'Full name must be at least 2 characters'),
   email: z.string().email('Invalid email address').or(z.literal('')).optional().nullable(),
   phone: z.string().optional().nullable(),
   role: z.enum(['Owner', 'Manager', 'Accountant', 'Staff', 'Attendant']).optional(),
   status: z.enum(['ACTIVE', 'INACTIVE']).default('ACTIVE'),
+  /** When true, provision a login account (needs an identity + password). */
+  enableAppAccess: z.boolean().optional(),
+  /** Owner-set password used when provisioning a login account. */
+  password: z.string().min(8, 'Password must be at least 8 characters').optional().nullable(),
+  stationIds: z.array(z.string()).optional(),
 });
+
+export const userSchema = userBaseSchema.superRefine((val, ctx) => {
+  if (!val.enableAppAccess) return;
+  const hasEmail = !!(val.email && val.email.trim() !== '');
+  const hasPhone = !!(val.phone && val.phone.trim() !== '');
+  if (!hasEmail && !hasPhone) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['email'],
+      message: 'An email or phone is required to enable app access',
+    });
+  }
+  if (!val.password || val.password.trim() === '') {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['password'],
+      message: 'A password is required to enable app access',
+    });
+  }
+});
+
+/** Partial (edit) form — no app-access provisioning cross-field rules. */
+export const userUpdateSchema = userBaseSchema.partial();
 
 export const expenseSchema = z.object({
   categoryId: z.string().uuid('Invalid category ID'),

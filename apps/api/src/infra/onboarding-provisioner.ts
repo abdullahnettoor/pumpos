@@ -65,6 +65,15 @@ export class DrizzleOnboardingProvisioner implements OnboardingProvisioner {
           })
           .returning();
 
+        // Assign the person who onboarded the station to it. Owners bypass
+        // station scoping so this is a no-op for them, but a Manager (or any
+        // non-Owner actor, e.g. multisite onboarding) would otherwise create a
+        // station they cannot access. The station was just created in this
+        // transaction, so no prior assignment can exist.
+        if (actorId) {
+          await tx.insert(schema.userStationAssignments).values({ userId: actorId, stationId: newStation.id });
+        }
+
         const productIdMap = new Map<string, string>();
         // Opening cost basis per fuel product = weighted average of its tanks'
         // (opening qty × landed rate) ÷ Σ opening qty. Built from tanks (which

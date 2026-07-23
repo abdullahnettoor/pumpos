@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import {
   Receipt, Wallet, ShoppingCart, ShoppingBag, CreditCard, Users, Truck, Package, FileText, Banknote,
-  ArrowUpRight, LogOut, TriangleAlert, Clock, LayoutDashboard,
+  ArrowUpRight, LogOut, TriangleAlert, Clock, LayoutDashboard, Fuel,
 } from 'lucide-react';
 import { resolveBusinessDate, type Station } from '@pump/shared';
 import type { NavIntent } from './AppShell.js';
@@ -39,6 +39,10 @@ export interface AppTopBarProps {
   onNavigate: (path: string, intent?: NavIntent) => void;
   onLogout: () => void;
   onToggleSidebar?: () => void;
+  /** When false the active station isn't operational yet (pre-onboarding hub):
+   *  hide business day, station alerts, and operational quick-create; scope the
+   *  “+ New” menu to getting-started actions. */
+  stationReady?: boolean;
 }
 
 function initialsOf(name: string): string {
@@ -81,6 +85,7 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
   onNavigate,
   onLogout,
   onToggleSidebar,
+  stationReady = true,
 }) => {
   const { open, setOpen } = useCommandPalette();
   const canSeeFinancials = userRole !== 'Staff';
@@ -90,7 +95,7 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
   const { data: customers } = useCustomers(true, { enabled: canSeeFinancials } as any);
   const { data: suppliers } = useSuppliers(true, { enabled: canSeeFinancials } as any);
   const { data: products } = useProducts();
-  const stationAlerts = useStationAlerts(stationId, canSeeFinancials);
+  const stationAlerts = useStationAlerts(stationId, stationReady && canSeeFinancials);
 
   // --- business day ---
   const settings: any = (selectedStation as any)?.settings || {};
@@ -120,6 +125,14 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
 
   // --- quick create ---
   const quickCreate: QuickCreateAction[] = useMemo(() => {
+    // Pre-ready (Organization hub): the only meaningful “create” is getting the
+    // station operational and inviting the team.
+    if (!stationReady) {
+      return [
+        { id: 'onboard-station', label: 'Onboard station', icon: <Fuel />, onSelect: () => onNavigate('/onboarding') },
+        { id: 'team-member', label: 'Team member', icon: <Users />, onSelect: () => onNavigate('/organization') },
+      ];
+    }
     const items: QuickCreateAction[] = [
       { id: 'expense', label: 'Expense', icon: <Receipt />, onSelect: () => openQuickEntry('expense') },
       { id: 'income', label: 'Income', icon: <Banknote />, onSelect: () => openQuickEntry('income') },
@@ -131,7 +144,7 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
       { id: 'customer', label: 'Customer', icon: <Users />, onSelect: () => onNavigate('/customers', { open: 'new-customer' }) },
     ];
     return userRole === 'Staff' ? items.filter((i) => i.id === 'expense' || i.id === 'collection' || i.id === 'merchandise-sale' || i.id === 'credit') : items;
-  }, [onNavigate, userRole]);
+  }, [onNavigate, userRole, stationReady]);
 
   // --- user menu ---
   const userMenu: UserMenuAction[] = [
@@ -140,24 +153,27 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
 
   // --- notifications: shared station alerts (stock/oversold) + sync state ---
   const notifications: NotificationItem[] = useMemo(() => {
-    const list: NotificationItem[] = stationAlerts.map((a) => ({
-      id: a.id,
-      tone: a.severity,
-      icon: <TriangleAlert />,
-      title: a.title,
-      meta: a.meta,
-      actionLabel: a.actionLabel,
-      onAction: a.actionPath
-        ? () => onNavigate(a.actionPath!, a.actionTab ? { focusInventoryTab: a.actionTab, focusInventoryId: a.actionEntityId } : undefined)
-        : undefined,
-    }));
+    // Pre-ready: no station is operational, so only surface sync state.
+    const list: NotificationItem[] = stationReady
+      ? stationAlerts.map((a) => ({
+          id: a.id,
+          tone: a.severity,
+          icon: <TriangleAlert />,
+          title: a.title,
+          meta: a.meta,
+          actionLabel: a.actionLabel,
+          onAction: a.actionPath
+            ? () => onNavigate(a.actionPath!, a.actionTab ? { focusInventoryTab: a.actionTab, focusInventoryId: a.actionEntityId } : undefined)
+            : undefined,
+        }))
+      : [];
     if (syncStatus === 'failed') {
       list.push({ id: 'sync', tone: 'danger', icon: <TriangleAlert />, title: 'Sync failed', meta: pendingSyncCount > 0 ? `${pendingSyncCount} events not synced` : 'Retry to reconcile', actionLabel: 'Retry', onAction: () => {} });
     } else if (syncStatus === 'pending' && pendingSyncCount > 0) {
       list.push({ id: 'sync', tone: 'info', icon: <Clock />, title: `${pendingSyncCount} events pending sync`, meta: 'Retrying automatically', onAction: () => {} });
     }
     return list;
-  }, [stationAlerts, syncStatus, pendingSyncCount, onNavigate]);
+  }, [stationAlerts, syncStatus, pendingSyncCount, onNavigate, stationReady]);
 
   // --- command palette groups ---
   const commandGroups: CommandGroup[] = useMemo(() => {
@@ -247,6 +263,7 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
         brand="PumpOS"
         businessDate={businessDate}
         businessDayStatus={businessDayStatus}
+        showBusinessDay={stationReady}
         onBusinessDay={() => onNavigate('/dashboard')}
         businessDays={businessDays}
         onSelectBusinessDay={(date) => onNavigate('/reports', { openDssrDate: date })}

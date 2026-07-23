@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { 
   AppShell, 
   Login, 
+  AcceptInvite,
   OnboardingWizard, 
   StationOverview, 
   DashboardOverview,
@@ -175,14 +176,14 @@ export const App: React.FC = () => {
           const active = list.find((station) => station.onboardingStatus === 'READY_FOR_OPERATIONS') || list[0];
           setSelectedStation(active);
           if (active.onboardingStatus !== 'READY_FOR_OPERATIONS') {
-            setCurrentPath('/onboarding');
+            setCurrentPath('/dashboard');
           } else {
             // Only direct to dashboard if currently on onboarding or login
             setCurrentPath((prev) => (prev === '/onboarding' || prev === '/login') ? '/dashboard' : prev);
           }
         } else {
-          // No stations configured yet
-          setCurrentPath('/onboarding');
+          // No stations yet — land on the dashboard (getting-started hero).
+          setCurrentPath('/dashboard');
         }
       } catch (err: any) {
         console.error('Failed to resolve backend profile:', err);
@@ -218,11 +219,9 @@ export const App: React.FC = () => {
 
   const handleStationChange = (station: Station) => {
     setSelectedStation(station);
-    if (station.onboardingStatus !== 'READY_FOR_OPERATIONS') {
-      setCurrentPath('/onboarding');
-    } else {
-      setCurrentPath('/dashboard');
-    }
+    // Dashboard is home for both ready and pre-ready stations (the dashboard
+    // shows a getting-started hero until the station is operational).
+    setCurrentPath('/dashboard');
   };
 
   const handleOnboardingComplete = async (completedStation: Station) => {
@@ -261,7 +260,8 @@ export const App: React.FC = () => {
         { label: 'Organization', path: '/organization', roles: ['Owner'] },
       ]
     : [
-        { label: 'Onboarding Setup', path: '/onboarding', roles: ['Owner', 'Manager'] }
+        { label: 'Dashboard', path: '/dashboard' },
+        { label: 'Organization', path: '/organization', roles: ['Owner', 'Manager'] },
       ];
 
   const navItemsWithDev = isLocalDev
@@ -424,12 +424,16 @@ export const App: React.FC = () => {
       );
     }
 
-    // 5. Gating check: Force Owner/Manager into the Onboarding Wizard
-    if (!isStationReady && currentPath !== '/onboarding') {
+    // 5. Pre-ready: Dashboard is home (it renders a getting-started hero until a
+    // station is READY). The Organization hub and the onboarding wizard are also
+    // reachable; any other (operational) destination falls back to the Dashboard.
+    if (!isStationReady && currentPath !== '/onboarding' && currentPath !== '/organization' && currentPath !== '/dashboard') {
       return (
-        <OnboardingWizard
-          onOnboardingComplete={handleOnboardingComplete}
+        <DashboardOverview
+          selectedStation={selectedStation}
+          userRole={userRole || 'Staff'}
           userName={userName}
+          onNavigate={navigate}
         />
       );
     }
@@ -439,6 +443,7 @@ export const App: React.FC = () => {
         return (
           <OnboardingWizard
             onOnboardingComplete={handleOnboardingComplete}
+            onExit={() => navigate('/dashboard')}
             userName={userName}
           />
         );
@@ -540,12 +545,21 @@ export const App: React.FC = () => {
     }
   };
 
+  // Invite / set-password landing. Handled before any device or session gate so
+  // an owner can open the emailed invite on a phone and set their password. The
+  // client parses the token from the URL; on completion we return to `/` where
+  // the normal session bootstrap routes them (Organization hub / desktop notice
+  // when no station is ready yet).
+  const isAcceptInvite =
+    typeof window !== 'undefined' && window.location.pathname.replace(/\/+$/, '') === '/accept-invite';
+  if (isAcceptInvite) {
+    return <AcceptInvite onDone={() => window.location.assign('/')} />;
+  }
+
   // Unsupported-device gate (fallback to the edge Worker redirect).
   if (isUnsupportedMobile) {
     return <MobileBlock />;
   }
-
-  // Outer loading spinner before session checks resolve
   if (loading && !session) {
     return (
       <div style={{
@@ -562,8 +576,10 @@ export const App: React.FC = () => {
     );
   }
 
-  // If not logged in, or if station is not ready (onboarding mode)
-  if (!session || !isStationReady) {
+  // No session, still resolving the profile, an error, or the focused onboarding
+  // wizard → render bare (no shell chrome). Otherwise render the full shell — the
+  // pre-ready Organization hub lives inside it with operational tabs hidden.
+  if (!session || !userRole || profileError || currentPath === '/onboarding') {
     return renderContent();
   }
 
@@ -581,6 +597,7 @@ export const App: React.FC = () => {
       selectedStation={selectedStation}
       onStationChange={handleStationChange}
       environmentTag={environmentTag}
+      stationReady={!!isStationReady}
     >
       {renderContent()}
       <QuickEntryHost selectedStation={selectedStation} />

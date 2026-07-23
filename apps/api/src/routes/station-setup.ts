@@ -4,10 +4,14 @@ import { schema, DbClient } from '@pump/db';
 import {
   canManageProduct,
   canManageInfrastructure,
-  canManageUsers,
+  canManageStaff,
+  isManageableByManager,
   isAuthorizedForStation,
+  normalizePhone,
+  phoneToAuthEmail,
   stationSchema,
   userSchema,
+  userUpdateSchema,
   fuelPriceSchema,
   finalizeOnboardingSchema,
   OnboardingDraft,
@@ -16,7 +20,7 @@ import {
 import { validateJson } from '../utils/validator.js';
 import {
   CreateStation, UpdateStation,
-  CreateUser, UpdateUser,
+  CreateUser, UpdateUser, ResetUserPassword, SetUserStatus,
   RecordFuelPrice,
   CreateTank, UpdateTank, DeleteTank,
   CreateDispenser, UpdateDispenser, DeleteDispenser,
@@ -29,6 +33,8 @@ import {
 } from '@pump/core';
 import { buildContext } from '../infra/context.js';
 import { createDispatcher } from '../infra/events.js';
+import { SupabaseAdmin } from '../infra/supabase-admin.js';
+import { rateLimit } from '../infra/rate-limit.js';
 import { DrizzleOnboardingProvisioner } from '../infra/onboarding-provisioner.js';
 import {
   DrizzleStationRepository,
@@ -39,6 +45,11 @@ import {
   DrizzleNozzleRepository,
   DrizzleShiftTemplateRepository,
 } from '../infra/repositories/setup-repositories.js';
+
+type Bindings = {
+  SUPABASE_URL?: string;
+  SUPABASE_SECRET_KEY?: string;
+};
 
 type Variables = {
   db: DbClient;
@@ -51,7 +62,7 @@ type Variables = {
   };
 };
 
-export const stationSetupRouter = new Hono<{ Variables: Variables }>();
+export const stationSetupRouter = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 const STATUS_BY_CODE: Record<string, number> = {
   VALIDATION_ERROR: 400,
@@ -286,30 +297,172 @@ stationSetupRouter.get('/users', async (c) => {
   return c.json({ success: true, data });
 });
 
-stationSetupRouter.post('/users', validateJson(userSchema, 'BAD_REQUEST'), async (c) => {
+// Resolve the Supabase admin adapter or return null when secrets are absent.
+function getSupabaseAdmin(c: any): SupabaseAdmin | null {
+  const url = c.env?.SUPABASE_URL;
+  const key = c.env?.SUPABASE_SECRET_KEY;
+  if (!url || !key) return null;
+  return new SupabaseAdmin({ url, secretKey: key });
+}
+
+// Owner = full; Manager = Staff/Attendant on own stations only.
+function canActOnTarget(
+  actor: { role: Role; assignedStationIds: string[] },
+  targetRole: Role,
+  targetStationIds: string[] = [],
+): boolean {
+  if (actor.role === 'Owner') return true;
+  if (actor.role !== 'Manager') return false;
+  if (!isManageableByManager(targetRole)) return false;
+  // Manager must share at least one assigned station with the target (or the
+  // target has no station scope yet, e.g. brand-new record).
+  if (targetStationIds.length === 0) return true;
+  return targetStationIds.some((s) => actor.assignedStationIds.includes(s));
+}
+
+stationSetupRouter.post('/users', rateLimit({ scope: 'users-write', max: 30, windowMs: 60_000 }), validateJson(userSchema, 'BAD_REQUEST'), async (c) => {
   const user = c.var.user;
-  if (!canManageUsers(user.role)) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Only Owners can manage users' } }, 403);
+  if (!canManageStaff(user.role)) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Not allowed to manage users' } }, 403);
   }
-  const body = await c.req.json();
+  const body = c.req.valid('json') as any;
+  const targetRole: Role = body.role ?? 'Staff';
+  if (!canActOnTarget(user, targetRole, body.stationIds ?? [])) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Managers may only add Staff/Attendant on their own stations' } }, 403);
+  }
+
   const db = c.var.db;
+  const wantsLogin = !!body.enableAppAccess;
+
+  // Compute identity: an email identity uses the real email; a phone identity
+  // uses a synthetic handle. The real phone is always normalized + stored.
+  const rawEmail: string | null = body.email && String(body.email).trim() !== '' ? String(body.email).trim().toLowerCase() : null;
+  const normalizedPhone = normalizePhone(body.phone);
+  let authUserId: string | null = null;
+
+  if (wantsLogin) {
+    const admin = getSupabaseAdmin(c);
+    if (!admin) {
+      return c.json({ success: false, error: { code: 'CONFIG_ERROR', message: 'Auth provisioning is not configured on the server' } }, 500);
+    }
+    // Prefer email identity when present; otherwise derive the phone handle.
+    const authEmail = rawEmail ?? phoneToAuthEmail(normalizedPhone);
+    if (!authEmail || !body.password) {
+      return c.json({ success: false, error: { code: 'BAD_REQUEST', message: 'An email or phone plus a password are required for app access' } }, 400);
+    }
+    try {
+      const created = await admin.createUser({ email: authEmail, password: String(body.password) });
+      authUserId = created.id;
+    } catch (e: any) {
+      const status = e?.status === 422 ? 409 : 400;
+      return c.json({ success: false, error: { code: 'AUTH_PROVISION_FAILED', message: e?.message ?? 'Could not create login account' } }, status);
+    }
+  }
+
   const useCase = new CreateUser({ repository: new DrizzleUserRepository(db), events: createDispatcher(db) });
-  const result = await useCase.execute(body, buildContext(user));
+  const result = await useCase.execute(
+    {
+      fullName: body.fullName,
+      // Phone-identity accounts keep users.email null (handle is synthetic).
+      email: rawEmail,
+      phone: normalizedPhone,
+      role: targetRole,
+      status: body.status ?? 'ACTIVE',
+      stationIds: body.stationIds,
+      authUserId,
+    },
+    buildContext(user),
+  );
   return sendResult(c, result);
 });
 
-stationSetupRouter.put('/users/:id', validateJson(userSchema.partial(), 'BAD_REQUEST'), async (c) => {
+stationSetupRouter.put('/users/:id', validateJson(userUpdateSchema, 'BAD_REQUEST'), async (c) => {
   const user = c.var.user;
   const id = c.req.param('id');
-  if (!canManageUsers(user.role)) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Only Owners can manage users' } }, 403);
+  const body = c.req.valid('json') as any;
+  const repo = new DrizzleUserRepository(c.var.db);
+  const target = await repo.findById(id);
+  if (!target || target.organizationId !== user.organizationId) {
+    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'User not found' } }, 404);
   }
-  const body = await c.req.json();
+  if (!canActOnTarget(user, (body.role ?? target.role) as Role)) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Not allowed to edit this user' } }, 403);
+  }
   const db = c.var.db;
   const useCase = new UpdateUser({ repository: new DrizzleUserRepository(db), events: createDispatcher(db) });
   const result = await useCase.execute({ ...body, id }, buildContext(user));
   return sendResult(c, result);
 });
+
+stationSetupRouter.post('/users/:id/reset-password', rateLimit({ scope: 'password-reset', max: 15, windowMs: 60_000 }), async (c) => {
+  const user = c.var.user;
+  const id = c.req.param('id');
+  const body = await c.req.json().catch(() => ({}));
+  const password = typeof body.password === 'string' ? body.password : '';
+  if (password.length < 8) {
+    return c.json({ success: false, error: { code: 'BAD_REQUEST', message: 'Password must be at least 8 characters' } }, 400);
+  }
+  const db = c.var.db;
+  const repo = new DrizzleUserRepository(db);
+  const target = await repo.findById(id);
+  if (!target || target.organizationId !== user.organizationId) {
+    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'User not found' } }, 404);
+  }
+  if (!canActOnTarget(user, target.role as Role)) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Not allowed to reset this password' } }, 403);
+  }
+  if (!target.authUserId) {
+    return c.json({ success: false, error: { code: 'NO_LOGIN', message: 'This member has no login account' } }, 400);
+  }
+  const admin = getSupabaseAdmin(c);
+  if (!admin) {
+    return c.json({ success: false, error: { code: 'CONFIG_ERROR', message: 'Auth provisioning is not configured on the server' } }, 500);
+  }
+  try {
+    await admin.updatePassword(target.authUserId, password);
+  } catch (e: any) {
+    return c.json({ success: false, error: { code: 'AUTH_RESET_FAILED', message: e?.message ?? 'Could not reset password' } }, 400);
+  }
+  const useCase = new ResetUserPassword({ repository: repo, events: createDispatcher(db) });
+  const result = await useCase.execute({ id }, buildContext(user));
+  return sendResult(c, result);
+});
+
+stationSetupRouter.post('/users/:id/deactivate', rateLimit({ scope: 'user-status', max: 30, windowMs: 60_000 }), async (c) => {
+  return setUserActive(c, false);
+});
+
+stationSetupRouter.post('/users/:id/reactivate', rateLimit({ scope: 'user-status', max: 30, windowMs: 60_000 }), async (c) => {
+  return setUserActive(c, true);
+});
+
+async function setUserActive(c: any, active: boolean) {
+  const user = c.var.user;
+  const id = c.req.param('id');
+  const db = c.var.db;
+  const repo = new DrizzleUserRepository(db);
+  const target = await repo.findById(id);
+  if (!target || target.organizationId !== user.organizationId) {
+    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'User not found' } }, 404);
+  }
+  if (!canActOnTarget(user, target.role as Role)) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Not allowed to change this user' } }, 403);
+  }
+  if (target.authUserId) {
+    const admin = getSupabaseAdmin(c);
+    if (admin) {
+      try {
+        if (active) await admin.unbanUser(target.authUserId);
+        else await admin.banUser(target.authUserId);
+      } catch (e: any) {
+        return c.json({ success: false, error: { code: 'AUTH_BAN_FAILED', message: e?.message ?? 'Could not update login account' } }, 400);
+      }
+    }
+  }
+  const useCase = new SetUserStatus({ repository: repo, events: createDispatcher(db) });
+  const result = await useCase.execute({ id, status: active ? 'ACTIVE' : 'INACTIVE' }, buildContext(user));
+  return sendResult(c, result);
+}
 
 // ----------------------------------------------------
 // Missing CRUD updates (PUT/DELETE)

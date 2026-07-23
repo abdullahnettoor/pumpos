@@ -31,6 +31,19 @@ const Centered: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   </div>
 );
 
+/** Recovery action for dead-end screens (error / no access) that render outside
+ *  the shell, so a stuck user can always sign out. Sign-out also clears the
+ *  persisted cache (see session.ts), which resolves stale-cache lockouts. */
+const SignOutButton: React.FC = () => (
+  <button
+    onClick={() => signOut()}
+    className="mt-3 rounded-lg px-4 py-2 text-sm font-semibold"
+    style={{ backgroundColor: 'var(--brand-primary)', color: '#ffffff' }}
+  >
+    Sign out
+  </button>
+);
+
 export const App: React.FC = () => {
   const { status, role, userName, error } = useSession();
   const stationsQ = useStations({ enabled: status === 'ready' });
@@ -99,6 +112,7 @@ export const App: React.FC = () => {
         <p className="text-4xl">⚠️</p>
         <p className="font-semibold">Couldn't load your account</p>
         <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{error?.message}</p>
+        <SignOutButton />
       </Centered>
     );
   }
@@ -116,6 +130,7 @@ export const App: React.FC = () => {
         <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
           The PumpOS mobile app is for owners and managers. Please use the desktop console.
         </p>
+        <SignOutButton />
       </Centered>
     );
   }

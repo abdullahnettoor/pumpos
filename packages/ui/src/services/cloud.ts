@@ -352,6 +352,21 @@ export class CloudUserAssignmentService implements IUserAssignmentService {
       body: JSON.stringify(data),
     });
   }
+
+  async resetUserPassword(id: string, password: string): Promise<User> {
+    return request<User>(`/setup/users/${id}/reset-password`, {
+      method: 'POST',
+      body: JSON.stringify({ password }),
+    });
+  }
+
+  async deactivateUser(id: string): Promise<User> {
+    return request<User>(`/setup/users/${id}/deactivate`, { method: 'POST' });
+  }
+
+  async reactivateUser(id: string): Promise<User> {
+    return request<User>(`/setup/users/${id}/reactivate`, { method: 'POST' });
+  }
 }
 
 export class CloudShiftService {

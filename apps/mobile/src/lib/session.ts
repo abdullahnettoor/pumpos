@@ -54,6 +54,11 @@ export function useSession(): SessionState {
       if (!session) {
         setAuthToken('');
         lastUserIdRef.current = null;
+        // Purge caches on sign-out (parity with console/desktop) so a previous
+        // user's persisted static data (stations, etc.) can't bleed into or
+        // stale the next session.
+        qc.clear();
+        clearPersistedQueryCache();
         setState({ status: 'signed-out', session: null, role: null, userName: '', error: null });
         return;
       }
