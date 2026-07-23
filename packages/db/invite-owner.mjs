@@ -18,6 +18,14 @@
  *   set -a; . apps/api/.dev.vars; set +a; node packages/db/invite-owner.mjs …
  *
  * If --password is omitted a strong one is generated and printed.
+ *
+ * Email-invite mode (A3): add `--invite` to send the real (Resend) invite email
+ * so the owner sets their OWN password via the /accept-invite page — no password
+ * is set or printed. The link destination comes from `--redirect <url>` or the
+ * `INVITE_REDIRECT_URL` env var (falls back to the Supabase Site URL):
+ *   node packages/db/invite-owner.mjs --invite \
+ *     --email owner@example.com --name "Jane Owner" --org "Jane's Fuels" \
+ *     --redirect https://console.pumpos.app/accept-invite
  */
 
 const args = parseArgs(process.argv.slice(2));
@@ -32,10 +40,52 @@ if (!SUPABASE_URL || !SUPABASE_SECRET_KEY) {
 const email = (args.email || '').trim().toLowerCase();
 const fullName = (args.name || '').trim();
 const orgName = (args.org || '').trim();
-const password = (args.password || '').trim() || generatePassword();
+
+// Two modes:
+//   default        → admin.createUser with an owner-set password (no email).
+//   --invite       → admin.inviteUserByEmail: sends the real (Resend) invite
+//                    email so the owner sets their OWN password via the
+//                    /accept-invite page. Use this to test the A3 email path.
+const inviteMode = args.invite === 'true' || args['email-invite'] === 'true';
+const redirectTo = (args.redirect || process.env.INVITE_REDIRECT_URL || '').trim();
+const password = inviteMode ? null : ((args.password || '').trim() || generatePassword());
 
 if (!email || !fullName || !orgName) {
   fail('Required: --email <email> --name "<full name>" --org "<organization name>"');
+}
+
+const ownerMetadata = {
+  signup_intent: 'owner',
+  organization_name: orgName,
+  full_name: fullName,
+  role: 'Owner',
+};
+
+if (inviteMode) {
+  const qs = redirectTo ? `?redirect_to=${encodeURIComponent(redirectTo)}` : '';
+  const inviteRes = await fetch(`${SUPABASE_URL}/auth/v1/invite${qs}`, {
+    method: 'POST',
+    headers: {
+      apikey: SUPABASE_SECRET_KEY,
+      Authorization: `Bearer ${SUPABASE_SECRET_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ email, data: ownerMetadata }),
+  });
+  const inviteText = await inviteRes.text();
+  const inviteBody = inviteText ? safeJson(inviteText) : null;
+  if (!inviteRes.ok) {
+    const msg = (inviteBody && (inviteBody.msg || inviteBody.message)) || `HTTP ${inviteRes.status}`;
+    if (inviteRes.status === 422) {
+      fail(`Auth user already exists for ${email} (${msg}). Use a different email or delete the existing auth user first.`);
+    }
+    fail(`Failed to send owner invite: ${msg}`);
+  }
+  console.log('\n✅ Owner invite sent.');
+  console.log('   The gated trigger created the organization + Owner profile row.');
+  console.log(`   An invite email was sent to ${email} (redirect: ${redirectTo || 'Supabase Site URL'}).`);
+  console.log('   The owner opens it (desktop or mobile), sets a password, then lands in the console.\n');
+  process.exit(0);
 }
 
 const res = await fetch(`${SUPABASE_URL}/auth/v1/admin/users`, {
@@ -50,12 +100,7 @@ const res = await fetch(`${SUPABASE_URL}/auth/v1/admin/users`, {
     password,
     email_confirm: true,
     // Read by the gated handle_new_user() trigger to create org + Owner row.
-    user_metadata: {
-      signup_intent: 'owner',
-      organization_name: orgName,
-      full_name: fullName,
-      role: 'Owner',
-    },
+    user_metadata: ownerMetadata,
   }),
 });
 

@@ -42,6 +42,15 @@ export interface AcceptInviteProps {
   onDone?: () => void;
 }
 
+/** Best-effort mobile detection so we don't bounce a fresh owner into the
+ *  mobile app (where onboarding — which is desktop-only — can't be done). */
+function isMobileDevice(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  const uaData = (navigator as any).userAgentData;
+  if (uaData && typeof uaData.mobile === 'boolean') return uaData.mobile;
+  return /Android|webOS|iPhone|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|Silk/i.test(navigator.userAgent || '');
+}
+
 export const AcceptInvite: React.FC<AcceptInviteProps> = ({ onDone }) => {
   const [ready, setReady] = useState(false);
   const [hasSession, setHasSession] = useState(false);
@@ -51,6 +60,9 @@ export const AcceptInvite: React.FC<AcceptInviteProps> = ({ onDone }) => {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const onMobile = isMobileDevice();
+  const desktopUrl = typeof window !== 'undefined' ? window.location.origin : 'https://console.pumpos.app';
 
   useEffect(() => {
     let cancelled = false;
@@ -158,27 +170,99 @@ export const AcceptInvite: React.FC<AcceptInviteProps> = ({ onDone }) => {
           <p style={{ fontSize: '13px', color: 'var(--text-muted)', textAlign: 'center' }}>Verifying your invite…</p>
         ) : done ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-            <p style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-              Your password is set. Continue to PumpOS — if setup for your station isn't finished yet, you'll be
-              guided to complete it on the desktop app.
-            </p>
-            <button
-              type="button"
-              onClick={() => (onDone ? onDone() : window.location.assign('/'))}
-              style={{
-                height: '36px',
-                backgroundColor: 'var(--brand-primary)',
-                color: '#ffffff',
-                border: 'none',
-                borderRadius: 'var(--radius-button)',
-                fontWeight: 600,
-                fontSize: '13px',
-                cursor: 'pointer',
-                width: '100%',
-              }}
-            >
-              Continue ➜
-            </button>
+            {onMobile ? (
+              <>
+                <p style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                  Your password is set. To finish setting up your station, open PumpOS on a
+                  desktop or laptop — station onboarding isn't available on mobile.
+                </p>
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '8px',
+                    padding: '10px 12px',
+                    backgroundColor: 'var(--bg-surface-alt)',
+                    border: '1px solid var(--border-strong)',
+                    borderRadius: 'var(--radius-input)',
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '12px',
+                    color: 'var(--text-strong)',
+                    wordBreak: 'break-all',
+                  }}
+                >
+                  <span>{desktopUrl}</span>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        await navigator.clipboard.writeText(desktopUrl);
+                        setCopied(true);
+                        setTimeout(() => setCopied(false), 1800);
+                      } catch {
+                        /* clipboard blocked — URL is shown as selectable text */
+                      }
+                    }}
+                    style={{
+                      flexShrink: 0,
+                      height: '26px',
+                      padding: '0 10px',
+                      border: '1px solid var(--border-strong)',
+                      backgroundColor: 'transparent',
+                      borderRadius: 'var(--radius-button)',
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      color: 'var(--text-default)',
+                    }}
+                  >
+                    {copied ? 'Copied' : 'Copy'}
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => (onDone ? onDone() : window.location.assign('/'))}
+                  style={{
+                    height: '36px',
+                    backgroundColor: 'transparent',
+                    color: 'var(--text-default)',
+                    border: '1px solid var(--border-strong)',
+                    borderRadius: 'var(--radius-button)',
+                    fontWeight: 600,
+                    fontSize: '13px',
+                    cursor: 'pointer',
+                    width: '100%',
+                  }}
+                >
+                  Open the app anyway
+                </button>
+              </>
+            ) : (
+              <>
+                <p style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                  Your password is set. Continue to PumpOS — if setup for your station isn't finished yet, you'll be
+                  guided to complete it on the desktop app.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => (onDone ? onDone() : window.location.assign('/'))}
+                  style={{
+                    height: '36px',
+                    backgroundColor: 'var(--brand-primary)',
+                    color: '#ffffff',
+                    border: 'none',
+                    borderRadius: 'var(--radius-button)',
+                    fontWeight: 600,
+                    fontSize: '13px',
+                    cursor: 'pointer',
+                    width: '100%',
+                  }}
+                >
+                  Continue ➜
+                </button>
+              </>
+            )}
           </div>
         ) : !hasSession ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
