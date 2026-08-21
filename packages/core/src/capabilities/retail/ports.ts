@@ -1,3 +1,5 @@
+import type { TaxCategory } from '@pump/shared';
+
 export type SaleType = 'Fuel' | 'Product' | 'Mixed';
 export type SaleCaptureMechanism = 'POS' | 'READING' | 'MERCH_HANDOVER';
 export type SalePaymentMethod = 'Cash' | 'Card' | 'UPI' | 'Credit';
@@ -10,7 +12,23 @@ export interface SaleBuyerDetails {
   stateCode?: string | null;
 }
 
-export interface SaleLine {
+/** T5 — the output-tax split frozen on a sale line at capture. */
+export interface SaleLineTax {
+  taxCategory: TaxCategory;
+  gstRate: string | null;
+  vatRate: string | null;
+  cessRate: string | null;
+  hsnCode: string | null;
+  taxableAmount: string;
+  cgst: string;
+  sgst: string;
+  igst: string;
+  /** Fuel only — VAT is outside GST and never summed with it. */
+  vat: string;
+  cess: string;
+}
+
+export interface SaleLine extends SaleLineTax {
   id: string;
   saleId: string;
   productId: string;

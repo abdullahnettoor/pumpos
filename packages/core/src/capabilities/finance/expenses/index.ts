@@ -4,6 +4,7 @@ import { BusinessEvents, err, eventFromContext, invariantViolation, notFoundErro
 import type { EventPublisher, ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
 import type { ShiftRepository } from '../../station-ops/shifts/index.js';
 import { ensureBusinessDayForDate, type BusinessDayRepository } from '../../station-ops/business-days/index.js';
+import { assertDrawerEntryVoidable } from '../void-guard.js';
 
 export type PaidFrom = 'SHIFT_CASH' | 'BANK' | 'OWNER';
 
@@ -23,6 +24,7 @@ export interface Expense {
 
 export interface ExpenseRepository {
   save(expense: Expense): Promise<void>;
+  findById(id: string): Promise<Expense | null>;
 }
 
 export interface RecordExpenseCommand {
@@ -117,5 +119,52 @@ export class RecordExpense implements UseCase<RecordExpenseCommand, Expense> {
     ]);
 
     return ok(expense);
+  }
+}
+
+export interface VoidExpenseCommand {
+  id: string;
+  reason?: string;
+}
+
+const voidSchema = z.object({ id: z.string().min(1, 'id is required'), reason: z.string().max(255).optional() });
+
+export interface VoidExpenseDeps {
+  expenses: ExpenseRepository;
+  /** Optional: enables the drawer guard (a closed shift's drawer is immutable). */
+  shifts?: ShiftRepository;
+  events: EventPublisher;
+}
+
+/** Void an expense (soft) — reverses its ledger posting via the outbox. */
+export class VoidExpense implements UseCase<VoidExpenseCommand, Expense> {
+  constructor(private readonly deps: VoidExpenseDeps) {}
+
+  async execute(input: VoidExpenseCommand, ctx: ExecutionContext): Promise<Result<Expense>> {
+    const p = voidSchema.safeParse(input);
+    if (!p.success) return err(validationError('Invalid VoidExpense command', { issues: p.error.flatten() }));
+
+    const existing = await this.deps.expenses.findById(p.data.id);
+    if (!existing) return err(notFoundError('Expense', p.data.id));
+    if (existing.status === 'VOIDED') return err(invariantViolation('Expense already voided', { id: existing.id }));
+
+    const guard = await assertDrawerEntryVoidable(existing, this.deps.shifts, 'This expense');
+    if (!guard.success) return guard as unknown as Result<Expense>;
+
+    const now = ctx.clock.now().toISOString();
+    const voided: Expense = { ...existing, status: 'VOIDED', updatedAt: now };
+    await this.deps.expenses.save(voided);
+
+    await this.deps.events.publish([
+      eventFromContext(ctx, {
+        eventType: BusinessEvents.EXPENSE_VOIDED,
+        aggregateType: 'Expense',
+        aggregateId: voided.id,
+        businessDayId: voided.businessDayId,
+        payload: { expenseId: voided.id, amount: voided.amount, paidFrom: voided.paidFrom, reason: p.data.reason ?? null },
+      }),
+    ]);
+
+    return ok(voided);
   }
 }

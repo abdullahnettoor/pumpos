@@ -441,6 +441,22 @@ export const saleItems = pgTable('sale_items', {
   unitPrice: numeric('unit_price', { precision: 12, scale: 2 }).notNull(),
   discountAmount: numeric('discount_amount', { precision: 12, scale: 2 }).default('0').notNull(),
   taxAmount: numeric('tax_amount', { precision: 12, scale: 2 }).notNull(),
+  // T5 — output-tax split frozen at capture, same column shape as
+  // `purchase_items` (input side) and `other_income`. Re-rating a product must
+  // never restate a closed period, so the components live on the line rather
+  // than being recomputed from the product's current `tax_config`.
+  // Fuel is VAT (outside GST) → `vat`; merchandise is GST → cgst+sgst or igst.
+  taxCategory: varchar('tax_category', { length: 20 }).default('NON_TAXABLE').notNull(),
+  gstRate: numeric('gst_rate', { precision: 5, scale: 2 }),
+  vatRate: numeric('vat_rate', { precision: 5, scale: 2 }),
+  cessRate: numeric('cess_rate', { precision: 5, scale: 2 }),
+  hsnCode: varchar('hsn_code', { length: 50 }),
+  taxableAmount: numeric('taxable_amount', { precision: 12, scale: 2 }),
+  cgst: numeric('cgst', { precision: 12, scale: 2 }).default('0').notNull(),
+  sgst: numeric('sgst', { precision: 12, scale: 2 }).default('0').notNull(),
+  igst: numeric('igst', { precision: 12, scale: 2 }).default('0').notNull(),
+  vat: numeric('vat', { precision: 12, scale: 2 }).default('0').notNull(),
+  cess: numeric('cess', { precision: 12, scale: 2 }).default('0').notNull(),
   lineTotal: numeric('line_total', { precision: 12, scale: 2 }).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
@@ -542,6 +558,24 @@ export const otherIncome = pgTable('other_income', {
   referenceType: varchar('reference_type', { length: 50 }),
   referenceId: uuid('reference_id'),
   description: varchar('description', { length: 500 }),
+  // FI4 — GST on income. Computed at capture from the category's `tax_config`
+  // (rate + HSN/SAC) and frozen here so the split never drifts when a category
+  // is later re-rated. `amount` stays the money actually received; when the
+  // category is priced tax-inclusive, `taxable_amount` = amount − tax.
+  // Mirrors `purchase_items`: rate + HSN as explicit columns (returns group by
+  // them), money components as numerics (they are SUMmed), and only the residual
+  // audit evidence in JSONB — per the metadata rule.
+  taxCategory: varchar('tax_category', { length: 20 }).default('NON_TAXABLE').notNull(), // 'GST' | 'EXEMPT' | 'NON_TAXABLE'
+  gstRate: numeric('gst_rate', { precision: 5, scale: 2 }),
+  cessRate: numeric('cess_rate', { precision: 5, scale: 2 }),
+  hsnCode: varchar('hsn_code', { length: 50 }),
+  taxableAmount: numeric('taxable_amount', { precision: 12, scale: 2 }),
+  cgst: numeric('cgst', { precision: 12, scale: 2 }).default('0').notNull(),
+  sgst: numeric('sgst', { precision: 12, scale: 2 }).default('0').notNull(),
+  igst: numeric('igst', { precision: 12, scale: 2 }).default('0').notNull(),
+  cess: numeric('cess', { precision: 12, scale: 2 }).default('0').notNull(),
+  // Residual evidence only: { inclusive, supplier_state, buyer_state }.
+  taxSnapshot: jsonb('tax_snapshot'),
   status: varchar('status', { length: 20 }).default('ACTIVE').notNull(), // 'ACTIVE' | 'VOIDED'
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),

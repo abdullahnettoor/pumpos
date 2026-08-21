@@ -13,11 +13,12 @@ import { ExpenseRegister } from './reports/ExpenseRegister.js';
 import { CashBankLedger } from './reports/CashBankLedger.js';
 import { UnifiedLedger } from './reports/UnifiedLedger.js';
 import { InvoicesPanel } from './reports/InvoicesPanel.js';
+import { TaxRegisterPanel } from './reports/TaxRegisterPanel.js';
 import { ProfitLossView } from './reports/ProfitLossView.js';
 import { inr } from '../utils/format.js';
 import { resolveBusinessDate } from '@pump/shared';
 import { Panel, Button, KpiStrip, KpiTile, EmptyState, DateText } from '../pump-ds/index.js';
-import { Play, Zap, Receipt, Wallet, BookOpen, FileText, TrendingUp } from 'lucide-react';
+import { Play, Zap, Receipt, Wallet, BookOpen, FileText, TrendingUp, Percent } from 'lucide-react';
 
 const shiftService = new CloudShiftService();
 
@@ -42,7 +43,7 @@ interface ReportsOverviewProps {
   onIntentConsumed?: () => void;
 }
 
-type ReportsTab = 'daily-dssr' | 'pnl' | 'ledger' | 'invoices' | 'expense-register' | 'cash-bank';
+type ReportsTab = 'daily-dssr' | 'pnl' | 'ledger' | 'invoices' | 'tax-register' | 'expense-register' | 'cash-bank';
 
 export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
   selectedStation,
@@ -159,6 +160,7 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
             ...(userRole === 'Owner' ? [{ id: 'pnl', label: 'Profit & Loss', icon: <TrendingUp size={13} /> }] : []),
             { id: 'ledger', label: 'Ledger', icon: <BookOpen size={13} /> },
             { id: 'invoices', label: 'Invoices', icon: <FileText size={13} /> },
+            { id: 'tax-register', label: 'Tax Register', icon: <Percent size={13} /> },
             { id: 'cash-bank', label: 'Cash & Bank', icon: <Wallet size={13} /> },
             { id: 'expense-register', label: 'Expense Register', icon: <Receipt size={13} /> },
           ]}
@@ -217,6 +219,7 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
       {activeTab === 'pnl' && userRole === 'Owner' && <ProfitLossView selectedStation={selectedStation} />}
 
       {activeTab === 'invoices' && <InvoicesPanel selectedStation={selectedStation} userRole={userRole} />}
+      {activeTab === 'tax-register' && <TaxRegisterPanel selectedStation={selectedStation} />}
 
       {activeTab === 'expense-register' && <ExpenseRegister selectedStation={selectedStation} />}
 

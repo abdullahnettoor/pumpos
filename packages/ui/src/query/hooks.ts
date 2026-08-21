@@ -76,6 +76,8 @@ export const queryKeys = {
   moneyMovements: (stationId: string, from: string, to: string) => ['money-movements', stationId, from, to] as const,
   invoices: (stationId: string, from: string, to: string) => ['invoices', stationId, from, to] as const,
   sales: (stationId: string, from: string, to: string) => ['sales', stationId, from, to] as const,
+  salesTaxRegister: (stationId: string, from: string, to: string) => ['sales-tax-register', stationId, from, to] as const,
+  incomeGstRegister: (stationId: string, from: string, to: string) => ['income-gst-register', stationId, from, to] as const,
   financialAccounts: (stationId: string) => ['financial-accounts', stationId] as const,
   accountLedger: (accountId: string, from: string, to: string) => ['account-ledger', accountId, from, to] as const,
   financeMovements: (stationId: string, from: string, to: string) => ['finance-movements', stationId, from, to] as const,
@@ -209,6 +211,28 @@ export function useSales(params: { stationId?: string | null; from?: string; to?
   return useQuery({
     queryKey: queryKeys.sales(params.stationId ?? '', params.from ?? '', params.to ?? ''),
     queryFn: () => txService.getSales({ stationId: params.stationId!, from: params.from, to: params.to }),
+    enabled: !!params.stationId,
+    ...TIER.operational,
+    ...options,
+  });
+}
+
+/** T5 — output-tax register (GST on merchandise + VAT on fuel) for a period. */
+export function useSalesTaxRegister(params: { stationId?: string | null; from?: string; to?: string }, options?: Options<any[]>) {
+  return useQuery({
+    queryKey: queryKeys.salesTaxRegister(params.stationId ?? '', params.from ?? '', params.to ?? ''),
+    queryFn: () => txService.getSalesTaxRegister({ stationId: params.stationId!, from: params.from, to: params.to }),
+    enabled: !!params.stationId,
+    ...TIER.operational,
+    ...options,
+  });
+}
+
+/** FI4 — GST collected on other/indirect income for a period. */
+export function useIncomeGstRegister(params: { stationId?: string | null; from?: string; to?: string }, options?: Options<any[]>) {
+  return useQuery({
+    queryKey: queryKeys.incomeGstRegister(params.stationId ?? '', params.from ?? '', params.to ?? ''),
+    queryFn: () => txService.getIncomeGstRegister(params.from, params.to, params.stationId ?? undefined),
     enabled: !!params.stationId,
     ...TIER.operational,
     ...options,
@@ -434,9 +458,16 @@ export function useInvalidateOperational() {
     // Business Day cockpit + P&L read the live DSSR preview — refresh it too.
     qc.invalidateQueries({ queryKey: ['dssr-preview'] });
     qc.invalidateQueries({ queryKey: ['expenses'] });
+    qc.invalidateQueries({ queryKey: ['income'] });
     qc.invalidateQueries({ queryKey: ['purchases'] });
     qc.invalidateQueries({ queryKey: ['collections'] });
     qc.invalidateQueries({ queryKey: ['customers'] });
+    // Money layer: account balances, statements and the Cash & Bank register all
+    // move with expenses / income / collections / payments.
+    qc.invalidateQueries({ queryKey: ['financial-accounts'] });
+    qc.invalidateQueries({ queryKey: ['account-ledger'] });
+    qc.invalidateQueries({ queryKey: ['finance-movements'] });
+    qc.invalidateQueries({ queryKey: ['money-movements'] });
     // Suppliers carry computed payable balances that move with purchases/payments,
     // and new suppliers are created from PurchasesList — keep them fresh too.
     qc.invalidateQueries({ queryKey: ['suppliers'] });

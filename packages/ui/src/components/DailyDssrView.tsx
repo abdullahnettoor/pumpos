@@ -54,6 +54,14 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
   const fleetCredit = Number(credit.fleetCredit || 0);
   const totalExpenses = Number(expenses.total || 0);
   const totalOtherIncome = Number(income.total || 0);
+  // FI4 — output GST collected on other income, frozen per entry at capture.
+  const incomeTax = (income.tax || {}) as Record<string, number>;
+  const incomeTaxTotal = Number(incomeTax.total || 0);
+  // T5 — output tax on sales. GST (merchandise) and VAT (fuel) stay on separate
+  // lines: fuel VAT is outside GST and carries no input credit for the buyer.
+  const salesTax = (snapshot.salesTax || {}) as { gst?: Record<string, number>; vat?: Record<string, number> };
+  const salesGstTotal = Number(salesTax.gst?.total || 0);
+  const salesVatTotal = Number(salesTax.vat?.vat || 0);
   const pnl = snapshot.pnl || {};
   const inr = (n: number) => `₹${n.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
 
@@ -254,6 +262,23 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
           { label: 'Drawer Expenses', value: inr(Number(expenses.drawer || 0)) },
           { label: 'Business Expenses', value: inr(Number(expenses.business || 0)) },
           ...(totalOtherIncome > 0 ? [{ label: 'Other Income (Cash / Bank)', value: `${inr(Number(income.drawer || 0))} / ${inr(Number(income.business || 0))}`, color: 'var(--brand-success)' }] : []),
+          ...(salesGstTotal > 0
+            ? [
+                { label: 'Merchandise — Taxable Value', value: inr(Number(salesTax.gst?.taxable || 0)) },
+                Number(salesTax.gst?.igst || 0) > 0
+                  ? { label: 'Output GST on Sales (IGST)', value: inr(Number(salesTax.gst?.igst || 0)) }
+                  : { label: 'Output GST on Sales (CGST / SGST)', value: `${inr(Number(salesTax.gst?.cgst || 0))} / ${inr(Number(salesTax.gst?.sgst || 0))}` },
+              ]
+            : []),
+          ...(salesVatTotal > 0 ? [{ label: 'Output VAT on Fuel', value: inr(salesVatTotal) }] : []),
+          ...(incomeTaxTotal > 0
+            ? [
+                { label: 'Other Income — Taxable Value', value: inr(Number(incomeTax.taxable || 0)) },
+                Number(incomeTax.igst || 0) > 0
+                  ? { label: 'Output GST on Income (IGST)', value: inr(Number(incomeTax.igst || 0)) }
+                  : { label: 'Output GST on Income (CGST / SGST)', value: `${inr(Number(incomeTax.cgst || 0))} / ${inr(Number(incomeTax.sgst || 0))}` },
+              ]
+            : []),
         ] as Array<{ label: string; value: string; color?: string }>).map((r, i) => (
           <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '11px 16px', borderBottom: '1px solid var(--border-soft)' }}>
             <span>{r.label}</span>

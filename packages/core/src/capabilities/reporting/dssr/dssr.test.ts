@@ -39,13 +39,13 @@ function source(): DssrSourceData {
     ],
     collections: [{ paymentMethod: 'Cash', amount: 2000 }, { paymentMethod: 'UPI', amount: 1000 }],
     expenses: [{ affectsDrawer: true, paidFrom: 'SHIFT_CASH', amount: 300, status: 'ACTIVE' }, { affectsDrawer: false, paidFrom: 'BANK', amount: 5000, status: 'ACTIVE' }, { affectsDrawer: true, paidFrom: 'SHIFT_CASH', amount: 999, status: 'VOIDED' }],
-    income: [{ affectsDrawer: true, receivedInto: 'SHIFT_CASH', amount: 500, status: 'ACTIVE', categoryName: 'Tanker Rental' }, { affectsDrawer: false, receivedInto: 'BANK', amount: 1500, status: 'ACTIVE', categoryName: 'Commission' }, { affectsDrawer: true, receivedInto: 'SHIFT_CASH', amount: 999, status: 'VOIDED', categoryName: 'Scrap Sale' }],
+    income: [{ affectsDrawer: true, receivedInto: 'SHIFT_CASH', amount: 500, status: 'ACTIVE', categoryName: 'Tanker Rental' }, { affectsDrawer: false, receivedInto: 'BANK', amount: 1500, status: 'ACTIVE', categoryName: 'Commission', taxCategory: 'GST', taxableAmount: 1271.19, cgst: 114.41, sgst: 114.4, igst: 0, cess: 0 }, { affectsDrawer: true, receivedInto: 'SHIFT_CASH', amount: 999, status: 'VOIDED', categoryName: 'Scrap Sale', taxCategory: 'GST', taxableAmount: 846.61, cgst: 76.19, sgst: 76.2, igst: 0, cess: 0 }],
     purchases: [{ amount: 450000 }],
     supplierPayments: [{ affectsDrawer: false, paidFrom: 'BANK', amount: 200000 }],
     sales: [{ paymentMethod: 'Cash', saleType: 'Product', totalAmount: 500 }, { paymentMethod: 'Credit', saleType: 'Product', totalAmount: 1180 }],
     creditSales: [{ customerType: 'Regular', amount: 1000 }, { customerType: 'Fleet', amount: 4000 }],
     stockVariances: [{ tankName: 'T1', productName: 'Petrol', unit: 'Litre', inventoryType: 'BULK', expectedQuantity: 5000, actualQuantity: 4990, varianceQuantity: -10, reason: null }],
-    saleItems: [{ productId: 'p2', quantity: 2, revenue: 1680 }],
+    saleItems: [{ productId: 'p2', quantity: 2, revenue: 1680, taxCategory: 'GST', taxableAmount: 1423.73, cgst: 128.14, sgst: 128.13, igst: 0, vat: 0, cess: 0 }],
     products: { p1: { name: 'Petrol', code: 'MS', costBasis: 88 }, p2: { name: 'Engine Oil', code: 'EO', costBasis: 400 } },
     nozzles: { n1: 'N1' },
   };
@@ -80,6 +80,14 @@ describe('GenerateDssr', () => {
       expect(d.income.drawer).toBe(500); // voided excluded
       expect(d.income.business).toBe(1500);
       expect(d.income.total).toBe(2000);
+      // FI4: only live GST income contributes to the output-GST-on-income lines.
+      expect(d.income.tax.entries).toBe(1);
+      expect(d.income.tax.taxable).toBe(1271.19);
+      expect(d.income.tax.total).toBe(228.81);
+      // T5: output GST on merchandise, extracted from the MRP-inclusive line.
+      expect(d.salesTax.gst.taxable).toBe(1423.73);
+      expect(d.salesTax.gst.total).toBe(256.27);
+      expect(d.salesTax.vat.vat).toBe(0);
       expect(d.purchases.total).toBe(450000);
       expect(d.supplierPayments.bank).toBe(200000);
       expect(d.fuelStockVariance[0].status).toBe('Loss');

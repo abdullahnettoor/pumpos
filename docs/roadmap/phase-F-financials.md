@@ -7,9 +7,8 @@
 > are all built. Also shipped on top: a **`CMS` money-account type**, **OMC
 > fleet-card sales** posting money-in to CMS (with per-line customer/vehicle/remarks
 > traceability on the CMS statement), and **supplier payment pay-from-CMS**.
-> **Remaining:** FI4 (GST-on-income), a **Void action in the Expenses/Income UI**
-> (backend `VoidExpense`/`VoidIncome` + routes + client methods exist; no UI trigger
-> yet), and FG1 GL (deferred by design).
+> **FI4 (GST-on-income)** and the **Void action in the Expenses/Income UI** are now
+> shipped too (2026-08-21). **Remaining:** FG1 GL (deferred by design).
 
 **Goal:** a real financial picture on top of the operational data — first the
 **money layer** (where cash actually is: drawer, petty cash, banks, card/UPI
@@ -213,20 +212,37 @@ business day (shift only when it lands in the drawer as cash). One extensible
   **GST % + HSN/SAC editor** writing `tax_config` (captured now; read in FI4).
   Ledger sources labelled "Other income" in Cash & Bank / Accounts.
 
-### FI4 — GST-on-income (pending)
-- Read `income_categories.tax_config` (`gst_rate` + `hsn_code`/SAC) at income
-  capture: split each entry into taxable value + CGST/SGST/IGST (intra- vs
-  inter-state, reusing the purchase/`phase-T-tax` tax engine). Persist the tax
-  components on `other_income` (or a snapshot) so they never drift.
-- Surface income GST in the DSSR tax lines and a **GST-on-income register**
-  (mirrors the purchase GST register); fold into GST-output totals / returns
-  exports.
-- Optional: GST-inclusive vs exclusive entry toggle; SAC-vs-HSN handling for
-  services. Recurring income stays out of scope.
+### FI4 — GST-on-income ✅ (2026-08-21)
+- `other_income` gained `tax_category`, `gst_rate`, `cess_rate`, `hsn_code`,
+  `taxable_amount`, `cgst`, `sgst`, `igst`, `cess` and a small `tax_snapshot`
+  JSONB (in `0000_baseline`, shared with T5) — **the same column shape as
+  `purchase_items`**, so the input and output registers are symmetric. Money
+  components and the rate/HSN are explicit columns (they are SUMmed and grouped
+  by for returns); only residual evidence (`inclusive`, supplier/buyer state)
+  goes in JSONB. Inter-state is derived (`igst > 0`), never stored. The split is
+  **computed at capture** by `computeIncomeTax()` (core, `finance/income`) from
+  `income_categories.tax_config` and **frozen on the entry**, so re-rating a
+  category never rewrites history.
+- `tax_config` keys read: `gst_rate` \| `gstRatePct`, `cess`, `hsn_code` \|
+  `sac_code`, `price_inclusive` (**defaults to true** — a negotiated rental /
+  commission figure is the gross actually received). A category with no rate is
+  `NON_TAXABLE` with a zero split, so pre-FI4 behaviour is unchanged.
+- Place of supply reuses the Phase-T engine (`computeLineTax` / `isInterState`).
+  The station's `settings.legal.stateCode` is the supplier side; an income payer
+  is free text with no state, so the safe default is intra-state (CGST + SGST).
+- **GST-on-income register:** `GET /transactions/income/gst-register?from&to&stationId`
+  (GST rows only, excludes `VOIDED`, flattens `hsnCode`/`gstRate`/`interState`
+  from the snapshot) surfaced as a **GST on Income** tab in the Income screen,
+  mirroring the purchase GST/ITC register.
+- **DSSR** carries `income.tax` (`taxable`, `cgst`, `sgst`, `igst`, `cess`,
+  `total`, `entries`) composed from live (non-voided) GST income, rendered in
+  `DailyDssrView` and the DSSR PDF.
+- Not done (intentionally): a per-entry inclusive/exclusive override (the
+  category's `price_inclusive` decides) and recurring income.
 
 ---
 
-## Voids & reversals (cross-cutting — backend done, UI pending)
+## Voids & reversals (cross-cutting — ✅ done 2026-08-21)
 
 Corrections are never edits: a financial entry is **voided** (status →
 `VOIDED`) and its ledger impact reversed, keeping history append-only (see the
@@ -240,19 +256,19 @@ ledger rule under Layer A).
   `voidIncome` exist. Reads already exclude `VOIDED` everywhere (Expenses/Income
   KPIs, DSSR/P&L compose, shift-close drawer reconciliation).
 - **Permission:** `canVoidExpense(role)` guard (reuse the same for income).
-- **Pending (take-over scope):** there is **no void action in the UI** on either
-  the **Expenses** or the **Income** ledger. To finish:
-  1. Add a row action / drawer (confirm + optional `adjustment_reason`) → the
-     void endpoint, gated by the permission guard.
-  2. On success call `useInvalidateOperational(stationId)` so the ledger, KPIs,
-     Cash & Bank, Accounts and the drawer all refresh.
-  3. Render voided rows struck-through with a **"Voided"** chip — the expense and
-     income columns already support this — so they stay visible but excluded.
-  4. Consider a **same-shift-only** guard for drawer-cash (`SHIFT_CASH`) entries
-     so a closed/reconciled drawer can't be retro-changed; bank/owner/business
-     entries can void any time within the business day.
-  Do expense + income together for a consistent pattern (neither has a void UI
-  today).
+- **UI shipped (both ledgers):** a `Ban` row action (`voidActionColumn`) on the
+  Expenses and Income tables opens a confirm dialog with an optional reason
+  (`useAsk` — `ConfirmDialog` now supports an input field), calls the void
+  endpoint, then `useInvalidateOperational(stationId)` so the ledger, KPIs,
+  Cash & Bank, Accounts and the drawer all refresh. Already-voided rows render a
+  **Voided** chip and no action.
+- **Guards:** routes are gated by `canVoidExpense(role)` (Owner / Manager) and
+  scoped to the caller's org via `belongsToOrg` (a repository `findById` alone
+  is not tenant-safe). `assertDrawerEntryVoidable` (shared by both use-cases)
+  refuses to void a **drawer-cash** entry once its shift is closed — the closed
+  drawer is frozen in an immutable `shift_summaries` snapshot — and directs the
+  operator to record a correcting entry instead. Bank / owner / business entries
+  void any time.
 
 ---
 
@@ -265,7 +281,7 @@ ledger rule under Layer A).
 
 ## Build order
 FA1 → FA2 → FA3 → FA4 → FA5 → FA6 → FA7 → FB1 → FB2 → FB3 → (FG1 later).
-Income: FI1 → FI2 → FI3 (done) → **FI4 (GST-on-income, next)**.
+Income: FI1 → FI2 → FI3 → FI4 (all done).
 
 ## Expansion
 - Budgets vs actual, cost centers, GST P&L, depreciation/fixed assets, tax-ready

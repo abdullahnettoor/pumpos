@@ -5,6 +5,7 @@ import type { ShiftRepository } from '../station-ops/shifts/index.js';
 import type { StockMovement, StockMovementRepository } from '../inventory/index.js';
 import type { ProductRepository } from '../station-setup/products/index.js';
 import { computeLineTax } from '../finance/tax/index.js';
+import { splitSaleLineTax } from './sale-tax.js';
 import type { Sale, SaleLine, SaleRepository, MerchandiseHandoverRepository } from './ports.js';
 
 export interface MerchandiseHandoverLineInput {
@@ -117,6 +118,8 @@ export class RecordMerchandiseHandover implements UseCase<RecordMerchandiseHando
         discountAmount: '0',
         taxAmount: String(tax.taxTotal),
         lineTotal: String(tax.total),
+        // T5 — freeze the same split that produced the totals above.
+        ...splitSaleLineTax(tax.total, product, false),
         createdAt: now,
       });
 

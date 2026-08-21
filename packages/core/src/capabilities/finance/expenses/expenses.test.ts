@@ -7,14 +7,18 @@ import {
   BusinessEvents,
 } from '../../../kernel/index.js';
 import type { ExecutionContext } from '../../../kernel/index.js';
-import { RecordExpense } from './index.js';
+import { RecordExpense, VoidExpense } from './index.js';
 import type { Expense, ExpenseRepository } from './index.js';
 import type { Shift, ShiftRepository } from '../../station-ops/shifts/index.js';
 import type { BusinessDay, BusinessDayRepository } from '../../station-ops/business-days/index.js';
 
 class ExpenseRepo implements ExpenseRepository {
   readonly rows: Expense[] = [];
-  async save(e: Expense) { this.rows.push(e); }
+  async save(e: Expense) {
+    const i = this.rows.findIndex((r) => r.id === e.id);
+    if (i >= 0) this.rows[i] = e; else this.rows.push(e);
+  }
+  async findById(id: string) { return this.rows.find((r) => r.id === id) ?? null; }
 }
 class ShiftRepo implements ShiftRepository {
   constructor(readonly rows: Shift[]) {}
@@ -79,5 +83,52 @@ describe('RecordExpense', () => {
       .execute({ shiftId: 'sh-1', categoryId: 'cat-1', amount: 100 }, ctx());
     expect(result.success).toBe(false);
     if (!result.success) expect(result.error.code).toBe('INVARIANT_VIOLATION');
+  });
+});
+
+describe('VoidExpense', () => {
+  async function seed(paidFrom: 'SHIFT_CASH' | 'BANK', shifts: ShiftRepo) {
+    const expenses = new ExpenseRepo();
+    const store = new InMemoryEventStore();
+    const events = new InProcessEventDispatcher({ store });
+    const rec = await new RecordExpense({ expenses, shifts, businessDays: new BdRepo([bday()]), events })
+      .execute(paidFrom === 'SHIFT_CASH' ? { shiftId: 'sh-1', categoryId: 'cat-1', amount: 350 } : { stationId: 'st-1', categoryId: 'cat-1', amount: 350, paidFrom: 'BANK' }, ctx());
+    if (!rec.success) throw new Error('seed failed');
+    return { expenses, store, events, id: rec.data.id };
+  }
+
+  it('voids an entry, keeps it (soft) and emits EXPENSE_VOIDED', async () => {
+    const shifts = new ShiftRepo([shift()]);
+    const { expenses, store, events, id } = await seed('SHIFT_CASH', shifts);
+    const result = await new VoidExpense({ expenses, shifts, events }).execute({ id, reason: 'duplicate' }, ctx());
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.status).toBe('VOIDED');
+    expect(expenses.rows).toHaveLength(1);
+    expect(store.events.at(-1)?.eventType).toBe(BusinessEvents.EXPENSE_VOIDED);
+  });
+
+  it('refuses to void twice', async () => {
+    const shifts = new ShiftRepo([shift()]);
+    const { expenses, events, id } = await seed('SHIFT_CASH', shifts);
+    await new VoidExpense({ expenses, shifts, events }).execute({ id }, ctx());
+    const again = await new VoidExpense({ expenses, shifts, events }).execute({ id }, ctx());
+    expect(again.success).toBe(false);
+    if (!again.success) expect(again.error.code).toBe('INVARIANT_VIOLATION');
+  });
+
+  it('refuses to void a drawer expense once its shift is closed', async () => {
+    const shifts = new ShiftRepo([shift()]);
+    const { expenses, events, id } = await seed('SHIFT_CASH', shifts);
+    shifts.rows[0] = shift('CLOSED');
+    const result = await new VoidExpense({ expenses, shifts, events }).execute({ id }, ctx());
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error.code).toBe('INVARIANT_VIOLATION');
+  });
+
+  it('allows voiding a business (bank) expense regardless of shift state', async () => {
+    const shifts = new ShiftRepo([shift('CLOSED')]);
+    const { expenses, events, id } = await seed('BANK', shifts);
+    const result = await new VoidExpense({ expenses, shifts, events }).execute({ id }, ctx());
+    expect(result.success).toBe(true);
   });
 });

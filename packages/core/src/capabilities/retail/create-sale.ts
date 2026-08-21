@@ -5,6 +5,9 @@ import type { ShiftRepository } from '../station-ops/shifts/index.js';
 import type { StockMovement, StockMovementRepository } from '../inventory/index.js';
 import type { CustomerLedgerRepository } from '../crm/collections/index.js';
 import type { CustomerRepository } from '../crm/customers/index.js';
+import type { ProductRepository } from '../station-setup/products/index.js';
+import { splitSaleLineTax } from './sale-tax.js';
+import { isInterState } from '../finance/tax/index.js';
 import type { Sale, SaleBuyerDetails, SaleLine, SalePaymentMethod, SaleRepository, SaleType } from './ports.js';
 
 export interface SaleLineInput {
@@ -28,6 +31,8 @@ export interface CreateSaleCommand {
   /** Ad-hoc buyer bill-to when the sale is not linked to a saved customer. */
   buyerDetails?: SaleBuyerDetails | null;
   notes?: string;
+  /** Station GST state — supplier side of place of supply (T5). */
+  supplierStateCode?: string | null;
 }
 
 const lineSchema = z.object({
@@ -54,6 +59,7 @@ const schema = z.object({
     })
     .nullish(),
   notes: z.string().max(500).optional(),
+  supplierStateCode: z.string().max(10).nullish(),
 });
 
 export interface CreateSaleDeps {
@@ -62,6 +68,8 @@ export interface CreateSaleDeps {
   ledger: CustomerLedgerRepository;
   customers: CustomerRepository;
   shifts: ShiftRepository;
+  /** Optional (T5): resolves each line's tax category + rates to freeze the split. */
+  products?: ProductRepository;
   docNumbers: DocumentNumberGenerator;
   events: EventPublisher;
 }
@@ -94,9 +102,11 @@ export class CreateSale implements UseCase<CreateSaleCommand, CreateSaleResult> 
     if (!shift || shift.organizationId !== ctx.organizationId) return err(notFoundError('Shift', cmd.shiftId));
     if (shift.status !== 'OPEN') return err(invariantViolation('Shift is not open', { shiftId: shift.id, status: shift.status }));
 
+    let buyerStateCode: string | null = cmd.buyerDetails?.stateCode ?? null;
     if (cmd.customerId) {
       const customer = await this.deps.customers.findById(cmd.customerId);
       if (!customer || customer.organizationId !== ctx.organizationId) return err(notFoundError('Customer', cmd.customerId));
+      buyerStateCode = ((customer.metadata as Record<string, any> | null)?.stateCode as string | undefined) ?? null;
     }
 
     const now = ctx.clock.now().toISOString();
@@ -110,6 +120,10 @@ export class CreateSale implements UseCase<CreateSaleCommand, CreateSaleResult> 
     const lines: SaleLine[] = [];
     const movements: StockMovement[] = [];
 
+    // T5 — place of supply. A saved customer's state makes the sale inter-state;
+    // a walk-in has none, so it stays intra-state (CGST+SGST).
+    const interState = isInterState({ supplierStateCode: cmd.supplierStateCode, buyerStateCode: buyerStateCode });
+
     for (const line of cmd.lines) {
       const qty = line.quantity;
       const discount = line.discountAmount ?? 0;
@@ -120,6 +134,11 @@ export class CreateSale implements UseCase<CreateSaleCommand, CreateSaleResult> 
       taxTotal += tax;
       total += lineTotal;
 
+      // The gross is what the customer pays for this line; the split is
+      // extracted from it, so the line total is never altered by taxing.
+      const product = this.deps.products ? await this.deps.products.findById(line.productId) : null;
+      const split = splitSaleLineTax(lineTotal, product && product.organizationId === ctx.organizationId ? product : null, interState);
+
       lines.push({
         id: ctx.ids.newId(),
         saleId,
@@ -129,6 +148,7 @@ export class CreateSale implements UseCase<CreateSaleCommand, CreateSaleResult> 
         discountAmount: String(discount),
         taxAmount: String(tax),
         lineTotal: String(lineTotal),
+        ...split,
         createdAt: now,
       });
 

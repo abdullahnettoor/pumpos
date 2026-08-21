@@ -8,6 +8,7 @@ import {
   canArchiveParty,
   canRecordPurchase,
   canManageExpenseCategory,
+  canVoidExpense,
   isAttendant,
   type Role,
 } from '@pump/shared';
@@ -23,6 +24,7 @@ import {
   AddVehicle,
   UpdateVehicle,
   RecordExpense,
+  VoidExpense,
   RecordIncome,
   VoidIncome,
   RecordCollection,
@@ -54,7 +56,7 @@ import {
   DrizzlePurchaseItemRepository,
   DrizzleSupplierTransactionRepository,
 } from '../infra/repositories/purchasing-repositories.js';
-import { DrizzleExpenseRepository, DrizzleIncomeRepository } from '../infra/repositories/finance-repositories.js';
+import { DrizzleExpenseRepository, DrizzleIncomeRepository, DrizzleIncomeCategoryRepository } from '../infra/repositories/finance-repositories.js';
 import { DrizzleStockMovementRepository, DrizzleStockVarianceRepository } from '../infra/repositories/inventory-repositories.js';
 import { DrizzleSaleRepository, DrizzleMerchandiseHandoverRepository } from '../infra/repositories/retail-repositories.js';
 import { DrizzleInvoiceRepository, DrizzleDocumentSequenceRepository } from '../infra/repositories/invoicing-repositories.js';
@@ -95,6 +97,37 @@ function sendResult<T>(c: any, result: Result<T>) {
 }
 
 const docNumbers = new TimestampDocumentNumberGenerator();
+
+/**
+ * Tenant guard for business-day-anchored rows (expenses / income): the row's
+ * business day must belong to the caller's organization before it can be
+ * mutated. Repository ports look records up by id alone, so scope here.
+ */
+/**
+ * The station's own GST state (supplier side of place-of-supply). Resolves from
+ * an explicit stationId, else via the shift the entry is anchored to.
+ */
+async function loadStationStateCode(db: DbClient, stationId?: string | null, shiftId?: string | null): Promise<string | null> {
+  let sid = stationId ?? null;
+  if (!sid && shiftId) {
+    const [sh] = await db.select({ stationId: schema.shifts.stationId }).from(schema.shifts).where(eq(schema.shifts.id, shiftId)).limit(1);
+    sid = sh?.stationId ?? null;
+  }
+  if (!sid) return null;
+  const [row] = await db.select({ settings: schema.stations.settings }).from(schema.stations).where(eq(schema.stations.id, sid)).limit(1);
+  const legal = ((row?.settings as any)?.legal) || {};
+  return typeof legal.stateCode === 'string' && legal.stateCode.trim() ? legal.stateCode.trim() : null;
+}
+
+async function belongsToOrg(db: DbClient, table: any, id: string, organizationId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ id: table.id })
+    .from(table)
+    .innerJoin(schema.businessDays, eq(table.businessDayId, schema.businessDays.id))
+    .where(and(eq(table.id, id), eq(schema.businessDays.organizationId, organizationId)))
+    .limit(1);
+  return !!row;
+}
 
 const DEFAULT_EXPENSE_CATEGORIES = [
   'Staff Tea & Snacks',
@@ -663,6 +696,9 @@ transactionsRouter.post('/income', async (c) => {
   const user = c.var.user;
   const body = await c.req.json().catch(() => ({}));
   const clock = await loadStationClock(c.var.db, body?.stationId);
+  // FI4 — place of supply: station state is the supplier side; the payer state
+  // (when the operator knows it) makes the entry inter-state (IGST).
+  const supplierStateCode = await loadStationStateCode(c.var.db, body?.stationId, body?.shiftId);
   const result = await runInTransaction(c.var.db, async (tx, events) => {
     // A chosen account overrides receivedInto/affectsDrawer by its type, so
     // drawer reconciliation stays correct (only shift Cash-in-Hand hits drawer).
@@ -682,8 +718,9 @@ transactionsRouter.post('/income', async (c) => {
       income: new DrizzleIncomeRepository(tx),
       shifts: new DrizzleShiftRepository(tx),
       businessDays: new DrizzleBusinessDayRepository(tx),
+      incomeCategories: new DrizzleIncomeCategoryRepository(tx),
       events,
-    }).execute(body, buildContext(user, { stationId: body?.stationId, ...clock }));
+    }).execute({ ...body, supplierStateCode: supplierStateCode ?? undefined }, buildContext(user, { stationId: body?.stationId, ...clock }));
     if (r.success) await new LedgerPostingService(tx).postIncome(user.organizationId, r.data, body?.accountId);
     return r;
   });
@@ -692,10 +729,16 @@ transactionsRouter.post('/income', async (c) => {
 
 transactionsRouter.post('/income/:id/void', async (c) => {
   const user = c.var.user;
+  if (!canVoidExpense(user.role)) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions to void income' } }, 403);
+  }
   const id = c.req.param('id');
   const body = await c.req.json().catch(() => ({}));
+  if (!(await belongsToOrg(c.var.db, schema.otherIncome, id, user.organizationId))) {
+    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Income entry not found' } }, 404);
+  }
   const result = await runInTransaction(c.var.db, async (tx, events) => {
-    const r = await new VoidIncome({ income: new DrizzleIncomeRepository(tx), events }).execute({ id, reason: body?.reason }, buildContext(user));
+    const r = await new VoidIncome({ income: new DrizzleIncomeRepository(tx), shifts: new DrizzleShiftRepository(tx), events }).execute({ id, reason: body?.reason }, buildContext(user));
     if (r.success) await new LedgerPostingService(tx).reverseIncome(id);
     return r;
   });
@@ -724,6 +767,14 @@ transactionsRouter.get('/income', async (c) => {
       description: schema.otherIncome.description,
       status: schema.otherIncome.status,
       shiftId: schema.otherIncome.shiftId,
+      taxCategory: schema.otherIncome.taxCategory,
+      gstRate: schema.otherIncome.gstRate,
+      hsnCode: schema.otherIncome.hsnCode,
+      taxableAmount: schema.otherIncome.taxableAmount,
+      cgst: schema.otherIncome.cgst,
+      sgst: schema.otherIncome.sgst,
+      igst: schema.otherIncome.igst,
+      cess: schema.otherIncome.cess,
       businessDate: schema.businessDays.businessDate,
       createdAt: schema.otherIncome.createdAt,
     })
@@ -735,6 +786,56 @@ transactionsRouter.get('/income', async (c) => {
   return c.json({ success: true, data: rows });
 });
 
+
+/**
+ * FI4 — GST-on-income register: every GST-bearing income entry in the window
+ * with its frozen taxable value + CGST/SGST/IGST split and HSN/SAC. Mirrors
+ * `GET /purchases/gst-register` (input side) for the output side.
+ */
+transactionsRouter.get('/income/gst-register', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  const from = c.req.query('from');
+  const to = c.req.query('to');
+  const stationId = c.req.query('stationId');
+  const conds = [
+    eq(schema.businessDays.organizationId, user.organizationId),
+    eq(schema.otherIncome.taxCategory, 'GST'),
+    ne(schema.otherIncome.status, 'VOIDED'),
+  ];
+  if (stationId) conds.push(eq(schema.businessDays.stationId, stationId));
+  if (from) conds.push(gte(schema.businessDays.businessDate, from));
+  if (to) conds.push(lte(schema.businessDays.businessDate, to));
+  const rows = await db
+    .select({
+      id: schema.otherIncome.id,
+      businessDate: schema.businessDays.businessDate,
+      categoryName: schema.incomeCategories.name,
+      payer: schema.otherIncome.payer,
+      description: schema.otherIncome.description,
+      amount: schema.otherIncome.amount,
+      gstRate: schema.otherIncome.gstRate,
+      cessRate: schema.otherIncome.cessRate,
+      hsnCode: schema.otherIncome.hsnCode,
+      taxableAmount: schema.otherIncome.taxableAmount,
+      cgst: schema.otherIncome.cgst,
+      sgst: schema.otherIncome.sgst,
+      igst: schema.otherIncome.igst,
+      cess: schema.otherIncome.cess,
+    })
+    .from(schema.otherIncome)
+    .innerJoin(schema.businessDays, eq(schema.otherIncome.businessDayId, schema.businessDays.id))
+    .leftJoin(schema.incomeCategories, eq(schema.incomeCategories.id, schema.otherIncome.categoryId))
+    .where(and(...conds))
+    .orderBy(desc(schema.businessDays.businessDate));
+  const data = rows.map((r) => ({
+    ...r,
+    // Inter-state is derivable — IGST is only ever charged across states.
+    interState: Number(r.igst || 0) > 0,
+    categoryName: r.categoryName ?? 'Other Income',
+  }));
+  return c.json({ success: true, data });
+});
 
 transactionsRouter.post('/expenses', async (c) => {
   const user = c.var.user;
@@ -763,6 +864,24 @@ transactionsRouter.post('/expenses', async (c) => {
       events,
     }).execute(body, buildContext(user, { stationId: body?.stationId, ...clock }));
     if (r.success) await new LedgerPostingService(tx).postExpense(user.organizationId, r.data, body?.accountId);
+    return r;
+  });
+  return sendResult(c, result);
+});
+
+transactionsRouter.post('/expenses/:id/void', async (c) => {
+  const user = c.var.user;
+  if (!canVoidExpense(user.role)) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions to void expenses' } }, 403);
+  }
+  const id = c.req.param('id');
+  const body = await c.req.json().catch(() => ({}));
+  if (!(await belongsToOrg(c.var.db, schema.expenses, id, user.organizationId))) {
+    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Expense not found' } }, 404);
+  }
+  const result = await runInTransaction(c.var.db, async (tx, events) => {
+    const r = await new VoidExpense({ expenses: new DrizzleExpenseRepository(tx), shifts: new DrizzleShiftRepository(tx), events }).execute({ id, reason: body?.reason }, buildContext(user));
+    if (r.success) await new LedgerPostingService(tx).reverseExpense(id);
     return r;
   });
   return sendResult(c, result);
@@ -954,6 +1073,8 @@ transactionsRouter.post('/sales', async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const rawBuyer = body.buyer && typeof body.buyer === 'object' ? body.buyer : null;
   const saveAsCustomer = !!body.saveAsCustomer;
+  // T5 — supplier side of place of supply for the frozen line-tax split.
+  const supplierStateCode = await loadStationStateCode(c.var.db, body?.stationId, body?.shiftId);
   const result = await runInTransaction(c.var.db, async (tx, events) => {
     let customerId: string | null = body.customerId ?? null;
     let buyerDetails: { name: string; phone: string | null; gstin: string | null; stateCode: string | null } | null = null;
@@ -995,9 +1116,10 @@ transactionsRouter.post('/sales', async (c) => {
       ledger: new DrizzleCustomerLedgerRepository(tx),
       customers: new DrizzleCustomerRepository(tx),
       shifts: new DrizzleShiftRepository(tx),
+      products: new DrizzleProductRepository(tx),
       docNumbers,
       events,
-    }).execute({ ...body, customerId, buyerDetails }, buildContext(user));
+    }).execute({ ...body, customerId, buyerDetails, supplierStateCode }, buildContext(user));
   });
   return sendResult(c, result);
 });
@@ -1073,6 +1195,66 @@ transactionsRouter.get('/purchases/:id/items', async (c) => {
 
 // GST input-tax-credit (ITC) register: GST purchase lines over a date range.
 // Fuel (VAT) and exempt lines carry no input credit and are excluded.
+/**
+ * T5 — output-tax register for sales: every taxed sale line in the window with
+ * its frozen split. GST (merchandise) and VAT (fuel) are returned together but
+ * tagged by `taxCategory`, because fuel VAT is outside GST and must never be
+ * summed into GST totals. Mirrors the purchase ITC and income GST registers.
+ */
+transactionsRouter.get('/sales/tax-register', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  const from = c.req.query('from');
+  const to = c.req.query('to');
+  const stationId = c.req.query('stationId');
+  const category = c.req.query('taxCategory');
+  const conds = [
+    eq(schema.businessDays.organizationId, user.organizationId),
+    category ? eq(schema.saleItems.taxCategory, category) : ne(schema.saleItems.taxCategory, 'NON_TAXABLE'),
+  ];
+  if (stationId) conds.push(eq(schema.businessDays.stationId, stationId));
+  if (from) conds.push(gte(schema.businessDays.businessDate, from));
+  if (to) conds.push(lte(schema.businessDays.businessDate, to));
+  const rows = await db
+    .select({
+      id: schema.saleItems.id,
+      businessDate: schema.businessDays.businessDate,
+      documentNumber: schema.sales.documentNumber,
+      paymentMethod: schema.sales.paymentMethod,
+      customerName: schema.customers.name,
+      productName: schema.products.name,
+      productCode: schema.products.code,
+      quantity: schema.saleItems.quantity,
+      taxCategory: schema.saleItems.taxCategory,
+      gstRate: schema.saleItems.gstRate,
+      vatRate: schema.saleItems.vatRate,
+      cessRate: schema.saleItems.cessRate,
+      hsnCode: schema.saleItems.hsnCode,
+      taxableAmount: schema.saleItems.taxableAmount,
+      cgst: schema.saleItems.cgst,
+      sgst: schema.saleItems.sgst,
+      igst: schema.saleItems.igst,
+      vat: schema.saleItems.vat,
+      cess: schema.saleItems.cess,
+      lineTotal: schema.saleItems.lineTotal,
+    })
+    .from(schema.saleItems)
+    .innerJoin(schema.sales, eq(schema.saleItems.saleId, schema.sales.id))
+    .innerJoin(schema.businessDays, eq(schema.sales.businessDayId, schema.businessDays.id))
+    .leftJoin(schema.customers, eq(schema.sales.customerId, schema.customers.id))
+    .leftJoin(schema.products, eq(schema.saleItems.productId, schema.products.id))
+    .where(and(...conds))
+    .orderBy(desc(schema.businessDays.businessDate));
+  const data = rows.map((r) => ({
+    ...r,
+    productName: r.productName ?? 'Product',
+    customerName: r.customerName ?? 'Walk-in',
+    // IGST is only ever charged across states.
+    interState: Number(r.igst || 0) > 0,
+  }));
+  return c.json({ success: true, data });
+});
+
 transactionsRouter.get('/purchases/gst-register', async (c) => {
   const db = c.var.db;
   const user = c.var.user;

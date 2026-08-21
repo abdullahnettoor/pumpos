@@ -35,6 +35,13 @@ export interface DssrIncome {
   amount: number;
   status: string;
   categoryName?: string | null;
+  /** FI4 — GST split frozen on the entry ('GST' | 'EXEMPT' | 'NON_TAXABLE'). */
+  taxCategory?: string | null;
+  taxableAmount?: number | null;
+  cgst?: number | null;
+  sgst?: number | null;
+  igst?: number | null;
+  cess?: number | null;
 }
 export interface DssrPurchase {
   amount: number;
@@ -56,6 +63,15 @@ export interface DssrSaleItem {
   quantity: number;
   /** Line revenue (net of nothing extra — the sale line total). */
   revenue: number;
+  /** T5 — output-tax split frozen on the line at capture. */
+  taxCategory?: string | null;
+  taxableAmount?: number | null;
+  cgst?: number | null;
+  sgst?: number | null;
+  igst?: number | null;
+  /** Fuel VAT — outside GST, never summed with it. */
+  vat?: number | null;
+  cess?: number | null;
 }
 
 /** Customer-ledger credit sale (receivable) created during the business day. */

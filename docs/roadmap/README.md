@@ -8,10 +8,10 @@ shippable and extends existing domain entities (per `AGENTS.md`) rather than red
 |---|---|---|---|
 | [L](phase-L-ledger.md) | Ledger / money visibility | ✅ Done | R (PDF export reuse) |
 | [U](phase-U-ui-uplift.md) | UI uplift & consistency | ✅ Done | — |
-| [F](phase-F-financials.md) | Financials — money accounts + P&L/COGS + Other Income + CMS/OMC | 🟡 Mostly done | L |
+| [F](phase-F-financials.md) | Financials — money accounts + P&L/COGS + Other Income + CMS/OMC | 🟡 Mostly done (only FG1 GL deferred) | L |
 | [R](phase-R-reports-pdf.md) | Reports & PDF hardening | 🟡 Mostly done (R4 server PDF pending) | — |
 | [P](phase-P-performance.md) | Performance & caching | 🟡 Mostly done | — |
-| [T](phase-T-tax.md) | Product tax restructure & GST invoicing | 🟡 Mostly done (T5 breakup pending) | R, L |
+| [T](phase-T-tax.md) | Product tax restructure & GST invoicing | ✅ Done (columns folded into `0000_baseline`) | R, L |
 | [U2](phase-U2-fuel-units.md) | Unit-aware fuels (kg / L, e.g. CNG) | 🟡 Mostly done (QA pass pending) | — |
 | [M](phase-M-multisite.md) | Multi-site topology (marketing + console + mobile) | 🟡 Code done; deploy/ops remain | — |
 | [MB](phase-MB-mobile-owner.md) | Mobile owner app (owner-first PWA) | 🟡 Partial (attendant handover done) | M, R (R4), F, L |
@@ -31,7 +31,7 @@ mobile handover parity and per-line idempotency keys. These span Phase F/L and s
 **Done:** L, U, and the bulk of F (FA money accounts → FB P&L/COGS → FI Other Income →
 CMS/OMC), P, T, M, U2. **Remaining priority order:** F finish (Void UI for
 Expenses/Income, FI4 GST-on-income) → R4 (server-side PDF) → D (pagination) →
-T5 (DSSR tax breakup) → MB owner cockpit → O (offline). X is future.
+MB owner cockpit → O (offline). X is future.
 Phase M's remaining work is deployment/ops (Cloudflare domains, Supabase Auth URLs,
 icons), independent of the domain-model phases.
 

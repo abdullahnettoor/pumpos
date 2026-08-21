@@ -607,6 +607,25 @@ export class CloudTransactionService {
     return request<any[]>(`/transactions/purchases/gst-register${suffix}`);
   }
 
+  async getSalesTaxRegister(params: { from?: string; to?: string; stationId?: string; taxCategory?: string } = {}): Promise<any[]> {
+    const qs = new URLSearchParams();
+    if (params.from) qs.set('from', params.from);
+    if (params.to) qs.set('to', params.to);
+    if (params.stationId) qs.set('stationId', params.stationId);
+    if (params.taxCategory) qs.set('taxCategory', params.taxCategory);
+    const suffix = qs.toString() ? `?${qs.toString()}` : '';
+    return request<any[]>(`/transactions/sales/tax-register${suffix}`);
+  }
+
+  async getIncomeGstRegister(from?: string, to?: string, stationId?: string): Promise<any[]> {
+    const qs = new URLSearchParams();
+    if (from) qs.set('from', from);
+    if (to) qs.set('to', to);
+    if (stationId) qs.set('stationId', stationId);
+    const suffix = qs.toString() ? `?${qs.toString()}` : '';
+    return request<any[]>(`/transactions/income/gst-register${suffix}`);
+  }
+
   async getCollections(): Promise<any[]> {
     return request<any[]>('/transactions/collections');
   }
@@ -633,6 +652,10 @@ export class CloudTransactionService {
     });
   }
 
+  async voidExpense(id: string, reason?: string): Promise<any> {
+    return request<any>(`/transactions/expenses/${id}/void`, { method: 'POST', body: JSON.stringify({ reason: reason || undefined }) });
+  }
+
   async getIncome(params?: { stationId?: string; from?: string; to?: string }): Promise<any[]> {
     const qs = new URLSearchParams();
     if (params?.stationId) qs.set('stationId', params.stationId);
@@ -649,8 +672,8 @@ export class CloudTransactionService {
     });
   }
 
-  async voidIncome(id: string): Promise<any> {
-    return request<any>(`/transactions/income/${id}/void`, { method: 'POST' });
+  async voidIncome(id: string, reason?: string): Promise<any> {
+    return request<any>(`/transactions/income/${id}/void`, { method: 'POST', body: JSON.stringify({ reason: reason || undefined }) });
   }
 
   async recordPurchase(payload: {

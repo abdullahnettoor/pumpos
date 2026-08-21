@@ -1,6 +1,6 @@
 # Phase T — Product Tax Restructure & GST Invoicing
 
-**Status:** T1–T3 done (deployed). T4–T5 remaining. **Depends on:** R (PDF kit), L (ledger) helpful but not required.
+**Status:** T1–T5 done. Tax-split columns live in `0000_baseline` (**re-apply the baseline / reset the DB before use**). **Depends on:** R (PDF kit), L (ledger) helpful but not required.
 
 **Goal:** Model Indian fuel-retail taxation correctly and enable **B2B GST tax invoices** with CGST/SGST/IGST line splits, while keeping fuel (VAT, outside GST) distinct from merchandise/lubes (GST).
 
@@ -56,11 +56,87 @@
   (sales / invoiced / pending), per-row **Issue** (idempotent) → downloads PDF, or **PDF** re-download for issued
   ones; Staff can't issue. `useSales`/`useInvoices` hooks + `issueInvoice`/`getInvoices`/`getSales` service.
 
-## T5 — Reports
-- DSSR/shift summary tax breakup (output VAT vs output GST) for the day.
-- **GST on other/indirect income** (tanker rental, commission, scrap, etc.) is tracked as **FI4** in
-  `phase-F-financials.md` — it reuses the T3 tax engine to split income into taxable + CGST/SGST/IGST and adds a
-  GST-on-income register + DSSR income tax lines. Categories already carry `tax_config` (GST% + HSN/SAC).
+## T5 — Output tax on sales ✅ done (migration pending apply)
+
+**Goal:** a complete **daily output-tax picture** on the DSSR — output VAT (fuel) +
+output GST (merchandise) + output GST (other income) — so a return can be filed
+from the report instead of reverse-engineered from invoices.
+
+### What shipped
+- **Schema** — `sale_items` gained `tax_category`, `gst_rate`, `vat_rate`,
+  `cess_rate`, `hsn_code`, `taxable_amount`, `cgst`, `sgst`, `igst`, `vat`, `cess`
+  (and `other_income` the FI4 equivalents). Since the platform is still
+  pre-production, these were **consolidated into `0000_baseline.sql`** rather than
+  shipped as an incremental `0002` — one baseline, no migration chain to babysit.
+  Once a production database exists, this consolidation is no longer allowed:
+  new columns must then arrive as an additive, idempotent migration.
+- **Core** `capabilities/retail/sale-tax.ts` → `splitSaleLineTax(gross, product, interState)`.
+  It **extracts** tax from the line's gross by default (`price_inclusive` defaults
+  true — pump rate includes VAT, MRP includes GST), so **a line total is never
+  changed by the split**. No rate ⇒ zero split with the full gross as taxable.
+  Wired into `CreateSale` (buyer state from `customer.metadata.stateCode`,
+  supplier state from `stations.settings.legal.stateCode`) and
+  `RecordMerchandiseHandover`. `sales.subtotal_amount` / `sales.tax_amount` are
+  deliberately **unchanged** — only the new per-line columns are populated.
+- **API** `GET /api/transactions/sales/tax-register` (excludes `NON_TAXABLE`,
+  optional `taxCategory` filter).
+- **DSSR** `salesTax: { gst: {taxable,cgst,sgst,igst,cess,total}, vat: {taxable,vat} }`,
+  rendered in `DailyDssrView` and the PDF (`dssrDoc.tsx`).
+- **UI** Reports → **Tax Register** tab (`reports/TaxRegisterPanel.tsx`): GST on
+  merchandise and VAT on fuel in two separate panels, plus the FI4 GST-on-income
+  totals — GST and VAT are **never summed together**.
+
+### The gap it closed
+Sales carry **no tax split**: `sale_items` stores only a lumped `tax_amount`. The
+CGST/SGST/IGST breakdown is computed at **invoice time** (T4) and frozen on the
+`invoices` snapshot. So an uninvoiced walk-in merchandise sale has no recoverable
+split, and fuel sales have no VAT figure computed anywhere.
+
+Meanwhile **FI4 is done** (`phase-F-financials.md`): every income entry freezes its
+own GST split at capture and the DSSR already carries `income.tax`
+(`taxable / cgst / sgst / igst / cess / total / entries`). T5 is the sales-side
+equivalent — the composition slot in `compose.ts` already exists to copy.
+
+### Design decision — freeze at capture, don't recompute in the report
+Split the tax on **`sale_items` at capture** — using the **exact column shape
+already established by `purchase_items`** (and now mirrored on `other_income`):
+`tax_category`, `gst_rate`, `vat_rate`, `cess_rate`, `hsn_code`, `taxable_amount`,
+`cgst`, `sgst`, `igst`, `vat`, `cess` — rather than deriving it in the DSSR from
+the product's *current* `tax_config`.
+
+**Columns, not a JSONB blob**, because these values are *aggregated and grouped*:
+registers and the DSSR `SUM()` the money components, and GST returns are
+fundamentally **rate-wise** (GSTR-1) with an **HSN summary** section. JSONB would
+force a cast on every row, forfeit `numeric(12,2)` exactness and `NOT NULL`
+defaults, and need expression indexes to group by rate. Reserve JSONB for the
+residual evidence nobody filters on.
+
+Rationale — the same rule that governs shift summaries and DSSR: **re-rating a
+product must never rewrite last month's tax**. A GST slab change or an MRP toggle
+would silently restate closed periods if the report recomputed on the fly. It also
+makes every sale return-ready whether or not an invoice was ever issued, and keeps
+invoiced and uninvoiced sales consistent (T4's invoice snapshot then simply agrees
+with the line splits instead of being the only source of them).
+
+### Build order
+1. **Schema** — tax split columns on `sale_items`. Rows default to `NON_TAXABLE`
+   with zeros, so anything captured before the split is never back-computed.
+2. **Core** — freeze the split in the sale use-case via the existing `computeLineTax`
+   (honouring `price_inclusive` / MRP), exactly as `computeIncomeTax` does for income.
+   Fuel lines resolve to `FUEL_VAT` → `vat`, merchandise to `GST` → CGST/SGST or IGST.
+3. **DSSR** — extend the sales ports with the split, aggregate into `sales.tax`
+   alongside the existing `income.tax`, and render **Output VAT** / **Output GST**
+   lines in `DailyDssrView` + `dssrDoc.tsx`. Add a compose test.
+4. **Register** — a sales GST/VAT register endpoint + tab, mirroring the purchase
+   ITC register and the FI4 GST-on-income register, so all three sit side by side.
+
+### Deferred
+- **Per-shift** output-tax breakup on `shift_summaries` — the day-level DSSR figure
+  covers filing; the per-shift split is only an operator-attribution nicety.
+
+### Note on fuel
+Fuel VAT is an **output tax with no input credit for the buyer** — report it, but
+keep it in a separate line from GST and never fold the two totals together.
 
 ## Tax-inclusive (MRP) pricing ✅ done + deployed
 - Retail merchandise/lubes are priced MRP (tax-inclusive) — tax is extracted, not added. `computeLineTax` gained

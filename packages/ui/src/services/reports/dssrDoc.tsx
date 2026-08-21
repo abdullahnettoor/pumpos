@@ -60,6 +60,7 @@ const builders: Record<DssrSection, (d: any, cfg: DssrReportConfig) => React.Rea
     const pur = d.purchases || {};
     const sup = d.supplierPayments || {};
     const merch = d.merchandise || {};
+    const sTax = (d.salesTax || {}) as { gst?: Record<string, number>; vat?: Record<string, number> };
     return (
       <View key="financial">
         <Text style={s.h2}>FINANCIAL SUMMARY</Text>
@@ -77,6 +78,29 @@ const builders: Record<DssrSection, (d: any, cfg: DssrReportConfig) => React.Rea
           <ReconRow label="Business Expenses" value={inr(exp.business)} />
           <ReconRow label="Total Expenses" value={inr(exp.total)} color={C.danger} />
           {Number(inc.total || 0) > 0 && <ReconRow label="Other Income (Cash / Bank)" value={`${inr(inc.drawer)} / ${inr(inc.business)}`} color={C.green} />}
+          {/* T5 — output tax on sales: GST (merchandise) and VAT (fuel) kept apart. */}
+          {Number(sTax.gst?.total || 0) > 0 && (
+            <>
+              <ReconRow label="Merchandise — Taxable Value" value={inr(Number(sTax.gst?.taxable || 0))} />
+              {Number(sTax.gst?.igst || 0) > 0 ? (
+                <ReconRow label="Output GST on Sales (IGST)" value={inr(Number(sTax.gst?.igst || 0))} />
+              ) : (
+                <ReconRow label="Output GST on Sales (CGST / SGST)" value={`${inr(Number(sTax.gst?.cgst || 0))} / ${inr(Number(sTax.gst?.sgst || 0))}`} />
+              )}
+            </>
+          )}
+          {Number(sTax.vat?.vat || 0) > 0 && <ReconRow label="Output VAT on Fuel" value={inr(Number(sTax.vat?.vat || 0))} />}
+          {/* FI4 — output GST collected on other income. */}
+          {Number(inc.tax?.total || 0) > 0 && (
+            <>
+              <ReconRow label="Other Income — Taxable Value" value={inr(Number(inc.tax?.taxable || 0))} />
+              {Number(inc.tax?.igst || 0) > 0 ? (
+                <ReconRow label="Output GST on Income (IGST)" value={inr(Number(inc.tax?.igst || 0))} />
+              ) : (
+                <ReconRow label="Output GST on Income (CGST / SGST)" value={`${inr(Number(inc.tax?.cgst || 0))} / ${inr(Number(inc.tax?.sgst || 0))}`} />
+              )}
+            </>
+          )}
         </View>
       </View>
     );

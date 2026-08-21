@@ -1,7 +1,9 @@
 import React from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
+import { Ban } from 'lucide-react';
 import { inr } from '../../utils/format.js';
 import { Chip, DateText } from '../../pump-ds/index.js';
+import { voidActionColumn } from '../finance/voidActionColumn.js';
 
 export const PAID_FROM: Record<string, { label: string; tone: 'brand' | 'info' | 'success' | 'warning' | 'danger' | 'neutral' }> = {
   SHIFT_CASH: { label: 'Cash · drawer', tone: 'warning' },
@@ -29,11 +31,20 @@ const amountCell = (row: any, getValue: () => any) => {
   );
 };
 
-/** Full expense ledger columns incl. Paid From — shared by the Ledger tab and the register. */
-export const expenseColumns: ColumnDef<any, any>[] = [
+const baseColumns: ColumnDef<any, any>[] = [
   { accessorKey: 'businessDate', header: 'Business Day', cell: ({ row }) => dateCell(row) },
   { accessorKey: 'categoryName', header: 'Category', cell: ({ getValue }) => <span style={{ fontWeight: 600, color: 'var(--text-strong)' }}>{(getValue() as string) ?? 'General'}</span> },
   { accessorKey: 'description', header: 'Description', cell: ({ getValue }) => <span style={{ color: 'var(--text-muted)' }}>{(getValue() as string) || '—'}</span> },
   { accessorKey: 'paidFrom', header: 'Paid From', cell: ({ getValue }) => paidFromCell(getValue() as string) },
   { accessorKey: 'amount', header: 'Amount', cell: ({ row, getValue }) => amountCell(row, getValue) },
 ];
+
+/** Full expense ledger columns incl. Paid From — shared by the Ledger tab and the register. */
+export const expenseColumns: ColumnDef<any, any>[] = baseColumns;
+
+/**
+ * Ledger columns with a Void row action. `onVoid` is omitted (or `canVoid` is
+ * false) for roles that may not void, in which case the plain columns are used.
+ */
+export const buildExpenseColumns = (onVoid?: (row: any) => void): ColumnDef<any, any>[] =>
+  onVoid ? [...baseColumns, voidActionColumn(onVoid, 'Void expense', <Ban size={14} />)] : baseColumns;
