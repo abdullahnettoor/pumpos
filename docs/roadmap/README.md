@@ -18,6 +18,7 @@ shippable and extends existing domain entities (per `AGENTS.md`) rather than red
 | [D](phase-D-data-pagination.md) | Data access & pagination | ⬜ Planned (not started) | P (complementary) |
 | [A](phase-A-auth-users.md) | Auth, owner onboarding & team management (email/phone + owner-set password) | 🟡 Mostly done (A0–A4 shipped; config verification pending) | — |
 | [O](phase-O-offline-sync.md) | Resilience & sync (Level 2, desktop) | ⬜ Foundations only (idempotency + outbox) | — |
+| [HR](phase-HR-historical-replay.md) | Historical replay, selective apply & manual day close | ⬜ Proposed for review | Core lifecycle hardening |
 | [X](phase-X-expansion.md) | Expansion modules | ⬜ Future (X4 prepaid/OMC partly seeded) | core stable |
 
 Recently shipped (this line supersedes the old sequence): **Customer Sales** in the

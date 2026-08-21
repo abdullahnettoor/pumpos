@@ -36,8 +36,10 @@ important domain rule:
 
 * **`business_day_id`** is the **universal anchor**. Every operational and
   financial record belongs to a business day.
-* **`shift_id`** is present **if and only if the money touches the physical cash
-  drawer.** A shift is an operator-accountability window for drawer cash.
+* **`shift_id`** is an **optional** anchor. A shift is an operator-accountability
+  window for drawer cash. It is set by default when money touches the physical
+  drawer (and for sales), and may be passed explicitly or preselected on other
+  records when shift attribution is useful.
 
 Operational flow:
 
@@ -58,12 +60,15 @@ Reports
 Anchoring rules (DO NOT couple everything to a shift):
 
 * Fuel/merchandise **sales** occur within a shift (operator accountability) →
-  `shift_id` set.
+  `shift_id` set by default.
 * **Cash** collections / cash supplier payments / drawer (`SHIFT_CASH`) expenses
-  touch the drawer → `shift_id` set.
+  touch the drawer → `shift_id` set by default.
 * **Card / UPI / bank / online** collections, **bank/owner** expenses,
-  **purchases**, and **credit sales** do NOT touch the drawer → `shift_id` is
-  NULL, anchored to the business day only.
+  **purchases**, and **credit sales** do NOT touch the drawer → `shift_id`
+  defaults to NULL, anchored to the business day. The field remains optional:
+  callers may pass a `shift_id`, or the UI may preselect the open shift, when
+  attributing the record to a shift window helps future capabilities slice
+  historical data.
 * **Credit sales are receivables**, not drawer cash. A fleet fuel-on-credit sale
   records only a customer-ledger debit (receivable); it never moves stock again
   (the fuel is already metered via nozzle readings). Customer balance =
@@ -677,3 +682,15 @@ When implementing a feature:
 If a proposed implementation violates any of those documents, stop and revisit the architecture before coding.
 
 Architecture decisions take precedence over implementation convenience.
+
+---
+
+## Agent skills
+
+### Issue tracker
+
+Issues live as local markdown under `.scratch/<feature>/`; long-range planning lives in `docs/roadmap/phase-*.md`. See `docs/agents/issue-tracker.md`.
+
+### Domain docs
+
+Single-context: one `CONTEXT.md` at the repo root plus `docs/adr/`. See `docs/agents/domain.md`.
