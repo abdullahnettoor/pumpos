@@ -164,6 +164,10 @@ export class RecordCollection implements UseCase<RecordCollectionCommand, Collec
         aggregateId: customer.id,
         businessDayId,
         payload: { collectionId: collection.id, customerId: customer.id, amount: collection.amount, paymentMethod: cmd.paymentMethod, affectsDrawer, shiftId },
+        presentation: {
+          templateId: 'credit-payment-received.v1',
+          values: { customerName: customer.name, amount: Number(collection.amount), paymentMethod: cmd.paymentMethod },
+        },
       }),
     ]);
 

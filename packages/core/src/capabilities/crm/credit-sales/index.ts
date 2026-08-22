@@ -115,6 +115,10 @@ export class RecordCreditSale implements UseCase<RecordCreditSaleCommand, Custom
         aggregateId: customer.id,
         businessDayId,
         payload: { customerId: customer.id, vehicleId: entry.vehicleId, amount: entry.amount },
+        presentation: {
+          templateId: 'credit-sale.amount-only.v1',
+          values: { customerName: customer.name, amount: Number(entry.amount) },
+        },
       }),
     ]);
 

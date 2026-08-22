@@ -109,6 +109,7 @@ export class OpenShift implements UseCase<OpenShiftCommand, OpenShiftResult> {
           stationId: businessDay.stationId,
           businessDayId: businessDay.id,
           payload: { businessDayId: businessDay.id, businessDate: businessDay.businessDate },
+          groupingRole: 'related',
         }),
       );
     }
@@ -180,6 +181,11 @@ export class OpenShift implements UseCase<OpenShiftCommand, OpenShiftResult> {
         stationId: shift.stationId,
         businessDayId: businessDay.id,
         payload: { shiftId: shift.id, openingCash: shift.openingCash, openedBy: shift.openedBy },
+        presentation: {
+          templateId: 'shift-opened.v1',
+          values: { openingCash: Number(shift.openingCash) },
+        },
+        groupingRole: 'primary',
       }),
     );
 

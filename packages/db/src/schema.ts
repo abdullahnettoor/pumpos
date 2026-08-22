@@ -1,5 +1,5 @@
 import { pgTable, uuid, varchar, timestamp, boolean, integer, numeric, jsonb, primaryKey, index, uniqueIndex } from 'drizzle-orm/pg-core';
-import { sql } from 'drizzle-orm';
+import { desc, sql } from 'drizzle-orm';
 
 // ----------------------------------------------------
 // CORE DOMAIN
@@ -740,7 +740,17 @@ export const events = pgTable('events', {
   causationId: uuid('causation_id'),
   payload: jsonb('payload').notNull(),
   metadata: jsonb('metadata').default({}).notNull(),
-});
+}, (t) => ({
+  activityPrimaryTimelineIdx: index('events_activity_primary_timeline_idx')
+    .on(t.organizationId, desc(t.recordedAt), desc(t.eventId))
+    .where(sql`${t.correlationId} IS NULL OR (${t.metadata} -> 'grouping' ->> 'role') = 'primary'`),
+  activityCorrelationDetailIdx: index('events_activity_correlation_detail_idx')
+    .on(t.organizationId, t.correlationId, t.occurredAt, t.eventId)
+    .where(sql`${t.correlationId} IS NOT NULL`),
+  activityPrimaryCorrelationUniq: uniqueIndex('events_activity_primary_correlation_uniq')
+    .on(t.organizationId, t.correlationId)
+    .where(sql`${t.correlationId} IS NOT NULL AND (${t.metadata} -> 'grouping' ->> 'role') = 'primary'`),
+}));
 
 // Caches the result of a mutating request keyed by a client-supplied
 // Idempotency-Key header, so retries (after a timeout or offline replay) return

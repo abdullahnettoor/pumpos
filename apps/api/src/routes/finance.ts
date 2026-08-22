@@ -1,8 +1,9 @@
 import { Hono } from 'hono';
 import { type DbClient } from '@pump/db';
-import { canManageFinancialAccounts, isAuthorizedForStation, type Role } from '@pump/shared';
+import { canManageFinancialAccounts, isAuthorizedForStation } from '@pump/shared';
 import { CreateFinancialAccount, UpdateFinancialAccount, SetOpeningBalance, RecordTransfer, RecordSettlement, RecordLedgerAdjustment, type Result } from '@pump/core';
 import { buildContext } from '../infra/context.js';
+import type { AuthenticatedPrincipal } from '../infra/authenticated-principal.js';
 import { loadStationClock } from '../infra/station-clock.js';
 import { runInTransaction } from '../infra/transaction.js';
 import {
@@ -13,13 +14,7 @@ import {
 
 type Variables = {
   db: DbClient;
-  user: {
-    id: string;
-    email: string;
-    organizationId: string;
-    role: Role;
-    assignedStationIds: string[];
-  };
+  user: AuthenticatedPrincipal;
 };
 
 export const financeRouter = new Hono<{ Variables: Variables }>();

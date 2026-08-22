@@ -1,9 +1,10 @@
 import { Hono } from 'hono';
 import { and, desc, eq, gte, lte } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
-import { isAuthorizedForStation, canExportReports, type Role } from '@pump/shared';
+import { isAuthorizedForStation, canExportReports } from '@pump/shared';
 import { GenerateDssr, composeDssr, type Result } from '@pump/core';
 import { buildContext } from '../infra/context.js';
+import type { AuthenticatedPrincipal } from '../infra/authenticated-principal.js';
 import { runInTransaction } from '../infra/transaction.js';
 import {
   DrizzleDssrSnapshotRepository,
@@ -13,13 +14,7 @@ import { DrizzleBusinessDayRepository } from '../infra/repositories/station-ops-
 
 type Variables = {
   db: DbClient;
-  user: {
-    id: string;
-    email: string;
-    organizationId: string;
-    role: Role;
-    assignedStationIds: string[];
-  };
+  user: AuthenticatedPrincipal;
 };
 
 export const dssrRouter = new Hono<{ Variables: Variables }>();

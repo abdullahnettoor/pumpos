@@ -9,6 +9,15 @@ import type { SupplierTransaction, SupplierTransactionRepository } from './ports
 
 export type SupplierPaidFrom = 'SHIFT_CASH' | 'BANK' | 'OWNER' | 'CMS';
 
+function accountLabel(paidFrom: SupplierPaidFrom): string {
+  return {
+    SHIFT_CASH: 'shift cash',
+    BANK: 'bank account',
+    OWNER: 'owner account',
+    CMS: 'CMS account',
+  }[paidFrom];
+}
+
 export interface RecordSupplierPaymentCommand {
   supplierId: string;
   amount: number | string;
@@ -102,6 +111,10 @@ export class RecordSupplierPayment implements UseCase<RecordSupplierPaymentComma
         stationId,
         businessDayId,
         payload: { supplierId: supplier.id, amount: payment.amount, paidFrom, affectsDrawer, shiftId },
+        presentation: {
+          templateId: 'supplier-paid.v1',
+          values: { supplierName: supplier.name, amount: Number(payment.amount), accountName: accountLabel(paidFrom) },
+        },
       }),
       eventFromContext(ctx, {
         eventType: BusinessEvents.PAYMENT_MADE,
@@ -110,6 +123,10 @@ export class RecordSupplierPayment implements UseCase<RecordSupplierPaymentComma
         stationId,
         businessDayId,
         payload: { supplierId: supplier.id, amount: payment.amount, paidFrom },
+        presentation: {
+          templateId: 'payment-made.v1',
+          values: { partyName: supplier.name, amount: Number(payment.amount), accountName: accountLabel(paidFrom) },
+        },
       }),
     ];
     await this.deps.events.publish(events);

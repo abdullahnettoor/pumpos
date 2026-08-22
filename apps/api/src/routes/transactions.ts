@@ -40,7 +40,8 @@ import {
   RecordMerchandiseHandover,
   type Result,
 } from '@pump/core';
-import { buildContext } from '../infra/context.js';
+import { buildContext, createCommandTrace } from '../infra/context.js';
+import type { AuthenticatedPrincipal } from '../infra/authenticated-principal.js';
 import { loadStationClock } from '../infra/station-clock.js';
 import { runInTransaction } from '../infra/transaction.js';
 import { TimestampDocumentNumberGenerator } from '../infra/doc-numbers.js';
@@ -70,13 +71,7 @@ import {
 
 type Variables = {
   db: DbClient;
-  user: {
-    id: string;
-    email: string;
-    organizationId: string;
-    role: Role;
-    assignedStationIds: string[];
-  };
+  user: AuthenticatedPrincipal;
 };
 
 export const transactionsRouter = new Hono<{ Variables: Variables }>();
@@ -185,7 +180,11 @@ transactionsRouter.post('/suppliers', async (c) => {
   const openingStationId: string | undefined = body?.openingStationId ?? body?.stationId ?? undefined;
   const clock = openingDue > 0 && openingStationId ? await loadStationClock(c.var.db, openingStationId) : {};
   const result = await runInTransaction(c.var.db, async (tx, events) => {
-    const created = await new CreateSupplier({ repository: new DrizzleSupplierRepository(tx), events }).execute(body, buildContext(user));
+    const trace = createCommandTrace();
+    const created = await new CreateSupplier({ repository: new DrizzleSupplierRepository(tx), events }).execute(
+      body,
+      buildContext(user, { correlationId: trace.correlationId, groupingRole: 'primary' }),
+    );
     if (!created.success || !(openingDue > 0)) return created;
     if (!openingStationId) return err(validationError('A station is required to record an opening balance.'));
     const ob = await new SetSupplierOpeningBalance({
@@ -195,7 +194,12 @@ transactionsRouter.post('/suppliers', async (c) => {
       events,
     }).execute(
       { supplierId: created.data.id, amount: openingDue, stationId: openingStationId, asOfDate: body?.openingAsOf },
-      buildContext(user, { stationId: openingStationId, ...clock }),
+      buildContext(user, {
+        stationId: openingStationId,
+        correlationId: trace.correlationId,
+        groupingRole: 'related',
+        ...clock,
+      }),
     );
     return ob.success ? created : ob;
   });
@@ -298,7 +302,11 @@ transactionsRouter.post('/customers', async (c) => {
   const openingStationId: string | undefined = body?.openingStationId ?? body?.stationId ?? undefined;
   const clock = openingDue > 0 && openingStationId ? await loadStationClock(c.var.db, openingStationId) : {};
   const result = await runInTransaction(c.var.db, async (tx, events) => {
-    const created = await new CreateCustomer({ repository: new DrizzleCustomerRepository(tx), events }).execute(body, buildContext(user));
+    const trace = createCommandTrace();
+    const created = await new CreateCustomer({ repository: new DrizzleCustomerRepository(tx), events }).execute(
+      body,
+      buildContext(user, { correlationId: trace.correlationId, groupingRole: 'primary' }),
+    );
     if (!created.success || !(openingDue > 0)) return created;
     if (!openingStationId) return err(validationError('A station is required to record an opening balance.'));
     const ob = await new SetCustomerOpeningBalance({
@@ -308,7 +316,12 @@ transactionsRouter.post('/customers', async (c) => {
       events,
     }).execute(
       { customerId: created.data.id, amount: openingDue, stationId: openingStationId, asOfDate: body?.openingAsOf },
-      buildContext(user, { stationId: openingStationId, ...clock }),
+      buildContext(user, {
+        stationId: openingStationId,
+        correlationId: trace.correlationId,
+        groupingRole: 'related',
+        ...clock,
+      }),
     );
     return ob.success ? created : ob;
   });
@@ -977,7 +990,13 @@ transactionsRouter.post('/purchases', async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const clock = await loadStationClock(c.var.db, body?.stationId);
   const result = await runInTransaction(c.var.db, async (tx, events) => {
-    const ctx = buildContext(user, { stationId: body?.stationId, ...clock });
+    const trace = createCommandTrace();
+    const ctx = buildContext(user, {
+      stationId: body?.stationId,
+      correlationId: trace.correlationId,
+      groupingRole: 'primary',
+      ...clock,
+    });
     const r = await new RecordPurchase({
       purchases: new DrizzlePurchaseRepository(tx),
       purchaseItems: new DrizzlePurchaseItemRepository(tx),
@@ -1023,7 +1042,12 @@ transactionsRouter.post('/purchases', async (c) => {
         shifts: new DrizzleShiftRepository(tx),
         businessDays: new DrizzleBusinessDayRepository(tx),
         events,
-      }).execute(paymentBody, ctx);
+      }).execute(paymentBody, buildContext(user, {
+        stationId: body?.stationId,
+        correlationId: trace.correlationId,
+        groupingRole: 'related',
+        ...clock,
+      }));
       if (!pr.success) return pr; // roll the whole purchase back
       await new LedgerPostingService(tx).postSupplierPayment(user.organizationId, pr.data, accountId);
     }
@@ -1076,6 +1100,7 @@ transactionsRouter.post('/sales', async (c) => {
   // T5 — supplier side of place of supply for the frozen line-tax split.
   const supplierStateCode = await loadStationStateCode(c.var.db, body?.stationId, body?.shiftId);
   const result = await runInTransaction(c.var.db, async (tx, events) => {
+    const trace = createCommandTrace();
     let customerId: string | null = body.customerId ?? null;
     let buyerDetails: { name: string; phone: string | null; gstin: string | null; stateCode: string | null } | null = null;
 
@@ -1100,7 +1125,7 @@ transactionsRouter.post('/sales', async (c) => {
         } else {
           const created = await new CreateCustomer({ repository: custRepo, events }).execute(
             { name, customerType: 'Regular', phone, metadata: { ...(gstin ? { gstin } : {}), ...(stateCode ? { stateCode } : {}) } },
-            buildContext(user),
+            buildContext(user, { correlationId: trace.correlationId, groupingRole: 'related' }),
           );
           if (!created.success) return created;
           customerId = created.data.id;
@@ -1119,7 +1144,10 @@ transactionsRouter.post('/sales', async (c) => {
       products: new DrizzleProductRepository(tx),
       docNumbers,
       events,
-    }).execute({ ...body, customerId, buyerDetails, supplierStateCode }, buildContext(user));
+    }).execute(
+      { ...body, customerId, buyerDetails, supplierStateCode },
+      buildContext(user, { correlationId: trace.correlationId, groupingRole: 'primary' }),
+    );
   });
   return sendResult(c, result);
 });

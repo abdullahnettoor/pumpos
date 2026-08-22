@@ -1,4 +1,4 @@
-import { useQueryClient, useQuery, type UseQueryOptions } from '@tanstack/react-query';
+import { useQueryClient, useQuery, useInfiniteQuery, type UseQueryOptions } from '@tanstack/react-query';
 import {
   CloudShiftService,
   CloudTransactionService,
@@ -72,7 +72,8 @@ export const queryKeys = {
   shiftTemplates: () => ['shift-templates'] as const,
   pricing: (stationId: string) => ['pricing', stationId] as const,
   organization: () => ['organization'] as const,
-  events: (stationId: string, type: string) => ['events', stationId, type] as const,
+  activityGroups: (stationId: string, type: string, limit: number) => ['activity-groups', stationId, type, limit] as const,
+  activityGroup: (groupId: string) => ['activity-group', groupId] as const,
   moneyMovements: (stationId: string, from: string, to: string) => ['money-movements', stationId, from, to] as const,
   invoices: (stationId: string, from: string, to: string) => ['invoices', stationId, from, to] as const,
   sales: (stationId: string, from: string, to: string) => ['sales', stationId, from, to] as const,
@@ -148,12 +149,32 @@ export function useOrganization(options?: Options<any>) {
   return useQuery({ queryKey: queryKeys.organization(), queryFn: () => orgSvc.getOrganization(), ...TIER.static, ...options });
 }
 
-export function useEvents(params?: { stationId?: string; type?: string; limit?: number }, options?: Options<any[]>) {
-  return useQuery({
-    queryKey: queryKeys.events(params?.stationId ?? '', params?.type ?? ''),
-    queryFn: () => eventsSvc.getEvents(params),
+export function useActivityGroups(
+  params?: { stationId?: string; type?: string; limit?: number },
+) {
+  const stationId = params?.stationId ?? '';
+  const type = params?.type ?? '';
+  const limit = params?.limit ?? 50;
+  return useInfiniteQuery({
+    queryKey: queryKeys.activityGroups(stationId, type, limit),
+    queryFn: ({ pageParam }) => eventsSvc.getActivityGroups({
+      stationId: params?.stationId,
+      type: params?.type,
+      limit,
+      cursor: pageParam ?? undefined,
+    }),
+    initialPageParam: null as string | null,
+    getNextPageParam: (page) => page.nextCursor,
     ...TIER.operational,
-    ...options,
+  });
+}
+
+export function useActivityGroup(groupId: string | null | undefined) {
+  return useQuery({
+    queryKey: queryKeys.activityGroup(groupId ?? ''),
+    queryFn: () => eventsSvc.getActivityGroup(groupId!),
+    enabled: Boolean(groupId),
+    ...TIER.operational,
   });
 }
 
@@ -471,6 +492,8 @@ export function useInvalidateOperational() {
     // Suppliers carry computed payable balances that move with purchases/payments,
     // and new suppliers are created from PurchasesList — keep them fresh too.
     qc.invalidateQueries({ queryKey: ['suppliers'] });
+    qc.invalidateQueries({ queryKey: ['activity-groups'] });
+    qc.invalidateQueries({ queryKey: ['activity-group'] });
     if (stationId) {
       qc.invalidateQueries({ queryKey: ['inventory-status', stationId] });
       qc.invalidateQueries({ queryKey: ['inventory-items', stationId] });

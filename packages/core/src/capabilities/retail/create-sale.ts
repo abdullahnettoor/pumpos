@@ -225,6 +225,11 @@ export class CreateSale implements UseCase<CreateSaleCommand, CreateSaleResult> 
         stationId: shift.stationId,
         businessDayId: shift.businessDayId,
         payload: { saleId, saleType, paymentMethod: cmd.paymentMethod, totalAmount: sale.totalAmount, customerId: sale.customerId },
+        presentation: {
+          templateId: 'retail-sale.amount.v1',
+          values: { amount: Number(sale.totalAmount), paymentMethod: cmd.paymentMethod },
+        },
+        groupingRole: cmd.paymentMethod === 'Credit' ? 'related' : 'primary',
       }),
     ];
     if (hasFuel) {
@@ -236,6 +241,7 @@ export class CreateSale implements UseCase<CreateSaleCommand, CreateSaleResult> 
           stationId: shift.stationId,
           businessDayId: shift.businessDayId,
           payload: { saleId },
+          groupingRole: 'related',
         }),
       );
     }
@@ -248,6 +254,7 @@ export class CreateSale implements UseCase<CreateSaleCommand, CreateSaleResult> 
           stationId: shift.stationId,
           businessDayId: shift.businessDayId,
           payload: { saleId, customerId: cmd.customerId, amount: sale.totalAmount },
+          groupingRole: 'primary',
         }),
       );
     }

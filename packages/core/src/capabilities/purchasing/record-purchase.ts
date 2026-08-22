@@ -152,6 +152,7 @@ export class RecordPurchase implements UseCase<RecordPurchaseCommand, RecordPurc
 
     const items: PurchaseItem[] = [];
     const movements: StockMovement[] = [];
+    const productNames = new Map<string, string>();
     const headerTotals = { taxable: 0, cgst: 0, sgst: 0, igst: 0, vat: 0, cess: 0, grand: 0 };
     // Per-product accumulator for the weighted-average cost recompute (FB1).
     // Keyed by productId; value = current cost basis + purchased qty & pre-tax
@@ -161,6 +162,7 @@ export class RecordPurchase implements UseCase<RecordPurchaseCommand, RecordPurc
     for (const line of rawLines) {
       const product = await this.deps.products.findById(line.productId);
       if (!product || product.organizationId !== ctx.organizationId) return err(notFoundError('Product', line.productId));
+      productNames.set(product.id, product.name);
 
       const quantity = Number(line.quantity);
       const unitPrice = Number(line.unitPrice);
@@ -316,6 +318,10 @@ export class RecordPurchase implements UseCase<RecordPurchaseCommand, RecordPurc
         stationId,
         businessDayId,
         payload: { purchaseId: purchase.id, supplierId: supplier.id, amount: purchase.amount, lineCount: items.length },
+        presentation: {
+          templateId: 'purchase.v1',
+          values: { supplierName: supplier.name, lineCount: items.length, amount: Number(purchase.amount) },
+        },
       }),
       ...items.map((it) =>
         eventFromContext(ctx, {
@@ -325,6 +331,15 @@ export class RecordPurchase implements UseCase<RecordPurchaseCommand, RecordPurc
           stationId,
           businessDayId,
           payload: { purchaseId: purchase.id, productId: it.productId, quantity: Number(it.quantity) },
+          presentation: {
+            templateId: 'goods-received.v1',
+            values: {
+              quantity: Number(it.quantity),
+              unit: 'units',
+              productName: productNames.get(it.productId) ?? 'product',
+              supplierName: supplier.name,
+            },
+          },
         }),
       ),
       eventFromContext(ctx, {
@@ -334,6 +349,14 @@ export class RecordPurchase implements UseCase<RecordPurchaseCommand, RecordPurc
         stationId,
         businessDayId,
         payload: { purchaseId: purchase.id, supplierId: supplier.id, amount: purchase.amount },
+        presentation: {
+          templateId: 'supplier-invoice.v1',
+          values: {
+            invoiceNumber: purchase.invoiceNumber ?? purchase.documentNumber,
+            supplierName: supplier.name,
+            amount: Number(purchase.amount),
+          },
+        },
       }),
     ];
     await this.deps.events.publish(events);
@@ -341,4 +364,3 @@ export class RecordPurchase implements UseCase<RecordPurchaseCommand, RecordPurc
     return ok({ purchase, items, movements, payable });
   }
 }
-

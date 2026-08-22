@@ -869,14 +869,62 @@ export class CloudOrganizationService {
   }
 }
 
+export type ActivityTone = 'info' | 'success' | 'warning' | 'danger' | 'default';
+
+export interface ActivityActor {
+  kind: 'tenant_user' | 'platform_admin' | 'system' | 'unknown';
+  id: string | null;
+  displayName: string;
+  role: string | null;
+}
+
+export interface ActivityEventItem {
+  eventId: string;
+  eventType: string;
+  title: string;
+  description: string;
+  tone: ActivityTone;
+  actor: ActivityActor;
+  stationId: string | null;
+  stationName: string | null;
+  aggregateType: string;
+  aggregateId: string;
+  occurredAt: string;
+  recordedAt: string;
+  causationId: string | null;
+  groupingRole: 'primary' | 'related';
+  renderStatus: 'rendered' | 'fallback';
+}
+
+export interface ActivityGroupSummary {
+  groupId: string;
+  primary: ActivityEventItem;
+  relatedCount: number;
+  primaryRecordedAt: string;
+}
+
+export interface ActivityGroupDetail extends ActivityGroupSummary {
+  related: ActivityEventItem[];
+}
+
+export interface ActivityPage {
+  items: ActivityGroupSummary[];
+  nextCursor: string | null;
+}
+
 export class CloudEventsService {
-  async getEvents(params?: { stationId?: string; type?: string; limit?: number }): Promise<any[]> {
+  async getActivityGroups(params?: { stationId?: string; type?: string; limit?: number; cursor?: string }): Promise<ActivityPage> {
     const qs = new URLSearchParams();
     if (params?.stationId) qs.set('stationId', params.stationId);
     if (params?.type) qs.set('type', params.type);
     if (params?.limit) qs.set('limit', String(params.limit));
+    if (params?.cursor) qs.set('cursor', params.cursor);
     const suffix = qs.toString() ? `?${qs.toString()}` : '';
-    return request<any[]>(`/activity${suffix}`);
+    return request<ActivityPage>(`/activity${suffix}`);
+  }
+
+  async getActivityGroup(groupId: string): Promise<ActivityGroupDetail> {
+    return request<ActivityGroupDetail>(`/activity/${encodeURIComponent(groupId)}`);
   }
 }
 

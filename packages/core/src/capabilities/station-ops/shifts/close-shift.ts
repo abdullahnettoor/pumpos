@@ -205,6 +205,11 @@ export class CloseShift implements UseCase<CloseShiftCommand, CloseShiftResult> 
         stationId: shift.stationId,
         businessDayId: shift.businessDayId,
         payload: { shiftId: shift.id, closingCash, expectedDrawerCash, cashVariance },
+        presentation: {
+          templateId: 'cash-declared.v1',
+          values: { closingCash },
+        },
+        groupingRole: 'related',
       }),
       eventFromContext(ctx, {
         eventType: BusinessEvents.SHIFT_CLOSED,
@@ -213,6 +218,11 @@ export class CloseShift implements UseCase<CloseShiftCommand, CloseShiftResult> 
         stationId: shift.stationId,
         businessDayId: shift.businessDayId,
         payload: { shiftId: shift.id, totalVolume, totalFuelSalesValue, cashVariance },
+        presentation: {
+          templateId: 'shift-closed.v1',
+          values: { cashVariance },
+        },
+        groupingRole: 'primary',
       }),
     ]);
 

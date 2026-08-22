@@ -8,6 +8,14 @@ import { assertDrawerEntryVoidable } from '../void-guard.js';
 
 export type PaidFrom = 'SHIFT_CASH' | 'BANK' | 'OWNER';
 
+function accountLabel(paidFrom: PaidFrom): string {
+  return {
+    SHIFT_CASH: 'shift cash',
+    BANK: 'bank account',
+    OWNER: 'owner account',
+  }[paidFrom];
+}
+
 export interface Expense {
   id: string;
   shiftId: string | null;
@@ -115,6 +123,10 @@ export class RecordExpense implements UseCase<RecordExpenseCommand, Expense> {
         aggregateId: expense.id,
         businessDayId,
         payload: { expenseId: expense.id, amount: expense.amount, paidFrom, affectsDrawer, shiftId },
+        presentation: {
+          templateId: 'expense.v1',
+          values: { amount: Number(expense.amount), accountName: accountLabel(paidFrom) },
+        },
       }),
     ]);
 

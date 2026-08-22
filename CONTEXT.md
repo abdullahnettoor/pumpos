@@ -254,6 +254,20 @@ carrying `event_id`, `event_type`, `organization_id`, `station_id`,
 `entity_type`, `entity_id`. Drives sync, audit, and reporting; never bypassed.
 _Avoid_: log entry, activity
 
+**Activity Group**:
+The set of Business Events produced by one accepted logical command. New groups
+share a correlation ID and are presented as one audit-feed row.
+
+**Primary Event**:
+The one Business Event in an Activity Group that supplies the group's
+human-readable summary. It is marked `metadata.grouping.role = 'primary'`.
+
+**Related Event**:
+Another Business Event from the same logical command. It shares the Activity
+Group correlation ID, is marked `metadata.grouping.role = 'related'`, and is
+shown beneath the Primary Event. A Related Event is not necessarily caused by
+the Primary Event.
+
 **Transactional Outbox**:
 The pattern where state changes and their events commit atomically in one
 transaction (`runInTransaction`).
