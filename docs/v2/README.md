@@ -24,7 +24,7 @@ docs win. The root [`AGENTS.md`](../../AGENTS.md) is the short, authoritative ru
 > set by default when money touches the physical cash drawer, passable or
 > preselected on other records when shift attribution is useful.**
 
-A shift is an operator-accountability window for drawer cash. Everything else
+A shift is an attendant-accountability window for drawer cash. Everything else
 (card/UPI/bank collections, purchases, credit sales, bank/owner expenses)
 defaults to `shift_id = NULL`, anchored to the **business day**. Drawer
 reconciliation keys off movement kind, never off `shift_id` presence. Getting

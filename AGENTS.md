@@ -36,7 +36,7 @@ important domain rule:
 
 * **`business_day_id`** is the **universal anchor**. Every operational and
   financial record belongs to a business day.
-* **`shift_id`** is an **optional** anchor. A shift is an operator-accountability
+* **`shift_id`** is an **optional** anchor. A shift is an attendant-accountability
   window for drawer cash. It is set by default when money touches the physical
   drawer (and for sales), and may be passed explicitly or preselected on other
   records when shift attribution is useful.
@@ -59,7 +59,7 @@ Reports
 
 Anchoring rules (DO NOT couple everything to a shift):
 
-* Fuel/merchandise **sales** occur within a shift (operator accountability) →
+* Fuel/product **sales** occur within a shift (attendant accountability) →
   `shift_id` set by default.
 * **Cash** collections / cash supplier payments / drawer (`SHIFT_CASH`) expenses
   touch the drawer → `shift_id` set by default.
@@ -207,9 +207,9 @@ Opening readings should default from previous closing readings.
 
 ---
 
-## Manual Sales
+## Product Sales
 
-Manual sales are used for:
+Product sales (formerly "manual sales") are used for:
 
 ```text
 Engine Oil
@@ -218,7 +218,8 @@ Grease
 Accessories
 ```
 
-Manual sales are separate from fuel sales.
+Product sales are separate from fuel sales, which derive from nozzle readings.
+See `CONTEXT.md` ("Sale", "Fuel Sale", "Product Sale") for the shared language.
 
 ---
 
@@ -345,13 +346,14 @@ Assume Row-Level Security (RLS) is mandatory.
 
 # Authorization Rules
 
-Current MVP Roles:
+Current Roles (code is source of truth — see `guards.ts`):
 
 ```text
 Owner
 Manager
 Accountant
 Staff
+Attendant   ← mobile-only; accountable for one Dispenser Unit (DU) per shift
 ```
 
 Do not introduce additional roles unless explicitly requested.

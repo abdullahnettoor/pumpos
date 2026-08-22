@@ -24,8 +24,8 @@ Business Date.
 _Avoid_: cutoff, open time
 
 **Shift**:
-An operator-accountability window inside a Business Day. A Business Day has one
-or more Shifts; day-anchored financials need none.
+An attendant-accountability window inside a Business Day. A Business Day has
+one or more Shifts; day-anchored financials need none.
 _Avoid_: slot, rotation, session, duty
 
 **Anchoring Rule**:
@@ -49,45 +49,77 @@ Start, tanks, dispensers, and nozzles.
 _Avoid_: site, outlet, pump (reserved for the hardware sense)
 
 **Dispenser**:
-A fuel-dispensing unit at a Station holding one or more Nozzles.
-_Avoid_: pump unit, du
+A fuel-dispensing unit ("DU") at a Station holding one or more Nozzles.
+_Avoid_: pump, du (standalone)
+
+**Attendant**:
+The staff role accountable for one specific Dispenser Unit during a Shift;
+assigned per shift via `shift_staff_assignments`. Generic UX copy may say
+"operator" for any app user, but the shift-accountable person is always the
+Attendant.
+_Avoid_: operator, pumper
+
+**Role**:
+Authorization level for app users: Owner, Manager, Accountant, Staff (console),
+Attendant (mobile-only, DU-scoped). `guards.ts` is the source of truth.
+_Avoid_: user type, permission group
 
 **Nozzle**:
 The metered dispensing point whose readings derive all Fuel Sales.
 _Avoid_: hose, gun
 
-## Fuel Operations
+**Shift Template**:
+A named recurring Shift window (start/end HH:MM) used to prefill Shift
+opening.
+_Avoid_: roster, schedule
+
+**Payment Terminal**:
+A registered card/UPI machine (TID) at a Station, optionally linked to a Shift
+at open; its settlements land in its Merchant Clearing Account.
+_Avoid_: POS machine, swipe machine
+
+## Sales
 
 **Nozzle Reading**:
 A meter snapshot taken on a Nozzle at a moment in a Shift. Opening readings
 default from the previous closing.
 _Avoid_: meter reading, dial reading
 
+**Sale**:
+One recorded sale at a Station — the receipt-level record — typed by its lines
+as `Fuel`, `Product`, `Mixed`, or `Credit`.
+_Avoid_: transaction, bill, invoice (reserved for GST invoicing)
+
 **Fuel Sale**:
-Volume derived as Closing Reading − Opening Reading. Never entered manually;
-never re-moves stock.
+A Sale whose volume derives from Nozzle Reading deltas (Closing − Opening).
+Never entered by hand; never re-moves stock.
 _Avoid_: pump sale, petrol sale
 
-**Manual Sale**:
-A non-fuel line item (engine oil, coolant, grease, accessories) recorded
-directly, separate from Fuel Sales.
-_Avoid_: product sale, lube sale, misc sale
+**Product Sale**:
+A Sale of directly-entered non-fuel lines — engine oil, coolant, grease,
+accessories. What earlier docs called a manual sale.
+_Avoid_: manual sale, merchandise sale, lube sale
 
 ## Money Movements
 
 **Drawer**:
-The physical cash box a Shift operator is accountable for. Only cash touches
-it.
+The physical cash box an Attendant is accountable for during a Shift. Only cash
+touches it.
 _Avoid_: till, cashbox, register
 
 **Collection**:
-Money received from a customer against dues or at point of sale. Cash
-Collections touch the Drawer; card/UPI/bank/online Collections do not.
+A customer payment settling dues — emits `CREDIT_PAYMENT_RECEIVED` and credits
+the customer ledger. Cash Collections touch the Drawer; card/UPI/bank do not.
 _Avoid_: receipt, payment-in
 
 **Expense**:
 Money paid out. Drawer Expenses hit the Drawer; bank/owner Expenses do not.
 _Avoid_: cost, spend
+
+**Income**:
+Non-customer money-in (commissions, rent, scrap) recorded into a Financial
+Account with its GST split frozen at capture.
+_Avoid_: other income, misc income
 
 **Supplier Payment**:
 Money paid to a supplier. Cash payments touch the Drawer; bank payments do not.
@@ -112,10 +144,64 @@ Cash moved out of the Drawer mid-shift (e.g., to a safe), reducing expected
 drawer cash.
 _Avoid_: safe drop, remittance
 
+**Handover**:
+The documented pre-close handoff from an outgoing Attendant: the handed-over
+cash plus meter state, recorded just before Shift close.
+_Avoid_: shift change, takeover, exchange
+
+**Cash Declaration**:
+The total Drawer cash an Attendant declares at Shift close (`CASH_DECLARED`),
+compared against expected drawer cash to produce the cash Variance.
+_Avoid_: cash stated, declared amount
+
 **Drawer Reconciliation**:
 At shift close: `opening + cash sales + cash collections − drawer expenses −
 drawer supplier payments − cash drops`. Card/UPI/bank/credit never enter it.
 _Avoid_: cash count, tally
+
+## Customers & Cards
+
+**Customer**:
+A person or organization buying fuel or products; typed `Regular`, `Credit`,
+or `Fleet`.
+_Avoid_: client, party, khata owner
+
+**Fleet Customer**:
+A Credit-type Customer operating Vehicles on credit terms; may settle through
+an OMC Wallet or directly against receivables.
+_Avoid_: corporate customer
+
+**Vehicle**:
+A registered vehicle under a Customer, linkable to credit sales.
+_Avoid_: truck, car
+
+**OMC Wallet**:
+The prepaid wallet-style account held for an Oil Marketing Company: fleet and
+card money is credited into it, and fuel sold on OMC cards settles against it.
+Implemented as a `CMS`-type Financial Account.
+_Avoid_: wallet (standalone), fuel-card account
+
+**OMC Card Sale**:
+Fuel dispensed against an Oil Marketing Company card; settles into the OMC
+Wallet — never Drawer cash, never a station receivable.
+_Avoid_: fuel-card sale
+
+## Finance & Ledger
+
+**Financial Account**:
+A named money bucket ledger entries post against: `CASH_IN_HAND` (the Drawer),
+`PETTY_CASH`, `BANK`, `MERCHANT_CLEARING`, `CMS` (the OMC Wallet), `OWNER`.
+_Avoid_: ledger, account (standalone)
+
+**Merchant Clearing Account**:
+The Financial Account where Payment Terminal settlements accumulate before bank
+credit, net of MDR.
+_Avoid_: settlement account, PG account
+
+**Ledger Entry**:
+A single in/out posting against a Financial Account, typed by source (`SALE_*`,
+`COLLECTION`, `EXPENSE`, `INCOME`, `SUPPLIER_PAYMENT`, …).
+_Avoid_: journal entry, transaction line
 
 ## Inventory
 
@@ -128,6 +214,19 @@ _Avoid_: stock entry, inventory adjustment
 Expected Stock − Actual Stock, always surfaced with a reason. First-class,
 never hidden inside reports.
 _Avoid_: difference, delta, shortage, loss
+
+**Tank Dip**:
+A physical fuel-level measurement of a Tank converted to volume; bulk fuel
+stock counts are dips.
+_Avoid_: gauging, stick reading
+
+**Physical Count**:
+A counted stock-take of non-fuel items, compared against book stock.
+_Avoid_: stock audit
+
+**Tank Transfer**:
+Fuel moved between two Tanks without a sale.
+_Avoid_: inter-tank move, decanting
 
 ## Reports & Snapshots
 

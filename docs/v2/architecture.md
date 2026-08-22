@@ -34,7 +34,7 @@ Two anchors exist, and choosing the right one is the most important domain decis
 
 - **`business_day_id`** — the **universal anchor**. Every operational and financial
   record belongs to a business day.
-- **`shift_id`** — an **optional** anchor. A shift is an operator-accountability
+- **`shift_id`** — an **optional** anchor. A shift is an attendant-accountability
   window for drawer cash. Set by default when money touches the drawer; other
   records may pass it explicitly (or preselect the open shift) when shift
   attribution of historical data is useful.
