@@ -1,9 +1,9 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import {
   Receipt, Wallet, ShoppingCart, ShoppingBag, CreditCard, Users, Truck, Package, FileText, Banknote,
   ArrowUpRight, LogOut, TriangleAlert, Clock, LayoutDashboard, Fuel,
 } from 'lucide-react';
-import { resolveBusinessDate, type Station } from '@pump/shared';
+import { type Station } from '@pump/shared';
 import type { NavIntent } from './AppShell.js';
 import { openQuickEntry } from '../quick-entry/store.js';
 import {
@@ -16,6 +16,7 @@ import {
 } from '../query/hooks.js';
 import { useStationAlerts } from '../query/useStationAlerts.js';
 import { inr } from '../utils/format.js';
+import { useStationBusinessDate } from '../hooks/useStationBusinessDate.js';
 
 /**
  * AppTopBar — the data container that wires the pure pump-ds `TopBar` +
@@ -83,12 +84,7 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
 
   // --- business day ---
   const settings: any = (selectedStation as any)?.settings || {};
-  const [clockTick, setClockTick] = useState(() => Date.now());
-  useEffect(() => {
-    const timer = window.setInterval(() => setClockTick(Date.now()), 30_000);
-    return () => window.clearInterval(timer);
-  }, []);
-  const businessIso = resolveBusinessDate({ now: new Date(clockTick), timeZone: settings.timezone, dayStartsAt: settings.business_day_starts_at });
+  const businessIso = useStationBusinessDate(settings.timezone, settings.business_day_starts_at);
   const businessDate = formatDayLabel(businessIso);
   const dayStatusQ = useBusinessDayStatus(stationId, businessIso, { enabled: !!stationId && stationReady } as any);
   const dayStatus = dayStatusQ.data;

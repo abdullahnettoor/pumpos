@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { FixedClock, InMemoryEventStore, InProcessEventDispatcher, SequentialIdGenerator, BusinessEvents } from '../../../kernel/index.js';
 import type { ExecutionContext } from '../../../kernel/index.js';
 import { GenerateDssr } from './generate-dssr.js';
+import { CloseBusinessDayAndGenerateDssr } from './close-business-day.js';
 import type { DssrDataReader, DssrSnapshot, DssrSnapshotRepository, DssrSourceData } from './ports.js';
 import type { BusinessDay, BusinessDayRepository } from '../../station-ops/business-days/index.js';
 
@@ -18,8 +19,14 @@ class SnapRepo implements DssrSnapshotRepository {
 class BdRepo implements BusinessDayRepository {
   constructor(readonly rows: BusinessDay[]) {}
   async findById(id: string) { return this.rows.find((r) => r.id === id) ?? null; }
-  async save() {}
+  async save(day: BusinessDay) {
+    const index = this.rows.findIndex((row) => row.id === day.id);
+    if (index >= 0) this.rows[index] = day;
+  }
   async findOpenByStation() { return null; }
+  async findByStationAndDate(orgId: string, stationId: string, date: string) {
+    return this.rows.find((row) => row.organizationId === orgId && row.stationId === stationId && row.businessDate === date) ?? null;
+  }
 }
 class Reader implements DssrDataReader {
   constructor(private readonly data: DssrSourceData) {}
@@ -134,5 +141,43 @@ describe('GenerateDssr', () => {
       events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
     }).execute({ businessDayId: 'nope' }, ctx());
     expect(result.success).toBe(false);
+  });
+});
+
+describe('CloseBusinessDayAndGenerateDssr', () => {
+  const openDay = (): BusinessDay => ({ ...bday(), status: 'OPEN', closedBy: null, closedAt: null });
+
+  it('closes the day and generates its DSSR', async () => {
+    const businessDays = new BdRepo([openDay()]);
+    const snapshots = new SnapRepo();
+    const result = await new CloseBusinessDayAndGenerateDssr({
+      businessDays, openShifts: { hasOpenShift: async () => false }, snapshots, dssrData: new Reader(source()),
+      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
+    }).execute({ businessDayId: 'bd-1', stationId: 'st-1' }, ctx());
+    expect(result.success).toBe(true);
+    expect(businessDays.rows[0].status).toBe('CLOSED');
+    expect(snapshots.rows).toHaveLength(1);
+  });
+
+  it('rejects closure while the day has an open Shift', async () => {
+    const businessDays = new BdRepo([openDay()]);
+    const result = await new CloseBusinessDayAndGenerateDssr({
+      businessDays, openShifts: { hasOpenShift: async () => true }, snapshots: new SnapRepo(), dssrData: new Reader(source()),
+      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
+    }).execute({ businessDayId: 'bd-1', stationId: 'st-1' }, ctx());
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error.code).toBe('INVARIANT_VIOLATION');
+    expect(businessDays.rows[0].status).toBe('OPEN');
+  });
+
+  it('preserves an existing immutable DSSR during close', async () => {
+    const snapshots = new SnapRepo();
+    snapshots.rows.push({ id: 'existing', organizationId: 'org-1', stationId: 'st-1', businessDate: '2026-03-15', generatedAt: 'earlier', snapshotData: { marker: 'original' } });
+    const result = await new CloseBusinessDayAndGenerateDssr({
+      businessDays: new BdRepo([openDay()]), openShifts: { hasOpenShift: async () => false }, snapshots, dssrData: new Reader(source()),
+      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
+    }).execute({ businessDayId: 'bd-1', stationId: 'st-1' }, ctx());
+    expect(result.success).toBe(true);
+    expect(snapshots.rows).toEqual([expect.objectContaining({ id: 'existing', generatedAt: 'earlier', snapshotData: { marker: 'original' } })]);
   });
 });

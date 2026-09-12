@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
 import { useQueryClient } from '@tanstack/react-query';
 import { CalendarRange, Check, Info, Lock } from 'lucide-react';
-import { resolveBusinessDate } from '@pump/shared';
 import { KpiStrip, KpiTile, Panel, StatusChip, Chip, DateText, EmptyState, Button } from '../../pump-ds/index.js';
 import { DataTable } from '../primitives/DataTable.js';
 import { useToast } from '../primitives/ToastProvider.js';
@@ -10,6 +9,7 @@ import { useConfirm } from '../primitives/ConfirmDialog.js';
 import { CloudShiftService } from '../../services/cloud.js';
 import { inr, formatDate, formatQty } from '../../utils/format.js';
 import { useBusinessDayStatus, useDailyDssrPreview, useShiftStatus, useInvalidateOperational, useCustomers, queryKeys } from '../../query/hooks.js';
+import { useStationBusinessDate } from '../../hooks/useStationBusinessDate.js';
 
 const shiftService = new CloudShiftService();
 
@@ -62,15 +62,7 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
 }) => {
   const stationId = selectedStation?.id ?? null;
   const settings = (selectedStation?.settings ?? {}) as { timezone?: string; business_day_starts_at?: string };
-  const [clockTick, setClockTick] = useState(() => Date.now());
-  useEffect(() => {
-    const timer = window.setInterval(() => setClockTick(Date.now()), 30_000);
-    return () => window.clearInterval(timer);
-  }, []);
-  const currentBusinessDate = useMemo(
-    () => resolveBusinessDate({ now: new Date(clockTick), timeZone: settings.timezone, dayStartsAt: settings.business_day_starts_at }),
-    [clockTick, settings.timezone, settings.business_day_starts_at],
-  );
+  const currentBusinessDate = useStationBusinessDate(settings.timezone, settings.business_day_starts_at);
   const [businessDate, setBusinessDate] = useState(currentBusinessDate);
   const initializedStationId = useRef<string | null>(null);
 
@@ -84,7 +76,8 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
   const previewQ = useDailyDssrPreview(stationId, businessDate, { enabled: !!stationId } as any);
   const currentBusinessDayStatusQ = useBusinessDayStatus(stationId, currentBusinessDate, { enabled: !!stationId } as any);
   const businessDayStatusQ = useBusinessDayStatus(stationId, businessDate, { enabled: !!stationId } as any);
-  const { data: shiftStatus } = useShiftStatus(stationId, true, { enabled: !!stationId } as any);
+  const shiftStatusQ = useShiftStatus(stationId, true, { enabled: !!stationId } as any);
+  const shiftStatus = shiftStatusQ.data;
   const activeShift = (shiftStatus as any)?.activeShift;
 
   // EOD-cycle customers still carrying a receivable that's expected cleared by
@@ -107,12 +100,13 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
   }, [currentBusinessDayStatusQ.data]);
 
   useEffect(() => {
-    if (!stationId || initializedStationId.current === stationId || currentBusinessDayStatusQ.isPending) return;
-    const activeDay = openBusinessDays.find((day: any) => day.id === activeBusinessDayId);
+    if (!stationId || initializedStationId.current === stationId || currentBusinessDayStatusQ.isFetching || shiftStatusQ.isFetching) return;
+    const resolvedActiveBusinessDayId = activeShift?.businessDayId ?? activeBusinessDayId;
+    const activeDay = openBusinessDays.find((day: any) => day.id === resolvedActiveBusinessDayId);
     setBusinessDate(requestedBusinessDate || activeDay?.businessDate || currentBusinessDate);
     initializedStationId.current = stationId;
     if (requestedBusinessDate) onBusinessDateSelected?.();
-  }, [stationId, activeBusinessDayId, requestedBusinessDate, currentBusinessDate, openBusinessDays, currentBusinessDayStatusQ.isPending, onBusinessDateSelected]);
+  }, [stationId, activeBusinessDayId, activeShift?.businessDayId, requestedBusinessDate, currentBusinessDate, openBusinessDays, currentBusinessDayStatusQ.isFetching, shiftStatusQ.isFetching, onBusinessDateSelected]);
 
   useEffect(() => {
     if (!requestedBusinessDate) return;
@@ -134,7 +128,7 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
         header: 'Closed',
         cell: ({ row }) =>
           row.original.closedAt ? (
-            <DateText value={row.original.closedAt} variant="time" />
+            <span>{formatStationActivity(row.original.closedAt, settings.timezone)}</span>
           ) : (
             <Chip tone="success" size="xs">Open</Chip>
           ),
@@ -169,7 +163,7 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
         },
       },
     ],
-    [],
+    [settings.timezone],
   );
 
   const status = businessDayStatusQ.data?.requestedState;
@@ -209,7 +203,7 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
     if (!ok) return;
     try {
       setClosing(true);
-      await shiftService.closeBusinessDay(snap.businessDayId);
+      await shiftService.closeBusinessDay(snap.businessDayId, stationId);
       toast.success('Business day closed · DSSR generated.');
       invalidateOperational(stationId);
       qc.invalidateQueries({ queryKey: queryKeys.dssr(stationId, businessDate) });

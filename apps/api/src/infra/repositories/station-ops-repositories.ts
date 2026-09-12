@@ -167,6 +167,13 @@ export class DrizzleBusinessDayRepository implements BusinessDayRepository {
 // ---------------- Shifts ----------------
 export class DrizzleShiftRepository implements ShiftRepository {
   constructor(private readonly db: DbClient) {}
+  async hasOpenShift(businessDayId: string): Promise<boolean> {
+    const [row] = await this.db.select({ id: schema.shifts.id }).from(schema.shifts).where(and(
+      eq(schema.shifts.businessDayId, businessDayId),
+      eq(schema.shifts.status, 'OPEN'),
+    )).limit(1);
+    return Boolean(row);
+  }
   private toEntity(r: typeof schema.shifts.$inferSelect): Shift {
     return {
       id: r.id,

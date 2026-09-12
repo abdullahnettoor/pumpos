@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isValidBusinessDate } from '../utils/business-date.js';
 
 const timeStringSchema = z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/, 'Time must be in HH:MM format');
 
@@ -11,6 +12,26 @@ const weekdaySchema = z.enum([
   'SATURDAY',
   'SUNDAY',
 ]);
+
+export type OpenShiftBusinessDayState = 'OPEN' | 'CLOSED' | 'NOT_CREATED' | 'UNKNOWN' | 'UNAVAILABLE';
+
+export function createOpenShiftFormSchema(currentBusinessDate: string, businessDayState: OpenShiftBusinessDayState) {
+  return z.object({
+    shiftTemplateId: z.string().min(1, 'Choose a Shift Template'),
+    businessDate: z.string().refine(isValidBusinessDate, 'Choose a valid Business Date'),
+    openingCash: z.coerce.number().nonnegative('Opening cash cannot be negative'),
+  }).superRefine((values, ctx) => {
+    if (values.businessDate > currentBusinessDate) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['businessDate'], message: 'Future Business Dates are unavailable' });
+    } else if (businessDayState === 'CLOSED') {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['businessDate'], message: 'This Business Day is closed' });
+    } else if (businessDayState === 'UNKNOWN' || businessDayState === 'UNAVAILABLE') {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['businessDate'], message: 'Business Day status is unavailable' });
+    }
+  });
+}
+
+export type OpenShiftFormValues = z.input<ReturnType<typeof createOpenShiftFormSchema>>;
 
 export const organizationSchema = z.object({
   name: z.string().min(2, 'Organization name must be at least 2 characters'),
@@ -493,4 +514,3 @@ export const merchandiseSaleEntryFormSchema = z.object({
   path: ['customerId'],
 });
 export type MerchandiseSaleEntryFormValues = z.infer<typeof merchandiseSaleEntryFormSchema>;
-

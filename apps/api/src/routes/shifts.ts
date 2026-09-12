@@ -9,8 +9,7 @@ import {
   ReopenShift,
   LockShift,
   OpenBusinessDay,
-  CloseBusinessDay,
-  GenerateDssr,
+  CloseBusinessDayAndGenerateDssr,
   GetBusinessDayStatus,
   type Result,
 } from '@pump/core';
@@ -1218,42 +1217,18 @@ shiftsRouter.post('/business-day/close', async (c) => {
   }
   const body = await c.req.json().catch(() => ({}));
   const db = c.var.db;
+  if (!body?.stationId || !isAuthorizedForStation(user, { organizationId: user.organizationId, stationId: body.stationId })) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this Station' } }, 403);
+  }
   const result = await runInTransaction(db, async (tx, events) => {
-    const [businessDay] = await tx
-      .select()
-      .from(schema.businessDays)
-      .where(and(
-        eq(schema.businessDays.id, body?.businessDayId ?? ''),
-        eq(schema.businessDays.organizationId, user.organizationId),
-      ))
-      .limit(1);
-    if (!businessDay) {
-      return { success: false, error: { code: 'NOT_FOUND' as const, message: 'Business Day not found' } };
-    }
-    if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId: businessDay.stationId })) {
-      return { success: false, error: { code: 'FORBIDDEN' as const, message: 'No access to this Station' } };
-    }
-    const [openShift] = await tx
-      .select({ id: schema.shifts.id })
-      .from(schema.shifts)
-      .where(and(eq(schema.shifts.businessDayId, businessDay.id), eq(schema.shifts.status, 'OPEN')))
-      .limit(1);
-    if (openShift) {
-      return { success: false, error: { code: 'INVARIANT_VIOLATION' as const, message: 'Close the open Shift before closing this Business Day' } };
-    }
     const businessDays = new DrizzleBusinessDayRepository(tx);
-    const closed = await new CloseBusinessDay({ repository: businessDays, events }).execute(body, buildContext(user));
-    if (!closed.success) return closed;
-    const generated = await new GenerateDssr({
+    return new CloseBusinessDayAndGenerateDssr({
       businessDays,
+      openShifts: new DrizzleShiftRepository(tx),
       snapshots: new DrizzleDssrSnapshotRepository(tx),
-      reader: new DrizzleDssrDataReader(tx),
+      dssrData: new DrizzleDssrDataReader(tx),
       events,
-    }).execute({ businessDayId: body.businessDayId, force: true }, buildContext(user, {
-      stationId: closed.data.stationId,
-      businessDayId: closed.data.id,
-    }));
-    return generated.success ? closed : generated;
+    }).execute(body, buildContext(user, { stationId: body.stationId, businessDayId: body.businessDayId }));
   });
   return sendResult(c, result);
 });

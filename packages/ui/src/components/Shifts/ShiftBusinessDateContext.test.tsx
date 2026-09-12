@@ -5,6 +5,8 @@ import { ShiftBusinessDateContext } from './ShiftBusinessDateContext.js';
 import { ShiftControlBar } from './ShiftControlBar.js';
 import { ShiftCloseSuccess } from './ShiftCloseSuccess.js';
 import { OpenShiftForm } from './OpenShiftForm.js';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { queryKeys } from '../../query/hooks.js';
 
 const historical = {
   businessDate: '2026-09-10',
@@ -16,9 +18,18 @@ const historical = {
 
 describe('ShiftBusinessDateContext', () => {
   it('keeps historical context visible on the open form with eligible date choices', () => {
-    const html = renderToStaticMarkup(<OpenShiftForm
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(queryKeys.businessDayStatus('station-1', '2026-09-10'), {
+      requestedState: 'OPEN',
+      openBusinessDays: [
+        { id: 'past', businessDate: '2026-09-10', status: 'OPEN', openedAt: '', closedAt: null, openShiftCount: 0, closedShiftCount: 1, lastActivityAt: '' },
+        { id: 'future', businessDate: '2026-09-13', status: 'OPEN', openedAt: '', closedAt: null, openShiftCount: 0, closedShiftCount: 0, lastActivityAt: '' },
+      ],
+    });
+    const html = renderToStaticMarkup(<QueryClientProvider client={queryClient}><OpenShiftForm
       lastShiftSummary={null}
       lastShift={{ id: 'previous' }}
+      stationId="station-1"
       templates={[{ id: 'template-1', name: 'Morning', startTime: '06:00', endTime: '14:00' }]}
       dispensers={[]}
       staff={[]}
@@ -27,18 +38,10 @@ describe('ShiftBusinessDateContext', () => {
       terminalAssignments={[]}
       onTerminalAssignmentChange={() => {}}
       selectedTemplateId="template-1"
-      onTemplateChange={() => {}}
       businessDate="2026-09-10"
       currentBusinessDate="2026-09-12"
       timeZone="Asia/Kolkata"
-      businessDayState="OPEN"
-      openBusinessDays={[
-        { id: 'past', businessDate: '2026-09-10', status: 'OPEN', openedAt: '', closedAt: null, openShiftCount: 0, closedShiftCount: 1, lastActivityAt: '' },
-        { id: 'future', businessDate: '2026-09-13', status: 'OPEN', openedAt: '', closedAt: null, openShiftCount: 0, closedShiftCount: 0, lastActivityAt: '' },
-      ]}
-      onBusinessDateChange={() => {}}
       openingCash={0}
-      onOpeningCashChange={() => {}}
       staffAssignments={[]}
       onStaffAssignmentChange={() => {}}
       initialReadings={[]}
@@ -46,7 +49,7 @@ describe('ShiftBusinessDateContext', () => {
       isOpening={false}
       onSubmit={() => {}}
       onViewLastShiftSummary={() => {}}
-    />);
+    /></QueryClientProvider>);
     expect(html).toContain('Shift Business Date · 10 Sept 2026');
     expect(html).toContain('Scheduled Shift Window · 06:00–14:00');
     expect(html).toContain('Working on 10 Sept 2026. Actions are being recorded on 12 Sept 2026.');

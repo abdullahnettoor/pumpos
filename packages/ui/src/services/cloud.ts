@@ -461,10 +461,10 @@ export class CloudShiftService {
     });
   }
 
-  async closeBusinessDay(businessDayId: string): Promise<any> {
+  async closeBusinessDay(businessDayId: string, stationId: string): Promise<any> {
     return request<any>('/shifts/business-day/close', {
       method: 'POST',
-      body: JSON.stringify({ businessDayId }),
+      body: JSON.stringify({ businessDayId, stationId }),
     });
   }
 

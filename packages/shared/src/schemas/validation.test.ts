@@ -1,7 +1,22 @@
 import { describe, it, expect } from 'vitest';
-import { stationSchema, nozzleReadingSchema, supplierPaymentSchema, shiftPurchaseSchema, onboardingDraftSchema, finalizeOnboardingSchema } from './validation.js';
+import { stationSchema, nozzleReadingSchema, supplierPaymentSchema, shiftPurchaseSchema, onboardingDraftSchema, finalizeOnboardingSchema, createOpenShiftFormSchema } from './validation.js';
 
 describe('Validation Schemas Tests', () => {
+  describe('createOpenShiftFormSchema', () => {
+    const values = { shiftTemplateId: 'template-1', businessDate: '2026-09-12', openingCash: 0 };
+
+    it('accepts current and earlier eligible Business Dates', () => {
+      const schema = createOpenShiftFormSchema('2026-09-12', 'NOT_CREATED');
+      expect(schema.safeParse(values).success).toBe(true);
+      expect(schema.safeParse({ ...values, businessDate: '2026-09-10' }).success).toBe(true);
+    });
+
+    it('rejects future and closed Business Dates', () => {
+      expect(createOpenShiftFormSchema('2026-09-12', 'NOT_CREATED').safeParse({ ...values, businessDate: '2026-09-13' }).success).toBe(false);
+      expect(createOpenShiftFormSchema('2026-09-12', 'CLOSED').safeParse(values).success).toBe(false);
+    });
+  });
+
   describe('stationSchema', () => {
     it('should validate correct station inputs', () => {
       const valid = {
