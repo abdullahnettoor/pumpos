@@ -199,7 +199,9 @@ export const shifts = pgTable('shifts', {
   closingCash: numeric('closing_cash', { precision: 12, scale: 2 }),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
-});
+}, (t) => ({
+  oneOpenPerStation: uniqueIndex('shifts_station_open_uniq').on(t.organizationId, t.stationId).where(sql`${t.status} = 'OPEN'`),
+}));
 
 export const shiftStaffAssignments = pgTable('shift_staff_assignments', {
   id: uuid('id').defaultRandom().primaryKey(),

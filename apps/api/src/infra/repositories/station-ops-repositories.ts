@@ -1,8 +1,11 @@
-import { and, eq, inArray, desc } from 'drizzle-orm';
+import { and, eq, inArray, desc, lt, sql } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
 import type {
   BusinessDay,
   BusinessDayRepository,
+  BusinessDayLock,
+  BusinessDayStatusReader,
+  BusinessDayStatusItem,
   Shift,
   ShiftRepository,
   StaffAssignmentInput,
@@ -18,7 +21,68 @@ import type {
   ShiftSummaryWriter,
 } from '@pump/core';
 
-export class DrizzleBusinessDayRepository implements BusinessDayRepository {
+export class DrizzleBusinessDayStatusReader implements BusinessDayStatusReader {
+  constructor(private readonly db: DbClient) {}
+
+  private projection() {
+    return {
+      id: schema.businessDays.id,
+      businessDate: schema.businessDays.businessDate,
+      status: schema.businessDays.status,
+      openedAt: schema.businessDays.openedAt,
+      closedAt: schema.businessDays.closedAt,
+      openShiftCount: sql<number>`(SELECT COUNT(*)::int FROM shifts s WHERE s.business_day_id = ${schema.businessDays.id} AND s.status = 'OPEN')`,
+      closedShiftCount: sql<number>`(SELECT COUNT(*)::int FROM shifts s WHERE s.business_day_id = ${schema.businessDays.id} AND s.status IN ('CLOSED', 'LOCKED'))`,
+      lastActivityAt: sql<Date>`GREATEST(
+        ${schema.businessDays.updatedAt},
+        COALESCE((SELECT MAX(s.updated_at) FROM shifts s WHERE s.business_day_id = ${schema.businessDays.id}), ${schema.businessDays.updatedAt}),
+        COALESCE((SELECT MAX(e.occurred_at) FROM events e WHERE e.business_day_id = ${schema.businessDays.id}), ${schema.businessDays.updatedAt})
+      )`,
+    };
+  }
+
+  private toItem(row: any): BusinessDayStatusItem {
+    return {
+      ...row,
+      status: row.status as BusinessDayStatusItem['status'],
+      openedAt: row.openedAt.toISOString(),
+      closedAt: row.closedAt?.toISOString() ?? null,
+      openShiftCount: Number(row.openShiftCount),
+      closedShiftCount: Number(row.closedShiftCount),
+      lastActivityAt: row.lastActivityAt.toISOString(),
+    };
+  }
+
+  async findByDate(organizationId: string, stationId: string, businessDate: string): Promise<BusinessDayStatusItem | null> {
+    const [row] = await this.db.select(this.projection()).from(schema.businessDays).where(and(
+      eq(schema.businessDays.organizationId, organizationId),
+      eq(schema.businessDays.stationId, stationId),
+      eq(schema.businessDays.businessDate, businessDate),
+    )).limit(1);
+    return row ? this.toItem(row) : null;
+  }
+
+  async listPastOpen(organizationId: string, stationId: string, currentBusinessDate: string): Promise<BusinessDayStatusItem[]> {
+    const rows = await this.db.select(this.projection()).from(schema.businessDays).where(and(
+      eq(schema.businessDays.organizationId, organizationId),
+      eq(schema.businessDays.stationId, stationId),
+      eq(schema.businessDays.status, 'OPEN'),
+      lt(schema.businessDays.businessDate, currentBusinessDate),
+    )).orderBy(desc(schema.businessDays.businessDate));
+    return rows.map((row) => this.toItem(row));
+  }
+
+  async listOpen(organizationId: string, stationId: string): Promise<BusinessDayStatusItem[]> {
+    const rows = await this.db.select(this.projection()).from(schema.businessDays).where(and(
+      eq(schema.businessDays.organizationId, organizationId),
+      eq(schema.businessDays.stationId, stationId),
+      eq(schema.businessDays.status, 'OPEN'),
+    )).orderBy(desc(schema.businessDays.businessDate));
+    return rows.map((row) => this.toItem(row));
+  }
+}
+
+export class DrizzleBusinessDayRepository implements BusinessDayRepository, BusinessDayLock {
   constructor(private readonly db: DbClient) {}
 
   private toEntity(r: typeof schema.businessDays.$inferSelect): BusinessDay {
@@ -40,6 +104,28 @@ export class DrizzleBusinessDayRepository implements BusinessDayRepository {
   async findById(id: string): Promise<BusinessDay | null> {
     const [r] = await this.db.select().from(schema.businessDays).where(eq(schema.businessDays.id, id)).limit(1);
     return r ? this.toEntity(r) : null;
+  }
+
+  async lockById(organizationId: string, businessDayId: string): Promise<void> {
+    await this.db.select({ id: schema.businessDays.id }).from(schema.businessDays).where(and(
+      eq(schema.businessDays.id, businessDayId),
+      eq(schema.businessDays.organizationId, organizationId),
+    )).for('update');
+  }
+
+  async lockStation(organizationId: string, stationId: string): Promise<void> {
+    await this.db.select({ id: schema.stations.id }).from(schema.stations).where(and(
+      eq(schema.stations.id, stationId),
+      eq(schema.stations.organizationId, organizationId),
+    )).for('update');
+  }
+
+  async lockByStationAndDate(organizationId: string, stationId: string, businessDate: string): Promise<void> {
+    await this.db.select({ id: schema.businessDays.id }).from(schema.businessDays).where(and(
+      eq(schema.businessDays.organizationId, organizationId),
+      eq(schema.businessDays.stationId, stationId),
+      eq(schema.businessDays.businessDate, businessDate),
+    )).for('update');
   }
 
   async save(d: BusinessDay): Promise<void> {
@@ -104,6 +190,13 @@ export class DrizzleBusinessDayRepository implements BusinessDayRepository {
 // ---------------- Shifts ----------------
 export class DrizzleShiftRepository implements ShiftRepository {
   constructor(private readonly db: DbClient) {}
+  async hasOpenShift(businessDayId: string): Promise<boolean> {
+    const [row] = await this.db.select({ id: schema.shifts.id }).from(schema.shifts).where(and(
+      eq(schema.shifts.businessDayId, businessDayId),
+      eq(schema.shifts.status, 'OPEN'),
+    )).limit(1);
+    return Boolean(row);
+  }
   private toEntity(r: typeof schema.shifts.$inferSelect): Shift {
     return {
       id: r.id,

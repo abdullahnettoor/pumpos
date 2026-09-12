@@ -39,6 +39,7 @@ const financeSvc = new CloudFinanceService();
 
 export const queryKeys = {
   shiftStatus: (stationId: string, lite = false) => ['shift-status', stationId, lite] as const,
+  businessDayStatus: (stationId: string, businessDate = '') => ['business-day-status', stationId, businessDate] as const,
   myAssignment: () => ['my-assignment'] as const,
   shiftSummaries: (stationId: string) => ['shift-summaries', stationId] as const,
   shiftTransactions: (shiftId: string) => ['shift-transactions', shiftId] as const,
@@ -310,6 +311,16 @@ export function useShiftStatus(stationId: string | null | undefined, lite = fals
   });
 }
 
+export function useBusinessDayStatus(stationId: string | null | undefined, businessDate?: string, options?: Options<any>) {
+  return useQuery({
+    queryKey: queryKeys.businessDayStatus(stationId ?? '', businessDate),
+    queryFn: () => shiftService.getBusinessDayStatus(stationId!, businessDate),
+    enabled: !!stationId,
+    ...TIER.operational,
+    ...options,
+  });
+}
+
 export function useShiftSummaries(stationId: string | null | undefined, options?: Options<any[]>) {
   return useQuery({
     queryKey: queryKeys.shiftSummaries(stationId ?? ''),
@@ -472,6 +483,7 @@ export function useInvalidateOperational() {
   const qc = useQueryClient();
   return (stationId?: string | null) => {
     qc.invalidateQueries({ queryKey: ['shift-status'] });
+    qc.invalidateQueries({ queryKey: ['business-day-status'] });
     qc.invalidateQueries({ queryKey: ['shift-summaries'] });
     qc.invalidateQueries({ queryKey: ['shift-transactions'] });
     qc.invalidateQueries({ queryKey: ['merchandise-handovers'] });

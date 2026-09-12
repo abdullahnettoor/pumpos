@@ -1,21 +1,24 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
 import { useQueryClient } from '@tanstack/react-query';
-import { CalendarRange, Info, Lock } from 'lucide-react';
-import { resolveBusinessDate } from '@pump/shared';
+import { CalendarRange, Check, Info, Lock } from 'lucide-react';
 import { KpiStrip, KpiTile, Panel, StatusChip, Chip, DateText, EmptyState, Button } from '../../pump-ds/index.js';
 import { DataTable } from '../primitives/DataTable.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import { useConfirm } from '../primitives/ConfirmDialog.js';
 import { CloudShiftService } from '../../services/cloud.js';
-import { inr, formatQty, formatTime } from '../../utils/format.js';
-import { useDailyDssrPreview, useShiftStatus, useInvalidateOperational, useCustomers } from '../../query/hooks.js';
+import { inr, formatDate, formatQty } from '../../utils/format.js';
+import { useBusinessDayStatus, useDailyDssr, useDailyDssrPreview, useShiftStatus, useInvalidateOperational, useCustomers, queryKeys } from '../../query/hooks.js';
+import { useStationBusinessDate } from '../../hooks/useStationBusinessDate.js';
 
 const shiftService = new CloudShiftService();
 
 interface BusinessDayTabProps {
   selectedStation: any | null;
   userRole: 'Owner' | 'Manager' | 'Accountant' | 'Staff';
+  activeBusinessDayId?: string | null;
+  requestedBusinessDate?: string | null;
+  onBusinessDateSelected?: () => void;
 }
 
 const rowStyle: React.CSSProperties = {
@@ -29,21 +32,39 @@ const rowStyle: React.CSSProperties = {
 const money: React.CSSProperties = { fontFamily: 'var(--font-mono)', color: 'var(--text-strong)' };
 
 /**
- * Business Day cockpit (read-only). The Shifts page is shift-centric; this tab
+ * Business Day cockpit. The Shifts page is shift-centric; this tab
  * surfaces the *business-day* layer — the universal anchor — so day-level
  * activity is visible even when no shift is open. Composed live from the DSSR
  * preview (all closed shifts + day-level collections, credit, purchases,
  * supplier payments and expenses + P&L), without writing a snapshot.
- * Phase 2 adds the Owner/Manager "Close business day" action (generates the
- * immutable DSSR snapshot + locks the day), blocked while a shift is open.
+ * Owner/Manager closure generates the immutable DSSR snapshot and locks the
+ * selected day. A day can close when it has no open Shift.
  */
-export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({ selectedStation, userRole }) => {
+function formatStationActivity(value: string, timeZone?: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Unknown';
+  return date.toLocaleString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone,
+  });
+}
+
+export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
+  selectedStation,
+  userRole,
+  activeBusinessDayId,
+  requestedBusinessDate,
+  onBusinessDateSelected,
+}) => {
   const stationId = selectedStation?.id ?? null;
   const settings = (selectedStation?.settings ?? {}) as { timezone?: string; business_day_starts_at?: string };
-  const businessDate = useMemo(
-    () => resolveBusinessDate({ timeZone: settings.timezone, dayStartsAt: settings.business_day_starts_at }),
-    [settings.timezone, settings.business_day_starts_at],
-  );
+  const currentBusinessDate = useStationBusinessDate(settings.timezone, settings.business_day_starts_at);
+  const [businessDate, setBusinessDate] = useState(currentBusinessDate);
+  const initializedStationId = useRef<string | null>(null);
 
   const toast = useToast();
   const confirm = useConfirm();
@@ -52,23 +73,49 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({ selectedStation,
   const [closing, setClosing] = useState(false);
   const canClose = userRole === 'Owner' || userRole === 'Manager';
 
-  const previewQ = useDailyDssrPreview(stationId, businessDate, { enabled: !!stationId } as any);
-  const { data: shiftStatus } = useShiftStatus(stationId, true, { enabled: !!stationId } as any);
-  const hasOpenShift = !!(shiftStatus as any)?.activeShift;
+  const currentBusinessDayStatusQ = useBusinessDayStatus(stationId, currentBusinessDate, { enabled: !!stationId } as any);
+  const businessDayStatusQ = useBusinessDayStatus(stationId, businessDate, { enabled: !!stationId } as any);
+  const selectedState = businessDayStatusQ.data?.requestedState;
+  const previewQ = useDailyDssrPreview(stationId, businessDate, { enabled: !!stationId && (selectedState === 'OPEN' || selectedState === 'NOT_CREATED') } as any);
+  const snapshotQ = useDailyDssr(stationId, businessDate, { enabled: !!stationId && selectedState === 'CLOSED' } as any);
+  const shiftStatusQ = useShiftStatus(stationId, true, { enabled: !!stationId } as any);
+  const shiftStatus = shiftStatusQ.data;
+  const activeShift = (shiftStatus as any)?.activeShift;
 
   // EOD-cycle customers still carrying a receivable that's expected cleared by
   // day close — surfaced as a (non-blocking) reminder before closing the day.
-  const { data: dayCustomers } = useCustomers(true, { enabled: !!stationId && canClose } as any);
+  const { data: dayCustomers } = useCustomers(true, { enabled: !!stationId && canClose && businessDate === currentBusinessDate } as any);
   const eodDueCustomers = useMemo(
-    () => (dayCustomers || []).filter((c: any) => c.settlementCycle === 'EOD' && Number(c.currentBalance || 0) > 0),
-    [dayCustomers],
+    () => businessDate === currentBusinessDate
+      ? (dayCustomers || []).filter((c: any) => c.settlementCycle === 'EOD' && Number(c.currentBalance || 0) > 0)
+      : [],
+    [businessDate, currentBusinessDate, dayCustomers],
   );
   const eodDueTotal = eodDueCustomers.reduce((s: number, c: any) => s + Number(c.currentBalance || 0), 0);
 
-  const preview = previewQ.data as any;
-  const snap = preview?.snapshotData ?? null;
+  const report = selectedState === 'CLOSED' ? snapshotQ.data : previewQ.data;
+  const snap = (report as any)?.snapshotData ?? null;
 
-  const shiftRows = (snap?.shifts ?? []) as any[];
+  const openBusinessDays = useMemo(() => {
+    return [...(currentBusinessDayStatusQ.data?.openBusinessDays ?? [])]
+      .sort((a: any, b: any) => b.businessDate.localeCompare(a.businessDate));
+  }, [currentBusinessDayStatusQ.data]);
+
+  useEffect(() => {
+    if (!stationId || initializedStationId.current === stationId || currentBusinessDayStatusQ.isFetching || shiftStatusQ.isFetching) return;
+    const resolvedActiveBusinessDayId = activeShift?.businessDayId ?? activeBusinessDayId;
+    const activeDay = openBusinessDays.find((day: any) => day.id === resolvedActiveBusinessDayId);
+    setBusinessDate(requestedBusinessDate || activeDay?.businessDate || currentBusinessDate);
+    initializedStationId.current = stationId;
+    if (requestedBusinessDate) onBusinessDateSelected?.();
+  }, [stationId, activeBusinessDayId, activeShift?.businessDayId, requestedBusinessDate, currentBusinessDate, openBusinessDays, currentBusinessDayStatusQ.isFetching, shiftStatusQ.isFetching, onBusinessDateSelected]);
+
+  useEffect(() => {
+    if (!requestedBusinessDate) return;
+    if (requestedBusinessDate !== businessDate) setBusinessDate(requestedBusinessDate);
+    initializedStationId.current = stationId;
+    onBusinessDateSelected?.();
+  }, [requestedBusinessDate, businessDate, stationId, onBusinessDateSelected]);
   const shiftColumns = useMemo<ColumnDef<any, any>[]>(
     () => [
       {
@@ -83,7 +130,7 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({ selectedStation,
         header: 'Closed',
         cell: ({ row }) =>
           row.original.closedAt ? (
-            <DateText value={row.original.closedAt} variant="time" />
+            <span>{formatStationActivity(row.original.closedAt, settings.timezone)}</span>
           ) : (
             <Chip tone="success" size="xs">Open</Chip>
           ),
@@ -91,17 +138,22 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({ selectedStation,
       {
         id: 'netVolume',
         header: 'Net Volume',
-        cell: ({ row }) => <span style={{ fontFamily: 'var(--font-mono)' }}>{formatQty(row.original.netVolume || 0, 2)} L</span>,
+        cell: ({ row }) => row.original.closedAt
+          ? <span style={{ fontFamily: 'var(--font-mono)' }}>{formatQty(row.original.netVolume || 0, 2)} L</span>
+          : <span style={{ color: 'var(--text-faint)' }}>—</span>,
       },
       {
         id: 'expectedDrawerCash',
         header: 'Expected Drawer',
-        cell: ({ row }) => <span style={{ fontFamily: 'var(--font-mono)' }}>{inr(row.original.expectedDrawerCash || 0)}</span>,
+        cell: ({ row }) => row.original.closedAt
+          ? <span style={{ fontFamily: 'var(--font-mono)' }}>{inr(row.original.expectedDrawerCash || 0)}</span>
+          : <span style={{ color: 'var(--text-faint)' }}>—</span>,
       },
       {
         id: 'cashVariance',
         header: 'Cash Variance',
         cell: ({ row }) => {
+          if (!row.original.closedAt) return <span style={{ color: 'var(--text-faint)' }}>—</span>;
           const v = Number(row.original.cashVariance || 0);
           const color = v < 0 ? 'var(--brand-danger)' : v > 0 ? 'var(--brand-warning)' : 'var(--state-success-fg)';
           return (
@@ -113,8 +165,26 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({ selectedStation,
         },
       },
     ],
-    [],
+    [settings.timezone],
   );
+
+  const status = selectedState;
+  const selectedBusinessDay = businessDayStatusQ.data?.requestedBusinessDay;
+  const hasOpenShift = !!activeShift && activeShift.businessDayId === selectedBusinessDay?.id;
+  const liveAsOf = status !== 'CLOSED' && (report as any)?.generatedAt ? formatStationActivity((report as any).generatedAt, settings.timezone) : null;
+  const reportLoading = businessDayStatusQ.isPending || (status === 'CLOSED' ? snapshotQ.isLoading : previewQ.isLoading);
+  const reportError = businessDayStatusQ.isError || (status === 'CLOSED' ? snapshotQ.isError : previewQ.isError);
+  const shiftRows = (() => {
+    const rows = [...((snap?.shifts ?? []) as any[])];
+    if (hasOpenShift && !rows.some((row) => row.shiftId === activeShift.id)) {
+      rows.unshift({
+        shiftId: activeShift.id,
+        templateName: activeShift.templateName,
+        closedAt: null,
+      });
+    }
+    return rows;
+  })();
 
   if (!selectedStation) {
     return (
@@ -123,9 +193,6 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({ selectedStation,
       </div>
     );
   }
-
-  const status = (snap?.status as string) || 'OPEN';
-  const liveAsOf = preview?.generatedAt ? formatTime(preview.generatedAt) : null;
 
   const handleCloseDay = async () => {
     if (!snap?.businessDayId || !stationId) return;
@@ -140,10 +207,10 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({ selectedStation,
     if (!ok) return;
     try {
       setClosing(true);
-      await shiftService.generateDailyDssr(stationId, businessDate);
-      await shiftService.closeBusinessDay(snap.businessDayId);
+      await shiftService.closeBusinessDay(snap.businessDayId, stationId);
       toast.success('Business day closed · DSSR generated.');
       invalidateOperational(stationId);
+      qc.invalidateQueries({ queryKey: queryKeys.dssr(stationId, businessDate) });
       qc.invalidateQueries({ queryKey: ['dssr-range'] });
     } catch (err: any) {
       toast.error(err.message || 'Failed to close the business day.');
@@ -175,9 +242,15 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({ selectedStation,
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <StatusChip status={status === 'CLOSED' ? 'closed' : 'open'} size="sm" />
-          {preview?.live && <Chip tone="warning" size="xs">Live{liveAsOf ? ` · ${liveAsOf}` : ''}</Chip>}
-          {status !== 'CLOSED' && canClose && snap && (
+          {businessDayStatusQ.isError
+            ? <Chip tone="danger" size="xs">Unavailable</Chip>
+            : !status
+            ? <Chip tone="neutral" size="xs">Checking</Chip>
+            : status === 'NOT_CREATED'
+            ? <Chip tone="neutral" size="xs">Not started</Chip>
+            : <StatusChip status={status === 'CLOSED' ? 'closed' : 'open'} size="sm" />}
+          {(report as any)?.live && <Chip tone="warning" size="xs">Live{liveAsOf ? ` · ${liveAsOf}` : ''}</Chip>}
+          {status === 'OPEN' && canClose && snap && (
             <Button
               variant="primary"
               size="sm"
@@ -193,14 +266,65 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({ selectedStation,
         </div>
       </div>
 
-      {hasOpenShift && status !== 'CLOSED' && canClose && snap && (
+      <Panel flush title={`Open Business Days · ${openBusinessDays.length}`}>
+        {currentBusinessDayStatusQ.isPending ? (
+          <div style={{ padding: '12px' }}>
+            <EmptyState compact icon={<CalendarRange />} title="Loading open Business Days" description="Checking the Station's Business Day lifecycle." />
+          </div>
+        ) : currentBusinessDayStatusQ.isError ? (
+          <div style={{ padding: '12px' }}>
+            <EmptyState compact icon={<CalendarRange />} title="Business Day status unavailable" description="Open days could not be loaded. Check the connection and retry." />
+          </div>
+        ) : openBusinessDays.length === 0 ? (
+          <div style={{ padding: '12px' }}>
+            <EmptyState compact icon={<CalendarRange />} title="No open Business Days" description="There are no open days requiring attention." />
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            {openBusinessDays.map((day: any) => {
+              const selected = day.businessDate === businessDate;
+              return (
+              <button
+                key={day.id}
+                type="button"
+                aria-pressed={selected}
+                onClick={() => setBusinessDate(day.businessDate)}
+                style={{
+                  ...rowStyle,
+                  width: '100%',
+                  gap: '16px',
+                  border: 0,
+                  borderBottom: '1px solid var(--border-soft)',
+                  background: selected ? 'var(--state-info-bg)' : 'transparent',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  fontFamily: 'inherit',
+                }}
+              >
+                <div style={{ minWidth: 120 }}>
+                  <span style={{ color: 'var(--text-strong)', fontWeight: 600 }}>{formatDate(day.businessDate)} · Open</span>
+                </div>
+                <div style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
+                  {Number(day.closedShiftCount)} closed · {Number(day.openShiftCount)} open
+                </div>
+                <div style={{ marginLeft: 'auto', color: 'var(--text-muted)', fontSize: '12px', textAlign: 'right' }}>
+                  Last activity {formatStationActivity(day.lastActivityAt, settings.timezone)}
+                </div>
+                {selected && <Check size={14} style={{ color: 'var(--state-info-fg)', flexShrink: 0 }} aria-label="Selected" />}
+              </button>
+            );})}
+          </div>
+        )}
+      </Panel>
+
+      {hasOpenShift && status === 'OPEN' && canClose && snap && (
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center', padding: '8px 12px', backgroundColor: 'var(--state-warning-bg)', color: 'var(--state-warning-fg)', borderRadius: 'var(--radius-input)', fontSize: '12px', border: '1px solid var(--border-soft)' }}>
           <Info size={14} style={{ flexShrink: 0 }} />
           <span>A shift is still open. Close the active shift before closing the business day.</span>
         </div>
       )}
 
-      {status !== 'CLOSED' && canClose && eodDueCustomers.length > 0 && (
+      {status === 'OPEN' && canClose && eodDueCustomers.length > 0 && (
         <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', padding: '8px 12px', backgroundColor: 'var(--state-warning-bg)', color: 'var(--state-warning-fg)', borderRadius: 'var(--radius-input)', fontSize: '12px', border: '1px solid var(--border-soft)' }}>
           <Info size={14} style={{ flexShrink: 0, marginTop: '1px' }} />
           <span>
@@ -211,10 +335,21 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({ selectedStation,
         </div>
       )}
 
-      {previewQ.isLoading ? (
+      {reportLoading ? (
         <Panel flush title="Business day">
           <div style={{ padding: '16px' }}>
             <EmptyState compact icon={<CalendarRange />} title="Loading…" description="Composing the business day." />
+          </div>
+        </Panel>
+      ) : reportError ? (
+        <Panel flush title="Business day">
+          <div style={{ padding: '12px' }}>
+            <EmptyState
+              compact
+              icon={<CalendarRange />}
+              title="Business Day workspace unavailable"
+              description="This day's Shifts and operational context could not be loaded. Check the connection and retry."
+            />
           </div>
         </Panel>
       ) : !snap ? (
@@ -240,16 +375,17 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({ selectedStation,
             <KpiTile dot={Number(pnl.netProfit || 0) < 0 ? 'danger' : 'success'} valueTone={Number(pnl.netProfit || 0) < 0 ? 'danger' : 'success'} label="Net Profit" value={inr(pnl.netProfit || 0)} hint={`Gross ${inr(pnl.grossMargin || 0)}`} />
           </KpiStrip>
 
-          {/* Live caveat: open-shift fuel isn't counted until the shift closes. */}
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', padding: '10px 12px', backgroundColor: 'var(--state-info-bg)', color: 'var(--state-info-fg)', borderRadius: 'var(--radius-input)', fontSize: '12px', border: '1px solid var(--border-soft)' }}>
-            <Info size={14} style={{ flexShrink: 0, marginTop: '1px' }} />
-            <span>
-              Provisional day view composed from <strong>{snap.shiftsIncluded || 0} closed shift{snap.shiftsIncluded === 1 ? '' : 's'}</strong> plus live merchandise, collections, credit, purchases &amp; expenses.
-              {hasOpenShift
-                ? " Fuel from the currently open shift isn't counted until it closes (nozzle readings are taken at close)."
-                : ' Fuel for a shift is counted once that shift closes.'}
-            </span>
-          </div>
+          {status !== 'CLOSED' && (
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', padding: '10px 12px', backgroundColor: 'var(--state-info-bg)', color: 'var(--state-info-fg)', borderRadius: 'var(--radius-input)', fontSize: '12px', border: '1px solid var(--border-soft)' }}>
+              <Info size={14} style={{ flexShrink: 0, marginTop: '1px' }} />
+              <span>
+                Provisional day view composed from <strong>{snap.shiftsIncluded || 0} closed shift{snap.shiftsIncluded === 1 ? '' : 's'}</strong> plus live merchandise, collections, credit, purchases &amp; expenses.
+                {hasOpenShift
+                  ? " Fuel from the currently open shift isn't counted until it closes (nozzle readings are taken at close)."
+                  : ' Fuel for a shift is counted once that shift closes.'}
+              </span>
+            </div>
+          )}
 
           {/* Shifts in this day */}
           <Panel flush title="Shifts in this day">

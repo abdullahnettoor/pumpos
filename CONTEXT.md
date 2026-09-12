@@ -18,6 +18,27 @@ The `YYYY-MM-DD` string that anchors a record to its Business Day, resolved
 timezone-aware from the station's clock settings — never from UTC.
 _Avoid_: date, today
 
+**Current Business Date**:
+The Business Date resolved for the current instant using the Station's timezone
+and Day Start. Its Business Day may be open, closed, or not yet created.
+_Avoid_: today, current day
+
+**Past Open Business Day**:
+An earlier Business Day that remains open while later Business Dates proceed.
+It requires Delayed Closure but does not block the Current Business Date.
+_Avoid_: stale day, pending day
+
+**Shift Business Date**:
+The Business Date selected when opening a Shift. It may be the Current Business
+Date or an earlier open or not-yet-created Business Date, but never a future or
+closed Business Day.
+_Avoid_: shift date
+
+**Delayed Closure**:
+Closing a Past Open Business Day after operations have continued on later
+Business Dates.
+_Avoid_: late close, backdated close
+
 **Day Start** (`business_day_starts_at`):
 The station-local time before which instants roll back to the previous
 Business Date.

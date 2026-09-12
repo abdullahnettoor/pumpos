@@ -247,7 +247,7 @@ export const App: React.FC = () => {
   const navItems = isStationReady
     ? [
         { label: 'Dashboard', path: '/dashboard' },
-        { label: 'Shifts', path: '/shifts', roles: ['Owner', 'Manager', 'Staff'] },
+        { label: 'Shifts', path: '/shifts', roles: ['Owner', 'Manager', 'Accountant', 'Staff'] },
         { label: 'Station Overview', path: '/setup/station', roles: ['Owner', 'Manager'] },
         { label: 'Expenses', path: '/expenses' },
         { label: 'Income', path: '/income' },
@@ -471,7 +471,9 @@ export const App: React.FC = () => {
             selectedStation={selectedStation}
             userRole={userRole || 'Staff'}
             userName={userName}
-            onNavigate={setCurrentPath}
+            onNavigate={navigate}
+            intent={navIntent}
+            onIntentConsumed={() => setNavIntent(null)}
           />
         );
       case '/expenses':
@@ -606,5 +608,3 @@ export const App: React.FC = () => {
 };
 
 export default App;
-
-

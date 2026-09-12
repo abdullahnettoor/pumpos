@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { resolveBusinessDate } from '@pump/shared';
+export * from './get-business-day-status.js';
 import { BusinessEvents, conflictError, err, eventFromContext, invariantViolation, notFoundError, ok, validationError } from '../../../kernel/index.js';
 import type { EventPublisher, ExecutionContext, Repository, Result, UseCase } from '../../../kernel/index.js';
 
@@ -24,13 +25,20 @@ export interface BusinessDayRepository extends Repository<BusinessDay> {
   findByStationAndDate(organizationId: string, stationId: string, businessDate: string): Promise<BusinessDay | null>;
 }
 
+/** Serializes workflows that can change or depend on a Business Day's lifecycle. */
+export interface BusinessDayLock {
+  lockStation(organizationId: string, stationId: string): Promise<void>;
+  lockById(organizationId: string, businessDayId: string): Promise<void>;
+  lockByStationAndDate(organizationId: string, stationId: string, businessDate: string): Promise<void>;
+}
+
 /**
  * Resolve the business day a non-shift money movement belongs to, by its
  * transaction date — creating the day lazily if it does not exist yet. This
  * removes the "open a business day first" ceremony: any date is transactional
  * (settlements/collections can land on Sundays/holidays). A day created for a
- * past date is recorded as CLOSED (a historical bucket, invisible to the
- * single-open-day shift logic); today/future is OPEN. The business day's date
+ * past date is recorded as CLOSED (a historical financial bucket); today/future
+ * is OPEN. The business day's date
  * IS the transaction date, so no separate column is needed.
  */
 export async function ensureBusinessDayForDate(
@@ -82,8 +90,8 @@ export interface BusinessDayDeps {
 }
 
 /**
- * Open the operating/accounting day for a station. A station may have at most
- * one OPEN business day; the previous day must be closed first.
+ * Open the Business Day for one Station and Business Date. Several Business
+ * Days may remain open concurrently until each is closed independently.
  */
 export class OpenBusinessDay implements UseCase<OpenBusinessDayCommand, BusinessDay> {
   constructor(private readonly deps: BusinessDayDeps) {}

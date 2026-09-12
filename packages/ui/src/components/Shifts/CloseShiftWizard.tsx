@@ -5,6 +5,7 @@ import { CashCountPopover, type CashBreakdown } from '../primitives/CashCountPop
 import { Button } from '../../pump-ds/index.js';
 import { inr } from '../../utils/format.js';
 import { AlertTriangle, Check, ChevronLeft, ChevronRight, Lock, Wallet, Droplet, FileText } from 'lucide-react';
+import { ShiftBusinessDateContext } from './ShiftBusinessDateContext.js';
 
 export interface CloseShiftWizardProps {
   isOpen: boolean;
@@ -13,6 +14,11 @@ export interface CloseShiftWizardProps {
   // Identity
   shiftTemplateName: string;
   openedAt: string;
+  businessDate: string;
+  currentBusinessDate: string;
+  scheduledStartTime?: string | null;
+  scheduledEndTime?: string | null;
+  timeZone?: string;
 
   // Cash reconciliation inputs
   openingCash: number;
@@ -60,7 +66,7 @@ const STEP_TITLES: Record<Step, string> = {
   1: 'Cash Reconciliation',
   2: 'Physical Dip Readings',
   3: 'Review Warnings',
-  4: 'Confirm & Compile DSSR',
+  4: 'Confirm Shift Summary',
 };
 
 const STEP_ICONS: Record<Step, React.ReactNode> = {
@@ -75,6 +81,11 @@ export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
   onClose,
   shiftTemplateName,
   openedAt,
+  businessDate,
+  currentBusinessDate,
+  scheduledStartTime,
+  scheduledEndTime,
+  timeZone,
   openingCash,
   cashCollections,
   cashExpenses,
@@ -174,9 +185,16 @@ export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
       footer={footer}
     >
       <div className="close-wizard-body">
-        <div className="close-wizard-meta">
-          Opened {new Date(openedAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })} · Step {step} of 4
-        </div>
+        <ShiftBusinessDateContext
+          compact
+          businessDate={businessDate}
+          currentBusinessDate={currentBusinessDate}
+          scheduledStartTime={scheduledStartTime}
+          scheduledEndTime={scheduledEndTime}
+          openedAt={openedAt}
+          timeZone={timeZone}
+        />
+        <div className="close-wizard-meta">Step {step} of 4</div>
         {stepper}
 
         {step === 1 && (
@@ -451,7 +469,7 @@ export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
 
         {step === 4 && (
           <section className="close-wizard-section">
-            <h4 className="close-wizard-section-title">Confirm &amp; Compile DSSR</h4>
+            <h4 className="close-wizard-section-title">Confirm Shift Summary</h4>
             <div className="close-wizard-summary-card">
               <div className="close-wizard-row">
                 <span>Expected Safe Cash</span>
@@ -485,8 +503,7 @@ export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
               </div>
             </div>
             <p className="close-wizard-helper" style={{ marginTop: '8px' }}>
-              On confirm, the shift status moves to <strong>CLOSED</strong> and a Shift Summary (DSSR) snapshot
-              is generated and stored permanently.
+              On confirm, the Shift status moves to <strong>CLOSED</strong> and an immutable Shift Summary is generated and stored permanently. The Business Day remains open until it is closed explicitly.
             </p>
           </section>
         )}

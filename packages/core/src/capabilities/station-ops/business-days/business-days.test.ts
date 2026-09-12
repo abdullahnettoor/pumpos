@@ -55,7 +55,7 @@ describe('OpenBusinessDay', () => {
     expect(store.events[0].businessDayId).toBeTruthy();
   });
 
-  it('rejects opening a second day while one is open', async () => {
+  it('rejects creating a duplicate Business Day for the same Business Date', async () => {
     const repo = new InMemoryBusinessDayRepo();
     const events = new InProcessEventDispatcher({ store: new InMemoryEventStore() });
     const ctx = makeContext();
@@ -63,6 +63,20 @@ describe('OpenBusinessDay', () => {
     const second = await new OpenBusinessDay({ repository: repo, events }).execute({ stationId: 'station-1' }, ctx);
     expect(second.success).toBe(false);
     if (!second.success) expect(second.error.code).toBe('CONFLICT');
+  });
+
+  it('allows several Business Days to remain open concurrently', async () => {
+    const repo = new InMemoryBusinessDayRepo();
+    const events = new InProcessEventDispatcher({ store: new InMemoryEventStore() });
+    const useCase = new OpenBusinessDay({ repository: repo, events });
+    const ctx = makeContext();
+
+    const first = await useCase.execute({ stationId: 'station-1', businessDate: '2026-03-14' }, ctx);
+    const second = await useCase.execute({ stationId: 'station-1', businessDate: '2026-03-15' }, ctx);
+
+    expect(first.success).toBe(true);
+    expect(second.success).toBe(true);
+    expect(repo.rows.filter((day) => day.status === 'OPEN')).toHaveLength(2);
   });
 });
 

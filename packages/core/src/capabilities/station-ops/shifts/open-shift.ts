@@ -1,8 +1,8 @@
 import { z } from 'zod';
-import { resolveBusinessDate } from '@pump/shared';
-import { BusinessEvents, conflictError, err, eventFromContext, ok, validationError } from '../../../kernel/index.js';
+import { isValidBusinessDate, resolveBusinessDate } from '@pump/shared';
+import { BusinessEvents, conflictError, err, eventFromContext, invariantViolation, ok, validationError } from '../../../kernel/index.js';
 import type { DomainEvent, EventPublisher, ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
-import type { BusinessDay, BusinessDayRepository } from '../business-days/index.js';
+import type { BusinessDay, BusinessDayLock, BusinessDayRepository } from '../business-days/index.js';
 import type { NozzleRepository } from '../../station-setup/nozzles/index.js';
 import type { FuelPriceRepository } from '../../station-setup/pricing/index.js';
 import type {
@@ -29,7 +29,7 @@ const schema = z.object({
   stationId: z.string().min(1, 'stationId is required'),
   shiftTemplateId: z.string().min(1, 'shiftTemplateId is required'),
   openingCash: z.coerce.number().min(0, 'openingCash must be >= 0'),
-  businessDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'businessDate must be YYYY-MM-DD').optional(),
+  businessDate: z.string().refine(isValidBusinessDate, 'businessDate must be a valid YYYY-MM-DD date').optional(),
   staffAssignments: z.array(z.object({ userId: z.string().min(1), duId: z.string().min(1) })).optional(),
   terminalLinks: z.array(z.object({ terminalId: z.string().min(1), duId: z.string().nullish() })).optional(),
   initialReadings: z.array(z.object({ nozzleId: z.string().min(1), openingReading: z.coerce.number().min(0) })).optional(),
@@ -38,6 +38,7 @@ const schema = z.object({
 export interface OpenShiftDeps {
   shifts: ShiftRepository;
   businessDays: BusinessDayRepository;
+  businessDayLock: BusinessDayLock;
   nozzles: NozzleRepository;
   nozzleReadings: NozzleReadingRepository;
   fuelPrices: FuelPriceRepository;
@@ -65,6 +66,7 @@ export class OpenShift implements UseCase<OpenShiftCommand, OpenShiftResult> {
     if (!p.success) return err(validationError('Invalid OpenShift command', { issues: p.error.flatten() }));
     const cmd = p.data;
 
+    await this.deps.businessDayLock.lockStation(ctx.organizationId, cmd.stationId);
     const existingOpen = await this.deps.shifts.findOpenByStation(ctx.organizationId, cmd.stationId);
     if (existingOpen) {
       return err(conflictError('A shift is already open at this station', { shiftId: existingOpen.id }));
@@ -85,7 +87,14 @@ export class OpenShift implements UseCase<OpenShiftCommand, OpenShiftResult> {
       return err(validationError('Business date cannot be in the future', { businessDate: cmd.businessDate }));
     }
     const businessDate = cmd.businessDate ?? today;
+    await this.deps.businessDayLock.lockByStationAndDate(ctx.organizationId, cmd.stationId, businessDate);
     let businessDay = await this.deps.businessDays.findByStationAndDate(ctx.organizationId, cmd.stationId, businessDate);
+    if (businessDay?.status === 'CLOSED') {
+      return err(invariantViolation(
+        `Cannot open a Shift for ${businessDate} because that Business Day is closed. Choose the Current Business Date, a Past Open Business Day, or a Business Date that has not yet been created.`,
+        { businessDayId: businessDay.id, businessDate, status: businessDay.status },
+      ));
+    }
     if (!businessDay) {
       businessDay = {
         id: ctx.ids.newId(),

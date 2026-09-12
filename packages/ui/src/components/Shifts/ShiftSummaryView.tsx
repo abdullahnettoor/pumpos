@@ -9,6 +9,8 @@ import { useConfirm } from '../primitives/ConfirmDialog.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import { inr } from '../../utils/format.js';
 import { isDesktopApp } from '../../utils/platform.js';
+import { formatStationDateTime, resolveBusinessDate } from '@pump/shared';
+import { ShiftBusinessDateContext } from './ShiftBusinessDateContext.js';
 
 const shiftService = new CloudShiftService();
 
@@ -41,6 +43,8 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
   const printRef = useRef<HTMLDivElement>(null);
 
   const { snapshotData, generatedAt } = shiftSummary;
+  const stationSettings = (station?.settings ?? {}) as { timezone?: string; business_day_starts_at?: string };
+  const currentBusinessDate = resolveBusinessDate({ timeZone: stationSettings.timezone, dayStartsAt: stationSettings.business_day_starts_at });
   const {
     shiftId,
     templateName,
@@ -156,9 +160,21 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
           Shift Summary Record
         </h2>
         <p style={{ color: 'var(--text-muted)', fontSize: '12px', marginTop: '4px' }}>
-          Authoritative Operational Snapshot • Compiled {new Date(generatedAt).toLocaleString()}
+          Authoritative Operational Snapshot • Compiled {formatStationDateTime(generatedAt, stationSettings.timezone)}
         </p>
       </div>
+
+      {shiftSummary.businessDate && (
+        <div style={{ marginBottom: '20px' }}>
+          <ShiftBusinessDateContext
+            businessDate={shiftSummary.businessDate}
+            currentBusinessDate={currentBusinessDate}
+            openedAt={openedAt || shiftSummary.openedAt}
+            closedAt={closedAt || shiftSummary.closedAt}
+            timeZone={stationSettings.timezone}
+          />
+        </div>
+      )}
 
       {/* Metadata Panel */}
       <div style={{
@@ -180,9 +196,10 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
           <strong style={{ fontSize: '13px', color: 'var(--text-strong)' }}>{templateName}</strong>
         </div>
         <div>
-          <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', textTransform: 'uppercase', fontWeight: 600 }}>Operational Duration</span>
+          <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', textTransform: 'uppercase', fontWeight: 600 }}>Lifecycle Timestamps</span>
           <strong style={{ fontSize: '12px', color: 'var(--text-strong)' }}>
-            {new Date(openedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - {new Date(closedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            Opened {formatStationDateTime(openedAt || shiftSummary.openedAt, stationSettings.timezone)}<br />
+            Closed {formatStationDateTime(closedAt || shiftSummary.closedAt, stationSettings.timezone)}
           </strong>
         </div>
         <div>

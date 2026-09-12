@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { and, desc, eq, inArray, ne, sql } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
-import { canOpenShift, canCloseShift, canReopenShift, isAuthorizedForStation, isAttendant, type Role } from '@pump/shared';
+import { canOpenShift, canCloseShift, canReopenShift, isAuthorizedForStation, isAttendant, resolveBusinessDate, type Role } from '@pump/shared';
 import {
   OpenShift,
   RecordNozzleReadings,
@@ -9,7 +9,8 @@ import {
   ReopenShift,
   LockShift,
   OpenBusinessDay,
-  CloseBusinessDay,
+  CloseBusinessDayAndGenerateDssr,
+  GetBusinessDayStatus,
   type Result,
 } from '@pump/core';
 import { buildContext } from '../infra/context.js';
@@ -22,6 +23,7 @@ import {
 } from '../infra/repositories/setup-repositories.js';
 import {
   DrizzleBusinessDayRepository,
+  DrizzleBusinessDayStatusReader,
   DrizzleShiftRepository,
   DrizzleNozzleReadingRepository,
   DrizzleShiftReconciliationReader,
@@ -29,6 +31,7 @@ import {
   DrizzleStockMovementWriter,
   DrizzleShiftSummaryWriter,
 } from '../infra/repositories/station-ops-repositories.js';
+import { DrizzleDssrDataReader, DrizzleDssrSnapshotRepository } from '../infra/repositories/reporting-repositories.js';
 import { LedgerPostingService } from '../infra/ledger-posting.js';
 
 type Variables = {
@@ -56,6 +59,33 @@ function sendResult<T>(c: any, result: Result<T>) {
 function canManageDay(role: Role): boolean {
   return role === 'Owner' || role === 'Manager';
 }
+
+// GET /api/shifts/business-days/status?stationId=...&date=YYYY-MM-DD
+// A lightweight lifecycle read for desktop/console. Missing is explicit rather
+// than being inferred from Shift state, and every Past Open Business Day is
+// returned so Delayed Closure remains visible.
+shiftsRouter.get('/business-days/status', async (c) => {
+  const user = c.var.user;
+  const stationId = c.req.query('stationId');
+  if (!stationId) {
+    return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'stationId is required' } }, 400);
+  }
+  if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId })) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+  }
+
+  const clock = await loadStationClock(c.var.db, stationId);
+  const currentBusinessDate = resolveBusinessDate({
+    timeZone: clock.timeZone,
+    dayStartsAt: clock.businessDayStartsAt,
+  });
+  const requestedBusinessDate = c.req.query('date') ?? currentBusinessDate;
+  const result = await new GetBusinessDayStatus(new DrizzleBusinessDayStatusReader(c.var.db)).execute(
+    { stationId, requestedBusinessDate, currentBusinessDate },
+    buildContext(user, { stationId, ...clock }),
+  );
+  return sendResult(c, result);
+});
 
 /**
  * Project an immutable v2 shift-summary snapshot into the shape the Shift Summary
@@ -339,9 +369,14 @@ shiftsRouter.get('/status', async (c) => {
 
   let activeShift: any = null;
   if (dbActiveShift) {
-    const [templateRows2, openedByRows2, nozzleReadingRows] = await Promise.all([
+    const [templateRows2, openedByRows2, activeBusinessDayRows, nozzleReadingRows] = await Promise.all([
       db.select().from(schema.shiftTemplates).where(eq(schema.shiftTemplates.id, dbActiveShift.shiftTemplateId)).limit(1),
       db.select().from(schema.users).where(eq(schema.users.id, dbActiveShift.openedBy)).limit(1),
+      db.select({ businessDate: schema.businessDays.businessDate }).from(schema.businessDays).where(and(
+        eq(schema.businessDays.id, dbActiveShift.businessDayId),
+        eq(schema.businessDays.organizationId, orgId),
+        eq(schema.businessDays.stationId, stationId),
+      )).limit(1),
       db
         .select({ nr: schema.nozzleReadings, nz: schema.nozzles, prod: schema.products, tnk: schema.tanks, du: schema.dispenserUnits })
         .from(schema.nozzleReadings)
@@ -353,6 +388,7 @@ shiftsRouter.get('/status', async (c) => {
     ]);
     const template = templateRows2[0];
     const openedByUser = openedByRows2[0];
+    const activeBusinessDay = activeBusinessDayRows[0];
 
     const nozzleReadings = nozzleReadingRows.map(({ nr, nz, prod, tnk, du }) => ({
       ...nr,
@@ -629,6 +665,9 @@ shiftsRouter.get('/status', async (c) => {
     activeShift = {
       ...dbActiveShift,
       templateName: template?.name ?? 'Custom',
+      businessDate: activeBusinessDay?.businessDate ?? null,
+      scheduledStartTime: template?.startTime ?? null,
+      scheduledEndTime: template?.endTime ?? null,
       openedByName: openedByUser?.fullName ?? 'System',
       nozzleReadings,
       staffAssignments,
@@ -1063,6 +1102,7 @@ shiftsRouter.post('/open', async (c) => {
     new OpenShift({
       shifts: new DrizzleShiftRepository(tx),
       businessDays: new DrizzleBusinessDayRepository(tx),
+      businessDayLock: new DrizzleBusinessDayRepository(tx),
       nozzles: new DrizzleNozzleRepository(tx),
       nozzleReadings: new DrizzleNozzleReadingRepository(tx),
       fuelPrices: new DrizzleFuelPriceRepository(tx),
@@ -1178,9 +1218,20 @@ shiftsRouter.post('/business-day/close', async (c) => {
   }
   const body = await c.req.json().catch(() => ({}));
   const db = c.var.db;
-  const result = await runInTransaction(db, (tx, events) =>
-    new CloseBusinessDay({ repository: new DrizzleBusinessDayRepository(tx), events }).execute(body, buildContext(user)),
-  );
+  if (!body?.stationId || !isAuthorizedForStation(user, { organizationId: user.organizationId, stationId: body.stationId })) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this Station' } }, 403);
+  }
+  const result = await runInTransaction(db, async (tx, events) => {
+    const businessDays = new DrizzleBusinessDayRepository(tx);
+    return new CloseBusinessDayAndGenerateDssr({
+      businessDays,
+      businessDayLock: businessDays,
+      openShifts: new DrizzleShiftRepository(tx),
+      snapshots: new DrizzleDssrSnapshotRepository(tx),
+      dssrData: new DrizzleDssrDataReader(tx),
+      events,
+    }).execute(body, buildContext(user, { stationId: body.stationId, businessDayId: body.businessDayId }));
+  });
   return sendResult(c, result);
 });
 

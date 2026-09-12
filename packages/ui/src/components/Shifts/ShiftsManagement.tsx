@@ -19,8 +19,11 @@ import { useToast } from '../primitives/ToastProvider.js';
 import { useShiftStatus, useShiftTransactions, useInvalidateOperational, queryKeys } from '../../query/hooks.js';
 import { openQuickEntry, useQuickEntry, type QuickEntryType } from '../../quick-entry/store.js';
 import { Station, resolveBusinessDate } from '@pump/shared';
+import type { OpenShiftFormValues } from '@pump/shared';
 import { FileText, User, Lock, AlertTriangle, Check, Fuel, Info, Play, History, Clock3, CalendarRange } from 'lucide-react';
 import { LoadingSpinner } from '../LoadingSpinner.js';
+import type { NavIntent } from '../AppShell.js';
+import { useStationBusinessDate } from '../../hooks/useStationBusinessDate.js';
 
 const shiftService = new CloudShiftService();
 const transactionService = new CloudTransactionService();
@@ -60,6 +63,8 @@ interface ShiftsManagementProps {
   userRole: 'Owner' | 'Manager' | 'Accountant' | 'Staff';
   userName: string;
   onNavigate?: (path: string) => void;
+  intent?: NavIntent | null;
+  onIntentConsumed?: () => void;
 }
 
 export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
@@ -67,6 +72,8 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   userRole,
   userName,
   onNavigate,
+  intent,
+  onIntentConsumed,
 }) => {
   const stationId = selectedStation?.id ?? null;
   const statusQ = useShiftStatus(stationId, false, { refetchOnWindowFocus: false });
@@ -79,26 +86,43 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   const [viewingShiftSummary, setViewingShiftSummary] = useState(false);
 
   // Shift Tab Sub-Navigation
-  const [shiftSubTab, setShiftSubTab] = useState<'today' | 'business-day' | 'history'>('today');
+  const [shiftSubTab, setShiftSubTab] = useState<'today' | 'business-day' | 'history'>(userRole === 'Accountant' ? 'business-day' : 'today');
+  const [requestedBusinessDayDate, setRequestedBusinessDayDate] = useState<string | null>(null);
   const [viewHistoryShiftId, setViewHistoryShiftId] = useState<string | null>(null);
 
   // Open Shift Form States
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [businessDate, setBusinessDate] = useState(() => resolveBusinessDate());
   const [openingCash, setOpeningCash] = useState(0);
+  const [preserveNextShiftDate, setPreserveNextShiftDate] = useState(false);
   const [staffAssignments, setStaffAssignments] = useState<{ userId: string; duId: string }[]>([]);
   // Terminal→DU assignment for the shift being opened. duId '' means shift-wide (any DU).
   const [terminalAssignments, setTerminalAssignments] = useState<{ terminalId: string; duId: string }[]>([]);
   const [initialReadings, setInitialReadings] = useState<{ nozzleId: string; openingReading: number }[]>([]);
   const [isOpening, setIsOpening] = useState(false);
+  const stationSettings = (selectedStation?.settings ?? {}) as { timezone?: string; business_day_starts_at?: string };
+  const currentBusinessDate = useStationBusinessDate(stationSettings.timezone, stationSettings.business_day_starts_at);
 
-  // Default the shift-open business date to the station's *local* business date
-  // (its timezone + day-start boundary), recomputed when the station changes.
+  // A Station change always starts from that Station's Current Business Date.
   useEffect(() => {
-    const s = (selectedStation?.settings ?? {}) as { timezone?: string; business_day_starts_at?: string };
-    setBusinessDate(resolveBusinessDate({ timeZone: s.timezone, dayStartsAt: s.business_day_starts_at }));
+    setPreserveNextShiftDate(false);
+    setBusinessDate(currentBusinessDate);
+    // currentBusinessDate is intentionally handled by the rollover effect below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedStation?.id]);
+
+  // Advance an idle form at the Station's day-start boundary unless the operator
+  // explicitly chose "Open next Shift" for a historical Business Date.
+  useEffect(() => {
+    if (!data?.activeShift && !preserveNextShiftDate) setBusinessDate(currentBusinessDate);
+  }, [currentBusinessDate, data?.activeShift, preserveNextShiftDate]);
+
+  useEffect(() => {
+    if (!intent?.openBusinessDayDate) return;
+    setRequestedBusinessDayDate(intent.openBusinessDayDate);
+    setShiftSubTab('business-day');
+    onIntentConsumed?.();
+  }, [intent?.openBusinessDayDate, onIntentConsumed]);
 
   // Active Shift Workspace States
   const [closingReadings, setClosingReadings] = useState<Record<string, number>>({});
@@ -117,6 +141,13 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     variance: number;
     lastClosedShiftId: string;
     nextTemplateId: string;
+    businessDate: string;
+    currentBusinessDate: string;
+    scheduledStartTime?: string | null;
+    scheduledEndTime?: string | null;
+    openedAt: string;
+    closedAt: string;
+    timeZone?: string;
   } | null>(null);
 
   // Handover Drawer states
@@ -296,6 +327,11 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     const statusData = statusQ.data;
     if (!statusData || !selectedStation) return;
 
+    if (statusData.activeShift?.businessDate) {
+      setBusinessDate(statusData.activeShift.businessDate);
+      setPreserveNextShiftDate(false);
+    }
+
     if (statusData.templates && statusData.templates.length > 0) {
       setSelectedTemplateId((prev: string) => prev || statusData.templates[0].id);
     }
@@ -336,16 +372,18 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   // the query refetches and the init effect above re-runs.
   const loadShiftStatus = () => invalidateOperational(stationId);
 
-  const handleOpenShift = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleOpenShift = async (values: OpenShiftFormValues) => {
     if (!selectedStation) return;
     try {
       setIsOpening(true);
+      setBusinessDate(values.businessDate);
+      setSelectedTemplateId(values.shiftTemplateId);
+      setOpeningCash(Number(values.openingCash));
       const payload: any = {
         stationId: selectedStation.id,
-        shiftTemplateId: selectedTemplateId,
-        businessDate,
-        openingCash,
+        shiftTemplateId: values.shiftTemplateId,
+        businessDate: values.businessDate,
+        openingCash: Number(values.openingCash),
         staffAssignments: staffAssignments.filter((a) => a.userId !== ''),
         terminalLinks: terminalAssignments.map((t) => ({ terminalId: t.terminalId, duId: t.duId || null })),
       };
@@ -442,7 +480,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         }
       }
 
-      await shiftService.closeShift(data.activeShift.id, {
+      const closeResult = await shiftService.closeShift(data.activeShift.id, {
         closingCash,
         nozzleReadings: readingsArray,
         dipReadings: dipReadingsArray,
@@ -457,7 +495,14 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         closingCash: actual,
         variance,
         lastClosedShiftId: closedId,
-        nextTemplateId
+        nextTemplateId,
+        businessDate: data.activeShift.businessDate,
+        currentBusinessDate,
+        scheduledStartTime: data.activeShift.scheduledStartTime,
+        scheduledEndTime: data.activeShift.scheduledEndTime,
+        openedAt: data.activeShift.openedAt,
+        closedAt: closeResult.shift.closedAt,
+        timeZone: stationSettings.timezone,
       });
     } catch (err: any) {
       toast.error(err.message || 'Failed to close shift');
@@ -531,7 +576,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         },
         { id: 'business-day', label: 'Business Day', icon: <CalendarRange size={13} /> },
         { id: 'history', label: 'History', icon: <History size={13} /> },
-      ]}
+      ].filter((tab) => userRole !== 'Accountant' || tab.id !== 'today')}
     />
     </div>
   );
@@ -544,7 +589,13 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontFamily: 'var(--font-sans)' }}
       >
         {renderShiftSubTabs()}
-        <BusinessDayTab selectedStation={selectedStation} userRole={userRole} />
+        <BusinessDayTab
+          selectedStation={selectedStation}
+          userRole={userRole}
+          activeBusinessDayId={activeShift?.businessDayId ?? null}
+          requestedBusinessDate={requestedBusinessDayDate}
+          onBusinessDateSelected={() => setRequestedBusinessDayDate(null)}
+        />
       </div>
     );
   }
@@ -576,6 +627,8 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         onStartNext={() => {
           setOpeningCash(closedShiftSuccess.closingCash);
           setSelectedTemplateId(closedShiftSuccess.nextTemplateId);
+          setBusinessDate(closedShiftSuccess.businessDate);
+          setPreserveNextShiftDate(true);
           setClosedShiftSuccess(null);
           setViewingShiftSummary(false);
         }}
@@ -631,6 +684,8 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
             }
           }}
           isPreparingClose={shiftScreenState === 'closing'}
+          currentBusinessDate={currentBusinessDate}
+          timeZone={stationSettings.timezone}
           onViewLastShiftSummary={lastShiftSummary ? () => {
             setViewHistoryShiftId(lastShiftSummary.shiftId);
             setShiftSubTab('history');
@@ -685,6 +740,11 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
           }}
           shiftTemplateName={activeShift.templateName}
           openedAt={activeShift.openedAt}
+          businessDate={activeShift.businessDate}
+          currentBusinessDate={currentBusinessDate}
+          scheduledStartTime={activeShift.scheduledStartTime}
+          scheduledEndTime={activeShift.scheduledEndTime}
+          timeZone={stationSettings.timezone}
           openingCash={openingCashNum}
           cashCollections={activeCashCollections}
           cashExpenses={shiftTotals.cashExpenses}
@@ -769,6 +829,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
       <OpenShiftForm
         lastShiftSummary={lastShiftSummary}
         lastShift={lastShift}
+        stationId={selectedStation.id}
         templates={templates}
         dispensers={dispensers}
         staff={staff}
@@ -777,11 +838,10 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         terminalAssignments={terminalAssignments}
         onTerminalAssignmentChange={handleTerminalAssignmentChange}
         selectedTemplateId={selectedTemplateId}
-        onTemplateChange={setSelectedTemplateId}
         businessDate={businessDate}
-        onBusinessDateChange={setBusinessDate}
+        currentBusinessDate={currentBusinessDate}
+        timeZone={stationSettings.timezone}
         openingCash={openingCash}
-        onOpeningCashChange={setOpeningCash}
         staffAssignments={staffAssignments}
         onStaffAssignmentChange={handleStaffAssignmentChange}
         initialReadings={initialReadings}

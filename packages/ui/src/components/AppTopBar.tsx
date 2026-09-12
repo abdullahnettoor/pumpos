@@ -1,9 +1,9 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import {
   Receipt, Wallet, ShoppingCart, ShoppingBag, CreditCard, Users, Truck, Package, FileText, Banknote,
   ArrowUpRight, LogOut, TriangleAlert, Clock, LayoutDashboard, Fuel,
 } from 'lucide-react';
-import { resolveBusinessDate, type Station } from '@pump/shared';
+import { type Station } from '@pump/shared';
 import type { NavIntent } from './AppShell.js';
 import { openQuickEntry } from '../quick-entry/store.js';
 import {
@@ -12,10 +12,11 @@ import {
   type QuickCreateAction, type UserMenuAction, type SyncStatus, type BusinessDayOption,
 } from '../pump-ds/index.js';
 import {
-  useShiftStatus, useCustomers, useSuppliers, useProducts, useDailyDssrRange,
+  useBusinessDayStatus, useCustomers, useSuppliers, useProducts,
 } from '../query/hooks.js';
 import { useStationAlerts } from '../query/useStationAlerts.js';
 import { inr } from '../utils/format.js';
+import { useStationBusinessDate } from '../hooks/useStationBusinessDate.js';
 
 /**
  * AppTopBar — the data container that wires the pure pump-ds `TopBar` +
@@ -53,26 +54,11 @@ function initialsOf(name: string): string {
 }
 
 function formatDayLabel(iso: string): string {
-  // iso is YYYY-MM-DD; render as "09 Jul".
+  // iso is YYYY-MM-DD; render as "09 Jul 2026".
   const [y, m, d] = iso.split('-').map(Number);
   if (!y || !m || !d) return iso;
   const dt = new Date(Date.UTC(y, m - 1, d));
-  return dt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', timeZone: 'UTC' });
-}
-
-function formatDayLabelLong(iso: string): string {
-  // iso is YYYY-MM-DD; render as "Mon, 09 Jul".
-  const [y, m, d] = iso.split('-').map(Number);
-  if (!y || !m || !d) return iso;
-  const dt = new Date(Date.UTC(y, m - 1, d));
-  return dt.toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', timeZone: 'UTC' });
-}
-
-function addDaysIso(iso: string, days: number): string {
-  const [y, m, d] = iso.split('-').map(Number);
-  const dt = new Date(Date.UTC(y, m - 1, d));
-  dt.setUTCDate(dt.getUTCDate() + days);
-  return dt.toISOString().slice(0, 10);
+  return dt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' });
 }
 
 export const AppTopBar: React.FC<AppTopBarProps> = ({
@@ -91,7 +77,6 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
   const canSeeFinancials = userRole !== 'Staff';
   const stationId = selectedStation?.id;
 
-  const { data: shiftStatus } = useShiftStatus(stationId);
   const { data: customers } = useCustomers(true, { enabled: canSeeFinancials } as any);
   const { data: suppliers } = useSuppliers(true, { enabled: canSeeFinancials } as any);
   const { data: products } = useProducts();
@@ -99,29 +84,30 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
 
   // --- business day ---
   const settings: any = (selectedStation as any)?.settings || {};
-  const businessIso = resolveBusinessDate({ timeZone: settings.timezone, dayStartsAt: settings.business_day_starts_at });
+  const businessIso = useStationBusinessDate(settings.timezone, settings.business_day_starts_at);
   const businessDate = formatDayLabel(businessIso);
-  const businessDayStatus: 'open' | 'closed' = (shiftStatus as any)?.activeShift ? 'open' : 'closed';
+  const dayStatusQ = useBusinessDayStatus(stationId, businessIso, { enabled: !!stationId && stationReady } as any);
+  const dayStatus = dayStatusQ.data;
+  const businessDayStatus = dayStatusQ.isError
+    ? 'unavailable'
+    : dayStatusQ.isPending
+      ? 'unknown'
+    : dayStatus?.requestedState === 'OPEN'
+    ? 'open'
+    : dayStatus?.requestedState === 'CLOSED'
+      ? 'closed'
+      : 'not-created';
 
-  // --- recent business days (dropdown) ---
-  // Lazily loaded: the DSSR range is only fetched once the anchor menu opens,
-  // so the always-mounted top bar never triggers a 30-day compute up front.
-  // TODO(follow-up): replace with a lightweight `business_days` list endpoint
-  // (honest per-day open/closed status, close-day action) instead of proxying
-  // the DSSR range.
-  const [dayMenuOpen, setDayMenuOpen] = useState(false);
-  const rangeFrom = addDaysIso(businessIso, -30);
-  const rangeTo = addDaysIso(businessIso, -1);
-  const { data: dssrRange } = useDailyDssrRange(stationId, rangeFrom, rangeTo, { enabled: !!stationId && dayMenuOpen } as any);
   const businessDays: BusinessDayOption[] = useMemo(() => {
-    const rows = (dssrRange as any[]) || [];
-    return rows
-      .map((r) => r?.businessDate as string)
-      .filter((d): d is string => !!d && d !== businessIso)
-      .sort((a, b) => (a < b ? 1 : -1))
-      .slice(0, 10)
-      .map((d) => ({ date: d, label: formatDayLabelLong(d) }));
-  }, [dssrRange, businessIso]);
+    return (dayStatus?.pastOpenBusinessDays ?? []).map((day: any) => ({
+      date: day.businessDate,
+      label: formatDayLabel(day.businessDate),
+      status: 'open',
+      openShiftCount: Number(day.openShiftCount),
+      closedShiftCount: Number(day.closedShiftCount),
+      lastActivityAt: day.lastActivityAt,
+    }));
+  }, [dayStatus]);
 
   // --- quick create ---
   const quickCreate: QuickCreateAction[] = useMemo(() => {
@@ -264,10 +250,10 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
         businessDate={businessDate}
         businessDayStatus={businessDayStatus}
         showBusinessDay={stationReady}
-        onBusinessDay={() => onNavigate('/dashboard')}
-        businessDays={businessDays}
-        onSelectBusinessDay={(date) => onNavigate('/reports', { openDssrDate: date })}
-        onBusinessDayMenuOpenChange={setDayMenuOpen}
+        onBusinessDay={() => onNavigate('/shifts', { openBusinessDayDate: businessIso })}
+        businessDays={dayStatusQ.isError || dayStatusQ.isPending ? [] : businessDays}
+        businessDaysState={dayStatusQ.isError ? 'unavailable' : dayStatusQ.isPending ? 'loading' : 'ready'}
+        onSelectBusinessDay={(date) => onNavigate('/shifts', { openBusinessDayDate: date })}
         stationLabel={selectedStation?.name}
         onOpenSearch={() => setOpen(true)}
         quickCreate={quickCreate}
