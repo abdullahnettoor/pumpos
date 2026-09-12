@@ -106,7 +106,7 @@ export const ShiftCloseSuccess: React.FC<ShiftCloseSuccessProps> = ({ result, on
             <div style={{ padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, backgroundColor: 'var(--state-warning-bg)' }}>
               <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--state-warning-fg)' }}><AlertTriangle size={13} /> Shift is closed; unsaved dips remain retryable.</span>
               <div style={{ display: 'flex', gap: 6 }}>
-                {onDiscardTankDips && <Button variant="ghost" size="sm" onClick={onDiscardTankDips} disabled={isSavingDips}>Discard</Button>}
+                {onDiscardTankDips && <Button variant="ghost" size="sm" onClick={onDiscardTankDips} disabled={isSavingDips}>Discard Unsaved Dips</Button>}
                 <Button variant="secondary" size="sm" onClick={onSaveTankDips} loading={isSavingDips}>Save Tank Dips</Button>
               </div>
             </div>

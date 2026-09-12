@@ -4,6 +4,7 @@ import { Checkbox } from '../primitives/Toggle.js';
 import { CashCountPopover, type CashBreakdown } from '../primitives/CashCountPopover.js';
 import { Button } from '../../pump-ds/index.js';
 import { inr } from '../../utils/format.js';
+import { useConfirm } from '../primitives/ConfirmDialog.js';
 import { AlertTriangle, Check, ChevronLeft, ChevronRight, Lock, Wallet, Droplet, FileText } from 'lucide-react';
 import { ShiftBusinessDateContext } from './ShiftBusinessDateContext.js';
 
@@ -106,8 +107,10 @@ export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
   isClosing,
   onConfirmClose,
 }) => {
+  const confirm = useConfirm();
   const [step, setStep] = useState<Step>(1);
   const [recordDip, setRecordDip] = useState(false);
+  const [confirmPostCloseDip, setConfirmPostCloseDip] = useState(false);
   const [showVarianceWhy, setShowVarianceWhy] = useState(false);
   // Denomination counts for the counted safe cash (held here so re-opening the
   // popover / navigating steps preserves them). Reset when the drawer closes.
@@ -116,7 +119,8 @@ export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
 
   const cashVariance = closingCash - expectedCash;
   const hasWarnings = warnings.length > 0;
-  const canSubmit = !hasWarnings || confirmWarningsChecked;
+  const hasEnteredDip = Object.values(dipReadings).some((value) => value !== '');
+  const canSubmit = (!hasWarnings || confirmWarningsChecked) && (!hasEnteredDip || confirmPostCloseDip);
 
   const goNext = () => setStep((s) => (s < 4 ? ((s + 1) as Step) : s));
   const goBack = () => setStep((s) => (s > 1 ? ((s - 1) as Step) : s));
@@ -392,10 +396,21 @@ export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
               <Checkbox
                 label="I recorded physical dip readings this shift"
                 checked={recordDip}
-                onChange={(e) => {
+                onChange={async (e) => {
                   const next = e.target.checked;
+                  if (!next && Object.values(dipReadings).some((value) => value !== '')) {
+                    const confirmed = await confirm({
+                      title: 'Close without recording Tank Dips?',
+                      message: 'The entered Tank Dip values will be discarded. The Shift can still be closed without recording a dip.',
+                      confirmLabel: 'Discard Tank Dips',
+                      danger: true,
+                    });
+                    if (!confirmed) return;
+                    onDipReadingsChange({});
+                    onDipReasonsChange({});
+                    setConfirmPostCloseDip(false);
+                  }
                   setRecordDip(next);
-                  if (!next) onDipReadingsChange({});
                 }}
               />
             </div>
@@ -516,8 +531,22 @@ export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
                 </span>
               </div>
             </div>
+            {hasEnteredDip && (
+              <div className="close-wizard-toggle" style={{ marginTop: '12px' }}>
+                <Checkbox
+                  label="I understand these Tank Dips are not saved by Shift close and must be recorded separately afterward."
+                  checked={confirmPostCloseDip}
+                  onChange={(e) => setConfirmPostCloseDip(e.target.checked)}
+                />
+              </div>
+            )}
             <p className="close-wizard-helper" style={{ marginTop: '8px' }}>
+<<<<<<< HEAD
               On confirm, the Shift status moves to <strong>CLOSED</strong> and an immutable Shift Summary is generated and stored permanently. The Business Day remains open until it is closed explicitly.
+=======
+              On confirm, the shift status moves to <strong>CLOSED</strong> and an immutable Shift Summary
+              is generated and stored permanently.
+>>>>>>> c1c3ea6 (refactor: remove tank dips from shift close)
             </p>
           </section>
         )}

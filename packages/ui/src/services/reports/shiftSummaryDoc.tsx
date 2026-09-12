@@ -39,7 +39,6 @@ export const vol3 = (n: any) => `${Number(n || 0).toLocaleString('en-IN', { mini
 export const vol1 = (n: any) => `${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} L`;
 // Unit-aware variants (L for liquids, kg for CNG/Auto-LPG). Never sum across units.
 export const vol3u = (n: any, u?: string) => `${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} ${u || 'L'}`;
-export const vol1u = (n: any, u?: string) => `${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} ${u || 'L'}`;
 export const unitTotals = (rows: any[], getter: (r: any) => number, dec = 3): string => {
   const m: Record<string, number> = {};
   for (const r of rows) { const u = r.unit || 'L'; m[u] = (m[u] || 0) + Number(getter(r) || 0); }
@@ -321,41 +320,6 @@ const builders: Record<ShiftSummarySection, (d: any, cfg: ReportConfig) => React
           { text: r.notes || '—' }, { text: inr(r.amount) },
         ])}
         total={[{ text: 'TOTAL CREDIT SALES' }, { text: '' }, { text: '' }, { text: '' }, { text: '' }, { text: inr(d.creditSalesTotal ?? (d.creditSales || []).reduce((a: number, r: any) => a + Number(r.amount || 0), 0)), color: C.green }]}
-      />
-    </View>
-  ) : null),
-  dips: (d) => (d.dipReadings && d.dipReadings.length > 0 ? (
-    <View key="dips"><Text style={s.h2}>TANK PHYSICAL DIP RECONCILIATION</Text>
-      <TableView
-        columns={[
-          { header: 'Tank', flex: 1.6, strong: true }, { header: 'Product', flex: 2 },
-          { header: 'Tank Capacity', flex: 1.5, align: 'right', mono: true }, { header: 'Physical Actual Stock', flex: 1.8, align: 'right', mono: true, strong: true },
-        ]}
-        rows={(d.dipReadings || []).map((r: any) => [
-          { text: r.tankName || '' }, { text: `${r.productName || ''}${r.productCode ? ` (${r.productCode})` : ''}` },
-          { text: `${Number(r.capacity || 0).toLocaleString('en-IN')} ${r.unit || 'L'}` }, { text: vol1u(r.actualQuantity, r.unit) },
-        ])}
-      />
-    </View>
-  ) : null),
-  stockVariances: (d) => (d.stockVariances && d.stockVariances.length > 0 ? (
-    <View key="stockVariances"><Text style={s.h2}>PRODUCT STOCK VARIANCES</Text>
-      <TableView
-        columns={[
-          { header: 'Product', flex: 2, strong: true }, { header: 'Expected Stock', flex: 1.4, align: 'right', mono: true },
-          { header: 'Physical Actual', flex: 1.4, align: 'right', mono: true }, { header: 'Variance', flex: 1.3, align: 'right', mono: true },
-          { header: 'Status', flex: 1.4 },
-        ]}
-        rows={(d.stockVariances || []).map((sv: any) => {
-          const diff = Number(sv.varianceQuantity || 0);
-          const severe = Number(sv.expectedQuantity || 0) > 0 && Math.abs(diff) > 0.005 * Number(sv.expectedQuantity);
-          return [
-            { text: `${sv.productName || ''}${sv.productCode ? ` (${sv.productCode})` : ''}` },
-            { text: vol1u(sv.expectedQuantity, sv.unit) }, { text: vol1u(sv.actualQuantity, sv.unit) },
-            { text: `${diff > 0 ? '+' : ''}${vol1u(diff, sv.unit)}`, color: diff < 0 ? C.danger : diff > 0 ? C.success : C.ink },
-            { text: severe ? 'Discrepancy (>0.5%)' : 'Normal', color: severe ? C.warnFg : C.success },
-          ];
-        })}
       />
     </View>
   ) : null),

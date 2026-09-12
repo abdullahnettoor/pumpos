@@ -16,8 +16,9 @@ import { BusinessDayTab } from './BusinessDayTab.js';
 import { OpenShiftForm } from './OpenShiftForm.js';
 import { Tabs } from '../primitives/Tabs.js';
 import { useToast } from '../primitives/ToastProvider.js';
+import { useConfirm } from '../primitives/ConfirmDialog.js';
 import { useShiftStatus, useShiftTransactions, useInventoryStatus, useInvalidateOperational, queryKeys } from '../../query/hooks.js';
-import { createStockCountIdempotencyKey, isAmbiguousMutationError, loadPendingTankDipWorkflow, savePendingTankDipWorkflow, type PendingTankDipWorkflow } from '../../query/stockCountMutation.js';
+import { createStockCountIdempotencyKey, discardUnrecordedTankDips, isAmbiguousMutationError, loadPendingTankDipWorkflow, savePendingTankDipWorkflow, shouldResetTankDipDraft, type PendingTankDipWorkflow } from '../../query/stockCountMutation.js';
 import { openQuickEntry, useQuickEntry, type QuickEntryType } from '../../quick-entry/store.js';
 import { Station, resolveBusinessDate } from '@pump/shared';
 import type { OpenShiftFormValues } from '@pump/shared';
@@ -81,6 +82,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   const invalidateOperational = useInvalidateOperational();
   const qc = useQueryClient();
   const toast = useToast();
+  const confirm = useConfirm();
   const data = statusQ.data ?? null;
   const loading = statusQ.isLoading;
   const error = statusQ.error as Error | null;
@@ -139,6 +141,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   const [dipReadings, setDipReadings] = useState<Record<string, number | string>>({});
   const [dipReasons, setDipReasons] = useState<Record<string, string>>({});
   const [closedShiftSuccess, setClosedShiftSuccess] = useState<PendingTankDipWorkflow | null>(null);
+  const tankDipDraftShiftIdRef = React.useRef<string | null>(null);
   const skipPendingTankDipPersistRef = React.useRef(true);
   const uncertainCloseWorkflowRef = React.useRef<PendingTankDipWorkflow | null>(null);
 
@@ -374,8 +377,13 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
           readingsMap[nr.nozzleId] = Number(nr.closingReading);
         });
         setClosingReadings(readingsMap);
-        setDipReadings({});
-        setDipReasons({});
+        if (shouldResetTankDipDraft(tankDipDraftShiftIdRef.current, statusData.activeShift.id)) {
+          setDipReadings({});
+          setDipReasons({});
+        }
+        tankDipDraftShiftIdRef.current = statusData.activeShift.id;
+      } else {
+        tankDipDraftShiftIdRef.current = null;
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -585,6 +593,17 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     await invalidateOperational(stationId);
   };
 
+  const discardTankDips = async () => {
+    const unsavedCount = closedShiftSuccess?.tankDips.filter((dip) => dip.status !== 'saved').length ?? 0;
+    if (!(await confirm({
+      title: 'Discard unrecorded Tank Dips?',
+      message: `${unsavedCount} unrecorded Tank Dip ${unsavedCount === 1 ? 'value' : 'values'} will be discarded. Any Tank Dips already saved remain recorded for the Business Day.`,
+      confirmLabel: 'Discard Unrecorded',
+      danger: true,
+    }))) return;
+    setClosedShiftSuccess((current) => current ? discardUnrecordedTankDips(current) : current);
+  };
+
   if (!selectedStation) {
     return (
       <div style={{ color: 'var(--text-muted)', padding: '24px' }}>
@@ -700,7 +719,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         result={closedShiftSuccess}
         tankDips={closedShiftSuccess.tankDips}
         onSaveTankDips={saveTankDips}
-        onDiscardTankDips={() => setClosedShiftSuccess((current) => current ? { ...current, tankDips: [] } : current)}
+        onDiscardTankDips={discardTankDips}
         onStartNext={() => {
           setOpeningCash(closedShiftSuccess.closingCash);
           setSelectedTemplateId(closedShiftSuccess.nextTemplateId);

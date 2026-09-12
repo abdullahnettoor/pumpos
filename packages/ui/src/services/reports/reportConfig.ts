@@ -6,7 +6,7 @@ import type { Letterhead } from './letterhead.js';
 
 export type ShiftSummarySection =
   | 'header' | 'meta' | 'warnings' | 'nozzles' | 'handovers' | 'terminals'
-  | 'creditSales' | 'dips' | 'stockVariances' | 'cashRecon' | 'nonCash'
+  | 'creditSales' | 'cashRecon' | 'nonCash'
   | 'expenses' | 'purchases' | 'collections' | 'signatures';
 
 export type DssrSection =
@@ -31,7 +31,7 @@ export interface DssrReportConfig {
 export const DEFAULT_SHIFT_SUMMARY_CONFIG: ReportConfig = {
   sections: [
     'header', 'meta', 'warnings', 'nozzles', 'handovers', 'terminals', 'creditSales',
-    'dips', 'stockVariances', 'cashRecon', 'nonCash', 'expenses', 'purchases', 'collections', 'signatures',
+    'cashRecon', 'nonCash', 'expenses', 'purchases', 'collections', 'signatures',
   ],
   showLogo: true,
   paper: 'A4',
@@ -46,7 +46,7 @@ export const DEFAULT_DSSR_CONFIG: DssrReportConfig = {
 export const SHIFT_SUMMARY_SECTION_LABELS: Record<ShiftSummarySection, string> = {
   header: 'Header / Letterhead', meta: 'Shift Meta', warnings: 'Warnings',
   nozzles: 'Nozzle Reconciliation', handovers: 'Attendant Handovers', terminals: 'POS Terminals',
-  creditSales: 'Fuel-on-Credit Sales', dips: 'Tank Dips', stockVariances: 'Stock Variances',
+  creditSales: 'Fuel-on-Credit Sales',
   cashRecon: 'Cash Reconciliation', nonCash: 'Non-Cash Collections', expenses: 'Expenses',
   purchases: 'Purchases', collections: 'Collections', signatures: 'Signatures',
 };

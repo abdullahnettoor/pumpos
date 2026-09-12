@@ -34,6 +34,14 @@ export interface PendingTankDipWorkflow {
   closeStatus?: 'submitting' | 'closed';
 }
 
+export function shouldResetTankDipDraft(previousShiftId: string | null, activeShiftId: string | null): boolean {
+  return activeShiftId !== null && activeShiftId !== previousShiftId;
+}
+
+export function discardUnrecordedTankDips(workflow: PendingTankDipWorkflow): PendingTankDipWorkflow {
+  return { ...workflow, tankDips: workflow.tankDips.filter((dip) => dip.status === 'saved') };
+}
+
 const pendingTankDipKey = (stationId: string) => `pumpos:pending-tank-dips:${stationId}`;
 const pendingStockCountKey = 'pumpos:pending-stock-count';
 

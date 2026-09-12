@@ -111,6 +111,8 @@ describe('CloseShift', () => {
     expect(stock.saved).toHaveLength(1);
     expect(stock.saved[0].quantity).toBe('-100');
     expect(summaries.saved).not.toBeNull();
+    expect(summaries.saved?.snapshot).not.toHaveProperty('dipReadings');
+    expect(summaries.saved?.snapshot).not.toHaveProperty('stockVariances');
     const types = store.events.map((e) => e.eventType);
     expect(types).toContain(BusinessEvents.CASH_DECLARED);
     expect(types).toContain(BusinessEvents.SHIFT_CLOSED);

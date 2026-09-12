@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { RecordStockCountPayload } from '../services/cloud.js';
-import { isAmbiguousMutationError, loadPendingStockCountRequest, loadPendingTankDipWorkflow, resolveStockCountRequestIdentity, savePendingStockCountRequest, savePendingTankDipWorkflow } from './stockCountMutation.js';
+import { discardUnrecordedTankDips, isAmbiguousMutationError, loadPendingStockCountRequest, loadPendingTankDipWorkflow, resolveStockCountRequestIdentity, savePendingStockCountRequest, savePendingTankDipWorkflow, shouldResetTankDipDraft } from './stockCountMutation.js';
 
 const payload: RecordStockCountPayload = {
   stationId: 'station-1',
@@ -9,6 +9,29 @@ const payload: RecordStockCountPayload = {
 };
 
 describe('Stock Count mutation identity', () => {
+  it('preserves a Tank Dip draft across refreshes of the same active Shift', () => {
+    expect(shouldResetTankDipDraft('shift-1', 'shift-1')).toBe(false);
+    expect(shouldResetTankDipDraft(null, 'shift-1')).toBe(true);
+    expect(shouldResetTankDipDraft('shift-1', 'shift-2')).toBe(true);
+  });
+
+  it('discards only unrecorded dips after a partial save', () => {
+    const workflow = {
+      expectedCash: 100,
+      closingCash: 100,
+      variance: 0,
+      lastClosedShiftId: 'shift-1',
+      nextTemplateId: 'template-2',
+      closeStatus: 'closed' as const,
+      tankDips: [
+        { tankId: 'tank-1', tankName: 'Tank 1', actualQuantity: 1000, status: 'saved' as const, idempotencyKey: 'key-1' },
+        { tankId: 'tank-2', tankName: 'Tank 2', actualQuantity: 2000, status: 'failed' as const, idempotencyKey: 'key-2' },
+      ],
+    };
+
+    expect(discardUnrecordedTankDips(workflow).tankDips).toEqual([workflow.tankDips[0]]);
+  });
+
   it('retains one idempotency key for an unchanged retry', () => {
     let created = 0;
     const createKey = () => `key-${++created}`;
