@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { and, desc, eq, inArray, ne, sql } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
-import { canOpenShift, canCloseShift, canReopenShift, isAuthorizedForStation, isAttendant, resolveBusinessDate, type Role } from '@pump/shared';
+import { canOpenShift, canCloseShift, canReopenShift, canRecordHandover, isAuthorizedForStation, isAttendant, resolveBusinessDate, type Role } from '@pump/shared';
 import {
   OpenShift,
   RecordNozzleReadings,
@@ -11,6 +11,7 @@ import {
   OpenBusinessDay,
   CloseBusinessDayAndGenerateDssr,
   GetBusinessDayStatus,
+  RecordHandover,
   type Result,
 } from '@pump/core';
 import { buildContext } from '../infra/context.js';
@@ -30,6 +31,8 @@ import {
   DrizzleCreditSalesReader,
   DrizzleStockMovementWriter,
   DrizzleShiftSummaryWriter,
+  DrizzleHandoverContextReader,
+  DrizzleHandoverRepository,
 } from '../infra/repositories/station-ops-repositories.js';
 import { DrizzleDssrDataReader, DrizzleDssrSnapshotRepository } from '../infra/repositories/reporting-repositories.js';
 import { LedgerPostingService } from '../infra/ledger-posting.js';
@@ -967,6 +970,9 @@ shiftsRouter.get('/handovers', async (c) => {
 shiftsRouter.post('/handovers', async (c) => {
   const db = c.var.db;
   const user = c.var.user;
+  if (!canRecordHandover(user.role)) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions to record a handover' } }, 403);
+  }
   const body = await c.req.json().catch(() => ({}));
   const { shiftId, userId, duId } = body ?? {};
   // Attendants derive userId from their own session, so only shiftId + duId are
@@ -974,116 +980,29 @@ shiftsRouter.post('/handovers', async (c) => {
   if (!shiftId || !duId || (!userId && !isAttendant(user.role))) {
     return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'shiftId, userId and duId are required' } }, 400);
   }
-  const [shift] = await db.select().from(schema.shifts).where(eq(schema.shifts.id, shiftId)).limit(1);
-  if (!shift || shift.organizationId !== user.organizationId) {
+  const [shift] = await db.select().from(schema.shifts).where(and(eq(schema.shifts.id, shiftId), eq(schema.shifts.organizationId, user.organizationId))).limit(1);
+  if (!shift) {
     return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Shift not found' } }, 404);
   }
-  if (shift.status === 'LOCKED') {
-    return c.json({ success: false, error: { code: 'INVARIANT_VIOLATION', message: 'Shift is locked' } }, 409);
-  }
-  // Caller must be authorized for the shift's station.
   if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId: shift.stationId })) {
     return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
   }
-  // Attendants may only record their OWN handover, and only for a dispenser unit
-  // they are assigned to on this shift. Operational roles may record on behalf of
-  // any attendant (the userId from the body stands).
-  let effectiveUserId: string = userId ?? user.id;
-  if (isAttendant(user.role)) {
-    effectiveUserId = user.id;
-    const [assigned] = await db
-      .select({ id: schema.shiftStaffAssignments.id })
-      .from(schema.shiftStaffAssignments)
-      .where(
-        and(
-          eq(schema.shiftStaffAssignments.shiftId, shiftId),
-          eq(schema.shiftStaffAssignments.userId, user.id),
-          eq(schema.shiftStaffAssignments.duId, duId),
-        ),
-      )
-      .limit(1);
-    if (!assigned) {
-      return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Not assigned to this dispenser unit' } }, 403);
-    }
-  }
-  // Per-terminal card/UPI breakdown. When present, the card/UPI aggregates are
-  // derived from these rows so the two can never drift apart.
-  const terminalEntries: { terminalId: string; duId?: string | null; cardAmount: number; upiAmount: number; batchRef?: string | null }[] =
-    Array.isArray(body.terminalEntries) ? body.terminalEntries : [];
-  const hasTerminalEntries = terminalEntries.length > 0;
-  const derivedCard = terminalEntries.reduce((acc, e) => acc + Number(e.cardAmount ?? 0), 0);
-  const derivedUpi = terminalEntries.reduce((acc, e) => acc + Number(e.upiAmount ?? 0), 0);
-  const values = {
-    organizationId: user.organizationId,
-    stationId: shift.stationId,
+  const result = await runInTransaction(db, (tx, events) => new RecordHandover({
+    shifts: new DrizzleShiftRepository(tx),
+    context: new DrizzleHandoverContextReader(tx),
+    handovers: new DrizzleHandoverRepository(tx),
+    events,
+  }).execute({
     shiftId,
-    userId: effectiveUserId,
+    attendantId: isAttendant(user.role) ? user.id : userId,
     duId,
-    cashHandedOver: String(body.cashHandedOver ?? 0),
-    cardHandedOver: String(hasTerminalEntries ? derivedCard : body.cardHandedOver ?? 0),
-    upiHandedOver: String(hasTerminalEntries ? derivedUpi : body.upiHandedOver ?? 0),
-    creditHandedOver: String(body.creditHandedOver ?? 0),
-    testingVolume: String(body.testingVolume ?? 0),
-    expectedSales: String(body.expectedSales ?? 0),
-    varianceAmount: String(body.varianceAmount ?? 0),
-  };
-  // One handover per (shift, user, du): replace if re-declared. Per-terminal
-  // entries cascade-delete with the old handover row.
-  await db
-    .delete(schema.attendantHandovers)
-    .where(and(eq(schema.attendantHandovers.shiftId, shiftId), eq(schema.attendantHandovers.userId, effectiveUserId), eq(schema.attendantHandovers.duId, duId)));
-  const [row] = await db.insert(schema.attendantHandovers).values(values).returning();
-
-  if (hasTerminalEntries) {
-    await db.insert(schema.handoverTerminalEntries).values(
-      terminalEntries
-        .filter((e) => e?.terminalId)
-        .map((e) => ({
-          organizationId: user.organizationId,
-          stationId: shift.stationId,
-          handoverId: row.id,
-          shiftId,
-          terminalId: e.terminalId,
-          duId: e.duId ?? duId ?? null,
-          cardAmount: String(e.cardAmount ?? 0),
-          upiAmount: String(e.upiAmount ?? 0),
-          batchRef: e.batchRef ?? null,
-        })),
-    );
-  }
-
-  // Persist the closing nozzle readings declared in the handover so the shift
-  // close picks up the volumes (volume = closing - opening).
-  const readings: { nozzleId: string; closingReading: number; testingVolume?: number }[] = Array.isArray(body.nozzleReadings) ? body.nozzleReadings : [];
-  for (const r of readings) {
-    if (!r?.nozzleId || r.closingReading == null) continue;
-    const [existing] = await db
-      .select()
-      .from(schema.nozzleReadings)
-      .where(and(eq(schema.nozzleReadings.shiftId, shiftId), eq(schema.nozzleReadings.nozzleId, r.nozzleId)))
-      .limit(1);
-    if (!existing) continue;
-    const opening = Number(existing.openingReading);
-    const closing = Number(r.closingReading);
-    if (closing < opening) continue;
-    const gross = closing - opening;
-    const setFields: { closingReading: string; volumeSold: string; testingVolume?: string } = {
-      closingReading: String(closing),
-      volumeSold: String(gross),
-    };
-    // Only overwrite testing when the caller explicitly sent a value; otherwise
-    // preserve the previously-saved testing (a reading-only re-save must not
-    // silently zero the calibration volume).
-    if (r.testingVolume !== undefined && r.testingVolume !== null) {
-      setFields.testingVolume = String(Math.min(Math.max(Number(r.testingVolume), 0), gross));
-    }
-    await db
-      .update(schema.nozzleReadings)
-      .set(setFields)
-      .where(eq(schema.nozzleReadings.id, existing.id));
-  }
-
-  return c.json({ success: true, data: row });
+    cashHandedOver: body.cashHandedOver ?? 0,
+    cardHandedOver: body.cardHandedOver,
+    upiHandedOver: body.upiHandedOver,
+    nozzleReadings: Array.isArray(body.nozzleReadings) ? body.nozzleReadings : [],
+    terminalEntries: Array.isArray(body.terminalEntries) ? body.terminalEntries : undefined,
+  }, buildContext(user, { stationId: shift.stationId, businessDayId: shift.businessDayId })));
+  return sendResult(c, result);
 });
 
 // POST /api/shifts/open

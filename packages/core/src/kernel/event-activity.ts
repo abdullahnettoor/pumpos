@@ -133,7 +133,11 @@ export const EventActivityCatalog = {
   [BusinessEvents.CASH_DECLARED]: info(BusinessEvents.CASH_DECLARED, 'Cash declared', [
     template('cash-declared.v1', 'Declared {closingCash} cash.', { closingCash: 'inr' }),
   ]),
-  [BusinessEvents.HANDOVER_RECORDED]: info(BusinessEvents.HANDOVER_RECORDED, 'Handover recorded'),
+  [BusinessEvents.HANDOVER_RECORDED]: info(BusinessEvents.HANDOVER_RECORDED, 'Handover recorded', [
+    template('handover-recorded.v1', "Recorded {attendantName}'s handover for {duName}.", {
+      attendantName: 'text', duName: 'text',
+    }),
+  ]),
   [BusinessEvents.DSSR_GENERATED]: success(BusinessEvents.DSSR_GENERATED, 'DSSR generated'),
   [BusinessEvents.FUEL_SALE_RECORDED]: success(BusinessEvents.FUEL_SALE_RECORDED, 'Fuel sale recorded'),
   [BusinessEvents.RETAIL_SALE_CREATED]: success(BusinessEvents.RETAIL_SALE_CREATED, 'Sale recorded', [

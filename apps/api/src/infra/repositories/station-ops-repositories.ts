@@ -1,4 +1,4 @@
-import { and, eq, inArray, desc, lt, sql } from 'drizzle-orm';
+import { and, eq, inArray, desc, lt, ne, sql } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
 import type {
   BusinessDay,
@@ -19,6 +19,12 @@ import type {
   StockMovementInput,
   StockMovementWriter,
   ShiftSummaryWriter,
+  AcceptedHandoverReading,
+  AttendantHandover,
+  HandoverContext,
+  HandoverContextReader,
+  HandoverRepository,
+  HandoverTerminalEntry,
 } from '@pump/core';
 
 export class DrizzleBusinessDayStatusReader implements BusinessDayStatusReader {
@@ -217,7 +223,7 @@ export class DrizzleShiftRepository implements ShiftRepository {
     };
   }
   async findById(id: string): Promise<Shift | null> {
-    const [r] = await this.db.select().from(schema.shifts).where(eq(schema.shifts.id, id)).limit(1);
+    const [r] = await this.db.select().from(schema.shifts).where(eq(schema.shifts.id, id)).limit(1).for('update');
     return r ? this.toEntity(r) : null;
   }
   async save(s: Shift): Promise<void> {
@@ -321,6 +327,248 @@ export class DrizzleNozzleReadingRepository implements NozzleReadingRepository {
   }
   async updateClosing(id: string, closingReading: string, volumeSold: string): Promise<void> {
     await this.db.update(schema.nozzleReadings).set({ closingReading, volumeSold }).where(eq(schema.nozzleReadings.id, id));
+  }
+}
+
+// ---------------- Attendant Handover ----------------
+export class DrizzleHandoverContextReader implements HandoverContextReader {
+  constructor(private readonly db: DbClient) {}
+
+  async load(organizationId: string, stationId: string, shiftId: string, attendantId: string, duId: string): Promise<HandoverContext> {
+    const [attendantRows, dispenserRows, assignmentRows, readingRows, terminalRows, creditRows, omcRows, merchandiseRows] = await Promise.all([
+      this.db.select().from(schema.users).where(and(eq(schema.users.id, attendantId), eq(schema.users.organizationId, organizationId))).limit(1),
+      this.db.select().from(schema.dispenserUnits).where(and(
+        eq(schema.dispenserUnits.id, duId),
+        eq(schema.dispenserUnits.organizationId, organizationId),
+        eq(schema.dispenserUnits.stationId, stationId),
+      )).limit(1),
+      this.db.select({ id: schema.shiftStaffAssignments.id }).from(schema.shiftStaffAssignments)
+        .innerJoin(schema.shifts, and(
+          eq(schema.shifts.id, schema.shiftStaffAssignments.shiftId),
+          eq(schema.shifts.organizationId, organizationId),
+          eq(schema.shifts.stationId, stationId),
+        ))
+        .where(and(
+          eq(schema.shiftStaffAssignments.shiftId, shiftId),
+          eq(schema.shiftStaffAssignments.userId, attendantId),
+          eq(schema.shiftStaffAssignments.duId, duId),
+        )).limit(1),
+      this.db.select({ reading: schema.nozzleReadings, nozzle: schema.nozzles }).from(schema.nozzles)
+        .leftJoin(schema.nozzleReadings, and(
+          eq(schema.nozzleReadings.nozzleId, schema.nozzles.id),
+          eq(schema.nozzleReadings.shiftId, shiftId),
+        ))
+        .where(and(
+          eq(schema.nozzles.organizationId, organizationId),
+          eq(schema.nozzles.stationId, stationId),
+          eq(schema.nozzles.duId, duId),
+        )),
+      this.db.select({ terminal: schema.paymentTerminals, linkedDuId: schema.shiftTerminalLinks.duId })
+        .from(schema.paymentTerminals)
+        .leftJoin(schema.shiftTerminalLinks, and(
+          eq(schema.shiftTerminalLinks.terminalId, schema.paymentTerminals.id),
+          eq(schema.shiftTerminalLinks.shiftId, shiftId),
+        ))
+        .where(and(
+          eq(schema.paymentTerminals.organizationId, organizationId),
+          eq(schema.paymentTerminals.stationId, stationId),
+          eq(schema.paymentTerminals.isActive, true),
+        )),
+      this.db.select({ amount: schema.customerTransactions.amount }).from(schema.customerTransactions)
+        .innerJoin(schema.shifts, and(
+          eq(schema.shifts.id, schema.customerTransactions.shiftId),
+          eq(schema.shifts.organizationId, organizationId),
+          eq(schema.shifts.stationId, stationId),
+        ))
+        .where(and(
+          eq(schema.customerTransactions.shiftId, shiftId),
+          eq(schema.customerTransactions.attendantId, attendantId),
+          eq(schema.customerTransactions.duId, duId),
+          eq(schema.customerTransactions.transactionType, 'Credit Sale'),
+          eq(schema.customerTransactions.referenceType, 'CREDIT_SALE'),
+        )),
+      this.db.select({ amount: schema.customerTransactions.amount }).from(schema.customerTransactions)
+        .innerJoin(schema.shifts, and(
+          eq(schema.shifts.id, schema.customerTransactions.shiftId),
+          eq(schema.shifts.organizationId, organizationId),
+          eq(schema.shifts.stationId, stationId),
+        ))
+        .where(and(
+          eq(schema.customerTransactions.shiftId, shiftId),
+          eq(schema.customerTransactions.attendantId, attendantId),
+          eq(schema.customerTransactions.duId, duId),
+          eq(schema.customerTransactions.transactionType, 'OMC Sale'),
+          eq(schema.customerTransactions.referenceType, 'OMC_CARD_SALE'),
+        )),
+      this.db.select({ total: schema.sales.totalAmount, nonCash: schema.sales.nonCashAmount }).from(schema.sales)
+        .innerJoin(schema.shifts, and(
+          eq(schema.shifts.id, schema.sales.shiftId),
+          eq(schema.shifts.organizationId, organizationId),
+          eq(schema.shifts.stationId, stationId),
+        ))
+        .where(and(
+          eq(schema.sales.shiftId, shiftId),
+          eq(schema.sales.attendantId, attendantId),
+          ne(schema.sales.saleType, 'Fuel'),
+          eq(schema.sales.paymentMethod, 'Cash'),
+        )),
+    ]);
+
+    const attendant = attendantRows[0];
+    const dispenser = dispenserRows[0];
+    return {
+      attendant: attendant ? { id: attendant.id, organizationId: attendant.organizationId, fullName: attendant.fullName, role: attendant.role, status: attendant.status } : null,
+      dispenser: dispenser ? {
+        id: dispenser.id,
+        organizationId: dispenser.organizationId,
+        stationId: dispenser.stationId,
+        name: dispenser.name,
+        code: dispenser.code,
+        status: dispenser.status,
+      } : null,
+      assigned: assignmentRows.length > 0,
+      nozzleReadings: readingRows.filter((row) => row.reading !== null).map(({ reading, nozzle }) => ({
+        ...this.toHandoverReading(reading!),
+        organizationId: nozzle.organizationId,
+        stationId: nozzle.stationId,
+        duId: nozzle.duId,
+        nozzleName: nozzle.name,
+      })),
+      missingReadingNozzleIds: readingRows.filter((row) => row.reading === null).map((row) => row.nozzle.id),
+      terminals: terminalRows.map(({ terminal, linkedDuId }) => ({
+        id: terminal.id,
+        organizationId: terminal.organizationId,
+        stationId: terminal.stationId,
+        label: terminal.label,
+        supportsCard: terminal.supportsCard,
+        supportsUpi: terminal.supportsUpi,
+        isActive: terminal.isActive,
+        linkedDuId,
+      })),
+      creditSales: creditRows.reduce((sum, row) => sum + Number(row.amount), 0),
+      omcCardSales: omcRows.reduce((sum, row) => sum + Number(row.amount), 0),
+      merchandiseCash: merchandiseRows.reduce((sum, row) => sum + Number(row.total) - Number(row.nonCash ?? 0), 0),
+    };
+  }
+
+  private toHandoverReading(r: typeof schema.nozzleReadings.$inferSelect) {
+    return {
+      id: r.id,
+      shiftId: r.shiftId,
+      nozzleId: r.nozzleId,
+      openingReading: r.openingReading,
+      closingReading: r.closingReading,
+      volumeSold: r.volumeSold,
+      testingVolume: r.testingVolume,
+      unitPrice: r.unitPrice,
+      createdAt: r.createdAt.toISOString(),
+    };
+  }
+}
+
+export class DrizzleHandoverRepository implements HandoverRepository {
+  constructor(private readonly db: DbClient) {}
+
+  async replaceCurrent(handover: AttendantHandover, terminalEntries: HandoverTerminalEntry[]) {
+    await this.db.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`${handover.organizationId}:${handover.stationId}:${handover.shiftId}:${handover.attendantId}:${handover.duId}`}, 0))`);
+    const [existing] = await this.db.select({ id: schema.attendantHandovers.id }).from(schema.attendantHandovers).where(and(
+      eq(schema.attendantHandovers.organizationId, handover.organizationId),
+      eq(schema.attendantHandovers.stationId, handover.stationId),
+      eq(schema.attendantHandovers.shiftId, handover.shiftId),
+      eq(schema.attendantHandovers.userId, handover.attendantId),
+      eq(schema.attendantHandovers.duId, handover.duId),
+    )).limit(1);
+    const [row] = await this.db.insert(schema.attendantHandovers).values({
+      id: handover.id,
+      organizationId: handover.organizationId,
+      stationId: handover.stationId,
+      shiftId: handover.shiftId,
+      userId: handover.attendantId,
+      duId: handover.duId,
+      cashHandedOver: handover.cashHandedOver,
+      cardHandedOver: handover.cardHandedOver,
+      upiHandedOver: handover.upiHandedOver,
+      creditHandedOver: handover.creditHandedOver,
+      testingVolume: handover.testingVolume,
+      expectedSales: handover.expectedSales,
+      varianceAmount: handover.varianceAmount,
+      createdAt: new Date(handover.createdAt),
+    }).onConflictDoUpdate({
+      target: [
+        schema.attendantHandovers.organizationId,
+        schema.attendantHandovers.stationId,
+        schema.attendantHandovers.shiftId,
+        schema.attendantHandovers.userId,
+        schema.attendantHandovers.duId,
+      ],
+      set: {
+        cashHandedOver: handover.cashHandedOver,
+        cardHandedOver: handover.cardHandedOver,
+        upiHandedOver: handover.upiHandedOver,
+        creditHandedOver: handover.creditHandedOver,
+        testingVolume: handover.testingVolume,
+        expectedSales: handover.expectedSales,
+        varianceAmount: handover.varianceAmount,
+        createdAt: new Date(handover.createdAt),
+      },
+    }).returning();
+
+    await this.db.delete(schema.handoverTerminalEntries).where(eq(schema.handoverTerminalEntries.handoverId, row.id));
+    const savedEntries = terminalEntries.length > 0
+      ? await this.db.insert(schema.handoverTerminalEntries).values(terminalEntries.map((entry) => ({
+          id: entry.id,
+          organizationId: handover.organizationId,
+          stationId: handover.stationId,
+          handoverId: row.id,
+          shiftId: handover.shiftId,
+          terminalId: entry.terminalId,
+          duId: entry.duId,
+          cardAmount: entry.cardAmount,
+          upiAmount: entry.upiAmount,
+          batchRef: entry.batchRef,
+          createdAt: new Date(entry.createdAt),
+        }))).returning()
+      : [];
+    const saved: AttendantHandover = {
+      id: row.id,
+      organizationId: row.organizationId,
+      stationId: row.stationId,
+      shiftId: row.shiftId,
+      attendantId: row.userId,
+      duId: row.duId,
+      cashHandedOver: row.cashHandedOver,
+      cardHandedOver: row.cardHandedOver,
+      upiHandedOver: row.upiHandedOver,
+      creditHandedOver: row.creditHandedOver,
+      testingVolume: row.testingVolume,
+      expectedSales: row.expectedSales,
+      varianceAmount: row.varianceAmount,
+      createdAt: row.createdAt.toISOString(),
+    };
+    return {
+      handover: saved,
+      replaced: Boolean(existing),
+      terminalEntries: savedEntries.map((entry) => ({
+        id: entry.id,
+        handoverId: entry.handoverId,
+        terminalId: entry.terminalId,
+        duId: entry.duId ?? handover.duId,
+        cardAmount: entry.cardAmount,
+        upiAmount: entry.upiAmount,
+        batchRef: entry.batchRef,
+        createdAt: entry.createdAt.toISOString(),
+      })),
+    };
+  }
+
+  async updateReadings(readings: AcceptedHandoverReading[]): Promise<void> {
+    for (const reading of readings) {
+      await this.db.update(schema.nozzleReadings).set({
+        closingReading: String(reading.closingReading),
+        volumeSold: String(reading.grossVolume),
+        testingVolume: String(reading.testingVolume),
+      }).where(eq(schema.nozzleReadings.id, reading.id));
+    }
   }
 }
 

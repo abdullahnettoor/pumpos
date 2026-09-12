@@ -47,6 +47,24 @@ describe('event activity', () => {
     });
   });
 
+  it('renders Handover display values captured at action time', () => {
+    const rendered = renderEventActivity({
+      eventType: BusinessEvents.HANDOVER_RECORDED,
+      metadata: {
+        presentation: {
+          templateId: 'handover-recorded.v1',
+          values: { attendantName: 'Asha Nair', duName: 'Dispenser 1' },
+        },
+      },
+    });
+
+    expect(rendered).toMatchObject({
+      title: 'Handover recorded',
+      description: "Recorded Asha Nair's handover for Dispenser 1.",
+      renderStatus: 'rendered',
+    });
+  });
+
   it('falls back safely for missing or unregistered presentation data', () => {
     expect(renderEventActivity({
       eventType: BusinessEvents.CREDIT_SALE_CREATED,

@@ -57,6 +57,88 @@ export interface NozzleReadingRepository {
   updateClosing(id: string, closingReading: string, volumeSold: string): Promise<void>;
 }
 
+export interface HandoverNozzleReading extends NozzleReading {
+  organizationId: string;
+  stationId: string;
+  duId: string;
+  nozzleName: string;
+}
+
+export interface HandoverTerminal {
+  id: string;
+  organizationId: string;
+  stationId: string;
+  label: string;
+  supportsCard: boolean;
+  supportsUpi: boolean;
+  isActive: boolean;
+  linkedDuId: string | null;
+}
+
+export interface HandoverContext {
+  attendant: { id: string; organizationId: string; fullName: string; role: string; status: string } | null;
+  dispenser: { id: string; organizationId: string; stationId: string; name: string; code: string; status: string } | null;
+  assigned: boolean;
+  nozzleReadings: HandoverNozzleReading[];
+  missingReadingNozzleIds: string[];
+  terminals: HandoverTerminal[];
+  creditSales: number;
+  omcCardSales: number;
+  merchandiseCash: number;
+}
+
+export interface HandoverContextReader {
+  load(organizationId: string, stationId: string, shiftId: string, attendantId: string, duId: string): Promise<HandoverContext>;
+}
+
+export interface AttendantHandover {
+  id: string;
+  organizationId: string;
+  stationId: string;
+  shiftId: string;
+  attendantId: string;
+  duId: string;
+  cashHandedOver: string;
+  cardHandedOver: string;
+  upiHandedOver: string;
+  creditHandedOver: string;
+  testingVolume: string;
+  expectedSales: string;
+  varianceAmount: string;
+  createdAt: string;
+}
+
+export interface HandoverTerminalEntry {
+  id: string;
+  handoverId: string;
+  terminalId: string;
+  duId: string;
+  cardAmount: string;
+  upiAmount: string;
+  batchRef: string | null;
+  createdAt: string;
+}
+
+export interface AcceptedHandoverReading {
+  id: string;
+  nozzleId: string;
+  openingReading: number;
+  closingReading: number;
+  grossVolume: number;
+  testingVolume: number;
+  netVolume: number;
+  unitPrice: number;
+  expectedSales: number;
+}
+
+export interface HandoverRepository {
+  replaceCurrent(
+    handover: AttendantHandover,
+    terminalEntries: HandoverTerminalEntry[],
+  ): Promise<{ handover: AttendantHandover; terminalEntries: HandoverTerminalEntry[]; replaced: boolean }>;
+  updateReadings(readings: AcceptedHandoverReading[]): Promise<void>;
+}
+
 /** Drawer-relevant money totals for a shift (drawer reconciliation model). */
 export interface ShiftReconciliationTotals {
   cashSales: number;

@@ -794,7 +794,10 @@ export const attendantHandovers = pgTable('attendant_handovers', {
   expectedSales: numeric('expected_sales', { precision: 12, scale: 2 }).default('0').notNull(),
   varianceAmount: numeric('variance_amount', { precision: 12, scale: 2 }).default('0').notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
-});
+}, (t) => ({
+  currentHandoverUniq: uniqueIndex('attendant_handovers_org_station_shift_user_du_uniq')
+    .on(t.organizationId, t.stationId, t.shiftId, t.userId, t.duId),
+}));
 
 // Per-terminal card/UPI breakdown captured within an attendant handover. The
 // parent handover's card/upi aggregates are the sum of these rows when present.
