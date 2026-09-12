@@ -9,7 +9,7 @@ import { useToast } from '../primitives/ToastProvider.js';
 import { useConfirm } from '../primitives/ConfirmDialog.js';
 import { CloudShiftService } from '../../services/cloud.js';
 import { inr, formatQty, formatTime } from '../../utils/format.js';
-import { useDailyDssrPreview, useShiftStatus, useInvalidateOperational, useCustomers } from '../../query/hooks.js';
+import { useBusinessDayStatus, useDailyDssrPreview, useShiftStatus, useInvalidateOperational, useCustomers } from '../../query/hooks.js';
 
 const shiftService = new CloudShiftService();
 
@@ -53,6 +53,7 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({ selectedStation,
   const canClose = userRole === 'Owner' || userRole === 'Manager';
 
   const previewQ = useDailyDssrPreview(stationId, businessDate, { enabled: !!stationId } as any);
+  const businessDayStatusQ = useBusinessDayStatus(stationId, businessDate, { enabled: !!stationId } as any);
   const { data: shiftStatus } = useShiftStatus(stationId, true, { enabled: !!stationId } as any);
   const hasOpenShift = !!(shiftStatus as any)?.activeShift;
 
@@ -124,7 +125,8 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({ selectedStation,
     );
   }
 
-  const status = (snap?.status as string) || 'OPEN';
+  const status = businessDayStatusQ.data?.requestedState;
+  const pastOpenBusinessDays = businessDayStatusQ.data?.pastOpenBusinessDays ?? [];
   const liveAsOf = preview?.generatedAt ? formatTime(preview.generatedAt) : null;
 
   const handleCloseDay = async () => {
@@ -175,9 +177,15 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({ selectedStation,
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <StatusChip status={status === 'CLOSED' ? 'closed' : 'open'} size="sm" />
+          {businessDayStatusQ.isError
+            ? <Chip tone="danger" size="xs">Unavailable</Chip>
+            : !status
+            ? <Chip tone="neutral" size="xs">Checking</Chip>
+            : status === 'NOT_CREATED'
+            ? <Chip tone="neutral" size="xs">Not started</Chip>
+            : <StatusChip status={status === 'CLOSED' ? 'closed' : 'open'} size="sm" />}
           {preview?.live && <Chip tone="warning" size="xs">Live{liveAsOf ? ` · ${liveAsOf}` : ''}</Chip>}
-          {status !== 'CLOSED' && canClose && snap && (
+          {status === 'OPEN' && canClose && snap && (
             <Button
               variant="primary"
               size="sm"
@@ -193,14 +201,35 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({ selectedStation,
         </div>
       </div>
 
-      {hasOpenShift && status !== 'CLOSED' && canClose && snap && (
+      {pastOpenBusinessDays.length > 0 && (
+        <Panel flush title={`Past Open Business Days · ${pastOpenBusinessDays.length}`}>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            {pastOpenBusinessDays.map((day: any) => (
+              <div key={day.id} style={{ ...rowStyle, gap: '16px' }}>
+                <div style={{ minWidth: 120 }}>
+                  <DateText value={day.businessDate} tone="strong" icon={false} />
+                  <div style={{ color: 'var(--state-warning-fg)', fontSize: '11px', marginTop: 2 }}>Delayed Closure</div>
+                </div>
+                <div style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
+                  {Number(day.openShiftCount)} open · {Number(day.closedShiftCount)} closed Shift{Number(day.closedShiftCount) === 1 ? '' : 's'}
+                </div>
+                <div style={{ marginLeft: 'auto', color: 'var(--text-muted)', fontSize: '12px', textAlign: 'right' }}>
+                  Last activity <DateText value={day.lastActivityAt} variant="datetime" icon={false} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </Panel>
+      )}
+
+      {hasOpenShift && status === 'OPEN' && canClose && snap && (
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center', padding: '8px 12px', backgroundColor: 'var(--state-warning-bg)', color: 'var(--state-warning-fg)', borderRadius: 'var(--radius-input)', fontSize: '12px', border: '1px solid var(--border-soft)' }}>
           <Info size={14} style={{ flexShrink: 0 }} />
           <span>A shift is still open. Close the active shift before closing the business day.</span>
         </div>
       )}
 
-      {status !== 'CLOSED' && canClose && eodDueCustomers.length > 0 && (
+      {status === 'OPEN' && canClose && eodDueCustomers.length > 0 && (
         <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', padding: '8px 12px', backgroundColor: 'var(--state-warning-bg)', color: 'var(--state-warning-fg)', borderRadius: 'var(--radius-input)', fontSize: '12px', border: '1px solid var(--border-soft)' }}>
           <Info size={14} style={{ flexShrink: 0, marginTop: '1px' }} />
           <span>

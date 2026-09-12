@@ -51,6 +51,9 @@ export interface BusinessDayOption {
   /** Human label (e.g. "Mon, 12 May"). */
   label: string;
   status?: 'open' | 'closed';
+  openShiftCount?: number;
+  closedShiftCount?: number;
+  lastActivityAt?: string;
 }
 
 /** True on macOS/iPadOS — render the ⌘ glyph instead of the "Ctrl" text. */
@@ -65,7 +68,7 @@ export interface TopBarProps {
   brand?: ReactNode;
 
   businessDate: string;
-  businessDayStatus: 'open' | 'closed';
+  businessDayStatus: 'open' | 'closed' | 'not-created' | 'unknown' | 'unavailable';
   /** Hide the business-day anchor entirely (e.g. pre-onboarding hub). */
   showBusinessDay?: boolean;
   /** Navigate to today's live view (dashboard). */
@@ -161,25 +164,27 @@ export const TopBar: React.FC<TopBarProps> = ({
             <BusinessDayChip date={businessDate} status={businessDayStatus} />
           </MenuTrigger>
           <MenuContent align="start">
-            <MenuLabel>Business day</MenuLabel>
+            <MenuLabel>Business Day</MenuLabel>
             <MenuItem onSelect={onBusinessDay}>
               <span className="flex flex-1 items-center justify-between gap-3">
-                <span>Today · {businessDate}</span>
+                <span>Current Business Date · {businessDate}</span>
                 <span className={cn('text-[11px] font-medium', businessDayStatus === 'open' ? 'text-brand' : 'text-ink-muted')}>
-                  {businessDayStatus === 'open' ? 'Open' : 'Closed'}
+                  {businessDayStatus === 'open' ? 'Open' : businessDayStatus === 'closed' ? 'Closed' : businessDayStatus === 'not-created' ? 'Not started' : businessDayStatus === 'unavailable' ? 'Unavailable' : 'Checking'}
                 </span>
               </span>
             </MenuItem>
-            {businessDays.length > 0 && <MenuSeparator />}
+            {businessDays.length > 0 && <><MenuSeparator /><MenuLabel>Past Open Business Days</MenuLabel></>}
             {businessDays.map((d) => (
               <MenuItem key={d.date} onSelect={() => onSelectBusinessDay?.(d.date)}>
-                <span className="flex flex-1 items-center justify-between gap-3">
-                  <span>{d.label}</span>
-                  {d.status && (
-                    <span className={cn('text-[11px]', d.status === 'open' ? 'text-brand' : 'text-ink-faint')}>
-                      {d.status === 'open' ? 'Open' : 'Closed'}
+                <span className="flex flex-1 items-center justify-between gap-4">
+                  <span className="flex flex-col">
+                    <span>{d.label}</span>
+                    <span className="text-[10px] text-ink-faint">
+                      {d.openShiftCount ?? 0} open · {d.closedShiftCount ?? 0} closed
+                      {d.lastActivityAt ? ` · Active ${new Date(d.lastActivityAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}` : ''}
                     </span>
-                  )}
+                  </span>
+                  <span className="text-[11px] text-brand">Delayed closure</span>
                 </span>
               </MenuItem>
             ))}

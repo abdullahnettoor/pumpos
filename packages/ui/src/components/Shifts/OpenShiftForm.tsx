@@ -16,6 +16,8 @@ interface OpenShiftFormProps {
   selectedTemplateId: string;
   onTemplateChange: (id: string) => void;
   businessDate: string;
+  currentBusinessDate: string;
+  businessDayState: 'OPEN' | 'CLOSED' | 'NOT_CREATED' | 'UNKNOWN' | 'UNAVAILABLE';
   onBusinessDateChange: (value: string) => void;
   openingCash: number;
   onOpeningCashChange: (value: number) => void;
@@ -48,6 +50,8 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
   selectedTemplateId,
   onTemplateChange,
   businessDate,
+  currentBusinessDate,
+  businessDayState,
   onBusinessDateChange,
   openingCash,
   onOpeningCashChange,
@@ -97,8 +101,19 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
                 ))}
               </Select>
             </Field>
-            <Field label="Business date" hint="defaults to today; back-date for an earlier day">
-              <DateField value={businessDate} max={new Date().toISOString().slice(0, 10)} onChange={(e) => onBusinessDateChange(e.target.value)} required />
+            <Field
+              label="Shift Business Date"
+              hint={businessDayState === 'CLOSED'
+                ? 'This Business Day is closed. Choose a Past Open Business Day or a Business Date that has not been created.'
+                : businessDayState === 'OPEN'
+                  ? 'This Shift will attach to the existing open Business Day.'
+                  : businessDayState === 'NOT_CREATED'
+                    ? 'The Business Day will be created when this Shift opens.'
+                    : businessDayState === 'UNAVAILABLE'
+                      ? 'Business Day status is unavailable. Check the connection and retry.'
+                      : 'Checking the Business Day lifecycle state.'}
+            >
+              <DateField value={businessDate} max={currentBusinessDate} onChange={(e) => onBusinessDateChange(e.target.value)} required />
             </Field>
             <Field label="Opening cash float (₹)">
               <NumberInput min="0" value={openingCash} onChange={(e) => onOpeningCashChange(Number(e.target.value))} required />
@@ -173,7 +188,7 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
         )}
 
         <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-          <Button type="submit" variant="primary" size="md" loading={isOpening} leftIcon={<Play style={{ fill: 'currentColor' }} />}>
+          <Button type="submit" variant="primary" size="md" loading={isOpening} disabled={businessDayState === 'CLOSED' || businessDayState === 'UNKNOWN' || businessDayState === 'UNAVAILABLE'} leftIcon={<Play style={{ fill: 'currentColor' }} />}>
             Start Shift Operations
           </Button>
         </div>

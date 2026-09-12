@@ -16,7 +16,7 @@ import { BusinessDayTab } from './BusinessDayTab.js';
 import { OpenShiftForm } from './OpenShiftForm.js';
 import { Tabs } from '../primitives/Tabs.js';
 import { useToast } from '../primitives/ToastProvider.js';
-import { useShiftStatus, useShiftTransactions, useInvalidateOperational, queryKeys } from '../../query/hooks.js';
+import { useBusinessDayStatus, useShiftStatus, useShiftTransactions, useInvalidateOperational, queryKeys } from '../../query/hooks.js';
 import { openQuickEntry, useQuickEntry, type QuickEntryType } from '../../quick-entry/store.js';
 import { Station, resolveBusinessDate } from '@pump/shared';
 import { FileText, User, Lock, AlertTriangle, Check, Fuel, Info, Play, History, Clock3, CalendarRange } from 'lucide-react';
@@ -91,6 +91,10 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   const [terminalAssignments, setTerminalAssignments] = useState<{ terminalId: string; duId: string }[]>([]);
   const [initialReadings, setInitialReadings] = useState<{ nozzleId: string; openingReading: number }[]>([]);
   const [isOpening, setIsOpening] = useState(false);
+  const stationSettings = (selectedStation?.settings ?? {}) as { timezone?: string; business_day_starts_at?: string };
+  const currentBusinessDate = resolveBusinessDate({ timeZone: stationSettings.timezone, dayStartsAt: stationSettings.business_day_starts_at });
+  const businessDayStatusQ = useBusinessDayStatus(stationId, businessDate);
+  const selectedBusinessDayState = businessDayStatusQ.data?.requestedState;
 
   // Default the shift-open business date to the station's *local* business date
   // (its timezone + day-start boundary), recomputed when the station changes.
@@ -339,6 +343,14 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   const handleOpenShift = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedStation) return;
+    if (!selectedBusinessDayState) {
+      toast.error('Business Day status is unavailable. Check the connection and retry.');
+      return;
+    }
+    if (selectedBusinessDayState === 'CLOSED') {
+      toast.error(`Business Day ${businessDate} is closed. Choose a Past Open Business Day or a Business Date that has not been created.`);
+      return;
+    }
     try {
       setIsOpening(true);
       const payload: any = {
@@ -779,6 +791,8 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         selectedTemplateId={selectedTemplateId}
         onTemplateChange={setSelectedTemplateId}
         businessDate={businessDate}
+        currentBusinessDate={currentBusinessDate}
+        businessDayState={businessDayStatusQ.isError ? 'UNAVAILABLE' : selectedBusinessDayState ?? 'UNKNOWN'}
         onBusinessDateChange={setBusinessDate}
         openingCash={openingCash}
         onOpeningCashChange={setOpeningCash}

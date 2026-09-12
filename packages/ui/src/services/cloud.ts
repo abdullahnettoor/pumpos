@@ -369,9 +369,35 @@ export class CloudUserAssignmentService implements IUserAssignmentService {
   }
 }
 
+export type BusinessDayLifecycleState = 'OPEN' | 'CLOSED' | 'NOT_CREATED';
+
+export interface BusinessDayStatusItem {
+  id: string;
+  businessDate: string;
+  status: 'OPEN' | 'CLOSED';
+  openedAt: string;
+  closedAt: string | null;
+  openShiftCount: number;
+  closedShiftCount: number;
+  lastActivityAt: string;
+}
+
+export interface BusinessDayStatusResponse {
+  currentBusinessDate: string;
+  requestedBusinessDate: string;
+  requestedState: BusinessDayLifecycleState;
+  requestedBusinessDay: BusinessDayStatusItem | null;
+  pastOpenBusinessDays: BusinessDayStatusItem[];
+}
+
 export class CloudShiftService {
   async getShiftStatus(stationId: string, lite: boolean = false): Promise<any> {
     return request<any>(`/shifts/status?stationId=${stationId}${lite ? '&lite=true' : ''}`);
+  }
+
+  async getBusinessDayStatus(stationId: string, businessDate?: string): Promise<BusinessDayStatusResponse> {
+    const date = businessDate ? `&date=${encodeURIComponent(businessDate)}` : '';
+    return request<BusinessDayStatusResponse>(`/shifts/business-days/status?stationId=${stationId}${date}`);
   }
 
   /**

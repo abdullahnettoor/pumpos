@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { and, desc, eq, inArray, ne, sql } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
-import { canOpenShift, canCloseShift, canReopenShift, isAuthorizedForStation, isAttendant, type Role } from '@pump/shared';
+import { canOpenShift, canCloseShift, canReopenShift, isAuthorizedForStation, isAttendant, resolveBusinessDate, type Role } from '@pump/shared';
 import {
   OpenShift,
   RecordNozzleReadings,
@@ -10,6 +10,7 @@ import {
   LockShift,
   OpenBusinessDay,
   CloseBusinessDay,
+  GetBusinessDayStatus,
   type Result,
 } from '@pump/core';
 import { buildContext } from '../infra/context.js';
@@ -22,6 +23,7 @@ import {
 } from '../infra/repositories/setup-repositories.js';
 import {
   DrizzleBusinessDayRepository,
+  DrizzleBusinessDayStatusReader,
   DrizzleShiftRepository,
   DrizzleNozzleReadingRepository,
   DrizzleShiftReconciliationReader,
@@ -56,6 +58,33 @@ function sendResult<T>(c: any, result: Result<T>) {
 function canManageDay(role: Role): boolean {
   return role === 'Owner' || role === 'Manager';
 }
+
+// GET /api/shifts/business-days/status?stationId=...&date=YYYY-MM-DD
+// A lightweight lifecycle read for desktop/console. Missing is explicit rather
+// than being inferred from Shift state, and every Past Open Business Day is
+// returned so Delayed Closure remains visible.
+shiftsRouter.get('/business-days/status', async (c) => {
+  const user = c.var.user;
+  const stationId = c.req.query('stationId');
+  if (!stationId) {
+    return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'stationId is required' } }, 400);
+  }
+  if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId })) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+  }
+
+  const clock = await loadStationClock(c.var.db, stationId);
+  const currentBusinessDate = resolveBusinessDate({
+    timeZone: clock.timeZone,
+    dayStartsAt: clock.businessDayStartsAt,
+  });
+  const requestedBusinessDate = c.req.query('date') ?? currentBusinessDate;
+  const result = await new GetBusinessDayStatus(new DrizzleBusinessDayStatusReader(c.var.db)).execute(
+    { stationId, requestedBusinessDate, currentBusinessDate },
+    buildContext(user, { stationId, ...clock }),
+  );
+  return sendResult(c, result);
+});
 
 /**
  * Project an immutable v2 shift-summary snapshot into the shape the Shift Summary

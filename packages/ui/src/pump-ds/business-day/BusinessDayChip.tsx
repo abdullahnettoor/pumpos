@@ -13,7 +13,7 @@ import { StatusChip } from '../chip/index.js';
 export interface BusinessDayChipProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'children'> {
   /** Formatted date label, e.g. "09 Jul". */
   date: string;
-  status: 'open' | 'closed';
+  status: 'open' | 'closed' | 'not-created' | 'unknown' | 'unavailable';
 }
 
 export const BusinessDayChip = forwardRef<HTMLButtonElement, BusinessDayChipProps>(function BusinessDayChip(
@@ -32,7 +32,13 @@ export const BusinessDayChip = forwardRef<HTMLButtonElement, BusinessDayChipProp
     >
       <Calendar className="size-3.5 text-ink-muted" />
       <span className="font-medium text-ink-strong">{date}</span>
-      <StatusChip status={status} size="xs" showIcon={false} pulse={status === 'open'} />
+      {status === 'not-created' || status === 'unknown' || status === 'unavailable' ? (
+        <span className="rounded-chip bg-surface-alt px-1.5 py-0.5 text-[10px] font-medium text-ink-muted">
+          {status === 'unknown' ? 'Checking' : status === 'unavailable' ? 'Unavailable' : 'Not started'}
+        </span>
+      ) : (
+        <StatusChip status={status} size="xs" showIcon={false} pulse={status === 'open'} />
+      )}
       <ChevronDown className="size-3.5 text-ink-faint" />
     </button>
   );
