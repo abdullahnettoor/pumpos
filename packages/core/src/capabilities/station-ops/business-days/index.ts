@@ -25,6 +25,12 @@ export interface BusinessDayRepository extends Repository<BusinessDay> {
   findByStationAndDate(organizationId: string, stationId: string, businessDate: string): Promise<BusinessDay | null>;
 }
 
+/** Serializes workflows that can change or depend on a Business Day's lifecycle. */
+export interface BusinessDayLock {
+  lockById(organizationId: string, businessDayId: string): Promise<void>;
+  lockByStationAndDate(organizationId: string, stationId: string, businessDate: string): Promise<void>;
+}
+
 /**
  * Resolve the business day a non-shift money movement belongs to, by its
  * transaction date — creating the day lazily if it does not exist yet. This

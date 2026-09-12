@@ -1102,6 +1102,7 @@ shiftsRouter.post('/open', async (c) => {
     new OpenShift({
       shifts: new DrizzleShiftRepository(tx),
       businessDays: new DrizzleBusinessDayRepository(tx),
+      businessDayLock: new DrizzleBusinessDayRepository(tx),
       nozzles: new DrizzleNozzleRepository(tx),
       nozzleReadings: new DrizzleNozzleReadingRepository(tx),
       fuelPrices: new DrizzleFuelPriceRepository(tx),
@@ -1224,6 +1225,7 @@ shiftsRouter.post('/business-day/close', async (c) => {
     const businessDays = new DrizzleBusinessDayRepository(tx);
     return new CloseBusinessDayAndGenerateDssr({
       businessDays,
+      businessDayLock: businessDays,
       openShifts: new DrizzleShiftRepository(tx),
       snapshots: new DrizzleDssrSnapshotRepository(tx),
       dssrData: new DrizzleDssrDataReader(tx),

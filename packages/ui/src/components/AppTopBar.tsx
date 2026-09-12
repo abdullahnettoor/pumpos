@@ -252,6 +252,7 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
         showBusinessDay={stationReady}
         onBusinessDay={() => onNavigate('/shifts', { openBusinessDayDate: businessIso })}
         businessDays={businessDays}
+        businessDaysState={dayStatusQ.isError ? 'unavailable' : dayStatusQ.isPending ? 'loading' : 'ready'}
         onSelectBusinessDay={(date) => onNavigate('/shifts', { openBusinessDayDate: date })}
         stationLabel={selectedStation?.name}
         onOpenSearch={() => setOpen(true)}

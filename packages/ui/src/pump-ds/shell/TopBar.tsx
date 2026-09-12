@@ -75,6 +75,7 @@ export interface TopBarProps {
   onBusinessDay?: () => void;
   /** Recent past business days shown in the anchor dropdown. */
   businessDays?: BusinessDayOption[];
+  businessDaysState?: 'loading' | 'ready' | 'unavailable';
   /** Open a past day's summary. */
   onSelectBusinessDay?: (date: string) => void;
   /** Notified when the business-day dropdown opens/closes (for lazy loading). */
@@ -129,6 +130,7 @@ export const TopBar: React.FC<TopBarProps> = ({
   showBusinessDay = true,
   onBusinessDay,
   businessDays = [],
+  businessDaysState = 'ready',
   onSelectBusinessDay,
   onBusinessDayMenuOpenChange,
   stationLabel,
@@ -173,11 +175,17 @@ export const TopBar: React.FC<TopBarProps> = ({
                 </span>
               </span>
             </MenuItem>
-            {businessDays.length > 0 && <><MenuSeparator /><MenuLabel>Past Open Business Days</MenuLabel></>}
-            {businessDays.length === 0 && (
+            {businessDaysState === 'ready' && businessDays.length > 0 && <><MenuSeparator /><MenuLabel>Past Open Business Days</MenuLabel></>}
+            {businessDaysState === 'loading' && (
+              <div className="px-2 py-1.5 text-[11px] text-ink-faint">Checking Past Open Business Days</div>
+            )}
+            {businessDaysState === 'unavailable' && (
+              <div className="px-2 py-1.5 text-[11px] text-danger-fg">Past Open Business Days unavailable</div>
+            )}
+            {businessDays.length === 0 && businessDaysState === 'ready' && (
               <div className="px-2 py-1.5 text-[11px] text-ink-faint">No Past Open Business Days</div>
             )}
-            {businessDays.map((d) => (
+            {businessDaysState === 'ready' && businessDays.map((d) => (
               <MenuItem key={d.date} onSelect={() => onSelectBusinessDay?.(d.date)}>
                 <span className="flex flex-1 items-center justify-between gap-4">
                   <span className="flex flex-col">

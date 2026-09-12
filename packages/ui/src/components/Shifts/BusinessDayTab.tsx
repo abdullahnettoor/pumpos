@@ -8,7 +8,7 @@ import { useToast } from '../primitives/ToastProvider.js';
 import { useConfirm } from '../primitives/ConfirmDialog.js';
 import { CloudShiftService } from '../../services/cloud.js';
 import { inr, formatDate, formatQty } from '../../utils/format.js';
-import { useBusinessDayStatus, useDailyDssrPreview, useShiftStatus, useInvalidateOperational, useCustomers, queryKeys } from '../../query/hooks.js';
+import { useBusinessDayStatus, useDailyDssr, useDailyDssrPreview, useShiftStatus, useInvalidateOperational, useCustomers, queryKeys } from '../../query/hooks.js';
 import { useStationBusinessDate } from '../../hooks/useStationBusinessDate.js';
 
 const shiftService = new CloudShiftService();
@@ -73,9 +73,11 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
   const [closing, setClosing] = useState(false);
   const canClose = userRole === 'Owner' || userRole === 'Manager';
 
-  const previewQ = useDailyDssrPreview(stationId, businessDate, { enabled: !!stationId } as any);
   const currentBusinessDayStatusQ = useBusinessDayStatus(stationId, currentBusinessDate, { enabled: !!stationId } as any);
   const businessDayStatusQ = useBusinessDayStatus(stationId, businessDate, { enabled: !!stationId } as any);
+  const selectedState = businessDayStatusQ.data?.requestedState;
+  const previewQ = useDailyDssrPreview(stationId, businessDate, { enabled: !!stationId && (selectedState === 'OPEN' || selectedState === 'NOT_CREATED') } as any);
+  const snapshotQ = useDailyDssr(stationId, businessDate, { enabled: !!stationId && selectedState === 'CLOSED' } as any);
   const shiftStatusQ = useShiftStatus(stationId, true, { enabled: !!stationId } as any);
   const shiftStatus = shiftStatusQ.data;
   const activeShift = (shiftStatus as any)?.activeShift;
@@ -91,8 +93,8 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
   );
   const eodDueTotal = eodDueCustomers.reduce((s: number, c: any) => s + Number(c.currentBalance || 0), 0);
 
-  const preview = previewQ.data as any;
-  const snap = preview?.snapshotData ?? null;
+  const report = selectedState === 'CLOSED' ? snapshotQ.data : previewQ.data;
+  const snap = (report as any)?.snapshotData ?? null;
 
   const openBusinessDays = useMemo(() => {
     return [...(currentBusinessDayStatusQ.data?.openBusinessDays ?? [])]
@@ -166,10 +168,12 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
     [settings.timezone],
   );
 
-  const status = businessDayStatusQ.data?.requestedState;
+  const status = selectedState;
   const selectedBusinessDay = businessDayStatusQ.data?.requestedBusinessDay;
   const hasOpenShift = !!activeShift && activeShift.businessDayId === selectedBusinessDay?.id;
-  const liveAsOf = preview?.generatedAt ? formatStationActivity(preview.generatedAt, settings.timezone) : null;
+  const liveAsOf = status !== 'CLOSED' && (report as any)?.generatedAt ? formatStationActivity((report as any).generatedAt, settings.timezone) : null;
+  const reportLoading = businessDayStatusQ.isPending || (status === 'CLOSED' ? snapshotQ.isLoading : previewQ.isLoading);
+  const reportError = businessDayStatusQ.isError || (status === 'CLOSED' ? snapshotQ.isError : previewQ.isError);
   const shiftRows = (() => {
     const rows = [...((snap?.shifts ?? []) as any[])];
     if (hasOpenShift && !rows.some((row) => row.shiftId === activeShift.id)) {
@@ -245,7 +249,7 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
             : status === 'NOT_CREATED'
             ? <Chip tone="neutral" size="xs">Not started</Chip>
             : <StatusChip status={status === 'CLOSED' ? 'closed' : 'open'} size="sm" />}
-          {preview?.live && <Chip tone="warning" size="xs">Live{liveAsOf ? ` · ${liveAsOf}` : ''}</Chip>}
+          {(report as any)?.live && <Chip tone="warning" size="xs">Live{liveAsOf ? ` · ${liveAsOf}` : ''}</Chip>}
           {status === 'OPEN' && canClose && snap && (
             <Button
               variant="primary"
@@ -331,13 +335,13 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
         </div>
       )}
 
-      {previewQ.isLoading ? (
+      {reportLoading ? (
         <Panel flush title="Business day">
           <div style={{ padding: '16px' }}>
             <EmptyState compact icon={<CalendarRange />} title="Loading…" description="Composing the business day." />
           </div>
         </Panel>
-      ) : previewQ.isError ? (
+      ) : reportError ? (
         <Panel flush title="Business day">
           <div style={{ padding: '12px' }}>
             <EmptyState

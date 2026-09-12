@@ -94,6 +94,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [businessDate, setBusinessDate] = useState(() => resolveBusinessDate());
   const [openingCash, setOpeningCash] = useState(0);
+  const [preserveNextShiftDate, setPreserveNextShiftDate] = useState(false);
   const [staffAssignments, setStaffAssignments] = useState<{ userId: string; duId: string }[]>([]);
   // Terminal→DU assignment for the shift being opened. duId '' means shift-wide (any DU).
   const [terminalAssignments, setTerminalAssignments] = useState<{ terminalId: string; duId: string }[]>([]);
@@ -102,11 +103,19 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   const stationSettings = (selectedStation?.settings ?? {}) as { timezone?: string; business_day_starts_at?: string };
   const currentBusinessDate = useStationBusinessDate(stationSettings.timezone, stationSettings.business_day_starts_at);
 
-  // Default the shift-open business date to the station's *local* business date
-  // (its timezone + day-start boundary), recomputed when the station changes.
+  // A Station change always starts from that Station's Current Business Date.
   useEffect(() => {
-    if (!data?.activeShift) setBusinessDate(currentBusinessDate);
-  }, [selectedStation?.id, currentBusinessDate, data?.activeShift]);
+    setPreserveNextShiftDate(false);
+    setBusinessDate(currentBusinessDate);
+    // currentBusinessDate is intentionally handled by the rollover effect below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedStation?.id]);
+
+  // Advance an idle form at the Station's day-start boundary unless the operator
+  // explicitly chose "Open next Shift" for a historical Business Date.
+  useEffect(() => {
+    if (!data?.activeShift && !preserveNextShiftDate) setBusinessDate(currentBusinessDate);
+  }, [currentBusinessDate, data?.activeShift, preserveNextShiftDate]);
 
   useEffect(() => {
     if (!intent?.openBusinessDayDate) return;
@@ -320,6 +329,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
 
     if (statusData.activeShift?.businessDate) {
       setBusinessDate(statusData.activeShift.businessDate);
+      setPreserveNextShiftDate(false);
     }
 
     if (statusData.templates && statusData.templates.length > 0) {
@@ -618,6 +628,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
           setOpeningCash(closedShiftSuccess.closingCash);
           setSelectedTemplateId(closedShiftSuccess.nextTemplateId);
           setBusinessDate(closedShiftSuccess.businessDate);
+          setPreserveNextShiftDate(true);
           setClosedShiftSuccess(null);
           setViewingShiftSummary(false);
         }}

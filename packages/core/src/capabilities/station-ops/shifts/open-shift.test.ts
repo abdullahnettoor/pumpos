@@ -45,6 +45,8 @@ class BdRepo implements BusinessDayRepository {
   }
 }
 
+const lock = { lockById: async () => {}, lockByStationAndDate: async () => {} };
+
 class NozzleRepo implements NozzleRepository {
   constructor(readonly rows: Nozzle[]) {}
   async findById(id: string) { return this.rows.find((r) => r.id === id) ?? null; }
@@ -98,7 +100,7 @@ describe('OpenShift', () => {
     const store = new InMemoryEventStore();
     const events = new InProcessEventDispatcher({ store });
 
-    const result = await new OpenShift({ shifts, businessDays, nozzles, nozzleReadings, fuelPrices, events }).execute(
+    const result = await new OpenShift({ shifts, businessDays, businessDayLock: lock, nozzles, nozzleReadings, fuelPrices, events }).execute(
       { stationId: 'st-1', shiftTemplateId: 'tpl-1', openingCash: 5000, terminalLinks: [{ terminalId: 't1', duId: 'du-1' }] },
       makeContext(),
     );
@@ -128,7 +130,7 @@ describe('OpenShift', () => {
     const ctx = makeContext();
     businessDays.rows.push({ id: 'bd-existing', organizationId: 'org-1', stationId: 'st-1', businessDate: '2026-03-15', status: 'OPEN', openedBy: 'u', openedAt: '', closedBy: null, closedAt: null, createdAt: '', updatedAt: '' });
     const result = await new OpenShift({
-      shifts, businessDays,
+      shifts, businessDays, businessDayLock: lock,
       nozzles: new NozzleRepo([]), nozzleReadings: new ReadingRepo(), fuelPrices: new PriceRepo([]),
       events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
     }).execute({ stationId: 'st-1', shiftTemplateId: 'tpl-1', openingCash: 0 }, ctx);
@@ -137,13 +139,37 @@ describe('OpenShift', () => {
     expect(businessDays.rows).toHaveLength(1);
   });
 
+  it('locks the Business Day before checking its lifecycle state', async () => {
+    const calls: string[] = [];
+    const businessDays = new BdRepo();
+    businessDays.rows.push({ id: 'bd-existing', organizationId: 'org-1', stationId: 'st-1', businessDate: '2026-03-15', status: 'OPEN', openedBy: 'u', openedAt: '', closedBy: null, closedAt: null, createdAt: '', updatedAt: '' });
+    const originalFind = businessDays.findByStationAndDate.bind(businessDays);
+    businessDays.findByStationAndDate = async (...args) => {
+      calls.push('find');
+      return originalFind(...args);
+    };
+    const businessDayLock = {
+      lockById: async () => {},
+      lockByStationAndDate: async () => { calls.push('lock'); },
+    };
+
+    const result = await new OpenShift({
+      shifts: new ShiftRepo(), businessDays, businessDayLock,
+      nozzles: new NozzleRepo([]), nozzleReadings: new ReadingRepo(), fuelPrices: new PriceRepo([]),
+      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
+    }).execute({ stationId: 'st-1', shiftTemplateId: 'tpl-1', openingCash: 0 }, makeContext());
+
+    expect(result.success).toBe(true);
+    expect(calls).toEqual(['lock', 'find']);
+  });
+
   it('opens a shift for a past open Business Day', async () => {
     const shifts = new ShiftRepo();
     const businessDays = new BdRepo();
     businessDays.rows.push({ id: 'bd-past', organizationId: 'org-1', stationId: 'st-1', businessDate: '2026-03-14', status: 'OPEN', openedBy: 'u', openedAt: '', closedBy: null, closedAt: null, createdAt: '', updatedAt: '' });
 
     const result = await new OpenShift({
-      shifts, businessDays,
+      shifts, businessDays, businessDayLock: lock,
       nozzles: new NozzleRepo([]), nozzleReadings: new ReadingRepo(), fuelPrices: new PriceRepo([]),
       events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
     }).execute({ stationId: 'st-1', shiftTemplateId: 'tpl-1', openingCash: 0, businessDate: '2026-03-14' }, makeContext());
@@ -157,7 +183,7 @@ describe('OpenShift', () => {
     const businessDays = new BdRepo();
 
     const result = await new OpenShift({
-      shifts, businessDays,
+      shifts, businessDays, businessDayLock: lock,
       nozzles: new NozzleRepo([]), nozzleReadings: new ReadingRepo(), fuelPrices: new PriceRepo([]),
       events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
     }).execute({ stationId: 'st-1', shiftTemplateId: 'tpl-1', openingCash: 0, businessDate: '2026-03-14' }, makeContext());
@@ -173,7 +199,7 @@ describe('OpenShift', () => {
     businessDays.rows.push({ id: 'bd-closed', organizationId: 'org-1', stationId: 'st-1', businessDate: '2026-03-14', status: 'CLOSED', openedBy: 'u', openedAt: '', closedBy: 'u', closedAt: '', createdAt: '', updatedAt: '' });
 
     const result = await new OpenShift({
-      shifts, businessDays,
+      shifts, businessDays, businessDayLock: lock,
       nozzles: new NozzleRepo([]), nozzleReadings: new ReadingRepo(), fuelPrices: new PriceRepo([]),
       events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
     }).execute({ stationId: 'st-1', shiftTemplateId: 'tpl-1', openingCash: 0, businessDate: '2026-03-14' }, makeContext());
@@ -189,7 +215,7 @@ describe('OpenShift', () => {
 
   it('rejects a future Shift Business Date', async () => {
     const result = await new OpenShift({
-      shifts: new ShiftRepo(), businessDays: new BdRepo(),
+      shifts: new ShiftRepo(), businessDays: new BdRepo(), businessDayLock: lock,
       nozzles: new NozzleRepo([]), nozzleReadings: new ReadingRepo(), fuelPrices: new PriceRepo([]),
       events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
     }).execute({ stationId: 'st-1', shiftTemplateId: 'tpl-1', openingCash: 0, businessDate: '2026-03-16' }, makeContext());
@@ -200,7 +226,7 @@ describe('OpenShift', () => {
 
   it('rejects an invalid calendar date', async () => {
     const result = await new OpenShift({
-      shifts: new ShiftRepo(), businessDays: new BdRepo(),
+      shifts: new ShiftRepo(), businessDays: new BdRepo(), businessDayLock: lock,
       nozzles: new NozzleRepo([]), nozzleReadings: new ReadingRepo(), fuelPrices: new PriceRepo([]),
       events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
     }).execute({ stationId: 'st-1', shiftTemplateId: 'tpl-1', openingCash: 0, businessDate: '2026-02-31' }, makeContext());
@@ -213,7 +239,7 @@ describe('OpenShift', () => {
     const shifts = new ShiftRepo();
     shifts.rows.push({ id: 's0', organizationId: 'org-1', stationId: 'st-1', businessDayId: 'bd', shiftTemplateId: 't', status: 'OPEN', openedBy: 'u', openedAt: '', closedBy: null, closedAt: null, lockedAt: null, openingCash: '0', closingCash: null, createdAt: '', updatedAt: '' });
     const result = await new OpenShift({
-      shifts, businessDays: new BdRepo(),
+      shifts, businessDays: new BdRepo(), businessDayLock: lock,
       nozzles: new NozzleRepo([]), nozzleReadings: new ReadingRepo(), fuelPrices: new PriceRepo([]),
       events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
     }).execute({ stationId: 'st-1', shiftTemplateId: 'tpl-1', openingCash: 0 }, makeContext());

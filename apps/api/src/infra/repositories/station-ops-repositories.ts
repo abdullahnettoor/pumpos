@@ -3,6 +3,7 @@ import { schema, type DbClient } from '@pump/db';
 import type {
   BusinessDay,
   BusinessDayRepository,
+  BusinessDayLock,
   BusinessDayStatusReader,
   BusinessDayStatusItem,
   Shift,
@@ -81,7 +82,7 @@ export class DrizzleBusinessDayStatusReader implements BusinessDayStatusReader {
   }
 }
 
-export class DrizzleBusinessDayRepository implements BusinessDayRepository {
+export class DrizzleBusinessDayRepository implements BusinessDayRepository, BusinessDayLock {
   constructor(private readonly db: DbClient) {}
 
   private toEntity(r: typeof schema.businessDays.$inferSelect): BusinessDay {
@@ -103,6 +104,21 @@ export class DrizzleBusinessDayRepository implements BusinessDayRepository {
   async findById(id: string): Promise<BusinessDay | null> {
     const [r] = await this.db.select().from(schema.businessDays).where(eq(schema.businessDays.id, id)).limit(1);
     return r ? this.toEntity(r) : null;
+  }
+
+  async lockById(organizationId: string, businessDayId: string): Promise<void> {
+    await this.db.select({ id: schema.businessDays.id }).from(schema.businessDays).where(and(
+      eq(schema.businessDays.id, businessDayId),
+      eq(schema.businessDays.organizationId, organizationId),
+    )).for('update');
+  }
+
+  async lockByStationAndDate(organizationId: string, stationId: string, businessDate: string): Promise<void> {
+    await this.db.select({ id: schema.businessDays.id }).from(schema.businessDays).where(and(
+      eq(schema.businessDays.organizationId, organizationId),
+      eq(schema.businessDays.stationId, stationId),
+      eq(schema.businessDays.businessDate, businessDate),
+    )).for('update');
   }
 
   async save(d: BusinessDay): Promise<void> {
