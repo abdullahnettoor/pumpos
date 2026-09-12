@@ -7,37 +7,23 @@ When writing issues, specs, tests, or code names, use these terms exactly.
 ## Time & Anchoring
 
 **Business Day**:
-One station's operating day, keyed by `(station, calendar date)`. The universal
+One station's operating day, keyed by `(station, Business Date)`. The universal
 anchor: every operational and financial record belongs to one. May run
 06:00 → 06:00 per station config. Several may be open at once; a past day
-closes independently without blocking today.
+closes independently without blocking the Current Business Date.
 _Avoid_: operating day, trading day, diwas
 
 **Business Date**:
-The `YYYY-MM-DD` string that anchors a record to its Business Day, resolved
-timezone-aware from the station's clock settings — never from UTC.
+The `YYYY-MM-DD` label that anchors a record to its Business Day. It is the
+station-local civil date on which that Business Day begins, resolved from the
+station's timezone and Day Start, never directly from UTC.
 _Avoid_: date, today
 
 **Current Business Date**:
 The Business Date resolved for the current instant using the Station's timezone
-and Day Start. Its Business Day may be open, closed, or not yet created.
-_Avoid_: today, current day
-
-**Past Open Business Day**:
-An earlier Business Day that remains open while later Business Dates proceed.
-It requires Delayed Closure but does not block the Current Business Date.
-_Avoid_: stale day, pending day
-
-**Shift Business Date**:
-The Business Date selected when opening a Shift. It may be the Current Business
-Date or an earlier open or not-yet-created Business Date, but never a future or
-closed Business Day.
-_Avoid_: shift date
-
-**Delayed Closure**:
-Closing a Past Open Business Day after operations have continued on later
-Business Dates.
-_Avoid_: late close, backdated close
+and Day Start. It may differ from the Station's current civil date before Day
+Start, and its Business Day may be open, closed, or not yet created.
+_Avoid_: today, current date
 
 **Day Start** (`business_day_starts_at`):
 The station-local time before which instants roll back to the previous
@@ -46,8 +32,41 @@ _Avoid_: cutoff, open time
 
 **Shift**:
 An attendant-accountability window inside a Business Day. A Business Day has
-one or more Shifts; day-anchored financials need none.
+one or more Shifts; day-anchored financials need none. A Shift inherits its
+Business Date from its Business Day and has no independent date.
 _Avoid_: slot, rotation, session, duty
+
+**Shift Business Date**:
+The Business Date inherited from the Shift's Business Day. Use it whenever the
+UI identifies which day a Shift belongs to.
+_Avoid_: Shift Date, opening date, closing date
+
+**Scheduled Shift Window**:
+The Shift Template's station-local start and end times. It states the planned
+operating window, not when users performed lifecycle actions in PumpOS.
+_Avoid_: actual start, actual end
+
+**Shift Opened At / Shift Closed At**:
+The instants when users opened or closed the Shift in PumpOS. They are audit and
+lifecycle timestamps, not the Scheduled Shift Window. Display them in the
+Station's timezone.
+_Avoid_: shift start, shift end, operating time
+
+**Past Open Business Day**:
+An OPEN Business Day whose Business Date precedes the Current Business Date.
+This is a factual state and does not imply that staff missed a deadline.
+_Avoid_: overdue day, current day
+
+**Delayed Closure**:
+Closing a Shift or Business Day after its scheduled or represented operating
+period. Delayed Closure does not change the Shift Business Date; Closed At
+records when the close action occurred.
+_Avoid_: backdating the close
+
+**Backdated Business-Date Assignment**:
+Recording an operation now while assigning it to an earlier Business Date. It
+does not alter audit or lifecycle timestamps.
+_Avoid_: backdated timestamp, backdated Shift
 
 **Anchoring Rule**:
 `business_day_id` anchors every record. `shift_id` is optional: set by default
@@ -254,13 +273,13 @@ _Avoid_: inter-tank move, decanting
 **Shift Summary**:
 Immutable snapshot created when a Shift closes: that shift's nozzle and drawer
 reconciliation plus totals.
-_Avoid_: shift report, closing report
+_Avoid_: shift report, closing report, DSSR
 
-**DSSR** (Daily Station Sales Report):
+**DSSR Snapshot** (Daily Station Sales Report):
 Immutable snapshot created when a Business Day closes: composes the day's
 closed Shift Summaries plus day-anchored financials (collections, expenses,
 purchases, supplier payments, credit sales).
-_Avoid_: daily report, day summary
+_Avoid_: Shift Summary, daily report, day summary
 
 **Snapshot Immutability**:
 Summaries are stored permanently, never recalculated historically, never
