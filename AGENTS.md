@@ -691,7 +691,7 @@ Architecture decisions take precedence over implementation convenience.
 
 ### Issue tracker
 
-Issues live as local markdown under `.scratch/<feature>/`; long-range planning lives in `docs/roadmap/phase-*.md`. See `docs/agents/issue-tracker.md`.
+Issues live in GitHub Issues for `abdullahnettoor/pumpos`; long-range planning remains in `docs/roadmap/phase-*.md`. See `docs/agents/issue-tracker.md`.
 
 ### Domain docs
 
