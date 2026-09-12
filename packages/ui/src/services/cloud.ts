@@ -44,6 +44,70 @@ export function setAuthToken(token: string) {
   activeToken = token;
 }
 
+export interface RecordHandoverPayload {
+  shiftId: string;
+  userId: string;
+  duId: string;
+  cashHandedOver: number;
+  cardHandedOver?: number;
+  upiHandedOver?: number;
+  nozzleReadings: Array<{ nozzleId: string; closingReading: number; testingVolume: number }>;
+  terminalEntries?: Array<{
+    terminalId: string;
+    duId?: string | null;
+    cardAmount: number;
+    upiAmount: number;
+    batchRef?: string | null;
+  }>;
+}
+
+export interface RecordHandoverResult {
+  handover: {
+    id: string;
+    shiftId: string;
+    attendantId: string;
+    duId: string;
+    cashHandedOver: string;
+    cardHandedOver: string;
+    upiHandedOver: string;
+    creditHandedOver: string;
+    testingVolume: string;
+    expectedSales: string;
+    varianceAmount: string;
+    createdAt: string;
+  };
+  terminalEntries: Array<{
+    id: string;
+    handoverId: string;
+    terminalId: string;
+    duId: string;
+    cardAmount: string;
+    upiAmount: string;
+    batchRef: string | null;
+    createdAt: string;
+  }>;
+  nozzleReadings: Array<{
+    id: string;
+    nozzleId: string;
+    openingReading: number;
+    closingReading: number;
+    grossVolume: number;
+    testingVolume: number;
+    netVolume: number;
+    unitPrice: number;
+    expectedSales: number;
+  }>;
+  expectedFuelSales: number;
+  merchandiseCash: number;
+  expectedSales: number;
+  expectedTotal: number;
+  creditSales: number;
+  omcCardSales: number;
+  declaredTotal: number;
+  varianceAmount: number;
+  replaced: boolean;
+}
+
 function getHeaders() {
   return {
     'Content-Type': 'application/json',
@@ -438,11 +502,11 @@ export class CloudShiftService {
     });
   }
 
-  async recordHandover(payload: any): Promise<any> {
-    return request<any>('/shifts/handovers', {
+  async recordHandover(payload: RecordHandoverPayload, opts?: { idempotencyKey?: string }): Promise<RecordHandoverResult> {
+    return request<RecordHandoverResult>('/shifts/handovers', {
       method: 'POST',
       body: JSON.stringify(payload),
-    });
+    }, { idempotencyKey: opts?.idempotencyKey });
   }
 
   async getHandovers(shiftId: string): Promise<any[]> {
@@ -822,8 +886,8 @@ export class CloudTransactionService {
   }
 
   /** Record/replace an employee's itemized walk-in merchandise handover for a shift. */
-  async recordMerchandiseHandover(shiftId: string, payload: { attendantId?: string; lines: { productId: string; quantity: number }[]; nonCashAmount?: number }): Promise<any> {
-    return request<any>(`/transactions/shifts/${shiftId}/merchandise-handover`, { method: 'POST', body: JSON.stringify(payload) });
+  async recordMerchandiseHandover(shiftId: string, payload: { attendantId?: string; lines: { productId: string; quantity: number }[]; nonCashAmount?: number }, opts?: { idempotencyKey?: string }): Promise<any> {
+    return request<any>(`/transactions/shifts/${shiftId}/merchandise-handover`, { method: 'POST', body: JSON.stringify(payload) }, { idempotencyKey: opts?.idempotencyKey });
   }
 
   async getMerchandiseHandovers(shiftId: string): Promise<any[]> {

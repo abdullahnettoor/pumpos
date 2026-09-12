@@ -185,11 +185,11 @@ export class RecordHandover implements UseCase<RecordHandoverCommand, RecordHand
     const activeTerminals = source.terminals.filter((terminal) => terminal.isActive);
     const submittedTerminals = cmd.terminalEntries ?? [];
     const terminalById = new Map(
-      activeTerminals.filter((terminal) => terminal.linkedDuId === cmd.duId).map((terminal) => [terminal.id, terminal]),
+      activeTerminals.filter((terminal) => terminal.linkedDuId === null || terminal.linkedDuId === cmd.duId).map((terminal) => [terminal.id, terminal]),
     );
     for (const entry of submittedTerminals) {
       const terminal = terminalById.get(entry.terminalId);
-      if (!terminal || terminal.organizationId !== ctx.organizationId || terminal.stationId !== shift.stationId || terminal.linkedDuId !== cmd.duId) {
+      if (!terminal || terminal.organizationId !== ctx.organizationId || terminal.stationId !== shift.stationId) {
         return err(validationError('Payment Terminal is not assigned to this Dispenser for the Shift', { terminalId: entry.terminalId }));
       }
       if (entry.duId && entry.duId !== cmd.duId) return err(validationError('Payment Terminal entry has the wrong Dispenser', { terminalId: entry.terminalId }));

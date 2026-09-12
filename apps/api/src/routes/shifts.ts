@@ -889,7 +889,7 @@ shiftsRouter.get('/my-assignment', async (c) => {
     // Only terminals bound to THIS dispenser unit — shift-wide / other-DU
     // machines are not shown to the attendant (mirrors the desktop drawer).
     const terminals = terminalRows
-      .filter((r) => r.link.duId === duId)
+      .filter((r) => r.link.duId === duId || r.link.duId == null)
       .map(({ link, term }) => ({
         terminalId: link.terminalId,
         label: term?.label ?? 'Terminal',
@@ -929,6 +929,12 @@ shiftsRouter.get('/my-assignment', async (c) => {
     return { duId, duName: du?.name ?? 'Unknown', duCode: du?.code ?? null, nozzles, terminals, handover, terminalEntries, creditSales, omcSales };
   });
 
+  const [configuredTerminal] = await db.select({ id: schema.paymentTerminals.id }).from(schema.paymentTerminals).where(and(
+    eq(schema.paymentTerminals.organizationId, user.organizationId),
+    eq(schema.paymentTerminals.stationId, shift.stationId),
+    eq(schema.paymentTerminals.isActive, true),
+  )).limit(1);
+
   return c.json({
     success: true,
     data: {
@@ -941,6 +947,7 @@ shiftsRouter.get('/my-assignment', async (c) => {
         templateName: templateRows[0]?.name ?? null,
       },
       station: stationRows[0] ? { id: stationRows[0].id, name: stationRows[0].name, code: stationRows[0].code } : null,
+      stationHasConfiguredTerminals: Boolean(configuredTerminal),
       dispenserUnits,
     },
   });

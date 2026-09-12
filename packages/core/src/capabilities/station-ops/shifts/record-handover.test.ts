@@ -161,6 +161,19 @@ describe('RecordHandover', () => {
     if (!rejected.success) expect(rejected.error.code).toBe('VALIDATION_ERROR');
   });
 
+  it('accepts a shift-wide Payment Terminal for a Dispenser Handover', async () => {
+    const configured = handoverContext({ terminals: [{
+      id: 'terminal-1', organizationId: 'org-1', stationId: 'station-1', label: 'Shared T1',
+      supportsCard: true, supportsUpi: true, isActive: true, linkedDuId: null,
+    }] });
+    const result = await setup(configured).useCase.execute({
+      ...command(), terminalEntries: [{ terminalId: 'terminal-1', cardAmount: 50, upiAmount: 25 }],
+    }, context());
+
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.declaredTotal).toBe(75);
+  });
+
   it('rejects closed shifts, missing assignments, and incomplete Nozzle sets', async () => {
     const closed = await setup(handoverContext(), shift({ status: 'CLOSED' })).useCase.execute(command(), context());
     expect(closed.success).toBe(false);

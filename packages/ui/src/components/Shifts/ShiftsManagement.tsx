@@ -781,6 +781,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
             terminals={(activeShift.terminalLinks || []).filter(
               (t: any) => t.duId === selectedHandoverAssignment.duId || t.duId == null
             )}
+            stationHasConfiguredTerminals={(data?.terminals || []).length > 0}
             customers={handoverCreditCustomers}
             merchandiseCash={
               Number(
@@ -813,9 +814,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
             existingHandover={activeShift.handovers?.find(
               (h: any) => h.userId === selectedHandoverAssignment.userId && h.duId === selectedHandoverAssignment.duId
             )}
-            onSaveSuccess={async () => {
-              await loadShiftStatus();
-            }}
+            onSaveSuccess={() => {}}
           />
         )}
       </div>
