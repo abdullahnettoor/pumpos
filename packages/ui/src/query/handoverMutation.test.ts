@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { RecordHandoverPayload, RecordHandoverResult } from '../services/cloud.js';
-import { handoverInvalidationKeys, handoverPayloadFingerprint, resolveHandoverRequestIdentity, selectHandoverSummary } from './handoverMutation.js';
+import { handoverInvalidationKeys, handoverPayloadFingerprint, loadHandoverRequestIdentity, resolveHandoverRequestIdentity, saveHandoverRequestIdentity, selectHandoverSummary } from './handoverMutation.js';
 
 const payload: RecordHandoverPayload = {
   shiftId: 'shift-1',
@@ -35,6 +35,22 @@ describe('Handover mutation state', () => {
 
     expect(edited.idempotencyKey).toBe('key-2');
     expect(edited.fingerprint).not.toBe(handoverPayloadFingerprint(payload));
+  });
+
+  it('retains a queued Handover identity across reloads', () => {
+    const values = new Map<string, string>();
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => values.set(key, value),
+      removeItem: (key: string) => values.delete(key),
+    });
+    const identity = resolveHandoverRequestIdentity(null, payload, () => 'key-1');
+
+    saveHandoverRequestIdentity('station-1', 'shift-1', 'user-1', 'du-1', identity);
+
+    expect(loadHandoverRequestIdentity('station-1', 'shift-1', 'user-1', 'du-1')).toEqual(identity);
+    expect(loadHandoverRequestIdentity('station-2', 'shift-1', 'user-1', 'du-1')).toBeNull();
+    vi.unstubAllGlobals();
   });
 
   it('shows the live preview until an accepted server result replaces it', () => {

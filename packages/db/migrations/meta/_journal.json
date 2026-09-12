@@ -31,17 +31,24 @@
       "breakpoints": true
     },
     {
-      "idx": 5,
+      "idx": 4,
       "version": "7",
       "when": 1789203053161,
       "tag": "0004_parallel_shaman",
       "breakpoints": true
     },
     {
-      "idx": 4,
+      "idx": 5,
       "version": "7",
       "when": 1789208440958,
       "tag": "0005_cuddly_dark_phoenix",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1789213423697,
+      "tag": "0006_far_warlock",
       "breakpoints": true
     }
   ]

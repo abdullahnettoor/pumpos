@@ -23,11 +23,12 @@ class RollbackSignal extends Error {
 export async function runInTransaction<T>(
   db: DbClient,
   fn: (tx: DbClient, events: EventPublisher) => Promise<Result<T>>,
+  eventPublisherFactory: (tx: DbClient) => EventPublisher = createDispatcher,
 ): Promise<Result<T>> {
   try {
     return await db.transaction(async (txRaw) => {
       const tx = txRaw as unknown as DbClient;
-      const events = createDispatcher(tx);
+      const events = eventPublisherFactory(tx);
       const result = await fn(tx, events);
       if (!result.success) {
         throw new RollbackSignal(result.error);

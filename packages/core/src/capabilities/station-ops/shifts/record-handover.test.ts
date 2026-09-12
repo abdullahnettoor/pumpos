@@ -201,6 +201,38 @@ describe('RecordHandover', () => {
     if (!missingSeed.success) expect(missingSeed.error.code).toBe('INVARIANT_VIOLATION');
   });
 
+  it('rejects cross-tenant and cross-Station Shift context', async () => {
+    const foreignTenant = await setup(handoverContext(), shift({ organizationId: 'org-2' })).useCase.execute(command(), context());
+    expect(foreignTenant.success).toBe(false);
+    if (!foreignTenant.success) expect(foreignTenant.error.code).toBe('NOT_FOUND');
+
+    const foreignStation = await setup(handoverContext(), shift({ stationId: 'station-2' })).useCase.execute(command(), context());
+    expect(foreignStation.success).toBe(false);
+    if (!foreignStation.success) expect(foreignStation.error.code).toBe('NOT_FOUND');
+  });
+
+  it('rejects cross-tenant Attendants, Dispensers, Nozzle Readings, and Payment Terminals', async () => {
+    const foreignAttendant = await setup(handoverContext({ attendant: { ...handoverContext().attendant!, organizationId: 'org-2' } })).useCase.execute(command(), context());
+    expect(foreignAttendant.success).toBe(false);
+
+    const foreignDispenser = await setup(handoverContext({ dispenser: { ...handoverContext().dispenser!, stationId: 'station-2' } })).useCase.execute(command(), context());
+    expect(foreignDispenser.success).toBe(false);
+
+    const foreignReading = handoverContext();
+    foreignReading.nozzleReadings[0].stationId = 'station-2';
+    const readingResult = await setup(foreignReading).useCase.execute(command(), context());
+    expect(readingResult.success).toBe(false);
+
+    const foreignTerminal = handoverContext({ terminals: [{
+      id: 'terminal-1', organizationId: 'org-2', stationId: 'station-2', label: 'Foreign',
+      supportsCard: true, supportsUpi: true, isActive: true, linkedDuId: 'du-1',
+    }] });
+    const terminalResult = await setup(foreignTerminal).useCase.execute({
+      ...command(), terminalEntries: [{ terminalId: 'terminal-1', cardAmount: 10, upiAmount: 0 }],
+    }, context());
+    expect(terminalResult.success).toBe(false);
+  });
+
   it('rejects duplicate IDs, invalid readings, and unrelated terminals', async () => {
     const duplicate = await setup().useCase.execute({
       ...command(), nozzleReadings: [command().nozzleReadings[0], command().nozzleReadings[0]],
@@ -239,5 +271,21 @@ describe('RecordHandover', () => {
       expect.objectContaining({ disposition: 'CREATED' }),
       expect.objectContaining({ disposition: 'REPLACED' }),
     ]);
+  });
+
+  it('preserves one current declaration and one immutable event per concurrent accepted command', async () => {
+    const { useCase, handovers, store } = setup();
+    const firstContext = { ...context(), ids: new SequentialIdGenerator('first') };
+    const secondContext = { ...context(), ids: new SequentialIdGenerator('second') };
+    const [first, second] = await Promise.all([
+      useCase.execute({ ...command(), cashHandedOver: 900 }, firstContext),
+      useCase.execute({ ...command(), cashHandedOver: 901 }, secondContext),
+    ]);
+
+    expect(first.success).toBe(true);
+    expect(second.success).toBe(true);
+    expect(handovers.current).not.toBeNull();
+    expect(store.events).toHaveLength(2);
+    expect(new Set(store.events.map((event) => event.eventId)).size).toBe(2);
   });
 });

@@ -4,8 +4,8 @@ import { schema, type DbClient } from '@pump/db';
 
 /**
  * Persists domain events to the canonical append-only `events` table. In a
- * later phase this append will participate in the same transaction as the state
- * change (transactional outbox); for now it is a direct insert after commit.
+ * The caller supplies the active transaction handle, so state changes and event
+ * insertion commit or roll back together.
  */
 export class DrizzleEventStore implements EventStore {
   constructor(private readonly db: DbClient) {}

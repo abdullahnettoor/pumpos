@@ -957,20 +957,40 @@ shiftsRouter.get('/my-assignment', async (c) => {
 // GET /api/shifts/handovers?shiftId=...  (legacy-compatible read)
 shiftsRouter.get('/handovers', async (c) => {
   const db = c.var.db;
+  const user = c.var.user;
   const shiftId = c.req.query('shiftId');
   if (!shiftId) {
     return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'shiftId is required' } }, 400);
+  }
+  const [shift] = await db.select({ stationId: schema.shifts.stationId }).from(schema.shifts).where(and(
+    eq(schema.shifts.id, shiftId),
+    eq(schema.shifts.organizationId, user.organizationId),
+  )).limit(1);
+  if (!shift) {
+    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Shift not found' } }, 404);
+  }
+  if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId: shift.stationId })) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
   }
   const rows = await db
     .select({ h: schema.attendantHandovers, userName: schema.users.fullName, duName: schema.dispenserUnits.name })
     .from(schema.attendantHandovers)
     .leftJoin(schema.users, eq(schema.users.id, schema.attendantHandovers.userId))
     .leftJoin(schema.dispenserUnits, eq(schema.dispenserUnits.id, schema.attendantHandovers.duId))
-    .where(eq(schema.attendantHandovers.shiftId, shiftId));
+    .where(and(
+      eq(schema.attendantHandovers.organizationId, user.organizationId),
+      eq(schema.attendantHandovers.stationId, shift.stationId),
+      eq(schema.attendantHandovers.shiftId, shiftId),
+      ...(isAttendant(user.role) ? [eq(schema.attendantHandovers.userId, user.id)] : []),
+    ));
   const entryRows = await db
     .select()
     .from(schema.handoverTerminalEntries)
-    .where(eq(schema.handoverTerminalEntries.shiftId, shiftId));
+    .where(and(
+      eq(schema.handoverTerminalEntries.organizationId, user.organizationId),
+      eq(schema.handoverTerminalEntries.stationId, shift.stationId),
+      eq(schema.handoverTerminalEntries.shiftId, shiftId),
+    ));
   return c.json({ success: true, data: rows.map(({ h, userName, duName }) => ({ ...h, userName: userName ?? 'Unknown', duName: duName ?? 'Unknown', terminalEntries: entryRows.filter((e) => e.handoverId === h.id) })) });
 });
 
@@ -1000,21 +1020,24 @@ shiftsRouter.post('/handovers', async (c) => {
   if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId: shift.stationId })) {
     return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
   }
-  const result = await runInTransaction(db, (tx, events) => new RecordHandover({
-    shifts: new DrizzleShiftRepository(tx),
-    context: new DrizzleHandoverContextReader(tx),
-    handovers: new DrizzleHandoverRepository(tx),
-    events,
-  }).execute({
-    shiftId,
-    attendantId,
-    duId,
-    cashHandedOver,
-    cardHandedOver,
-    upiHandedOver,
-    nozzleReadings,
-    terminalEntries,
-  }, buildContext(user, { stationId: shift.stationId, businessDayId: shift.businessDayId })));
+  const result = await runInTransaction(db, async (tx, events) => {
+    await lockStationInventory(tx, user.organizationId, shift.stationId);
+    return new RecordHandover({
+      shifts: new DrizzleShiftRepository(tx),
+      context: new DrizzleHandoverContextReader(tx),
+      handovers: new DrizzleHandoverRepository(tx),
+      events,
+    }).execute({
+      shiftId,
+      attendantId,
+      duId,
+      cashHandedOver,
+      cardHandedOver,
+      upiHandedOver,
+      nozzleReadings,
+      terminalEntries,
+    }, buildContext(user, { stationId: shift.stationId, businessDayId: shift.businessDayId }));
+  });
   return sendResult(c, result);
 });
 
@@ -1179,6 +1202,9 @@ shiftsRouter.get('/shift-summaries', async (c) => {
   const stationId = c.req.query('stationId');
   if (!stationId) {
     return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'stationId is required' } }, 400);
+  }
+  if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId })) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
   }
   const db = c.var.db;
   const rows = await db

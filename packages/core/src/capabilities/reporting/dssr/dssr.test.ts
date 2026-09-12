@@ -142,6 +142,34 @@ describe('GenerateDssr', () => {
     }).execute({ businessDayId: 'nope' }, ctx());
     expect(result.success).toBe(false);
   });
+
+  it('rejects a Business Day from another Station in the execution context', async () => {
+    const result = await new GenerateDssr({
+      businessDays: new BdRepo([bday()]), snapshots: new SnapRepo(), reader: new Reader(source()),
+      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
+    }).execute({ businessDayId: 'bd-1' }, { ...ctx(), stationId: 'station-2' });
+
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error.code).toBe('NOT_FOUND');
+  });
+
+  it('includes a later Business Day Tank Dip without changing its Shift Summary', async () => {
+    const data = source();
+    data.stockVariances = [];
+    const immutableSummary = structuredClone(data.shiftSummaries[0].snapshot);
+    data.stockVariances.push({ tankName: 'T2', productName: 'Diesel', unit: 'Litre', inventoryType: 'BULK', expectedQuantity: 8000, actualQuantity: 7990, varianceQuantity: -10, reason: 'Post-close dip' });
+
+    const result = await new GenerateDssr({
+      businessDays: new BdRepo([bday()]), snapshots: new SnapRepo(), reader: new Reader(data),
+      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
+    }).execute({ businessDayId: 'bd-1' }, ctx());
+
+    expect(result.success).toBe(true);
+    if (result.success) expect((result.data.snapshotData as any).fuelStockVariance).toEqual([
+      expect.objectContaining({ tankName: 'T2', varianceQuantity: -10, reason: 'Post-close dip' }),
+    ]);
+    expect(data.shiftSummaries[0].snapshot).toEqual(immutableSummary);
+  });
 });
 
 describe('CloseBusinessDayAndGenerateDssr', () => {

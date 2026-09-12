@@ -10,7 +10,7 @@ import { CustomerFormDrawer } from '../customers/CustomerFormDrawer.js';
 import { VehicleDrawer } from '../customers/VehicleDrawer.js';
 import { useAllVehicles } from '../../query/hooks.js';
 import { CloudTransactionService, type RecordHandoverPayload, type RecordHandoverResult } from '../../services/cloud.js';
-import { resolveHandoverRequestIdentity, useRecordHandoverMutation } from '../../query/handoverMutation.js';
+import { loadHandoverRequestIdentity, resolveHandoverRequestIdentity, saveHandoverRequestIdentity, useRecordHandoverMutation } from '../../query/handoverMutation.js';
 import { inr } from '../../utils/format.js';
 
 const transactionService = new CloudTransactionService();
@@ -135,7 +135,7 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
 
     setError(null);
     setAcceptedResult(null);
-    handoverRequestRef.current = null;
+    handoverRequestRef.current = stationId ? loadHandoverRequestIdentity(stationId, shiftId, userId, duId) : null;
     if (existingHandover) {
       setValue('cashHandedOver', (Number(existingHandover.cashHandedOver) || '') as any);
       setValue('cardHandedOver', (Number(existingHandover.cardHandedOver) || '') as any);
@@ -556,6 +556,7 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
           : undefined,
       };
       handoverRequestRef.current = resolveHandoverRequestIdentity(handoverRequestRef.current, payload);
+      if (stationId) saveHandoverRequestIdentity(stationId, shiftId, userId, duId, handoverRequestRef.current);
       const result = await recordHandover.mutateAsync({
         stationId: stationId ?? '',
         payload,
@@ -575,6 +576,7 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
       acceptedFormFingerprintRef.current = JSON.stringify(getValues());
       setAcceptedResult(result);
       handoverRequestRef.current = null;
+      if (stationId) saveHandoverRequestIdentity(stationId, shiftId, userId, duId, null);
       await onSaveSuccess();
     } catch (err: any) {
       setError(err.message || 'Failed to save attendant handover');

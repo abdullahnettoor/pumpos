@@ -38,6 +38,7 @@ export class GenerateDssr implements UseCase<GenerateDssrCommand, DssrSnapshot> 
 
     const businessDay = await this.deps.businessDays.findById(p.data.businessDayId);
     if (!businessDay || businessDay.organizationId !== ctx.organizationId) return err(notFoundError('BusinessDay', p.data.businessDayId));
+    if (ctx.stationId && businessDay.stationId !== ctx.stationId) return err(notFoundError('BusinessDay', p.data.businessDayId));
 
     const existing = await this.deps.snapshots.findByStationDate(ctx.organizationId, businessDay.stationId, businessDay.businessDate);
     if (existing && !p.data.force) return ok(existing);

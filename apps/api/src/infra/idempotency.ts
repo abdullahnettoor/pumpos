@@ -2,6 +2,57 @@ import type { MiddlewareHandler } from 'hono';
 import { and, eq } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
 
+export interface IdempotencyRecord {
+  id: string;
+  requestPath: string | null;
+  responseStatus: number | null;
+  responseBody: unknown;
+}
+
+export interface IdempotencyStore {
+  reserve(organizationId: string, key: string, requestPath: string): Promise<string | null>;
+  find(organizationId: string, key: string): Promise<IdempotencyRecord | null>;
+  release(id: string): Promise<void>;
+  complete(id: string, status: number, body: unknown): Promise<void>;
+}
+
+class DrizzleIdempotencyStore implements IdempotencyStore {
+  constructor(private readonly db: DbClient) {}
+
+  async reserve(organizationId: string, key: string, requestPath: string): Promise<string | null> {
+    const [row] = await this.db.insert(schema.idempotencyKeys)
+      .values({ organizationId, idempotencyKey: key, requestPath })
+      .onConflictDoNothing()
+      .returning({ id: schema.idempotencyKeys.id });
+    return row?.id ?? null;
+  }
+
+  async find(organizationId: string, key: string): Promise<IdempotencyRecord | null> {
+    const [row] = await this.db.select().from(schema.idempotencyKeys).where(and(
+      eq(schema.idempotencyKeys.organizationId, organizationId),
+      eq(schema.idempotencyKeys.idempotencyKey, key),
+    )).limit(1);
+    return row ? {
+      id: row.id,
+      requestPath: row.requestPath,
+      responseStatus: row.responseStatus,
+      responseBody: row.responseBody,
+    } : null;
+  }
+
+  async release(id: string): Promise<void> {
+    await this.db.delete(schema.idempotencyKeys).where(eq(schema.idempotencyKeys.id, id));
+  }
+
+  async complete(id: string, status: number, body: unknown): Promise<void> {
+    await this.db.update(schema.idempotencyKeys)
+      .set({ responseStatus: status, responseBody: body as Record<string, unknown> | null })
+      .where(eq(schema.idempotencyKeys.id, id));
+  }
+}
+
+type StoreFactory = (db: DbClient) => IdempotencyStore;
+
 /**
  * Idempotency middleware. When a mutating request carries an `Idempotency-Key`
  * header, the first request reserves the key and caches its final response;
@@ -16,7 +67,8 @@ import { schema, type DbClient } from '@pump/db';
  *
  * Must run after auth (needs `c.var.user`) and the db middleware (`c.var.db`).
  */
-export const idempotency: MiddlewareHandler = async (c, next) => {
+export function createIdempotencyMiddleware(createStore: StoreFactory = (db) => new DrizzleIdempotencyStore(db)): MiddlewareHandler {
+  return async (c, next) => {
   const method = c.req.method.toUpperCase();
   const key = c.req.header('Idempotency-Key') ?? c.req.header('idempotency-key');
   const user = (c.var as any).user as { organizationId?: string } | undefined;
@@ -26,21 +78,21 @@ export const idempotency: MiddlewareHandler = async (c, next) => {
     return next();
   }
   const orgId = user.organizationId;
+  const requestPath = `${method} ${c.req.path}`;
+  const store = createStore(db);
 
   // Reserve the key (first writer wins via the unique constraint).
-  const reserved = await db
-    .insert(schema.idempotencyKeys)
-    .values({ organizationId: orgId, idempotencyKey: key, requestPath: c.req.path })
-    .onConflictDoNothing()
-    .returning({ id: schema.idempotencyKeys.id });
+  const reservationId = await store.reserve(orgId, key, requestPath);
 
-  if (reserved.length === 0) {
-    const [existing] = await db
-      .select()
-      .from(schema.idempotencyKeys)
-      .where(and(eq(schema.idempotencyKeys.organizationId, orgId), eq(schema.idempotencyKeys.idempotencyKey, key)))
-      .limit(1);
+  if (!reservationId) {
+    const existing = await store.find(orgId, key);
     if (existing && existing.responseStatus != null) {
+      if (existing.requestPath && existing.requestPath !== c.req.path && existing.requestPath !== requestPath) {
+        return c.json(
+          { success: false, error: { code: 'CONFLICT', message: 'This Idempotency-Key was already used for another request' } },
+          409,
+        );
+      }
       return c.json(existing.responseBody as any, existing.responseStatus as any);
     }
     return c.json(
@@ -49,15 +101,19 @@ export const idempotency: MiddlewareHandler = async (c, next) => {
     );
   }
 
-  const reservationId = reserved[0].id;
-  await next();
+  try {
+    await next();
+  } catch (error) {
+    await store.release(reservationId);
+    throw error;
+  }
 
   const res = c.res;
   const status = res?.status ?? 200;
 
   // Release the reservation on server errors so the client can retry.
   if (status >= 500) {
-    await db.delete(schema.idempotencyKeys).where(eq(schema.idempotencyKeys.id, reservationId));
+    await store.release(reservationId);
     return;
   }
 
@@ -69,8 +125,8 @@ export const idempotency: MiddlewareHandler = async (c, next) => {
       body = null;
     }
   }
-  await db
-    .update(schema.idempotencyKeys)
-    .set({ responseStatus: status, responseBody: body as Record<string, unknown> | null })
-    .where(eq(schema.idempotencyKeys.id, reservationId));
-};
+  await store.complete(reservationId, status, body);
+  };
+}
+
+export const idempotency = createIdempotencyMiddleware();

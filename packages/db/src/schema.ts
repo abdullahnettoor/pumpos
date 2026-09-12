@@ -761,13 +761,14 @@ export const events = pgTable('events', {
 export const idempotencyKeys = pgTable('idempotency_keys', {
   id: uuid('id').defaultRandom().primaryKey(),
   organizationId: uuid('organization_id').references(() => organizations.id).notNull(),
-  idempotencyKey: varchar('idempotency_key', { length: 255 }).notNull().unique(),
+  idempotencyKey: varchar('idempotency_key', { length: 255 }).notNull(),
   requestPath: varchar('request_path', { length: 255 }),
   responseStatus: integer('response_status'),
   responseBody: jsonb('response_body'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 }, (t) => ({
   orgIdx: index('idempotency_keys_org_idx').on(t.organizationId),
+  orgKeyUniq: uniqueIndex('idempotency_keys_org_key_uniq').on(t.organizationId, t.idempotencyKey),
 }));
 
 export const fuelPrices = pgTable('fuel_prices', {

@@ -43,7 +43,7 @@ dssrRouter.post('/daily/generate', async (c) => {
   }
   const body = await c.req.json().catch(() => ({}));
   let businessDayId: string | undefined = body?.businessDayId;
-  const stationId: string | undefined = body?.stationId;
+  let stationId: string | undefined = body?.stationId;
   const businessDate: string | undefined = body?.businessDate;
 
   if (!businessDayId) {
@@ -68,6 +68,19 @@ dssrRouter.post('/daily/generate', async (c) => {
       return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'No business day found for that station and date' } }, 404);
     }
     businessDayId = bd.id;
+  } else {
+    const [bd] = await db
+      .select({ id: schema.businessDays.id, stationId: schema.businessDays.stationId })
+      .from(schema.businessDays)
+      .where(and(eq(schema.businessDays.id, businessDayId), eq(schema.businessDays.organizationId, user.organizationId)))
+      .limit(1);
+    if (!bd) {
+      return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Business day not found' } }, 404);
+    }
+    stationId = bd.stationId;
+    if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId })) {
+      return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+    }
   }
 
   const result = await runInTransaction(db, (tx, events) =>
