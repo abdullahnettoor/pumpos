@@ -387,6 +387,7 @@ export interface BusinessDayStatusResponse {
   requestedBusinessDate: string;
   requestedState: BusinessDayLifecycleState;
   requestedBusinessDay: BusinessDayStatusItem | null;
+  openBusinessDays: BusinessDayStatusItem[];
   pastOpenBusinessDays: BusinessDayStatusItem[];
 }
 

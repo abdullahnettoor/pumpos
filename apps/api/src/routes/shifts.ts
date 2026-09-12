@@ -10,6 +10,7 @@ import {
   LockShift,
   OpenBusinessDay,
   CloseBusinessDay,
+  GenerateDssr,
   GetBusinessDayStatus,
   type Result,
 } from '@pump/core';
@@ -31,6 +32,7 @@ import {
   DrizzleStockMovementWriter,
   DrizzleShiftSummaryWriter,
 } from '../infra/repositories/station-ops-repositories.js';
+import { DrizzleDssrDataReader, DrizzleDssrSnapshotRepository } from '../infra/repositories/reporting-repositories.js';
 import { LedgerPostingService } from '../infra/ledger-posting.js';
 
 type Variables = {
@@ -1207,9 +1209,43 @@ shiftsRouter.post('/business-day/close', async (c) => {
   }
   const body = await c.req.json().catch(() => ({}));
   const db = c.var.db;
-  const result = await runInTransaction(db, (tx, events) =>
-    new CloseBusinessDay({ repository: new DrizzleBusinessDayRepository(tx), events }).execute(body, buildContext(user)),
-  );
+  const result = await runInTransaction(db, async (tx, events) => {
+    const [businessDay] = await tx
+      .select()
+      .from(schema.businessDays)
+      .where(and(
+        eq(schema.businessDays.id, body?.businessDayId ?? ''),
+        eq(schema.businessDays.organizationId, user.organizationId),
+      ))
+      .limit(1);
+    if (!businessDay) {
+      return { success: false, error: { code: 'NOT_FOUND' as const, message: 'Business Day not found' } };
+    }
+    if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId: businessDay.stationId })) {
+      return { success: false, error: { code: 'FORBIDDEN' as const, message: 'No access to this Station' } };
+    }
+    const [openShift] = await tx
+      .select({ id: schema.shifts.id })
+      .from(schema.shifts)
+      .where(and(eq(schema.shifts.businessDayId, businessDay.id), eq(schema.shifts.status, 'OPEN')))
+      .limit(1);
+    if (openShift) {
+      return { success: false, error: { code: 'INVARIANT_VIOLATION' as const, message: 'Close the open Shift before closing this Business Day' } };
+    }
+    const businessDays = new DrizzleBusinessDayRepository(tx);
+    const closed = await new CloseBusinessDay({ repository: businessDays, events }).execute(body, buildContext(user));
+    if (!closed.success) return closed;
+    const generated = await new GenerateDssr({
+      businessDays,
+      snapshots: new DrizzleDssrSnapshotRepository(tx),
+      reader: new DrizzleDssrDataReader(tx),
+      events,
+    }).execute({ businessDayId: body.businessDayId, force: true }, buildContext(user, {
+      stationId: closed.data.stationId,
+      businessDayId: closed.data.id,
+    }));
+    return generated.success ? closed : generated;
+  });
   return sendResult(c, result);
 });
 

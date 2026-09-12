@@ -6,6 +6,7 @@ import { GetBusinessDayStatus, type BusinessDayStatusItem, type BusinessDayStatu
 class Reader implements BusinessDayStatusReader {
   constructor(readonly rows: BusinessDayStatusItem[]) {}
   async findByDate(org: string, station: string, date: string) { return this.rows.find((row) => row.businessDate === date) ?? null; }
+  async listOpen(org: string, station: string) { return this.rows.filter((row) => row.status === 'OPEN'); }
   async listPastOpen(org: string, station: string, date: string) { return this.rows.filter((row) => row.status === 'OPEN' && row.businessDate < date); }
 }
 
@@ -14,7 +15,7 @@ const day = (id: string, businessDate: string, status: 'OPEN' | 'CLOSED' = 'OPEN
 
 describe('GetBusinessDayStatus', () => {
   it('distinguishes a missing requested Business Day and returns every Past Open Business Day', async () => {
-    const result = await new GetBusinessDayStatus(new Reader([day('one', '2026-03-13'), day('two', '2026-03-14')])).execute(
+    const result = await new GetBusinessDayStatus(new Reader([day('one', '2026-03-13'), day('two', '2026-03-14'), day('future', '2026-03-16')])).execute(
       { stationId: 'station-1', requestedBusinessDate: '2026-03-15', currentBusinessDate: '2026-03-15' }, ctx,
     );
     expect(result.success).toBe(true);
@@ -22,6 +23,7 @@ describe('GetBusinessDayStatus', () => {
       expect(result.data.requestedState).toBe('NOT_CREATED');
       expect(result.data.requestedBusinessDay).toBeNull();
       expect(result.data.pastOpenBusinessDays.map((item) => item.id)).toEqual(['one', 'two']);
+      expect(result.data.openBusinessDays.map((item) => item.id)).toEqual(['one', 'two', 'future']);
     }
   });
 

@@ -14,10 +14,11 @@ export interface BusinessDayChipProps extends Omit<ButtonHTMLAttributes<HTMLButt
   /** Formatted date label, e.g. "09 Jul". */
   date: string;
   status: 'open' | 'closed' | 'not-created' | 'unknown' | 'unavailable';
+  pastOpenCount?: number;
 }
 
 export const BusinessDayChip = forwardRef<HTMLButtonElement, BusinessDayChipProps>(function BusinessDayChip(
-  { className, date, status, ...props },
+  { className, date, status, pastOpenCount = 0, ...props },
   ref
 ) {
   return (
@@ -38,6 +39,11 @@ export const BusinessDayChip = forwardRef<HTMLButtonElement, BusinessDayChipProp
         </span>
       ) : (
         <StatusChip status={status} size="xs" showIcon={false} pulse={status === 'open'} />
+      )}
+      {pastOpenCount > 0 && (
+        <span className="rounded-chip bg-warning-bg px-1.5 py-0.5 text-[10px] font-semibold text-warning-fg">
+          {pastOpenCount} past open
+        </span>
       )}
       <ChevronDown className="size-3.5 text-ink-faint" />
     </button>

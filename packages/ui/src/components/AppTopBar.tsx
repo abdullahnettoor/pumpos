@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Receipt, Wallet, ShoppingCart, ShoppingBag, CreditCard, Users, Truck, Package, FileText, Banknote,
   ArrowUpRight, LogOut, TriangleAlert, Clock, LayoutDashboard, Fuel,
@@ -53,19 +53,11 @@ function initialsOf(name: string): string {
 }
 
 function formatDayLabel(iso: string): string {
-  // iso is YYYY-MM-DD; render as "09 Jul".
+  // iso is YYYY-MM-DD; render as "09 Jul 2026".
   const [y, m, d] = iso.split('-').map(Number);
   if (!y || !m || !d) return iso;
   const dt = new Date(Date.UTC(y, m - 1, d));
-  return dt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', timeZone: 'UTC' });
-}
-
-function formatDayLabelLong(iso: string): string {
-  // iso is YYYY-MM-DD; render as "Mon, 09 Jul".
-  const [y, m, d] = iso.split('-').map(Number);
-  if (!y || !m || !d) return iso;
-  const dt = new Date(Date.UTC(y, m - 1, d));
-  return dt.toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', timeZone: 'UTC' });
+  return dt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' });
 }
 
 export const AppTopBar: React.FC<AppTopBarProps> = ({
@@ -91,7 +83,12 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
 
   // --- business day ---
   const settings: any = (selectedStation as any)?.settings || {};
-  const businessIso = resolveBusinessDate({ timeZone: settings.timezone, dayStartsAt: settings.business_day_starts_at });
+  const [clockTick, setClockTick] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setClockTick(Date.now()), 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
+  const businessIso = resolveBusinessDate({ now: new Date(clockTick), timeZone: settings.timezone, dayStartsAt: settings.business_day_starts_at });
   const businessDate = formatDayLabel(businessIso);
   const dayStatusQ = useBusinessDayStatus(stationId, businessIso, { enabled: !!stationId && stationReady } as any);
   const dayStatus = dayStatusQ.data;
@@ -108,7 +105,7 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
   const businessDays: BusinessDayOption[] = useMemo(() => {
     return (dayStatus?.pastOpenBusinessDays ?? []).map((day: any) => ({
       date: day.businessDate,
-      label: formatDayLabelLong(day.businessDate),
+      label: formatDayLabel(day.businessDate),
       status: 'open',
       openShiftCount: Number(day.openShiftCount),
       closedShiftCount: Number(day.closedShiftCount),
@@ -257,9 +254,9 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
         businessDate={businessDate}
         businessDayStatus={businessDayStatus}
         showBusinessDay={stationReady}
-        onBusinessDay={() => onNavigate('/dashboard')}
+        onBusinessDay={() => onNavigate('/shifts', { openBusinessDayDate: businessIso })}
         businessDays={businessDays}
-        onSelectBusinessDay={(date) => onNavigate('/reports', { openDssrDate: date })}
+        onSelectBusinessDay={(date) => onNavigate('/shifts', { openBusinessDayDate: date })}
         stationLabel={selectedStation?.name}
         onOpenSearch={() => setOpen(true)}
         quickCreate={quickCreate}

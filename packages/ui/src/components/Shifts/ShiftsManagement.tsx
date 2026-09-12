@@ -21,6 +21,7 @@ import { openQuickEntry, useQuickEntry, type QuickEntryType } from '../../quick-
 import { Station, resolveBusinessDate } from '@pump/shared';
 import { FileText, User, Lock, AlertTriangle, Check, Fuel, Info, Play, History, Clock3, CalendarRange } from 'lucide-react';
 import { LoadingSpinner } from '../LoadingSpinner.js';
+import type { NavIntent } from '../AppShell.js';
 
 const shiftService = new CloudShiftService();
 const transactionService = new CloudTransactionService();
@@ -60,6 +61,8 @@ interface ShiftsManagementProps {
   userRole: 'Owner' | 'Manager' | 'Accountant' | 'Staff';
   userName: string;
   onNavigate?: (path: string) => void;
+  intent?: NavIntent | null;
+  onIntentConsumed?: () => void;
 }
 
 export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
@@ -67,6 +70,8 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   userRole,
   userName,
   onNavigate,
+  intent,
+  onIntentConsumed,
 }) => {
   const stationId = selectedStation?.id ?? null;
   const statusQ = useShiftStatus(stationId, false, { refetchOnWindowFocus: false });
@@ -79,7 +84,8 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   const [viewingShiftSummary, setViewingShiftSummary] = useState(false);
 
   // Shift Tab Sub-Navigation
-  const [shiftSubTab, setShiftSubTab] = useState<'today' | 'business-day' | 'history'>('today');
+  const [shiftSubTab, setShiftSubTab] = useState<'today' | 'business-day' | 'history'>(userRole === 'Accountant' ? 'business-day' : 'today');
+  const [requestedBusinessDayDate, setRequestedBusinessDayDate] = useState<string | null>(null);
   const [viewHistoryShiftId, setViewHistoryShiftId] = useState<string | null>(null);
 
   // Open Shift Form States
@@ -103,6 +109,13 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     setBusinessDate(resolveBusinessDate({ timeZone: s.timezone, dayStartsAt: s.business_day_starts_at }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedStation?.id]);
+
+  useEffect(() => {
+    if (!intent?.openBusinessDayDate) return;
+    setRequestedBusinessDayDate(intent.openBusinessDayDate);
+    setShiftSubTab('business-day');
+    onIntentConsumed?.();
+  }, [intent?.openBusinessDayDate, onIntentConsumed]);
 
   // Active Shift Workspace States
   const [closingReadings, setClosingReadings] = useState<Record<string, number>>({});
@@ -543,7 +556,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         },
         { id: 'business-day', label: 'Business Day', icon: <CalendarRange size={13} /> },
         { id: 'history', label: 'History', icon: <History size={13} /> },
-      ]}
+      ].filter((tab) => userRole !== 'Accountant' || tab.id !== 'today')}
     />
     </div>
   );
@@ -556,7 +569,13 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontFamily: 'var(--font-sans)' }}
       >
         {renderShiftSubTabs()}
-        <BusinessDayTab selectedStation={selectedStation} userRole={userRole} />
+        <BusinessDayTab
+          selectedStation={selectedStation}
+          userRole={userRole}
+          activeBusinessDayId={activeShift?.businessDayId ?? null}
+          requestedBusinessDate={requestedBusinessDayDate}
+          onBusinessDateSelected={() => setRequestedBusinessDayDate(null)}
+        />
       </div>
     );
   }

@@ -70,6 +70,15 @@ export class DrizzleBusinessDayStatusReader implements BusinessDayStatusReader {
     )).orderBy(desc(schema.businessDays.businessDate));
     return rows.map((row) => this.toItem(row));
   }
+
+  async listOpen(organizationId: string, stationId: string): Promise<BusinessDayStatusItem[]> {
+    const rows = await this.db.select(this.projection()).from(schema.businessDays).where(and(
+      eq(schema.businessDays.organizationId, organizationId),
+      eq(schema.businessDays.stationId, stationId),
+      eq(schema.businessDays.status, 'OPEN'),
+    )).orderBy(desc(schema.businessDays.businessDate));
+    return rows.map((row) => this.toItem(row));
+  }
 }
 
 export class DrizzleBusinessDayRepository implements BusinessDayRepository {

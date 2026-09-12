@@ -28,6 +28,8 @@ export interface NavIntent {
   open?: 'customer-statement' | 'new-customer' | 'new-collection' | 'supplier-statement' | 'supplier-payment' | 'new-expense' | 'new-income';
   /** Open a specific past business day's DSSR summary (Reports page). */
   openDssrDate?: string;
+  /** Open a specific Business Day in the Shifts workspace. */
+  openBusinessDayDate?: string;
 }
 
 export interface AppShellProps {

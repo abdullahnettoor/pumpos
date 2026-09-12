@@ -161,7 +161,7 @@ export const TopBar: React.FC<TopBarProps> = ({
       {showBusinessDay && (
         <Menu onOpenChange={onBusinessDayMenuOpenChange}>
           <MenuTrigger asChild>
-            <BusinessDayChip date={businessDate} status={businessDayStatus} />
+            <BusinessDayChip date={businessDate} status={businessDayStatus} pastOpenCount={businessDays.length} />
           </MenuTrigger>
           <MenuContent align="start">
             <MenuLabel>Business Day</MenuLabel>
@@ -174,17 +174,19 @@ export const TopBar: React.FC<TopBarProps> = ({
               </span>
             </MenuItem>
             {businessDays.length > 0 && <><MenuSeparator /><MenuLabel>Past Open Business Days</MenuLabel></>}
+            {businessDays.length === 0 && (
+              <div className="px-2 py-1.5 text-[11px] text-ink-faint">No Past Open Business Days</div>
+            )}
             {businessDays.map((d) => (
               <MenuItem key={d.date} onSelect={() => onSelectBusinessDay?.(d.date)}>
                 <span className="flex flex-1 items-center justify-between gap-4">
                   <span className="flex flex-col">
                     <span>{d.label}</span>
                     <span className="text-[10px] text-ink-faint">
-                      {d.openShiftCount ?? 0} open · {d.closedShiftCount ?? 0} closed
-                      {d.lastActivityAt ? ` · Active ${new Date(d.lastActivityAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}` : ''}
+                      {d.closedShiftCount ?? 0} closed · {d.openShiftCount ?? 0} open
                     </span>
                   </span>
-                  <span className="text-[11px] text-brand">Delayed closure</span>
+                  <span className="text-[11px] text-brand">Open</span>
                 </span>
               </MenuItem>
             ))}

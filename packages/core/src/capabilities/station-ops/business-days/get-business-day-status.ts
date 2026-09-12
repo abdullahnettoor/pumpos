@@ -17,6 +17,7 @@ export interface BusinessDayStatusItem {
 
 export interface BusinessDayStatusReader {
   findByDate(organizationId: string, stationId: string, businessDate: string): Promise<BusinessDayStatusItem | null>;
+  listOpen(organizationId: string, stationId: string): Promise<BusinessDayStatusItem[]>;
   listPastOpen(organizationId: string, stationId: string, currentBusinessDate: string): Promise<BusinessDayStatusItem[]>;
 }
 
@@ -25,6 +26,7 @@ export interface GetBusinessDayStatusResult {
   requestedBusinessDate: string;
   requestedState: BusinessDayLifecycleState;
   requestedBusinessDay: BusinessDayStatusItem | null;
+  openBusinessDays: BusinessDayStatusItem[];
   pastOpenBusinessDays: BusinessDayStatusItem[];
 }
 
@@ -35,8 +37,9 @@ export class GetBusinessDayStatus implements UseCase<{ stationId: string; reques
     if (!input.stationId || !isValidBusinessDate(input.requestedBusinessDate) || !isValidBusinessDate(input.currentBusinessDate)) {
       return err(validationError('Business Day status requires a Station and valid Business Dates'));
     }
-    const [requestedBusinessDay, pastOpenBusinessDays] = await Promise.all([
+    const [requestedBusinessDay, openBusinessDays, pastOpenBusinessDays] = await Promise.all([
       this.reader.findByDate(ctx.organizationId, input.stationId, input.requestedBusinessDate),
+      this.reader.listOpen(ctx.organizationId, input.stationId),
       this.reader.listPastOpen(ctx.organizationId, input.stationId, input.currentBusinessDate),
     ]);
     return ok({
@@ -44,6 +47,7 @@ export class GetBusinessDayStatus implements UseCase<{ stationId: string; reques
       requestedBusinessDate: input.requestedBusinessDate,
       requestedState: requestedBusinessDay?.status ?? 'NOT_CREATED',
       requestedBusinessDay,
+      openBusinessDays,
       pastOpenBusinessDays,
     });
   }
