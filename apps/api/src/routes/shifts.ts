@@ -17,7 +17,7 @@ import {
 import { buildContext } from '../infra/context.js';
 import type { AuthenticatedPrincipal } from '../infra/authenticated-principal.js';
 import { loadStationClock } from '../infra/station-clock.js';
-import { runInTransaction } from '../infra/transaction.js';
+import { lockStationInventory, runInTransaction } from '../infra/transaction.js';
 import {
   DrizzleNozzleRepository,
   DrizzleFuelPriceRepository,
@@ -36,6 +36,7 @@ import {
 } from '../infra/repositories/station-ops-repositories.js';
 import { DrizzleDssrDataReader, DrizzleDssrSnapshotRepository } from '../infra/repositories/reporting-repositories.js';
 import { LedgerPostingService } from '../infra/ledger-posting.js';
+import { DrizzleStockVarianceRepository } from '../infra/repositories/inventory-repositories.js';
 
 type Variables = {
   db: DbClient;
@@ -1029,8 +1030,9 @@ shiftsRouter.post('/open', async (c) => {
   }
   const db = c.var.db;
   const clock = await loadStationClock(db, body?.stationId);
-  const result = await runInTransaction(db, (tx, events) =>
-    new OpenShift({
+  const result = await runInTransaction(db, async (tx, events) => {
+    await lockStationInventory(tx, user.organizationId, body?.stationId);
+    return new OpenShift({
       shifts: new DrizzleShiftRepository(tx),
       businessDays: new DrizzleBusinessDayRepository(tx),
       businessDayLock: new DrizzleBusinessDayRepository(tx),
@@ -1038,8 +1040,8 @@ shiftsRouter.post('/open', async (c) => {
       nozzleReadings: new DrizzleNozzleReadingRepository(tx),
       fuelPrices: new DrizzleFuelPriceRepository(tx),
       events,
-    }).execute(body, buildContext(user, { stationId: body?.stationId, ...clock })),
-  );
+    }).execute(body, buildContext(user, { stationId: body?.stationId, ...clock }));
+  });
   return sendResult(c, result);
 });
 
@@ -1065,9 +1067,11 @@ shiftsRouter.post('/close', async (c) => {
     return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions to close a shift' } }, 403);
   }
   const body = await c.req.json().catch(() => ({}));
-  const command = { shiftId: body?.shiftId, ...(body?.payload ?? {}) };
+  const command = { ...(body?.payload ?? {}), shiftId: body?.shiftId };
   const db = c.var.db;
   const result = await runInTransaction(db, async (tx, events) => {
+    const [shift] = await tx.select({ stationId: schema.shifts.stationId }).from(schema.shifts).where(and(eq(schema.shifts.id, body?.shiftId), eq(schema.shifts.organizationId, user.organizationId))).limit(1);
+    if (shift) await lockStationInventory(tx, user.organizationId, shift.stationId);
     const r = await new CloseShift({
       shifts: new DrizzleShiftRepository(tx),
       nozzles: new DrizzleNozzleRepository(tx),
@@ -1100,9 +1104,12 @@ shiftsRouter.post('/reopen', async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const db = c.var.db;
   const result = await runInTransaction(db, async (tx, events) => {
+    const [shift] = await tx.select({ stationId: schema.shifts.stationId }).from(schema.shifts).where(and(eq(schema.shifts.id, body?.shiftId), eq(schema.shifts.organizationId, user.organizationId))).limit(1);
+    if (shift) await lockStationInventory(tx, user.organizationId, shift.stationId);
     const r = await new ReopenShift({
       shifts: new DrizzleShiftRepository(tx),
       summaries: new DrizzleShiftSummaryWriter(tx),
+      stockVariances: new DrizzleStockVarianceRepository(tx),
       events,
     }).execute(body, buildContext(user));
     // Roll back the shift-close money postings; they will be re-posted on re-close.

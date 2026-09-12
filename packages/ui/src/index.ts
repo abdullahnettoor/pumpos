@@ -43,6 +43,7 @@ export { DesignSystem } from './components/DesignSystem.js';
 export * from './query/queryClient.js';
 export * from './query/hooks.js';
 export * from './query/handoverMutation.js';
+export * from './query/stockCountMutation.js';
 export { useStationAlerts } from './query/useStationAlerts.js';
 export type { StationAlert, AlertSeverity } from './query/useStationAlerts.js';
 export { PageLayout } from './components/primitives/PageLayout.js';

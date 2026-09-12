@@ -34,6 +34,7 @@ import {
 import { buildContext } from '../infra/context.js';
 import type { AuthenticatedPrincipal } from '../infra/authenticated-principal.js';
 import { createDispatcher } from '../infra/events.js';
+import { runInTransaction } from '../infra/transaction.js';
 import { SupabaseAdmin } from '../infra/supabase-admin.js';
 import { rateLimit } from '../infra/rate-limit.js';
 import { DrizzleOnboardingProvisioner } from '../infra/onboarding-provisioner.js';
@@ -158,7 +159,8 @@ stationSetupRouter.get('/tanks', async (c) => {
     .where(
       and(
         eq(schema.tanks.stationId, stationId),
-        eq(schema.tanks.organizationId, user.organizationId)
+        eq(schema.tanks.organizationId, user.organizationId),
+        eq(schema.tanks.status, 'ACTIVE'),
       )
     );
 
@@ -248,8 +250,9 @@ stationSetupRouter.post('/nozzles', async (c) => {
     return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient write permissions' } }, 403);
   }
   const db = c.var.db;
-  const useCase = new CreateNozzle({ repository: new DrizzleNozzleRepository(db), events: createDispatcher(db) });
-  const result = await useCase.execute(body, buildContext(user, { stationId: body.stationId }));
+  const result = await runInTransaction(db, (tx, events) =>
+    new CreateNozzle({ repository: new DrizzleNozzleRepository(tx), tanks: new DrizzleTankRepository(tx), events }).execute(body, buildContext(user, { stationId: body.stationId })),
+  );
   return sendResult(c, result);
 });
 
@@ -483,8 +486,9 @@ stationSetupRouter.delete('/tanks/:id', async (c) => {
     return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient write permissions' } }, 403);
   }
   const db = c.var.db;
-  const useCase = new DeleteTank({ repository: new DrizzleTankRepository(db), events: createDispatcher(db) });
-  const result = await useCase.execute({ id }, buildContext(user));
+  const result = await runInTransaction(db, (tx, events) =>
+    new DeleteTank({ repository: new DrizzleTankRepository(tx), events }).execute({ id }, buildContext(user)),
+  );
   return sendResult(c, result);
 });
 
@@ -521,8 +525,9 @@ stationSetupRouter.put('/nozzles/:id', async (c) => {
     return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient write permissions' } }, 403);
   }
   const db = c.var.db;
-  const useCase = new UpdateNozzle({ repository: new DrizzleNozzleRepository(db), events: createDispatcher(db) });
-  const result = await useCase.execute({ ...body, id }, buildContext(user, { stationId: body.stationId }));
+  const result = await runInTransaction(db, (tx, events) =>
+    new UpdateNozzle({ repository: new DrizzleNozzleRepository(tx), tanks: new DrizzleTankRepository(tx), events }).execute({ ...body, id }, buildContext(user, { stationId: body.stationId })),
+  );
   return sendResult(c, result);
 });
 
@@ -533,7 +538,7 @@ stationSetupRouter.delete('/nozzles/:id', async (c) => {
     return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient write permissions' } }, 403);
   }
   const db = c.var.db;
-  const useCase = new DeleteNozzle({ repository: new DrizzleNozzleRepository(db), events: createDispatcher(db) });
+  const useCase = new DeleteNozzle({ repository: new DrizzleNozzleRepository(db), tanks: new DrizzleTankRepository(db), events: createDispatcher(db) });
   const result = await useCase.execute({ id }, buildContext(user));
   return sendResult(c, result);
 });

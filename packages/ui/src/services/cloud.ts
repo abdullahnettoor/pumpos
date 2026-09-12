@@ -94,6 +94,32 @@ export interface RecordHandoverResult {
   replaced: boolean;
 }
 
+export interface RecordStockCountPayload {
+  stationId: string;
+  actualQuantity: number;
+  productId?: string;
+  tankId?: string | null;
+  shiftId?: string | null;
+  reason?: string;
+}
+
+export interface RecordStockCountResult {
+  variance: {
+    id: string;
+    shiftId: string | null;
+    businessDayId: string;
+    productId: string;
+    tankId: string | null;
+    expectedQuantity: string;
+    actualQuantity: string;
+    varianceQuantity: string;
+    reason: string | null;
+  };
+  expectedQuantity: number;
+  actualQuantity: number;
+  varianceQuantity: number;
+}
+
 function getHeaders() {
   return {
     'Content-Type': 'application/json',
@@ -813,11 +839,14 @@ export class CloudTransactionService {
     return request<any[]>(`/transactions/inventory/items?stationId=${stationId}`);
   }
 
-  async recordStockCount(payload: { stationId: string; productId: string; actualQuantity: number; tankId?: string | null; reason?: string }): Promise<any> {
-    return request<any>('/transactions/inventory/count', {
+  async recordStockCount(
+    payload: RecordStockCountPayload,
+    opts?: { idempotencyKey?: string },
+  ): Promise<RecordStockCountResult> {
+    return request<RecordStockCountResult>('/transactions/inventory/count', {
       method: 'POST',
       body: JSON.stringify(payload),
-    });
+    }, { idempotencyKey: opts?.idempotencyKey });
   }
 
   async getInventoryMovements(stationId: string): Promise<any[]> {

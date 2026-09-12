@@ -1,30 +1,43 @@
 import { z } from 'zod';
 import { resolveBusinessDate } from '@pump/shared';
-import { BusinessEvents, err, eventFromContext, ok, validationError } from '../../kernel/index.js';
+import { BusinessEvents, err, eventFromContext, notFoundError, ok, relatedEventFromContext, validationError } from '../../kernel/index.js';
 import type { DomainEvent, EventPublisher, ExecutionContext, Result, UseCase } from '../../kernel/index.js';
 import { ensureBusinessDayForDate, type BusinessDayRepository } from '../station-ops/business-days/index.js';
+import type { ShiftRepository } from '../station-ops/shifts/index.js';
+import type { TankRepository } from '../station-setup/tanks/index.js';
 import type { StockMovement, StockMovementRepository, StockVariance, StockVarianceRepository } from './ports.js';
 
 export interface RecordStockCountCommand {
   stationId: string;
-  productId: string;
+  productId?: string;
   /** Physically measured quantity (tank dip for bulk, count for item). */
   actualQuantity: number | string;
   tankId?: string | null;
+  shiftId?: string | null;
   reason?: string;
 }
 
 const schema = z.object({
   stationId: z.string().min(1, 'stationId is required'),
-  productId: z.string().min(1, 'productId is required'),
+  productId: z.string().min(1).optional(),
   actualQuantity: z.coerce.number().min(0, 'actualQuantity must be >= 0'),
   tankId: z.string().nullish(),
+  shiftId: z.string().nullish(),
   reason: z.string().max(255).optional(),
+}).superRefine((value, refinement) => {
+  if (!value.tankId && !value.productId) {
+    refinement.addIssue({ code: z.ZodIssueCode.custom, message: 'tankId or productId is required' });
+  }
+  if (value.tankId && value.productId) {
+    refinement.addIssue({ code: z.ZodIssueCode.custom, message: 'productId must not be supplied for a Tank Dip', path: ['productId'] });
+  }
 });
 
 export interface RecordStockCountDeps {
   movements: StockMovementRepository;
   variances: StockVarianceRepository;
+  tanks: TankRepository;
+  shifts: ShiftRepository;
   businessDays: BusinessDayRepository;
   events: EventPublisher;
 }
@@ -49,23 +62,46 @@ export class RecordStockCount implements UseCase<RecordStockCountCommand, Record
     const p = schema.safeParse(input);
     if (!p.success) return err(validationError('Invalid RecordStockCount command', { issues: p.error.flatten() }));
     const cmd = p.data;
+    if (ctx.stationId && ctx.stationId !== cmd.stationId) return err(notFoundError('Station', cmd.stationId));
+
+    const tank = cmd.tankId ? await this.deps.tanks.findByIdForUpdate(cmd.tankId) : null;
+    if (cmd.tankId && (!tank || tank.organizationId !== ctx.organizationId || tank.stationId !== cmd.stationId || tank.status !== 'ACTIVE')) {
+      return err(notFoundError('Tank', cmd.tankId));
+    }
+    const productId = tank?.productId ?? cmd.productId!;
+
+    let attributedShift = null;
+    if (cmd.shiftId) {
+      attributedShift = await this.deps.shifts.findById(cmd.shiftId);
+      if (!attributedShift || attributedShift.organizationId !== ctx.organizationId || attributedShift.stationId !== cmd.stationId || attributedShift.status === 'OPEN') {
+        return err(notFoundError('Shift', cmd.shiftId));
+      }
+    }
+    if (cmd.tankId && await this.deps.shifts.findOpenByStation(ctx.organizationId, cmd.stationId)) {
+      return err(validationError('Close the open Shift before recording a Tank Dip'));
+    }
 
     const date = resolveBusinessDate({ now: ctx.clock.now(), timeZone: ctx.timeZone, dayStartsAt: ctx.businessDayStartsAt });
-    const bd = await ensureBusinessDayForDate(this.deps.businessDays, ctx, cmd.stationId, date);
+    const bd = attributedShift
+      ? await this.deps.businessDays.findById(attributedShift.businessDayId)
+      : await ensureBusinessDayForDate(this.deps.businessDays, ctx, cmd.stationId, date);
+    if (!bd || bd.organizationId !== ctx.organizationId || bd.stationId !== cmd.stationId) {
+      return err(notFoundError('Business Day', attributedShift?.businessDayId ?? date));
+    }
 
     const isBulk = !!cmd.tankId;
     const expected = isBulk
       ? await this.deps.movements.currentQuantityForTank(cmd.tankId as string)
-      : await this.deps.movements.currentQuantityForProduct(ctx.organizationId, cmd.productId);
+      : await this.deps.movements.currentQuantityForProduct(ctx.organizationId, productId);
     const actual = cmd.actualQuantity;
     const varianceQuantity = actual - expected;
 
     const now = ctx.clock.now().toISOString();
     const variance: StockVariance = {
       id: ctx.ids.newId(),
-      shiftId: null,
+      shiftId: cmd.shiftId ?? null,
       businessDayId: bd.id,
-      productId: cmd.productId,
+      productId,
       tankId: cmd.tankId ?? null,
       expectedQuantity: String(expected),
       actualQuantity: String(actual),
@@ -79,9 +115,9 @@ export class RecordStockCount implements UseCase<RecordStockCountCommand, Record
     if (varianceQuantity !== 0) {
       const movement: StockMovement = {
         id: ctx.ids.newId(),
-        shiftId: null,
+        shiftId: cmd.shiftId ?? null,
         businessDayId: bd.id,
-        productId: cmd.productId,
+        productId,
         tankId: cmd.tankId ?? null,
         movementType: 'Variance',
         quantity: String(varianceQuantity),
@@ -97,21 +133,21 @@ export class RecordStockCount implements UseCase<RecordStockCountCommand, Record
       eventFromContext(ctx, {
         eventType: isBulk ? BusinessEvents.TANK_DIP_RECORDED : BusinessEvents.PHYSICAL_COUNT_COMPLETED,
         aggregateType: isBulk ? 'Tank' : 'Product',
-        aggregateId: cmd.tankId ?? cmd.productId,
+        aggregateId: cmd.tankId ?? productId,
         stationId: cmd.stationId,
         businessDayId: bd.id,
-        payload: { productId: cmd.productId, tankId: cmd.tankId ?? null, expected, actual, variance: varianceQuantity },
+        payload: { productId, tankId: cmd.tankId ?? null, shiftId: cmd.shiftId ?? null, expected, actual, variance: varianceQuantity },
       }),
     ];
     if (varianceQuantity !== 0) {
       events.push(
-        eventFromContext(ctx, {
+        relatedEventFromContext(ctx, {
           eventType: BusinessEvents.VARIANCE_RECORDED,
           aggregateType: 'StockVariance',
           aggregateId: variance.id,
           stationId: cmd.stationId,
           businessDayId: bd.id,
-          payload: { varianceId: variance.id, productId: cmd.productId, tankId: cmd.tankId ?? null, varianceQuantity },
+          payload: { varianceId: variance.id, productId, tankId: cmd.tankId ?? null, shiftId: cmd.shiftId ?? null, varianceQuantity },
         }),
       );
     }

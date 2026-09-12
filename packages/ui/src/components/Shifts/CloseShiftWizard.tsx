@@ -49,6 +49,8 @@ export interface CloseShiftWizardProps {
   stationTanks: any[];
   dipReadings: Record<string, number | string>;
   onDipReadingsChange: (next: Record<string, number | string>) => void;
+  dipReasons: Record<string, string>;
+  onDipReasonsChange: (next: Record<string, string>) => void;
 
   // Warnings
   warnings: string[];
@@ -96,6 +98,8 @@ export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
   stationTanks,
   dipReadings,
   onDipReadingsChange,
+  dipReasons,
+  onDipReasonsChange,
   warnings,
   confirmWarningsChecked,
   onConfirmWarningsChange,
@@ -405,30 +409,40 @@ export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
             {recordDip && stationTanks.length > 0 && (
               <div className="close-wizard-tank-list">
                 {stationTanks.map((tank) => (
-                  <div key={tank.id} className="close-wizard-tank-row">
+                  <div key={tank.id} className="close-wizard-tank-row" style={{ alignItems: 'flex-start' }}>
                     <div>
                       <div className="close-wizard-tank-name">{tank.name}</div>
                       <div className="close-wizard-tank-meta">
-                        {tank.productName} · Expected{' '}
-                        <strong>{Number(tank.currentVolume).toFixed(1)} {tank.productUnit || 'L'}</strong>
+                        {tank.productName} · Actual quantity is reconciled after Shift close
                       </div>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', alignItems: 'flex-end' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <input
+                          type="number" min="0"
+                          step="0.1"
+                          placeholder="Actual"
+                          value={dipReadings[tank.id] ?? ''}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            onDipReadingsChange({
+                              ...dipReadings,
+                              [tank.id]: val === '' ? '' : Number(val),
+                            });
+                          }}
+                          className="close-wizard-input close-wizard-input--small"
+                        />
+                        <span className="close-wizard-helper">L</span>
+                      </div>
                       <input
-                        type="number" min="0"
-                        step="0.1"
-                        placeholder="Actual"
-                        value={dipReadings[tank.id] ?? ''}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          onDipReadingsChange({
-                            ...dipReadings,
-                            [tank.id]: val === '' ? '' : Number(val),
-                          });
-                        }}
-                        className="close-wizard-input close-wizard-input--small"
+                        type="text"
+                        maxLength={255}
+                        placeholder="Reason (optional)"
+                        value={dipReasons[tank.id] ?? ''}
+                        onChange={(e) => onDipReasonsChange({ ...dipReasons, [tank.id]: e.target.value })}
+                        className="close-wizard-input"
+                        style={{ width: 190 }}
                       />
-                      <span className="close-wizard-helper">L</span>
                     </div>
                   </div>
                 ))}

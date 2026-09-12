@@ -51,4 +51,5 @@ export interface StockVariance {
 
 export interface StockVarianceRepository {
   save(variance: StockVariance): Promise<void>;
+  existsForShift(shiftId: string): Promise<boolean>;
 }

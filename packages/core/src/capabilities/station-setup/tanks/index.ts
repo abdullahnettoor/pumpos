@@ -9,12 +9,15 @@ export interface Tank {
   name: string;
   productId: string;
   capacity: string;
+  status: 'ACTIVE' | 'INACTIVE';
   createdAt: string;
   updatedAt: string;
 }
 
 export interface TankRepository extends Repository<Tank> {
-  deleteById(id: string): Promise<boolean>;
+  findByIdForUpdate(id: string): Promise<Tank | null>;
+  hasNozzles(id: string): Promise<boolean>;
+  deactivateById(id: string): Promise<boolean>;
   listByStation(organizationId: string, stationId: string): Promise<Tank[]>;
 }
 
@@ -64,6 +67,7 @@ export class CreateTank implements UseCase<CreateTankCommand, Tank> {
       name: p.data.name,
       productId: p.data.productId,
       capacity: String(p.data.capacity),
+      status: 'ACTIVE',
       createdAt: now,
       updatedAt: now,
     };
@@ -112,9 +116,12 @@ export class UpdateTank implements UseCase<UpdateTankCommand, Tank> {
 export class DeleteTank implements UseCase<{ id: string }, Tank> {
   constructor(private readonly deps: TankDeps) {}
   async execute(input: { id: string }, ctx: ExecutionContext): Promise<Result<Tank>> {
-    const existing = await this.deps.repository.findById(input.id);
+    const existing = await this.deps.repository.findByIdForUpdate(input.id);
     if (!existing || existing.organizationId !== ctx.organizationId) return err(notFoundError('Tank', input.id));
-    await this.deps.repository.deleteById(existing.id);
+    if (await this.deps.repository.hasNozzles(existing.id)) {
+      return err(validationError('Tank cannot be deactivated while Nozzles are assigned to it', { tankId: existing.id }));
+    }
+    await this.deps.repository.deactivateById(existing.id);
     await this.deps.events.publish([
       eventFromContext(ctx, {
         eventType: BusinessEvents.TANK_DELETED,

@@ -182,13 +182,7 @@ export const shiftCloseSchema = z.object({
       closingReading: z.number().nonnegative('Closing reading must be non-negative'),
     })
   ),
-  dipReadings: z.array(
-    z.object({
-      tankId: z.string().uuid('Invalid tank ID'),
-      actualQuantity: z.number().nonnegative('Actual quantity must be non-negative'),
-    })
-  ).optional(),
-});
+}).strict();
 
 
 export const nozzleReadingSchema = z.object({

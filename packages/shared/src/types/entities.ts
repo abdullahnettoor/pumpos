@@ -236,6 +236,7 @@ export interface Tank {
   name: string;
   productId: string;
   capacity: number; // in Liters
+  status: 'ACTIVE' | 'INACTIVE';
   createdAt: string;
   updatedAt: string;
 }
@@ -347,7 +348,6 @@ export interface ShiftOpenPayload {
 export interface ShiftClosePayload {
   closingCash: number;
   nozzleReadings: { nozzleId: string; closingReading: number }[];
-  dipReadings?: { tankId: string; actualQuantity: number }[];
 }
 
 export interface ShiftDashboardSummary {

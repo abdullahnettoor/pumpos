@@ -71,6 +71,7 @@ export const tanks = pgTable('tanks', {
   name: varchar('name', { length: 100 }).notNull(),
   productId: uuid('product_id').notNull(), // references products table defined below
   capacity: numeric('capacity', { precision: 12, scale: 2 }).notNull(), // Liters
+  status: varchar('status', { length: 20 }).default('ACTIVE').notNull(), // 'ACTIVE' | 'INACTIVE'
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });

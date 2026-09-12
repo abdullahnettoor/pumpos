@@ -43,7 +43,7 @@ import {
 import { buildContext, createCommandTrace } from '../infra/context.js';
 import type { AuthenticatedPrincipal } from '../infra/authenticated-principal.js';
 import { loadStationClock } from '../infra/station-clock.js';
-import { runInTransaction } from '../infra/transaction.js';
+import { lockStationInventory, runInTransaction } from '../infra/transaction.js';
 import { TimestampDocumentNumberGenerator } from '../infra/doc-numbers.js';
 import {
   DrizzleCustomerRepository,
@@ -62,7 +62,7 @@ import { DrizzleStockMovementRepository, DrizzleStockVarianceRepository } from '
 import { DrizzleSaleRepository, DrizzleMerchandiseHandoverRepository } from '../infra/repositories/retail-repositories.js';
 import { DrizzleInvoiceRepository, DrizzleDocumentSequenceRepository } from '../infra/repositories/invoicing-repositories.js';
 import { DrizzleProductRepository } from '../infra/repositories/product.repo.js';
-import { DrizzleStationRepository } from '../infra/repositories/setup-repositories.js';
+import { DrizzleStationRepository, DrizzleTankRepository } from '../infra/repositories/setup-repositories.js';
 import { LedgerPostingService } from '../infra/ledger-posting.js';
 import {
   DrizzleShiftRepository,
@@ -1958,7 +1958,7 @@ transactionsRouter.get('/inventory/status', async (c) => {
     .from(schema.tanks)
     .leftJoin(schema.products, eq(schema.products.id, schema.tanks.productId))
     .leftJoin(schema.stockMovements, eq(schema.stockMovements.tankId, schema.tanks.id))
-    .where(and(eq(schema.tanks.stationId, stationId), eq(schema.tanks.organizationId, user.organizationId)))
+    .where(and(eq(schema.tanks.stationId, stationId), eq(schema.tanks.organizationId, user.organizationId), eq(schema.tanks.status, 'ACTIVE')))
     .groupBy(schema.tanks.id, schema.products.name, schema.products.code, schema.products.unit);
 
   const enriched = rows.map((r) => ({
@@ -2016,14 +2016,17 @@ transactionsRouter.post('/inventory/count', async (c) => {
     return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
   }
   const stockClock = await loadStationClock(c.var.db, body?.stationId);
-  const result = await runInTransaction(c.var.db, (tx, events) =>
-    new RecordStockCount({
+  const result = await runInTransaction(c.var.db, async (tx, events) => {
+    await lockStationInventory(tx, user.organizationId, body?.stationId);
+    return new RecordStockCount({
       movements: new DrizzleStockMovementRepository(tx),
       variances: new DrizzleStockVarianceRepository(tx),
+      tanks: new DrizzleTankRepository(tx),
+      shifts: new DrizzleShiftRepository(tx),
       businessDays: new DrizzleBusinessDayRepository(tx),
       events,
-    }).execute(body, buildContext(user, { stationId: body?.stationId, ...stockClock })),
-  );
+    }).execute(body, buildContext(user, { stationId: body?.stationId, ...stockClock }));
+  });
   return sendResult(c, result);
 });
 

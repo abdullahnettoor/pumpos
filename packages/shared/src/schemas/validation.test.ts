@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { stationSchema, nozzleReadingSchema, supplierPaymentSchema, shiftPurchaseSchema, onboardingDraftSchema, finalizeOnboardingSchema, createOpenShiftFormSchema, attendantHandoverSchema } from './validation.js';
+import { stationSchema, nozzleReadingSchema, supplierPaymentSchema, shiftPurchaseSchema, onboardingDraftSchema, finalizeOnboardingSchema, createOpenShiftFormSchema, attendantHandoverSchema, shiftCloseSchema } from './validation.js';
 
 describe('Validation Schemas Tests', () => {
   describe('createOpenShiftFormSchema', () => {
@@ -119,6 +119,18 @@ describe('Validation Schemas Tests', () => {
         expect(attendantHandoverSchema.safeParse({ ...valid, [field]: 1 }).success).toBe(false);
       },
     );
+  });
+
+  describe('shiftCloseSchema', () => {
+    it('rejects Tank Dip input because dips are recorded after close as a separate action', () => {
+      const result = shiftCloseSchema.safeParse({
+        closingCash: 100,
+        nozzleReadings: [{ nozzleId: '550e8400-e29b-41d4-a716-446655440003', closingReading: 1300 }],
+        dipReadings: [{ tankId: '550e8400-e29b-41d4-a716-446655440004', actualQuantity: 5000 }],
+      });
+
+      expect(result.success).toBe(false);
+    });
   });
 
   describe('shiftPurchaseSchema', () => {

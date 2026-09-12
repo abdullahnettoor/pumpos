@@ -7,10 +7,11 @@ import { Tabs } from './primitives/Tabs.js';
 import { Drawer } from './Drawer.js';
 import { Field, NumberInput, TextInput, Select } from './primitives/Field.js';
 import { CloudTransactionService } from '../services/cloud.js';
-import { useInventoryStatus, useInventoryItems, useInventoryMovements, useInventoryVariances } from '../query/hooks.js';
+import { useInventoryStatus, useInventoryItems, useInventoryMovements, useInventoryVariances, useInvalidateOperational } from '../query/hooks.js';
 import { Panel, Button, KpiStrip, KpiTile, StatusChip, Chip, MeterRow, EmptyState, DateText } from '../pump-ds/index.js';
 import { tankPct, classifyTank } from '../utils/stock.js';
 import type { NavIntent } from './AppShell.js';
+import { isAmbiguousMutationError, loadPendingStockCountRequest, resolveStockCountRequestIdentity, savePendingStockCountRequest, type StockCountRequestIdentity } from '../query/stockCountMutation.js';
 
 const transactionService = new CloudTransactionService();
 
@@ -122,6 +123,7 @@ const itemColumns: ColumnDef<any, any>[] = [
 export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation, intent, onIntentConsumed }) => {
   const [activeTab, setActiveTab] = useState<TabType>('tanks');
   const stationId = selectedStation?.id ?? null;
+  const invalidateOperational = useInvalidateOperational();
 
   const tanksQ = useInventoryStatus(stationId);
   const itemsQ = useInventoryItems(stationId);
@@ -163,6 +165,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation, i
   const [countReason, setCountReason] = useState('');
   const [countSubmitting, setCountSubmitting] = useState(false);
   const [countError, setCountError] = useState<string | null>(null);
+  const countRequestRef = useRef<StockCountRequestIdentity | null>(loadPendingStockCountRequest());
 
   const items = itemsQ.data ?? [];
   const tanksData = tanksQ.data ?? [];
@@ -220,16 +223,25 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation, i
         productId = tank?.productId ?? '';
         tankId = countTargetId;
       }
-      await transactionService.recordStockCount({
+      const payload = {
         stationId,
-        productId,
+        ...(tankId ? {} : { productId }),
         actualQuantity: Number(countActual),
         tankId,
         reason: countReason || undefined,
-      });
+      };
+      countRequestRef.current = resolveStockCountRequestIdentity(countRequestRef.current, payload);
+      savePendingStockCountRequest({ ...countRequestRef.current, payload });
+      await transactionService.recordStockCount(payload, { idempotencyKey: countRequestRef.current.idempotencyKey });
+      countRequestRef.current = null;
+      savePendingStockCountRequest(null);
       setCountOpen(false);
-      refresh();
+      await invalidateOperational(stationId);
     } catch (err: any) {
+      if (!isAmbiguousMutationError(err)) {
+        countRequestRef.current = null;
+        savePendingStockCountRequest(null);
+      }
       setCountError(err.message || 'Failed to record stock count');
     } finally {
       setCountSubmitting(false);

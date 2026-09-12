@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { BusinessEvents, err, eventFromContext, notFoundError, ok, validationError } from '../../../kernel/index.js';
 import type { EventPublisher, ExecutionContext, Repository, Result, UseCase } from '../../../kernel/index.js';
+import type { TankRepository } from '../tanks/index.js';
 
 export interface Nozzle {
   id: string;
@@ -57,6 +58,7 @@ const updateSchema = z.object({
 
 export interface NozzleDeps {
   repository: NozzleRepository;
+  tanks: TankRepository;
   events: EventPublisher;
 }
 
@@ -65,6 +67,11 @@ export class CreateNozzle implements UseCase<CreateNozzleCommand, Nozzle> {
   async execute(input: CreateNozzleCommand, ctx: ExecutionContext): Promise<Result<Nozzle>> {
     const p = createSchema.safeParse(input);
     if (!p.success) return err(validationError('Invalid CreateNozzle command', { issues: p.error.flatten() }));
+    const tank = await this.deps.tanks.findByIdForUpdate(p.data.tankId);
+    if (!tank || tank.organizationId !== ctx.organizationId || tank.stationId !== p.data.stationId || tank.status !== 'ACTIVE') {
+      return err(notFoundError('Tank', p.data.tankId));
+    }
+    if (tank.productId !== p.data.productId) return err(validationError('Nozzle Product must match its Tank Product'));
     const now = ctx.clock.now().toISOString();
     const nozzle: Nozzle = {
       id: ctx.ids.newId(),
@@ -99,11 +106,18 @@ export class UpdateNozzle implements UseCase<UpdateNozzleCommand, Nozzle> {
     if (!p.success) return err(validationError('Invalid UpdateNozzle command', { issues: p.error.flatten() }));
     const existing = await this.deps.repository.findById(p.data.id);
     if (!existing || existing.organizationId !== ctx.organizationId) return err(notFoundError('Nozzle', p.data.id));
+    const tankId = p.data.tankId ?? existing.tankId;
+    const productId = p.data.productId ?? existing.productId;
+    const tank = await this.deps.tanks.findByIdForUpdate(tankId);
+    if (!tank || tank.organizationId !== ctx.organizationId || tank.stationId !== existing.stationId || tank.status !== 'ACTIVE') {
+      return err(notFoundError('Tank', tankId));
+    }
+    if (tank.productId !== productId) return err(validationError('Nozzle Product must match its Tank Product'));
     const updated: Nozzle = {
       ...existing,
       duId: p.data.duId ?? existing.duId,
-      tankId: p.data.tankId ?? existing.tankId,
-      productId: p.data.productId ?? existing.productId,
+      tankId,
+      productId,
       name: p.data.name ?? existing.name,
       currentReading: p.data.currentReading !== undefined ? String(p.data.currentReading) : existing.currentReading,
       updatedAt: ctx.clock.now().toISOString(),
