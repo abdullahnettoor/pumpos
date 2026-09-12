@@ -4,6 +4,7 @@ import { Eye } from 'lucide-react';
 import { Panel, Button, StatusChip, DateText } from '../../pump-ds/index.js';
 import { DataTable } from '../primitives/DataTable.js';
 import { inr } from '../../utils/format.js';
+import { formatStationDateTime } from '@pump/shared';
 import { useShiftSummaries } from '../../query/hooks.js';
 import { ShiftSummaryView } from './ShiftSummaryView.js';
 
@@ -26,6 +27,7 @@ export const ShiftHistoryTab: React.FC<ShiftHistoryTabProps> = ({
   onClearViewShiftId,
 }) => {
   const stationId = selectedStation?.id ?? null;
+  const timeZone = (selectedStation?.settings as { timezone?: string } | undefined)?.timezone;
   const summariesQ = useShiftSummaries(stationId);
   const summaries = summariesQ.data ?? [];
   const [activeSummary, setActiveSummary] = useState<any | null>(null);
@@ -47,7 +49,7 @@ export const ShiftHistoryTab: React.FC<ShiftHistoryTabProps> = ({
       {
         accessorKey: 'generatedAt',
         header: 'Closure Date',
-        cell: ({ row }) => <DateText value={row.original.generatedAt} variant="datetime" />,
+        cell: ({ row }) => <span>{formatStationDateTime(row.original.generatedAt, timeZone)}</span>,
       },
       {
         id: 'businessDate',
@@ -121,7 +123,7 @@ export const ShiftHistoryTab: React.FC<ShiftHistoryTabProps> = ({
         ),
       },
     ],
-    [],
+    [timeZone],
   );
 
   if (!selectedStation) {

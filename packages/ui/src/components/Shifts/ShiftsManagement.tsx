@@ -134,6 +134,13 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     variance: number;
     lastClosedShiftId: string;
     nextTemplateId: string;
+    businessDate: string;
+    currentBusinessDate: string;
+    scheduledStartTime?: string | null;
+    scheduledEndTime?: string | null;
+    openedAt: string;
+    closedAt: string;
+    timeZone?: string;
   } | null>(null);
 
   // Handover Drawer states
@@ -313,6 +320,10 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     const statusData = statusQ.data;
     if (!statusData || !selectedStation) return;
 
+    if (statusData.activeShift?.businessDate) {
+      setBusinessDate(statusData.activeShift.businessDate);
+    }
+
     if (statusData.templates && statusData.templates.length > 0) {
       setSelectedTemplateId((prev: string) => prev || statusData.templates[0].id);
     }
@@ -467,7 +478,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         }
       }
 
-      await shiftService.closeShift(data.activeShift.id, {
+      const closeResult = await shiftService.closeShift(data.activeShift.id, {
         closingCash,
         nozzleReadings: readingsArray,
         dipReadings: dipReadingsArray,
@@ -482,7 +493,14 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         closingCash: actual,
         variance,
         lastClosedShiftId: closedId,
-        nextTemplateId
+        nextTemplateId,
+        businessDate: data.activeShift.businessDate,
+        currentBusinessDate,
+        scheduledStartTime: data.activeShift.scheduledStartTime,
+        scheduledEndTime: data.activeShift.scheduledEndTime,
+        openedAt: data.activeShift.openedAt,
+        closedAt: closeResult.shift.closedAt,
+        timeZone: stationSettings.timezone,
       });
     } catch (err: any) {
       toast.error(err.message || 'Failed to close shift');
@@ -607,6 +625,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         onStartNext={() => {
           setOpeningCash(closedShiftSuccess.closingCash);
           setSelectedTemplateId(closedShiftSuccess.nextTemplateId);
+          setBusinessDate(closedShiftSuccess.businessDate);
           setClosedShiftSuccess(null);
           setViewingShiftSummary(false);
         }}
@@ -662,6 +681,8 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
             }
           }}
           isPreparingClose={shiftScreenState === 'closing'}
+          currentBusinessDate={currentBusinessDate}
+          timeZone={stationSettings.timezone}
           onViewLastShiftSummary={lastShiftSummary ? () => {
             setViewHistoryShiftId(lastShiftSummary.shiftId);
             setShiftSubTab('history');
@@ -716,6 +737,11 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
           }}
           shiftTemplateName={activeShift.templateName}
           openedAt={activeShift.openedAt}
+          businessDate={activeShift.businessDate}
+          currentBusinessDate={currentBusinessDate}
+          scheduledStartTime={activeShift.scheduledStartTime}
+          scheduledEndTime={activeShift.scheduledEndTime}
+          timeZone={stationSettings.timezone}
           openingCash={openingCashNum}
           cashCollections={activeCashCollections}
           cashExpenses={shiftTotals.cashExpenses}
@@ -811,7 +837,9 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         onTemplateChange={setSelectedTemplateId}
         businessDate={businessDate}
         currentBusinessDate={currentBusinessDate}
+        timeZone={stationSettings.timezone}
         businessDayState={businessDayStatusQ.isError ? 'UNAVAILABLE' : selectedBusinessDayState ?? 'UNKNOWN'}
+        openBusinessDays={businessDayStatusQ.data?.openBusinessDays ?? []}
         onBusinessDateChange={setBusinessDate}
         openingCash={openingCash}
         onOpeningCashChange={setOpeningCash}

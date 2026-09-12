@@ -370,9 +370,14 @@ shiftsRouter.get('/status', async (c) => {
 
   let activeShift: any = null;
   if (dbActiveShift) {
-    const [templateRows2, openedByRows2, nozzleReadingRows] = await Promise.all([
+    const [templateRows2, openedByRows2, activeBusinessDayRows, nozzleReadingRows] = await Promise.all([
       db.select().from(schema.shiftTemplates).where(eq(schema.shiftTemplates.id, dbActiveShift.shiftTemplateId)).limit(1),
       db.select().from(schema.users).where(eq(schema.users.id, dbActiveShift.openedBy)).limit(1),
+      db.select({ businessDate: schema.businessDays.businessDate }).from(schema.businessDays).where(and(
+        eq(schema.businessDays.id, dbActiveShift.businessDayId),
+        eq(schema.businessDays.organizationId, orgId),
+        eq(schema.businessDays.stationId, stationId),
+      )).limit(1),
       db
         .select({ nr: schema.nozzleReadings, nz: schema.nozzles, prod: schema.products, tnk: schema.tanks, du: schema.dispenserUnits })
         .from(schema.nozzleReadings)
@@ -384,6 +389,7 @@ shiftsRouter.get('/status', async (c) => {
     ]);
     const template = templateRows2[0];
     const openedByUser = openedByRows2[0];
+    const activeBusinessDay = activeBusinessDayRows[0];
 
     const nozzleReadings = nozzleReadingRows.map(({ nr, nz, prod, tnk, du }) => ({
       ...nr,
@@ -660,6 +666,9 @@ shiftsRouter.get('/status', async (c) => {
     activeShift = {
       ...dbActiveShift,
       templateName: template?.name ?? 'Custom',
+      businessDate: activeBusinessDay?.businessDate ?? null,
+      scheduledStartTime: template?.startTime ?? null,
+      scheduledEndTime: template?.endTime ?? null,
       openedByName: openedByUser?.fullName ?? 'System',
       nozzleReadings,
       staffAssignments,

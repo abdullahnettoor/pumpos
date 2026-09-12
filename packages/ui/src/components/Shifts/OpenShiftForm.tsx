@@ -1,7 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { FileText, Info, Play } from 'lucide-react';
-import { Panel, Button, DateText } from '../../pump-ds/index.js';
+import { Panel, Button } from '../../pump-ds/index.js';
 import { Field, Select, NumberInput, DateField } from '../primitives/Field.js';
+import type { BusinessDayStatusItem } from '../../services/cloud.js';
+import { formatStationDateTime } from '@pump/shared';
+import { ShiftBusinessDateContext } from './ShiftBusinessDateContext.js';
 
 interface OpenShiftFormProps {
   lastShiftSummary: any;
@@ -17,7 +20,9 @@ interface OpenShiftFormProps {
   onTemplateChange: (id: string) => void;
   businessDate: string;
   currentBusinessDate: string;
+  timeZone?: string;
   businessDayState: 'OPEN' | 'CLOSED' | 'NOT_CREATED' | 'UNKNOWN' | 'UNAVAILABLE';
+  openBusinessDays: BusinessDayStatusItem[];
   onBusinessDateChange: (value: string) => void;
   openingCash: number;
   onOpeningCashChange: (value: number) => void;
@@ -51,7 +56,9 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
   onTemplateChange,
   businessDate,
   currentBusinessDate,
+  timeZone,
   businessDayState,
+  openBusinessDays,
   onBusinessDateChange,
   openingCash,
   onOpeningCashChange,
@@ -63,6 +70,10 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
   onSubmit,
   onViewLastShiftSummary,
 }) => {
+  const knownOpenDate = openBusinessDays.some((day) => day.businessDate === businessDate);
+  const [customDateMode, setCustomDateMode] = useState(false);
+  const dateChoice = !customDateMode && knownOpenDate ? businessDate : 'custom';
+  const selectedTemplate = templates.find((template: any) => template.id === selectedTemplateId);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
       {/* Header */}
@@ -85,36 +96,63 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px', fontSize: '12px', color: 'var(--text-muted)' }}>
             <span>Shift ID: <strong style={{ color: 'var(--text-default)', fontFamily: 'var(--font-mono)' }}>{lastShiftSummary.shiftId?.slice(0, 8) || lastShiftSummary.snapshotData?.shiftId?.slice(0, 8) || '—'}</strong></span>
             <span>Template: <strong style={{ color: 'var(--text-default)' }}>{lastShiftSummary.snapshotData?.templateName || lastShiftSummary.templateName || '—'}</strong></span>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>Closed: <DateText value={lastShiftSummary.snapshotData?.closedAt || lastShiftSummary.closedAt} variant="datetime" tone="strong" /></span>
+            <span>Shift Closed At: <strong style={{ color: 'var(--text-default)' }}>{formatStationDateTime(lastShiftSummary.snapshotData?.closedAt || lastShiftSummary.closedAt, timeZone)}</strong></span>
           </div>
         </Panel>
       )}
 
       {/* Main open-shift form */}
       <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <ShiftBusinessDateContext
+          businessDate={businessDate}
+          currentBusinessDate={currentBusinessDate}
+          scheduledStartTime={selectedTemplate?.startTime}
+          scheduledEndTime={selectedTemplate?.endTime}
+        />
         <Panel title="Shift details">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
             <Field label="Shift template">
               <Select value={selectedTemplateId} onChange={(e) => onTemplateChange(e.target.value)} required>
                 {templates && templates.map((t: any) => (
-                  <option key={t.id} value={t.id}>{t.name} ({t.startTime} - {t.endTime})</option>
+                  <option key={t.id} value={t.id}>{t.name} · Scheduled {t.startTime}–{t.endTime}</option>
                 ))}
               </Select>
             </Field>
-            <Field
-              label="Shift Business Date"
+            <Field label="Shift Business Date" hint="Known open Business Days are listed first. Choose Custom Business Date for another eligible date.">
+              <Select
+                value={dateChoice}
+                onChange={(e) => {
+                  if (e.target.value === 'custom') {
+                    setCustomDateMode(true);
+                  } else {
+                    setCustomDateMode(false);
+                    onBusinessDateChange(e.target.value);
+                  }
+                }}
+              >
+                {openBusinessDays.map((day) => (
+                  <option key={day.id} value={day.businessDate} disabled={day.businessDate > currentBusinessDate}>
+                    {day.businessDate} · Open{day.businessDate > currentBusinessDate ? ' · Unavailable (future)' : ''}
+                  </option>
+                ))}
+                <option value="custom">Custom Business Date</option>
+              </Select>
+            </Field>
+            {dateChoice === 'custom' && <Field
+              label="Custom Business Date"
               hint={businessDayState === 'CLOSED'
-                ? 'This Business Day is closed. Choose a Past Open Business Day or a Business Date that has not been created.'
+                ? 'Unavailable: this Business Day is closed. Choose an open or not-yet-created Business Date.'
                 : businessDayState === 'OPEN'
                   ? 'This Shift will attach to the existing open Business Day.'
-                  : businessDayState === 'NOT_CREATED'
+                : businessDayState === 'NOT_CREATED'
                     ? 'The Business Day will be created when this Shift opens.'
                     : businessDayState === 'UNAVAILABLE'
                       ? 'Business Day status is unavailable. Check the connection and retry.'
                       : 'Checking the Business Day lifecycle state.'}
             >
-              <DateField value={businessDate} max={currentBusinessDate} onChange={(e) => onBusinessDateChange(e.target.value)} required />
-            </Field>
+              <DateField value={businessDate} onChange={(e) => onBusinessDateChange(e.target.value)} required />
+              {businessDate > currentBusinessDate && <div style={{ marginTop: '5px', color: 'var(--state-danger-fg)', fontSize: '11px' }}>Unavailable: future Business Dates cannot be used to open a Shift.</div>}
+            </Field>}
             <Field label="Opening cash float (₹)">
               <NumberInput min="0" value={openingCash} onChange={(e) => onOpeningCashChange(Number(e.target.value))} required />
             </Field>
@@ -188,7 +226,7 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
         )}
 
         <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-          <Button type="submit" variant="primary" size="md" loading={isOpening} disabled={businessDayState === 'CLOSED' || businessDayState === 'UNKNOWN' || businessDayState === 'UNAVAILABLE'} leftIcon={<Play style={{ fill: 'currentColor' }} />}>
+          <Button type="submit" variant="primary" size="md" loading={isOpening} disabled={businessDate > currentBusinessDate || businessDayState === 'CLOSED' || businessDayState === 'UNKNOWN' || businessDayState === 'UNAVAILABLE'} leftIcon={<Play style={{ fill: 'currentColor' }} />}>
             Start Shift Operations
           </Button>
         </div>

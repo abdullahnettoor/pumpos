@@ -2,6 +2,7 @@ import React from 'react';
 import { Check, Play, FileText } from 'lucide-react';
 import { Button } from '../../pump-ds/index.js';
 import { inr } from '../../utils/format.js';
+import { ShiftBusinessDateContext } from './ShiftBusinessDateContext.js';
 
 export interface ShiftCloseResult {
   expectedCash: number;
@@ -9,6 +10,13 @@ export interface ShiftCloseResult {
   variance: number;
   lastClosedShiftId: string;
   nextTemplateId: string;
+  businessDate: string;
+  currentBusinessDate: string;
+  scheduledStartTime?: string | null;
+  scheduledEndTime?: string | null;
+  openedAt: string;
+  closedAt: string;
+  timeZone?: string;
 }
 
 export interface ShiftCloseSuccessProps {
@@ -34,6 +42,18 @@ export const ShiftCloseSuccess: React.FC<ShiftCloseSuccessProps> = ({ result, on
         <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>The Shift Summary is saved permanently.</p>
       </div>
 
+      <div style={{ textAlign: 'left' }}>
+        <ShiftBusinessDateContext
+          businessDate={result.businessDate}
+          currentBusinessDate={result.currentBusinessDate}
+          scheduledStartTime={result.scheduledStartTime}
+          scheduledEndTime={result.scheduledEndTime}
+          openedAt={result.openedAt}
+          closedAt={result.closedAt}
+          timeZone={result.timeZone}
+        />
+      </div>
+
       <div style={{ border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', display: 'flex', flexDirection: 'column', fontSize: '13px', overflow: 'hidden', backgroundColor: 'var(--bg-surface-alt)', textAlign: 'left' }}>
         <div style={{ display: 'flex', alignSelf: 'stretch', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid var(--border-soft)' }}>
           <span>Expected Safe Cash</span>
@@ -54,7 +74,7 @@ export const ShiftCloseSuccess: React.FC<ShiftCloseSuccessProps> = ({ result, on
 
       <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
         <Button variant="primary" size="md" leftIcon={<Play size={13} style={{ fill: 'currentColor' }} />} onClick={onStartNext}>
-          Start Next Shift
+          Open next Shift
         </Button>
         <Button variant="secondary" size="md" leftIcon={<FileText size={13} />} onClick={onViewSummary}>
           View Compiled Shift Summary
