@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { stationSchema, nozzleReadingSchema, supplierPaymentSchema, shiftPurchaseSchema, onboardingDraftSchema, finalizeOnboardingSchema, createOpenShiftFormSchema } from './validation.js';
+import { stationSchema, nozzleReadingSchema, supplierPaymentSchema, shiftPurchaseSchema, onboardingDraftSchema, finalizeOnboardingSchema, createOpenShiftFormSchema, attendantHandoverSchema } from './validation.js';
 
 describe('Validation Schemas Tests', () => {
   describe('createOpenShiftFormSchema', () => {
@@ -92,6 +92,33 @@ describe('Validation Schemas Tests', () => {
       const result = supplierPaymentSchema.safeParse(invalid);
       expect(result.success).toBe(false);
     });
+  });
+
+  describe('attendantHandoverSchema', () => {
+    const valid = {
+      shiftId: '550e8400-e29b-41d4-a716-446655440000',
+      userId: '550e8400-e29b-41d4-a716-446655440001',
+      duId: '550e8400-e29b-41d4-a716-446655440002',
+      cashHandedOver: 100,
+      cardHandedOver: 50,
+      upiHandedOver: 25,
+      nozzleReadings: [{
+        nozzleId: '550e8400-e29b-41d4-a716-446655440003',
+        closingReading: 1300,
+        testingVolume: 1,
+      }],
+    };
+
+    it('accepts declarations and source measurements', () => {
+      expect(attendantHandoverSchema.safeParse(valid).success).toBe(true);
+    });
+
+    it.each(['expectedSales', 'varianceAmount', 'creditHandedOver', 'creditSales', 'omcCardHandedOver', 'omcCardSales'])(
+      'rejects the client-supplied conclusion %s',
+      (field) => {
+        expect(attendantHandoverSchema.safeParse({ ...valid, [field]: 1 }).success).toBe(false);
+      },
+    );
   });
 
   describe('shiftPurchaseSchema', () => {

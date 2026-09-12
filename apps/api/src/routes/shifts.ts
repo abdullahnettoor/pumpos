@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { and, desc, eq, inArray, ne, sql } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
-import { canOpenShift, canCloseShift, canReopenShift, canRecordHandover, isAuthorizedForStation, isAttendant, resolveBusinessDate, type Role } from '@pump/shared';
+import { attendantHandoverSchema, canOpenShift, canCloseShift, canReopenShift, canRecordHandover, isAuthorizedForStation, isAttendant, resolveBusinessDate, type Role } from '@pump/shared';
 import {
   OpenShift,
   RecordNozzleReadings,
@@ -973,7 +973,7 @@ shiftsRouter.get('/handovers', async (c) => {
   return c.json({ success: true, data: rows.map(({ h, userName, duName }) => ({ ...h, userName: userName ?? 'Unknown', duName: duName ?? 'Unknown', terminalEntries: entryRows.filter((e) => e.handoverId === h.id) })) });
 });
 
-// POST /api/shifts/handovers  (legacy-compatible attendant cash/card/UPI/credit declaration)
+// POST /api/shifts/handovers
 shiftsRouter.post('/handovers', async (c) => {
   const db = c.var.db;
   const user = c.var.user;
@@ -981,10 +981,15 @@ shiftsRouter.post('/handovers', async (c) => {
     return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions to record a handover' } }, 403);
   }
   const body = await c.req.json().catch(() => ({}));
-  const { shiftId, userId, duId } = body ?? {};
+  const parsed = attendantHandoverSchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Invalid Handover request' } }, 400);
+  }
+  const { shiftId, userId, duId, cashHandedOver, cardHandedOver, upiHandedOver, nozzleReadings, terminalEntries } = parsed.data;
+  const attendantId = isAttendant(user.role) ? user.id : userId;
   // Attendants derive userId from their own session, so only shiftId + duId are
   // required from them; operational roles must name the attendant (userId).
-  if (!shiftId || !duId || (!userId && !isAttendant(user.role))) {
+  if (!attendantId) {
     return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'shiftId, userId and duId are required' } }, 400);
   }
   const [shift] = await db.select().from(schema.shifts).where(and(eq(schema.shifts.id, shiftId), eq(schema.shifts.organizationId, user.organizationId))).limit(1);
@@ -1001,13 +1006,13 @@ shiftsRouter.post('/handovers', async (c) => {
     events,
   }).execute({
     shiftId,
-    attendantId: isAttendant(user.role) ? user.id : userId,
+    attendantId,
     duId,
-    cashHandedOver: body.cashHandedOver ?? 0,
-    cardHandedOver: body.cardHandedOver,
-    upiHandedOver: body.upiHandedOver,
-    nozzleReadings: Array.isArray(body.nozzleReadings) ? body.nozzleReadings : [],
-    terminalEntries: Array.isArray(body.terminalEntries) ? body.terminalEntries : undefined,
+    cashHandedOver,
+    cardHandedOver,
+    upiHandedOver,
+    nozzleReadings,
+    terminalEntries,
   }, buildContext(user, { stationId: shift.stationId, businessDayId: shift.businessDayId })));
   return sendResult(c, result);
 });

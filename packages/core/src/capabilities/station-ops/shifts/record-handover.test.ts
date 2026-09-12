@@ -112,13 +112,8 @@ describe('RecordHandover', () => {
     const result = await useCase.execute({
       ...command(),
       cashHandedOver: 400,
-      cardHandedOver: 9999,
-      upiHandedOver: 9999,
       terminalEntries: [{ terminalId: 'terminal-1', cardAmount: 250, upiAmount: 100 }],
-      expectedSales: 1,
-      varianceAmount: 1,
-      creditHandedOver: 1,
-    } as any, context());
+    }, context());
 
     expect(result.success).toBe(true);
     if (!result.success) return;
@@ -147,6 +142,16 @@ describe('RecordHandover', () => {
     });
   });
 
+  it.each(['expectedSales', 'varianceAmount', 'creditHandedOver', 'creditSales', 'omcCardHandedOver', 'omcCardSales'])(
+    'rejects the client-supplied conclusion %s',
+    async (field) => {
+      const result = await setup().useCase.execute({ ...command(), [field]: 1 } as any, context());
+
+      expect(result.success).toBe(false);
+      if (!result.success) expect(result.error.code).toBe('VALIDATION_ERROR');
+    },
+  );
+
   it('accepts aggregate card and UPI declarations only when no terminals are configured', async () => {
     const aggregate = await setup().useCase.execute({ ...command(), cardHandedOver: 50, upiHandedOver: 25 }, context());
     expect(aggregate.success).toBe(true);
@@ -159,6 +164,10 @@ describe('RecordHandover', () => {
     const rejected = await setup(configured).useCase.execute({ ...command(), cardHandedOver: 50 }, context());
     expect(rejected.success).toBe(false);
     if (!rejected.success) expect(rejected.error.code).toBe('VALIDATION_ERROR');
+
+    const zeroAggregate = await setup(configured).useCase.execute({ ...command(), cardHandedOver: 0 }, context());
+    expect(zeroAggregate.success).toBe(false);
+    if (!zeroAggregate.success) expect(zeroAggregate.error.code).toBe('VALIDATION_ERROR');
   });
 
   it('accepts a shift-wide Payment Terminal for a Dispenser Handover', async () => {

@@ -17,6 +17,7 @@ import {
   User,
   ShiftOpenPayload,
   ShiftClosePayload,
+  AttendantHandoverInput,
   FinalizeOnboardingPayload,
   FinalizeOnboardingResult,
 } from '@pump/shared';
@@ -44,22 +45,7 @@ export function setAuthToken(token: string) {
   activeToken = token;
 }
 
-export interface RecordHandoverPayload {
-  shiftId: string;
-  userId: string;
-  duId: string;
-  cashHandedOver: number;
-  cardHandedOver?: number;
-  upiHandedOver?: number;
-  nozzleReadings: Array<{ nozzleId: string; closingReading: number; testingVolume: number }>;
-  terminalEntries?: Array<{
-    terminalId: string;
-    duId?: string | null;
-    cardAmount: number;
-    upiAmount: number;
-    batchRef?: string | null;
-  }>;
-}
+export type RecordHandoverPayload = AttendantHandoverInput;
 
 export interface RecordHandoverResult {
   handover: {

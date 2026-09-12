@@ -31,7 +31,6 @@ const handoverFormSchema = z.object({
   cashHandedOver: z.coerce.number().nonnegative('Cash must be non-negative'),
   cardHandedOver: z.coerce.number().nonnegative('Card Swipe total must be non-negative'),
   upiHandedOver: z.coerce.number().nonnegative('UPI QR total must be non-negative'),
-  creditHandedOver: z.coerce.number().nonnegative('Credit chits total must be non-negative'),
   nozzleReadings: z.record(z.string().uuid(), z.coerce.number().nonnegative('Reading must be non-negative')),
   nozzleTesting: z.record(z.string().uuid(), z.coerce.number().nonnegative('Testing quantity must be non-negative')),
   terminalCard: z.record(z.string(), z.coerce.number().nonnegative()).optional(),
@@ -110,7 +109,6 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
       cashHandedOver: 0,
       cardHandedOver: 0,
       upiHandedOver: 0,
-      creditHandedOver: 0,
       nozzleReadings: {},
       nozzleTesting: {},
       terminalCard: {},
@@ -142,12 +140,10 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
       setValue('cashHandedOver', (Number(existingHandover.cashHandedOver) || '') as any);
       setValue('cardHandedOver', (Number(existingHandover.cardHandedOver) || '') as any);
       setValue('upiHandedOver', (Number(existingHandover.upiHandedOver) || '') as any);
-      setValue('creditHandedOver', (Number(existingHandover.creditHandedOver) || '') as any);
     } else {
       setValue('cashHandedOver', '' as any);
       setValue('cardHandedOver', '' as any);
       setValue('upiHandedOver', '' as any);
-      setValue('creditHandedOver', '' as any);
     }
 
     // Initialize readings and testing maps. Closing keeps the opening reading as a
@@ -181,7 +177,6 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
   const formNozzleReadings = formValues.nozzleReadings || {};
   const formNozzleTesting = formValues.nozzleTesting || {};
   const formCash = formValues.cashHandedOver || 0;
-  const formCredit = formValues.creditHandedOver || 0;
 
   // POS terminals assigned to THIS DU (shift-wide / other-DU machines are not
   // shown to the attendant). When present, card/UPI aggregates are derived from

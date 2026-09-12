@@ -409,21 +409,30 @@ export const finalizeOnboardingSchema = z.object({
   draft: onboardingDraftSchema,
 });
 
+const handoverAmountSchema = z.number().finite().nonnegative();
+
 export const attendantHandoverSchema = z.object({
-  userId: z.string().uuid('Invalid user ID'),
+  shiftId: z.string().uuid('Invalid shift ID'),
+  userId: z.string().uuid('Invalid user ID').optional(),
   duId: z.string().uuid('Invalid DU ID'),
-  cashHandedOver: z.number().nonnegative('Cash must be non-negative'),
-  cardHandedOver: z.number().nonnegative('Card payments must be non-negative'),
-  upiHandedOver: z.number().nonnegative('UPI payments must be non-negative'),
-  creditHandedOver: z.number().nonnegative('Credit sales must be non-negative'),
-  testingVolume: z.number().nonnegative('Testing volume must be non-negative'),
-  expectedSales: z.number().nonnegative('Expected sales must be non-negative'),
-  varianceAmount: z.number(),
+  cashHandedOver: handoverAmountSchema,
+  cardHandedOver: handoverAmountSchema.optional(),
+  upiHandedOver: handoverAmountSchema.optional(),
   nozzleReadings: z.array(z.object({
     nozzleId: z.string().uuid('Invalid nozzle ID'),
-    closingReading: z.number().nonnegative('Reading must be non-negative'),
-  })),
-});
+    closingReading: handoverAmountSchema,
+    testingVolume: handoverAmountSchema.optional(),
+  })).min(1),
+  terminalEntries: z.array(z.object({
+    terminalId: z.string().uuid('Invalid Payment Terminal ID'),
+    duId: z.string().uuid('Invalid DU ID').nullish(),
+    cardAmount: handoverAmountSchema,
+    upiAmount: handoverAmountSchema,
+    batchRef: z.string().max(100).nullish(),
+  })).optional(),
+}).strict();
+
+export type AttendantHandoverInput = z.infer<typeof attendantHandoverSchema>;
 
 export const supplierPaymentSchema = z.object({
   shiftId: z.string().uuid('Invalid shift ID'),

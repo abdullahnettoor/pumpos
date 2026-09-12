@@ -77,7 +77,7 @@ const commandSchema = z.object({
     upiAmount: amount,
     batchRef: z.string().max(100).nullish(),
   })).optional(),
-});
+}).strict();
 
 const roundPaise = (value: number) => Math.round(value * 100) / 100 || 0;
 
@@ -199,8 +199,8 @@ export class RecordHandover implements UseCase<RecordHandoverCommand, RecordHand
 
     const hasTerminalDetails = submittedTerminals.length > 0;
     const hasConfiguredTerminals = activeTerminals.length > 0;
-    if (hasConfiguredTerminals && !hasTerminalDetails && (Number(cmd.cardHandedOver ?? 0) > 0 || Number(cmd.upiHandedOver ?? 0) > 0)) {
-      return err(validationError('Payment Terminal detail is required for card or UPI declarations'));
+    if (hasConfiguredTerminals && (cmd.cardHandedOver !== undefined || cmd.upiHandedOver !== undefined)) {
+      return err(validationError('Aggregate card or UPI declarations are allowed only when the Station has no configured Payment Terminals'));
     }
     const cardHandedOver = hasTerminalDetails
       ? submittedTerminals.reduce((sum, entry) => sum + entry.cardAmount, 0)
