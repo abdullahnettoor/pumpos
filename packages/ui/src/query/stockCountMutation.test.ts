@@ -22,6 +22,10 @@ describe('Stock Count mutation identity', () => {
       variance: 0,
       lastClosedShiftId: 'shift-1',
       nextTemplateId: 'template-2',
+      businessDate: '2026-09-12',
+      currentBusinessDate: '2026-09-12',
+      openedAt: '2026-09-12T06:00:00.000Z',
+      closedAt: '2026-09-12T14:00:00.000Z',
       closeStatus: 'closed' as const,
       tankDips: [
         { tankId: 'tank-1', tankName: 'Tank 1', actualQuantity: 1000, status: 'saved' as const, idempotencyKey: 'key-1' },

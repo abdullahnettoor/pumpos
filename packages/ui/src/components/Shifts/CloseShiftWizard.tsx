@@ -541,12 +541,7 @@ export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
               </div>
             )}
             <p className="close-wizard-helper" style={{ marginTop: '8px' }}>
-<<<<<<< HEAD
               On confirm, the Shift status moves to <strong>CLOSED</strong> and an immutable Shift Summary is generated and stored permanently. The Business Day remains open until it is closed explicitly.
-=======
-              On confirm, the shift status moves to <strong>CLOSED</strong> and an immutable Shift Summary
-              is generated and stored permanently.
->>>>>>> c1c3ea6 (refactor: remove tank dips from shift close)
             </p>
           </section>
         )}
