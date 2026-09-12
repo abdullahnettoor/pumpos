@@ -375,16 +375,17 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
             <KpiTile dot={Number(pnl.netProfit || 0) < 0 ? 'danger' : 'success'} valueTone={Number(pnl.netProfit || 0) < 0 ? 'danger' : 'success'} label="Net Profit" value={inr(pnl.netProfit || 0)} hint={`Gross ${inr(pnl.grossMargin || 0)}`} />
           </KpiStrip>
 
-          {/* Live caveat: open-shift fuel isn't counted until the shift closes. */}
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', padding: '10px 12px', backgroundColor: 'var(--state-info-bg)', color: 'var(--state-info-fg)', borderRadius: 'var(--radius-input)', fontSize: '12px', border: '1px solid var(--border-soft)' }}>
-            <Info size={14} style={{ flexShrink: 0, marginTop: '1px' }} />
-            <span>
-              Provisional day view composed from <strong>{snap.shiftsIncluded || 0} closed shift{snap.shiftsIncluded === 1 ? '' : 's'}</strong> plus live merchandise, collections, credit, purchases &amp; expenses.
-              {hasOpenShift
-                ? " Fuel from the currently open shift isn't counted until it closes (nozzle readings are taken at close)."
-                : ' Fuel for a shift is counted once that shift closes.'}
-            </span>
-          </div>
+          {status !== 'CLOSED' && (
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', padding: '10px 12px', backgroundColor: 'var(--state-info-bg)', color: 'var(--state-info-fg)', borderRadius: 'var(--radius-input)', fontSize: '12px', border: '1px solid var(--border-soft)' }}>
+              <Info size={14} style={{ flexShrink: 0, marginTop: '1px' }} />
+              <span>
+                Provisional day view composed from <strong>{snap.shiftsIncluded || 0} closed shift{snap.shiftsIncluded === 1 ? '' : 's'}</strong> plus live merchandise, collections, credit, purchases &amp; expenses.
+                {hasOpenShift
+                  ? " Fuel from the currently open shift isn't counted until it closes (nozzle readings are taken at close)."
+                  : ' Fuel for a shift is counted once that shift closes.'}
+              </span>
+            </div>
+          )}
 
           {/* Shifts in this day */}
           <Panel flush title="Shifts in this day">

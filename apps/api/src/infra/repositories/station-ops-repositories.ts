@@ -113,6 +113,13 @@ export class DrizzleBusinessDayRepository implements BusinessDayRepository, Busi
     )).for('update');
   }
 
+  async lockStation(organizationId: string, stationId: string): Promise<void> {
+    await this.db.select({ id: schema.stations.id }).from(schema.stations).where(and(
+      eq(schema.stations.id, stationId),
+      eq(schema.stations.organizationId, organizationId),
+    )).for('update');
+  }
+
   async lockByStationAndDate(organizationId: string, stationId: string, businessDate: string): Promise<void> {
     await this.db.select({ id: schema.businessDays.id }).from(schema.businessDays).where(and(
       eq(schema.businessDays.organizationId, organizationId),

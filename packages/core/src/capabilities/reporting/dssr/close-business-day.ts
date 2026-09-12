@@ -26,6 +26,7 @@ export class CloseBusinessDayAndGenerateDssr implements UseCase<CloseBusinessDay
   constructor(private readonly deps: CloseBusinessDayAndGenerateDssrDeps) {}
 
   async execute(input: CloseBusinessDayAndGenerateDssrCommand, ctx: ExecutionContext): Promise<Result<BusinessDay>> {
+    await this.deps.businessDayLock.lockStation(ctx.organizationId, input.stationId);
     await this.deps.businessDayLock.lockById(ctx.organizationId, input.businessDayId);
     const day = await this.deps.businessDays.findById(input.businessDayId);
     if (!day || day.organizationId !== ctx.organizationId || day.stationId !== input.stationId) {

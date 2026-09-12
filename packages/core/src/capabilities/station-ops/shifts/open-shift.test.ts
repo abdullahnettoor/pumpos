@@ -45,7 +45,7 @@ class BdRepo implements BusinessDayRepository {
   }
 }
 
-const lock = { lockById: async () => {}, lockByStationAndDate: async () => {} };
+const lock = { lockStation: async () => {}, lockById: async () => {}, lockByStationAndDate: async () => {} };
 
 class NozzleRepo implements NozzleRepository {
   constructor(readonly rows: Nozzle[]) {}
@@ -141,6 +141,12 @@ describe('OpenShift', () => {
 
   it('locks the Business Day before checking its lifecycle state', async () => {
     const calls: string[] = [];
+    const shifts = new ShiftRepo();
+    const originalFindOpen = shifts.findOpenByStation.bind(shifts);
+    shifts.findOpenByStation = async (...args) => {
+      calls.push('active-check');
+      return originalFindOpen(...args);
+    };
     const businessDays = new BdRepo();
     businessDays.rows.push({ id: 'bd-existing', organizationId: 'org-1', stationId: 'st-1', businessDate: '2026-03-15', status: 'OPEN', openedBy: 'u', openedAt: '', closedBy: null, closedAt: null, createdAt: '', updatedAt: '' });
     const originalFind = businessDays.findByStationAndDate.bind(businessDays);
@@ -149,18 +155,19 @@ describe('OpenShift', () => {
       return originalFind(...args);
     };
     const businessDayLock = {
+      lockStation: async () => { calls.push('station-lock'); },
       lockById: async () => {},
-      lockByStationAndDate: async () => { calls.push('lock'); },
+      lockByStationAndDate: async () => { calls.push('day-lock'); },
     };
 
     const result = await new OpenShift({
-      shifts: new ShiftRepo(), businessDays, businessDayLock,
+      shifts, businessDays, businessDayLock,
       nozzles: new NozzleRepo([]), nozzleReadings: new ReadingRepo(), fuelPrices: new PriceRepo([]),
       events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
     }).execute({ stationId: 'st-1', shiftTemplateId: 'tpl-1', openingCash: 0 }, makeContext());
 
     expect(result.success).toBe(true);
-    expect(calls).toEqual(['lock', 'find']);
+    expect(calls).toEqual(['station-lock', 'active-check', 'day-lock', 'find']);
   });
 
   it('opens a shift for a past open Business Day', async () => {

@@ -27,6 +27,7 @@ export interface BusinessDayRepository extends Repository<BusinessDay> {
 
 /** Serializes workflows that can change or depend on a Business Day's lifecycle. */
 export interface BusinessDayLock {
+  lockStation(organizationId: string, stationId: string): Promise<void>;
   lockById(organizationId: string, businessDayId: string): Promise<void>;
   lockByStationAndDate(organizationId: string, stationId: string, businessDate: string): Promise<void>;
 }

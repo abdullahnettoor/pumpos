@@ -66,6 +66,7 @@ export class OpenShift implements UseCase<OpenShiftCommand, OpenShiftResult> {
     if (!p.success) return err(validationError('Invalid OpenShift command', { issues: p.error.flatten() }));
     const cmd = p.data;
 
+    await this.deps.businessDayLock.lockStation(ctx.organizationId, cmd.stationId);
     const existingOpen = await this.deps.shifts.findOpenByStation(ctx.organizationId, cmd.stationId);
     if (existingOpen) {
       return err(conflictError('A shift is already open at this station', { shiftId: existingOpen.id }));
