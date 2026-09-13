@@ -226,6 +226,10 @@ export class DrizzleShiftRepository implements ShiftRepository {
     const [r] = await this.db.select().from(schema.shifts).where(eq(schema.shifts.id, id)).limit(1).for('update');
     return r ? this.toEntity(r) : null;
   }
+  async findByIdWithoutLock(id: string): Promise<Shift | null> {
+    const [r] = await this.db.select().from(schema.shifts).where(eq(schema.shifts.id, id)).limit(1);
+    return r ? this.toEntity(r) : null;
+  }
   async save(s: Shift): Promise<void> {
     await this.db
       .insert(schema.shifts)

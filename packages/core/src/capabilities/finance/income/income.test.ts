@@ -10,7 +10,7 @@ import type { ExecutionContext } from '../../../kernel/index.js';
 import { RecordIncome, VoidIncome, computeIncomeTax } from './index.js';
 import type { OtherIncome, IncomeRepository, IncomeCategory, IncomeCategoryRepository } from './index.js';
 import type { Shift, ShiftRepository } from '../../station-ops/shifts/index.js';
-import type { BusinessDay, BusinessDayRepository } from '../../station-ops/business-days/index.js';
+import type { BusinessDay, BusinessDayWriteRepository } from '../../station-ops/business-days/index.js';
 
 class IncomeRepo implements IncomeRepository {
   readonly rows: OtherIncome[] = [];
@@ -27,12 +27,13 @@ class CategoryRepo implements IncomeCategoryRepository {
 class ShiftRepo implements ShiftRepository {
   constructor(readonly rows: Shift[]) {}
   async findById(id: string) { return this.rows.find((r) => r.id === id) ?? null; }
+  async findByIdWithoutLock(id: string) { return this.findById(id); }
   async save() {}
   async findOpenByStation() { return null; }
   async addStaffAssignments() {}
   async addTerminalLinks() {}
 }
-class BdRepo implements BusinessDayRepository {
+class BdRepo implements BusinessDayWriteRepository {
   constructor(readonly rows: BusinessDay[]) {}
   async findById(id: string) { return this.rows.find((r) => r.id === id) ?? null; }
   async save() {}
@@ -40,6 +41,9 @@ class BdRepo implements BusinessDayRepository {
   async findByStationAndDate(orgId: string, stationId: string) {
     return this.rows.find((r) => r.organizationId === orgId && r.stationId === stationId) ?? null;
   }
+  async lockStation() {}
+  async lockById() {}
+  async lockByStationAndDate() {}
 }
 
 function ctx(): ExecutionContext {
@@ -56,7 +60,7 @@ describe('RecordIncome', () => {
   it('cash income (SHIFT_CASH) attaches to shift + affects drawer', async () => {
     const income = new IncomeRepo();
     const store = new InMemoryEventStore();
-    const result = await new RecordIncome({ income, shifts: new ShiftRepo([shift()]), businessDays: new BdRepo([]), events: new InProcessEventDispatcher({ store }) })
+    const result = await new RecordIncome({ income, shifts: new ShiftRepo([shift()]), businessDays: new BdRepo([bday()]), events: new InProcessEventDispatcher({ store }) })
       .execute({ shiftId: 'sh-1', categoryId: 'cat-1', amount: 500, payer: 'Truck ABC' }, ctx());
     expect(result.success).toBe(true);
     if (result.success) {
@@ -80,9 +84,34 @@ describe('RecordIncome', () => {
     }
   });
 
+  it('preserves explicit non-drawer handling for a petty-cash account', async () => {
+    const income = new IncomeRepo();
+    const result = await new RecordIncome({ income, shifts: new ShiftRepo([shift()]), businessDays: new BdRepo([bday()]), events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }) })
+      .execute({ shiftId: 'sh-1', categoryId: 'cat-1', amount: 500, receivedInto: 'SHIFT_CASH', affectsDrawer: false }, ctx());
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.affectsDrawer).toBe(false);
+  });
+
+  it('rejects drawer income against a closed shift', async () => {
+    const income = new IncomeRepo();
+    const result = await new RecordIncome({ income, shifts: new ShiftRepo([shift('CLOSED')]), businessDays: new BdRepo([bday()]), events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }) })
+      .execute({ shiftId: 'sh-1', categoryId: 'cat-1', amount: 500 }, ctx());
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error.code).toBe('INVARIANT_VIOLATION');
+    expect(income.rows).toHaveLength(0);
+  });
+
+  it('retains a closed shift on non-drawer income after day close', async () => {
+    const income = new IncomeRepo();
+    const result = await new RecordIncome({ income, shifts: new ShiftRepo([shift('CLOSED')]), businessDays: new BdRepo([{ ...bday(), status: 'CLOSED', closedAt: '2026-03-15T09:00:00Z' }]), events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }) })
+      .execute({ shiftId: 'sh-1', categoryId: 'cat-1', amount: 500, receivedInto: 'BANK' }, ctx());
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data).toMatchObject({ shiftId: 'sh-1', affectsDrawer: false, metadata: { lateEntry: true } });
+  });
+
   it('voids an income entry', async () => {
     const income = new IncomeRepo();
-    const rec = await new RecordIncome({ income, shifts: new ShiftRepo([shift()]), businessDays: new BdRepo([]), events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }) })
+    const rec = await new RecordIncome({ income, shifts: new ShiftRepo([shift()]), businessDays: new BdRepo([bday()]), events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }) })
       .execute({ shiftId: 'sh-1', categoryId: 'cat-1', amount: 500 }, ctx());
     const id = rec.success ? rec.data.id : '';
     const store = new InMemoryEventStore();
@@ -97,7 +126,7 @@ describe('VoidIncome drawer guard', () => {
   it('refuses to void drawer cash income once its shift is closed', async () => {
     const income = new IncomeRepo();
     const shifts = new ShiftRepo([shift()]);
-    const rec = await new RecordIncome({ income, shifts, businessDays: new BdRepo([]), events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }) })
+    const rec = await new RecordIncome({ income, shifts, businessDays: new BdRepo([bday()]), events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }) })
       .execute({ shiftId: 'sh-1', categoryId: 'cat-1', amount: 500 }, ctx());
     const id = rec.success ? rec.data.id : '';
     shifts.rows[0] = shift('CLOSED');

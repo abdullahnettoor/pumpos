@@ -3,8 +3,8 @@ import { resolveBusinessDate } from '@pump/shared';
 import { BusinessEvents, err, eventFromContext, invariantViolation, notFoundError, ok, validationError } from '../../kernel/index.js';
 import type { DocumentNumberGenerator, DomainEvent, EventPublisher, ExecutionContext, Result, UseCase } from '../../kernel/index.js';
 import type { StockMovement, StockMovementRepository } from '../inventory/index.js';
-import type { ShiftRepository } from '../station-ops/shifts/index.js';
-import { ensureBusinessDayForDate, type BusinessDayRepository } from '../station-ops/business-days/index.js';
+import { resolveShiftBusinessDayWrite, type ShiftRepository } from '../station-ops/shifts/index.js';
+import { resolveBusinessDayWrite, type BusinessDayWriteRepository } from '../station-ops/business-days/index.js';
 import type { SupplierRepository } from '../crm/suppliers/index.js';
 import type { ProductRepository } from '../station-setup/products/index.js';
 import type { StationRepository } from '../station-setup/stations/index.js';
@@ -76,7 +76,7 @@ export interface RecordPurchaseDeps {
   products: ProductRepository;
   stations: StationRepository;
   shifts: ShiftRepository;
-  businessDays: BusinessDayRepository;
+  businessDays: BusinessDayWriteRepository;
   docNumbers: DocumentNumberGenerator;
   events: EventPublisher;
 }
@@ -124,15 +124,17 @@ export class RecordPurchase implements UseCase<RecordPurchaseCommand, RecordPurc
     // it keeps shift-level provenance available for future reporting.
     let shiftIdToStore: string | null = null;
     if (cmd.shiftId) {
-      const shift = await this.deps.shifts.findById(cmd.shiftId);
-      if (!shift || shift.organizationId !== ctx.organizationId) return err(notFoundError('Shift', cmd.shiftId));
-      businessDayId = shift.businessDayId;
+      const eligibility = await resolveShiftBusinessDayWrite(this.deps.shifts, this.deps.businessDays, ctx, cmd.shiftId, 'STOCK');
+      if (!eligibility.success) return eligibility as unknown as Result<RecordPurchaseResult>;
+      const shift = eligibility.data.shift;
+      businessDayId = eligibility.data.businessDay.id;
       stationId = shift.stationId;
       shiftIdToStore = shift.id;
     } else if (stationId) {
       const date = cmd.transactionDate ?? resolveBusinessDate({ now: ctx.clock.now(), timeZone: ctx.timeZone, dayStartsAt: ctx.businessDayStartsAt });
-      const bd = await ensureBusinessDayForDate(this.deps.businessDays, ctx, stationId, date);
-      businessDayId = bd.id;
+      const eligibility = await resolveBusinessDayWrite(this.deps.businessDays, ctx, { stationId, businessDate: date, kind: 'STOCK' });
+      if (!eligibility.success) return eligibility as unknown as Result<RecordPurchaseResult>;
+      businessDayId = eligibility.data.businessDay.id;
     } else {
       return err(validationError('Either shiftId or stationId is required'));
     }

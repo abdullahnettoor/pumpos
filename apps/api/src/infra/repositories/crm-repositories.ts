@@ -125,6 +125,7 @@ export class DrizzleCustomerLedgerRepository implements CustomerLedgerRepository
       referenceType: e.referenceType,
       referenceId: e.referenceId,
       notes: e.notes,
+      metadata: e.metadata ?? {},
       createdAt: new Date(e.createdAt),
     });
   }
@@ -147,6 +148,7 @@ export class DrizzleCustomerLedgerRepository implements CustomerLedgerRepository
       referenceType: r.referenceType,
       referenceId: r.referenceId,
       notes: r.notes,
+      metadata: (r.metadata as Record<string, unknown>) ?? {},
       createdAt: r.createdAt.toISOString(),
     };
   }
@@ -169,6 +171,7 @@ export class DrizzleCollectionRepository implements CollectionRepository {
       amount: c.amount,
       paymentMethod: c.paymentMethod,
       notes: c.notes,
+      metadata: c.metadata ?? {},
       createdAt: new Date(c.createdAt),
     });
   }

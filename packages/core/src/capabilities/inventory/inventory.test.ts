@@ -10,7 +10,7 @@ import type { ExecutionContext } from '../../kernel/index.js';
 import { RecordInventoryAdjustment } from './record-adjustment.js';
 import { RecordStockCount } from './record-stock-count.js';
 import type { StockMovement, StockMovementRepository, StockVariance, StockVarianceRepository } from './ports.js';
-import type { BusinessDay, BusinessDayRepository } from '../station-ops/business-days/index.js';
+import type { BusinessDay, BusinessDayWriteRepository } from '../station-ops/business-days/index.js';
 import type { Tank, TankRepository } from '../station-setup/tanks/index.js';
 import type { Shift, ShiftRepository } from '../station-ops/shifts/index.js';
 
@@ -39,12 +39,13 @@ class TankRepo implements TankRepository {
 class ShiftRepo implements ShiftRepository {
   constructor(readonly rows: Shift[] = []) {}
   async findById(id: string) { return this.rows.find((row) => row.id === id) ?? null; }
+  async findByIdWithoutLock(id: string) { return this.findById(id); }
   async save() {}
   async findOpenByStation(orgId: string, stationId: string) { return this.rows.find((row) => row.organizationId === orgId && row.stationId === stationId && row.status === 'OPEN') ?? null; }
   async addStaffAssignments() {}
   async addTerminalLinks() {}
 }
-class BdRepo implements BusinessDayRepository {
+class BdRepo implements BusinessDayWriteRepository {
   requestedDate: string | null = null;
   constructor(readonly rows: BusinessDay[]) {}
   async findById(id: string) { return this.rows.find((r) => r.id === id) ?? null; }
@@ -56,6 +57,9 @@ class BdRepo implements BusinessDayRepository {
     this.requestedDate = date;
     return this.rows.find((r) => r.organizationId === orgId && r.stationId === stationId) ?? null;
   }
+  async lockStation() {}
+  async lockById() {}
+  async lockByStationAndDate() {}
 }
 
 function ctx(): ExecutionContext {
@@ -98,6 +102,19 @@ describe('RecordInventoryAdjustment', () => {
 });
 
 describe('RecordStockCount', () => {
+  it('rejects a stock count on a closed Business Day before writing a variance', async () => {
+    const { deps, movements, variances, store } = stockCountDeps();
+    deps.businessDays = new BdRepo([{ ...bday(), status: 'CLOSED', closedAt: '2026-03-15T09:00:00Z' }]);
+
+    const result = await new RecordStockCount(deps).execute({ stationId: 'st-1', tankId: 'tank-A', actualQuantity: 4950 }, ctx());
+
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error.code).toBe('INVARIANT_VIOLATION');
+    expect(variances.rows).toHaveLength(0);
+    expect(movements.rows).toHaveLength(0);
+    expect(store.events).toHaveLength(0);
+  });
+
   it('bulk dip below book posts negative variance + Variance movement + TANK_DIP + VARIANCE events', async () => {
     const { deps, movements, variances, store } = stockCountDeps(undefined, undefined, new ShiftRepo([closedShift()]));
     const result = await new RecordStockCount(deps)

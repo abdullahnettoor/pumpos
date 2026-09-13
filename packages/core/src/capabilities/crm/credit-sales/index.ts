@@ -2,8 +2,8 @@ import { z } from 'zod';
 import { resolveBusinessDate } from '@pump/shared';
 import { BusinessEvents, err, eventFromContext, invariantViolation, notFoundError, ok, validationError } from '../../../kernel/index.js';
 import type { EventPublisher, ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
-import type { ShiftRepository } from '../../station-ops/shifts/index.js';
-import { ensureBusinessDayForDate, type BusinessDayRepository } from '../../station-ops/business-days/index.js';
+import { resolveShiftBusinessDayWrite, type ShiftRepository } from '../../station-ops/shifts/index.js';
+import { resolveBusinessDayWrite, type BusinessDayWriteRepository } from '../../station-ops/business-days/index.js';
 import type { CustomerRepository } from '../customers/index.js';
 import type { CustomerLedgerEntry, CustomerLedgerRepository } from '../collections/index.js';
 
@@ -43,7 +43,7 @@ export interface RecordCreditSaleDeps {
   ledger: CustomerLedgerRepository;
   customers: CustomerRepository;
   shifts: ShiftRepository;
-  businessDays: BusinessDayRepository;
+  businessDays: BusinessDayWriteRepository;
   events: EventPublisher;
 }
 
@@ -70,16 +70,23 @@ export class RecordCreditSale implements UseCase<RecordCreditSaleCommand, Custom
 
     let businessDayId: string;
     let shiftId: string | null = null;
+    let stationId: string;
+    let lateEntry: boolean;
     if (cmd.shiftId) {
-      const shift = await this.deps.shifts.findById(cmd.shiftId);
-      if (!shift || shift.organizationId !== ctx.organizationId) return err(notFoundError('Shift', cmd.shiftId));
-      if (shift.status === 'LOCKED') return err(invariantViolation('Shift is locked', { shiftId: shift.id }));
-      businessDayId = shift.businessDayId;
+      const eligibility = await resolveShiftBusinessDayWrite(this.deps.shifts, this.deps.businessDays, ctx, cmd.shiftId, 'FINANCIAL');
+      if (!eligibility.success) return eligibility as unknown as Result<CustomerLedgerEntry>;
+      const shift = eligibility.data.shift;
+      stationId = shift.stationId;
+      businessDayId = eligibility.data.businessDay.id;
+      lateEntry = eligibility.data.lateEntry;
       shiftId = shift.id;
     } else if (cmd.stationId) {
       const date = cmd.transactionDate ?? resolveBusinessDate({ now: ctx.clock.now(), timeZone: ctx.timeZone, dayStartsAt: ctx.businessDayStartsAt });
-      const bd = await ensureBusinessDayForDate(this.deps.businessDays, ctx, cmd.stationId, date);
-      businessDayId = bd.id;
+      stationId = cmd.stationId;
+      const eligibility = await resolveBusinessDayWrite(this.deps.businessDays, ctx, { stationId, businessDate: date, kind: 'FINANCIAL' });
+      if (!eligibility.success) return eligibility as unknown as Result<CustomerLedgerEntry>;
+      businessDayId = eligibility.data.businessDay.id;
+      lateEntry = eligibility.data.lateEntry;
     } else {
       return err(validationError('Either shiftId or stationId is required'));
     }
@@ -104,6 +111,7 @@ export class RecordCreditSale implements UseCase<RecordCreditSaleCommand, Custom
       referenceType: 'CREDIT_SALE',
       referenceId: null,
       notes: cmd.notes ?? null,
+      metadata: lateEntry ? { lateEntry: true } : {},
       createdAt: now,
     };
     await this.deps.ledger.save(entry);
@@ -113,7 +121,9 @@ export class RecordCreditSale implements UseCase<RecordCreditSaleCommand, Custom
         eventType: BusinessEvents.CREDIT_SALE_CREATED,
         aggregateType: 'Customer',
         aggregateId: customer.id,
+        stationId,
         businessDayId,
+        metadata: lateEntry ? { lateEntry: true, lateEntryPrimary: true } : undefined,
         payload: { customerId: customer.id, vehicleId: entry.vehicleId, amount: entry.amount },
         presentation: {
           templateId: 'credit-sale.amount-only.v1',
@@ -218,7 +228,7 @@ export interface RecordOmcCardSaleDeps {
   ledger: CustomerLedgerRepository;
   customers: CustomerRepository;
   shifts: ShiftRepository;
-  businessDays: BusinessDayRepository;
+  businessDays: BusinessDayWriteRepository;
   events: EventPublisher;
 }
 
@@ -248,16 +258,23 @@ export class RecordOmcCardSale implements UseCase<RecordOmcCardSaleCommand, Cust
 
     let businessDayId: string;
     let shiftId: string | null = null;
+    let stationId: string;
+    let lateEntry: boolean;
     if (cmd.shiftId) {
-      const shift = await this.deps.shifts.findById(cmd.shiftId);
-      if (!shift || shift.organizationId !== ctx.organizationId) return err(notFoundError('Shift', cmd.shiftId));
-      if (shift.status === 'LOCKED') return err(invariantViolation('Shift is locked', { shiftId: shift.id }));
-      businessDayId = shift.businessDayId;
+      const eligibility = await resolveShiftBusinessDayWrite(this.deps.shifts, this.deps.businessDays, ctx, cmd.shiftId, 'FINANCIAL');
+      if (!eligibility.success) return eligibility as unknown as Result<CustomerLedgerEntry>;
+      const shift = eligibility.data.shift;
+      stationId = shift.stationId;
+      businessDayId = eligibility.data.businessDay.id;
+      lateEntry = eligibility.data.lateEntry;
       shiftId = shift.id;
     } else if (cmd.stationId) {
       const date = cmd.transactionDate ?? resolveBusinessDate({ now: ctx.clock.now(), timeZone: ctx.timeZone, dayStartsAt: ctx.businessDayStartsAt });
-      const bd = await ensureBusinessDayForDate(this.deps.businessDays, ctx, cmd.stationId, date);
-      businessDayId = bd.id;
+      stationId = cmd.stationId;
+      const eligibility = await resolveBusinessDayWrite(this.deps.businessDays, ctx, { stationId, businessDate: date, kind: 'FINANCIAL' });
+      if (!eligibility.success) return eligibility as unknown as Result<CustomerLedgerEntry>;
+      businessDayId = eligibility.data.businessDay.id;
+      lateEntry = eligibility.data.lateEntry;
     } else {
       return err(validationError('Either shiftId or stationId is required'));
     }
@@ -280,6 +297,7 @@ export class RecordOmcCardSale implements UseCase<RecordOmcCardSaleCommand, Cust
       referenceType: 'OMC_CARD_SALE',
       referenceId: null,
       notes: cmd.notes ?? null,
+      metadata: lateEntry ? { lateEntry: true } : {},
       createdAt: now,
     };
     await this.deps.ledger.save(entry);
@@ -289,7 +307,9 @@ export class RecordOmcCardSale implements UseCase<RecordOmcCardSaleCommand, Cust
         eventType: BusinessEvents.OMC_CARD_SALE_CREATED,
         aggregateType: 'Customer',
         aggregateId: customerId ?? entry.id,
+        stationId,
         businessDayId,
+        metadata: lateEntry ? { lateEntry: true, lateEntryPrimary: true } : undefined,
         payload: { omcSaleId: entry.id, customerId, vehicleId: entry.vehicleId, amount: entry.amount, duId: entry.duId ?? null },
       }),
     ]);

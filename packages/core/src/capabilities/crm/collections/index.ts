@@ -2,8 +2,8 @@ import { z } from 'zod';
 import { resolveBusinessDate } from '@pump/shared';
 import { BusinessEvents, err, eventFromContext, invariantViolation, notFoundError, ok, validationError } from '../../../kernel/index.js';
 import type { DocumentNumberGenerator, EventPublisher, ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
-import type { ShiftRepository } from '../../station-ops/shifts/index.js';
-import { ensureBusinessDayForDate, type BusinessDayRepository } from '../../station-ops/business-days/index.js';
+import { resolveShiftBusinessDayWrite, type ShiftRepository } from '../../station-ops/shifts/index.js';
+import { resolveBusinessDayWrite, type BusinessDayWriteRepository } from '../../station-ops/business-days/index.js';
 import type { CustomerRepository } from '../customers/index.js';
 
 export type CollectionPaymentMethod = 'Cash' | 'Card' | 'UPI' | 'BankTransfer';
@@ -18,6 +18,7 @@ export interface Collection {
   amount: string;
   paymentMethod: string;
   notes: string | null;
+  metadata?: Record<string, unknown>;
   createdAt: string;
 }
 
@@ -45,6 +46,7 @@ export interface CustomerLedgerEntry {
   referenceType: string | null;
   referenceId: string | null;
   notes: string | null;
+  metadata?: Record<string, unknown>;
   createdAt: string;
 }
 
@@ -83,15 +85,15 @@ export interface RecordCollectionDeps {
   ledger: CustomerLedgerRepository;
   customers: CustomerRepository;
   shifts: ShiftRepository;
-  businessDays: BusinessDayRepository;
+  businessDays: BusinessDayWriteRepository;
   docNumbers: DocumentNumberGenerator;
   events: EventPublisher;
 }
 
 /**
  * Record a payment received against a customer's receivable. Only CASH collected
- * at the counter touches the drawer/shift; bank/UPI/card collections (e.g. paid
- * to accounts or the owner) are anchored to the business day with no shift.
+ * at the counter touches the drawer/shift; bank/UPI/card collections do not
+ * affect the drawer but may retain optional shift attribution.
  */
 export class RecordCollection implements UseCase<RecordCollectionCommand, Collection> {
   constructor(private readonly deps: RecordCollectionDeps) {}
@@ -108,22 +110,34 @@ export class RecordCollection implements UseCase<RecordCollectionCommand, Collec
 
     let businessDayId: string;
     let shiftId: string | null;
+    let stationId: string;
+    let lateEntry: boolean;
     if (cmd.shiftId) {
-      const shift = await this.deps.shifts.findById(cmd.shiftId);
-      if (!shift || shift.organizationId !== ctx.organizationId) return err(notFoundError('Shift', cmd.shiftId));
-      if (shift.status === 'LOCKED') return err(invariantViolation('Shift is locked', { shiftId: shift.id }));
-      businessDayId = shift.businessDayId;
-      shiftId = affectsDrawer ? shift.id : null;
+      const eligibility = await resolveShiftBusinessDayWrite(this.deps.shifts, this.deps.businessDays, ctx, cmd.shiftId, 'FINANCIAL');
+      if (!eligibility.success) return eligibility as unknown as Result<Collection>;
+      const shift = eligibility.data.shift;
+      stationId = shift.stationId;
+      businessDayId = eligibility.data.businessDay.id;
+      lateEntry = eligibility.data.lateEntry;
+      if (affectsDrawer && (lateEntry || shift.status !== 'OPEN')) {
+        return err(invariantViolation('Cash collections require an open Shift and open Business Day', { shiftId: shift.id, shiftStatus: shift.status, businessDayId }));
+      }
+      shiftId = shift.id;
     } else if (cmd.stationId) {
       const date = cmd.transactionDate ?? resolveBusinessDate({ now: ctx.clock.now(), timeZone: ctx.timeZone, dayStartsAt: ctx.businessDayStartsAt });
-      const bd = await ensureBusinessDayForDate(this.deps.businessDays, ctx, cmd.stationId, date);
-      businessDayId = bd.id;
+      stationId = cmd.stationId;
+      const eligibility = await resolveBusinessDayWrite(this.deps.businessDays, ctx, { stationId, businessDate: date, kind: 'FINANCIAL' });
+      if (!eligibility.success) return eligibility as unknown as Result<Collection>;
+      businessDayId = eligibility.data.businessDay.id;
+      lateEntry = eligibility.data.lateEntry;
       shiftId = null;
+      if (affectsDrawer) return err(validationError('Cash collections require shiftId'));
     } else {
       return err(validationError('Either shiftId or stationId is required'));
     }
 
     const now = ctx.clock.now().toISOString();
+    const affectsDrawerToStore = shiftId !== null && affectsDrawer;
     const documentNumber = await this.deps.docNumbers.next('COLLECTION');
     const collection: Collection = {
       id: ctx.ids.newId(),
@@ -135,6 +149,7 @@ export class RecordCollection implements UseCase<RecordCollectionCommand, Collec
       amount: String(cmd.amount),
       paymentMethod: cmd.paymentMethod,
       notes: cmd.notes ?? null,
+      metadata: lateEntry ? { lateEntry: true } : {},
       createdAt: now,
     };
     await this.deps.collections.save(collection);
@@ -154,6 +169,7 @@ export class RecordCollection implements UseCase<RecordCollectionCommand, Collec
       referenceType: 'COLLECTION',
       referenceId: collection.id,
       notes: cmd.notes ?? null,
+      metadata: lateEntry ? { lateEntry: true } : {},
       createdAt: now,
     });
 
@@ -162,8 +178,10 @@ export class RecordCollection implements UseCase<RecordCollectionCommand, Collec
         eventType: BusinessEvents.CREDIT_PAYMENT_RECEIVED,
         aggregateType: 'Customer',
         aggregateId: customer.id,
+        stationId,
         businessDayId,
-        payload: { collectionId: collection.id, customerId: customer.id, amount: collection.amount, paymentMethod: cmd.paymentMethod, affectsDrawer, shiftId },
+        metadata: lateEntry ? { lateEntry: true, lateEntryPrimary: true } : undefined,
+        payload: { collectionId: collection.id, customerId: customer.id, amount: collection.amount, paymentMethod: cmd.paymentMethod, affectsDrawer: affectsDrawerToStore, shiftId },
         presentation: {
           templateId: 'credit-payment-received.v1',
           values: { customerName: customer.name, amount: Number(collection.amount), paymentMethod: cmd.paymentMethod },

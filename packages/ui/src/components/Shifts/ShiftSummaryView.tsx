@@ -88,7 +88,7 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
   const handleReopen = async () => {
     if (!(await confirm({
       title: 'Reopen this shift?',
-      message: 'Reopening will delete this compiled Shift Summary and set the shift state back to OPEN.',
+      message: 'Reopening will delete this compiled Shift Summary and set the shift state back to OPEN. It is allowed until the Business Day closes, provided no other shift is open.',
       confirmLabel: 'Reopen',
       danger: true,
     }))) {

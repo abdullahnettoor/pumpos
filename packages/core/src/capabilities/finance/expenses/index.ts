@@ -2,8 +2,8 @@ import { z } from 'zod';
 import { resolveBusinessDate } from '@pump/shared';
 import { BusinessEvents, err, eventFromContext, invariantViolation, notFoundError, ok, validationError } from '../../../kernel/index.js';
 import type { EventPublisher, ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
-import type { ShiftRepository } from '../../station-ops/shifts/index.js';
-import { ensureBusinessDayForDate, type BusinessDayRepository } from '../../station-ops/business-days/index.js';
+import { resolveShiftBusinessDayWrite, type ShiftRepository } from '../../station-ops/shifts/index.js';
+import { resolveBusinessDayWrite, type BusinessDayWriteRepository } from '../../station-ops/business-days/index.js';
 import { assertDrawerEntryVoidable } from '../void-guard.js';
 
 export type PaidFrom = 'SHIFT_CASH' | 'BANK' | 'OWNER';
@@ -26,6 +26,7 @@ export interface Expense {
   affectsDrawer: boolean;
   description: string | null;
   status: string;
+  metadata?: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
 }
@@ -61,14 +62,15 @@ const schema = z.object({
 export interface RecordExpenseDeps {
   expenses: ExpenseRepository;
   shifts: ShiftRepository;
-  businessDays: BusinessDayRepository;
+  businessDays: BusinessDayWriteRepository;
   events: EventPublisher;
 }
 
 /**
  * Record an expense anchored to a business day. Drawer expenses (paidFrom
  * SHIFT_CASH) attach to the open shift and reduce its drawer; business expenses
- * (BANK/OWNER) attach only to the business day and do not affect reconciliation.
+ * (BANK/OWNER) do not affect reconciliation and may retain optional shift
+ * attribution.
  */
 export class RecordExpense implements UseCase<RecordExpenseCommand, Expense> {
   constructor(private readonly deps: RecordExpenseDeps) {}
@@ -79,23 +81,33 @@ export class RecordExpense implements UseCase<RecordExpenseCommand, Expense> {
     const cmd = p.data;
 
     const paidFrom: PaidFrom = cmd.paidFrom ?? 'SHIFT_CASH';
-    let affectsDrawer = cmd.affectsDrawer ?? paidFrom === 'SHIFT_CASH';
+    const affectsDrawer = cmd.affectsDrawer ?? paidFrom === 'SHIFT_CASH';
 
     let businessDayId: string;
     let shiftId: string | null;
+    let stationId: string;
+    let lateEntry: boolean;
 
     if (cmd.shiftId) {
-      const shift = await this.deps.shifts.findById(cmd.shiftId);
-      if (!shift || shift.organizationId !== ctx.organizationId) return err(notFoundError('Shift', cmd.shiftId));
-      if (shift.status === 'LOCKED') return err(invariantViolation('Shift is locked', { shiftId: shift.id }));
-      businessDayId = shift.businessDayId;
-      shiftId = affectsDrawer ? shift.id : null;
+      const eligibility = await resolveShiftBusinessDayWrite(this.deps.shifts, this.deps.businessDays, ctx, cmd.shiftId, 'FINANCIAL');
+      if (!eligibility.success) return eligibility as unknown as Result<Expense>;
+      const shift = eligibility.data.shift;
+      stationId = shift.stationId;
+      businessDayId = eligibility.data.businessDay.id;
+      lateEntry = eligibility.data.lateEntry;
+      if (affectsDrawer && (lateEntry || shift.status !== 'OPEN')) {
+        return err(invariantViolation('Drawer expenses require an open Shift and open Business Day', { shiftId: shift.id, shiftStatus: shift.status, businessDayId }));
+      }
+      shiftId = shift.id;
     } else if (cmd.stationId) {
       const date = cmd.transactionDate ?? resolveBusinessDate({ now: ctx.clock.now(), timeZone: ctx.timeZone, dayStartsAt: ctx.businessDayStartsAt });
-      const bd = await ensureBusinessDayForDate(this.deps.businessDays, ctx, cmd.stationId, date);
-      businessDayId = bd.id;
+      stationId = cmd.stationId;
+      const eligibility = await resolveBusinessDayWrite(this.deps.businessDays, ctx, { stationId, businessDate: date, kind: 'FINANCIAL' });
+      if (!eligibility.success) return eligibility as unknown as Result<Expense>;
+      businessDayId = eligibility.data.businessDay.id;
+      lateEntry = eligibility.data.lateEntry;
       shiftId = null;
-      affectsDrawer = false;
+      if (affectsDrawer) return err(validationError('Drawer expenses require shiftId'));
     } else {
       return err(validationError('Either shiftId or stationId is required'));
     }
@@ -111,6 +123,7 @@ export class RecordExpense implements UseCase<RecordExpenseCommand, Expense> {
       affectsDrawer,
       description: cmd.description ?? null,
       status: 'ACTIVE',
+      metadata: lateEntry ? { lateEntry: true } : {},
       createdAt: now,
       updatedAt: now,
     };
@@ -121,7 +134,9 @@ export class RecordExpense implements UseCase<RecordExpenseCommand, Expense> {
         eventType: BusinessEvents.EXPENSE_RECORDED,
         aggregateType: 'Expense',
         aggregateId: expense.id,
+        stationId,
         businessDayId,
+        metadata: lateEntry ? { lateEntry: true, lateEntryPrimary: true } : undefined,
         payload: { expenseId: expense.id, amount: expense.amount, paidFrom, affectsDrawer, shiftId },
         presentation: {
           templateId: 'expense.v1',

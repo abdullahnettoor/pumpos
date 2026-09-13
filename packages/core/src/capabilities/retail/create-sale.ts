@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import { BusinessEvents, err, eventFromContext, invariantViolation, notFoundError, ok, validationError } from '../../kernel/index.js';
 import type { DomainEvent, EventPublisher, ExecutionContext, DocumentNumberGenerator, Result, UseCase } from '../../kernel/index.js';
-import type { ShiftRepository } from '../station-ops/shifts/index.js';
+import { resolveShiftBusinessDayWrite, type ShiftRepository } from '../station-ops/shifts/index.js';
+import type { BusinessDayWriteRepository } from '../station-ops/business-days/index.js';
 import type { StockMovement, StockMovementRepository } from '../inventory/index.js';
 import type { CustomerLedgerRepository } from '../crm/collections/index.js';
 import type { CustomerRepository } from '../crm/customers/index.js';
@@ -68,6 +69,7 @@ export interface CreateSaleDeps {
   ledger: CustomerLedgerRepository;
   customers: CustomerRepository;
   shifts: ShiftRepository;
+  businessDays: BusinessDayWriteRepository;
   /** Optional (T5): resolves each line's tax category + rates to freeze the split. */
   products?: ProductRepository;
   docNumbers: DocumentNumberGenerator;
@@ -98,8 +100,9 @@ export class CreateSale implements UseCase<CreateSaleCommand, CreateSaleResult> 
       return err(validationError('A credit sale requires a customerId'));
     }
 
-    const shift = await this.deps.shifts.findById(cmd.shiftId);
-    if (!shift || shift.organizationId !== ctx.organizationId) return err(notFoundError('Shift', cmd.shiftId));
+    const eligibility = await resolveShiftBusinessDayWrite(this.deps.shifts, this.deps.businessDays, ctx, cmd.shiftId, 'STOCK');
+    if (!eligibility.success) return eligibility as unknown as Result<CreateSaleResult>;
+    const shift = eligibility.data.shift;
     if (shift.status !== 'OPEN') return err(invariantViolation('Shift is not open', { shiftId: shift.id, status: shift.status }));
 
     let buyerStateCode: string | null = cmd.buyerDetails?.stateCode ?? null;

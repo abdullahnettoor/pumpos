@@ -7,10 +7,10 @@ import {
   BusinessEvents,
 } from '../../../kernel/index.js';
 import type { ExecutionContext } from '../../../kernel/index.js';
-import { OpenBusinessDay, CloseBusinessDay } from './index.js';
-import type { BusinessDay, BusinessDayRepository } from './index.js';
+import { OpenBusinessDay, CloseBusinessDay, resolveBusinessDayWrite } from './index.js';
+import type { BusinessDay, BusinessDayWriteRepository } from './index.js';
 
-class InMemoryBusinessDayRepo implements BusinessDayRepository {
+class InMemoryBusinessDayRepo implements BusinessDayWriteRepository {
   readonly rows: BusinessDay[] = [];
   async findById(id: string) {
     return this.rows.find((r) => r.id === id) ?? null;
@@ -26,6 +26,9 @@ class InMemoryBusinessDayRepo implements BusinessDayRepository {
   async findByStationAndDate(orgId: string, stationId: string, businessDate: string) {
     return this.rows.find((r) => r.organizationId === orgId && r.stationId === stationId && r.businessDate === businessDate) ?? null;
   }
+  async lockStation() {}
+  async lockById() {}
+  async lockByStationAndDate() {}
 }
 
 function makeContext(): ExecutionContext {
@@ -104,5 +107,34 @@ describe('CloseBusinessDay', () => {
     const again = await new CloseBusinessDay({ repository: repo, events }).execute({ businessDayId: id }, ctx);
     expect(again.success).toBe(false);
     if (!again.success) expect(again.error.code).toBe('INVARIANT_VIOLATION');
+  });
+});
+
+describe('resolveBusinessDayWrite', () => {
+  it('opens a nonexistent historical day for its first financial entry', async () => {
+    const repo = new InMemoryBusinessDayRepo();
+    const result = await resolveBusinessDayWrite(repo, makeContext(), {
+      stationId: 'station-1',
+      businessDate: '2026-03-14',
+      kind: 'FINANCIAL',
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.businessDay.status).toBe('OPEN');
+      expect(result.data.lateEntry).toBe(false);
+    }
+  });
+
+  it('accepts stock writes to a lazily-created historical day while it is open', async () => {
+    const repo = new InMemoryBusinessDayRepo();
+    const result = await resolveBusinessDayWrite(repo, makeContext(), {
+      stationId: 'station-1',
+      businessDate: '2026-03-14',
+      kind: 'STOCK',
+    });
+
+    expect(result.success).toBe(true);
+    expect(repo.rows[0]?.status).toBe('OPEN');
   });
 });

@@ -22,6 +22,7 @@ import type {
 class ShiftRepo implements ShiftRepository {
   constructor(readonly row: Shift | null = shift()) {}
   async findById(id: string) { return this.row?.id === id ? this.row : null; }
+  async findByIdWithoutLock(id: string) { return this.findById(id); }
   async save() {}
   async findOpenByStation() { return this.row; }
   async addStaffAssignments() {}

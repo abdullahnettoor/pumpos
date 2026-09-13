@@ -311,6 +311,7 @@ export const customerTransactions = pgTable('customer_transactions', {
   referenceType: varchar('reference_type', { length: 50 }),
   referenceId: uuid('reference_id'),
   notes: varchar('notes', { length: 500 }),
+  metadata: jsonb('metadata').default({}).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 }, (t) => ({
   shiftAttendantIdx: index('customer_txn_shift_attendant_idx').on(t.shiftId, t.attendantId),
@@ -343,6 +344,7 @@ export const supplierTransactions = pgTable('supplier_transactions', {
   referenceType: varchar('reference_type', { length: 50 }),
   referenceId: uuid('reference_id'),
   notes: varchar('notes', { length: 500 }),
+  metadata: jsonb('metadata').default({}).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
@@ -523,6 +525,7 @@ export const expenses = pgTable('expenses', {
   parentExpenseId: uuid('parent_expense_id'),
   adjustmentReason: varchar('adjustment_reason', { length: 255 }),
   status: varchar('status', { length: 20 }).default('ACTIVE').notNull(), // 'ACTIVE', 'ADJUSTMENT', 'VOIDED'
+  metadata: jsonb('metadata').default({}).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
@@ -580,6 +583,7 @@ export const otherIncome = pgTable('other_income', {
   // Residual evidence only: { inclusive, supplier_state, buyer_state }.
   taxSnapshot: jsonb('tax_snapshot'),
   status: varchar('status', { length: 20 }).default('ACTIVE').notNull(), // 'ACTIVE' | 'VOIDED'
+  metadata: jsonb('metadata').default({}).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 }, (t) => ({
@@ -600,6 +604,7 @@ export const collections = pgTable('collections', {
   amount: numeric('amount', { precision: 12, scale: 2 }).notNull(),
   paymentMethod: varchar('payment_method', { length: 50 }).notNull(),
   notes: varchar('notes', { length: 500 }),
+  metadata: jsonb('metadata').default({}).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 

@@ -3,8 +3,8 @@ import { resolveBusinessDate } from '@pump/shared';
 import type { TaxCategory } from '@pump/shared';
 import { BusinessEvents, err, eventFromContext, invariantViolation, notFoundError, ok, validationError } from '../../../kernel/index.js';
 import type { EventPublisher, ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
-import type { ShiftRepository } from '../../station-ops/shifts/index.js';
-import { ensureBusinessDayForDate, type BusinessDayRepository } from '../../station-ops/business-days/index.js';
+import { resolveShiftBusinessDayWrite, type ShiftRepository } from '../../station-ops/shifts/index.js';
+import { resolveBusinessDayWrite, type BusinessDayWriteRepository } from '../../station-ops/business-days/index.js';
 import { assertDrawerEntryVoidable } from '../void-guard.js';
 import { computeLineTax, isInterState } from '../tax/index.js';
 
@@ -62,6 +62,7 @@ export interface OtherIncome {
   igst: string;
   cess: string;
   taxSnapshot: Record<string, unknown> | null;
+  metadata?: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
 }
@@ -181,7 +182,7 @@ const schema = z.object({
 export interface RecordIncomeDeps {
   income: IncomeRepository;
   shifts: ShiftRepository;
-  businessDays: BusinessDayRepository;
+  businessDays: BusinessDayWriteRepository;
   /** Optional (FI4): resolves the category's tax_config to split GST at capture. */
   incomeCategories?: IncomeCategoryRepository;
   events: EventPublisher;
@@ -191,7 +192,8 @@ export interface RecordIncomeDeps {
  * Record indirect / non-operating income (tanker rental, truck parking,
  * commission, scrap, interest, …) anchored to a business day. Cash income
  * (receivedInto SHIFT_CASH) attaches to the open shift and increases its drawer;
- * bank/owner income attaches only to the business day. Mirror of RecordExpense.
+ * bank/owner income does not affect the drawer and may retain optional shift
+ * attribution. Mirror of RecordExpense.
  */
 export class RecordIncome implements UseCase<RecordIncomeCommand, OtherIncome> {
   constructor(private readonly deps: RecordIncomeDeps) {}
@@ -202,23 +204,33 @@ export class RecordIncome implements UseCase<RecordIncomeCommand, OtherIncome> {
     const cmd = p.data;
 
     const receivedInto: ReceivedInto = cmd.receivedInto ?? 'SHIFT_CASH';
-    let affectsDrawer = cmd.affectsDrawer ?? receivedInto === 'SHIFT_CASH';
+    const affectsDrawer = cmd.affectsDrawer ?? receivedInto === 'SHIFT_CASH';
 
     let businessDayId: string;
     let shiftId: string | null;
+    let stationId: string;
+    let lateEntry: boolean;
 
     if (cmd.shiftId) {
-      const shift = await this.deps.shifts.findById(cmd.shiftId);
-      if (!shift || shift.organizationId !== ctx.organizationId) return err(notFoundError('Shift', cmd.shiftId));
-      if (shift.status === 'LOCKED') return err(invariantViolation('Shift is locked', { shiftId: shift.id }));
-      businessDayId = shift.businessDayId;
-      shiftId = affectsDrawer ? shift.id : null;
+      const eligibility = await resolveShiftBusinessDayWrite(this.deps.shifts, this.deps.businessDays, ctx, cmd.shiftId, 'FINANCIAL');
+      if (!eligibility.success) return eligibility as unknown as Result<OtherIncome>;
+      const shift = eligibility.data.shift;
+      stationId = shift.stationId;
+      businessDayId = eligibility.data.businessDay.id;
+      lateEntry = eligibility.data.lateEntry;
+      if (affectsDrawer && (lateEntry || shift.status !== 'OPEN')) {
+        return err(invariantViolation('Drawer income requires an open Shift and open Business Day', { shiftId: shift.id, shiftStatus: shift.status, businessDayId }));
+      }
+      shiftId = shift.id;
     } else if (cmd.stationId) {
       const date = cmd.transactionDate ?? resolveBusinessDate({ now: ctx.clock.now(), timeZone: ctx.timeZone, dayStartsAt: ctx.businessDayStartsAt });
-      const bd = await ensureBusinessDayForDate(this.deps.businessDays, ctx, cmd.stationId, date);
-      businessDayId = bd.id;
+      stationId = cmd.stationId;
+      const eligibility = await resolveBusinessDayWrite(this.deps.businessDays, ctx, { stationId, businessDate: date, kind: 'FINANCIAL' });
+      if (!eligibility.success) return eligibility as unknown as Result<OtherIncome>;
+      businessDayId = eligibility.data.businessDay.id;
+      lateEntry = eligibility.data.lateEntry;
       shiftId = null;
-      affectsDrawer = false;
+      if (affectsDrawer) return err(validationError('Drawer income requires shiftId'));
     } else {
       return err(validationError('Either shiftId or stationId is required'));
     }
@@ -252,6 +264,7 @@ export class RecordIncome implements UseCase<RecordIncomeCommand, OtherIncome> {
       igst: tax.igst,
       cess: tax.cess,
       taxSnapshot: tax.snapshot,
+      metadata: lateEntry ? { lateEntry: true } : {},
       createdAt: now,
       updatedAt: now,
     };
@@ -262,7 +275,9 @@ export class RecordIncome implements UseCase<RecordIncomeCommand, OtherIncome> {
         eventType: BusinessEvents.INCOME_RECORDED,
         aggregateType: 'Income',
         aggregateId: income.id,
+        stationId,
         businessDayId,
+        metadata: lateEntry ? { lateEntry: true, lateEntryPrimary: true } : undefined,
         payload: { incomeId: income.id, amount: income.amount, receivedInto, affectsDrawer, shiftId, categoryId: income.categoryId, taxCategory: income.taxCategory, taxableAmount: income.taxableAmount },
       }),
     ]);

@@ -32,41 +32,79 @@ export interface BusinessDayLock {
   lockByStationAndDate(organizationId: string, stationId: string, businessDate: string): Promise<void>;
 }
 
+export type BusinessDayWriteRepository = BusinessDayRepository & BusinessDayLock;
+
 /**
  * Resolve the business day a non-shift money movement belongs to, by its
  * transaction date — creating the day lazily if it does not exist yet. This
  * removes the "open a business day first" ceremony: any date is transactional
- * (settlements/collections can land on Sundays/holidays). A day created for a
- * past date is recorded as CLOSED (a historical financial bucket); today/future
- * is OPEN. The business day's date
- * IS the transaction date, so no separate column is needed.
+ * (settlements/collections can land on Sundays/holidays). A lazily-created day
+ * is OPEN regardless of its date and remains open until the explicit close
+ * workflow creates its immutable snapshot. The business day's date IS the
+ * transaction date, so no separate column is needed.
  */
 export async function ensureBusinessDayForDate(
-  repo: BusinessDayRepository,
+  repo: BusinessDayWriteRepository,
   ctx: ExecutionContext,
   stationId: string,
   businessDate: string,
 ): Promise<BusinessDay> {
+  await repo.lockStation(ctx.organizationId, stationId);
+  await repo.lockByStationAndDate(ctx.organizationId, stationId, businessDate);
   const existing = await repo.findByStationAndDate(ctx.organizationId, stationId, businessDate);
   if (existing) return existing;
-  const today = resolveBusinessDate({ now: ctx.clock.now(), timeZone: ctx.timeZone, dayStartsAt: ctx.businessDayStartsAt });
-  const isPast = businessDate < today;
   const nowIso = ctx.clock.now().toISOString();
   const day: BusinessDay = {
     id: ctx.ids.newId(),
     organizationId: ctx.organizationId,
     stationId,
     businessDate,
-    status: isPast ? 'CLOSED' : 'OPEN',
+    status: 'OPEN',
     openedBy: ctx.actorId ?? 'system',
     openedAt: nowIso,
-    closedBy: isPast ? (ctx.actorId ?? 'system') : null,
-    closedAt: isPast ? nowIso : null,
+    closedBy: null,
+    closedAt: null,
     createdAt: nowIso,
     updatedAt: nowIso,
   };
   await repo.save(day);
   return day;
+}
+
+export type BusinessDayWriteKind = 'FINANCIAL' | 'STOCK';
+
+export interface BusinessDayWriteEligibility {
+  businessDay: BusinessDay;
+  lateEntry: boolean;
+}
+
+/** Locks and validates the parent day immediately before a transactional write. */
+export async function resolveBusinessDayWrite(
+  repo: BusinessDayWriteRepository,
+  ctx: ExecutionContext,
+  input: { stationId: string; businessDate?: string; businessDayId?: string; kind: BusinessDayWriteKind },
+): Promise<Result<BusinessDayWriteEligibility>> {
+  let day: BusinessDay | null;
+  if (input.businessDayId) {
+    const candidate = await repo.findById(input.businessDayId);
+    if (!candidate || candidate.organizationId !== ctx.organizationId || candidate.stationId !== input.stationId) {
+      return err(notFoundError('Business Day', input.businessDayId));
+    }
+    await repo.lockStation(ctx.organizationId, input.stationId);
+    await repo.lockById(ctx.organizationId, input.businessDayId);
+    day = await repo.findById(input.businessDayId);
+  } else {
+    const businessDate = input.businessDate ?? resolveBusinessDate({ now: ctx.clock.now(), timeZone: ctx.timeZone, dayStartsAt: ctx.businessDayStartsAt });
+    day = await ensureBusinessDayForDate(repo, ctx, input.stationId, businessDate);
+  }
+
+  if (!day || day.organizationId !== ctx.organizationId || day.stationId !== input.stationId) {
+    return err(notFoundError('Business Day', input.businessDayId ?? input.businessDate ?? 'current'));
+  }
+  if (day.status === 'CLOSED' && input.kind === 'STOCK') {
+    return err(invariantViolation('Business day is closed; sales and stock records are sealed', { businessDayId: day.id, businessDate: day.businessDate }));
+  }
+  return ok({ businessDay: day, lateEntry: day.status === 'CLOSED' });
 }
 
 export interface OpenBusinessDayCommand {
@@ -85,7 +123,7 @@ const openSchema = z.object({
 });
 
 export interface BusinessDayDeps {
-  repository: BusinessDayRepository;
+  repository: BusinessDayWriteRepository;
   events: EventPublisher;
 }
 
@@ -103,6 +141,8 @@ export class OpenBusinessDay implements UseCase<OpenBusinessDayCommand, Business
     const businessDate = p.data.businessDate ?? resolveBusinessDate({ now, timeZone: ctx.timeZone, dayStartsAt: ctx.businessDayStartsAt });
     // One business day per (station, date). Several dates may be open at once;
     // a past day stays open until explicitly closed (close day 1 on day 5).
+    await this.deps.repository.lockStation(ctx.organizationId, p.data.stationId);
+    await this.deps.repository.lockByStationAndDate(ctx.organizationId, p.data.stationId, businessDate);
     const existing = await this.deps.repository.findByStationAndDate(ctx.organizationId, p.data.stationId, businessDate);
     if (existing) {
       return err(conflictError('A business day already exists for this station and date', { businessDayId: existing.id, businessDate: existing.businessDate }));

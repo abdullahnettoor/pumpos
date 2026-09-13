@@ -26,6 +26,7 @@ import type { Nozzle, NozzleRepository } from '../../station-setup/nozzles/index
 class ShiftRepo implements ShiftRepository {
   constructor(readonly rows: Shift[]) {}
   async findById(id: string) { return this.rows.find((r) => r.id === id) ?? null; }
+  async findByIdWithoutLock(id: string) { return this.findById(id); }
   async save(s: Shift) { const i = this.rows.findIndex((r) => r.id === s.id); if (i >= 0) this.rows[i] = s; else this.rows.push(s); }
   async findOpenByStation() { return null; }
   async addStaffAssignments() {}
