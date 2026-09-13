@@ -9,6 +9,8 @@ import {
   validationError,
 } from '../../../kernel/index.js';
 import type { EventPublisher, ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
+import type { BusinessDayWriteRepository } from '../business-days/index.js';
+import { resolveShiftBusinessDayWrite } from './resolve-shift-write.js';
 import type {
   AcceptedHandoverReading,
   AttendantHandover,
@@ -37,6 +39,7 @@ export interface RecordHandoverCommand {
 
 export interface RecordHandoverDeps {
   shifts: ShiftRepository;
+  businessDays: BusinessDayWriteRepository;
   context: HandoverContextReader;
   handovers: HandoverRepository;
   events: EventPublisher;
@@ -100,9 +103,9 @@ export class RecordHandover implements UseCase<RecordHandoverCommand, RecordHand
       return err(validationError('Duplicate Payment Terminal IDs are not allowed'));
     }
 
-    const shift = await this.deps.shifts.findById(cmd.shiftId);
-    if (!shift || shift.organizationId !== ctx.organizationId) return err(notFoundError('Shift', cmd.shiftId));
-    if (ctx.stationId && shift.stationId !== ctx.stationId) return err(notFoundError('Shift', cmd.shiftId));
+    const eligibility = await resolveShiftBusinessDayWrite(this.deps.shifts, this.deps.businessDays, ctx, cmd.shiftId, 'STOCK');
+    if (!eligibility.success) return eligibility;
+    const shift = eligibility.data.shift;
     if (shift.status !== 'OPEN') {
       return err(invariantViolation('Shift is not open', { shiftId: shift.id, status: shift.status }));
     }

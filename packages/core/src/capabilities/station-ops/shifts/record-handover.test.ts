@@ -7,6 +7,7 @@ import {
   SequentialIdGenerator,
 } from '../../../kernel/index.js';
 import type { ExecutionContext } from '../../../kernel/index.js';
+import type { BusinessDay, BusinessDayWriteRepository } from '../business-days/index.js';
 import { RecordHandover } from './record-handover.js';
 import type {
   AcceptedHandoverReading,
@@ -20,13 +21,30 @@ import type {
 } from './ports.js';
 
 class ShiftRepo implements ShiftRepository {
-  constructor(readonly row: Shift | null = shift()) {}
-  async findById(id: string) { return this.row?.id === id ? this.row : null; }
-  async findByIdWithoutLock(id: string) { return this.findById(id); }
+  constructor(readonly row: Shift | null = shift(), private readonly calls: string[] = []) {}
+  async findById(id: string) { this.calls.push('shift-lock'); return this.row?.id === id ? this.row : null; }
+  async findByIdWithoutLock(id: string) { this.calls.push('shift-discovery'); return this.row?.id === id ? this.row : null; }
   async save() {}
   async findOpenByStation() { return this.row; }
   async addStaffAssignments() {}
   async addTerminalLinks() {}
+}
+
+class BusinessDayRepo implements BusinessDayWriteRepository {
+  constructor(private readonly status: BusinessDay['status'] = 'OPEN', private readonly calls: string[] = []) {}
+  private row(): BusinessDay {
+    return {
+      id: 'day-1', organizationId: 'org-1', stationId: 'station-1', businessDate: '2026-09-12', status: this.status,
+      openedBy: 'manager-1', openedAt: '', closedBy: null, closedAt: null, createdAt: '', updatedAt: '',
+    };
+  }
+  async findById() { this.calls.push('day-find'); return this.row(); }
+  async save() {}
+  async findOpenByStation() { return this.status === 'OPEN' ? this.row() : null; }
+  async findByStationAndDate() { return this.row(); }
+  async lockStation() { this.calls.push('station-lock'); }
+  async lockById() { this.calls.push('day-lock'); }
+  async lockByStationAndDate() {}
 }
 
 class ContextReader implements HandoverContextReader {
@@ -90,16 +108,18 @@ function command() {
   };
 }
 
-function setup(source = handoverContext(), shiftRow = shift()) {
+function setup(source = handoverContext(), shiftRow = shift(), dayStatus: BusinessDay['status'] = 'OPEN') {
   const handovers = new HandoverRepo();
   const store = new InMemoryEventStore();
+  const calls: string[] = [];
   const useCase = new RecordHandover({
-    shifts: new ShiftRepo(shiftRow),
+    shifts: new ShiftRepo(shiftRow, calls),
+    businessDays: new BusinessDayRepo(dayStatus, calls),
     context: new ContextReader(source),
     handovers,
     events: new InProcessEventDispatcher({ store }),
   });
-  return { useCase, handovers, store };
+  return { useCase, handovers, store, calls };
 }
 
 describe('RecordHandover', () => {
@@ -184,11 +204,7 @@ describe('RecordHandover', () => {
     if (result.success) expect(result.data.declaredTotal).toBe(75);
   });
 
-  it('rejects closed shifts, missing assignments, and incomplete Nozzle sets', async () => {
-    const closed = await setup(handoverContext(), shift({ status: 'CLOSED' })).useCase.execute(command(), context());
-    expect(closed.success).toBe(false);
-    if (!closed.success) expect(closed.error.code).toBe('INVARIANT_VIOLATION');
-
+  it('rejects missing assignments and incomplete Nozzle sets', async () => {
     const unassigned = await setup(handoverContext({ assigned: false })).useCase.execute(command(), context());
     expect(unassigned.success).toBe(false);
     if (!unassigned.success) expect(unassigned.error.code).toBe('INVARIANT_VIOLATION');
@@ -200,6 +216,57 @@ describe('RecordHandover', () => {
     const missingSeed = await setup(handoverContext({ missingReadingNozzleIds: ['nozzle-2'] })).useCase.execute(command(), context());
     expect(missingSeed.success).toBe(false);
     if (!missingSeed.success) expect(missingSeed.error.code).toBe('INVARIANT_VIOLATION');
+  });
+
+  it.each(['CLOSED', 'LOCKED'] as const)('rejects a %s Shift without handover, reading, or event effects', async (status) => {
+    const { useCase, handovers, store } = setup(handoverContext(), shift({ status }));
+    const existingHandover: AttendantHandover = {
+      id: 'existing-handover', organizationId: 'org-1', stationId: 'station-1', shiftId: 'shift-1',
+      attendantId: 'attendant-1', duId: 'du-1', cashHandedOver: '800', cardHandedOver: '100',
+      upiHandedOver: '50', creditHandedOver: '25', testingVolume: '1', expectedSales: '975',
+      varianceAmount: '0', createdAt: '2026-09-12T07:00:00.000Z',
+    };
+    const existingEntry: HandoverTerminalEntry = {
+      id: 'existing-entry', handoverId: existingHandover.id, terminalId: 'terminal-1', duId: 'du-1',
+      cardAmount: '100', upiAmount: '50', batchRef: 'batch-1', createdAt: existingHandover.createdAt,
+    };
+    const existingReading: AcceptedHandoverReading = {
+      id: 'reading-1', nozzleId: 'nozzle-1', openingReading: 100, closingReading: 109,
+      grossVolume: 9, testingVolume: 1, netVolume: 8, unitPrice: 100, expectedSales: 800,
+    };
+    handovers.current = existingHandover;
+    handovers.entries = [existingEntry];
+    handovers.readings = [existingReading];
+
+    const result = await useCase.execute(command(), context());
+
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error.code).toBe('INVARIANT_VIOLATION');
+    expect(handovers.current).toEqual(existingHandover);
+    expect(handovers.entries).toEqual([existingEntry]);
+    expect(handovers.readings).toEqual([existingReading]);
+    expect(store.events).toEqual([]);
+  });
+
+  it('rejects a closed parent Business Day without handover, reading, or event effects', async () => {
+    const { useCase, handovers, store } = setup(handoverContext(), shift(), 'CLOSED');
+
+    const result = await useCase.execute(command(), context());
+
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error.code).toBe('INVARIANT_VIOLATION');
+    expect(handovers.current).toBeNull();
+    expect(handovers.readings).toEqual([]);
+    expect(store.events).toEqual([]);
+  });
+
+  it('locks Station, Business Day, then Shift before recording a handover', async () => {
+    const { useCase, calls } = setup();
+
+    const result = await useCase.execute(command(), context());
+
+    expect(result.success).toBe(true);
+    expect(calls).toEqual(['shift-discovery', 'day-find', 'station-lock', 'day-lock', 'day-find', 'shift-lock']);
   });
 
   it('rejects cross-tenant and cross-Station Shift context', async () => {

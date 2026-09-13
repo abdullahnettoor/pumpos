@@ -17,7 +17,9 @@ export async function resolveShiftBusinessDayWrite(
   kind: BusinessDayWriteKind,
 ): Promise<Result<ShiftBusinessDayWriteEligibility>> {
   const discovered = await shifts.findByIdWithoutLock(shiftId);
-  if (!discovered || discovered.organizationId !== ctx.organizationId) return err(notFoundError('Shift', shiftId));
+  if (!discovered || discovered.organizationId !== ctx.organizationId || (ctx.stationId && discovered.stationId !== ctx.stationId)) {
+    return err(notFoundError('Shift', shiftId));
+  }
 
   const day = await resolveBusinessDayWrite(businessDays, ctx, {
     stationId: discovered.stationId,
@@ -27,7 +29,8 @@ export async function resolveShiftBusinessDayWrite(
   if (!day.success) return day;
 
   const shift = await shifts.findById(shiftId);
-  if (!shift || shift.organizationId !== ctx.organizationId || shift.stationId !== discovered.stationId || shift.businessDayId !== day.data.businessDay.id) {
+  if (!shift || shift.organizationId !== ctx.organizationId || (ctx.stationId && shift.stationId !== ctx.stationId)
+    || shift.stationId !== discovered.stationId || shift.businessDayId !== day.data.businessDay.id) {
     return err(notFoundError('Shift', shiftId));
   }
   return ok({ ...day.data, shift });

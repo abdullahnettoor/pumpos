@@ -1023,6 +1023,7 @@ shiftsRouter.post('/handovers', async (c) => {
     await lockStationInventory(tx, user.organizationId, shift.stationId);
     return new RecordHandover({
       shifts: new DrizzleShiftRepository(tx),
+      businessDays: new DrizzleBusinessDayRepository(tx),
       context: new DrizzleHandoverContextReader(tx),
       handovers: new DrizzleHandoverRepository(tx),
       events,
@@ -1071,13 +1072,28 @@ shiftsRouter.put('/readings', async (c) => {
   const user = c.var.user;
   const body = await c.req.json().catch(() => ({}));
   const db = c.var.db;
-  const result = await runInTransaction(db, (tx, events) =>
-    new RecordNozzleReadings({
+  if (typeof body?.shiftId !== 'string' || body.shiftId.length === 0) {
+    return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Invalid RecordNozzleReadings command' } }, 400);
+  }
+  const [shift] = await db.select({ stationId: schema.shifts.stationId, businessDayId: schema.shifts.businessDayId }).from(schema.shifts).where(and(
+    eq(schema.shifts.id, body.shiftId),
+    eq(schema.shifts.organizationId, user.organizationId),
+  )).limit(1);
+  if (!shift) {
+    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Shift not found' } }, 404);
+  }
+  if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId: shift.stationId })) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+  }
+  const result = await runInTransaction(db, async (tx, events) => {
+    await lockStationInventory(tx, user.organizationId, shift.stationId);
+    return new RecordNozzleReadings({
       shifts: new DrizzleShiftRepository(tx),
+      businessDays: new DrizzleBusinessDayRepository(tx),
       nozzleReadings: new DrizzleNozzleReadingRepository(tx),
       events,
-    }).execute(body, buildContext(user)),
-  );
+    }).execute(body, buildContext(user, { stationId: shift.stationId, businessDayId: shift.businessDayId }));
+  });
   return sendResult(c, result);
 });
 
