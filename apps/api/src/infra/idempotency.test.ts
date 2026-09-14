@@ -10,11 +10,11 @@ class MemoryStore implements IdempotencyStore {
     return `${organizationId}:${key}`;
   }
 
-  async reserve(organizationId: string, key: string, requestPath: string) {
+  async reserve(organizationId: string, key: string, requestPath: string, actorId: string | null, requestHash: string | null) {
     const scopedKey = this.key(organizationId, key);
     if (this.rows.has(scopedKey)) return null;
     const id = String(this.nextId++);
-    this.rows.set(scopedKey, { id, requestPath, responseStatus: null, responseBody: null });
+    this.rows.set(scopedKey, { id, requestPath, actorId, requestHash, responseStatus: null, responseBody: null });
     return id;
   }
 
@@ -31,10 +31,10 @@ class MemoryStore implements IdempotencyStore {
   }
 }
 
-function appFor(store: MemoryStore, organizationId = 'org-1') {
+function appFor(store: MemoryStore, organizationId = 'org-1', userId = 'user-1') {
   const app = new Hono();
   app.use('*', async (c, next) => {
-    c.set('user' as never, { organizationId } as never);
+    c.set('user' as never, { id: userId, organizationId } as never);
     c.set('db' as never, {} as never);
     await next();
   });
@@ -91,5 +91,41 @@ describe('idempotency middleware', () => {
     expect(first.status).toBe(500);
     expect(retry.status).toBe(200);
     expect(executions).toBe(2);
+  });
+
+  it('rejects replay by a different same-tenant actor', async () => {
+    const store = new MemoryStore();
+    const alice = appFor(store, 'org-1', 'alice');
+    const bob = appFor(store, 'org-1', 'bob');
+    alice.post('/command', (c) => c.json({ success: true, data: 'alice' }));
+    bob.post('/command', (c) => c.json({ success: true, data: 'bob' }));
+
+    await alice.request('/command', { method: 'POST', headers: { 'Idempotency-Key': 'shared' } });
+    const replay = await bob.request('/command', { method: 'POST', headers: { 'Idempotency-Key': 'shared' } });
+
+    expect(replay.status).toBe(409);
+  });
+
+  it('rejects the same key with different request content', async () => {
+    const store = new MemoryStore();
+    const app = appFor(store);
+    let executions = 0;
+    app.post('/command', (c) => c.json({ success: true, data: ++executions }));
+
+    const first = await app.request('/command', {
+      method: 'POST', headers: { 'Idempotency-Key': 'key-1' }, body: JSON.stringify({ amount: 100 }),
+    });
+    const changed = await app.request('/command', {
+      method: 'POST', headers: { 'Idempotency-Key': 'key-1' }, body: JSON.stringify({ amount: 999 }),
+    });
+    const trueRetry = await app.request('/command', {
+      method: 'POST', headers: { 'Idempotency-Key': 'key-1' }, body: JSON.stringify({ amount: 100 }),
+    });
+
+    expect(first.status).toBe(200);
+    expect(changed.status).toBe(409);
+    expect(trueRetry.status).toBe(200);
+    expect(await trueRetry.json()).toEqual({ success: true, data: 1 });
+    expect(executions).toBe(1);
   });
 });

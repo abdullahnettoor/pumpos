@@ -768,6 +768,10 @@ export const idempotencyKeys = pgTable('idempotency_keys', {
   organizationId: uuid('organization_id').references(() => organizations.id).notNull(),
   idempotencyKey: varchar('idempotency_key', { length: 255 }).notNull(),
   requestPath: varchar('request_path', { length: 255 }),
+  // Actor + canonical body hash: replay only for the same user resending the
+  // same request content; anything else conflicts.
+  actorId: uuid('actor_id'),
+  requestHash: varchar('request_hash', { length: 64 }),
   responseStatus: integer('response_status'),
   responseBody: jsonb('response_body'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
