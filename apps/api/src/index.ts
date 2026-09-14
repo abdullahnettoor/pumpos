@@ -1,6 +1,5 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
-import { verify, decode } from 'hono/jwt';
 import { createDb, DbClient, schema } from '@pump/db';
 import { eq, and, asc, desc, inArray, count, isNotNull, isNull, lt, or, sql, type SQL } from 'drizzle-orm';
 import { Role, canManageUsers, organizationUpdateSchema } from '@pump/shared';
@@ -13,6 +12,7 @@ import { transactionsRouter } from './routes/transactions.js';
 import { dssrRouter } from './routes/dssr.js';
 import { financeRouter } from './routes/finance.js';
 import { idempotency } from './infra/idempotency.js';
+import { verifySupabaseJwt } from './infra/supabase-jwt.js';
 import { SupabaseAdmin } from './infra/supabase-admin.js';
 import { DrizzleEventStore } from './infra/events.js';
 import { rateLimit } from './infra/rate-limit.js';
@@ -25,8 +25,6 @@ import {
   type ActivityGroupingRole,
 } from './infra/activity.js';
 
-
-const keyCache = new Map<string, CryptoKey>();
 
 // --- Auth cache (per-isolate) --------------------------------------------
 // Cloudflare Workers reuse isolates across many requests, so a module-level
@@ -103,84 +101,6 @@ type Variables = {
 };
 
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
-
-function isLocalRequest(url: string): boolean {
-  try {
-    const host = new URL(url).hostname;
-    return host === 'localhost' || host === '127.0.0.1' || host === '::1';
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Verify a Supabase-issued JWT and return its payload. Supports asymmetric
- * ES256 (verified via the project's JWKS, cached per-isolate) with an optional
- * legacy HS256 fallback. In local/dev only, a JWKS-fetch failure falls back to
- * the decoded claims. Shared by the tenant auth middleware and the platform-admin
- * middleware so JWT verification has a single source of truth.
- */
-async function verifySupabaseJwt(token: string, env: Bindings, reqUrl: string): Promise<any> {
-  const { header, payload: decodedPayload } = decode(token);
-
-  if (header.alg === 'HS256') {
-    const secret = env.SUPABASE_JWT_SECRET;
-    if (!secret) {
-      throw new Error('Received legacy HS256 token but SUPABASE_JWT_SECRET is not configured. Enable asymmetric JWTs or set the legacy secret.');
-    }
-    return await verify(token, secret, 'HS256');
-  }
-
-  if (header.alg === 'ES256') {
-    const kid = header.kid;
-    if (!kid) {
-      throw new Error('Missing key ID (kid) in token header');
-    }
-    try {
-      let publicKey = keyCache.get(kid);
-      if (!publicKey) {
-        const iss = decodedPayload.iss;
-        if (!iss) {
-          throw new Error('Missing issuer (iss) in token payload');
-        }
-        const jwksUrl = iss.endsWith('/') ? `${iss}.well-known/jwks.json` : `${iss}/.well-known/jwks.json`;
-        console.log(`[JWT JWKS FETCH] Fetching JWKS from: ${jwksUrl}`);
-        const response = await fetch(jwksUrl);
-        if (!response.ok) {
-          throw new Error(`Failed to fetch JWKS from ${jwksUrl}: ${response.statusText}`);
-        }
-        const jwks = await response.json() as { keys: any[] };
-        const jwk = jwks.keys.find((k: any) => k.kid === kid);
-        if (!jwk) {
-          throw new Error(`Key with ID ${kid} not found in JWKS`);
-        }
-        publicKey = await crypto.subtle.importKey(
-          'jwk',
-          jwk,
-          { name: 'ECDSA', namedCurve: 'P-256' },
-          true,
-          ['verify']
-        );
-        keyCache.set(kid, publicKey);
-      }
-      return await verify(token, publicKey, 'ES256');
-    } catch (jwksError: any) {
-      // Local-only fallback for workerd TLS trust chain issues when fetching JWKS.
-      // Keep production strict by only permitting this in development/local environments
-      // AND for localhost requests.
-      const isDevelopment = env.ENVIRONMENT === 'development' || env.ENVIRONMENT === 'local';
-      if (isDevelopment && isLocalRequest(reqUrl) && decodedPayload?.sub) {
-        console.warn('[JWT DEV FALLBACK] JWKS fetch/verify failed locally; using decoded token claims only.', {
-          reason: jwksError?.message || String(jwksError),
-        });
-        return decodedPayload;
-      }
-      throw jwksError;
-    }
-  }
-
-  throw new Error(`Unsupported algorithm: ${header.alg}`);
-}
 
 
 function getDbFromHyperdrive(env: Bindings): DbClient {
@@ -594,13 +514,17 @@ api.use('*', async (c, next) => {
 
     await next();
   } catch (err: any) {
-    const causeMessage = err.cause ? ` | Cause: ${err.cause.message || err.cause}` : '';
+    // Never expose internal error details (messages, causes, stacks) to the
+    // caller — log them server-side and return a fixed envelope.
+    console.error('[AUTH] Token validation failed', {
+      message: err?.message,
+      cause: err?.cause?.message ?? err?.cause,
+    });
     return c.json({
       success: false,
       error: {
         code: 'UNAUTHORIZED',
-        message: `Token validation failed: ${err.message}${causeMessage}`,
-        stack: err.stack
+        message: 'Invalid or expired authentication token',
       }
     }, 401);
   }
@@ -829,7 +753,8 @@ platform.use('*', async (c, next) => {
   try {
     payload = await verifySupabaseJwt(token, c.env, c.req.url);
   } catch (err: any) {
-    return c.json({ success: false, error: { code: 'UNAUTHORIZED', message: `Token validation failed: ${err.message}` } }, 401);
+    console.error('[PLATFORM AUTH] Token validation failed', { message: err?.message });
+    return c.json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Invalid or expired authentication token' } }, 401);
   }
   const email = String(payload?.email ?? '').trim().toLowerCase();
   const allow = (c.env.PLATFORM_ADMIN_EMAILS ?? '')
