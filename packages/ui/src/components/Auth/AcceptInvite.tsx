@@ -69,10 +69,20 @@ export const AcceptInvite: React.FC<AcceptInviteProps> = ({ onDone }) => {
     // The client parses the invite/recovery token from the URL on load. Give it
     // a moment to establish the session, then reflect whether we have one.
     const resolve = async () => {
-      const { data } = await supabase.auth.getSession();
-      if (cancelled) return;
-      setHasSession(!!data.session);
-      setEmail(data.session?.user?.email ?? null);
+      try {
+        const { data } = await supabase.auth.getSession();
+        if (cancelled) return;
+        setHasSession(!!data.session);
+        setEmail(data.session?.user?.email ?? null);
+      } catch (err: unknown) {
+        // Without this, a rejected getSession skipped setReady(true) and the
+        // invite screen hung on its loading state. Fall through to "no
+        // session", which renders the actionable error instead.
+        console.error('Failed to read invite session:', err);
+        if (cancelled) return;
+        setHasSession(false);
+        setEmail(null);
+      }
       setReady(true);
     };
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -81,7 +91,7 @@ export const AcceptInvite: React.FC<AcceptInviteProps> = ({ onDone }) => {
       setEmail(session?.user?.email ?? null);
       setReady(true);
     });
-    resolve();
+    void resolve();
     return () => {
       cancelled = true;
       sub.subscription.unsubscribe();

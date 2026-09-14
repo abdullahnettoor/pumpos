@@ -89,10 +89,21 @@ export function useSession(): SessionState {
       }
     };
 
-    supabase.auth.getSession().then(({ data }: any) => handle(data.session));
+    supabase.auth
+      .getSession()
+      .then(({ data }: any) => handle(data.session))
+      // A rejected getSession left `status: 'loading'` set forever — an
+      // attendant staring at a spinner with no way forward. `handle(null)`
+      // resolves to the signed-out state so they can at least log in again.
+      .catch((err: any) => {
+        console.error('Failed to read auth session:', err);
+        return handle(null);
+      });
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_e: any, session: any) => handle(session));
+    } = supabase.auth.onAuthStateChange((_e: any, session: any) => {
+      void handle(session);
+    });
     return () => subscription.unsubscribe();
   }, [qc]);
 

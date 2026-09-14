@@ -13,7 +13,6 @@ import { useConfirm } from '../primitives/ConfirmDialog.js';
 import type { ColumnDef } from '@tanstack/react-table';
 
 const productService = new CloudProductService();
-let isSeedingFuels = false;
 
 const buildProductColumns = (startEdit: (p: any) => void, archive: (id: string) => void): ColumnDef<any, any>[] => [
   { accessorKey: 'name', header: 'Name', cell: ({ getValue }) => <span style={{ fontWeight: 600, color: 'var(--text-strong)' }}>{getValue() as string}</span> },

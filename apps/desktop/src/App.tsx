@@ -104,13 +104,21 @@ const App: React.FC = () => {
 
   useEffect(() => {
     // 1. Check current active session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      handleSession(session);
-    });
+    supabase.auth
+      .getSession()
+      .then(({ data: { session } }) => handleSession(session))
+      // Desktop is the resilience tier and is the most likely to start on a
+      // flaky connection. If reading the session rejects, the `.then` never
+      // runs and `loading` stays true — a permanent spinner. Fall back to the
+      // signed-out path, which stops loading and routes to /login.
+      .catch((err: unknown) => {
+        console.error('Failed to read auth session:', err);
+        return handleSession(null);
+      });
 
     // 2. Subscribe to auth changes (sign in, sign out, token refresh)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      handleSession(session);
+      void handleSession(session);
     });
 
     return () => subscription.unsubscribe();
