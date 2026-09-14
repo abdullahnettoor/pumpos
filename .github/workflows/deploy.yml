@@ -121,9 +121,15 @@ jobs:
         with:
           node-version: 22
           cache: npm
+          # Marketing is a standalone install (own lockfile, not an npm
+          # workspace): its Astro 7 / Vite 8 tree must not share hoisting with
+          # the app shells' Vite 5.
+          cache-dependency-path: apps/marketing/package-lock.json
       - run: npm ci
+        working-directory: apps/marketing
       - name: Build marketing
-        run: npm run build:marketing
+        run: npm run build
+        working-directory: apps/marketing
         env:
           SITE: ${{ github.ref_type == 'tag' && (vars.MARKETING_SITE || 'https://pumpos.app') || 'https://pumpos.abdullahnettoor.com' }}
           PUBLIC_CONSOLE_URL: ${{ github.ref_type == 'tag' && (vars.CONSOLE_URL || 'https://console.pumpos.app') || 'https://console.pumpos.abdullahnettoor.com' }}
