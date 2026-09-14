@@ -1,9 +1,8 @@
 import { z } from 'zod';
-import { resolveBusinessDate } from '@pump/shared';
 import { BusinessEvents, err, eventFromContext, invariantViolation, notFoundError, ok, validationError } from '../../kernel/index.js';
 import type { DomainEvent, EventPublisher, ExecutionContext, Result, UseCase } from '../../kernel/index.js';
-import { resolveShiftBusinessDayWrite, type ShiftRepository } from '../station-ops/shifts/index.js';
-import { resolveBusinessDayWrite, type BusinessDayWriteRepository } from '../station-ops/business-days/index.js';
+import { resolveFinancialAnchor, type ShiftRepository } from '../station-ops/shifts/index.js';
+import type { BusinessDayWriteRepository } from '../station-ops/business-days/index.js';
 import type { SupplierRepository } from '../crm/suppliers/index.js';
 import type { SupplierTransaction, SupplierTransactionRepository } from './ports.js';
 
@@ -69,30 +68,11 @@ export class RecordSupplierPayment implements UseCase<RecordSupplierPaymentComma
 
     let businessDayId: string;
     let shiftId: string | null;
-    let lateEntry: boolean;
     let stationId = cmd.stationId ?? ctx.stationId ?? null;
-    if (cmd.shiftId) {
-      const eligibility = await resolveShiftBusinessDayWrite(this.deps.shifts, this.deps.businessDays, ctx, cmd.shiftId, 'FINANCIAL');
-      if (!eligibility.success) return eligibility as unknown as Result<SupplierTransaction>;
-      const shift = eligibility.data.shift;
-      stationId = shift.stationId;
-      businessDayId = eligibility.data.businessDay.id;
-      lateEntry = eligibility.data.lateEntry;
-      if (affectsDrawer && (lateEntry || shift.status !== 'OPEN')) {
-        return err(invariantViolation('Drawer supplier payments require an open Shift and open Business Day', { shiftId: shift.id, shiftStatus: shift.status, businessDayId }));
-      }
-      shiftId = shift.id;
-    } else if (stationId) {
-      const date = cmd.transactionDate ?? resolveBusinessDate({ now: ctx.clock.now(), timeZone: ctx.timeZone, dayStartsAt: ctx.businessDayStartsAt });
-      const eligibility = await resolveBusinessDayWrite(this.deps.businessDays, ctx, { stationId, businessDate: date, kind: 'FINANCIAL' });
-      if (!eligibility.success) return eligibility as unknown as Result<SupplierTransaction>;
-      businessDayId = eligibility.data.businessDay.id;
-      lateEntry = eligibility.data.lateEntry;
-      shiftId = null;
-      if (affectsDrawer) return err(validationError('Drawer supplier payments require shiftId'));
-    } else {
-      return err(validationError('Either shiftId or stationId is required'));
-    }
+    if (!cmd.shiftId && !stationId) return err(validationError('Either shiftId or stationId is required'));
+    const anchor = await resolveFinancialAnchor(this.deps, ctx, { shiftId: cmd.shiftId, stationId, transactionDate: cmd.transactionDate }, { affectsDrawer, drawerLabel: 'Drawer supplier payments' });
+    if (!anchor.success) return anchor;
+    ({ businessDayId, shiftId, stationId } = anchor.data);
 
     const now = ctx.clock.now().toISOString();
     const payment: SupplierTransaction = {
@@ -107,7 +87,7 @@ export class RecordSupplierPayment implements UseCase<RecordSupplierPaymentComma
       referenceType: null,
       referenceId: null,
       notes: cmd.notes ?? null,
-      metadata: lateEntry ? { lateEntry: true } : {},
+      metadata: anchor.data.recordMetadata,
       createdAt: now,
     };
     await this.deps.supplierTxns.save(payment);
@@ -119,7 +99,7 @@ export class RecordSupplierPayment implements UseCase<RecordSupplierPaymentComma
         aggregateId: supplier.id,
         stationId,
         businessDayId,
-        metadata: lateEntry ? { lateEntry: true, lateEntryPrimary: true } : undefined,
+        metadata: anchor.data.eventMetadata,
         payload: { supplierId: supplier.id, amount: payment.amount, paidFrom, affectsDrawer: payment.affectsDrawer, shiftId },
         presentation: {
           templateId: 'supplier-paid.v1',
@@ -132,7 +112,7 @@ export class RecordSupplierPayment implements UseCase<RecordSupplierPaymentComma
         aggregateId: supplier.id,
         stationId,
         businessDayId,
-        metadata: lateEntry ? { lateEntry: true } : undefined,
+        metadata: anchor.data.lateEntry ? { lateEntry: true } : undefined,
         payload: { supplierId: supplier.id, amount: payment.amount, paidFrom },
         presentation: {
           templateId: 'payment-made.v1',

@@ -66,7 +66,7 @@ const context: ExecutionContext = {
   clock: new FixedClock(new Date('2026-09-12T10:00:00Z')), ids: new SequentialIdGenerator('id'),
 };
 
-function dependencies(shifts = new ShiftRepo(shift), day = openDay, calls?: string[]) {
+function dependencies(shifts = new ShiftRepo(shift), day = openDay, calls?: string[], hasTankDip = false) {
   const businessDays = new BusinessDayRepo(day, calls);
   const summaries = new SummaryWriter();
   return {
@@ -74,6 +74,7 @@ function dependencies(shifts = new ShiftRepo(shift), day = openDay, calls?: stri
       shifts,
       businessDays,
       summaries,
+      stockVariances: { async existsForShift() { return hasTankDip; } } as any,
       events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
     },
     summaries,
@@ -113,6 +114,15 @@ describe('ReopenShift', () => {
 
     expect(result.success).toBe(false);
     if (!result.success) expect(result.error.message).toContain('another shift is currently open');
+  });
+
+  it('rejects reopening when the Shift has an attributed Tank Dip', async () => {
+    const { deps } = dependencies(new ShiftRepo(shift), openDay, undefined, true);
+
+    const result = await new ReopenShift(deps).execute({ shiftId: shift.id }, context);
+
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error.message).toContain('attributed Tank Dip');
   });
 
   it('locks Station, Business Day, then Shift after the unlocked discovery read', async () => {

@@ -94,7 +94,11 @@ export async function resolveBusinessDayWrite(
     await repo.lockById(ctx.organizationId, input.businessDayId);
     day = await repo.findById(input.businessDayId);
   } else {
-    const businessDate = input.businessDate ?? resolveBusinessDate({ now: ctx.clock.now(), timeZone: ctx.timeZone, dayStartsAt: ctx.businessDayStartsAt });
+    const currentBusinessDate = resolveBusinessDate({ now: ctx.clock.now(), timeZone: ctx.timeZone, dayStartsAt: ctx.businessDayStartsAt });
+    const businessDate = input.businessDate ?? currentBusinessDate;
+    if (input.businessDate && businessDate > currentBusinessDate) {
+      return err(validationError('businessDate cannot be after the Current Business Date', { businessDate, currentBusinessDate }));
+    }
     day = await ensureBusinessDayForDate(repo, ctx, input.stationId, businessDate);
   }
 

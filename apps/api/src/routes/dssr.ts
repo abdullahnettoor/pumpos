@@ -142,7 +142,7 @@ dssrRouter.post('/daily/generate', async (c) => {
       snapshots: new DrizzleDssrSnapshotRepository(tx),
       reader: new DrizzleDssrDataReader(tx),
       events,
-    }).execute({ businessDayId: businessDayId! }, buildContext(user, { stationId, businessDayId })),
+    }).execute({ businessDayId: businessDayId!, force: Boolean(body?.force) }, buildContext(user, { stationId, businessDayId })),
   );
   return sendResult(c, result);
 });

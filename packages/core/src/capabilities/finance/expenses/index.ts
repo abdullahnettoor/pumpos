@@ -1,9 +1,8 @@
 import { z } from 'zod';
-import { resolveBusinessDate } from '@pump/shared';
 import { BusinessEvents, err, eventFromContext, invariantViolation, notFoundError, ok, validationError } from '../../../kernel/index.js';
 import type { EventPublisher, ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
-import { resolveShiftBusinessDayWrite, type ShiftRepository } from '../../station-ops/shifts/index.js';
-import { resolveBusinessDayWrite, type BusinessDayWriteRepository } from '../../station-ops/business-days/index.js';
+import { resolveFinancialAnchor, type ShiftRepository } from '../../station-ops/shifts/index.js';
+import type { BusinessDayWriteRepository } from '../../station-ops/business-days/index.js';
 import { assertDrawerEntryVoidable } from '../void-guard.js';
 
 export type PaidFrom = 'SHIFT_CASH' | 'BANK' | 'OWNER';
@@ -88,29 +87,10 @@ export class RecordExpense implements UseCase<RecordExpenseCommand, Expense> {
     let stationId: string;
     let lateEntry: boolean;
 
-    if (cmd.shiftId) {
-      const eligibility = await resolveShiftBusinessDayWrite(this.deps.shifts, this.deps.businessDays, ctx, cmd.shiftId, 'FINANCIAL');
-      if (!eligibility.success) return eligibility as unknown as Result<Expense>;
-      const shift = eligibility.data.shift;
-      stationId = shift.stationId;
-      businessDayId = eligibility.data.businessDay.id;
-      lateEntry = eligibility.data.lateEntry;
-      if (affectsDrawer && (lateEntry || shift.status !== 'OPEN')) {
-        return err(invariantViolation('Drawer expenses require an open Shift and open Business Day', { shiftId: shift.id, shiftStatus: shift.status, businessDayId }));
-      }
-      shiftId = shift.id;
-    } else if (cmd.stationId) {
-      const date = cmd.transactionDate ?? resolveBusinessDate({ now: ctx.clock.now(), timeZone: ctx.timeZone, dayStartsAt: ctx.businessDayStartsAt });
-      stationId = cmd.stationId;
-      const eligibility = await resolveBusinessDayWrite(this.deps.businessDays, ctx, { stationId, businessDate: date, kind: 'FINANCIAL' });
-      if (!eligibility.success) return eligibility as unknown as Result<Expense>;
-      businessDayId = eligibility.data.businessDay.id;
-      lateEntry = eligibility.data.lateEntry;
-      shiftId = null;
-      if (affectsDrawer) return err(validationError('Drawer expenses require shiftId'));
-    } else {
-      return err(validationError('Either shiftId or stationId is required'));
-    }
+    if (!cmd.shiftId && !cmd.stationId) return err(validationError('Either shiftId or stationId is required'));
+    const anchor = await resolveFinancialAnchor(this.deps, ctx, cmd, { affectsDrawer, drawerLabel: 'Drawer expenses' });
+    if (!anchor.success) return anchor;
+    ({ businessDayId, shiftId, stationId, lateEntry } = anchor.data);
 
     const now = ctx.clock.now().toISOString();
     const expense: Expense = {
@@ -123,7 +103,7 @@ export class RecordExpense implements UseCase<RecordExpenseCommand, Expense> {
       affectsDrawer,
       description: cmd.description ?? null,
       status: 'ACTIVE',
-      metadata: lateEntry ? { lateEntry: true } : {},
+      metadata: anchor.data.recordMetadata,
       createdAt: now,
       updatedAt: now,
     };
@@ -136,7 +116,7 @@ export class RecordExpense implements UseCase<RecordExpenseCommand, Expense> {
         aggregateId: expense.id,
         stationId,
         businessDayId,
-        metadata: lateEntry ? { lateEntry: true, lateEntryPrimary: true } : undefined,
+        metadata: anchor.data.eventMetadata,
         payload: { expenseId: expense.id, amount: expense.amount, paidFrom, affectsDrawer, shiftId },
         presentation: {
           templateId: 'expense.v1',

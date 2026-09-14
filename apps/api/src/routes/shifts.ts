@@ -1154,6 +1154,7 @@ shiftsRouter.post('/reopen', async (c) => {
       shifts: new DrizzleShiftRepository(tx),
       businessDays,
       summaries: new DrizzleShiftSummaryWriter(tx),
+      stockVariances: new DrizzleStockVarianceRepository(tx),
       events,
     }).execute(body, buildContext(user, shift ? { stationId: shift.stationId, businessDayId: shift.businessDayId } : undefined));
     // Roll back the shift-close money postings; they will be re-posted on re-close.

@@ -1,9 +1,8 @@
 import { z } from 'zod';
-import { resolveBusinessDate } from '@pump/shared';
 import { BusinessEvents, err, eventFromContext, invariantViolation, notFoundError, ok, validationError } from '../../../kernel/index.js';
 import type { EventPublisher, ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
-import { resolveShiftBusinessDayWrite, type ShiftRepository } from '../../station-ops/shifts/index.js';
-import { resolveBusinessDayWrite, type BusinessDayWriteRepository } from '../../station-ops/business-days/index.js';
+import { resolveFinancialAnchor, type ShiftRepository } from '../../station-ops/shifts/index.js';
+import type { BusinessDayWriteRepository } from '../../station-ops/business-days/index.js';
 import type { CustomerRepository } from '../customers/index.js';
 import type { CustomerLedgerEntry, CustomerLedgerRepository } from '../collections/index.js';
 
@@ -71,25 +70,10 @@ export class RecordCreditSale implements UseCase<RecordCreditSaleCommand, Custom
     let businessDayId: string;
     let shiftId: string | null = null;
     let stationId: string;
-    let lateEntry: boolean;
-    if (cmd.shiftId) {
-      const eligibility = await resolveShiftBusinessDayWrite(this.deps.shifts, this.deps.businessDays, ctx, cmd.shiftId, 'FINANCIAL');
-      if (!eligibility.success) return eligibility as unknown as Result<CustomerLedgerEntry>;
-      const shift = eligibility.data.shift;
-      stationId = shift.stationId;
-      businessDayId = eligibility.data.businessDay.id;
-      lateEntry = eligibility.data.lateEntry;
-      shiftId = shift.id;
-    } else if (cmd.stationId) {
-      const date = cmd.transactionDate ?? resolveBusinessDate({ now: ctx.clock.now(), timeZone: ctx.timeZone, dayStartsAt: ctx.businessDayStartsAt });
-      stationId = cmd.stationId;
-      const eligibility = await resolveBusinessDayWrite(this.deps.businessDays, ctx, { stationId, businessDate: date, kind: 'FINANCIAL' });
-      if (!eligibility.success) return eligibility as unknown as Result<CustomerLedgerEntry>;
-      businessDayId = eligibility.data.businessDay.id;
-      lateEntry = eligibility.data.lateEntry;
-    } else {
-      return err(validationError('Either shiftId or stationId is required'));
-    }
+    if (!cmd.shiftId && !cmd.stationId) return err(validationError('Either shiftId or stationId is required'));
+    const anchor = await resolveFinancialAnchor(this.deps, ctx, cmd, {});
+    if (!anchor.success) return anchor;
+    ({ businessDayId, shiftId, stationId } = anchor.data);
 
     const now = ctx.clock.now().toISOString();
     // Attendant attribution applies only to shift-anchored credit sales; a
@@ -111,7 +95,7 @@ export class RecordCreditSale implements UseCase<RecordCreditSaleCommand, Custom
       referenceType: 'CREDIT_SALE',
       referenceId: null,
       notes: cmd.notes ?? null,
-      metadata: lateEntry ? { lateEntry: true } : {},
+      metadata: anchor.data.recordMetadata,
       createdAt: now,
     };
     await this.deps.ledger.save(entry);
@@ -123,7 +107,7 @@ export class RecordCreditSale implements UseCase<RecordCreditSaleCommand, Custom
         aggregateId: customer.id,
         stationId,
         businessDayId,
-        metadata: lateEntry ? { lateEntry: true, lateEntryPrimary: true } : undefined,
+        metadata: anchor.data.eventMetadata,
         payload: { customerId: customer.id, vehicleId: entry.vehicleId, amount: entry.amount },
         presentation: {
           templateId: 'credit-sale.amount-only.v1',
@@ -259,25 +243,10 @@ export class RecordOmcCardSale implements UseCase<RecordOmcCardSaleCommand, Cust
     let businessDayId: string;
     let shiftId: string | null = null;
     let stationId: string;
-    let lateEntry: boolean;
-    if (cmd.shiftId) {
-      const eligibility = await resolveShiftBusinessDayWrite(this.deps.shifts, this.deps.businessDays, ctx, cmd.shiftId, 'FINANCIAL');
-      if (!eligibility.success) return eligibility as unknown as Result<CustomerLedgerEntry>;
-      const shift = eligibility.data.shift;
-      stationId = shift.stationId;
-      businessDayId = eligibility.data.businessDay.id;
-      lateEntry = eligibility.data.lateEntry;
-      shiftId = shift.id;
-    } else if (cmd.stationId) {
-      const date = cmd.transactionDate ?? resolveBusinessDate({ now: ctx.clock.now(), timeZone: ctx.timeZone, dayStartsAt: ctx.businessDayStartsAt });
-      stationId = cmd.stationId;
-      const eligibility = await resolveBusinessDayWrite(this.deps.businessDays, ctx, { stationId, businessDate: date, kind: 'FINANCIAL' });
-      if (!eligibility.success) return eligibility as unknown as Result<CustomerLedgerEntry>;
-      businessDayId = eligibility.data.businessDay.id;
-      lateEntry = eligibility.data.lateEntry;
-    } else {
-      return err(validationError('Either shiftId or stationId is required'));
-    }
+    if (!cmd.shiftId && !cmd.stationId) return err(validationError('Either shiftId or stationId is required'));
+    const anchor = await resolveFinancialAnchor(this.deps, ctx, cmd, {});
+    if (!anchor.success) return anchor;
+    ({ businessDayId, shiftId, stationId } = anchor.data);
 
     const now = ctx.clock.now().toISOString();
     const attendantId = shiftId ? (cmd.attendantId ?? ctx.actorId ?? null) : null;
@@ -297,7 +266,7 @@ export class RecordOmcCardSale implements UseCase<RecordOmcCardSaleCommand, Cust
       referenceType: 'OMC_CARD_SALE',
       referenceId: null,
       notes: cmd.notes ?? null,
-      metadata: lateEntry ? { lateEntry: true } : {},
+      metadata: anchor.data.recordMetadata,
       createdAt: now,
     };
     await this.deps.ledger.save(entry);
@@ -309,7 +278,7 @@ export class RecordOmcCardSale implements UseCase<RecordOmcCardSaleCommand, Cust
         aggregateId: customerId ?? entry.id,
         stationId,
         businessDayId,
-        metadata: lateEntry ? { lateEntry: true, lateEntryPrimary: true } : undefined,
+        metadata: anchor.data.eventMetadata,
         payload: { omcSaleId: entry.id, customerId, vehicleId: entry.vehicleId, amount: entry.amount, duId: entry.duId ?? null },
       }),
     ]);

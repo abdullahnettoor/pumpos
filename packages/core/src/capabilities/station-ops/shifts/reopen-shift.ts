@@ -2,6 +2,7 @@ import { BusinessEvents, err, eventFromContext, invariantViolation, notFoundErro
 import type { EventPublisher, ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
 import type { Shift, ShiftRepository, ShiftSummaryWriter } from './ports.js';
 import type { BusinessDayWriteRepository } from '../business-days/index.js';
+import type { StockVarianceRepository } from '../../inventory/index.js';
 
 export interface ReopenShiftCommand {
   shiftId: string;
@@ -11,6 +12,7 @@ export interface ReopenShiftDeps {
   shifts: ShiftRepository;
   businessDays: BusinessDayWriteRepository;
   summaries: ShiftSummaryWriter;
+  stockVariances: StockVarianceRepository;
   events: EventPublisher;
 }
 
@@ -46,6 +48,10 @@ export class ReopenShift implements UseCase<ReopenShiftCommand, Shift> {
     const openShift = await this.deps.shifts.findOpenByStation(shift.organizationId, shift.stationId);
     if (openShift && openShift.id !== shift.id) {
       return err(invariantViolation('Cannot reopen: another shift is currently open at this station. Close it first.', { shiftId: shift.id, openShiftId: openShift.id }));
+    }
+    // A tank dip attributed to this shift pins its stock reconciliation.
+    if (await this.deps.stockVariances.existsForShift(shift.id)) {
+      return err(invariantViolation('Cannot reopen: the Shift has an attributed Tank Dip', { shiftId: shift.id }));
     }
     const nowIso = ctx.clock.now().toISOString();
     const reopened: Shift = {

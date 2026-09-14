@@ -1,10 +1,9 @@
 import { z } from 'zod';
-import { resolveBusinessDate } from '@pump/shared';
 import { BusinessEvents, err, eventFromContext, invariantViolation, notFoundError, ok, validationError } from '../../kernel/index.js';
 import type { DocumentNumberGenerator, DomainEvent, EventPublisher, ExecutionContext, Result, UseCase } from '../../kernel/index.js';
 import type { StockMovement, StockMovementRepository } from '../inventory/index.js';
-import { resolveShiftBusinessDayWrite, type ShiftRepository } from '../station-ops/shifts/index.js';
-import { resolveBusinessDayWrite, type BusinessDayWriteRepository } from '../station-ops/business-days/index.js';
+import { resolveFinancialAnchor, type ShiftRepository } from '../station-ops/shifts/index.js';
+import type { BusinessDayWriteRepository } from '../station-ops/business-days/index.js';
 import type { SupplierRepository } from '../crm/suppliers/index.js';
 import type { ProductRepository } from '../station-setup/products/index.js';
 import type { StationRepository } from '../station-setup/stations/index.js';
@@ -123,21 +122,12 @@ export class RecordPurchase implements UseCase<RecordPurchaseCommand, RecordPurc
     // drawer (so this is pure attribution, not a reconciliation input), but storing
     // it keeps shift-level provenance available for future reporting.
     let shiftIdToStore: string | null = null;
-    if (cmd.shiftId) {
-      const eligibility = await resolveShiftBusinessDayWrite(this.deps.shifts, this.deps.businessDays, ctx, cmd.shiftId, 'STOCK');
-      if (!eligibility.success) return eligibility as unknown as Result<RecordPurchaseResult>;
-      const shift = eligibility.data.shift;
-      businessDayId = eligibility.data.businessDay.id;
-      stationId = shift.stationId;
-      shiftIdToStore = shift.id;
-    } else if (stationId) {
-      const date = cmd.transactionDate ?? resolveBusinessDate({ now: ctx.clock.now(), timeZone: ctx.timeZone, dayStartsAt: ctx.businessDayStartsAt });
-      const eligibility = await resolveBusinessDayWrite(this.deps.businessDays, ctx, { stationId, businessDate: date, kind: 'STOCK' });
-      if (!eligibility.success) return eligibility as unknown as Result<RecordPurchaseResult>;
-      businessDayId = eligibility.data.businessDay.id;
-    } else {
-      return err(validationError('Either shiftId or stationId is required'));
-    }
+    if (!cmd.shiftId && !stationId) return err(validationError('Either shiftId or stationId is required'));
+    const anchor = await resolveFinancialAnchor(this.deps, ctx, { shiftId: cmd.shiftId, stationId, transactionDate: cmd.transactionDate }, { kind: 'STOCK' });
+    if (!anchor.success) return anchor;
+    businessDayId = anchor.data.businessDayId;
+    stationId = anchor.data.stationId;
+    shiftIdToStore = anchor.data.shiftId;
 
     // Resolve inter-state status from supplier state vs buyer (station) state.
     const supplierStateCode = (supplier.metadata as Record<string, unknown> | null)?.stateCode as string | undefined;
