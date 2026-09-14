@@ -39,6 +39,10 @@ const financeSvc = new CloudFinanceService();
 
 export const queryKeys = {
   shiftStatus: (stationId: string, lite = false) => ['shift-status', stationId, lite] as const,
+  // Prefix keys for station-wide invalidation (TanStack matches by prefix).
+  shiftStatusPrefix: (stationId: string) => ['shift-status', stationId] as const,
+  dssrPreviewPrefix: (stationId: string) => ['dssr-preview', stationId] as const,
+  activityGroupsPrefix: (stationId: string) => ['activity-groups', stationId] as const,
   businessDayStatus: (stationId: string, businessDate = '') => ['business-day-status', stationId, businessDate] as const,
   myAssignment: () => ['my-assignment'] as const,
   shiftSummaries: (stationId: string) => ['shift-summaries', stationId] as const,
