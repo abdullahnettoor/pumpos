@@ -1,115 +1,40 @@
 ---
-import '../styles/global.css';
-
-interface Props {
-  title: string;
-  description?: string;
-  /** Path (no domain) for canonical + OG url, e.g. "/download". */
-  path?: string;
-}
-
-const {
-  title,
-  description = 'PumpOS — the operating system for fuel retail. Multi-tenant fuel station management for Indian fuel stations.',
-  path = '/',
-} = Astro.props;
-
+import BrandMark from '../components/marketing-preview/BrandMark.astro';
+import { CONSOLE_URL } from '../config';
+import '../styles/site.css';
+interface Props { title: string; description?: string; path?: string; green?: boolean; noindex?: boolean; article?: boolean; }
+const { title, description = 'Fuel station management for Indian owners. Inspect customer dues, collections, stock and Shift reports with PumpOS.', path = '/', green = false, noindex = false, article = false } = Astro.props;
 const canonical = new URL(path, Astro.site).toString();
-const ogImage = new URL('/og-default.svg', Astro.site).toString();
+const ogImage = new URL('/og-default.png', Astro.site).toString();
+const nav = [{ href: '/product', label: 'Product' }, { href: '/docs', label: 'Docs' }, { href: '/blog', label: 'Journal' }, { href: '/download', label: 'Download' }];
 ---
-
 <!doctype html>
-<html lang="en">
+<html lang="en-IN">
   <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{title}</title><meta name="description" content={description} />
+    <meta name="theme-color" content="#1f6a53" />
+    {noindex && <meta name="robots" content="noindex, follow" />}
+    <link rel="icon" type="image/svg+xml" href="/brand/pumpos-mark.svg" />
     <link rel="canonical" href={canonical} />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
-    />
-    <title>{title}</title>
-    <meta name="description" content={description} />
-
-    <!-- Open Graph -->
-    <meta property="og:type" content="website" />
-    <meta property="og:title" content={title} />
-    <meta property="og:description" content={description} />
-    <meta property="og:url" content={canonical} />
-    <meta property="og:image" content={ogImage} />
-    <meta property="og:site_name" content="PumpOS" />
-
-    <!-- Twitter -->
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content={title} />
-    <meta name="twitter:description" content={description} />
-    <meta name="twitter:image" content={ogImage} />
-
-    <link rel="alternate" type="application/rss+xml" title="PumpOS Blog" href="/rss.xml" />
+    <link rel="preload" href="/fonts/brand/public-sans-variable.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/brand/barlow-semi-condensed-600.woff2" as="font" type="font/woff2" crossorigin />
+    <meta property="og:type" content={article ? 'article' : 'website'} /><meta property="og:title" content={title} /><meta property="og:description" content={description} /><meta property="og:url" content={canonical} /><meta property="og:image" content={ogImage} /><meta property="og:image:width" content="1200" /><meta property="og:image:height" content="630" /><meta property="og:image:alt" content="PumpOS. Your station. Your numbers. No waiting." /><meta property="og:site_name" content="PumpOS" /><meta property="og:locale" content="en_IN" />
+    <meta name="twitter:card" content="summary_large_image" /><meta name="twitter:title" content={title} /><meta name="twitter:description" content={description} /><meta name="twitter:image" content={ogImage} />
+    <link rel="alternate" type="application/rss+xml" title="PumpOS Journal" href="/rss.xml" />
     <meta name="generator" content={Astro.generator} />
+    <slot name="head" />
   </head>
-  <body class="min-h-screen flex flex-col">
-    <header
-      class="sticky top-0 z-30 border-b border-[var(--color-border-soft)] bg-[var(--color-surface)]/95 backdrop-blur"
-    >
-      <nav class="mx-auto flex max-w-6xl items-center justify-between px-6 py-3.5">
-        <a href="/" class="flex items-center gap-2.5 font-semibold tracking-[-0.02em] text-[var(--color-ink)]">
-          <span
-            class="grid h-7 w-7 place-items-center rounded-md bg-[var(--color-brand)] font-mono text-xs font-semibold text-white"
-            >PO</span>
-          PumpOS
-        </a>
-        <a
-          href="mailto:hello@pumpos.app?subject=Request%20PumpOS%20demo"
-          class="rounded-md bg-[var(--color-brand)] px-3 py-2 text-sm font-medium text-white transition hover:bg-[var(--color-brand-dark)] md:hidden"
-          >Demo</a
-        >
-        <div class="hidden items-center gap-6 text-sm md:flex">
-          <a href="/#platform" class="text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]"
-            >Platform</a
-          >
-          <a href="/#solutions" class="text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]"
-            >Solutions</a
-          >
-          <a href="/#security" class="text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]"
-            >Control</a
-          >
-          <a href="/docs" class="text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]"
-            >Docs</a
-          >
-          <a href="/blog" class="text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]"
-            >Blog</a
-          >
-          <a href="/download" class="text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]"
-            >Download</a
-          >
-          <a
-            href="mailto:hello@pumpos.app?subject=Request%20PumpOS%20demo"
-            class="rounded-md bg-[var(--color-brand)] px-4 py-2 font-medium text-white transition hover:bg-[var(--color-brand-dark)]"
-            >Request Demo</a
-          >
-        </div>
-      </nav>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class:list={['site-top', { 'site-top--green': green }]}>
+      <div class="site-top-inner"><a class="brand-wordmark" href="/" aria-label="PumpOS home"><BrandMark /><span>Pump<span class="brand-os">OS</span></span></a><nav class="desktop-nav" aria-label="Main navigation">{nav.map(item => <a href={item.href} aria-current={path.startsWith(item.href) ? 'page' : undefined}>{item.label}</a>)}</nav><div class="header-actions"><a class="console-link" href={CONSOLE_URL}>Sign in ↗</a><a class="nav-demo" href="/demo">Book a demo <span aria-hidden="true">↗</span></a><details class="mobile-menu"><summary aria-label="Open navigation"><span></span><span></span></summary><nav aria-label="Mobile navigation">{nav.map(item => <a href={item.href} aria-current={path.startsWith(item.href) ? 'page' : undefined}>{item.label}</a>)}<a href={CONSOLE_URL}>Sign in ↗</a></nav></details></div></div>
     </header>
-
-    <main class="flex-1">
-      <slot />
-    </main>
-
-    <footer class="border-t border-[var(--color-border-soft)] bg-[var(--color-surface)]">
-      <div
-        class="mx-auto flex max-w-6xl flex-col gap-4 px-6 py-8 text-sm text-[var(--color-ink-muted)] sm:flex-row sm:items-center sm:justify-between"
-      >
-        <p>© {new Date().getFullYear()} PumpOS. The operating system for fuel retail.</p>
-        <div class="flex gap-5">
-          <a href="/download" class="hover:text-[var(--color-ink)]">Download</a>
-          <a href="/legal/privacy" class="hover:text-[var(--color-ink)]">Privacy</a>
-          <a href="/legal/terms" class="hover:text-[var(--color-ink)]">Terms</a>
-        </div>
-      </div>
-    </footer>
+    <main id="main"><slot /></main>
+    <footer class="site-footer"><div class="footer-main"><div><a class="brand-wordmark" href="/" aria-label="PumpOS home"><BrandMark /><span>Pump<span class="brand-os">OS</span></span></a><p>The operating system<br />for fuel retail.</p><a class="footer-contact" href="mailto:hello@pumpos.app">hello@pumpos.app ↗</a></div><nav aria-label="Footer product links"><h2>PumpOS</h2><a href="/product">Explore the product</a><a href="/demo">Book a guided demo</a><a href="/#pilot">Pilot & pricing</a><a href="/download">Download</a></nav><nav aria-label="Footer resources"><h2>Resources</h2><a href="/docs">Documentation</a><a href="/blog">Journal</a><a href={CONSOLE_URL}>Web console ↗</a></nav><div class="footer-note"><span>Built for Indian fuel stations.</span><p>From the first Nozzle Reading<br />to the day's final report.</p></div></div><div class="footer-bottom"><span>© {new Date().getFullYear()} PumpOS</span><div><a href="/legal/privacy">Privacy</a><a href="/legal/terms">Terms</a><a href="#main">Back to top ↑</a></div></div></footer>
+    <script>
+      import { initialiseSiteMotion } from '../scripts/site-motion';
+      initialiseSiteMotion();
+    </script>
   </body>
 </html>

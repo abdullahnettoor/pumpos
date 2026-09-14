@@ -1,0 +1,65 @@
+,,01-02-2025,6 AM TO 2 PM,,,01-02-2025,6 AM TO 2 PM,0,,01-02-2025,6 AM TO 2 PM,,,01-02-2025,6 AM TO 2 PM,0
+,,DU 1,,,,DU 2,,,,DU 3,,,,DU 4,,
+,Cashier,MOHIBUL,,,Cashier,ABIDUL RAHMAN,,,Cashier,EJAJUL HUCK,,,Cashier,NIZAM,,
+,NOZZLE,Opening,Test,Closing,NOZZLE,Opening,Test,Closing,NOZZLE,Opening,Test,Closing,NOZZLE,Opening,Test,Closing
+,DIESEL (N1),"19,719.67",10,"19,931.73",DIESEL (N3),"10,195.73",10,"10,544.74",DIESEL (N7),"16,608.94",10,"16,961.53",PETROL (N9),"15,324.98",10,"15,553.43"
+,DIESEL (N2),"71,973.51",10,"73,373.78",DIESEL (N4),"30,798.50",10,"31,353.10",PETROL (N8),"32,960.56",10,"33,890.47",PETROL (N10),"17,764.10",10,"18,198.15"
+,,,,,PETROL (N5),"14,785.60",10,"15,098.77",,,,,,,,
+,,,,,PETROL (N6),"40,497.36",10,"41,029.53",,,,,,,,
+,,,,,,,,,,,,,,,,
+,,SALE,,,,SALE,,,,SALE,,,,SALE,,
+,NOZZLE,,,,NOZZLE,,,,NOZZLE,,,,NOZZLE,,,
+,DIESEL (N1),202.06,,,DIESEL (N3),339.01,,,DIESEL (N7),342.59,,,PETROL (N9),218.45,,
+,DIESEL (N2),"1,390.27",,,DIESEL (N4),544.6,,,PETROL (N8),919.91,,,PETROL (N10),424.05,,
+,,,,,PETROL (N5),303.17,,,,,,,,,,
+,,,,,PETROL (N6),522.17,,,,,,,,,,
+,,,,,,,,,,,,,,,,
+,,RECEIPTS,,,,RECEIPTS,,,,RECEIPTS,,,,RECEIPTS,,
+,,Rate,Receiveble,Received,,Rate,Receiveble,Received,,Rate,Receiveble,Received,,Rate,Receiveble,Received
+,NOZZLE,,,,NOZZLE,,,,NOZZLE,,,,NOZZLE,,,
+,DIESEL (N1),94.54,"19,102.75",,DIESEL (N3),94.54,"32,050.01",,DIESEL (N7),94.54,"32,388.46",,PETROL (N9),105.8,"23,112.01",
+,DIESEL (N2),94.54,"1,31,436.13",,DIESEL (N4),94.54,"51,486.48",,PETROL (N8),105.8,"97,326.48",,PETROL (N10),105.8,"44,864.49",
+,,,,,PETROL (N5),105.8,"32,075.39",,,,,,,,,
+,,,,,PETROL (N6),105.8,"55,245.59",,,,,,,,,
+,TOTAL,,"1,50,538.88","1,50,536.80",TOTAL,,"1,70,857.46","1,70,842.50",TOTAL,,"1,29,714.94","1,29,696.06",TOTAL,,"67,976.50","67,960.96"
+,DISCOUNT,,,0,DISCOUNT,,,0,DISCOUNT,,,-,DISCOUNT,,,0
+,SHORT,,,-2.08,SHORT,,,-14.96,SHORT,,,-18.88,SHORT,,,-15.54
+,NET RECEIPT,,,"1,50,536.80",NET RECEIPT,,,"1,70,842.50",NET RECEIPT,,,"1,29,696.06",NET RECEIPT,,,"67,960.96"
+,,,,,,DENOMINATION,,,,,,,,,,
+,,,,,,,,,,,,,,,,
+,,DU 1,,,,DU 2,,,,DU 3,,,,DU 4,,
+,,500,93,"46,500.00",,500,94,"47,000.00",,500,80,"40,000.00",,500,41,"20,500.00"
+,,200,7,"1,400.00",,200,6,"1,200.00",,200,6,"1,200.00",,200,-,-
+,,100,7,700,,100,5,500,,100,12,"1,200.00",,100,2,200
+,,50,4,200,,50,4,200,,50,1,50,,50,,-
+,,20,9,180,,20,1,20,,20,1,20,,20,2,40
+,,10,3,30,,10,5,50,,10,1,10,,10,20,200
+,,COINS,8,8,,COINS,,-,,COINS,-,-,,COINS,18,18
+,,TOTAL CASH,-,"49,018.00",,TOTAL CASH,,"48,970.00",,TOTAL CASH,,"42,480.00",,TOTAL CASH,,"20,958.00"
+,,ICICI,,-,,ICICI,,"65,811.08",,ICICI,,"28,544.55",,ICICI,,-
+,,PAYTM,,"1,01,518.80",,PAYTM,,"56,061.42",,PAYTM,,"58,671.51",,PAYTM,,"47,002.96"
+,,CREDIT,,,,CREDIT,,,,CREDIT,,,,CREDIT,,
+,,FUEL COUPEN,,,,FUEL COUPEN,,,,FUEL COUPEN,,,,FUEL COUPEN,,
+,,GENERATOR,,,,GENERATOR,,,,GENERATOR,,,,GENERATOR,,
+,,TOTAL,,"1,50,536.80",,TOTAL,,"1,70,842.50",,TOTAL,,"1,29,696.06",,TOTAL,,"67,960.96"
+,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,
+,,,,,DATE,01-02-2025,,,,SHORT/EXESS,,,,,,
+,,,,,TIME,6 AM TO 2 PM,,,,MOHIBUL,,-2.08,,,,
+,,,,,TOTAL SALE,,,,,ABIDUL RAHMAN,,-14.96,,,,
+,,,,,DIESEL,"2,818.53",94.54,"2,66,463.83",,EJAJUL HUCK,,-18.88,,,,
+,,,,,PETROL,"2,387.75",105.8,"2,52,623.95",,NIZAM,,-15.54,,,,
+,,,,,,"5,206.28",,"5,19,087.78",,EXESS/SHORT,,-51.46,,,,
+,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,
+,,,1 st shift,,,,,,,,,,,,,
+,,,TOTAL RECEIPT,AMOUNT,,,,,,,,,,,,
+,,,CASH,"1,61,426.00",,,,,,,,,,,,
+,,,ICICI,"94,355.63",,,,,,,,,,,,
+,,,PAYTM,"2,63,254.69",,,,,,,,,,,,
+,,,,"5,19,036.32",,,,,,,,,,,,
+,,,CREDIT,-,,,,,,,,,,,,
+,,,DISCOUNT,-,,,,,,,,,,,,
+,,,FUEL COUPEN,-,,,,,,,,,,,,
+,,,Generator,-,,,,,,,,,,,,

@@ -1,0 +1,14 @@
+---
+interface Props { step: number }
+const { step } = Astro.props;
+const collected = step === 2;
+---
+<div class="app-preview product-replica">
+ <div class="app-preview-top"><strong>PumpOS</strong><span>Sample station</span><span class="app-preview-user">Owner</span></div>
+ <div class="app-preview-body"><div class="app-preview-sidebar" aria-hidden="true"><span>Dashboard</span><span>Shifts</span><span>Inventory</span><span class="app-nav-active">Customers</span><span>Accounts</span><span>Reports</span></div><div class="customer-drawer"><div class="drawer-heading"><h4>{step === 1 ? 'Collection details' : 'Customer Account Statement'}</h4><span>Sample data</span></div><div class="drawer-content">
+ {step === 1 ? <div class="faithful-collection" data-motion-detail><p class="collection-state"><span aria-hidden="true">✓</span> Collection recorded</p><dl><div><dt>Customer</dt><dd>Malabar Transport</dd></div><div><dt>Amount</dt><dd class="product-number">₹15,000.00</dd></div><div><dt>Payment method</dt><dd>Bank transfer</dd></div><div><dt>Business date</dt><dd>14 Sep 2026</dd></div><div><dt>Notes</dt><dd>Part payment against dues</dd></div></dl><p>Customer dues reduced. Drawer cash unchanged.</p></div> : <>
+ <div class="customer-summary"><div class="summary-top"><div><h5>Malabar Transport</h5><span class="credit-badge">Credit</span></div><div class="outstanding"><span>Outstanding Balance</span><strong data-motion-detail>{collected ? '₹27,500.00' : '₹42,500.00'}</strong></div></div><dl class="credit-details"><div><dt>Credit Limit</dt><dd>₹75,000.00</dd></div><div><dt>Available Credit</dt><dd>{collected ? '₹47,500.00' : '₹32,500.00'}</dd></div></dl></div>
+ <div class="real-ledger"><h5>Statement of Account</h5><table><caption class="sr-only">Malabar Transport ledger, newest entries first</caption><thead><tr><th scope="col">Date / Period</th><th scope="col">Type</th><th scope="col">Debit</th><th scope="col">Credit</th><th scope="col">Balance</th></tr></thead><tbody>{collected && <tr class="highlight-credit" data-motion-detail><td>14 Sep 26</td><td>Collection<span>Part payment</span></td><td>—</td><td class="credit-number">15,000.00</td><td>27,500.00</td></tr>}<tr><td>13 Sep 26</td><td>Credit Sale</td><td>12,500.00</td><td>—</td><td>42,500.00</td></tr><tr><td>12 Sep 26</td><td>Opening Balance</td><td>30,000.00</td><td>—</td><td>30,000.00</td></tr></tbody><tfoot><tr><th scope="row" colspan="2">Totals · INR</th><td>42,500.00</td><td>{collected ? '15,000.00' : '0.00'}</td><td>{collected ? '27,500.00' : '42,500.00'}</td></tr></tfoot></table></div><div class="sample-drawer-actions" aria-label="Illustrative application actions"><span>Edit profile</span><span>Record collection</span></div>
+ </>}
+ </div></div></div>
+</div>

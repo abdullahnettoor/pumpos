@@ -1,20 +1,4 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
 ---
-
-<BaseLayout title="Privacy Policy — PumpOS" path="/legal/privacy">
-  <article class="mx-auto max-w-3xl px-6 py-20">
-    <h1 class="text-3xl font-bold tracking-tight">Privacy Policy</h1>
-    <p class="mt-2 text-sm text-[var(--color-ink-muted)]">Last updated: {new Date().getFullYear()}</p>
-    <div class="mt-8 space-y-4 text-[var(--color-ink-muted)] leading-relaxed">
-      <p>
-        This is a placeholder privacy policy for PumpOS. Final legal copy will be
-        published before general availability.
-      </p>
-      <p>
-        PumpOS is a multi-tenant fuel station management platform. Operational
-        data is isolated per organization and station with row-level security.
-      </p>
-    </div>
-  </article>
-</BaseLayout>
+<BaseLayout title="Privacy | PumpOS" description="Privacy information and contact details for the PumpOS pilot." path="/legal/privacy" noindex><article class="reading-page"><p class="section-context">PumpOS pilot</p><h1>Privacy information</h1><div class="legal-notice">The full privacy policy is being prepared for launch. This page is not a final privacy policy.</div><div class="prose-pump"><h2>Contacting us</h2><p>If you email us to arrange a demo, share your name, station name and preferred contact details. Customer records and financial files are not needed for the demonstration.</p><h2>Your station's information</h2><p>PumpOS separates organizations' operational data. We will discuss access and onboarding requirements before your station joins the pilot.</p><h2>Privacy questions</h2><p>For questions about information you have shared with us, email <a href="mailto:hello@pumpos.app?subject=Privacy%20question">hello@pumpos.app</a>.</p></div></article></BaseLayout>

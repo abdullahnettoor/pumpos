@@ -1,33 +1,24 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
-import Hero from '../components/marketing/Hero.astro';
-import PainSection from '../components/marketing/PainSection.astro';
-import OverviewFlow from '../components/marketing/OverviewFlow.astro';
-import ProductTour from '../components/marketing/ProductTour.astro';
-import ConnectedWorkflow from '../components/marketing/ConnectedWorkflow.astro';
-import Capabilities from '../components/marketing/Capabilities.astro';
-import Comparison from '../components/marketing/Comparison.astro';
-import Audience from '../components/marketing/Audience.astro';
-import PlatformAdvantages from '../components/marketing/PlatformAdvantages.astro';
-import ProofStory from '../components/marketing/ProofStory.astro';
-import FAQ from '../components/marketing/FAQ.astro';
-import FinalCTA from '../components/marketing/FinalCTA.astro';
+import HomeHero from '../components/marketing-preview/HomeHero.astro';
+import CollectionWalkthrough from '../components/marketing-preview/CollectionWalkthrough.astro';
+import OperationsStory from '../components/marketing-preview/OperationsStory.astro';
+import PilotOffer from '../components/marketing-preview/PilotOffer.astro';
+const questions = [
+  ['Who is the pilot for?', 'Owners of Indian fuel stations who want to move daily operations out of scattered registers and spreadsheets. We start with your station and its existing workflow.'],
+  ['Can I check customer dues myself?', 'Yes. Owners can inspect customer balances and entries in the web console and online mobile owner view. The information reflects activity recorded in PumpOS.'],
+  ['Does PumpOS replace my accountant?', 'Your accountant still handles the work that needs accounting judgement. PumpOS gives you and your team access to station operations, financial accounts and reports without reassembling the same records.'],
+  ['Do I need to connect my dispensers?', 'The current workflow uses Nozzle Readings entered by your team. Direct hardware integration is planned expansion, not a pilot requirement.'],
+  ['Can it run completely offline?', 'PumpOS is an online-primary system. The desktop app bundles its interface locally, but extended disconnected operation is not part of the pilot promise. We will discuss connectivity requirements during your demo.'],
+];
 ---
-
-<BaseLayout
-  title="PumpOS — The Operating System for Modern Fuel Retail"
-  description="Run forecourt operations, shift reconciliation, inventory, accounting and owner insights in one connected platform for fuel stations."
->
-  <Hero />
-  <PainSection />
-  <OverviewFlow />
-  <ProductTour />
-  <ConnectedWorkflow />
-  <Capabilities />
-  <Comparison />
-  <Audience />
-  <PlatformAdvantages />
-  <ProofStory />
-  <FAQ />
-  <FinalCTA />
+<BaseLayout title="PumpOS | Fuel station management, in your hands" description="Check customer dues, collections and Shift reports without chasing an update. Explore PumpOS, fuel station management built for Indian owners." green>
+  <HomeHero />
+  <section class="owner-thesis site-container" id="solutions"><p>Your team runs the Shift.<br /><strong>You should still know where things stand.</strong></p><div>See what customers owe. Follow recorded collections. Review the day's work with the entries in front of you.</div></section>
+  <div class="content-wrap"><CollectionWalkthrough /></div>
+  <OperationsStory />
+  <section class="owner-access" id="security"><div class="site-container owner-access-inner"><div><p class="section-context">Access that fits the work</p><h2>At the station.<br />Away from the desk.<br /><span>Still your business.</span></h2></div><div class="access-list"><a href="/product#desktop"><span>Desktop</span><div><h3>For the team running the Shift.</h3><p>Readings, collections and drawer reconciliation in a focused workspace.</p></div><span aria-hidden="true">↗</span></a><a href="/product#owner"><span>Web & mobile</span><div><h3>For the owner checking the record.</h3><p>Inspect customer dues and recent financial entries yourself.</p></div><span aria-hidden="true">↗</span></a><a href="/product#reports"><span>Reports</span><div><h3>For the questions that come later.</h3><p>Return to saved Shift Summaries and the day's generated DSSR.</p></div><span aria-hidden="true">↗</span></a></div></div></section>
+  <PilotOffer />
+  <section class="faq-section site-container" id="faq"><div><p class="section-context">Before we talk</p><h2>A few practical<br />questions.</h2><a href="mailto:hello@pumpos.app" class="inline-link">Ask us something else ↗</a></div><div class="faq-list">{questions.map(([q,a]) => <details><summary>{q}<span aria-hidden="true">+</span></summary><p>{a}</p></details>)}</div></section>
+  <section class="future-note site-container"><h2>Room to grow.</h2><p>Multi-station oversight, WhatsApp workflows and hardware integrations are areas of planned expansion. We'll shape future packages as the pilot teaches us what stations need.</p><span>Planned capabilities, separate from the pilot offer.</span></section>
 </BaseLayout>

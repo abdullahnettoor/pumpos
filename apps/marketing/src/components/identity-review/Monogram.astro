@@ -1,0 +1,22 @@
+---
+interface Props {
+  direction: 'ledger' | 'continuity' | 'stamp';
+  class?: string;
+}
+const { direction, class: className } = Astro.props;
+---
+
+<svg class={className} viewBox="0 0 64 64" fill="none" aria-hidden="true">
+  {direction === 'ledger' && (
+    <>
+      <path fill="currentColor" d="M10 7h28c13 0 20 8 20 20S50 47 38 47H27V35h11c6 0 8-3 8-8s-2-8-8-8H22v38H10V7Z" />
+      <path fill="currentColor" d="M27 23h11v8H27z" />
+    </>
+  )}
+  {direction === 'continuity' && (
+    <path stroke="currentColor" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" d="M13 55V25c0-10 7-16 18-16h7c10 0 17 7 17 17s-7 17-17 17H27V25h11" />
+  )}
+  {direction === 'stamp' && (
+    <path fill="currentColor" fill-rule="evenodd" d="M9 8h34l13 13v18L43 52H23v7H9V8Zm14 13v18h15l5-5v-8l-5-5H23Z" clip-rule="evenodd" />
+  )}
+</svg>

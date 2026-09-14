@@ -1,0 +1,13 @@
+---
+import IdentityReview from '../../components/identity-review/IdentityReview.astro';
+import HomepageReview from '../../components/marketing-preview/HomepageReview.astro';
+
+// Checkpoint pages stay out of production routes, the sitemap and search index.
+export function getStaticPaths() {
+  return import.meta.env.DEV
+    ? ['identity', 'home'].map((view) => ({ params: { view } }))
+    : [];
+}
+---
+
+{Astro.params.view === 'home' ? <HomepageReview /> : <IdentityReview />}

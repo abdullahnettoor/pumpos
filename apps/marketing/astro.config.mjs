@@ -14,7 +14,7 @@ const site = process.env.SITE ?? 'https://pumpos.abdullahnettoor.com';
 export default defineConfig({
   site,
   output: 'static',
-  integrations: [mdx(), sitemap(), pagefind()],
+  integrations: [mdx(), sitemap({ filter: (page) => !/\/(?:404|legal\/)/.test(page) }), pagefind()],
   vite: {
     plugins: [tailwindcss()],
   },
