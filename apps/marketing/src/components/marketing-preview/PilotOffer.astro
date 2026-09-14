@@ -1,0 +1,5 @@
+---
+interface Props { compact?: boolean }
+const { compact = false } = Astro.props;
+---
+<section id="pilot" class:list={['pilot-offer', { 'pilot-offer--compact': compact }]}><div class="pilot-offer-inner"><div><p class="section-context">The PumpOS guided pilot</p><h2>A better way to run<br />your station starts here.</h2><p class="pilot-offer-lead">Bring your questions. We'll walk through your station's workflow and help you get set up.</p><a href="/demo" class="button-light">Book a guided demo <span aria-hidden="true">↗</span></a></div><div class="pilot-inclusions"><h3>One station. A connected record.</h3><ul><li>Shifts, Nozzle Readings and drawer reconciliation</li><li>Customer credit, collections and financial accounts</li><li>Stock records and daily reporting</li><li>Direct owner access and hands-on onboarding</li></ul><p>Pricing discussed during your demo.</p><span>The pilot offer is scoped with you before onboarding.</span></div></div></section>

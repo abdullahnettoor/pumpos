@@ -1,155 +1,45 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
-import { CONSOLE_URL, DOWNLOAD_MANIFEST_URL } from '../config.ts';
-
-// Static list drives the card layout; live availability + URLs come from
-// /downloads/manifest.json at runtime (see the client script below).
+import { CONSOLE_URL, DOWNLOAD_MANIFEST_URL } from '../config';
 const platforms = [
-  { key: 'windows-x64', os: 'windows', label: 'Windows', sub: '10/11 · 64-bit', icon: '🪟' },
-  { key: 'macos-arm64', os: 'macos', label: 'macOS', sub: 'Apple Silicon', icon: '' },
-  { key: 'macos-x64', os: 'macos', label: 'macOS', sub: 'Intel', icon: '' },
-  { key: 'linux-x64-appimage', os: 'linux', label: 'Linux', sub: 'AppImage', icon: '🐧' },
-  { key: 'linux-x64-deb', os: 'linux', label: 'Linux', sub: '.deb (Debian/Ubuntu)', icon: '🐧' },
+ { key:'windows-x64', label:'Windows', sub:'Windows 10/11 · 64-bit', icon:'M3 3h8v8H3zm10 0h8v8h-8zM3 13h8v8H3zm10 0h8v8h-8z' },
+ { key:'macos-arm64', label:'macOS', sub:'Apple Silicon', icon:'M4 3h16v14H4zM8 21h8M12 17v4' },
+ { key:'macos-x64', label:'macOS', sub:'Intel', icon:'M4 3h16v14H4zM8 21h8M12 17v4' },
+ { key:'linux-x64-appimage', label:'Linux', sub:'AppImage · 64-bit', icon:'M3 4h18v16H3zM7 9l3 3-3 3m6 0h4' },
+ { key:'linux-x64-deb', label:'Linux', sub:'.deb · Debian / Ubuntu', icon:'M3 4h18v16H3zM7 9l3 3-3 3m6 0h4' },
 ];
 ---
-
-<BaseLayout
-  title="Download PumpOS"
-  description="Download the PumpOS desktop app for Windows, macOS or Linux."
-  path="/download"
->
-  <section class="mx-auto max-w-4xl px-6 pb-24 pt-20 text-center" data-manifest-url={DOWNLOAD_MANIFEST_URL}>
-    <h1 class="text-4xl font-bold tracking-tight sm:text-5xl">Download PumpOS</h1>
-    <p class="mx-auto mt-4 max-w-xl text-lg text-[var(--color-ink-muted)]">
-      The desktop app keeps your station running through network outages — no frozen screens, no lost entries. Pick your platform below.
-    </p>
-
-    <!-- Recommended (OS-detected) slot, filled by client script -->
-    <div id="recommended" class="mt-10 hidden">
-      <div
-        class="mx-auto max-w-md rounded-xl border border-[var(--color-brand)] bg-[var(--color-surface)] p-6 text-left"
-      >
-        <p class="text-xs font-medium uppercase tracking-wide text-[var(--color-brand)]">
-          Recommended for your device
-        </p>
-        <p id="recommended-label" class="mt-1 text-lg font-semibold"></p>
-        <a
-          id="recommended-link"
-          href="#"
-          class="mt-4 inline-block rounded-lg bg-[var(--color-brand)] px-6 py-3 font-medium text-white transition hover:bg-[var(--color-brand-dark)]"
-        ></a>
-      </div>
-    </div>
-
-    <!-- All platforms -->
-    <div class="mt-12 grid gap-4 text-left sm:grid-cols-2">
-      {
-        platforms.map((p) => (
-          <div
-            data-platform={p.key}
-            data-os={p.os}
-            class="platform-card rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-surface)] p-5"
-          >
-            <div class="flex items-center gap-3">
-              <span class="text-2xl">{p.icon}</span>
-              <div>
-                <p class="font-semibold">{p.label}</p>
-                <p class="text-sm text-[var(--color-ink-muted)]">{p.sub}</p>
-              </div>
-            </div>
-            <a
-              data-download
-              href="#"
-              class="mt-4 inline-block rounded-lg border border-[var(--color-border-soft)] px-4 py-2 text-sm font-medium transition hover:border-[var(--color-brand)]"
-            >
-              Download
-            </a>
-            <p data-meta class="mt-2 text-xs text-[var(--color-ink-muted)]" />
-          </div>
-        ))
-      }
-    </div>
-
-    <p class="mt-10 text-sm text-[var(--color-ink-muted)]">
-      Prefer the browser? <a href={CONSOLE_URL} class="text-[var(--color-brand)] underline">Open the web console</a> from any desktop.
-    </p>
-  </section>
+<BaseLayout title="Download PumpOS | Desktop & web" description="Get the PumpOS desktop app for your station or open the web console. Check installer availability for Windows, macOS and Linux." path="/download">
+ <section class="page-heading site-container"><p class="section-context">Your station workspace</p><h1>Ready for the next Shift.</h1><p>Use the desktop app at your station, or open PumpOS in your browser. Pilot access is arranged during onboarding.</p></section>
+ <div class="site-container" data-manifest-url={DOWNLOAD_MANIFEST_URL}><section class="download-browser"><div><h2>Already have access?</h2><p>Open your station in the web console.</p></div><a class="button-green" href={CONSOLE_URL}>Open the web console ↗</a></section><p class="download-status" role="status" data-download-status>Installer availability is checked when this page loads.</p><noscript><p class="download-status">Enable JavaScript to check current releases, or contact us for an installer.</p></noscript><div class="download-list">{platforms.map(p => <div class="download-row" data-platform={p.key}><svg class="os-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><path d={p.icon} /></svg><div><h2>{p.label}</h2><p>{p.sub}</p></div><span data-meta>Availability not checked</span><a data-download aria-disabled="true" aria-label={`${p.label} ${p.sub}: availability not checked`}>Not available yet</a></div>)}</div><p class="download-help">Setting up your first station? <a href="/demo">Start with a guided demo.</a></p></div>
 </BaseLayout>
-
 <script>
-  type Artifact = { url: string | null; size: number | null; sha256: string | null; ext: string };
-  type Manifest = { version: string; artifacts: Record<string, Artifact> };
-
-  function detectOs(): 'windows' | 'macos' | 'linux' | null {
-    const p = navigator.platform?.toLowerCase() ?? '';
-    const ua = navigator.userAgent.toLowerCase();
-    if (p.includes('win') || ua.includes('windows')) return 'windows';
-    if (p.includes('mac') || ua.includes('mac os')) return 'macos';
-    if (p.includes('linux') || ua.includes('linux')) return 'linux';
-    return null;
-  }
-
-  function fmtSize(bytes: number | null): string {
-    if (!bytes) return '';
-    const mb = bytes / (1024 * 1024);
-    return `${mb.toFixed(1)} MB`;
-  }
-
-  async function init() {
-    let manifest: Manifest | null = null;
-    const manifestUrl =
-      document.querySelector('[data-manifest-url]')?.getAttribute('data-manifest-url') ||
-      '/downloads/manifest.json';
-    try {
-      const res = await fetch(manifestUrl, { cache: 'no-store' });
-      if (res.ok) manifest = (await res.json()) as Manifest;
-    } catch {
-      /* offline / not yet published — cards stay in "coming soon" state */
-    }
-
-    const cards = document.querySelectorAll<HTMLElement>('.platform-card');
-    cards.forEach((card) => {
-      const key = card.dataset.platform!;
-      const link = card.querySelector<HTMLAnchorElement>('[data-download]')!;
-      const meta = card.querySelector<HTMLElement>('[data-meta]')!;
-      const art = manifest?.artifacts?.[key];
-      if (art?.url) {
-        link.href = art.url;
-        link.textContent = 'Download';
-        meta.textContent = [manifest?.version && `v${manifest.version}`, fmtSize(art.size)]
-          .filter(Boolean)
-          .join(' · ');
-      } else {
-        link.textContent = 'Coming soon';
-        link.setAttribute('aria-disabled', 'true');
-        link.classList.add('pointer-events-none', 'opacity-50');
-      }
-    });
-
-    // Recommended slot
-    const os = detectOs();
-    if (os) {
-      const match = Array.from(cards).find((c) => c.dataset.os === os);
-      if (match) {
-        const key = match.dataset.platform!;
-        const art = manifest?.artifacts?.[key];
-        const label = match.querySelector('.font-semibold')?.textContent ?? os;
-        const box = document.getElementById('recommended')!;
-        const lbl = document.getElementById('recommended-label')!;
-        const rlink = document.getElementById('recommended-link') as HTMLAnchorElement;
-        lbl.textContent = label;
-        if (art?.url) {
-          rlink.href = art.url;
-          rlink.textContent = `Download for ${label}`;
-        } else {
-          rlink.textContent = 'Coming soon';
-          rlink.setAttribute('aria-disabled', 'true');
-          rlink.classList.add('pointer-events-none', 'opacity-60');
-        }
-        box.classList.remove('hidden');
-      }
-    }
-  }
-
-  init();
+ type Artifact = { url?: unknown; size?: unknown };
+ const root = document.querySelector<HTMLElement>('[data-manifest-url]');
+ const status = document.querySelector<HTMLElement>('[data-download-status]');
+ async function loadDownloads() {
+   if (!root || !status) return;
+   status.textContent = 'Checking available installers…';
+   try {
+     const response = await fetch(root.dataset.manifestUrl!, { cache: 'no-store', signal: AbortSignal.timeout(10000) });
+     if (!response.ok) throw new Error('Manifest unavailable');
+     const manifest = await response.json();
+     if (!manifest || typeof manifest.artifacts !== 'object' || !manifest.artifacts) throw new Error('Invalid manifest');
+     let available = 0;
+     root.querySelectorAll<HTMLElement>('[data-platform]').forEach(row => {
+       const artifact = manifest.artifacts[row.dataset.platform!] as Artifact | undefined;
+       const link = row.querySelector<HTMLAnchorElement>('[data-download]')!;
+       const meta = row.querySelector<HTMLElement>('[data-meta]')!;
+       let url: URL | null = null;
+       try { if (typeof artifact?.url === 'string') { const candidate = new URL(artifact.url, location.origin); if (candidate.protocol === 'https:' || (candidate.origin === location.origin && candidate.protocol === 'http:')) url = candidate; } } catch { /* Invalid release link remains unavailable. */ }
+       if (!url) { meta.textContent = 'Installer not published'; link.textContent = 'Coming soon'; link.setAttribute('aria-label', `${row.querySelector('h2')?.textContent} ${row.querySelector('p')?.textContent}: coming soon`); return; }
+       available++;
+       link.href = url.href; link.removeAttribute('aria-disabled'); link.textContent = 'Download ↗';
+       link.setAttribute('aria-label', `Download PumpOS for ${row.querySelector('h2')?.textContent} ${row.querySelector('p')?.textContent}`);
+       meta.textContent = [typeof manifest.version === 'string' ? `v${manifest.version}` : '', typeof artifact?.size === 'number' && artifact.size > 0 ? `${(artifact.size / 1048576).toFixed(1)} MB` : ''].filter(Boolean).join(' · ');
+     });
+     status.textContent = available ? 'Choose the installer that matches your device.' : 'Public installers are not available yet. Contact us for pilot setup.';
+   } catch { status.textContent = 'We could not check installer availability. Try again later or contact hello@pumpos.app.'; root.querySelectorAll('[data-meta]').forEach(el => { el.textContent = 'Availability could not be checked'; }); }
+ }
+ loadDownloads();
 </script>

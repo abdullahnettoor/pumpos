@@ -16,3 +16,11 @@ export const CONSOLE_URL: string =
  */
 export const DOWNLOAD_MANIFEST_URL: string =
   import.meta.env.PUBLIC_DOWNLOAD_MANIFEST_URL || '/downloads/manifest.json';
+
+// Optional hosted scheduler. An unset URL uses a truthful email invitation.
+function bookingUrl(value: string | undefined): string | null {
+  if (!value) return null;
+  try { const url = new URL(value); return url.protocol === 'https:' ? url.href : null; }
+  catch { return null; }
+}
+export const DEMO_BOOKING_URL = bookingUrl(import.meta.env.PUBLIC_DEMO_BOOKING_URL);
