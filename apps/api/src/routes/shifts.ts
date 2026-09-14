@@ -1106,6 +1106,19 @@ shiftsRouter.post('/close', async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const command = { ...(body?.payload ?? {}), shiftId: body?.shiftId };
   const db = c.var.db;
+  // Authorize the shift's stored station (matches open/readings/reopen): a
+  // Manager assigned to Station A must not close Station B's shift.
+  const [target] = await db
+    .select({ stationId: schema.shifts.stationId })
+    .from(schema.shifts)
+    .where(and(eq(schema.shifts.id, body?.shiftId), eq(schema.shifts.organizationId, user.organizationId)))
+    .limit(1);
+  if (!target) {
+    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Shift not found' } }, 404);
+  }
+  if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId: target.stationId })) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+  }
   const result = await runInTransaction(db, async (tx, events) => {
     const [shift] = await tx.select({ stationId: schema.shifts.stationId }).from(schema.shifts).where(and(eq(schema.shifts.id, body?.shiftId), eq(schema.shifts.organizationId, user.organizationId))).limit(1);
     if (shift) await lockStationInventory(tx, user.organizationId, shift.stationId);
@@ -1199,6 +1212,9 @@ shiftsRouter.post('/business-day/open', async (c) => {
   }
   const body = await c.req.json().catch(() => ({}));
   const db = c.var.db;
+  if (!body?.stationId || !isAuthorizedForStation(user, { organizationId: user.organizationId, stationId: body.stationId })) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this Station' } }, 403);
+  }
   const clock = await loadStationClock(db, body?.stationId);
   const result = await runInTransaction(db, (tx, events) =>
     new OpenBusinessDay({ repository: new DrizzleBusinessDayRepository(tx), events }).execute(body, buildContext(user, { stationId: body?.stationId, ...clock })),

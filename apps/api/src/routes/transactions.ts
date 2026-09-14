@@ -9,6 +9,10 @@ import {
   canRecordPurchase,
   canManageExpenseCategory,
   canVoidExpense,
+  canCreateExpense,
+  canRecordCollection,
+  canRecordIncome,
+  canRecordStockCount,
   canRecordHandover,
   isAttendant,
   type Role,
@@ -708,7 +712,13 @@ transactionsRouter.put('/income-categories/:id', async (c) => {
 // ---- Other income (indirect income; money IN to drawer/bank/owner) ----
 transactionsRouter.post('/income', async (c) => {
   const user = c.var.user;
+  if (!canRecordIncome(user.role)) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions to record income' } }, 403);
+  }
   const body = await c.req.json().catch(() => ({}));
+  if (body?.stationId && !isAuthorizedForStation(user, { organizationId: user.organizationId, stationId: body.stationId })) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+  }
   const clock = await loadStationClock(c.var.db, body?.stationId);
   // FI4 — place of supply: station state is the supplier side; the payer state
   // (when the operator knows it) makes the entry inter-state (IGST).
@@ -853,7 +863,13 @@ transactionsRouter.get('/income/gst-register', async (c) => {
 
 transactionsRouter.post('/expenses', async (c) => {
   const user = c.var.user;
+  if (!canCreateExpense(user.role)) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions to record expenses' } }, 403);
+  }
   const body = await c.req.json().catch(() => ({}));
+  if (body?.stationId && !isAuthorizedForStation(user, { organizationId: user.organizationId, stationId: body.stationId })) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+  }
   const clock = await loadStationClock(c.var.db, body?.stationId);
   const result = await runInTransaction(c.var.db, async (tx, events) => {
     // When a specific pay-from account is chosen, derive paidFrom/affectsDrawer
@@ -904,6 +920,16 @@ transactionsRouter.post('/expenses/:id/void', async (c) => {
 transactionsRouter.post('/collections', async (c) => {
   const user = c.var.user;
   const body = await c.req.json().catch(() => ({}));
+  // A 'Credit'/'OMC' "collection" is really a credit sale declared during a
+  // DU handover — Attendants may record those. True payment collections are
+  // desk operations and exclude the mobile-only Attendant.
+  const isHandoverCreditSale = body?.paymentMethod === 'Credit' || body?.paymentMethod === 'OMC';
+  if (isHandoverCreditSale ? !canRecordHandover(user.role) : !canRecordCollection(user.role)) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions to record collections' } }, 403);
+  }
+  if (body?.stationId && !isAuthorizedForStation(user, { organizationId: user.organizationId, stationId: body.stationId })) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+  }
   const clock = await loadStationClock(c.var.db, body?.stationId);
   // A "Credit" collection is a credit SALE (a receivable), not a payment. It is
   // recorded on the customer ledger with no drawer/stock impact.
@@ -2056,6 +2082,9 @@ transactionsRouter.get('/inventory/items', async (c) => {
 // Reconciles book stock to the measured actual (tankId for fuel, productId for items).
 transactionsRouter.post('/inventory/count', async (c) => {
   const user = c.var.user;
+  if (!canRecordStockCount(user.role)) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions to record a stock count' } }, 403);
+  }
   const body = await c.req.json().catch(() => ({}));
   if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId: body?.stationId })) {
     return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
