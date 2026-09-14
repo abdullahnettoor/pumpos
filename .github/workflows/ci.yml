@@ -48,6 +48,31 @@ jobs:
       - name: Build
         run: npm run build --workspaces --if-present
 
+  # Separate job so a lint failure is instantly distinguishable from a broken
+  # test, and so lint problems never mask a real regression.
+  #
+  # This is a RATCHET, not a wall. The 392 pre-existing violations are recorded
+  # in eslint-suppressions.json, so today's code passes. Only NEW violations of
+  # the error-level rules fail. Warnings (currently ~7.2k, mostly `any`-related)
+  # never fail the build — run `npm run lint:warnings` to see them.
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      # Type-aware rules need the declaration output of the workspace packages.
+      - name: Build types
+        run: npx tsc -b
+
+      - name: ESLint
+        run: npm run lint
+
   # Marketing is a standalone install with its own lockfile (Astro 7 / Vite 8),
   # so it cannot share the workspace install above.
   marketing:
