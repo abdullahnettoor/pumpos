@@ -36,6 +36,12 @@ export interface CreateAuthUserInput {
    * `full_name`, `role` for owner provisioning. Omit for staff accounts.
    */
   userMetadata?: Record<string, unknown>;
+  /**
+   * Server-set metadata (`raw_app_meta_data`) the end user can never edit.
+   * The gated `handle_new_user()` trigger requires `signup_intent: 'owner'`
+   * here (or a server-issued invite) before bootstrapping an organization.
+   */
+  appMetadata?: Record<string, unknown>;
 }
 
 export class SupabaseAdminError extends Error {
@@ -96,6 +102,7 @@ export class SupabaseAdmin {
       password: input.password,
       email_confirm: true,
       ...(input.userMetadata ? { user_metadata: input.userMetadata } : {}),
+      ...(input.appMetadata ? { app_metadata: input.appMetadata } : {}),
     });
     return user;
   }

@@ -167,6 +167,16 @@ export function canManageProduct(role: Role): boolean {
   return role === 'Owner' || role === 'Manager';
 }
 
+/** Tank dips / stock counts are desk operations, not attendant actions. */
+export function canRecordStockCount(role: Role): boolean {
+  return role !== 'Attendant';
+}
+
+/** Other income (money IN outside sales) mirrors expense recording. */
+export function canRecordIncome(role: Role): boolean {
+  return role !== 'Attendant';
+}
+
 export function canManageInfrastructure(role: Role): boolean {
   return role === 'Owner' || role === 'Manager';
 }

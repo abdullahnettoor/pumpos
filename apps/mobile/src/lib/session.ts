@@ -4,7 +4,7 @@ import {
   CloudStationService,
   setApiBaseUrl,
   setAuthToken,
-  clearPersistedQueryCache,
+  clearClientSessionData,
   supabase,
 } from '@pump/ui';
 
@@ -57,8 +57,7 @@ export function useSession(): SessionState {
         // Purge caches on sign-out (parity with console/desktop) so a previous
         // user's persisted static data (stations, etc.) can't bleed into or
         // stale the next session.
-        qc.clear();
-        clearPersistedQueryCache();
+        clearClientSessionData(qc);
         setState({ status: 'signed-out', session: null, role: null, userName: '', error: null });
         return;
       }
@@ -66,8 +65,7 @@ export function useSession(): SessionState {
 
       // Account switch: purge caches so the previous user's data can't bleed.
       if (lastUserIdRef.current && lastUserIdRef.current !== session.user.id) {
-        qc.clear();
-        clearPersistedQueryCache();
+        clearClientSessionData(qc);
       }
       lastUserIdRef.current = session.user.id;
 

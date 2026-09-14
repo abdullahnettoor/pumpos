@@ -71,3 +71,39 @@ describe('Handover mutation state', () => {
     ]);
   });
 });
+
+// --- logout cleanup -----------------------------------------------------
+import { clearPendingWorkflowKeys, PENDING_WORKFLOW_KEY_PREFIX } from './queryClient.js';
+
+function installLocalStorageStub() {
+  const store = new Map<string, string>();
+  const stub = {
+    get length() { return store.size; },
+    key: (i: number) => [...store.keys()][i] ?? null,
+    getItem: (k: string) => store.get(k) ?? null,
+    setItem: (k: string, v: string) => { store.set(k, v); },
+    removeItem: (k: string) => { store.delete(k); },
+    clear: () => store.clear(),
+  } as unknown as Storage;
+  (globalThis as any).localStorage = stub;
+  (globalThis as any).window = { localStorage: stub };
+  return () => { delete (globalThis as any).localStorage; delete (globalThis as any).window; };
+}
+
+describe('clearPendingWorkflowKeys', () => {
+  it('removes every pending workflow draft but nothing else', () => {
+    const restore = installLocalStorageStub();
+    localStorage.setItem('pumpos:pending-handover:s1:sh1:a1:d1', '{"fingerprint":"f","idempotencyKey":"k"}');
+    localStorage.setItem('pumpos:pending-stock-count', '{}');
+    localStorage.setItem('pumpos:pending-tank-dips:s1', '{}');
+    localStorage.setItem('pumpos-rq-cache', '{"keep":"me"}');
+
+    clearPendingWorkflowKeys();
+
+    for (let i = 0; i < localStorage.length; i++) {
+      expect(localStorage.key(i)!.startsWith(PENDING_WORKFLOW_KEY_PREFIX)).toBe(false);
+    }
+    expect(localStorage.getItem('pumpos-rq-cache')).toBe('{"keep":"me"}');
+    restore();
+  });
+});

@@ -110,3 +110,62 @@ describe('RecordCreditSale', () => {
     expect(result.success).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Tenant-scoped voids: shiftless entries must not be deletable cross-tenant.
+// ---------------------------------------------------------------------------
+import { VoidCreditSale, VoidOmcCardSale } from './index.js';
+
+class ScopedLedgerRepo implements CustomerLedgerRepository {
+  constructor(readonly rows: Array<CustomerLedgerEntry & { organizationId: string }>) {}
+  async save(e: CustomerLedgerEntry) { this.rows.push({ ...e, organizationId: 'org-1' }); }
+  async findById(id: string, organizationId: string) {
+    return this.rows.find((r) => r.id === id && r.organizationId === organizationId) ?? null;
+  }
+  async delete(id: string, organizationId: string) {
+    const i = this.rows.findIndex((r) => r.id === id && r.organizationId === organizationId);
+    if (i >= 0) this.rows.splice(i, 1);
+  }
+}
+
+function shiftlessEntry(over: Partial<CustomerLedgerEntry> = {}): CustomerLedgerEntry & { organizationId: string } {
+  return {
+    id: 'led-1', shiftId: null, businessDayId: 'bd-1', customerId: 'cust-1', vehicleId: null,
+    productId: null, attendantId: null, duId: null, transactionType: 'Credit Sale', amount: '500',
+    quantity: null, unitPrice: null, referenceType: 'CREDIT_SALE', referenceId: null, notes: null,
+    metadata: {}, createdAt: '2026-03-15T09:00:00Z', organizationId: 'org-1', ...over,
+  } as CustomerLedgerEntry & { organizationId: string };
+}
+
+describe('VoidCreditSale tenant scoping', () => {
+  it('voids a shiftless credit sale within the owning organization', async () => {
+    const ledger = new ScopedLedgerRepo([shiftlessEntry()]);
+    const store = new InMemoryEventStore();
+    const r = await new VoidCreditSale({ ledger, shifts: new ShiftRepo([]), events: new InProcessEventDispatcher({ store }) })
+      .execute({ id: 'led-1' }, ctx());
+    expect(r.success).toBe(true);
+    expect(ledger.rows).toHaveLength(0);
+  });
+
+  it('refuses to void a shiftless credit sale from another organization', async () => {
+    const ledger = new ScopedLedgerRepo([shiftlessEntry({ organizationId: 'org-2' } as any)]);
+    const store = new InMemoryEventStore();
+    const r = await new VoidCreditSale({ ledger, shifts: new ShiftRepo([]), events: new InProcessEventDispatcher({ store }) })
+      .execute({ id: 'led-1' }, ctx());
+    expect(r.success).toBe(false);
+    if (!r.success) expect(r.error.code).toBe('NOT_FOUND');
+    expect(ledger.rows).toHaveLength(1);
+  });
+
+  it('refuses to void a shiftless OMC card sale from another organization', async () => {
+    const ledger = new ScopedLedgerRepo([
+      shiftlessEntry({ organizationId: 'org-2', transactionType: 'OMC Sale', referenceType: 'OMC_CARD_SALE' } as any),
+    ]);
+    const store = new InMemoryEventStore();
+    const r = await new VoidOmcCardSale({ ledger, shifts: new ShiftRepo([]), events: new InProcessEventDispatcher({ store }) })
+      .execute({ id: 'led-1' }, ctx());
+    expect(r.success).toBe(false);
+    if (!r.success) expect(r.error.code).toBe('NOT_FOUND');
+    expect(ledger.rows).toHaveLength(1);
+  });
+});

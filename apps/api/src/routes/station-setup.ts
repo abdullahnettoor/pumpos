@@ -292,7 +292,9 @@ stationSetupRouter.get('/users', async (c) => {
   const user = c.var.user;
   const repo = new DrizzleUserRepository(c.var.db);
   const data = await repo.listWithAssignments(user.organizationId);
-  return c.json({ success: true, data });
+  // Never expose auth linkage ids to clients; they only need "has a login".
+  const sanitized = data.map(({ authUserId, ...rest }) => ({ ...rest, hasLogin: !!authUserId }));
+  return c.json({ success: true, data: sanitized });
 });
 
 // Resolve the Supabase admin adapter or return null when secrets are absent.
@@ -312,10 +314,20 @@ function canActOnTarget(
   if (actor.role === 'Owner') return true;
   if (actor.role !== 'Manager') return false;
   if (!isManageableByManager(targetRole)) return false;
-  // Manager must share at least one assigned station with the target (or the
-  // target has no station scope yet, e.g. brand-new record).
-  if (targetStationIds.length === 0) return true;
-  return targetStationIds.some((s) => actor.assignedStationIds.includes(s));
+  // A Manager must be assigned to EVERY station the target touches (current
+  // and requested). A target with no station scope is NOT implicitly
+  // manageable — that previously let Managers control any org account.
+  if (targetStationIds.length === 0) return false;
+  return targetStationIds.every((s) => actor.assignedStationIds.includes(s));
+}
+
+/** Current station assignments of a target user (for authorization). */
+async function loadTargetStationIds(db: DbClient, userId: string): Promise<string[]> {
+  const rows = await db
+    .select({ stationId: schema.userStationAssignments.stationId })
+    .from(schema.userStationAssignments)
+    .where(eq(schema.userStationAssignments.userId, userId));
+  return rows.map((r) => r.stationId);
 }
 
 stationSetupRouter.post('/users', rateLimit({ scope: 'users-write', max: 30, windowMs: 60_000 }), validateJson(userSchema, 'BAD_REQUEST'), async (c) => {
@@ -383,7 +395,11 @@ stationSetupRouter.put('/users/:id', validateJson(userUpdateSchema, 'BAD_REQUEST
   if (!target || target.organizationId !== user.organizationId) {
     return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'User not found' } }, 404);
   }
-  if (!canActOnTarget(user, (body.role ?? target.role) as Role)) {
+  // Authorize against the target's actual stations plus any requested change.
+  const currentStationIds = await loadTargetStationIds(c.var.db, id);
+  const requestedStationIds: string[] = Array.isArray(body.stationIds) ? body.stationIds : [];
+  const scope = [...new Set([...currentStationIds, ...requestedStationIds])];
+  if (!canActOnTarget(user, (body.role ?? target.role) as Role, scope)) {
     return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Not allowed to edit this user' } }, 403);
   }
   const db = c.var.db;
@@ -406,7 +422,7 @@ stationSetupRouter.post('/users/:id/reset-password', rateLimit({ scope: 'passwor
   if (!target || target.organizationId !== user.organizationId) {
     return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'User not found' } }, 404);
   }
-  if (!canActOnTarget(user, target.role as Role)) {
+  if (!canActOnTarget(user, target.role as Role, await loadTargetStationIds(db, id))) {
     return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Not allowed to reset this password' } }, 403);
   }
   if (!target.authUserId) {
@@ -443,7 +459,7 @@ async function setUserActive(c: any, active: boolean) {
   if (!target || target.organizationId !== user.organizationId) {
     return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'User not found' } }, 404);
   }
-  if (!canActOnTarget(user, target.role as Role)) {
+  if (!canActOnTarget(user, target.role as Role, await loadTargetStationIds(db, id))) {
     return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Not allowed to change this user' } }, 403);
   }
   if (target.authUserId) {
@@ -466,25 +482,63 @@ async function setUserActive(c: any, active: boolean) {
 // Missing CRUD updates (PUT/DELETE)
 // ----------------------------------------------------
 
+/**
+ * Resolve an infrastructure resource's STORED station within the caller's
+ * organization. Authorization must use this — never a client-supplied
+ * stationId, which could name a station the caller controls while the
+ * resource belongs to another.
+ */
+async function resolveStoredStation(
+  db: DbClient,
+  table: typeof schema.tanks | typeof schema.dispenserUnits | typeof schema.nozzles,
+  id: string,
+  organizationId: string,
+): Promise<string | null> {
+  const [row] = await db
+    .select({ stationId: table.stationId })
+    .from(table)
+    .where(and(eq(table.id, id), eq(table.organizationId, organizationId)))
+    .limit(1);
+  return row?.stationId ?? null;
+}
+
+/** Shared guard for tank/dispenser/nozzle mutations. Response error or null. */
+async function authorizeInfrastructure(
+  c: any,
+  table: typeof schema.tanks | typeof schema.dispenserUnits | typeof schema.nozzles,
+  id: string,
+): Promise<{ error: Response | null; stationId: string | null }> {
+  const user = c.var.user;
+  if (!canManageInfrastructure(user.role)) {
+    return { error: c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient write permissions' } }, 403), stationId: null };
+  }
+  const stationId = await resolveStoredStation(c.var.db, table, id, user.organizationId);
+  if (!stationId) {
+    return { error: c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Resource not found' } }, 404), stationId: null };
+  }
+  if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId })) {
+    return { error: c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403), stationId: null };
+  }
+  return { error: null, stationId };
+}
+
 stationSetupRouter.put('/tanks/:id', async (c) => {
   const user = c.var.user;
   const id = c.req.param('id');
   const body = await c.req.json().catch(() => ({}));
-  if (!checkWriteAccess(c, body.stationId) || !canManageInfrastructure(user.role)) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient write permissions' } }, 403);
-  }
+  const { error, stationId } = await authorizeInfrastructure(c, schema.tanks, id);
+  if (error) return error;
   const db = c.var.db;
   const useCase = new UpdateTank({ repository: new DrizzleTankRepository(db), events: createDispatcher(db) });
-  const result = await useCase.execute({ ...body, id }, buildContext(user, { stationId: body.stationId }));
+  const result = await useCase.execute({ ...body, id }, buildContext(user, { stationId }));
   return sendResult(c, result);
 });
 
 stationSetupRouter.delete('/tanks/:id', async (c) => {
   const user = c.var.user;
   const id = c.req.param('id');
-  if (!canManageInfrastructure(user.role)) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient write permissions' } }, 403);
-  }
+  const { error } = await authorizeInfrastructure(c, schema.tanks, id);
+  if (error) return error;
   const db = c.var.db;
   const result = await runInTransaction(db, (tx, events) =>
     new DeleteTank({ repository: new DrizzleTankRepository(tx), events }).execute({ id }, buildContext(user)),
@@ -496,21 +550,19 @@ stationSetupRouter.put('/dispensers/:id', async (c) => {
   const user = c.var.user;
   const id = c.req.param('id');
   const body = await c.req.json().catch(() => ({}));
-  if (!checkWriteAccess(c, body.stationId) || !canManageInfrastructure(user.role)) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient write permissions' } }, 403);
-  }
+  const { error, stationId } = await authorizeInfrastructure(c, schema.dispenserUnits, id);
+  if (error) return error;
   const db = c.var.db;
   const useCase = new UpdateDispenser({ repository: new DrizzleDispenserRepository(db), events: createDispatcher(db) });
-  const result = await useCase.execute({ ...body, id }, buildContext(user, { stationId: body.stationId }));
+  const result = await useCase.execute({ ...body, id }, buildContext(user, { stationId }));
   return sendResult(c, result);
 });
 
 stationSetupRouter.delete('/dispensers/:id', async (c) => {
   const user = c.var.user;
   const id = c.req.param('id');
-  if (!canManageInfrastructure(user.role)) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient write permissions' } }, 403);
-  }
+  const { error } = await authorizeInfrastructure(c, schema.dispenserUnits, id);
+  if (error) return error;
   const db = c.var.db;
   const useCase = new DeleteDispenser({ repository: new DrizzleDispenserRepository(db), events: createDispatcher(db) });
   const result = await useCase.execute({ id }, buildContext(user));
@@ -521,12 +573,11 @@ stationSetupRouter.put('/nozzles/:id', async (c) => {
   const user = c.var.user;
   const id = c.req.param('id');
   const body = await c.req.json().catch(() => ({}));
-  if (!checkWriteAccess(c, body.stationId) || !canManageInfrastructure(user.role)) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient write permissions' } }, 403);
-  }
+  const { error, stationId } = await authorizeInfrastructure(c, schema.nozzles, id);
+  if (error) return error;
   const db = c.var.db;
   const result = await runInTransaction(db, (tx, events) =>
-    new UpdateNozzle({ repository: new DrizzleNozzleRepository(tx), tanks: new DrizzleTankRepository(tx), events }).execute({ ...body, id }, buildContext(user, { stationId: body.stationId })),
+    new UpdateNozzle({ repository: new DrizzleNozzleRepository(tx), tanks: new DrizzleTankRepository(tx), events }).execute({ ...body, id }, buildContext(user, { stationId })),
   );
   return sendResult(c, result);
 });
@@ -534,9 +585,8 @@ stationSetupRouter.put('/nozzles/:id', async (c) => {
 stationSetupRouter.delete('/nozzles/:id', async (c) => {
   const user = c.var.user;
   const id = c.req.param('id');
-  if (!canManageInfrastructure(user.role)) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient write permissions' } }, 403);
-  }
+  const { error } = await authorizeInfrastructure(c, schema.nozzles, id);
+  if (error) return error;
   const db = c.var.db;
   const useCase = new DeleteNozzle({ repository: new DrizzleNozzleRepository(db), tanks: new DrizzleTankRepository(db), events: createDispatcher(db) });
   const result = await useCase.execute({ id }, buildContext(user));

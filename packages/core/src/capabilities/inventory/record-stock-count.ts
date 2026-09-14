@@ -47,6 +47,9 @@ export interface RecordStockCountResult {
   expectedQuantity: number;
   actualQuantity: number;
   varianceQuantity: number;
+  /** True when a shift was open at the station: measurement + variance were
+   * recorded but book stock was NOT reconciled (in-flight sales un-booked). */
+  openShiftAtRecording: boolean;
 }
 
 /**
@@ -77,13 +80,19 @@ export class RecordStockCount implements UseCase<RecordStockCountCommand, Record
       if (!eligibility.success) return eligibility as unknown as Result<RecordStockCountResult>;
       attributedShift = eligibility.data.shift;
       attributedDay = eligibility.data.businessDay;
-      if (!attributedShift || attributedShift.organizationId !== ctx.organizationId || attributedShift.stationId !== cmd.stationId || attributedShift.status === 'OPEN') {
+      // Attribution to any tenant/station-valid shift is allowed, open or
+      // closed — a dip may be measured while the shift it belongs to runs.
+      if (!attributedShift || attributedShift.organizationId !== ctx.organizationId || attributedShift.stationId !== cmd.stationId) {
         return err(notFoundError('Shift', cmd.shiftId));
       }
     }
-    if (cmd.tankId && await this.deps.shifts.findOpenByStation(ctx.organizationId, cmd.stationId)) {
-      return err(validationError('Close the open Shift before recording a Tank Dip'));
-    }
+    // A dip may be recorded at any point in the business day. While a shift is
+    // OPEN, dispensed fuel is not yet booked (nozzle sales land at close), so
+    // the measurement + variance are recorded but book stock is NOT reconciled
+    // — reconciling to a mid-shift reading would double-count once the shift's
+    // sales post. The record and events carry the flag so consumers can warn.
+    const openShiftAtRecording = !!cmd.tankId
+      && !!(await this.deps.shifts.findOpenByStation(ctx.organizationId, cmd.stationId));
 
     const date = resolveBusinessDate({ now: ctx.clock.now(), timeZone: ctx.timeZone, dayStartsAt: ctx.businessDayStartsAt });
     const eligibility = attributedDay ? ok({ businessDay: attributedDay, lateEntry: false }) : await resolveBusinessDayWrite(this.deps.businessDays, ctx, {
@@ -113,11 +122,12 @@ export class RecordStockCount implements UseCase<RecordStockCountCommand, Record
       varianceQuantity: String(varianceQuantity),
       reason: cmd.reason ?? null,
       approvedBy: ctx.actorId ?? null,
+      metadata: openShiftAtRecording ? { openShiftAtRecording: true } : {},
       createdAt: now,
     };
     await this.deps.variances.save(variance);
 
-    if (varianceQuantity !== 0) {
+    if (varianceQuantity !== 0 && !openShiftAtRecording) {
       const movement: StockMovement = {
         id: ctx.ids.newId(),
         shiftId: cmd.shiftId ?? null,
@@ -141,7 +151,7 @@ export class RecordStockCount implements UseCase<RecordStockCountCommand, Record
         aggregateId: cmd.tankId ?? productId,
         stationId: cmd.stationId,
         businessDayId: bd.id,
-        payload: { productId, tankId: cmd.tankId ?? null, shiftId: cmd.shiftId ?? null, expected, actual, variance: varianceQuantity },
+        payload: { productId, tankId: cmd.tankId ?? null, shiftId: cmd.shiftId ?? null, expected, actual, variance: varianceQuantity, openShiftAtRecording },
       }),
     ];
     if (varianceQuantity !== 0) {
@@ -152,12 +162,12 @@ export class RecordStockCount implements UseCase<RecordStockCountCommand, Record
           aggregateId: variance.id,
           stationId: cmd.stationId,
           businessDayId: bd.id,
-          payload: { varianceId: variance.id, productId, tankId: cmd.tankId ?? null, shiftId: cmd.shiftId ?? null, varianceQuantity },
+          payload: { varianceId: variance.id, productId, tankId: cmd.tankId ?? null, shiftId: cmd.shiftId ?? null, varianceQuantity, openShiftAtRecording },
         }),
       );
     }
     await this.deps.events.publish(events);
 
-    return ok({ variance, expectedQuantity: expected, actualQuantity: actual, varianceQuantity });
+    return ok({ variance, expectedQuantity: expected, actualQuantity: actual, varianceQuantity, openShiftAtRecording });
   }
 }

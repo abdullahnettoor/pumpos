@@ -29,6 +29,38 @@ export function clearPersistedQueryCache() {
 }
 
 /**
+ * localStorage prefix shared by all resilience drafts (pending Tank Dips,
+ * Stock Counts, Handover request identities). Keeping one prefix lets logout
+ * wipe every pending workflow without enumerating each feature's keys.
+ */
+export const PENDING_WORKFLOW_KEY_PREFIX = 'pumpos:pending-';
+
+/**
+ * Remove every pending-workflow draft (Tank Dip, Stock Count, Handover) from
+ * localStorage. Call on logout / account switch so one user's queued drafts
+ * never leak into — or get submitted by — the next session on this device.
+ */
+export function clearPendingWorkflowKeys() {
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  const doomed: string[] = [];
+  for (let i = 0; i < window.localStorage.length; i++) {
+    const key = window.localStorage.key(i);
+    if (key && key.startsWith(PENDING_WORKFLOW_KEY_PREFIX)) doomed.push(key);
+  }
+  for (const key of doomed) window.localStorage.removeItem(key);
+}
+
+/**
+ * Full client-side cleanup for logout / account switch: in-memory query cache,
+ * persisted static/semi cache, and all pending workflow drafts.
+ */
+export function clearClientSessionData(qc: QueryClient) {
+  qc.clear();
+  clearPersistedQueryCache();
+  clearPendingWorkflowKeys();
+}
+
+/**
  * Shared QueryClient factory. App shells (web, desktop) create one client and
  * wrap their tree in {@link QueryProvider}; all data hooks in @pump/ui read from
  * this single cache. Defaults favour operator workflows: short stale time,

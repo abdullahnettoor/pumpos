@@ -51,10 +51,10 @@ export interface CustomerLedgerEntry {
 
 export interface CustomerLedgerRepository {
   save(entry: CustomerLedgerEntry): Promise<void>;
-  /** Look up a single ledger entry by id (for void/correction). */
-  findById?(id: string): Promise<CustomerLedgerEntry | null>;
-  /** Hard-delete a ledger entry (used to void an in-shift credit-sale correction). */
-  delete?(id: string): Promise<void>;
+  /** Look up a single ledger entry by id, scoped to the organization (for void/correction). */
+  findById?(id: string, organizationId: string): Promise<CustomerLedgerEntry | null>;
+  /** Hard-delete a ledger entry, scoped to the organization (void of an in-shift correction). */
+  delete?(id: string, organizationId: string): Promise<void>;
 }
 
 export interface RecordCollectionCommand {

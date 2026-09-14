@@ -378,6 +378,11 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation, i
           <div style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.5 }}>
             Enter the physically measured quantity. Book stock is reconciled to it (a variance is logged and an adjustment movement posts the difference). Use this to set an opening balance for a new product or correct a count.
           </div>
+          {countScope === 'tank' && (
+            <div style={{ backgroundColor: 'var(--state-warning-bg)', color: 'var(--state-warning-fg)', padding: '8px 12px', borderRadius: 'var(--radius-input)', fontSize: '12px', lineHeight: 1.5 }}>
+              A dip taken while a Shift is open records the measurement and variance, but book stock is NOT adjusted — fuel dispensed during the open Shift is not yet booked, so the variance may include un-booked sales.
+            </div>
+          )}
           {countError && (
             <div style={{ backgroundColor: 'var(--state-danger-bg)', color: 'var(--state-danger-fg)', padding: '8px 12px', borderRadius: 'var(--radius-input)', fontSize: '12px' }}>{countError}</div>
           )}
