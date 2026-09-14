@@ -1,0 +1,69 @@
+.tour-stage { padding: 18px; min-height: 445px; }
+.tour-panel { grid-template-columns: .6fr 1.45fr; gap: 40px; }
+.app-preview { border: 1px solid #b9c1b7; border-radius: 6px; background: #f6f7f4; overflow: hidden; width: 100%; }
+.app-preview-top { display: flex; align-items: center; gap: 18px; background: white; border-bottom: 1px solid #d9ded6; height: 38px; padding: 0 14px; font-size: 9px; }
+.app-preview-top strong { color: #1f6a53; font-size: 12px; }
+.app-preview-top > span { color: #5e6a61; font-size: 8px; }
+.app-preview-user { margin-left: auto; }
+.app-preview-body { display: grid; grid-template-columns: 88px minmax(0,1fr); }
+.app-preview-sidebar { background: #f1f3ef; padding: 20px 6px; border-right: 1px solid #d9ded6; }
+.app-preview-sidebar span { display: block; padding: 9px 8px; color: #5e6a61; font-size: 8px; }
+.app-preview-sidebar .app-nav-active { background: #e9f1f7; color: #2e5e88; font-weight: 600; border-radius: 4px; }
+.customer-drawer { background: white; border-left: 1px solid #b9c1b7; min-height: 347px; }
+.drawer-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid #d9ded6; padding: 14px 16px; }
+.drawer-heading h4 { font-size: 11px; font-weight: 600; }
+.drawer-heading > span { font-size: 8px; color: #5e6a61; white-space: nowrap; }
+.drawer-content { padding: 16px; }
+.customer-summary { background: #f1f3ef; border: 1px solid #d9ded6; border-radius: 7px; padding: 13px; }
+.summary-top { display: flex; justify-content: space-between; gap: 13px; align-items: flex-start; }
+.summary-top h5 { font-size: 11px; margin: 0; font-weight: 600; }
+.credit-badge { display: inline-block; background: #fff3df; color: #865814; font-size: 8px; padding: 2px 5px; border-radius: 3px; margin-top: 5px; }
+.outstanding { text-align: right; }
+.outstanding > span { display: block; font-size: 8px; color: #5e6a61; }
+.outstanding strong { font: 600 15px/1.5 var(--product-mono); color: #865814; white-space: nowrap; }
+.credit-details { margin-top: 12px; border-top: 1px solid #d9ded6; padding-top: 9px; display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+.credit-details dt { font-size: 8px; color: #5e6a61; }
+.credit-details dd { font: 500 10px/1.6 var(--product-mono); margin-top: 3px; }
+.real-ledger { margin-top: 19px; }
+.real-ledger h5 { font-size: 10px; font-weight: 600; margin: 0 0 10px; }
+.real-ledger table { width: 100%; border-collapse: collapse; }
+.real-ledger th { color: #5e6a61; background: #f1f3ef; font-size: 7px; font-weight: 500; text-align: left; }
+.real-ledger td,.real-ledger th { padding: 9px 5px; border-bottom: 1px solid #d9ded6; }
+.real-ledger td { font-size: 8px; }
+.real-ledger td:first-child { color: #5e6a61; font-size: 7px; white-space: nowrap; }
+.real-ledger td:nth-child(n+3),.real-ledger tfoot td { font: 400 8px/1.4 var(--product-mono); white-space: nowrap; }
+.real-ledger td:nth-child(n+3),.real-ledger th:nth-child(n+3) { text-align: right; }
+.real-ledger td > span { display: block; font-size: 7px; color: #5e6a61; margin-top: 3px; }
+.real-ledger .highlight-credit { background: #edf6ef; }
+.credit-number { color: #1f6a53; }
+.real-ledger tfoot td { text-align: right; font-weight: 500; background: #f1f3ef; }
+.sample-drawer-actions { display: flex; gap: 9px; margin-top: 17px; }
+.sample-drawer-actions > span { padding: 5px 8px; border: 1px solid #d9ded6; border-radius: 5px; font-size: 8px; }
+.faithful-collection { padding: 5px; }
+.collection-state { display: flex; align-items: center; gap: 9px; color: #1f6a53; font-size: 12px; font-weight: 600; margin-bottom: 20px; }
+.collection-state > span { background: #e5f3e9; padding: 2px 6px; border-radius: 50%; }
+.faithful-collection dl > div { display: flex; justify-content: space-between; gap: 18px; padding-block: 10px; border-bottom: 1px solid #d9ded6; font-size: 10px; }
+.faithful-collection dt { color: #5e6a61; }
+.faithful-collection dd { text-align: right; }
+.product-number { font-family: var(--product-mono); color: #1f6a53; font-size: 15px; }
+.faithful-collection > p:last-child { font-size: 9px; color: #5e6a61; margin-top: 18px; }
+.phone-entries li > div:last-child,.phone-customer > strong,.phone-balance > strong { font-family: var(--product-mono); }
+.phone-balance > strong { color: #865814; }
+.phone-top { background: white; border-bottom: 1px solid #d9ded6; color: #1f6a53; }
+.phone-top > span:last-child { color: #5e6a61; }
+.phone-kinds { background: #f1f3ef; }
+.phone-kinds strong { padding: 4px 20px; background: white; border-radius: 4px; }
+.phone-kinds { align-items: center; padding: 4px; }
+.phone-view { border-color: #b9c1b7; }
+.pause-glyph { display: none; }
+[data-playing=true] .pause-glyph { display: block; }
+[data-playing=true] .play-glyph { display: none; }
+.tour-tabs button { min-height: 48px; }
+@media (max-width: 1100px) { .app-preview-body { grid-template-columns: 1fr; } .app-preview-sidebar { display: none; } .customer-drawer { border-left: 0; } .tour-panel { gap: 28px; } }
+@media (max-width: 800px) { .tour-panel { grid-template-columns: 1fr; } .app-preview-body { grid-template-columns: 88px minmax(0,1fr); } .app-preview-sidebar { display: block; } .tour-stage { padding: 22px; } .real-ledger td { font-size: 9px; } .real-ledger td:nth-child(n+3),.real-ledger tfoot td { font-size: 9px; } }
+@media (max-width: 600px) {
+ .tour-stage { padding: 10px; min-height: 420px; } .app-preview-body { grid-template-columns: 1fr; } .app-preview-sidebar { display: none; } .drawer-content { padding: 12px; } .drawer-heading { padding: 13px 12px; } .drawer-heading h4 { font-size: 10px; } .drawer-heading > span { font-size: 7px; }
+ .summary-top { flex-wrap: wrap; gap: 10px; } .summary-top h5 { font-size: 11px; } .outstanding strong { font-size: 13px; } .outstanding > span { font-size: 7px; } .customer-summary { padding: 11px; } .real-ledger td,.real-ledger th { padding: 10px 3px; }
+ .real-ledger tbody td:first-child,.real-ledger thead th:first-child { display: none; } .real-ledger td:nth-child(n+3),.real-ledger tfoot td { font-size: 8px; } .real-ledger tfoot { display: none; }
+ .real-ledger td:nth-child(2) { font-size: 8px; } .real-ledger th { font-size: 7px; } .customer-drawer { min-height: 350px; } .credit-details dd { font-size: 10px; } .phone-entries strong { font-size: 10px; } .phone-entries span { font-size: 8px; } .phone-customer > strong { font-size: 11px; } .phone-balance > strong { font-size: 9px; }
+}

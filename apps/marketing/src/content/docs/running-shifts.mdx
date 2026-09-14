@@ -5,7 +5,8 @@ order: 1
 category: Operations
 ---
 
-A shift is the operator-accountability window for the cash drawer.
+A Shift is an attendant-accountability window for the Drawer. Every operational
+record also belongs to a Business Day.
 
 ## Opening
 
@@ -14,7 +15,7 @@ the opening cash float.
 
 ## During the shift
 
-- **Fuel sales** are derived from nozzle readings — no manual entry.
+- **Fuel Sales** are derived from Nozzle Readings rather than manual sales entries.
 - Record **expenses**, **collections**, **purchases**, and **credit sales** as
   they happen. Only cash movements touch the drawer.
 
@@ -28,5 +29,17 @@ expectedDrawerCash =
   − drawerExpenses − drawerSupplierPayments − cashDrops
 ```
 
-Any difference is recorded as **variance** — a first-class, auditable number.
-On close, an immutable **shift summary** snapshot is created.
+Any difference is recorded as **variance**, so it remains available for review.
+Closing creates a **Shift Summary** snapshot. Where reopening is permitted, it
+is an explicit action. Closing the Business Day locks its Shifts.
+
+## The daily report
+
+The DSSR brings together closed-shift summaries and Business Day financials as
+of generation. Financial entries recorded later do not change the saved snapshot.
+
+## Credit and non-cash collections
+
+A Credit Sale increases a customer receivable. A Collection reduces it.
+Bank, card and UPI Collections do not affect Drawer cash. You can inspect these
+entries in the customer statement without including them in cash reconciliation.

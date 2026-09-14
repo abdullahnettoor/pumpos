@@ -1,24 +1,42 @@
 ---
 title: Introducing PumpOS
-description: Why we built an operating system for fuel retail — operational simplicity, offline resilience, and audit-ready reporting.
+description: A station owner should be able to inspect the numbers without waiting for someone to put a report together. That is where PumpOS starts.
 publishedAt: 2026-07-16
+updatedAt: 2026-09-14
 tags: [product, announcement]
 ---
 
-Running a fuel station means juggling shifts, nozzle readings, cash drawers,
-credit customers, suppliers, and a daily reconciliation that has to be exactly
-right. Most software treats stations like a generic shop. PumpOS doesn't.
+An owner asks how much a customer owes. Someone checks a register, calls the
+accountant and sends a number over WhatsApp. The next question, whether a recent
+payment is included, starts the process again.
 
-## Built around how stations actually work
+PumpOS brings the entries behind that answer into a record the owner can inspect.
+Customer credit, collections and the outstanding balance belong together.
 
-- **Business-day & shift anchoring** — every record belongs to a business day;
-  cash accountability rolls up per shift.
-- **Nozzle-derived fuel sales** — sales come from opening/closing meter
-  readings, not manual entry. Variance is a first-class, auditable number.
-- **Immutable snapshots** — shift summaries and the Daily Station Sales Report
-  are frozen at close, so reports never drift.
+## The Shift still matters
 
-## What's next
+Fuel Sales come from opening and closing Nozzle Readings. The Shift gives cash
+accountability a defined window. When the team counts the Drawer, they should
+see the difference between expected and actual cash rather than force the totals
+to agree.
 
-We're shipping continuously. Follow this blog for release notes and deep dives
-into the domain model behind PumpOS.
+A bank collection reduces a customer's dues, but it never enters the Drawer.
+Keeping those distinctions clear makes the resulting reports useful.
+
+## A report with a point in time
+
+The Shift Summary records a closed Shift. The Daily Station Sales Report, or
+DSSR, brings together the Business Day's closed-shift summaries and financial
+records as of generation. Later financial entries do not silently rewrite that
+saved report.
+
+That history matters when a question comes up days or months later.
+
+## Starting with a guided pilot
+
+We're starting with individual stations and hands-on onboarding. The pilot is
+a chance to work through real workflows, understand where teams need help and
+improve the product from that experience.
+
+You can [explore the customer-credit walkthrough](/#walkthrough) without sharing
+your details, or [arrange a guided demo](/demo) to talk through your station.
