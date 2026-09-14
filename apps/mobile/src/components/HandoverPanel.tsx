@@ -449,6 +449,9 @@ export const HandoverPanel: React.FC = () => {
   const [sheetDuId, setSheetDuId] = useState<string | null>(null);
   const [cashBreakdownByDu, setCashBreakdownByDu] = useState<Record<string, CashBreakdown>>({});
   const [saving, setSaving] = useState(false);
+  // Terminals assigned but zero card/UPI declared: require one explicit
+  // confirmation so a forgotten POS sheet is caught at entry.
+  const [zeroTerminalsConfirmed, setZeroTerminalsConfirmed] = useState(false);
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [acceptedByDu, setAcceptedByDu] = useState<Record<string, RecordHandoverResult>>({});
@@ -686,6 +689,19 @@ export const HandoverPanel: React.FC = () => {
     if (collectErrors().length > 0) {
       setError('Please fix the highlighted fields before saving.');
       return;
+    }
+    if (!zeroTerminalsConfirmed) {
+      const zeroDus = (data?.dus ?? []).filter((du: any) => {
+        const form = forms[du.duId];
+        if (!form || du.terminals.length === 0) return false;
+        return du.terminals.every((t: any) =>
+          num(form.terminals[t.terminalId]?.card) === 0 && num(form.terminals[t.terminalId]?.upi) === 0);
+      });
+      if (zeroDus.length > 0) {
+        setZeroTerminalsConfirmed(true);
+        setError('No card/UPI takings entered for the assigned terminal(s). If that is correct, save again to confirm; otherwise enter the terminal amounts.');
+        return;
+      }
     }
     setSaving(true);
     setError(null);

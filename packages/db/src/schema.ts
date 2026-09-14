@@ -495,6 +495,8 @@ export const stockVariances = pgTable('stock_variances', {
   varianceQuantity: numeric('variance_quantity', { precision: 12, scale: 3 }).notNull(),
   reason: varchar('reason', { length: 255 }),
   approvedBy: uuid('approved_by').references(() => users.id),
+  // e.g. { openShiftAtRecording: true } — mid-shift dip, no reconciliation.
+  metadata: jsonb('metadata').default({}).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 

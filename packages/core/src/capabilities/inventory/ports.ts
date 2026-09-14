@@ -46,6 +46,8 @@ export interface StockVariance {
   varianceQuantity: string;
   reason: string | null;
   approvedBy: string | null;
+  /** e.g. { openShiftAtRecording: true } — mid-shift dip, not reconciled. */
+  metadata?: Record<string, unknown>;
   createdAt: string;
 }
 

@@ -77,6 +77,7 @@ export class DrizzleStockVarianceRepository implements StockVarianceRepository {
       varianceQuantity: v.varianceQuantity,
       reason: v.reason,
       approvedBy: v.approvedBy,
+      metadata: v.metadata ?? {},
       createdAt: new Date(v.createdAt),
     });
   }

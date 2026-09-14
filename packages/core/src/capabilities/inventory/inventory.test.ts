@@ -191,12 +191,44 @@ describe('RecordStockCount', () => {
     expect(variances.rows[0].businessDayId).toBe('bd-1');
   });
 
-  it('rejects a Tank Dip while a Shift is open so pending fuel sales cannot create false Variance', async () => {
-    const { deps } = stockCountDeps(undefined, undefined, new ShiftRepo([closedShift({ status: 'OPEN', closedAt: null, closedBy: null })]));
+  it('records a mid-shift Tank Dip with variance but WITHOUT reconciling book stock', async () => {
+    const movements = new MovementRepo({ 'tank-A': 5000 });
+    const { deps, variances, store } = stockCountDeps(movements, undefined, new ShiftRepo([closedShift({ status: 'OPEN', closedAt: null, closedBy: null })]));
     const result = await new RecordStockCount(deps).execute({ stationId: 'st-1', tankId: 'tank-A', actualQuantity: 4950 }, ctx());
 
-    expect(result.success).toBe(false);
-    if (!result.success) expect(result.error.code).toBe('VALIDATION_ERROR');
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.openShiftAtRecording).toBe(true);
+    expect(result.data.varianceQuantity).toBe(-50);
+    // Variance snapshot recorded, flagged...
+    expect(variances.rows).toHaveLength(1);
+    expect(variances.rows[0].metadata).toEqual({ openShiftAtRecording: true });
+    // ...but no reconciliation movement while in-flight sales are un-booked.
+    expect(movements.rows).toHaveLength(0);
+    const dip = store.events.find((e) => e.eventType === BusinessEvents.TANK_DIP_RECORDED);
+    expect((dip?.payload as any)?.openShiftAtRecording).toBe(true);
+  });
+
+  it('allows attribution to an OPEN shift', async () => {
+    const openShift = closedShift({ status: 'OPEN', closedAt: null, closedBy: null });
+    const { deps, variances } = stockCountDeps(undefined, undefined, new ShiftRepo([openShift]));
+    const result = await new RecordStockCount(deps).execute({ stationId: 'st-1', tankId: 'tank-A', actualQuantity: 5000, shiftId: 'sh-1' }, ctx());
+
+    expect(result.success).toBe(true);
+    expect(variances.rows[0].shiftId).toBe('sh-1');
+  });
+
+  it('reconciles book stock for a between-shift dip (no open shift)', async () => {
+    const movements = new MovementRepo({ 'tank-A': 5000 });
+    const { deps, variances } = stockCountDeps(movements, undefined, new ShiftRepo([closedShift()]));
+    const result = await new RecordStockCount(deps).execute({ stationId: 'st-1', tankId: 'tank-A', actualQuantity: 4950 }, ctx());
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.openShiftAtRecording).toBe(false);
+    expect(variances.rows[0].metadata).toEqual({});
+    expect(movements.rows).toHaveLength(1);
+    expect(movements.rows[0].movementType).toBe('Variance');
   });
 
   it('rejects a caller-supplied Product for a Tank Dip', async () => {
