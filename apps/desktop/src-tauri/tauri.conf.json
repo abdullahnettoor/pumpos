@@ -1,7 +1,7 @@
 {
   "$schema": "./gen/schemas/desktop-schema.json",
   "productName": "PumpOS",
-  "version": "1.0.4",
+  "version": "1.0.7",
   "identifier": "com.pumpos.desktop",
   "build": {
     "beforeDevCommand": "npm run dev",
