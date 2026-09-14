@@ -1,6 +1,10 @@
 import postgres from 'postgres';
 
-const connectionString = 'postgresql://postgres.sniubtppskopxkpznfkh:CsljzYX66FXm2xDC@aws-1-ap-northeast-2.pooler.supabase.com:5432/postgres';
+const connectionString = process.env.DIRECT_DATABASE_URL || process.env.DATABASE_URL;
+if (!connectionString) {
+  throw new Error('Missing DIRECT_DATABASE_URL (or DATABASE_URL) for user inspection');
+}
+
 const sql = postgres(connectionString, { ssl: 'require' });
 
 async function inspect() {
@@ -15,6 +19,7 @@ async function inspect() {
     console.table(users);
   } catch (err) {
     console.error('Error querying auth.users:', err);
+    process.exitCode = 1;
   } finally {
     await sql.end();
   }

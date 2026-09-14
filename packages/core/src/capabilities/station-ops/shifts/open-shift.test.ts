@@ -16,7 +16,7 @@ import type {
   StaffAssignmentInput,
   TerminalLinkInput,
 } from './ports.js';
-import type { BusinessDay, BusinessDayRepository } from '../business-days/index.js';
+import type { BusinessDay, BusinessDayWriteRepository } from '../business-days/index.js';
 import type { Nozzle, NozzleRepository } from '../../station-setup/nozzles/index.js';
 import type { FuelPrice, FuelPriceRepository } from '../../station-setup/pricing/index.js';
 
@@ -25,6 +25,7 @@ class ShiftRepo implements ShiftRepository {
   readonly staff: { shiftId: string; a: StaffAssignmentInput }[] = [];
   readonly terminals: { shiftId: string; l: TerminalLinkInput }[] = [];
   async findById(id: string) { return this.rows.find((r) => r.id === id) ?? null; }
+  async findByIdWithoutLock(id: string) { return this.findById(id); }
   async save(s: Shift) { const i = this.rows.findIndex((r) => r.id === s.id); if (i >= 0) this.rows[i] = s; else this.rows.push(s); }
   async findOpenByStation(orgId: string, stationId: string) {
     return this.rows.find((r) => r.organizationId === orgId && r.stationId === stationId && r.status === 'OPEN') ?? null;
@@ -33,7 +34,7 @@ class ShiftRepo implements ShiftRepository {
   async addTerminalLinks(shiftId: string, l: TerminalLinkInput[]) { l.forEach((x) => this.terminals.push({ shiftId, l: x })); }
 }
 
-class BdRepo implements BusinessDayRepository {
+class BdRepo implements BusinessDayWriteRepository {
   readonly rows: BusinessDay[] = [];
   async findById(id: string) { return this.rows.find((r) => r.id === id) ?? null; }
   async save(d: BusinessDay) { const i = this.rows.findIndex((r) => r.id === d.id); if (i >= 0) this.rows[i] = d; else this.rows.push(d); }
@@ -43,6 +44,9 @@ class BdRepo implements BusinessDayRepository {
   async findByStationAndDate(orgId: string, stationId: string, businessDate: string) {
     return this.rows.find((r) => r.organizationId === orgId && r.stationId === stationId && r.businessDate === businessDate) ?? null;
   }
+  async lockStation() {}
+  async lockById() {}
+  async lockByStationAndDate() {}
 }
 
 class NozzleRepo implements NozzleRepository {
@@ -135,6 +139,106 @@ describe('OpenShift', () => {
     expect(result.success).toBe(true);
     if (result.success) expect(result.data.shift.businessDayId).toBe('bd-existing');
     expect(businessDays.rows).toHaveLength(1);
+  });
+
+  it('locks the Business Day before checking its lifecycle state', async () => {
+    const calls: string[] = [];
+    const shifts = new ShiftRepo();
+    const originalFindOpen = shifts.findOpenByStation.bind(shifts);
+    shifts.findOpenByStation = async (...args) => {
+      calls.push('active-check');
+      return originalFindOpen(...args);
+    };
+    const businessDays = new BdRepo();
+    businessDays.rows.push({ id: 'bd-existing', organizationId: 'org-1', stationId: 'st-1', businessDate: '2026-03-15', status: 'OPEN', openedBy: 'u', openedAt: '', closedBy: null, closedAt: null, createdAt: '', updatedAt: '' });
+    const originalFind = businessDays.findByStationAndDate.bind(businessDays);
+    businessDays.findByStationAndDate = async (...args) => {
+      calls.push('find');
+      return originalFind(...args);
+    };
+    businessDays.lockStation = async () => { calls.push('station-lock'); };
+    businessDays.lockByStationAndDate = async () => { calls.push('day-lock'); };
+
+    const result = await new OpenShift({
+      shifts, businessDays,
+      nozzles: new NozzleRepo([]), nozzleReadings: new ReadingRepo(), fuelPrices: new PriceRepo([]),
+      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
+    }).execute({ stationId: 'st-1', shiftTemplateId: 'tpl-1', openingCash: 0 }, makeContext());
+
+    expect(result.success).toBe(true);
+    expect(calls).toEqual(['station-lock', 'active-check', 'day-lock', 'find']);
+  });
+
+  it('opens a shift for a past open Business Day', async () => {
+    const shifts = new ShiftRepo();
+    const businessDays = new BdRepo();
+    businessDays.rows.push({ id: 'bd-past', organizationId: 'org-1', stationId: 'st-1', businessDate: '2026-03-14', status: 'OPEN', openedBy: 'u', openedAt: '', closedBy: null, closedAt: null, createdAt: '', updatedAt: '' });
+
+    const result = await new OpenShift({
+      shifts, businessDays,
+      nozzles: new NozzleRepo([]), nozzleReadings: new ReadingRepo(), fuelPrices: new PriceRepo([]),
+      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
+    }).execute({ stationId: 'st-1', shiftTemplateId: 'tpl-1', openingCash: 0, businessDate: '2026-03-14' }, makeContext());
+
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.shift.businessDayId).toBe('bd-past');
+  });
+
+  it('lazily creates a past Business Day when opening a shift', async () => {
+    const shifts = new ShiftRepo();
+    const businessDays = new BdRepo();
+
+    const result = await new OpenShift({
+      shifts, businessDays,
+      nozzles: new NozzleRepo([]), nozzleReadings: new ReadingRepo(), fuelPrices: new PriceRepo([]),
+      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
+    }).execute({ stationId: 'st-1', shiftTemplateId: 'tpl-1', openingCash: 0, businessDate: '2026-03-14' }, makeContext());
+
+    expect(result.success).toBe(true);
+    expect(businessDays.rows[0]?.businessDate).toBe('2026-03-14');
+    expect(businessDays.rows[0]?.status).toBe('OPEN');
+  });
+
+  it('rejects opening a shift for a closed Business Day', async () => {
+    const shifts = new ShiftRepo();
+    const businessDays = new BdRepo();
+    businessDays.rows.push({ id: 'bd-closed', organizationId: 'org-1', stationId: 'st-1', businessDate: '2026-03-14', status: 'CLOSED', openedBy: 'u', openedAt: '', closedBy: 'u', closedAt: '', createdAt: '', updatedAt: '' });
+
+    const result = await new OpenShift({
+      shifts, businessDays,
+      nozzles: new NozzleRepo([]), nozzleReadings: new ReadingRepo(), fuelPrices: new PriceRepo([]),
+      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
+    }).execute({ stationId: 'st-1', shiftTemplateId: 'tpl-1', openingCash: 0, businessDate: '2026-03-14' }, makeContext());
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.code).toBe('INVARIANT_VIOLATION');
+      expect(result.error.message).toContain('2026-03-14');
+      expect(result.error.details).toMatchObject({ businessDayId: 'bd-closed', businessDate: '2026-03-14', status: 'CLOSED' });
+    }
+    expect(shifts.rows).toHaveLength(0);
+  });
+
+  it('rejects a future Shift Business Date', async () => {
+    const result = await new OpenShift({
+      shifts: new ShiftRepo(), businessDays: new BdRepo(),
+      nozzles: new NozzleRepo([]), nozzleReadings: new ReadingRepo(), fuelPrices: new PriceRepo([]),
+      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
+    }).execute({ stationId: 'st-1', shiftTemplateId: 'tpl-1', openingCash: 0, businessDate: '2026-03-16' }, makeContext());
+
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error.code).toBe('VALIDATION_ERROR');
+  });
+
+  it('rejects an invalid calendar date', async () => {
+    const result = await new OpenShift({
+      shifts: new ShiftRepo(), businessDays: new BdRepo(),
+      nozzles: new NozzleRepo([]), nozzleReadings: new ReadingRepo(), fuelPrices: new PriceRepo([]),
+      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
+    }).execute({ stationId: 'st-1', shiftTemplateId: 'tpl-1', openingCash: 0, businessDate: '2026-02-31' }, makeContext());
+
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error.code).toBe('VALIDATION_ERROR');
   });
 
   it('rejects opening a second shift', async () => {

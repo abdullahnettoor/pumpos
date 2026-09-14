@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { resolveBusinessDate } from '@pump/shared';
 import { BusinessEvents, err, eventFromContext, notFoundError, ok, validationError } from '../../kernel/index.js';
 import type { EventPublisher, ExecutionContext, Result, UseCase } from '../../kernel/index.js';
-import { ensureBusinessDayForDate, type BusinessDayRepository } from '../station-ops/business-days/index.js';
+import { resolveBusinessDayWrite, type BusinessDayWriteRepository } from '../station-ops/business-days/index.js';
 import type { SupplierRepository } from '../crm/suppliers/index.js';
 import type { SupplierTransaction, SupplierTransactionRepository } from './ports.js';
 
@@ -26,7 +26,7 @@ const schema = z.object({
 export interface SetSupplierOpeningBalanceDeps {
   supplierTxns: SupplierTransactionRepository;
   suppliers: SupplierRepository;
-  businessDays: BusinessDayRepository;
+  businessDays: BusinessDayWriteRepository;
   events: EventPublisher;
 }
 
@@ -51,7 +51,10 @@ export class SetSupplierOpeningBalance implements UseCase<SetSupplierOpeningBala
     if (!supplier || supplier.organizationId !== ctx.organizationId) return err(notFoundError('Supplier', cmd.supplierId));
 
     const date = cmd.asOfDate ?? resolveBusinessDate({ now: ctx.clock.now(), timeZone: ctx.timeZone, dayStartsAt: ctx.businessDayStartsAt });
-    const bd = await ensureBusinessDayForDate(this.deps.businessDays, ctx, cmd.stationId, date);
+    const eligibility = await resolveBusinessDayWrite(this.deps.businessDays, ctx, { stationId: cmd.stationId, businessDate: date, kind: 'FINANCIAL' });
+    if (!eligibility.success) return eligibility as unknown as Result<SupplierTransaction>;
+    const bd = eligibility.data.businessDay;
+    const lateEntry = eligibility.data.lateEntry;
 
     const now = ctx.clock.now().toISOString();
     const entry: SupplierTransaction = {
@@ -68,6 +71,7 @@ export class SetSupplierOpeningBalance implements UseCase<SetSupplierOpeningBala
       referenceType: 'OPENING_BALANCE',
       referenceId: null,
       notes: 'Opening balance (carried forward at onboarding)',
+      metadata: lateEntry ? { lateEntry: true } : {},
       createdAt: now,
     };
     await this.deps.supplierTxns.save(entry);
@@ -79,6 +83,7 @@ export class SetSupplierOpeningBalance implements UseCase<SetSupplierOpeningBala
         aggregateId: supplier.id,
         stationId: cmd.stationId,
         businessDayId: bd.id,
+        metadata: lateEntry ? { lateEntry: true, lateEntryPrimary: true } : undefined,
         payload: { supplierId: supplier.id, amount: entry.amount, asOfDate: date },
       }),
     ]);

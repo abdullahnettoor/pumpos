@@ -51,6 +51,9 @@ export interface BusinessDayOption {
   /** Human label (e.g. "Mon, 12 May"). */
   label: string;
   status?: 'open' | 'closed';
+  openShiftCount?: number;
+  closedShiftCount?: number;
+  lastActivityAt?: string;
 }
 
 /** True on macOS/iPadOS — render the ⌘ glyph instead of the "Ctrl" text. */
@@ -65,13 +68,14 @@ export interface TopBarProps {
   brand?: ReactNode;
 
   businessDate: string;
-  businessDayStatus: 'open' | 'closed';
+  businessDayStatus: 'open' | 'closed' | 'not-created' | 'unknown' | 'unavailable';
   /** Hide the business-day anchor entirely (e.g. pre-onboarding hub). */
   showBusinessDay?: boolean;
   /** Navigate to today's live view (dashboard). */
   onBusinessDay?: () => void;
   /** Recent past business days shown in the anchor dropdown. */
   businessDays?: BusinessDayOption[];
+  businessDaysState?: 'loading' | 'ready' | 'unavailable';
   /** Open a past day's summary. */
   onSelectBusinessDay?: (date: string) => void;
   /** Notified when the business-day dropdown opens/closes (for lazy loading). */
@@ -126,6 +130,7 @@ export const TopBar: React.FC<TopBarProps> = ({
   showBusinessDay = true,
   onBusinessDay,
   businessDays = [],
+  businessDaysState = 'ready',
   onSelectBusinessDay,
   onBusinessDayMenuOpenChange,
   stationLabel,
@@ -158,28 +163,38 @@ export const TopBar: React.FC<TopBarProps> = ({
       {showBusinessDay && (
         <Menu onOpenChange={onBusinessDayMenuOpenChange}>
           <MenuTrigger asChild>
-            <BusinessDayChip date={businessDate} status={businessDayStatus} />
+            <BusinessDayChip date={businessDate} status={businessDayStatus} pastOpenCount={businessDays.length} />
           </MenuTrigger>
           <MenuContent align="start">
-            <MenuLabel>Business day</MenuLabel>
+            <MenuLabel>Business Day</MenuLabel>
             <MenuItem onSelect={onBusinessDay}>
               <span className="flex flex-1 items-center justify-between gap-3">
-                <span>Today · {businessDate}</span>
+                <span>Current Business Date · {businessDate}</span>
                 <span className={cn('text-[11px] font-medium', businessDayStatus === 'open' ? 'text-brand' : 'text-ink-muted')}>
-                  {businessDayStatus === 'open' ? 'Open' : 'Closed'}
+                  {businessDayStatus === 'open' ? 'Open' : businessDayStatus === 'closed' ? 'Closed' : businessDayStatus === 'not-created' ? 'Not started' : businessDayStatus === 'unavailable' ? 'Unavailable' : 'Checking'}
                 </span>
               </span>
             </MenuItem>
-            {businessDays.length > 0 && <MenuSeparator />}
-            {businessDays.map((d) => (
+            {businessDaysState === 'ready' && businessDays.length > 0 && <><MenuSeparator /><MenuLabel>Past Open Business Days</MenuLabel></>}
+            {businessDaysState === 'loading' && (
+              <div className="px-2 py-1.5 text-[11px] text-ink-faint">Checking Past Open Business Days</div>
+            )}
+            {businessDaysState === 'unavailable' && (
+              <div className="px-2 py-1.5 text-[11px] text-danger-fg">Past Open Business Days unavailable</div>
+            )}
+            {businessDays.length === 0 && businessDaysState === 'ready' && (
+              <div className="px-2 py-1.5 text-[11px] text-ink-faint">No Past Open Business Days</div>
+            )}
+            {businessDaysState === 'ready' && businessDays.map((d) => (
               <MenuItem key={d.date} onSelect={() => onSelectBusinessDay?.(d.date)}>
-                <span className="flex flex-1 items-center justify-between gap-3">
-                  <span>{d.label}</span>
-                  {d.status && (
-                    <span className={cn('text-[11px]', d.status === 'open' ? 'text-brand' : 'text-ink-faint')}>
-                      {d.status === 'open' ? 'Open' : 'Closed'}
+                <span className="flex flex-1 items-center justify-between gap-4">
+                  <span className="flex flex-col">
+                    <span>{d.label}</span>
+                    <span className="text-[10px] text-ink-faint">
+                      {d.closedShiftCount ?? 0} closed · {d.openShiftCount ?? 0} open
                     </span>
-                  )}
+                  </span>
+                  <span className="text-[11px] text-brand">Open</span>
                 </span>
               </MenuItem>
             ))}

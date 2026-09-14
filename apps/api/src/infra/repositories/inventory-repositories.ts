@@ -77,8 +77,14 @@ export class DrizzleStockVarianceRepository implements StockVarianceRepository {
       varianceQuantity: v.varianceQuantity,
       reason: v.reason,
       approvedBy: v.approvedBy,
+      metadata: v.metadata ?? {},
       createdAt: new Date(v.createdAt),
     });
+  }
+
+  async existsForShift(shiftId: string): Promise<boolean> {
+    const [row] = await this.db.select({ id: schema.stockVariances.id }).from(schema.stockVariances).where(eq(schema.stockVariances.shiftId, shiftId)).limit(1);
+    return Boolean(row);
   }
 }
 
@@ -91,7 +97,7 @@ export async function readInventoryLevels(db: DbClient, organizationId: string, 
   const tanks = await db
     .select()
     .from(schema.tanks)
-    .where(and(eq(schema.tanks.organizationId, organizationId), eq(schema.tanks.stationId, stationId)));
+    .where(and(eq(schema.tanks.organizationId, organizationId), eq(schema.tanks.stationId, stationId), eq(schema.tanks.status, 'ACTIVE')));
 
   const bulk = [];
   for (const t of tanks) {

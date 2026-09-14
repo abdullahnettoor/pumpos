@@ -23,7 +23,7 @@ import {
   queryKeys,
   setApiBaseUrl,
   setAuthToken, 
-  clearPersistedQueryCache,
+  clearClientSessionData,
   clearStoredOnboardingDraft,
   supabase 
 } from '@pump/ui';
@@ -147,8 +147,7 @@ export const App: React.FC = () => {
       // Account switch within the same tab: purge the previous user's cached
       // (and persisted) data so their stations/products never bleed through.
       if (lastUserIdRef.current && lastUserIdRef.current !== currentSession.user.id) {
-        qc.clear();
-        clearPersistedQueryCache();
+        clearClientSessionData(qc);
         clearStoredOnboardingDraft();
       }
 
@@ -211,8 +210,7 @@ export const App: React.FC = () => {
       setCurrentPath('/login');
       // Wipe all cached + persisted data so the next user starts from a clean
       // slate (prevents cross-user data bleed and stale "station not found").
-      qc.clear();
-      clearPersistedQueryCache();
+      clearClientSessionData(qc);
       clearStoredOnboardingDraft();
     }
   };
@@ -247,7 +245,7 @@ export const App: React.FC = () => {
   const navItems = isStationReady
     ? [
         { label: 'Dashboard', path: '/dashboard' },
-        { label: 'Shifts', path: '/shifts', roles: ['Owner', 'Manager', 'Staff'] },
+        { label: 'Shifts', path: '/shifts', roles: ['Owner', 'Manager', 'Accountant', 'Staff'] },
         { label: 'Station Overview', path: '/setup/station', roles: ['Owner', 'Manager'] },
         { label: 'Expenses', path: '/expenses' },
         { label: 'Income', path: '/income' },
@@ -471,7 +469,9 @@ export const App: React.FC = () => {
             selectedStation={selectedStation}
             userRole={userRole || 'Staff'}
             userName={userName}
-            onNavigate={setCurrentPath}
+            onNavigate={navigate}
+            intent={navIntent}
+            onIntentConsumed={() => setNavIntent(null)}
           />
         );
       case '/expenses':
@@ -606,5 +606,3 @@ export const App: React.FC = () => {
 };
 
 export default App;
-
-

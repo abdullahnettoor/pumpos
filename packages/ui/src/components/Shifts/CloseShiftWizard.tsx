@@ -4,7 +4,9 @@ import { Checkbox } from '../primitives/Toggle.js';
 import { CashCountPopover, type CashBreakdown } from '../primitives/CashCountPopover.js';
 import { Button } from '../../pump-ds/index.js';
 import { inr } from '../../utils/format.js';
+import { useConfirm } from '../primitives/ConfirmDialog.js';
 import { AlertTriangle, Check, ChevronLeft, ChevronRight, Lock, Wallet, Droplet, FileText } from 'lucide-react';
+import { ShiftBusinessDateContext } from './ShiftBusinessDateContext.js';
 
 export interface CloseShiftWizardProps {
   isOpen: boolean;
@@ -13,6 +15,11 @@ export interface CloseShiftWizardProps {
   // Identity
   shiftTemplateName: string;
   openedAt: string;
+  businessDate: string;
+  currentBusinessDate: string;
+  scheduledStartTime?: string | null;
+  scheduledEndTime?: string | null;
+  timeZone?: string;
 
   // Cash reconciliation inputs
   openingCash: number;
@@ -43,6 +50,8 @@ export interface CloseShiftWizardProps {
   stationTanks: any[];
   dipReadings: Record<string, number | string>;
   onDipReadingsChange: (next: Record<string, number | string>) => void;
+  dipReasons: Record<string, string>;
+  onDipReasonsChange: (next: Record<string, string>) => void;
 
   // Warnings
   warnings: string[];
@@ -60,7 +69,7 @@ const STEP_TITLES: Record<Step, string> = {
   1: 'Cash Reconciliation',
   2: 'Physical Dip Readings',
   3: 'Review Warnings',
-  4: 'Confirm & Compile DSSR',
+  4: 'Confirm Shift Summary',
 };
 
 const STEP_ICONS: Record<Step, React.ReactNode> = {
@@ -75,6 +84,11 @@ export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
   onClose,
   shiftTemplateName,
   openedAt,
+  businessDate,
+  currentBusinessDate,
+  scheduledStartTime,
+  scheduledEndTime,
+  timeZone,
   openingCash,
   cashCollections,
   cashExpenses,
@@ -85,14 +99,18 @@ export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
   stationTanks,
   dipReadings,
   onDipReadingsChange,
+  dipReasons,
+  onDipReasonsChange,
   warnings,
   confirmWarningsChecked,
   onConfirmWarningsChange,
   isClosing,
   onConfirmClose,
 }) => {
+  const confirm = useConfirm();
   const [step, setStep] = useState<Step>(1);
   const [recordDip, setRecordDip] = useState(false);
+  const [confirmPostCloseDip, setConfirmPostCloseDip] = useState(false);
   const [showVarianceWhy, setShowVarianceWhy] = useState(false);
   // Denomination counts for the counted safe cash (held here so re-opening the
   // popover / navigating steps preserves them). Reset when the drawer closes.
@@ -101,7 +119,8 @@ export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
 
   const cashVariance = closingCash - expectedCash;
   const hasWarnings = warnings.length > 0;
-  const canSubmit = !hasWarnings || confirmWarningsChecked;
+  const hasEnteredDip = Object.values(dipReadings).some((value) => value !== '');
+  const canSubmit = (!hasWarnings || confirmWarningsChecked) && (!hasEnteredDip || confirmPostCloseDip);
 
   const goNext = () => setStep((s) => (s < 4 ? ((s + 1) as Step) : s));
   const goBack = () => setStep((s) => (s > 1 ? ((s - 1) as Step) : s));
@@ -174,9 +193,16 @@ export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
       footer={footer}
     >
       <div className="close-wizard-body">
-        <div className="close-wizard-meta">
-          Opened {new Date(openedAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })} · Step {step} of 4
-        </div>
+        <ShiftBusinessDateContext
+          compact
+          businessDate={businessDate}
+          currentBusinessDate={currentBusinessDate}
+          scheduledStartTime={scheduledStartTime}
+          scheduledEndTime={scheduledEndTime}
+          openedAt={openedAt}
+          timeZone={timeZone}
+        />
+        <div className="close-wizard-meta">Step {step} of 4</div>
         {stepper}
 
         {step === 1 && (
@@ -370,10 +396,21 @@ export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
               <Checkbox
                 label="I recorded physical dip readings this shift"
                 checked={recordDip}
-                onChange={(e) => {
+                onChange={async (e) => {
                   const next = e.target.checked;
+                  if (!next && Object.values(dipReadings).some((value) => value !== '')) {
+                    const confirmed = await confirm({
+                      title: 'Close without recording Tank Dips?',
+                      message: 'The entered Tank Dip values will be discarded. The Shift can still be closed without recording a dip.',
+                      confirmLabel: 'Discard Tank Dips',
+                      danger: true,
+                    });
+                    if (!confirmed) return;
+                    onDipReadingsChange({});
+                    onDipReasonsChange({});
+                    setConfirmPostCloseDip(false);
+                  }
                   setRecordDip(next);
-                  if (!next) onDipReadingsChange({});
                 }}
               />
             </div>
@@ -387,30 +424,40 @@ export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
             {recordDip && stationTanks.length > 0 && (
               <div className="close-wizard-tank-list">
                 {stationTanks.map((tank) => (
-                  <div key={tank.id} className="close-wizard-tank-row">
+                  <div key={tank.id} className="close-wizard-tank-row" style={{ alignItems: 'flex-start' }}>
                     <div>
                       <div className="close-wizard-tank-name">{tank.name}</div>
                       <div className="close-wizard-tank-meta">
-                        {tank.productName} · Expected{' '}
-                        <strong>{Number(tank.currentVolume).toFixed(1)} {tank.productUnit || 'L'}</strong>
+                        {tank.productName} · Actual quantity is reconciled after Shift close
                       </div>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', alignItems: 'flex-end' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <input
+                          type="number" min="0"
+                          step="0.1"
+                          placeholder="Actual"
+                          value={dipReadings[tank.id] ?? ''}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            onDipReadingsChange({
+                              ...dipReadings,
+                              [tank.id]: val === '' ? '' : Number(val),
+                            });
+                          }}
+                          className="close-wizard-input close-wizard-input--small"
+                        />
+                        <span className="close-wizard-helper">L</span>
+                      </div>
                       <input
-                        type="number" min="0"
-                        step="0.1"
-                        placeholder="Actual"
-                        value={dipReadings[tank.id] ?? ''}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          onDipReadingsChange({
-                            ...dipReadings,
-                            [tank.id]: val === '' ? '' : Number(val),
-                          });
-                        }}
-                        className="close-wizard-input close-wizard-input--small"
+                        type="text"
+                        maxLength={255}
+                        placeholder="Reason (optional)"
+                        value={dipReasons[tank.id] ?? ''}
+                        onChange={(e) => onDipReasonsChange({ ...dipReasons, [tank.id]: e.target.value })}
+                        className="close-wizard-input"
+                        style={{ width: 190 }}
                       />
-                      <span className="close-wizard-helper">L</span>
                     </div>
                   </div>
                 ))}
@@ -451,7 +498,7 @@ export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
 
         {step === 4 && (
           <section className="close-wizard-section">
-            <h4 className="close-wizard-section-title">Confirm &amp; Compile DSSR</h4>
+            <h4 className="close-wizard-section-title">Confirm Shift Summary</h4>
             <div className="close-wizard-summary-card">
               <div className="close-wizard-row">
                 <span>Expected Safe Cash</span>
@@ -484,9 +531,17 @@ export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
                 </span>
               </div>
             </div>
+            {hasEnteredDip && (
+              <div className="close-wizard-toggle" style={{ marginTop: '12px' }}>
+                <Checkbox
+                  label="I understand these Tank Dips are not saved by Shift close and must be recorded separately afterward."
+                  checked={confirmPostCloseDip}
+                  onChange={(e) => setConfirmPostCloseDip(e.target.checked)}
+                />
+              </div>
+            )}
             <p className="close-wizard-helper" style={{ marginTop: '8px' }}>
-              On confirm, the shift status moves to <strong>CLOSED</strong> and a Shift Summary (DSSR) snapshot
-              is generated and stored permanently.
+              On confirm, the Shift status moves to <strong>CLOSED</strong> and an immutable Shift Summary is generated and stored permanently. The Business Day remains open until it is closed explicitly.
             </p>
           </section>
         )}

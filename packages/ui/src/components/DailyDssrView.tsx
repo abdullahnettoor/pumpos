@@ -1,6 +1,5 @@
 import React from 'react';
-import { ArrowLeft, Printer, Download, AlertTriangle } from 'lucide-react';
-import { exportReactPdf } from '../services/exportPdf.js';
+import { ArrowLeft, Printer, Download, AlertTriangle, Info } from 'lucide-react';
 import { DEFAULT_DSSR_CONFIG, paperFromStation } from '../services/reports/reportConfig.js';
 import { letterheadFromStation } from '../services/reports/letterhead.js';
 import { Button } from '../pump-ds/index.js';
@@ -31,6 +30,8 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
   const merchandiseStockVariance = (snapshot.merchandiseStockVariance || []) as Array<any>;
   const shifts = snapshot.shifts || [];
   const warnings = snapshot.warnings || [];
+  const generatedAt = dailyDssr?.generatedAt ?? snapshot.generatedAt;
+  const lateEntryCount = Number(dailyDssr?.lateEntryCount ?? 0);
 
   const totalGrossVolume = Number(fuel.totalGrossVolume ?? fuel.totalVolume ?? 0);
   const totalTestingVolume = Number(fuel.totalTestingVolume || 0);
@@ -54,6 +55,14 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
   const fleetCredit = Number(credit.fleetCredit || 0);
   const totalExpenses = Number(expenses.total || 0);
   const totalOtherIncome = Number(income.total || 0);
+  // FI4 — output GST collected on other income, frozen per entry at capture.
+  const incomeTax = (income.tax || {}) as Record<string, number>;
+  const incomeTaxTotal = Number(incomeTax.total || 0);
+  // T5 — output tax on sales. GST (merchandise) and VAT (fuel) stay on separate
+  // lines: fuel VAT is outside GST and carries no input credit for the buyer.
+  const salesTax = (snapshot.salesTax || {}) as { gst?: Record<string, number>; vat?: Record<string, number> };
+  const salesGstTotal = Number(salesTax.gst?.total || 0);
+  const salesVatTotal = Number(salesTax.vat?.vat || 0);
   const pnl = snapshot.pnl || {};
   const inr = (n: number) => `₹${n.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
 
@@ -108,8 +117,47 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
           Daily Sales Summary Record
         </h2>
         <p style={{ color: 'var(--text-muted)', fontSize: '12px', marginTop: '4px' }}>
-          Business Date {dailyDssr.businessDate} • Generated {formatDateTime(dailyDssr.generatedAt)}
+          Business Date {dailyDssr.businessDate} • Generated {formatDateTime(generatedAt)}
         </p>
+      </div>
+
+      {lateEntryCount > 0 && (
+        <div
+          className="no-print"
+          style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '8px',
+            padding: '10px 12px',
+            marginBottom: '12px',
+            border: '1px solid var(--state-warning-fg)',
+            borderRadius: 'var(--radius-input)',
+            backgroundColor: 'var(--state-warning-bg)',
+            color: 'var(--state-warning-fg)',
+            fontSize: '12px',
+          }}
+        >
+          <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: '1px' }} />
+          <span>{lateEntryCount} late {lateEntryCount === 1 ? 'entry was' : 'entries were'} recorded after day close. The immutable snapshot below was not changed.</span>
+        </div>
+      )}
+
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'flex-start',
+          gap: '8px',
+          padding: '10px 12px',
+          marginBottom: '20px',
+          border: '1px solid var(--border-soft)',
+          borderRadius: 'var(--radius-input)',
+          backgroundColor: 'var(--bg-surface-alt)',
+          color: 'var(--text-muted)',
+          fontSize: '11px',
+        }}
+      >
+        <Info size={14} style={{ flexShrink: 0, marginTop: '1px' }} />
+        <span>Financial sections include records available as of {formatDateTime(generatedAt)}. Financial entries recorded later are not included in this report.</span>
       </div>
 
       <div
@@ -254,6 +302,23 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
           { label: 'Drawer Expenses', value: inr(Number(expenses.drawer || 0)) },
           { label: 'Business Expenses', value: inr(Number(expenses.business || 0)) },
           ...(totalOtherIncome > 0 ? [{ label: 'Other Income (Cash / Bank)', value: `${inr(Number(income.drawer || 0))} / ${inr(Number(income.business || 0))}`, color: 'var(--brand-success)' }] : []),
+          ...(salesGstTotal > 0
+            ? [
+                { label: 'Merchandise — Taxable Value', value: inr(Number(salesTax.gst?.taxable || 0)) },
+                Number(salesTax.gst?.igst || 0) > 0
+                  ? { label: 'Output GST on Sales (IGST)', value: inr(Number(salesTax.gst?.igst || 0)) }
+                  : { label: 'Output GST on Sales (CGST / SGST)', value: `${inr(Number(salesTax.gst?.cgst || 0))} / ${inr(Number(salesTax.gst?.sgst || 0))}` },
+              ]
+            : []),
+          ...(salesVatTotal > 0 ? [{ label: 'Output VAT on Fuel', value: inr(salesVatTotal) }] : []),
+          ...(incomeTaxTotal > 0
+            ? [
+                { label: 'Other Income — Taxable Value', value: inr(Number(incomeTax.taxable || 0)) },
+                Number(incomeTax.igst || 0) > 0
+                  ? { label: 'Output GST on Income (IGST)', value: inr(Number(incomeTax.igst || 0)) }
+                  : { label: 'Output GST on Income (CGST / SGST)', value: `${inr(Number(incomeTax.cgst || 0))} / ${inr(Number(incomeTax.sgst || 0))}` },
+              ]
+            : []),
         ] as Array<{ label: string; value: string; color?: string }>).map((r, i) => (
           <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '11px 16px', borderBottom: '1px solid var(--border-soft)' }}>
             <span>{r.label}</span>

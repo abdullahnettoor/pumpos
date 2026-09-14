@@ -1,10 +1,12 @@
 import { z } from 'zod';
 import { BusinessEvents, err, eventFromContext, invariantViolation, notFoundError, ok, validationError } from '../../kernel/index.js';
 import type { EventPublisher, ExecutionContext, DocumentNumberGenerator, Result, UseCase } from '../../kernel/index.js';
-import type { ShiftRepository } from '../station-ops/shifts/index.js';
+import { resolveShiftBusinessDayWrite, type ShiftRepository } from '../station-ops/shifts/index.js';
+import type { BusinessDayWriteRepository } from '../station-ops/business-days/index.js';
 import type { StockMovement, StockMovementRepository } from '../inventory/index.js';
 import type { ProductRepository } from '../station-setup/products/index.js';
 import { computeLineTax } from '../finance/tax/index.js';
+import { splitSaleLineTax } from './sale-tax.js';
 import type { Sale, SaleLine, SaleRepository, MerchandiseHandoverRepository } from './ports.js';
 
 export interface MerchandiseHandoverLineInput {
@@ -28,6 +30,7 @@ export interface RecordMerchandiseHandoverDeps {
   stock: StockMovementRepository;
   products: ProductRepository;
   shifts: ShiftRepository;
+  businessDays: BusinessDayWriteRepository;
   docNumbers: DocumentNumberGenerator;
   events: EventPublisher;
 }
@@ -66,8 +69,9 @@ export class RecordMerchandiseHandover implements UseCase<RecordMerchandiseHando
     if (!p.success) return err(validationError('Invalid RecordMerchandiseHandover command', { issues: p.error.flatten() }));
     const cmd = p.data;
 
-    const shift = await this.deps.shifts.findById(cmd.shiftId);
-    if (!shift || shift.organizationId !== ctx.organizationId) return err(notFoundError('Shift', cmd.shiftId));
+    const eligibility = await resolveShiftBusinessDayWrite(this.deps.shifts, this.deps.businessDays, ctx, cmd.shiftId, 'STOCK');
+    if (!eligibility.success) return eligibility as unknown as Result<RecordMerchandiseHandoverResult>;
+    const shift = eligibility.data.shift;
     if (shift.status !== 'OPEN') return err(invariantViolation('Shift is not open', { shiftId: shift.id, status: shift.status }));
 
     // Replace any prior handover for this employee (pre-close edit).
@@ -117,6 +121,8 @@ export class RecordMerchandiseHandover implements UseCase<RecordMerchandiseHando
         discountAmount: '0',
         taxAmount: String(tax.taxTotal),
         lineTotal: String(tax.total),
+        // T5 — freeze the same split that produced the totals above.
+        ...splitSaleLineTax(tax.total, product, false),
         createdAt: now,
       });
 

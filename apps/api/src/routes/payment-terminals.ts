@@ -1,6 +1,5 @@
 import { Hono } from 'hono';
 import type { DbClient } from '@pump/db';
-import type { Role } from '@pump/shared';
 import { normalizeProvider } from '@pump/shared';
 import {
   RegisterPaymentTerminal,
@@ -8,19 +7,14 @@ import {
   type Result,
 } from '@pump/core';
 import { buildContext } from '../infra/context.js';
+import type { AuthenticatedPrincipal } from '../infra/authenticated-principal.js';
 import { createDispatcher } from '../infra/events.js';
 import { DrizzlePaymentTerminalRepository } from '../infra/repositories/payment-terminal.repo.js';
 import { AccountProvisioningService } from '../infra/account-provisioning.js';
 
 type Variables = {
   db: DbClient;
-  user: {
-    id: string;
-    email: string;
-    organizationId: string;
-    role: Role;
-    assignedStationIds: string[];
-  };
+  user: AuthenticatedPrincipal;
 };
 
 export const paymentTerminalsRouter = new Hono<{ Variables: Variables }>();

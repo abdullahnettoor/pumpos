@@ -3247,6 +3247,71 @@
           "primaryKey": false,
           "notNull": false
         },
+        "tax_category": {
+          "name": "tax_category",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'NON_TAXABLE'"
+        },
+        "gst_rate": {
+          "name": "gst_rate",
+          "type": "numeric(5, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cess_rate": {
+          "name": "cess_rate",
+          "type": "numeric(5, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "hsn_code": {
+          "name": "hsn_code",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "taxable_amount": {
+          "name": "taxable_amount",
+          "type": "numeric(12, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cgst": {
+          "name": "cgst",
+          "type": "numeric(12, 2)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "sgst": {
+          "name": "sgst",
+          "type": "numeric(12, 2)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "igst": {
+          "name": "igst",
+          "type": "numeric(12, 2)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "cess": {
+          "name": "cess",
+          "type": "numeric(12, 2)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "tax_snapshot": {
+          "name": "tax_snapshot",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
         "status": {
           "name": "status",
           "type": "varchar(20)",
@@ -4017,6 +4082,78 @@
           "type": "numeric(12, 2)",
           "primaryKey": false,
           "notNull": true
+        },
+        "tax_category": {
+          "name": "tax_category",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'NON_TAXABLE'"
+        },
+        "gst_rate": {
+          "name": "gst_rate",
+          "type": "numeric(5, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "vat_rate": {
+          "name": "vat_rate",
+          "type": "numeric(5, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cess_rate": {
+          "name": "cess_rate",
+          "type": "numeric(5, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "hsn_code": {
+          "name": "hsn_code",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "taxable_amount": {
+          "name": "taxable_amount",
+          "type": "numeric(12, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cgst": {
+          "name": "cgst",
+          "type": "numeric(12, 2)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "sgst": {
+          "name": "sgst",
+          "type": "numeric(12, 2)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "igst": {
+          "name": "igst",
+          "type": "numeric(12, 2)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "vat": {
+          "name": "vat",
+          "type": "numeric(12, 2)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "cess": {
+          "name": "cess",
+          "type": "numeric(12, 2)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
         },
         "line_total": {
           "name": "line_total",
@@ -5591,7 +5728,24 @@
           "default": "now()"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "users_auth_user_id_uniq": {
+          "name": "users_auth_user_id_uniq",
+          "columns": [
+            {
+              "expression": "auth_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"users\".\"auth_user_id\" IS NOT NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "users_organization_id_organizations_id_fk": {
           "name": "users_organization_id_organizations_id_fk",

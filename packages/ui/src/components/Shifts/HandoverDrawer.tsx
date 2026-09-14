@@ -9,10 +9,10 @@ import { CashCountPopover, type CashBreakdown } from '../primitives/CashCountPop
 import { CustomerFormDrawer } from '../customers/CustomerFormDrawer.js';
 import { VehicleDrawer } from '../customers/VehicleDrawer.js';
 import { useAllVehicles } from '../../query/hooks.js';
-import { CloudShiftService, CloudTransactionService } from '../../services/cloud.js';
+import { CloudTransactionService, type RecordHandoverPayload, type RecordHandoverResult } from '../../services/cloud.js';
+import { loadHandoverRequestIdentity, resolveHandoverRequestIdentity, saveHandoverRequestIdentity, useRecordHandoverMutation } from '../../query/handoverMutation.js';
 import { inr } from '../../utils/format.js';
 
-const shiftService = new CloudShiftService();
 const transactionService = new CloudTransactionService();
 
 // Sentinel option values for the "＋ New …" inline-create entries in the picker.
@@ -31,7 +31,6 @@ const handoverFormSchema = z.object({
   cashHandedOver: z.coerce.number().nonnegative('Cash must be non-negative'),
   cardHandedOver: z.coerce.number().nonnegative('Card Swipe total must be non-negative'),
   upiHandedOver: z.coerce.number().nonnegative('UPI QR total must be non-negative'),
-  creditHandedOver: z.coerce.number().nonnegative('Credit chits total must be non-negative'),
   nozzleReadings: z.record(z.string().uuid(), z.coerce.number().nonnegative('Reading must be non-negative')),
   nozzleTesting: z.record(z.string().uuid(), z.coerce.number().nonnegative('Testing quantity must be non-negative')),
   terminalCard: z.record(z.string(), z.coerce.number().nonnegative()).optional(),
@@ -51,6 +50,7 @@ interface HandoverDrawerProps {
   duCode: string;
   nozzles: any[];
   terminals?: any[];
+  stationHasConfiguredTerminals?: boolean;
   /** Credit-eligible (non-prepaid Credit/Fleet) customers, each with currentBalance + creditLimit. */
   customers?: any[];
   /** Fuel-on-credit lines already recorded for this (attendant, DU). */
@@ -78,6 +78,7 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
   duCode,
   nozzles,
   terminals = [],
+  stationHasConfiguredTerminals = false,
   customers = [],
   creditSales = [],
   omcSales = [],
@@ -89,6 +90,12 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
 }) => {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Guard against a forgotten POS sheet: terminals configured but zero card/UPI
+  // declared needs one explicit confirmation before submit.
+  const [zeroTerminalsConfirmed, setZeroTerminalsConfirmed] = useState(false);
+  const [acceptedResult, setAcceptedResult] = useState<RecordHandoverResult | null>(null);
+  const handoverRequestRef = useRef<{ fingerprint: string; idempotencyKey: string } | null>(null);
+  const recordHandover = useRecordHandoverMutation();
   // Denomination counts for the handover cash (held here so re-opening the
   // popover preserves them). Reset when the drawer opens.
   const [cashBreakdown, setCashBreakdown] = useState<CashBreakdown>({});
@@ -97,6 +104,7 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
     handleSubmit,
     watch,
     setValue,
+    getValues,
     formState: { errors },
   } = useForm<HandoverFormValues>({
     resolver: zodResolver(handoverFormSchema),
@@ -104,13 +112,13 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
       cashHandedOver: 0,
       cardHandedOver: 0,
       upiHandedOver: 0,
-      creditHandedOver: 0,
       nozzleReadings: {},
       nozzleTesting: {},
       terminalCard: {},
       terminalUpi: {},
     },
   });
+  const acceptedFormFingerprintRef = useRef<string | null>(null);
 
   // Pre-fill form if existing handover is passed.
   //
@@ -129,16 +137,17 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
     prefilledRef.current = true;
 
     setError(null);
+    setAcceptedResult(null);
+    setZeroTerminalsConfirmed(false);
+    handoverRequestRef.current = stationId ? loadHandoverRequestIdentity(stationId, shiftId, userId, duId) : null;
     if (existingHandover) {
       setValue('cashHandedOver', (Number(existingHandover.cashHandedOver) || '') as any);
       setValue('cardHandedOver', (Number(existingHandover.cardHandedOver) || '') as any);
       setValue('upiHandedOver', (Number(existingHandover.upiHandedOver) || '') as any);
-      setValue('creditHandedOver', (Number(existingHandover.creditHandedOver) || '') as any);
     } else {
       setValue('cashHandedOver', '' as any);
       setValue('cardHandedOver', '' as any);
       setValue('upiHandedOver', '' as any);
-      setValue('creditHandedOver', '' as any);
     }
 
     // Initialize readings and testing maps. Closing keeps the opening reading as a
@@ -164,10 +173,14 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
 
   // Watch form values reactively for live expected sales and variance computations
   const formValues = watch();
+  useEffect(() => {
+    if (acceptedResult && acceptedFormFingerprintRef.current !== JSON.stringify(formValues)) {
+      setAcceptedResult(null);
+    }
+  }, [acceptedResult, formValues]);
   const formNozzleReadings = formValues.nozzleReadings || {};
   const formNozzleTesting = formValues.nozzleTesting || {};
   const formCash = formValues.cashHandedOver || 0;
-  const formCredit = formValues.creditHandedOver || 0;
 
   // POS terminals assigned to THIS DU (shift-wide / other-DU machines are not
   // shown to the attendant). When present, card/UPI aggregates are derived from
@@ -178,8 +191,9 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
   const formTerminalUpi = formValues.terminalUpi || {};
   const terminalCardTotal = duTerminals.reduce((sum: number, t: any) => sum + Number(formTerminalCard[t.terminalId] || 0), 0);
   const terminalUpiTotal = duTerminals.reduce((sum: number, t: any) => sum + Number(formTerminalUpi[t.terminalId] || 0), 0);
-  const effectiveCard = terminalCardTotal;
-  const effectiveUpi = terminalUpiTotal;
+  const aggregateAllowed = !stationHasConfiguredTerminals;
+  const effectiveCard = hasTerminals ? terminalCardTotal : aggregateAllowed ? Number(formValues.cardHandedOver || 0) : 0;
+  const effectiveUpi = hasTerminals ? terminalUpiTotal : aggregateAllowed ? Number(formValues.upiHandedOver || 0) : 0;
 
   // ---- Fuel-on-credit (credit chits) declared for this (attendant, DU) ----
   const [creditLines, setCreditLines] = useState<any[]>([]);
@@ -379,6 +393,8 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
       };
       if (isOmc) setOmcLines((prev) => [...prev, line]);
       else setCreditLines((prev) => [...prev, line]);
+      setAcceptedResult(null);
+      handoverRequestRef.current = null;
       resetCcRow();
       await onCreditChanged?.();
     } catch (e: any) {
@@ -395,6 +411,8 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
       setCcBusy(true);
       await transactionService.voidCreditSale(id);
       setCreditLines((prev) => prev.filter((l) => l.id !== id));
+      setAcceptedResult(null);
+      handoverRequestRef.current = null;
       await onCreditChanged?.();
     } catch (e: any) {
       setError(e.message || 'Failed to remove credit sale');
@@ -410,6 +428,8 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
       setCcBusy(true);
       await transactionService.voidOmcCardSale(id);
       setOmcLines((prev) => prev.filter((l) => l.id !== id));
+      setAcceptedResult(null);
+      handoverRequestRef.current = null;
       await onCreditChanged?.();
     } catch (e: any) {
       setError(e.message || 'Failed to remove OMC card sale');
@@ -504,6 +524,22 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
   const onSubmit = async (values: HandoverFormValues) => {
     setError(null);
 
+    // Terminals are assigned but no card/UPI declared: legitimate when no
+    // customer paid by POS, but also the signature of a forgotten terminal
+    // sheet — require one explicit confirmation.
+    if (hasTerminals && !zeroTerminalsConfirmed) {
+      const terminalTotal = duTerminals.reduce(
+        (sum: number, t: any) =>
+          sum + Number(values.terminalCard?.[t.terminalId] ?? 0) + Number(values.terminalUpi?.[t.terminalId] ?? 0),
+        0,
+      );
+      if (terminalTotal === 0) {
+        setZeroTerminalsConfirmed(true);
+        setError('No card/UPI takings entered for the assigned terminal(s). If that is correct, submit again to confirm; otherwise enter the terminal amounts.');
+        return;
+      }
+    }
+
     // Validate reading constraints: closing cannot be less than opening
     for (const nz of calculatedNozzles) {
       if (nz.closing < nz.opening) {
@@ -520,17 +556,15 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
         testingVolume: Number(values.nozzleTesting?.[nozzleId] ?? 0),
       }));
 
-      const payload = {
+      const payload: RecordHandoverPayload = {
         shiftId,
         userId,
         duId,
         cashHandedOver: Number(values.cashHandedOver),
-        cardHandedOver: effectiveCard,
-        upiHandedOver: effectiveUpi,
-        creditHandedOver: creditTotal,
-        testingVolume: totalTestingVolume, // aggregate sum of all nozzles testing volumes
-        expectedSales,
-        varianceAmount: variance,
+        ...(aggregateAllowed ? {
+          cardHandedOver: Number(values.cardHandedOver || 0),
+          upiHandedOver: Number(values.upiHandedOver || 0),
+        } : {}),
         nozzleReadings: nozzleReadingsPayload,
         terminalEntries: hasTerminals
           ? duTerminals.map((t: any) => ({
@@ -541,10 +575,29 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
             }))
           : undefined,
       };
-
-      await shiftService.recordHandover(payload);
-      onSaveSuccess();
-      onClose();
+      handoverRequestRef.current = resolveHandoverRequestIdentity(handoverRequestRef.current, payload);
+      if (stationId) saveHandoverRequestIdentity(stationId, shiftId, userId, duId, handoverRequestRef.current);
+      const result = await recordHandover.mutateAsync({
+        stationId: stationId ?? '',
+        payload,
+        idempotencyKey: handoverRequestRef.current.idempotencyKey,
+      });
+      for (const reading of result.nozzleReadings) {
+        setValue(`nozzleReadings.${reading.nozzleId}`, reading.closingReading, { shouldDirty: false });
+        setValue(`nozzleTesting.${reading.nozzleId}`, reading.testingVolume, { shouldDirty: false });
+      }
+      setValue('cashHandedOver', Number(result.handover.cashHandedOver), { shouldDirty: false });
+      setValue('cardHandedOver', Number(result.handover.cardHandedOver), { shouldDirty: false });
+      setValue('upiHandedOver', Number(result.handover.upiHandedOver), { shouldDirty: false });
+      for (const entry of result.terminalEntries) {
+        setValue(`terminalCard.${entry.terminalId}`, Number(entry.cardAmount), { shouldDirty: false });
+        setValue(`terminalUpi.${entry.terminalId}`, Number(entry.upiAmount), { shouldDirty: false });
+      }
+      acceptedFormFingerprintRef.current = JSON.stringify(getValues());
+      setAcceptedResult(result);
+      handoverRequestRef.current = null;
+      if (stationId) saveHandoverRequestIdentity(stationId, shiftId, userId, duId, null);
+      await onSaveSuccess();
     } catch (err: any) {
       setError(err.message || 'Failed to save attendant handover');
     } finally {
@@ -667,7 +720,7 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
              DU are shown (an attendant isn't aware of machines that weren't
              handed to them; shift-wide / other-DU machines are reconciled at
              shift close). */}
-        {hasTerminals && (
+        {hasTerminals ? (
           <div>
             <h3 style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '10px' }}>
               2. Card / UPI Collections
@@ -733,6 +786,27 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
                 </strong>
               </div>
             </div>
+          </div>
+        ) : aggregateAllowed ? (
+          <div>
+            <h3 style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '10px' }}>
+              2. Card / UPI Collections
+            </h3>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Card total (₹)</label>
+                <input type="number" step="any" min="0" placeholder="0" {...register('cardHandedOver')} style={{ height: '30px', padding: '0 8px', border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-input)', fontFamily: 'var(--font-mono)', fontSize: '12px', textAlign: 'right' }} />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>UPI total (₹)</label>
+                <input type="number" step="any" min="0" placeholder="0" {...register('upiHandedOver')} style={{ height: '30px', padding: '0 8px', border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-input)', fontFamily: 'var(--font-mono)', fontSize: '12px', textAlign: 'right' }} />
+              </div>
+            </div>
+            <span style={{ display: 'block', marginTop: '4px', fontSize: '10px', color: 'var(--text-faint)' }}>Aggregate declaration used because no Payment Terminal is configured.</span>
+          </div>
+        ) : (
+          <div style={{ padding: '10px 12px', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', backgroundColor: 'var(--bg-surface-alt)', color: 'var(--text-muted)', fontSize: '11px' }}>
+            No Payment Terminal is assigned to this Dispenser. Card and UPI declarations must be recorded against an assigned terminal.
           </div>
         )}
 
@@ -959,17 +1033,21 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
             marginTop: '8px',
           }}
         >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', fontSize: '11px', fontWeight: 600, color: acceptedResult ? 'var(--state-success-fg)' : 'var(--text-faint)' }}>
+            <span>{acceptedResult ? 'Accepted by server' : 'Live preview'}</span>
+            {acceptedResult && <span>Saved</span>}
+          </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
             <span>Derived Fuel Volume:</span>
-            <strong style={{ fontFamily: 'var(--font-mono)' }}>{totalVolumeSold.toFixed(3)} {handoverUnitLabel}</strong>
+            <strong style={{ fontFamily: 'var(--font-mono)' }}>{(acceptedResult ? acceptedResult.nozzleReadings.reduce((sum, reading) => sum + reading.grossVolume, 0) : totalVolumeSold).toFixed(3)} {handoverUnitLabel}</strong>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
             <span>Testing/Calibration Volume:</span>
-            <strong style={{ fontFamily: 'var(--font-mono)' }}>{totalTestingVolume.toFixed(1)} {handoverUnitLabel}</strong>
+            <strong style={{ fontFamily: 'var(--font-mono)' }}>{(acceptedResult ? acceptedResult.nozzleReadings.reduce((sum, reading) => sum + reading.testingVolume, 0) : totalTestingVolume).toFixed(1)} {handoverUnitLabel}</strong>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
             <span>Expected Fuel Sales Value:</span>
-            <strong style={{ fontFamily: 'var(--font-mono)' }}>₹{expectedSales.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
+            <strong style={{ fontFamily: 'var(--font-mono)' }}>₹{(acceptedResult?.expectedSales ?? expectedSales).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
           </div>
           {(merchandiseCashNum > 0 || merchandiseNonCashNum > 0) && (
             <>
@@ -987,7 +1065,7 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
               )}
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', fontWeight: 600 }}>
                 <span>Total Expected:</span>
-                <strong style={{ fontFamily: 'var(--font-mono)' }}>₹{expectedTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
+                 <strong style={{ fontFamily: 'var(--font-mono)' }}>₹{(acceptedResult?.expectedTotal ?? expectedTotal).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
               </div>
             </>
           )}
@@ -1005,7 +1083,7 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
           )}
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
             <span>Declared Deposit Sum:</span>
-            <strong style={{ fontFamily: 'var(--font-mono)' }}>₹{totalDeclared.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
+            <strong style={{ fontFamily: 'var(--font-mono)' }}>₹{(acceptedResult?.declaredTotal ?? totalDeclared).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
           </div>
           <div
             style={{
@@ -1016,13 +1094,13 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
               borderTop: '1px solid var(--border-soft)',
               paddingTop: '8px',
               marginTop: '4px',
-              color: variance === 0 ? 'var(--state-success-fg)' : variance > 0 ? 'var(--brand-warning)' : 'var(--brand-danger)',
+              color: (acceptedResult?.varianceAmount ?? variance) === 0 ? 'var(--state-success-fg)' : (acceptedResult?.varianceAmount ?? variance) > 0 ? 'var(--brand-warning)' : 'var(--brand-danger)',
             }}
           >
             <span>Handover Variance:</span>
             <span style={{ fontFamily: 'var(--font-mono)' }}>
-              {variance > 0 ? '+' : ''}₹{variance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-              {variance === 0 ? ' (Balanced)' : variance > 0 ? ' (Surplus)' : ' (Shortage)'}
+              {(acceptedResult?.varianceAmount ?? variance) > 0 ? '+' : ''}₹{(acceptedResult?.varianceAmount ?? variance).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              {(acceptedResult?.varianceAmount ?? variance) === 0 ? ' (Balanced)' : (acceptedResult?.varianceAmount ?? variance) > 0 ? ' (Surplus)' : ' (Shortage)'}
             </span>
           </div>
         </div>
@@ -1041,7 +1119,7 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
             loading={submitting}
             style={{ flex: 1, height: '36px' }}
           >
-            Save Handover &amp; Readings
+            {acceptedResult ? 'Save Changes' : 'Save Handover & Readings'}
           </Button>
           <Button
             type="button"
@@ -1049,7 +1127,7 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
             onClick={onClose}
             style={{ flex: 1, height: '36px' }}
           >
-            Cancel
+            {acceptedResult ? 'Done' : 'Cancel'}
           </Button>
         </div>
       </form>

@@ -2,8 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { FixedClock, InMemoryEventStore, InProcessEventDispatcher, SequentialIdGenerator, BusinessEvents } from '../../../kernel/index.js';
 import type { ExecutionContext } from '../../../kernel/index.js';
 import { GenerateDssr } from './generate-dssr.js';
+import { CloseBusinessDayAndGenerateDssr } from './close-business-day.js';
 import type { DssrDataReader, DssrSnapshot, DssrSnapshotRepository, DssrSourceData } from './ports.js';
-import type { BusinessDay, BusinessDayRepository } from '../../station-ops/business-days/index.js';
+import type { BusinessDay, BusinessDayWriteRepository } from '../../station-ops/business-days/index.js';
 
 class SnapRepo implements DssrSnapshotRepository {
   readonly rows: DssrSnapshot[] = [];
@@ -15,11 +16,20 @@ class SnapRepo implements DssrSnapshotRepository {
     if (i >= 0) this.rows[i] = s; else this.rows.push(s);
   }
 }
-class BdRepo implements BusinessDayRepository {
+class BdRepo implements BusinessDayWriteRepository {
   constructor(readonly rows: BusinessDay[]) {}
   async findById(id: string) { return this.rows.find((r) => r.id === id) ?? null; }
-  async save() {}
+  async save(day: BusinessDay) {
+    const index = this.rows.findIndex((row) => row.id === day.id);
+    if (index >= 0) this.rows[index] = day;
+  }
   async findOpenByStation() { return null; }
+  async findByStationAndDate(orgId: string, stationId: string, date: string) {
+    return this.rows.find((row) => row.organizationId === orgId && row.stationId === stationId && row.businessDate === date) ?? null;
+  }
+  async lockStation() {}
+  async lockById() {}
+  async lockByStationAndDate() {}
 }
 class Reader implements DssrDataReader {
   constructor(private readonly data: DssrSourceData) {}
@@ -39,13 +49,13 @@ function source(): DssrSourceData {
     ],
     collections: [{ paymentMethod: 'Cash', amount: 2000 }, { paymentMethod: 'UPI', amount: 1000 }],
     expenses: [{ affectsDrawer: true, paidFrom: 'SHIFT_CASH', amount: 300, status: 'ACTIVE' }, { affectsDrawer: false, paidFrom: 'BANK', amount: 5000, status: 'ACTIVE' }, { affectsDrawer: true, paidFrom: 'SHIFT_CASH', amount: 999, status: 'VOIDED' }],
-    income: [{ affectsDrawer: true, receivedInto: 'SHIFT_CASH', amount: 500, status: 'ACTIVE', categoryName: 'Tanker Rental' }, { affectsDrawer: false, receivedInto: 'BANK', amount: 1500, status: 'ACTIVE', categoryName: 'Commission' }, { affectsDrawer: true, receivedInto: 'SHIFT_CASH', amount: 999, status: 'VOIDED', categoryName: 'Scrap Sale' }],
+    income: [{ affectsDrawer: true, receivedInto: 'SHIFT_CASH', amount: 500, status: 'ACTIVE', categoryName: 'Tanker Rental' }, { affectsDrawer: false, receivedInto: 'BANK', amount: 1500, status: 'ACTIVE', categoryName: 'Commission', taxCategory: 'GST', taxableAmount: 1271.19, cgst: 114.41, sgst: 114.4, igst: 0, cess: 0 }, { affectsDrawer: true, receivedInto: 'SHIFT_CASH', amount: 999, status: 'VOIDED', categoryName: 'Scrap Sale', taxCategory: 'GST', taxableAmount: 846.61, cgst: 76.19, sgst: 76.2, igst: 0, cess: 0 }],
     purchases: [{ amount: 450000 }],
     supplierPayments: [{ affectsDrawer: false, paidFrom: 'BANK', amount: 200000 }],
     sales: [{ paymentMethod: 'Cash', saleType: 'Product', totalAmount: 500 }, { paymentMethod: 'Credit', saleType: 'Product', totalAmount: 1180 }],
     creditSales: [{ customerType: 'Regular', amount: 1000 }, { customerType: 'Fleet', amount: 4000 }],
     stockVariances: [{ tankName: 'T1', productName: 'Petrol', unit: 'Litre', inventoryType: 'BULK', expectedQuantity: 5000, actualQuantity: 4990, varianceQuantity: -10, reason: null }],
-    saleItems: [{ productId: 'p2', quantity: 2, revenue: 1680 }],
+    saleItems: [{ productId: 'p2', quantity: 2, revenue: 1680, taxCategory: 'GST', taxableAmount: 1423.73, cgst: 128.14, sgst: 128.13, igst: 0, vat: 0, cess: 0 }],
     products: { p1: { name: 'Petrol', code: 'MS', costBasis: 88 }, p2: { name: 'Engine Oil', code: 'EO', costBasis: 400 } },
     nozzles: { n1: 'N1' },
   };
@@ -80,6 +90,14 @@ describe('GenerateDssr', () => {
       expect(d.income.drawer).toBe(500); // voided excluded
       expect(d.income.business).toBe(1500);
       expect(d.income.total).toBe(2000);
+      // FI4: only live GST income contributes to the output-GST-on-income lines.
+      expect(d.income.tax.entries).toBe(1);
+      expect(d.income.tax.taxable).toBe(1271.19);
+      expect(d.income.tax.total).toBe(228.81);
+      // T5: output GST on merchandise, extracted from the MRP-inclusive line.
+      expect(d.salesTax.gst.taxable).toBe(1423.73);
+      expect(d.salesTax.gst.total).toBe(256.27);
+      expect(d.salesTax.vat.vat).toBe(0);
       expect(d.purchases.total).toBe(450000);
       expect(d.supplierPayments.bank).toBe(200000);
       expect(d.fuelStockVariance[0].status).toBe('Loss');
@@ -120,11 +138,116 @@ describe('GenerateDssr', () => {
     expect(snapshots.rows).toHaveLength(1);
   });
 
+  it('rejects an open Business Day without reading data, saving a snapshot, or publishing an event', async () => {
+    const snapshots = new SnapRepo();
+    const store = new InMemoryEventStore();
+    let readCount = 0;
+    const result = await new GenerateDssr({
+      businessDays: new BdRepo([{ ...bday(), status: 'OPEN', closedBy: null, closedAt: null }]),
+      snapshots,
+      reader: { readBusinessDay: async () => { readCount += 1; return source(); } },
+      events: new InProcessEventDispatcher({ store }),
+    }).execute({ businessDayId: 'bd-1' }, ctx());
+
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error).toMatchObject({ code: 'INVARIANT_VIOLATION', details: { businessDayId: 'bd-1', status: 'OPEN' } });
+    expect(readCount).toBe(0);
+    expect(snapshots.rows).toHaveLength(0);
+    expect(store.events).toHaveLength(0);
+  });
+
   it('rejects an unknown business day', async () => {
     const result = await new GenerateDssr({
       businessDays: new BdRepo([]), snapshots: new SnapRepo(), reader: new Reader(source()),
       events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
     }).execute({ businessDayId: 'nope' }, ctx());
     expect(result.success).toBe(false);
+  });
+
+  it('rejects a Business Day from another Station in the execution context', async () => {
+    const result = await new GenerateDssr({
+      businessDays: new BdRepo([bday()]), snapshots: new SnapRepo(), reader: new Reader(source()),
+      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
+    }).execute({ businessDayId: 'bd-1' }, { ...ctx(), stationId: 'station-2' });
+
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error.code).toBe('NOT_FOUND');
+  });
+
+  it('includes a later Business Day Tank Dip without changing its Shift Summary', async () => {
+    const data = source();
+    data.stockVariances = [];
+    const immutableSummary = structuredClone(data.shiftSummaries[0].snapshot);
+    data.stockVariances.push({ tankName: 'T2', productName: 'Diesel', unit: 'Litre', inventoryType: 'BULK', expectedQuantity: 8000, actualQuantity: 7990, varianceQuantity: -10, reason: 'Post-close dip' });
+
+    const result = await new GenerateDssr({
+      businessDays: new BdRepo([bday()]), snapshots: new SnapRepo(), reader: new Reader(data),
+      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
+    }).execute({ businessDayId: 'bd-1' }, ctx());
+
+    expect(result.success).toBe(true);
+    if (result.success) expect((result.data.snapshotData as any).fuelStockVariance).toEqual([
+      expect.objectContaining({ tankName: 'T2', varianceQuantity: -10, reason: 'Post-close dip' }),
+    ]);
+    expect(data.shiftSummaries[0].snapshot).toEqual(immutableSummary);
+  });
+});
+
+describe('CloseBusinessDayAndGenerateDssr', () => {
+  const openDay = (): BusinessDay => ({ ...bday(), status: 'OPEN', closedBy: null, closedAt: null });
+
+  it('closes the day and generates its DSSR', async () => {
+    const businessDays = new BdRepo([openDay()]);
+    const snapshots = new SnapRepo();
+    const result = await new CloseBusinessDayAndGenerateDssr({
+      businessDays, openShifts: { hasOpenShift: async () => false }, snapshots, dssrData: new Reader(source()),
+      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
+    }).execute({ businessDayId: 'bd-1', stationId: 'st-1' }, ctx());
+    expect(result.success).toBe(true);
+    expect(businessDays.rows[0].status).toBe('CLOSED');
+    expect(snapshots.rows).toHaveLength(1);
+  });
+
+  it('rejects closure while the day has an open Shift', async () => {
+    const businessDays = new BdRepo([openDay()]);
+    const result = await new CloseBusinessDayAndGenerateDssr({
+      businessDays, openShifts: { hasOpenShift: async () => true }, snapshots: new SnapRepo(), dssrData: new Reader(source()),
+      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
+    }).execute({ businessDayId: 'bd-1', stationId: 'st-1' }, ctx());
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error.code).toBe('INVARIANT_VIOLATION');
+    expect(businessDays.rows[0].status).toBe('OPEN');
+  });
+
+  it('locks the Business Day before checking for an open Shift', async () => {
+    const calls: string[] = [];
+    const businessDays = new BdRepo([openDay()]);
+    businessDays.lockStation = async () => { calls.push('station-lock'); };
+    businessDays.lockById = async () => { calls.push('day-lock'); };
+    const result = await new CloseBusinessDayAndGenerateDssr({
+      businessDays,
+      openShifts: { hasOpenShift: async () => { calls.push('check'); return true; } },
+      snapshots: new SnapRepo(),
+      dssrData: new Reader(source()),
+      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
+    }).execute({ businessDayId: 'bd-1', stationId: 'st-1' }, ctx());
+
+    expect(result.success).toBe(false);
+    expect(calls).toEqual(['station-lock', 'day-lock', 'check']);
+  });
+
+  it('force-regenerates an existing preview snapshot at close', async () => {
+    const snapshots = new SnapRepo();
+    snapshots.rows.push({ id: 'existing', organizationId: 'org-1', stationId: 'st-1', businessDate: '2026-03-15', generatedAt: 'earlier', snapshotData: { marker: 'original' } });
+    const result = await new CloseBusinessDayAndGenerateDssr({
+      businessDays: new BdRepo([openDay()]), openShifts: { hasOpenShift: async () => false }, snapshots, dssrData: new Reader(source()),
+      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
+    }).execute({ businessDayId: 'bd-1', stationId: 'st-1' }, ctx());
+    expect(result.success).toBe(true);
+    expect(snapshots.rows).toEqual([expect.objectContaining({
+      id: 'existing',
+      generatedAt: '2026-03-15T20:00:00.000Z',
+      snapshotData: expect.objectContaining({ businessDayId: 'bd-1', status: 'CLOSED', shiftsIncluded: 1 }),
+    })]);
   });
 });

@@ -9,6 +9,9 @@ import { useConfirm } from '../primitives/ConfirmDialog.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import { inr } from '../../utils/format.js';
 import { isDesktopApp } from '../../utils/platform.js';
+import { formatStationDateTime } from '@pump/shared';
+import { ShiftBusinessDateContext } from './ShiftBusinessDateContext.js';
+import { useStationBusinessDate } from '../../hooks/useStationBusinessDate.js';
 
 const shiftService = new CloudShiftService();
 
@@ -41,6 +44,8 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
   const printRef = useRef<HTMLDivElement>(null);
 
   const { snapshotData, generatedAt } = shiftSummary;
+  const stationSettings = (station?.settings ?? {}) as { timezone?: string; business_day_starts_at?: string };
+  const currentBusinessDate = useStationBusinessDate(stationSettings.timezone, stationSettings.business_day_starts_at);
   const {
     shiftId,
     templateName,
@@ -69,8 +74,6 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
     expenses = [],
     purchases = [],
     collections = [],
-    stockVariances = [],
-    dipReadings = [],
     handovers = [],
     terminalBreakdown = [],
     creditSales = [],
@@ -86,7 +89,7 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
   const handleReopen = async () => {
     if (!(await confirm({
       title: 'Reopen this shift?',
-      message: 'Reopening will delete this compiled Shift Summary and set the shift state back to OPEN.',
+      message: 'Reopening will delete this compiled Shift Summary and set the shift state back to OPEN. It is allowed until the Business Day closes, provided no other shift is open.',
       confirmLabel: 'Reopen',
       danger: true,
     }))) {
@@ -156,9 +159,21 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
           Shift Summary Record
         </h2>
         <p style={{ color: 'var(--text-muted)', fontSize: '12px', marginTop: '4px' }}>
-          Authoritative Operational Snapshot • Compiled {new Date(generatedAt).toLocaleString()}
+          Authoritative Operational Snapshot • Compiled {formatStationDateTime(generatedAt, stationSettings.timezone)}
         </p>
       </div>
+
+      {shiftSummary.businessDate && (
+        <div style={{ marginBottom: '20px' }}>
+          <ShiftBusinessDateContext
+            businessDate={shiftSummary.businessDate}
+            currentBusinessDate={currentBusinessDate}
+            openedAt={openedAt || shiftSummary.openedAt}
+            closedAt={closedAt || shiftSummary.closedAt}
+            timeZone={stationSettings.timezone}
+          />
+        </div>
+      )}
 
       {/* Metadata Panel */}
       <div style={{
@@ -180,9 +195,10 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
           <strong style={{ fontSize: '13px', color: 'var(--text-strong)' }}>{templateName}</strong>
         </div>
         <div>
-          <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', textTransform: 'uppercase', fontWeight: 600 }}>Operational Duration</span>
+          <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', textTransform: 'uppercase', fontWeight: 600 }}>Lifecycle Timestamps</span>
           <strong style={{ fontSize: '12px', color: 'var(--text-strong)' }}>
-            {new Date(openedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - {new Date(closedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            Opened {formatStationDateTime(openedAt || shiftSummary.openedAt, stationSettings.timezone)}<br />
+            Closed {formatStationDateTime(closedAt || shiftSummary.closedAt, stationSettings.timezone)}
           </strong>
         </div>
         <div>
@@ -498,97 +514,6 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
                   ₹{(Number(creditSalesTotal) || creditSales.reduce((s: number, r: any) => s + Number(r.amount || 0), 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                 </td>
               </tr>
-            </tbody>
-          </table>
-        </>
-      )}
-
-      {/* Tank Physical Dip Reconciliation */}
-      {dipReadings && dipReadings.length > 0 && (
-        <>
-          <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
-            Tank Physical Dip Reconciliation
-          </h3>
-          <table style={{
-            width: '100%',
-            borderCollapse: 'collapse',
-            marginBottom: '32px',
-            fontSize: '13px'
-          }}>
-            <thead>
-              <tr style={{ backgroundColor: 'var(--bg-surface-alt)', borderBottom: '1px solid var(--border-soft)', textAlign: 'left', color: 'var(--text-muted)' }}>
-                <th style={{ padding: '10px 16px', fontWeight: 600 }}>Tank</th>
-                <th style={{ padding: '10px 16px', fontWeight: 600 }}>Product</th>
-                <th style={{ padding: '10px 16px', fontWeight: 600, textAlign: 'right' }}>Tank Capacity</th>
-                <th style={{ padding: '10px 16px', fontWeight: 600, textAlign: 'right' }}>Physical Actual Stock</th>
-              </tr>
-            </thead>
-            <tbody>
-              {dipReadings.map((dr: any, idx: number) => (
-                <tr key={idx} style={{ borderBottom: '1px solid var(--border-soft)' }}>
-                  <td style={{ padding: '12px 16px', fontWeight: 600, color: 'var(--text-strong)' }}>{dr.tankName}</td>
-                  <td style={{ padding: '12px 16px', color: 'var(--text-default)' }}>{dr.productName} ({dr.productCode})</td>
-                  <td style={{ padding: '12px 16px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{Number(dr.capacity).toLocaleString('en-IN')} {dr.unit || 'L'}</td>
-                  <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 600, color: 'var(--text-strong)', fontFamily: 'var(--font-mono)' }}>{Number(dr.actualQuantity).toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} {dr.unit || 'L'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </>
-      )}
-
-      {/* Stock Variance Reconciliation */}
-      {stockVariances && stockVariances.length > 0 && (
-        <>
-          <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
-            Product Stock Variances
-          </h3>
-          <table style={{
-            width: '100%',
-            borderCollapse: 'collapse',
-            marginBottom: '32px',
-            fontSize: '13px'
-          }}>
-            <thead>
-              <tr style={{ backgroundColor: 'var(--bg-surface-alt)', borderBottom: '1px solid var(--border-soft)', textAlign: 'left', color: 'var(--text-muted)' }}>
-                <th style={{ padding: '10px 16px', fontWeight: 600 }}>Product</th>
-                <th style={{ padding: '10px 16px', fontWeight: 600, textAlign: 'right' }}>Expected Stock</th>
-                <th style={{ padding: '10px 16px', fontWeight: 600, textAlign: 'right' }}>Physical Actual</th>
-                <th style={{ padding: '10px 16px', fontWeight: 600, textAlign: 'right' }}>Variance</th>
-                <th style={{ padding: '10px 16px', fontWeight: 600 }}>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {stockVariances.map((sv: any, idx: number) => {
-                const diff = sv.varianceQuantity;
-                const isSevere = sv.expectedQuantity > 0 && Math.abs(diff) > 0.005 * sv.expectedQuantity;
-                let diffColor = 'var(--text-strong)';
-                if (diff < 0) {
-                  diffColor = 'var(--state-danger-fg)';
-                } else if (diff > 0) {
-                  diffColor = 'var(--state-success-fg)';
-                }
-
-                return (
-                  <tr key={idx} style={{ borderBottom: '1px solid var(--border-soft)' }}>
-                    <td style={{ padding: '12px 16px', fontWeight: 600, color: 'var(--text-strong)' }}>{sv.productName} ({sv.productCode})</td>
-                    <td style={{ padding: '12px 16px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{Number(sv.expectedQuantity).toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} {sv.unit || 'L'}</td>
-                    <td style={{ padding: '12px 16px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{Number(sv.actualQuantity).toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} {sv.unit || 'L'}</td>
-                    <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 600, color: diffColor, fontFamily: 'var(--font-mono)' }}>
-                      {diff > 0 ? '+' : ''}{diff.toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} {sv.unit || 'L'}
-                    </td>
-                    <td style={{ padding: '12px 16px', fontSize: '11px' }}>
-                      {isSevere ? (
-                        <span style={{ color: 'var(--state-warning-fg)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                          <AlertTriangle size={12} /> Discrepancy (&gt;0.5%)
-                        </span>
-                      ) : (
-                        <span style={{ color: 'var(--state-success-fg)', fontWeight: 600 }}>Normal</span>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
             </tbody>
           </table>
         </>

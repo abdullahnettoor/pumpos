@@ -30,6 +30,7 @@ export class DrizzleTankRepository implements TankRepository {
       name: r.name,
       productId: r.productId,
       capacity: r.capacity,
+      status: r.status as Tank['status'],
       createdAt: r.createdAt.toISOString(),
       updatedAt: r.updatedAt.toISOString(),
     };
@@ -38,14 +39,22 @@ export class DrizzleTankRepository implements TankRepository {
     const [r] = await this.db.select().from(schema.tanks).where(eq(schema.tanks.id, id)).limit(1);
     return r ? this.toEntity(r) : null;
   }
+  async findByIdForUpdate(id: string): Promise<Tank | null> {
+    const [r] = await this.db.select().from(schema.tanks).where(eq(schema.tanks.id, id)).limit(1).for('update');
+    return r ? this.toEntity(r) : null;
+  }
+  async hasNozzles(id: string): Promise<boolean> {
+    const [r] = await this.db.select({ id: schema.nozzles.id }).from(schema.nozzles).where(eq(schema.nozzles.tankId, id)).limit(1);
+    return Boolean(r);
+  }
   async save(t: Tank): Promise<void> {
     await this.db
       .insert(schema.tanks)
-      .values({ id: t.id, organizationId: t.organizationId, stationId: t.stationId, name: t.name, productId: t.productId, capacity: t.capacity, createdAt: new Date(t.createdAt), updatedAt: new Date(t.updatedAt) })
-      .onConflictDoUpdate({ target: schema.tanks.id, set: { name: t.name, productId: t.productId, capacity: t.capacity, updatedAt: new Date(t.updatedAt) } });
+      .values({ id: t.id, organizationId: t.organizationId, stationId: t.stationId, name: t.name, productId: t.productId, capacity: t.capacity, status: t.status, createdAt: new Date(t.createdAt), updatedAt: new Date(t.updatedAt) })
+      .onConflictDoUpdate({ target: schema.tanks.id, set: { name: t.name, productId: t.productId, capacity: t.capacity, status: t.status, updatedAt: new Date(t.updatedAt) } });
   }
-  async deleteById(id: string): Promise<boolean> {
-    const rows = await this.db.delete(schema.tanks).where(eq(schema.tanks.id, id)).returning({ id: schema.tanks.id });
+  async deactivateById(id: string): Promise<boolean> {
+    const rows = await this.db.update(schema.tanks).set({ status: 'INACTIVE', updatedAt: new Date() }).where(eq(schema.tanks.id, id)).returning({ id: schema.tanks.id });
     return rows.length > 0;
   }
   async listByStation(organizationId: string, stationId: string): Promise<Tank[]> {
@@ -220,7 +229,18 @@ export class DrizzleUserRepository implements UserRepository {
       .values({ id: u.id, organizationId: u.organizationId, authUserId: u.authUserId, fullName: u.fullName, email: u.email, phone: u.phone, role: u.role, status: u.status, createdAt: new Date(u.createdAt), updatedAt: new Date(u.updatedAt) })
       .onConflictDoUpdate({ target: schema.users.id, set: { fullName: u.fullName, email: u.email, phone: u.phone, role: u.role, status: u.status, updatedAt: new Date(u.updatedAt) } });
   }
-  async setStationAssignments(userId: string, stationIds: string[]): Promise<void> {
+  async setStationAssignments(userId: string, stationIds: string[], organizationId: string): Promise<void> {
+    // Tenant integrity: every assigned station must belong to the same
+    // organization — cross-tenant assignments must be structurally impossible.
+    if (stationIds.length > 0) {
+      const owned = await this.db
+        .select({ id: schema.stations.id })
+        .from(schema.stations)
+        .where(and(inArray(schema.stations.id, stationIds), eq(schema.stations.organizationId, organizationId)));
+      if (owned.length !== new Set(stationIds).size) {
+        throw new Error('One or more stations do not belong to this organization');
+      }
+    }
     await this.db.delete(schema.userStationAssignments).where(eq(schema.userStationAssignments.userId, userId));
     if (stationIds.length > 0) {
       await this.db.insert(schema.userStationAssignments).values(stationIds.map((stationId) => ({ userId, stationId })));

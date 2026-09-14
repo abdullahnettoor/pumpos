@@ -1,10 +1,9 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
-import { verify, decode } from 'hono/jwt';
 import { createDb, DbClient, schema } from '@pump/db';
-import { eq, and, desc, inArray, count } from 'drizzle-orm';
+import { eq, and, asc, desc, inArray, count, isNotNull, isNull, lt, or, sql, type SQL } from 'drizzle-orm';
 import { Role, canManageUsers, organizationUpdateSchema } from '@pump/shared';
-import { BusinessEvents, SystemClock, UuidGenerator, createEvent, type DomainEvent } from '@pump/core';
+import { BusinessEvents, SystemClock, UuidGenerator, createEvent, type DomainEvent, type EventTone } from '@pump/core';
 import { stationSetupRouter } from './routes/station-setup.js';
 import { paymentTerminalsRouter } from './routes/payment-terminals.js';
 import { productsRouter } from './routes/products.js';
@@ -13,12 +12,19 @@ import { transactionsRouter } from './routes/transactions.js';
 import { dssrRouter } from './routes/dssr.js';
 import { financeRouter } from './routes/finance.js';
 import { idempotency } from './infra/idempotency.js';
+import { verifySupabaseJwt } from './infra/supabase-jwt.js';
 import { SupabaseAdmin } from './infra/supabase-admin.js';
 import { DrizzleEventStore } from './infra/events.js';
 import { rateLimit } from './infra/rate-limit.js';
+import type { AuthenticatedPrincipal } from './infra/authenticated-principal.js';
+import {
+  readActivityMetadata,
+  renderActivityFallback,
+  resolveActivityActor,
+  type ActivityActor,
+  type ActivityGroupingRole,
+} from './infra/activity.js';
 
-
-const keyCache = new Map<string, CryptoKey>();
 
 // --- Auth cache (per-isolate) --------------------------------------------
 // Cloudflare Workers reuse isolates across many requests, so a module-level
@@ -87,95 +93,14 @@ type Bindings = {
 
 type Variables = {
   db: DbClient;
-  user: {
-    id: string;
-    email: string | null;
-    fullName: string | null;
-    organizationId: string;
-    role: Role;
-    assignedStationIds: string[];
+  user: AuthenticatedPrincipal;
+  platformAdmin: {
+    email: string;
+    subjectId: string | null;
   };
 };
 
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
-
-function isLocalRequest(url: string): boolean {
-  try {
-    const host = new URL(url).hostname;
-    return host === 'localhost' || host === '127.0.0.1' || host === '::1';
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Verify a Supabase-issued JWT and return its payload. Supports asymmetric
- * ES256 (verified via the project's JWKS, cached per-isolate) with an optional
- * legacy HS256 fallback. In local/dev only, a JWKS-fetch failure falls back to
- * the decoded claims. Shared by the tenant auth middleware and the platform-admin
- * middleware so JWT verification has a single source of truth.
- */
-async function verifySupabaseJwt(token: string, env: Bindings, reqUrl: string): Promise<any> {
-  const { header, payload: decodedPayload } = decode(token);
-
-  if (header.alg === 'HS256') {
-    const secret = env.SUPABASE_JWT_SECRET;
-    if (!secret) {
-      throw new Error('Received legacy HS256 token but SUPABASE_JWT_SECRET is not configured. Enable asymmetric JWTs or set the legacy secret.');
-    }
-    return await verify(token, secret, 'HS256');
-  }
-
-  if (header.alg === 'ES256') {
-    const kid = header.kid;
-    if (!kid) {
-      throw new Error('Missing key ID (kid) in token header');
-    }
-    try {
-      let publicKey = keyCache.get(kid);
-      if (!publicKey) {
-        const iss = decodedPayload.iss;
-        if (!iss) {
-          throw new Error('Missing issuer (iss) in token payload');
-        }
-        const jwksUrl = iss.endsWith('/') ? `${iss}.well-known/jwks.json` : `${iss}/.well-known/jwks.json`;
-        console.log(`[JWT JWKS FETCH] Fetching JWKS from: ${jwksUrl}`);
-        const response = await fetch(jwksUrl);
-        if (!response.ok) {
-          throw new Error(`Failed to fetch JWKS from ${jwksUrl}: ${response.statusText}`);
-        }
-        const jwks = await response.json() as { keys: any[] };
-        const jwk = jwks.keys.find((k: any) => k.kid === kid);
-        if (!jwk) {
-          throw new Error(`Key with ID ${kid} not found in JWKS`);
-        }
-        publicKey = await crypto.subtle.importKey(
-          'jwk',
-          jwk,
-          { name: 'ECDSA', namedCurve: 'P-256' },
-          true,
-          ['verify']
-        );
-        keyCache.set(kid, publicKey);
-      }
-      return await verify(token, publicKey, 'ES256');
-    } catch (jwksError: any) {
-      // Local-only fallback for workerd TLS trust chain issues when fetching JWKS.
-      // Keep production strict by only permitting this in development/local environments
-      // AND for localhost requests.
-      const isDevelopment = env.ENVIRONMENT === 'development' || env.ENVIRONMENT === 'local';
-      if (isDevelopment && isLocalRequest(reqUrl) && decodedPayload?.sub) {
-        console.warn('[JWT DEV FALLBACK] JWKS fetch/verify failed locally; using decoded token claims only.', {
-          reason: jwksError?.message || String(jwksError),
-        });
-        return decodedPayload;
-      }
-      throw jwksError;
-    }
-  }
-
-  throw new Error(`Unsupported algorithm: ${header.alg}`);
-}
 
 
 function getDbFromHyperdrive(env: Bindings): DbClient {
@@ -312,6 +237,200 @@ app.get('/health', (c) => {
 // Authenticated Routes Group
 const api = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
+type ActivityEventRow = {
+  eventId: string;
+  eventType: string;
+  stationId: string | null;
+  stationName: string | null;
+  aggregateType: string;
+  aggregateId: string;
+  occurredAt: Date;
+  recordedAt: Date;
+  actorId: string | null;
+  actorName: string | null;
+  actorEmail: string | null;
+  correlationId: string | null;
+  causationId: string | null;
+  metadata: unknown;
+};
+
+interface ActivityEvent {
+  eventId: string;
+  eventType: string;
+  stationId: string | null;
+  stationName: string | null;
+  aggregateType: string;
+  aggregateId: string;
+  occurredAt: Date;
+  recordedAt: Date;
+  correlationId: string | null;
+  causationId: string | null;
+  groupingRole: ActivityGroupingRole | null;
+  actor: ActivityActor;
+  title: string;
+  description: string;
+  tone: EventTone;
+  renderStatus: 'rendered' | 'fallback';
+}
+
+interface ActivityGroupSummary {
+  groupId: string;
+  primary: ActivityEvent;
+  relatedCount: number;
+  primaryRecordedAt: Date;
+  isLegacy: boolean;
+}
+
+interface ActivityPage {
+  items: ActivityGroupSummary[];
+  nextCursor: string | null;
+}
+
+interface ActivityGroupDetail extends ActivityGroupSummary {
+  related: ActivityEvent[];
+}
+
+interface ActivityCursor {
+  recordedAt: Date;
+  eventId: string;
+}
+
+const ACTIVITY_UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+const activityEventFields = {
+  eventId: schema.events.eventId,
+  eventType: schema.events.eventType,
+  stationId: schema.events.stationId,
+  stationName: schema.stations.name,
+  aggregateType: schema.events.aggregateType,
+  aggregateId: schema.events.aggregateId,
+  occurredAt: schema.events.occurredAt,
+  recordedAt: schema.events.recordedAt,
+  actorId: schema.events.actorId,
+  actorName: schema.users.fullName,
+  actorEmail: schema.users.email,
+  correlationId: schema.events.correlationId,
+  causationId: schema.events.causationId,
+  metadata: schema.events.metadata,
+};
+
+function encodeActivityCursor(row: Pick<ActivityEventRow, 'recordedAt' | 'eventId'>): string {
+  return btoa(JSON.stringify({ recordedAt: row.recordedAt.toISOString(), eventId: row.eventId }))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '');
+}
+
+function decodeActivityCursor(value: string | undefined): ActivityCursor | null {
+  if (!value) return null;
+  if (!/^[A-Za-z0-9_-]+$/.test(value)) {
+    throw new Error('Malformed activity cursor');
+  }
+
+  try {
+    const padded = value.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(value.length / 4) * 4, '=');
+    const decoded: unknown = JSON.parse(atob(padded));
+    if (
+      !decoded ||
+      typeof decoded !== 'object' ||
+      Array.isArray(decoded) ||
+      typeof (decoded as Record<string, unknown>).recordedAt !== 'string' ||
+      typeof (decoded as Record<string, unknown>).eventId !== 'string'
+    ) {
+      throw new Error('Malformed activity cursor');
+    }
+    const recordedAt = new Date((decoded as Record<string, string>).recordedAt);
+    const eventId = (decoded as Record<string, string>).eventId;
+    if (Number.isNaN(recordedAt.getTime()) || !ACTIVITY_UUID_PATTERN.test(eventId)) {
+      throw new Error('Malformed activity cursor');
+    }
+    return { recordedAt, eventId };
+  } catch {
+    throw new Error('Malformed activity cursor');
+  }
+}
+
+function parseActivityLimit(value: string | undefined): number {
+  if (!value) return 50;
+  if (!/^[1-9]\d*$/.test(value)) {
+    throw new Error('limit must be a positive integer');
+  }
+  return Math.min(Number(value), 200);
+}
+
+function isValidActivityGroupId(value: string): boolean {
+  return ACTIVITY_UUID_PATTERN.test(value);
+}
+
+function formatActivityEvent(row: ActivityEventRow, isLegacy = false): ActivityEvent {
+  const metadata = readActivityMetadata(row.metadata);
+  const rendered = renderActivityFallback({ eventType: row.eventType, metadata: row.metadata });
+  return {
+    eventId: row.eventId,
+    eventType: row.eventType,
+    stationId: row.stationId,
+    stationName: row.stationName,
+    aggregateType: row.aggregateType,
+    aggregateId: row.aggregateId,
+    occurredAt: row.occurredAt,
+    recordedAt: row.recordedAt,
+    correlationId: row.correlationId,
+    causationId: row.causationId,
+    groupingRole: isLegacy ? 'primary' : metadata.groupingRole,
+    actor: resolveActivityActor(row.metadata, row.actorId, {
+      fullName: row.actorName,
+      email: row.actorEmail,
+    }),
+    title: rendered.title,
+    description: rendered.description,
+    tone: rendered.tone,
+    renderStatus: rendered.renderStatus,
+  };
+}
+
+function activityGroupFilter(
+  organizationId: string,
+  stationId: string | undefined,
+  type: string | undefined,
+): SQL | undefined {
+  if (!stationId && !type) return undefined;
+
+  const stationFilter = stationId
+    ? sql` AND activity_group_members.station_id = ${stationId}`
+    : sql``;
+  const typeFilter = type
+    ? sql` AND activity_group_members.event_type = ${type}`
+    : sql``;
+  return sql`EXISTS (
+    SELECT 1
+    FROM events AS activity_group_members
+    WHERE activity_group_members.organization_id = ${organizationId}
+      AND (
+        (${schema.events.correlationId} IS NOT NULL
+          AND activity_group_members.correlation_id = ${schema.events.correlationId})
+        OR
+        (${schema.events.correlationId} IS NULL
+          AND activity_group_members.event_id = ${schema.events.eventId})
+      )
+      ${stationFilter}
+      ${typeFilter}
+  )`;
+}
+
+function activityJoins(organizationId: string) {
+  return {
+    station: and(
+      eq(schema.stations.id, schema.events.stationId),
+      eq(schema.stations.organizationId, organizationId),
+    ),
+    actor: and(
+      eq(schema.users.id, schema.events.actorId),
+      eq(schema.users.organizationId, organizationId),
+    ),
+  };
+}
+
 // Auth Middleware (validates JWT tokens issued by Supabase Auth)
 api.use('*', async (c, next) => {
   if (c.req.method === 'OPTIONS') {
@@ -395,13 +514,17 @@ api.use('*', async (c, next) => {
 
     await next();
   } catch (err: any) {
-    const causeMessage = err.cause ? ` | Cause: ${err.cause.message || err.cause}` : '';
+    // Never expose internal error details (messages, causes, stacks) to the
+    // caller — log them server-side and return a fixed envelope.
+    console.error('[AUTH] Token validation failed', {
+      message: err?.message,
+      cause: err?.cause?.message ?? err?.cause,
+    });
     return c.json({
       success: false,
       error: {
         code: 'UNAUTHORIZED',
-        message: `Token validation failed: ${err.message}${causeMessage}`,
-        stack: err.stack
+        message: 'Invalid or expired authentication token',
       }
     }, 401);
   }
@@ -449,40 +572,143 @@ api.put('/organization', async (c) => {
   return c.json({ success: true, data: updated });
 });
 
-// GET /api/activity - human-readable business-event activity feed (Owner only).
+// GET /api/activity - human-readable business-event activity groups (Owner only).
 // (Named /activity rather than /events so ad-blockers don't block it.)
-// Org-scoped; optional ?stationId= and ?type= filters, ?limit= (default 50, max 200).
 api.get('/activity', async (c) => {
   const user = c.var.user;
   if (!canManageUsers(user.role)) {
     return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Only Owners can view the activity log' } }, 403);
   }
-  const db = c.var.db;
   const stationId = c.req.query('stationId');
   const type = c.req.query('type');
-  const limit = Math.min(Number(c.req.query('limit')) || 50, 200);
-  const conds = [eq(schema.events.organizationId, user.organizationId)];
-  if (stationId) conds.push(eq(schema.events.stationId, stationId));
-  if (type) conds.push(eq(schema.events.eventType, type));
-  const rows = await db
-    .select({
-      id: schema.events.id,
-      eventType: schema.events.eventType,
-      stationId: schema.events.stationId,
-      stationName: schema.stations.name,
-      aggregateType: schema.events.aggregateType,
-      occurredAt: schema.events.occurredAt,
-      recordedAt: schema.events.recordedAt,
-      actorName: schema.users.fullName,
-      payload: schema.events.payload,
-    })
+  let limit: number;
+  let cursor: ActivityCursor | null;
+  try {
+    limit = parseActivityLimit(c.req.query('limit'));
+    cursor = decodeActivityCursor(c.req.query('cursor'));
+  } catch (error) {
+    return c.json({
+      success: false,
+      error: { code: 'VALIDATION_ERROR', message: error instanceof Error ? error.message : 'Invalid activity query' },
+    }, 400);
+  }
+
+  const primaryRole = sql`${schema.events.metadata} -> 'grouping' ->> 'role'`;
+  const conds: SQL[] = [
+    eq(schema.events.organizationId, user.organizationId),
+    or(
+      isNull(schema.events.correlationId),
+      and(isNotNull(schema.events.correlationId), eq(primaryRole, 'primary')),
+    )!,
+  ];
+  const memberFilter = activityGroupFilter(user.organizationId, stationId, type);
+  if (memberFilter) conds.push(memberFilter);
+  if (cursor) {
+    conds.push(or(
+      lt(schema.events.recordedAt, cursor.recordedAt),
+      and(eq(schema.events.recordedAt, cursor.recordedAt), lt(schema.events.eventId, cursor.eventId)),
+    )!);
+  }
+
+  const joins = activityJoins(user.organizationId);
+  const relatedCount = sql<number>`CASE
+    WHEN ${schema.events.correlationId} IS NULL THEN 0
+    ELSE (
+      SELECT count(*) - 1
+      FROM events AS activity_group_members
+      WHERE activity_group_members.organization_id = ${user.organizationId}
+        AND activity_group_members.correlation_id = ${schema.events.correlationId}
+    )
+  END`.mapWith(Number).as('related_count');
+
+  const rows = await c.var.db
+    .select({ ...activityEventFields, relatedCount })
     .from(schema.events)
-    .leftJoin(schema.stations, eq(schema.stations.id, schema.events.stationId))
-    .leftJoin(schema.users, eq(schema.users.id, schema.events.actorId))
+    .leftJoin(schema.stations, joins.station)
+    .leftJoin(schema.users, joins.actor)
     .where(and(...conds))
-    .orderBy(desc(schema.events.recordedAt))
-    .limit(limit);
-  return c.json({ success: true, data: rows });
+    .orderBy(desc(schema.events.recordedAt), desc(schema.events.eventId))
+    .limit(limit + 1);
+
+  const hasMore = rows.length > limit;
+  const pageRows = rows.slice(0, limit);
+  const data: ActivityPage = {
+    items: pageRows.map((row) => {
+      const isLegacy = row.correlationId === null;
+      return {
+        groupId: row.correlationId ?? row.eventId,
+        primary: formatActivityEvent(row, isLegacy),
+        relatedCount: row.relatedCount,
+        primaryRecordedAt: row.recordedAt,
+        isLegacy,
+      };
+    }),
+    nextCursor: hasMore && pageRows.length > 0
+      ? encodeActivityCursor(pageRows[pageRows.length - 1]!)
+      : null,
+  };
+  return c.json({ success: true, data });
+});
+
+// GET /api/activity/:groupId - one grouped command, including lazy siblings.
+api.get('/activity/:groupId', async (c) => {
+  const user = c.var.user;
+  if (!canManageUsers(user.role)) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Only Owners can view the activity log' } }, 403);
+  }
+  const groupId = c.req.param('groupId');
+  if (!isValidActivityGroupId(groupId)) {
+    return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Invalid activity group ID' } }, 400);
+  }
+
+  const joins = activityJoins(user.organizationId);
+  const selectActivityRows = (where: SQL) => c.var.db
+    .select(activityEventFields)
+    .from(schema.events)
+    .leftJoin(schema.stations, joins.station)
+    .leftJoin(schema.users, joins.actor)
+    .where(where)
+    .orderBy(asc(schema.events.occurredAt), asc(schema.events.eventId));
+
+  let rows = await selectActivityRows(and(
+    eq(schema.events.organizationId, user.organizationId),
+    eq(schema.events.correlationId, groupId),
+  )!);
+  let isLegacy = false;
+  if (rows.length === 0) {
+    isLegacy = true;
+    rows = await selectActivityRows(and(
+      eq(schema.events.organizationId, user.organizationId),
+      eq(schema.events.eventId, groupId),
+      isNull(schema.events.correlationId),
+    )!);
+  }
+  if (rows.length === 0) {
+    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Activity group not found' } }, 404);
+  }
+
+  const primaryRow = isLegacy
+    ? rows[0]!
+    : rows.find((row) => readActivityMetadata(row.metadata).groupingRole === 'primary');
+  if (!primaryRow) {
+    console.warn('[ACTIVITY_MALFORMED_GROUP] Correlated activity group has no primary event', {
+      organizationId: user.organizationId,
+      correlationId: groupId,
+    });
+    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Activity group not found' } }, 404);
+  }
+
+  const data: ActivityGroupDetail = {
+    groupId,
+    primary: formatActivityEvent(primaryRow, isLegacy),
+    relatedCount: rows.length - 1,
+    primaryRecordedAt: primaryRow.recordedAt,
+    related: rows
+      .filter((row) => row.eventId !== primaryRow.eventId)
+      .map((row) => formatActivityEvent(row)),
+    isLegacy,
+  };
+  return c.json({ success: true, data });
 });
 
 // Idempotency: dedupe mutating requests that carry an Idempotency-Key header.
@@ -527,7 +753,8 @@ platform.use('*', async (c, next) => {
   try {
     payload = await verifySupabaseJwt(token, c.env, c.req.url);
   } catch (err: any) {
-    return c.json({ success: false, error: { code: 'UNAUTHORIZED', message: `Token validation failed: ${err.message}` } }, 401);
+    console.error('[PLATFORM AUTH] Token validation failed', { message: err?.message });
+    return c.json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Invalid or expired authentication token' } }, 401);
   }
   const email = String(payload?.email ?? '').trim().toLowerCase();
   const allow = (c.env.PLATFORM_ADMIN_EMAILS ?? '')
@@ -537,7 +764,10 @@ platform.use('*', async (c, next) => {
   if (!email || allow.length === 0 || !allow.includes(email)) {
     return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Not a platform administrator' } }, 403);
   }
-  (c as any).set('platformAdminEmail', email);
+  c.set('platformAdmin', {
+    email,
+    subjectId: typeof payload?.sub === 'string' && payload.sub.trim() ? payload.sub : null,
+  });
   await next();
 });
 
@@ -584,7 +814,14 @@ platform.post('/owners/invite', async (c) => {
       return c.json({ success: false, error: { code: 'BAD_REQUEST', message: 'Password must be at least 8 characters' } }, 400);
     }
     try {
-      const created = await admin.createUser({ email, password, userMetadata: ownerMetadata });
+      const created = await admin.createUser({
+        email,
+        password,
+        userMetadata: ownerMetadata,
+        // Server-set authority for the gated handle_new_user() owner branch
+        // (admin-created accounts have no invited_at).
+        appMetadata: { signup_intent: 'owner' },
+      });
       return c.json({ success: true, data: { authUserId: created.id, email, password } });
     } catch (e: any) {
       const status = e?.status === 422 ? 409 : 400;
@@ -638,8 +875,9 @@ function buildPlatformEvent<TType extends string, TPayload>(
   organizationId: string,
   aggregateId: string,
   payload: TPayload,
-  actorEmail: string,
+  actor: Variables['platformAdmin'],
 ): DomainEvent<TType, TPayload> {
+  const ids = new UuidGenerator();
   return createEvent<TType, TPayload>(
     {
       eventType,
@@ -648,9 +886,19 @@ function buildPlatformEvent<TType extends string, TPayload>(
       payload,
       organizationId,
       actorId: null,
-      metadata: { platformActorEmail: actorEmail },
+      correlationId: ids.newId(),
+      metadata: {
+        platformActorEmail: actor.email,
+        grouping: { role: 'primary' },
+        actorSnapshot: {
+          kind: 'platform_admin',
+          displayName: actor.email,
+          role: 'Platform Admin',
+          subjectId: actor.subjectId,
+        },
+      },
     },
-    { ids: new UuidGenerator(), clock: new SystemClock() },
+    { ids, clock: new SystemClock() },
   );
 }
 
@@ -821,10 +1069,9 @@ platform.post('/owners/:orgId/resend', async (c) => {
       .update(schema.users)
       .set({ authUserId: invited.id, updatedAt: new Date() })
       .where(eq(schema.users.id, owner.id));
-    const actorEmail = String((c as any).get?.('platformAdminEmail') ?? '') || '';
     await appendPlatformEvent(
       c.var.db,
-      buildPlatformEvent(BusinessEvents.OWNER_INVITE_RESENT, org.id, owner.id, { email: owner.email }, actorEmail),
+      buildPlatformEvent(BusinessEvents.OWNER_INVITE_RESENT, org.id, owner.id, { email: owner.email }, c.var.platformAdmin),
     );
     return c.json({ success: true, data: { authUserId: invited.id, email: owner.email } });
   } catch (e: any) {
@@ -879,10 +1126,15 @@ platform.post('/owners/:orgId/revoke', async (c) => {
     .update(schema.organizations)
     .set({ subscriptionStatus: 'Revoked', updatedAt: new Date() })
     .where(eq(schema.organizations.id, org.id));
-  const actorEmail = String((c as any).get?.('platformAdminEmail') ?? '') || '';
   await appendPlatformEvent(
     db,
-    buildPlatformEvent(BusinessEvents.OWNER_INVITE_REVOKED, org.id, owner?.id ?? org.id, { organizationName: org.name, email: owner?.email ?? null }, actorEmail),
+    buildPlatformEvent(
+      BusinessEvents.OWNER_INVITE_REVOKED,
+      org.id,
+      owner?.id ?? org.id,
+      { organizationName: org.name, email: owner?.email ?? null },
+      c.var.platformAdmin,
+    ),
   );
   return c.json({ success: true, data: { organizationId: org.id, revoked: true } });
 });
@@ -913,7 +1165,6 @@ async function setOwnerActive(c: any, active: boolean): Promise<Response> {
     .update(schema.organizations)
     .set({ subscriptionStatus: active ? 'Active' : 'Deactivated', updatedAt: new Date() })
     .where(eq(schema.organizations.id, org.id));
-  const actorEmail = String(c.get?.('platformAdminEmail') ?? '') || '';
   await appendPlatformEvent(
     db,
     buildPlatformEvent(
@@ -921,7 +1172,7 @@ async function setOwnerActive(c: any, active: boolean): Promise<Response> {
       org.id,
       org.id,
       { organizationName: org.name, ownerEmail: owner.email },
-      actorEmail,
+      c.var.platformAdmin,
     ),
   );
   return c.json({ success: true, data: { organizationId: org.id, active } });

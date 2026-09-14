@@ -8,11 +8,17 @@ import {
   useInventoryItems,
   useMerchandiseHandovers,
   Combobox,
-  CloudShiftService,
   CloudTransactionService,
+  handoverPayloadFingerprint,
+  createIdempotencyKey,
+  resolveHandoverRequestIdentity,
+  selectHandoverSummary,
+  useRecordHandoverMutation,
   queryKeys,
   inr,
   type CashBreakdown,
+  type RecordHandoverPayload,
+  type RecordHandoverResult,
 } from '@pump/ui';
 import { CashCountSheet } from './CashCountSheet.js';
 
@@ -25,7 +31,6 @@ import { CashCountSheet } from './CashCountSheet.js';
  * other role when they are assigned to a dispenser unit on an open shift.
  */
 
-const shiftService = new CloudShiftService();
 const txService = new CloudTransactionService();
 
 type TerminalState = Record<string, { card: string; upi: string; batch: string }>;
@@ -34,6 +39,8 @@ interface DuFormState {
   readings: Record<string, string>; // nozzleId -> closing
   testing: Record<string, string>; // nozzleId -> testing volume
   terminals: TerminalState; // terminalId -> {card, upi, batch}
+  aggregateCard: string;
+  aggregateUpi: string;
   cash: string;
 }
 
@@ -419,12 +426,14 @@ export const HandoverPanel: React.FC = () => {
   const customersQ = useCustomers(true);
   const vehiclesQ = useAllVehicles(true);
   const qc = useQueryClient();
+  const recordHandover = useRecordHandoverMutation();
 
   const data = assignmentQ.data;
   const dus: any[] = data?.dispenserUnits ?? [];
   const shiftId: string | undefined = data?.shift?.id;
   const attendantId: string | undefined = data?.userId;
   const stationId: string | undefined = data?.station?.id ?? data?.shift?.stationId;
+  const aggregateNonCashAllowed = data?.stationHasConfiguredTerminals === false;
   const inventoryQ = useInventoryItems(stationId ?? null);
   const merchHandoversQ = useMerchandiseHandovers(shiftId ?? null);
 
@@ -440,8 +449,19 @@ export const HandoverPanel: React.FC = () => {
   const [sheetDuId, setSheetDuId] = useState<string | null>(null);
   const [cashBreakdownByDu, setCashBreakdownByDu] = useState<Record<string, CashBreakdown>>({});
   const [saving, setSaving] = useState(false);
+  // Terminals assigned but zero card/UPI declared: require one explicit
+  // confirmation so a forgotten POS sheet is caught at entry.
+  const [zeroTerminalsConfirmed, setZeroTerminalsConfirmed] = useState(false);
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [acceptedByDu, setAcceptedByDu] = useState<Record<string, RecordHandoverResult>>({});
+  const handoverRequestByDuRef = useRef<Record<string, { fingerprint: string; idempotencyKey: string }>>({});
+  const acceptedFingerprintByDuRef = useRef<Record<string, string>>({});
+  const merchandiseRequestRef = useRef<{ fingerprint: string; idempotencyKey: string } | null>(null);
+  const resetMerchandiseAcceptance = () => {
+    setAcceptedByDu({});
+    merchandiseRequestRef.current = null;
+  };
 
   // Seed local state once from the assignment (incl. any saved draft + credit lines).
   useEffect(() => {
@@ -453,7 +473,7 @@ export const HandoverPanel: React.FC = () => {
         const readings: Record<string, string> = {};
         const testing: Record<string, string> = {};
         for (const nz of du.nozzles) {
-          readings[nz.nozzleId] = nz.closingReading != null ? String(nz.closingReading) : '';
+          readings[nz.nozzleId] = String(nz.closingReading ?? nz.openingReading ?? 0);
           testing[nz.nozzleId] = nz.testingVolume != null && Number(nz.testingVolume) > 0 ? String(Number(nz.testingVolume)) : '';
         }
         const terminals: TerminalState = {};
@@ -465,7 +485,14 @@ export const HandoverPanel: React.FC = () => {
             batch: entry?.batchRef ?? '',
           };
         }
-        next[du.duId] = { readings, testing, terminals, cash: du.handover?.cashHandedOver != null ? String(Number(du.handover.cashHandedOver)) : '' };
+        next[du.duId] = {
+          readings,
+          testing,
+          terminals,
+          aggregateCard: du.terminals.length === 0 && du.handover?.cardHandedOver != null ? String(Number(du.handover.cardHandedOver)) : '',
+          aggregateUpi: du.terminals.length === 0 && du.handover?.upiHandedOver != null ? String(Number(du.handover.upiHandedOver)) : '',
+          cash: du.handover?.cashHandedOver != null ? String(Number(du.handover.cashHandedOver)) : '',
+        };
       }
       return next;
     });
@@ -546,17 +573,38 @@ export const HandoverPanel: React.FC = () => {
       ).values(),
     ) as DuProduct[];
 
-  const setReading = (duId: string, nozzleId: string, v: string) =>
+  const clearAccepted = (duId: string) => setAcceptedByDu((current) => {
+    if (!current[duId]) return current;
+    const next = { ...current };
+    delete next[duId];
+    return next;
+  });
+  const resetAcceptedHandover = (duId: string) => {
+    clearAccepted(duId);
+    delete handoverRequestByDuRef.current[duId];
+    delete acceptedFingerprintByDuRef.current[duId];
+  };
+  const setReading = (duId: string, nozzleId: string, v: string) => {
+    resetAcceptedHandover(duId);
     setForms((f) => ({ ...f, [duId]: { ...f[duId], readings: { ...f[duId].readings, [nozzleId]: v } } }));
-  const setTesting = (duId: string, nozzleId: string, v: string) =>
+  };
+  const setTesting = (duId: string, nozzleId: string, v: string) => {
+    resetAcceptedHandover(duId);
     setForms((f) => ({ ...f, [duId]: { ...f[duId], testing: { ...f[duId].testing, [nozzleId]: v } } }));
-  const setCash = (duId: string, v: string) =>
+  };
+  const setCash = (duId: string, v: string) => {
+    resetAcceptedHandover(duId);
     setForms((f) => ({ ...f, [duId]: { ...f[duId], cash: v } }));
+  };
+  const setAggregate = (duId: string, field: 'aggregateCard' | 'aggregateUpi', v: string) => {
+    resetAcceptedHandover(duId);
+    setForms((f) => ({ ...f, [duId]: { ...f[duId], [field]: v } }));
+  };
   const setTerminal = (duId: string, terminalId: string, field: 'card' | 'upi' | 'batch', v: string) =>
-    setForms((f) => ({
-      ...f,
-      [duId]: { ...f[duId], terminals: { ...f[duId].terminals, [terminalId]: { ...f[duId].terminals[terminalId], [field]: v } } },
-    }));
+    { resetAcceptedHandover(duId); setForms((f) => ({
+        ...f,
+        [duId]: { ...f[duId], terminals: { ...f[duId].terminals, [terminalId]: { ...f[duId].terminals[terminalId], [field]: v } } },
+      })); };
 
   const addCredit = async (duId: string, channel: 'credit' | 'omc', line: Omit<CreditLine, 'id'>, idempotencyKey?: string) => {
     if (!shiftId) return;
@@ -577,10 +625,12 @@ export const HandoverPanel: React.FC = () => {
         notes: line.notes ?? undefined,
       }, { idempotencyKey });
       const stamped = { ...line, id: entry?.id };
+      resetAcceptedHandover(duId);
       if (channel === 'omc') setOmcByDu((c) => ({ ...c, [duId]: [...(c[duId] || []), stamped] }));
       else setCreditByDu((c) => ({ ...c, [duId]: [...(c[duId] || []), stamped] }));
     } catch (e: any) {
       setError(e?.message ?? 'Failed to add sale');
+      throw e;
     } finally {
       setCcBusy(false);
     }
@@ -592,9 +642,11 @@ export const HandoverPanel: React.FC = () => {
     try {
       if (channel === 'omc') {
         await txService.voidOmcCardSale(id);
+        resetAcceptedHandover(duId);
         setOmcByDu((c) => ({ ...c, [duId]: (c[duId] || []).filter((l) => l.id !== id) }));
       } else {
         await txService.voidCreditSale(id);
+        resetAcceptedHandover(duId);
         setCreditByDu((c) => ({ ...c, [duId]: (c[duId] || []).filter((l) => l.id !== id) }));
       }
     } catch (e: any) {
@@ -613,6 +665,7 @@ export const HandoverPanel: React.FC = () => {
         const raw = form.readings[nz.nozzleId];
         const hasReading = raw !== '' && raw != null;
         const closing = num(raw);
+        if (!hasReading) errs.push(`${nz.nozzleName}: closing reading required`);
         if (hasReading && closing < nz.openingReading) errs.push(`${nz.nozzleName}: closing below opening`);
         if (closing < 0) errs.push(`${nz.nozzleName}: negative reading`);
         const vol = Math.max(0, closing - nz.openingReading);
@@ -624,6 +677,7 @@ export const HandoverPanel: React.FC = () => {
         if (num(form.terminals[t.terminalId]?.card) < 0 || num(form.terminals[t.terminalId]?.upi) < 0) errs.push(`${du.duName}: negative POS amount`);
       }
       if (num(form.cash) < 0) errs.push(`${du.duName}: negative cash`);
+      if (aggregateNonCashAllowed && (num(form.aggregateCard) < 0 || num(form.aggregateUpi) < 0)) errs.push(`${du.duName}: negative non-cash amount`);
     }
     if (num(merchNonCash) < 0) errs.push('Merchandise non-cash negative');
     for (const r of merchRows) if (num(r.quantity) < 0) errs.push('Merchandise qty negative');
@@ -636,15 +690,45 @@ export const HandoverPanel: React.FC = () => {
       setError('Please fix the highlighted fields before saving.');
       return;
     }
+    if (!zeroTerminalsConfirmed) {
+      const zeroDus = (data?.dus ?? []).filter((du: any) => {
+        const form = forms[du.duId];
+        if (!form || du.terminals.length === 0) return false;
+        return du.terminals.every((t: any) =>
+          num(form.terminals[t.terminalId]?.card) === 0 && num(form.terminals[t.terminalId]?.upi) === 0);
+      });
+      if (zeroDus.length > 0) {
+        setZeroTerminalsConfirmed(true);
+        setError('No card/UPI takings entered for the assigned terminal(s). If that is correct, save again to confirm; otherwise enter the terminal amounts.');
+        return;
+      }
+    }
     setSaving(true);
     setError(null);
     try {
+      // Merchandise is recorded first so each accepted Handover reads the same
+      // authoritative merchandise cash that the live preview includes.
+      const merchLines = merchRows
+        .map((r) => ({ productId: r.productId, quantity: num(r.quantity) }))
+        .filter((l) => l.productId && l.quantity > 0);
+      if (merchLines.length) {
+        const merchandisePayload = { attendantId, lines: merchLines, nonCashAmount: num(merchNonCash) };
+        const fingerprint = JSON.stringify(merchandisePayload);
+        if (merchandiseRequestRef.current?.fingerprint !== fingerprint) {
+          merchandiseRequestRef.current = { fingerprint, idempotencyKey: createIdempotencyKey() };
+        }
+        await txService.recordMerchandiseHandover(shiftId, merchandisePayload, { idempotencyKey: merchandiseRequestRef.current.idempotencyKey });
+        await Promise.all([
+          qc.invalidateQueries({ queryKey: queryKeys.merchandiseHandovers(shiftId) }),
+          qc.invalidateQueries({ queryKey: queryKeys.merchandiseSales(shiftId) }),
+          stationId ? qc.invalidateQueries({ queryKey: queryKeys.inventoryItems(stationId) }) : Promise.resolve(),
+        ]);
+      }
+
       for (const du of dus) {
         const form = forms[du.duId];
         if (!form) continue;
-        const nozzleReadings = du.nozzles
-          .filter((nz: any) => form.readings[nz.nozzleId] !== '' && form.readings[nz.nozzleId] != null)
-          .map((nz: any) => ({
+        const nozzleReadings = du.nozzles.map((nz: any) => ({
             nozzleId: nz.nozzleId,
             closingReading: num(form.readings[nz.nozzleId]),
             testingVolume: num(form.testing[nz.nozzleId]),
@@ -657,32 +741,48 @@ export const HandoverPanel: React.FC = () => {
             batchRef: form.terminals[t.terminalId]?.batch || null,
           }))
           .filter((e: any) => e.cardAmount > 0 || e.upiAmount > 0 || e.batchRef);
-        const testingTotal = du.nozzles.reduce((s: number, nz: any) => s + num(form.testing[nz.nozzleId]), 0);
-        const creditTotal = (creditByDu[du.duId] || []).reduce((s, l) => s + Number(l.amount || 0), 0);
-
-        await shiftService.recordHandover({
+        const payload: RecordHandoverPayload = {
           shiftId,
-          userId: attendantId,
+          userId: attendantId!,
           duId: du.duId,
           cashHandedOver: num(form.cash),
-          creditHandedOver: creditTotal,
-          testingVolume: testingTotal,
-          terminalEntries,
+          ...(du.terminals.length === 0 && aggregateNonCashAllowed ? { cardHandedOver: num(form.aggregateCard), upiHandedOver: num(form.aggregateUpi) } : {}),
+          terminalEntries: du.terminals.length > 0 ? terminalEntries : undefined,
           nozzleReadings,
+        };
+        const fingerprint = handoverPayloadFingerprint(payload);
+        if (acceptedFingerprintByDuRef.current[du.duId] === fingerprint && acceptedByDu[du.duId]) continue;
+        handoverRequestByDuRef.current[du.duId] = resolveHandoverRequestIdentity(handoverRequestByDuRef.current[du.duId], payload);
+        const result = await recordHandover.mutateAsync({
+          stationId: stationId ?? '',
+          payload,
+          idempotencyKey: handoverRequestByDuRef.current[du.duId].idempotencyKey,
         });
-      }
-
-      // Merchandise closing (one per attendant per shift) — only if any quantity.
-      const merchLines = merchRows
-        .map((r) => ({ productId: r.productId, quantity: num(r.quantity) }))
-        .filter((l) => l.productId && l.quantity > 0);
-      if (merchLines.length) {
-        await txService.recordMerchandiseHandover(shiftId, { attendantId, lines: merchLines, nonCashAmount: num(merchNonCash) });
+        acceptedFingerprintByDuRef.current[du.duId] = fingerprint;
+        delete handoverRequestByDuRef.current[du.duId];
+        setAcceptedByDu((current) => ({ ...current, [du.duId]: result }));
+        setForms((current) => ({
+          ...current,
+          [du.duId]: {
+            ...current[du.duId],
+            cash: String(Number(result.handover.cashHandedOver)),
+            aggregateCard: String(Number(result.handover.cardHandedOver)),
+            aggregateUpi: String(Number(result.handover.upiHandedOver)),
+            readings: Object.fromEntries(result.nozzleReadings.map((reading) => [reading.nozzleId, String(reading.closingReading)])),
+            testing: Object.fromEntries(result.nozzleReadings.map((reading) => [reading.nozzleId, String(reading.testingVolume)])),
+            terminals: Object.fromEntries(du.terminals.map((terminal: any) => {
+              const entry = result.terminalEntries.find((item) => item.terminalId === terminal.terminalId);
+              return [terminal.terminalId, {
+                card: entry ? String(Number(entry.cardAmount)) : '',
+                upi: entry ? String(Number(entry.upiAmount)) : '',
+                batch: entry?.batchRef ?? '',
+              }];
+            })),
+          },
+        }));
       }
 
       setSavedAt(new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }));
-      await qc.invalidateQueries({ queryKey: queryKeys.myAssignment() });
-      if (shiftId) await qc.invalidateQueries({ queryKey: queryKeys.merchandiseHandovers(shiftId) });
     } catch (e: any) {
       setError(e?.message ?? 'Could not save handover');
     } finally {
@@ -723,8 +823,12 @@ export const HandoverPanel: React.FC = () => {
       const net = Math.max(0, vol - num(form.testing[nz.nozzleId]));
       fuelExpected += net * Number(nz.unitPrice || 0);
     }
-    const cardTotal = du.terminals.reduce((s: number, t: any) => s + num(form.terminals[t.terminalId]?.card), 0);
-    const upiTotal = du.terminals.reduce((s: number, t: any) => s + num(form.terminals[t.terminalId]?.upi), 0);
+    const cardTotal = du.terminals.length > 0
+      ? du.terminals.reduce((s: number, t: any) => s + num(form.terminals[t.terminalId]?.card), 0)
+      : aggregateNonCashAllowed ? num(form.aggregateCard) : 0;
+    const upiTotal = du.terminals.length > 0
+      ? du.terminals.reduce((s: number, t: any) => s + num(form.terminals[t.terminalId]?.upi), 0)
+      : aggregateNonCashAllowed ? num(form.aggregateUpi) : 0;
     const creditTotal = (creditByDu[du.duId] || []).reduce((s, l) => s + Number(l.amount || 0), 0);
     const omcTotal = (omcByDu[du.duId] || []).reduce((s, l) => s + Number(l.amount || 0), 0);
     declaredTotal += num(form.cash) + cardTotal + upiTotal + creditTotal + omcTotal;
@@ -733,6 +837,15 @@ export const HandoverPanel: React.FC = () => {
   const merchCash = Math.max(0, merchTotal - num(merchNonCash));
   const expectedTotal = fuelExpected + merchCash;
   const varianceTotal = Math.round((declaredTotal - expectedTotal) * 100) / 100;
+  const allAccepted = dus.length > 0 && dus.every((du) => acceptedByDu[du.duId]);
+  const acceptedSummary = allAccepted ? {
+    ...acceptedByDu[dus[0].duId],
+    expectedTotal: dus.reduce((sum, du) => sum + acceptedByDu[du.duId].expectedFuelSales, 0) + acceptedByDu[dus[0].duId].merchandiseCash,
+    declaredTotal: dus.reduce((sum, du) => sum + acceptedByDu[du.duId].declaredTotal, 0),
+    varianceAmount: Math.round((dus.reduce((sum, du) => sum + acceptedByDu[du.duId].declaredTotal, 0)
+      - (dus.reduce((sum, du) => sum + acceptedByDu[du.duId].expectedFuelSales, 0) + acceptedByDu[dus[0].duId].merchandiseCash)) * 100) / 100,
+  } : null;
+  const shownSummary = selectHandoverSummary({ expectedTotal, declaredTotal, varianceAmount: varianceTotal }, acceptedSummary);
   const formInvalid = collectErrors().length > 0;
 
   return (
@@ -800,7 +913,7 @@ export const HandoverPanel: React.FC = () => {
             </div>
 
             {/* Card / UPI per assigned terminal */}
-            {du.terminals.length > 0 && (
+            {du.terminals.length > 0 ? (
               <div>
                 <p className="mb-2 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
                   Card / UPI by terminal
@@ -831,6 +944,21 @@ export const HandoverPanel: React.FC = () => {
                   ))}
                 </div>
               </div>
+            ) : aggregateNonCashAllowed ? (
+              <div>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
+                  Card / UPI totals
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <NumberField label="Card" value={form.aggregateCard} onChange={(v) => setAggregate(du.duId, 'aggregateCard', v)} />
+                  <NumberField label="UPI" value={form.aggregateUpi} onChange={(v) => setAggregate(du.duId, 'aggregateUpi', v)} />
+                </div>
+                <p className="mt-1 text-[11px]" style={{ color: 'var(--text-faint)' }}>Aggregate declaration used because no Payment Terminal is configured.</p>
+              </div>
+            ) : (
+              <p className="rounded-lg border p-3 text-xs" style={{ borderColor: 'var(--border-soft)', color: 'var(--text-muted)' }}>
+                No Payment Terminal is assigned to this Dispenser. Card and UPI declarations require an assigned terminal.
+              </p>
             )}
 
             {/* Customer sales — credit (receivable) + OMC card (→ CMS) */}
@@ -863,7 +991,7 @@ export const HandoverPanel: React.FC = () => {
                 <Combobox
                   options={merchOptions}
                   value={row.productId}
-                  onChange={(v) => setMerchRows((rs) => rs.map((r, i) => (i === idx ? { ...r, productId: v } : r)))}
+                  onChange={(v) => { resetMerchandiseAcceptance(); setMerchRows((rs) => rs.map((r, i) => (i === idx ? { ...r, productId: v } : r))); }}
                   placeholder="Select product…"
                   searchPlaceholder="Search product…"
                 />
@@ -876,7 +1004,7 @@ export const HandoverPanel: React.FC = () => {
                       min="0"
                       value={row.quantity}
                       placeholder="0"
-                      onChange={(e) => setMerchRows((rs) => rs.map((r, i) => (i === idx ? { ...r, quantity: e.target.value } : r)))}
+                      onChange={(e) => { resetMerchandiseAcceptance(); setMerchRows((rs) => rs.map((r, i) => (i === idx ? { ...r, quantity: e.target.value } : r))); }}
                       className="rounded-lg border px-3 py-2 text-right text-sm font-mono tabular-nums"
                       style={fieldStyle}
                     />
@@ -886,7 +1014,7 @@ export const HandoverPanel: React.FC = () => {
                   </div>
                   <button
                     type="button"
-                    onClick={() => setMerchRows((rs) => (rs.length > 1 ? rs.filter((_, i) => i !== idx) : [{ productId: '', quantity: '' }]))}
+                    onClick={() => { resetMerchandiseAcceptance(); setMerchRows((rs) => (rs.length > 1 ? rs.filter((_, i) => i !== idx) : [{ productId: '', quantity: '' }])); }}
                     className="grid h-9 w-9 place-items-center rounded-lg border"
                     style={{ borderColor: 'var(--border-soft)', color: 'var(--state-danger-fg)' }}
                     aria-label="Remove item"
@@ -901,7 +1029,7 @@ export const HandoverPanel: React.FC = () => {
 
         <button
           type="button"
-          onClick={() => setMerchRows((rs) => [...rs, { productId: '', quantity: '' }])}
+          onClick={() => { resetMerchandiseAcceptance(); setMerchRows((rs) => [...rs, { productId: '', quantity: '' }]); }}
           className="w-full rounded-lg border border-dashed py-2 text-sm font-medium"
           style={{ borderColor: 'var(--border-soft)', color: 'var(--text-muted)' }}
         >
@@ -911,7 +1039,7 @@ export const HandoverPanel: React.FC = () => {
         <NumberField
           label="Paid by card / UPI (₹, optional)"
           value={merchNonCash}
-          onChange={setMerchNonCash}
+          onChange={(value) => { resetMerchandiseAcceptance(); setMerchNonCash(value); }}
           sub="Portion of merchandise not collected as cash"
         />
       </section>
@@ -953,18 +1081,21 @@ export const HandoverPanel: React.FC = () => {
         {formInvalid && !error && (
           <p className="text-center text-[11px]" style={{ color: 'var(--state-danger-fg)' }}>Fix the highlighted fields to save.</p>
         )}
+        <p className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: allAccepted ? 'var(--state-success-fg)' : 'var(--text-faint)' }}>
+          {shownSummary.source === 'accepted' ? 'Accepted by server' : 'Live preview'}
+        </p>
         <div className="flex items-center justify-between text-xs">
           <span style={{ color: 'var(--text-muted)' }}>
             Expected{' '}
-            <span className="font-mono tabular-nums" style={{ color: 'var(--text-strong)' }}>{inr(expectedTotal)}</span>
+            <span className="font-mono tabular-nums" style={{ color: 'var(--text-strong)' }}>{inr(shownSummary.expectedTotal)}</span>
             {' · '}Declared{' '}
-            <span className="font-mono tabular-nums" style={{ color: 'var(--text-strong)' }}>{inr(declaredTotal)}</span>
+            <span className="font-mono tabular-nums" style={{ color: 'var(--text-strong)' }}>{inr(shownSummary.declaredTotal)}</span>
           </span>
           <span
             className="font-mono text-sm font-semibold tabular-nums"
-            style={{ color: Math.abs(varianceTotal) < 1 ? 'var(--text-faint)' : varianceTotal < 0 ? 'var(--state-danger-fg)' : 'var(--state-warning-fg)' }}
+            style={{ color: Math.abs(shownSummary.varianceAmount) < 1 ? 'var(--text-faint)' : shownSummary.varianceAmount < 0 ? 'var(--state-danger-fg)' : 'var(--state-warning-fg)' }}
           >
-            {varianceTotal >= 0 ? '+' : ''}{inr(varianceTotal)}
+            {shownSummary.varianceAmount >= 0 ? '+' : ''}{inr(shownSummary.varianceAmount)}
           </span>
         </div>
         {savedAt && !saving && (

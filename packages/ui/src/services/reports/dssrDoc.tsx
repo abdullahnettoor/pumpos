@@ -24,6 +24,11 @@ const builders: Record<DssrSection, (d: any, cfg: DssrReportConfig) => React.Rea
       <Text style={s.sub}>
         Business Date {d.businessDate}{d.generatedAt ? ` \u2022 Generated ${fmtDateTime(d.generatedAt)}` : ''}
       </Text>
+      {d.generatedAt && (
+        <Text style={s.sub}>
+          Financial sections include records available as of {fmtDateTime(d.generatedAt)}. Financial entries recorded later are not included.
+        </Text>
+      )}
     </View>
   ),
   meta: (d) => {
@@ -60,6 +65,7 @@ const builders: Record<DssrSection, (d: any, cfg: DssrReportConfig) => React.Rea
     const pur = d.purchases || {};
     const sup = d.supplierPayments || {};
     const merch = d.merchandise || {};
+    const sTax = (d.salesTax || {}) as { gst?: Record<string, number>; vat?: Record<string, number> };
     return (
       <View key="financial">
         <Text style={s.h2}>FINANCIAL SUMMARY</Text>
@@ -77,6 +83,29 @@ const builders: Record<DssrSection, (d: any, cfg: DssrReportConfig) => React.Rea
           <ReconRow label="Business Expenses" value={inr(exp.business)} />
           <ReconRow label="Total Expenses" value={inr(exp.total)} color={C.danger} />
           {Number(inc.total || 0) > 0 && <ReconRow label="Other Income (Cash / Bank)" value={`${inr(inc.drawer)} / ${inr(inc.business)}`} color={C.green} />}
+          {/* T5 — output tax on sales: GST (merchandise) and VAT (fuel) kept apart. */}
+          {Number(sTax.gst?.total || 0) > 0 && (
+            <>
+              <ReconRow label="Merchandise — Taxable Value" value={inr(Number(sTax.gst?.taxable || 0))} />
+              {Number(sTax.gst?.igst || 0) > 0 ? (
+                <ReconRow label="Output GST on Sales (IGST)" value={inr(Number(sTax.gst?.igst || 0))} />
+              ) : (
+                <ReconRow label="Output GST on Sales (CGST / SGST)" value={`${inr(Number(sTax.gst?.cgst || 0))} / ${inr(Number(sTax.gst?.sgst || 0))}`} />
+              )}
+            </>
+          )}
+          {Number(sTax.vat?.vat || 0) > 0 && <ReconRow label="Output VAT on Fuel" value={inr(Number(sTax.vat?.vat || 0))} />}
+          {/* FI4 — output GST collected on other income. */}
+          {Number(inc.tax?.total || 0) > 0 && (
+            <>
+              <ReconRow label="Other Income — Taxable Value" value={inr(Number(inc.tax?.taxable || 0))} />
+              {Number(inc.tax?.igst || 0) > 0 ? (
+                <ReconRow label="Output GST on Income (IGST)" value={inr(Number(inc.tax?.igst || 0))} />
+              ) : (
+                <ReconRow label="Output GST on Income (CGST / SGST)" value={`${inr(Number(inc.tax?.cgst || 0))} / ${inr(Number(inc.tax?.sgst || 0))}`} />
+              )}
+            </>
+          )}
         </View>
       </View>
     );
@@ -207,7 +236,11 @@ const builders: Record<DssrSection, (d: any, cfg: DssrReportConfig) => React.Rea
  * reports stay visually identical. Reads the immutable DSSR snapshot.
  */
 export const DssrDoc: React.FC<{ dssr: any; config?: DssrReportConfig }> = ({ dssr, config = DEFAULT_DSSR_CONFIG }) => {
-  const d = { ...(dssr?.snapshotData || {}), businessDate: dssr?.businessDate, generatedAt: dssr?.generatedAt };
+  const d = {
+    ...(dssr?.snapshotData || {}),
+    businessDate: dssr?.businessDate ?? dssr?.snapshotData?.businessDate,
+    generatedAt: dssr?.generatedAt ?? dssr?.snapshotData?.generatedAt,
+  };
   return (
     <Document>
       <Page size={config.paper} style={s.page}>

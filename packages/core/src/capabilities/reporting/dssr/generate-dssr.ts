@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { BusinessEvents, err, eventFromContext, notFoundError, ok, validationError } from '../../../kernel/index.js';
+import { BusinessEvents, err, eventFromContext, invariantViolation, notFoundError, ok, validationError } from '../../../kernel/index.js';
 import type { EventPublisher, ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
 import type { BusinessDayRepository } from '../../station-ops/business-days/index.js';
 import { composeDssr } from './compose.js';
@@ -38,6 +38,13 @@ export class GenerateDssr implements UseCase<GenerateDssrCommand, DssrSnapshot> 
 
     const businessDay = await this.deps.businessDays.findById(p.data.businessDayId);
     if (!businessDay || businessDay.organizationId !== ctx.organizationId) return err(notFoundError('BusinessDay', p.data.businessDayId));
+    if (ctx.stationId && businessDay.stationId !== ctx.stationId) return err(notFoundError('BusinessDay', p.data.businessDayId));
+    if (businessDay.status !== 'CLOSED') {
+      return err(invariantViolation('DSSR snapshots can only be generated for closed Business Days', {
+        businessDayId: businessDay.id,
+        status: businessDay.status,
+      }));
+    }
 
     const existing = await this.deps.snapshots.findByStationDate(ctx.organizationId, businessDay.stationId, businessDay.businessDate);
     if (existing && !p.data.force) return ok(existing);

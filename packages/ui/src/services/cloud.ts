@@ -17,6 +17,7 @@ import {
   User,
   ShiftOpenPayload,
   ShiftClosePayload,
+  AttendantHandoverInput,
   FinalizeOnboardingPayload,
   FinalizeOnboardingResult,
 } from '@pump/shared';
@@ -42,6 +43,81 @@ let activeToken = '';
 
 export function setAuthToken(token: string) {
   activeToken = token;
+}
+
+export type RecordHandoverPayload = AttendantHandoverInput;
+
+export interface RecordHandoverResult {
+  handover: {
+    id: string;
+    shiftId: string;
+    attendantId: string;
+    duId: string;
+    cashHandedOver: string;
+    cardHandedOver: string;
+    upiHandedOver: string;
+    creditHandedOver: string;
+    testingVolume: string;
+    expectedSales: string;
+    varianceAmount: string;
+    createdAt: string;
+  };
+  terminalEntries: Array<{
+    id: string;
+    handoverId: string;
+    terminalId: string;
+    duId: string;
+    cardAmount: string;
+    upiAmount: string;
+    batchRef: string | null;
+    createdAt: string;
+  }>;
+  nozzleReadings: Array<{
+    id: string;
+    nozzleId: string;
+    openingReading: number;
+    closingReading: number;
+    grossVolume: number;
+    testingVolume: number;
+    netVolume: number;
+    unitPrice: number;
+    expectedSales: number;
+  }>;
+  expectedFuelSales: number;
+  merchandiseCash: number;
+  expectedSales: number;
+  expectedTotal: number;
+  creditSales: number;
+  omcCardSales: number;
+  declaredTotal: number;
+  varianceAmount: number;
+  replaced: boolean;
+}
+
+export interface RecordStockCountPayload {
+  stationId: string;
+  actualQuantity: number;
+  productId?: string;
+  tankId?: string | null;
+  shiftId?: string | null;
+  reason?: string;
+}
+
+export interface RecordStockCountResult {
+  variance: {
+    id: string;
+    shiftId: string | null;
+    businessDayId: string;
+    productId: string;
+    tankId: string | null;
+    expectedQuantity: string;
+    actualQuantity: string;
+    varianceQuantity: string;
+    reason: string | null;
+  };
+  expectedQuantity: number;
+  actualQuantity: number;
+  varianceQuantity: number;
 }
 
 function getHeaders() {
@@ -369,9 +445,36 @@ export class CloudUserAssignmentService implements IUserAssignmentService {
   }
 }
 
+export type BusinessDayLifecycleState = 'OPEN' | 'CLOSED' | 'NOT_CREATED';
+
+export interface BusinessDayStatusItem {
+  id: string;
+  businessDate: string;
+  status: 'OPEN' | 'CLOSED';
+  openedAt: string;
+  closedAt: string | null;
+  openShiftCount: number;
+  closedShiftCount: number;
+  lastActivityAt: string;
+}
+
+export interface BusinessDayStatusResponse {
+  currentBusinessDate: string;
+  requestedBusinessDate: string;
+  requestedState: BusinessDayLifecycleState;
+  requestedBusinessDay: BusinessDayStatusItem | null;
+  openBusinessDays: BusinessDayStatusItem[];
+  pastOpenBusinessDays: BusinessDayStatusItem[];
+}
+
 export class CloudShiftService {
   async getShiftStatus(stationId: string, lite: boolean = false): Promise<any> {
     return request<any>(`/shifts/status?stationId=${stationId}${lite ? '&lite=true' : ''}`);
+  }
+
+  async getBusinessDayStatus(stationId: string, businessDate?: string): Promise<BusinessDayStatusResponse> {
+    const date = businessDate ? `&date=${encodeURIComponent(businessDate)}` : '';
+    return request<BusinessDayStatusResponse>(`/shifts/business-days/status?stationId=${stationId}${date}`);
   }
 
   /**
@@ -411,11 +514,11 @@ export class CloudShiftService {
     });
   }
 
-  async recordHandover(payload: any): Promise<any> {
-    return request<any>('/shifts/handovers', {
+  async recordHandover(payload: RecordHandoverPayload, opts?: { idempotencyKey?: string }): Promise<RecordHandoverResult> {
+    return request<RecordHandoverResult>('/shifts/handovers', {
       method: 'POST',
       body: JSON.stringify(payload),
-    });
+    }, { idempotencyKey: opts?.idempotencyKey });
   }
 
   async getHandovers(shiftId: string): Promise<any[]> {
@@ -434,10 +537,10 @@ export class CloudShiftService {
     });
   }
 
-  async closeBusinessDay(businessDayId: string): Promise<any> {
+  async closeBusinessDay(businessDayId: string, stationId: string): Promise<any> {
     return request<any>('/shifts/business-day/close', {
       method: 'POST',
-      body: JSON.stringify({ businessDayId }),
+      body: JSON.stringify({ businessDayId, stationId }),
     });
   }
 
@@ -607,6 +710,25 @@ export class CloudTransactionService {
     return request<any[]>(`/transactions/purchases/gst-register${suffix}`);
   }
 
+  async getSalesTaxRegister(params: { from?: string; to?: string; stationId?: string; taxCategory?: string } = {}): Promise<any[]> {
+    const qs = new URLSearchParams();
+    if (params.from) qs.set('from', params.from);
+    if (params.to) qs.set('to', params.to);
+    if (params.stationId) qs.set('stationId', params.stationId);
+    if (params.taxCategory) qs.set('taxCategory', params.taxCategory);
+    const suffix = qs.toString() ? `?${qs.toString()}` : '';
+    return request<any[]>(`/transactions/sales/tax-register${suffix}`);
+  }
+
+  async getIncomeGstRegister(from?: string, to?: string, stationId?: string): Promise<any[]> {
+    const qs = new URLSearchParams();
+    if (from) qs.set('from', from);
+    if (to) qs.set('to', to);
+    if (stationId) qs.set('stationId', stationId);
+    const suffix = qs.toString() ? `?${qs.toString()}` : '';
+    return request<any[]>(`/transactions/income/gst-register${suffix}`);
+  }
+
   async getCollections(): Promise<any[]> {
     return request<any[]>('/transactions/collections');
   }
@@ -633,6 +755,10 @@ export class CloudTransactionService {
     });
   }
 
+  async voidExpense(id: string, reason?: string): Promise<any> {
+    return request<any>(`/transactions/expenses/${id}/void`, { method: 'POST', body: JSON.stringify({ reason: reason || undefined }) });
+  }
+
   async getIncome(params?: { stationId?: string; from?: string; to?: string }): Promise<any[]> {
     const qs = new URLSearchParams();
     if (params?.stationId) qs.set('stationId', params.stationId);
@@ -649,8 +775,8 @@ export class CloudTransactionService {
     });
   }
 
-  async voidIncome(id: string): Promise<any> {
-    return request<any>(`/transactions/income/${id}/void`, { method: 'POST' });
+  async voidIncome(id: string, reason?: string): Promise<any> {
+    return request<any>(`/transactions/income/${id}/void`, { method: 'POST', body: JSON.stringify({ reason: reason || undefined }) });
   }
 
   async recordPurchase(payload: {
@@ -713,11 +839,14 @@ export class CloudTransactionService {
     return request<any[]>(`/transactions/inventory/items?stationId=${stationId}`);
   }
 
-  async recordStockCount(payload: { stationId: string; productId: string; actualQuantity: number; tankId?: string | null; reason?: string }): Promise<any> {
-    return request<any>('/transactions/inventory/count', {
+  async recordStockCount(
+    payload: RecordStockCountPayload,
+    opts?: { idempotencyKey?: string },
+  ): Promise<RecordStockCountResult> {
+    return request<RecordStockCountResult>('/transactions/inventory/count', {
       method: 'POST',
       body: JSON.stringify(payload),
-    });
+    }, { idempotencyKey: opts?.idempotencyKey });
   }
 
   async getInventoryMovements(stationId: string): Promise<any[]> {
@@ -772,8 +901,8 @@ export class CloudTransactionService {
   }
 
   /** Record/replace an employee's itemized walk-in merchandise handover for a shift. */
-  async recordMerchandiseHandover(shiftId: string, payload: { attendantId?: string; lines: { productId: string; quantity: number }[]; nonCashAmount?: number }): Promise<any> {
-    return request<any>(`/transactions/shifts/${shiftId}/merchandise-handover`, { method: 'POST', body: JSON.stringify(payload) });
+  async recordMerchandiseHandover(shiftId: string, payload: { attendantId?: string; lines: { productId: string; quantity: number }[]; nonCashAmount?: number }, opts?: { idempotencyKey?: string }): Promise<any> {
+    return request<any>(`/transactions/shifts/${shiftId}/merchandise-handover`, { method: 'POST', body: JSON.stringify(payload) }, { idempotencyKey: opts?.idempotencyKey });
   }
 
   async getMerchandiseHandovers(shiftId: string): Promise<any[]> {
@@ -846,14 +975,62 @@ export class CloudOrganizationService {
   }
 }
 
+export type ActivityTone = 'info' | 'success' | 'warning' | 'danger' | 'default';
+
+export interface ActivityActor {
+  kind: 'tenant_user' | 'platform_admin' | 'system' | 'unknown';
+  id: string | null;
+  displayName: string;
+  role: string | null;
+}
+
+export interface ActivityEventItem {
+  eventId: string;
+  eventType: string;
+  title: string;
+  description: string;
+  tone: ActivityTone;
+  actor: ActivityActor;
+  stationId: string | null;
+  stationName: string | null;
+  aggregateType: string;
+  aggregateId: string;
+  occurredAt: string;
+  recordedAt: string;
+  causationId: string | null;
+  groupingRole: 'primary' | 'related';
+  renderStatus: 'rendered' | 'fallback';
+}
+
+export interface ActivityGroupSummary {
+  groupId: string;
+  primary: ActivityEventItem;
+  relatedCount: number;
+  primaryRecordedAt: string;
+}
+
+export interface ActivityGroupDetail extends ActivityGroupSummary {
+  related: ActivityEventItem[];
+}
+
+export interface ActivityPage {
+  items: ActivityGroupSummary[];
+  nextCursor: string | null;
+}
+
 export class CloudEventsService {
-  async getEvents(params?: { stationId?: string; type?: string; limit?: number }): Promise<any[]> {
+  async getActivityGroups(params?: { stationId?: string; type?: string; limit?: number; cursor?: string }): Promise<ActivityPage> {
     const qs = new URLSearchParams();
     if (params?.stationId) qs.set('stationId', params.stationId);
     if (params?.type) qs.set('type', params.type);
     if (params?.limit) qs.set('limit', String(params.limit));
+    if (params?.cursor) qs.set('cursor', params.cursor);
     const suffix = qs.toString() ? `?${qs.toString()}` : '';
-    return request<any[]>(`/activity${suffix}`);
+    return request<ActivityPage>(`/activity${suffix}`);
+  }
+
+  async getActivityGroup(groupId: string): Promise<ActivityGroupDetail> {
+    return request<ActivityGroupDetail>(`/activity/${encodeURIComponent(groupId)}`);
   }
 }
 

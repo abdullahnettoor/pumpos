@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect, useRef } from 'react';
 import type { ExpenseEntryFormValues } from '@pump/shared';
-import { canManageExpenseCategory } from '@pump/shared';
+import { canManageExpenseCategory, canVoidExpense } from '@pump/shared';
 import { CloudTransactionService } from '../services/cloud.js';
 import { Plus, HelpCircle, Tags, Receipt, ArrowLeftRight } from 'lucide-react';
 import { PageLayout } from './primitives/PageLayout.js';
@@ -10,13 +10,14 @@ import { DateRangeField, computeRange } from './primitives/DateRangeField.js';
 import type { DateRange } from './primitives/DateRangeField.js';
 import { inr } from '../utils/format.js';
 import { useToast } from './primitives/ToastProvider.js';
+import { useAsk } from './primitives/ConfirmDialog.js';
 import { Drawer } from './Drawer.js';
 import { ExpenseEntryForm } from './transactions/ExpenseEntryForm.js';
 import { useExpenses, useShiftStatus, useExpenseCategories, useInvalidateOperational } from '../query/hooks.js';
 import { useQueryClient } from '@tanstack/react-query';
 import { Panel, Button, KpiStrip, KpiTile, EmptyState, SearchInput, Select } from '../pump-ds/index.js';
 import type { NavIntent } from './AppShell.js';
-import { expenseColumns } from './expenses/columns.js';
+import { buildExpenseColumns } from './expenses/columns.js';
 import { ExpenseAnalytics } from './expenses/ExpenseAnalytics.js';
 import { CategoryManagerDrawer } from './expenses/CategoryManagerDrawer.js';
 
@@ -40,6 +41,7 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({ selectedStation, def
   const invalidateOperational = useInvalidateOperational();
   const qc = useQueryClient();
   const toast = useToast();
+  const ask = useAsk();
 
   const s = (selectedStation as any)?.settings || {};
   const clock = { timeZone: s.timezone, dayStartsAt: s.business_day_starts_at };
@@ -49,6 +51,7 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({ selectedStation, def
   const activeShift = statusQ.data?.activeShift ?? null;
   const recentClosedShifts: any[] = statusQ.data?.recentClosedShifts ?? [];
   const canManageCategories = canManageExpenseCategory((userRole as any) ?? 'Staff');
+  const canVoid = canVoidExpense((userRole as any) ?? 'Staff');
 
   const [activeTab, setActiveTab] = useState<TabType>('ledger');
   const [range, setRange] = useState<DateRange>(() => computeRange('this-month', clock));
@@ -111,6 +114,34 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({ selectedStation, def
   };
 
   const refetchCategories = () => qc.invalidateQueries({ queryKey: ['expense-categories'] });
+
+  // Corrections are never edits: an expense is voided (status → VOIDED) and its
+  // ledger posting reversed, keeping history append-only.
+  const handleVoid = async (row: any) => {
+    const { confirmed, value } = await ask({
+      title: 'Void this expense?',
+      message: (
+        <>
+          {inr(row.amount)} · {row.categoryName || 'General'}. The entry stays in the ledger marked
+          <strong> Voided</strong> and its money posting is reversed. This cannot be undone.
+        </>
+      ),
+      input: { label: 'Reason (optional)', placeholder: 'e.g. duplicate entry, wrong amount' },
+      confirmLabel: 'Void expense',
+      danger: true,
+    });
+    if (!confirmed) return;
+    try {
+      await transactionService.voidExpense(row.id, value);
+      invalidateOperational(stationId);
+      toast.success('Expense voided.');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to void expense');
+    }
+  };
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const ledgerColumns = useMemo(() => buildExpenseColumns(canVoid ? handleVoid : undefined), [canVoid, stationId]);
 
   // KPIs — fixed windows (today / this month), independent of the table range filter.
   const kpis = useMemo(() => {
@@ -212,7 +243,7 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({ selectedStation, def
               ) : (
                 <DataTable
                   bare
-                  columns={expenseColumns}
+                  columns={ledgerColumns}
                   data={filteredExpenses}
                   error={expensesQ.error as Error | null}
                   emptyMessage="No matching expenses found."

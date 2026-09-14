@@ -20,13 +20,16 @@ docs win. The root [`AGENTS.md`](../../AGENTS.md) is the short, authoritative ru
 
 ## The one rule that matters most
 
-> **`business_day_id` is the universal anchor. `shift_id` is present if and only if
-> the money touches the physical cash drawer.**
+> **`business_day_id` is the universal anchor. `shift_id` is an optional anchor:
+> set by default when money touches the physical cash drawer, passable or
+> preselected on other records when shift attribution is useful.**
 
-A shift is an operator-accountability window for drawer cash. Everything else
-(card/UPI/bank collections, purchases, credit sales, bank/owner expenses) is
-anchored to the **business day** with `shift_id = NULL`. Getting this wrong is the
-single biggest source of modelling bugs. See [architecture.md](architecture.md).
+A shift is an attendant-accountability window for drawer cash. Everything else
+(card/UPI/bank collections, purchases, credit sales, bank/owner expenses)
+defaults to `shift_id = NULL`, anchored to the **business day**. Drawer
+reconciliation keys off movement kind, never off `shift_id` presence. Getting
+this wrong is the single biggest source of modelling bugs. See
+[architecture.md](architecture.md).
 
 ## Monorepo map
 

@@ -2,6 +2,7 @@ import React from 'react';
 import { inr } from '../../utils/format.js';
 import { Clock3, FileText, Fuel, Receipt, ShoppingBag, ShoppingCart, Wallet } from 'lucide-react';
 import { Button, Chip } from '../../pump-ds/index.js';
+import { ShiftBusinessDateContext } from './ShiftBusinessDateContext.js';
 
 type QuickAction = {
   key: string;
@@ -29,6 +30,8 @@ interface ShiftControlBarProps {
   onCloseShiftClick: () => void;
   onViewLastShiftSummary?: () => void;
   isPreparingClose: boolean;
+  currentBusinessDate: string;
+  timeZone?: string;
 }
 
 function formatElapsed(openedAt: string): string {
@@ -39,14 +42,6 @@ function formatElapsed(openedAt: string): string {
   const hours = Math.floor(mins / 60);
   const remMins = mins % 60;
   return `${hours}h ${remMins}m`;
-}
-
-function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString('en-IN', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true,
-  });
 }
 
 const iconForKey = (key: string) => {
@@ -75,24 +70,34 @@ export const ShiftControlBar: React.FC<ShiftControlBarProps> = ({
   onCloseShiftClick,
   onViewLastShiftSummary,
   isPreparingClose,
+  currentBusinessDate,
+  timeZone,
 }) => {
   const elapsed = formatElapsed(activeShift.openedAt);
-  const openedAtShort = formatTime(activeShift.openedAt);
   const allHandoversDone =
     handoversAssigned > 0 && handoversCompleted >= handoversAssigned;
   const closePromoted = allHandoversDone || isPreparingClose;
 
   return (
     <div className="shift-control-bar card animate-fade-in">
+      <div style={{ padding: '9px 12px 0' }}>
+        <ShiftBusinessDateContext
+          compact
+          businessDate={activeShift.businessDate}
+          currentBusinessDate={currentBusinessDate}
+          scheduledStartTime={activeShift.scheduledStartTime}
+          scheduledEndTime={activeShift.scheduledEndTime}
+          openedAt={activeShift.openedAt}
+          timeZone={timeZone}
+        />
+      </div>
       <div className="shift-control-bar__inline">
         <div className="shift-control-bar__cluster shift-control-bar__identity">
           {isPreparingClose && <Chip tone="warning" size="sm">Closing</Chip>}
           <strong style={{ fontSize: '13px', color: 'var(--text-strong)' }}>
             {activeShift.templateName}
           </strong>
-          <span className="shift-control-bar__meta">
-            <Clock3 size={11} /> {openedAtShort} · {elapsed}
-          </span>
+          <span className="shift-control-bar__meta"><Clock3 size={11} /> Active for {elapsed}</span>
           <span className="shift-control-bar__meta">
             Float{' '}
             <strong className="font-mono">

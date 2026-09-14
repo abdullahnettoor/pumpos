@@ -34,8 +34,10 @@ Two anchors exist, and choosing the right one is the most important domain decis
 
 - **`business_day_id`** — the **universal anchor**. Every operational and financial
   record belongs to a business day.
-- **`shift_id`** — present **iff the money touches the physical cash drawer.** A shift
-  is an operator-accountability window for drawer cash.
+- **`shift_id`** — an **optional** anchor. A shift is an attendant-accountability
+  window for drawer cash. Set by default when money touches the drawer; other
+  records may pass it explicitly (or preselect the open shift) when shift
+  attribution of historical data is useful.
 
 ```
 Business Day
@@ -55,9 +57,13 @@ Reports
 |---|---|---|
 | Fuel/merchandise sale | **set** | operator accountability within a shift |
 | Cash collection, cash supplier payment, drawer (`SHIFT_CASH`) expense | **set** | touches the drawer |
-| Card / UPI / bank / online collection | NULL | no drawer impact |
-| Bank/owner expense, purchase, supplier bank payment | NULL | business-day anchored |
-| Credit sale (receivable) | NULL | not drawer cash; a customer-ledger debit |
+| Card / UPI / bank / online collection | NULL by default | no drawer impact; passable/preselectable for shift attribution |
+| Bank/owner expense, purchase, supplier bank payment | NULL by default | business-day anchored; passable for shift attribution |
+| Credit sale (receivable) | NULL by default | not drawer cash; a customer-ledger debit |
+
+Drawer reconciliation keys off **movement kind**, never off `shift_id`
+presence — anchoring a card/UPI collection to a shift never pulls it into
+drawer math.
 
 **Credit sales are receivables, not cash.** A fleet fuel-on-credit sale records only a
 customer-ledger debit; it never moves stock again (the fuel is already metered via

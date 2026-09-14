@@ -100,6 +100,12 @@ export class DrizzleDssrDataReader implements DssrDataReader {
         amount: schema.otherIncome.amount,
         status: schema.otherIncome.status,
         categoryName: schema.incomeCategories.name,
+        taxCategory: schema.otherIncome.taxCategory,
+        taxableAmount: schema.otherIncome.taxableAmount,
+        cgst: schema.otherIncome.cgst,
+        sgst: schema.otherIncome.sgst,
+        igst: schema.otherIncome.igst,
+        cess: schema.otherIncome.cess,
       })
       .from(schema.otherIncome)
       .leftJoin(schema.incomeCategories, eq(schema.incomeCategories.id, schema.otherIncome.categoryId))
@@ -135,7 +141,18 @@ export class DrizzleDssrDataReader implements DssrDataReader {
 
     // Merchandise sale line items (productId + qty + revenue) for merch COGS + per-product margin.
     const saleItemRows = await this.db
-      .select({ productId: schema.saleItems.productId, quantity: schema.saleItems.quantity, lineTotal: schema.saleItems.lineTotal })
+      .select({
+        productId: schema.saleItems.productId,
+        quantity: schema.saleItems.quantity,
+        lineTotal: schema.saleItems.lineTotal,
+        taxCategory: schema.saleItems.taxCategory,
+        taxableAmount: schema.saleItems.taxableAmount,
+        cgst: schema.saleItems.cgst,
+        sgst: schema.saleItems.sgst,
+        igst: schema.saleItems.igst,
+        vat: schema.saleItems.vat,
+        cess: schema.saleItems.cess,
+      })
       .from(schema.saleItems)
       .innerJoin(schema.sales, eq(schema.sales.id, schema.saleItems.saleId))
       .where(eq(schema.sales.businessDayId, businessDayId));
@@ -197,7 +214,19 @@ export class DrizzleDssrDataReader implements DssrDataReader {
       })),
       collections: collectionRows.map((r) => ({ paymentMethod: r.paymentMethod, amount: Number(r.amount) })),
       expenses: expenseRows.map((r) => ({ affectsDrawer: r.affectsDrawer, paidFrom: r.paidFrom, amount: Number(r.amount), status: r.status })),
-      income: incomeRows.map((r) => ({ affectsDrawer: r.affectsDrawer, receivedInto: r.receivedInto, amount: Number(r.amount), status: r.status, categoryName: r.categoryName ?? null })),
+      income: incomeRows.map((r) => ({
+        affectsDrawer: r.affectsDrawer,
+        receivedInto: r.receivedInto,
+        amount: Number(r.amount),
+        status: r.status,
+        categoryName: r.categoryName ?? null,
+        taxCategory: r.taxCategory ?? null,
+        taxableAmount: r.taxableAmount != null ? Number(r.taxableAmount) : null,
+        cgst: Number(r.cgst ?? 0),
+        sgst: Number(r.sgst ?? 0),
+        igst: Number(r.igst ?? 0),
+        cess: Number(r.cess ?? 0),
+      })),
       purchases: purchaseRows.map((r) => ({ amount: Number(r.amount) })),
       supplierPayments: supplierPaymentRows.map((r) => ({ affectsDrawer: r.affectsDrawer, paidFrom: r.paidFrom, amount: Number(r.amount) })),
       sales: saleRows.map((r) => ({ paymentMethod: r.paymentMethod, saleType: r.saleType, totalAmount: Number(r.totalAmount) })),
@@ -212,7 +241,18 @@ export class DrizzleDssrDataReader implements DssrDataReader {
         varianceQuantity: Number(r.varianceQuantity),
         reason: r.reason ?? null,
       })),
-      saleItems: saleItemRows.map((r) => ({ productId: r.productId, quantity: Number(r.quantity), revenue: Number(r.lineTotal) })),
+      saleItems: saleItemRows.map((r) => ({
+        productId: r.productId,
+        quantity: Number(r.quantity),
+        revenue: Number(r.lineTotal),
+        taxCategory: r.taxCategory ?? null,
+        taxableAmount: r.taxableAmount != null ? Number(r.taxableAmount) : null,
+        cgst: Number(r.cgst ?? 0),
+        sgst: Number(r.sgst ?? 0),
+        igst: Number(r.igst ?? 0),
+        vat: Number(r.vat ?? 0),
+        cess: Number(r.cess ?? 0),
+      })),
       products,
       nozzles,
     };

@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { and, desc, eq, inArray, ne, sql } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
-import { canOpenShift, canCloseShift, canReopenShift, isAuthorizedForStation, isAttendant, type Role } from '@pump/shared';
+import { attendantHandoverSchema, canOpenShift, canCloseShift, canReopenShift, canRecordHandover, isAuthorizedForStation, isAttendant, resolveBusinessDate, type Role } from '@pump/shared';
 import {
   OpenShift,
   RecordNozzleReadings,
@@ -9,36 +9,38 @@ import {
   ReopenShift,
   LockShift,
   OpenBusinessDay,
-  CloseBusinessDay,
+  CloseBusinessDayAndGenerateDssr,
+  GetBusinessDayStatus,
+  RecordHandover,
   type Result,
 } from '@pump/core';
 import { buildContext } from '../infra/context.js';
+import type { AuthenticatedPrincipal } from '../infra/authenticated-principal.js';
 import { loadStationClock } from '../infra/station-clock.js';
-import { runInTransaction } from '../infra/transaction.js';
+import { lockStationInventory, runInTransaction } from '../infra/transaction.js';
 import {
   DrizzleNozzleRepository,
   DrizzleFuelPriceRepository,
 } from '../infra/repositories/setup-repositories.js';
 import {
   DrizzleBusinessDayRepository,
+  DrizzleBusinessDayStatusReader,
   DrizzleShiftRepository,
   DrizzleNozzleReadingRepository,
   DrizzleShiftReconciliationReader,
   DrizzleCreditSalesReader,
   DrizzleStockMovementWriter,
   DrizzleShiftSummaryWriter,
+  DrizzleHandoverContextReader,
+  DrizzleHandoverRepository,
 } from '../infra/repositories/station-ops-repositories.js';
+import { DrizzleDssrDataReader, DrizzleDssrSnapshotRepository } from '../infra/repositories/reporting-repositories.js';
 import { LedgerPostingService } from '../infra/ledger-posting.js';
+import { DrizzleStockVarianceRepository } from '../infra/repositories/inventory-repositories.js';
 
 type Variables = {
   db: DbClient;
-  user: {
-    id: string;
-    email: string;
-    organizationId: string;
-    role: Role;
-    assignedStationIds: string[];
-  };
+  user: AuthenticatedPrincipal;
 };
 
 export const shiftsRouter = new Hono<{ Variables: Variables }>();
@@ -61,6 +63,33 @@ function sendResult<T>(c: any, result: Result<T>) {
 function canManageDay(role: Role): boolean {
   return role === 'Owner' || role === 'Manager';
 }
+
+// GET /api/shifts/business-days/status?stationId=...&date=YYYY-MM-DD
+// A lightweight lifecycle read for desktop/console. Missing is explicit rather
+// than being inferred from Shift state, and every Past Open Business Day is
+// returned so Delayed Closure remains visible.
+shiftsRouter.get('/business-days/status', async (c) => {
+  const user = c.var.user;
+  const stationId = c.req.query('stationId');
+  if (!stationId) {
+    return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'stationId is required' } }, 400);
+  }
+  if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId })) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+  }
+
+  const clock = await loadStationClock(c.var.db, stationId);
+  const currentBusinessDate = resolveBusinessDate({
+    timeZone: clock.timeZone,
+    dayStartsAt: clock.businessDayStartsAt,
+  });
+  const requestedBusinessDate = c.req.query('date') ?? currentBusinessDate;
+  const result = await new GetBusinessDayStatus(new DrizzleBusinessDayStatusReader(c.var.db)).execute(
+    { stationId, requestedBusinessDate, currentBusinessDate },
+    buildContext(user, { stationId, ...clock }),
+  );
+  return sendResult(c, result);
+});
 
 /**
  * Project an immutable v2 shift-summary snapshot into the shape the Shift Summary
@@ -344,9 +373,14 @@ shiftsRouter.get('/status', async (c) => {
 
   let activeShift: any = null;
   if (dbActiveShift) {
-    const [templateRows2, openedByRows2, nozzleReadingRows] = await Promise.all([
+    const [templateRows2, openedByRows2, activeBusinessDayRows, nozzleReadingRows] = await Promise.all([
       db.select().from(schema.shiftTemplates).where(eq(schema.shiftTemplates.id, dbActiveShift.shiftTemplateId)).limit(1),
       db.select().from(schema.users).where(eq(schema.users.id, dbActiveShift.openedBy)).limit(1),
+      db.select({ businessDate: schema.businessDays.businessDate }).from(schema.businessDays).where(and(
+        eq(schema.businessDays.id, dbActiveShift.businessDayId),
+        eq(schema.businessDays.organizationId, orgId),
+        eq(schema.businessDays.stationId, stationId),
+      )).limit(1),
       db
         .select({ nr: schema.nozzleReadings, nz: schema.nozzles, prod: schema.products, tnk: schema.tanks, du: schema.dispenserUnits })
         .from(schema.nozzleReadings)
@@ -358,6 +392,7 @@ shiftsRouter.get('/status', async (c) => {
     ]);
     const template = templateRows2[0];
     const openedByUser = openedByRows2[0];
+    const activeBusinessDay = activeBusinessDayRows[0];
 
     const nozzleReadings = nozzleReadingRows.map(({ nr, nz, prod, tnk, du }) => ({
       ...nr,
@@ -634,6 +669,9 @@ shiftsRouter.get('/status', async (c) => {
     activeShift = {
       ...dbActiveShift,
       templateName: template?.name ?? 'Custom',
+      businessDate: activeBusinessDay?.businessDate ?? null,
+      scheduledStartTime: template?.startTime ?? null,
+      scheduledEndTime: template?.endTime ?? null,
       openedByName: openedByUser?.fullName ?? 'System',
       nozzleReadings,
       staffAssignments,
@@ -662,35 +700,34 @@ shiftsRouter.get('/status', async (c) => {
   let gracePeriodExpiresAt: string | null = null;
 
   if (dbLastShift) {
-    let currentStatus = dbLastShift.status;
-    let lockedAt = dbLastShift.lockedAt;
+    const currentStatus = dbLastShift.status;
+    const lockedAt = dbLastShift.lockedAt;
     if (currentStatus === 'CLOSED' && dbLastShift.closedAt) {
       const closedTime = new Date(dbLastShift.closedAt).getTime();
-      const lockExpiryTime = closedTime + lockGraceDays * 24 * 60 * 60 * 1000;
-      if (now > lockExpiryTime) {
-        lockedAt = new Date(lockExpiryTime);
-        currentStatus = 'LOCKED';
-      } else {
-        const reopenExpiryTime = closedTime + graceMinutes * 60 * 1000;
-        if (now <= reopenExpiryTime) gracePeriodExpiresAt = new Date(reopenExpiryTime).toISOString();
-      }
+      const reopenExpiryTime = closedTime + graceMinutes * 60 * 1000;
+      if (now <= reopenExpiryTime) gracePeriodExpiresAt = new Date(reopenExpiryTime).toISOString();
     }
-    const [lastTemplateRows, lastClosedByRows, lastSummaryRows] = await Promise.all([
+    const [lastTemplateRows, lastClosedByRows, lastSummaryRows, parentDayRows] = await Promise.all([
       db.select().from(schema.shiftTemplates).where(eq(schema.shiftTemplates.id, dbLastShift.shiftTemplateId)).limit(1),
       dbLastShift.closedBy
         ? db.select().from(schema.users).where(eq(schema.users.id, dbLastShift.closedBy)).limit(1)
         : Promise.resolve([] as any[]),
       db.select().from(schema.shiftSummaries).where(eq(schema.shiftSummaries.shiftId, dbLastShift.id)).limit(1),
+      db.select({ status: schema.businessDays.status }).from(schema.businessDays).where(and(
+        eq(schema.businessDays.id, dbLastShift.businessDayId),
+        eq(schema.businessDays.organizationId, orgId),
+        eq(schema.businessDays.stationId, stationId),
+      )).limit(1),
     ]);
     const template = lastTemplateRows[0];
     const closedByName = lastClosedByRows[0]?.fullName ?? 'System';
     const summary = lastSummaryRows[0];
-    if (currentStatus === 'CLOSED' && gracePeriodExpiresAt && canReopenShift(user.role) && !dbActiveShift) canReopenLastShift = true;
+    if (currentStatus === 'CLOSED' && parentDayRows[0]?.status === 'OPEN' && canReopenShift(user.role) && !dbActiveShift) canReopenLastShift = true;
     lastShift = { ...dbLastShift, status: currentStatus, lockedAt, templateName: template?.name ?? 'Custom', closedByName };
     lastDssr = summary ? { ...summary, snapshotData: await projectShiftSummary(db, dbLastShift, summary.snapshotData) } : null;
   }
 
-  // --- Recent closed (not lock-expired) shifts ---
+  // --- Recent closed (not attribution-grace-expired) shifts ---
   const dbClosedShifts = await db
     .select({ shift: schema.shifts, templateName: schema.shiftTemplates.name })
     .from(schema.shifts)
@@ -701,8 +738,8 @@ shiftsRouter.get('/status', async (c) => {
   for (const item of dbClosedShifts) {
     const s = item.shift;
     if (s.closedAt) {
-      const lockExpiryTime = new Date(s.closedAt).getTime() + lockGraceDays * 24 * 60 * 60 * 1000;
-      if (now <= lockExpiryTime) recentClosedShifts.push({ ...s, templateName: item.templateName ?? 'Custom' });
+      const attributionExpiryTime = new Date(s.closedAt).getTime() + lockGraceDays * 24 * 60 * 60 * 1000;
+      if (now <= attributionExpiryTime) recentClosedShifts.push({ ...s, templateName: item.templateName ?? 'Custom' });
     }
   }
 
@@ -852,7 +889,7 @@ shiftsRouter.get('/my-assignment', async (c) => {
     // Only terminals bound to THIS dispenser unit — shift-wide / other-DU
     // machines are not shown to the attendant (mirrors the desktop drawer).
     const terminals = terminalRows
-      .filter((r) => r.link.duId === duId)
+      .filter((r) => r.link.duId === duId || r.link.duId == null)
       .map(({ link, term }) => ({
         terminalId: link.terminalId,
         label: term?.label ?? 'Terminal',
@@ -892,6 +929,12 @@ shiftsRouter.get('/my-assignment', async (c) => {
     return { duId, duName: du?.name ?? 'Unknown', duCode: du?.code ?? null, nozzles, terminals, handover, terminalEntries, creditSales, omcSales };
   });
 
+  const [configuredTerminal] = await db.select({ id: schema.paymentTerminals.id }).from(schema.paymentTerminals).where(and(
+    eq(schema.paymentTerminals.organizationId, user.organizationId),
+    eq(schema.paymentTerminals.stationId, shift.stationId),
+    eq(schema.paymentTerminals.isActive, true),
+  )).limit(1);
+
   return c.json({
     success: true,
     data: {
@@ -904,6 +947,7 @@ shiftsRouter.get('/my-assignment', async (c) => {
         templateName: templateRows[0]?.name ?? null,
       },
       station: stationRows[0] ? { id: stationRows[0].id, name: stationRows[0].name, code: stationRows[0].code } : null,
+      stationHasConfiguredTerminals: Boolean(configuredTerminal),
       dispenserUnits,
     },
   });
@@ -912,144 +956,89 @@ shiftsRouter.get('/my-assignment', async (c) => {
 // GET /api/shifts/handovers?shiftId=...  (legacy-compatible read)
 shiftsRouter.get('/handovers', async (c) => {
   const db = c.var.db;
+  const user = c.var.user;
   const shiftId = c.req.query('shiftId');
   if (!shiftId) {
     return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'shiftId is required' } }, 400);
+  }
+  const [shift] = await db.select({ stationId: schema.shifts.stationId }).from(schema.shifts).where(and(
+    eq(schema.shifts.id, shiftId),
+    eq(schema.shifts.organizationId, user.organizationId),
+  )).limit(1);
+  if (!shift) {
+    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Shift not found' } }, 404);
+  }
+  if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId: shift.stationId })) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
   }
   const rows = await db
     .select({ h: schema.attendantHandovers, userName: schema.users.fullName, duName: schema.dispenserUnits.name })
     .from(schema.attendantHandovers)
     .leftJoin(schema.users, eq(schema.users.id, schema.attendantHandovers.userId))
     .leftJoin(schema.dispenserUnits, eq(schema.dispenserUnits.id, schema.attendantHandovers.duId))
-    .where(eq(schema.attendantHandovers.shiftId, shiftId));
+    .where(and(
+      eq(schema.attendantHandovers.organizationId, user.organizationId),
+      eq(schema.attendantHandovers.stationId, shift.stationId),
+      eq(schema.attendantHandovers.shiftId, shiftId),
+      ...(isAttendant(user.role) ? [eq(schema.attendantHandovers.userId, user.id)] : []),
+    ));
   const entryRows = await db
     .select()
     .from(schema.handoverTerminalEntries)
-    .where(eq(schema.handoverTerminalEntries.shiftId, shiftId));
+    .where(and(
+      eq(schema.handoverTerminalEntries.organizationId, user.organizationId),
+      eq(schema.handoverTerminalEntries.stationId, shift.stationId),
+      eq(schema.handoverTerminalEntries.shiftId, shiftId),
+    ));
   return c.json({ success: true, data: rows.map(({ h, userName, duName }) => ({ ...h, userName: userName ?? 'Unknown', duName: duName ?? 'Unknown', terminalEntries: entryRows.filter((e) => e.handoverId === h.id) })) });
 });
 
-// POST /api/shifts/handovers  (legacy-compatible attendant cash/card/UPI/credit declaration)
+// POST /api/shifts/handovers
 shiftsRouter.post('/handovers', async (c) => {
   const db = c.var.db;
   const user = c.var.user;
+  if (!canRecordHandover(user.role)) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions to record a handover' } }, 403);
+  }
   const body = await c.req.json().catch(() => ({}));
-  const { shiftId, userId, duId } = body ?? {};
+  const parsed = attendantHandoverSchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Invalid Handover request' } }, 400);
+  }
+  const { shiftId, userId, duId, cashHandedOver, cardHandedOver, upiHandedOver, nozzleReadings, terminalEntries } = parsed.data;
+  const attendantId = isAttendant(user.role) ? user.id : userId;
   // Attendants derive userId from their own session, so only shiftId + duId are
   // required from them; operational roles must name the attendant (userId).
-  if (!shiftId || !duId || (!userId && !isAttendant(user.role))) {
+  if (!attendantId) {
     return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'shiftId, userId and duId are required' } }, 400);
   }
-  const [shift] = await db.select().from(schema.shifts).where(eq(schema.shifts.id, shiftId)).limit(1);
-  if (!shift || shift.organizationId !== user.organizationId) {
+  const [shift] = await db.select().from(schema.shifts).where(and(eq(schema.shifts.id, shiftId), eq(schema.shifts.organizationId, user.organizationId))).limit(1);
+  if (!shift) {
     return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Shift not found' } }, 404);
   }
-  if (shift.status === 'LOCKED') {
-    return c.json({ success: false, error: { code: 'INVARIANT_VIOLATION', message: 'Shift is locked' } }, 409);
-  }
-  // Caller must be authorized for the shift's station.
   if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId: shift.stationId })) {
     return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
   }
-  // Attendants may only record their OWN handover, and only for a dispenser unit
-  // they are assigned to on this shift. Operational roles may record on behalf of
-  // any attendant (the userId from the body stands).
-  let effectiveUserId: string = userId ?? user.id;
-  if (isAttendant(user.role)) {
-    effectiveUserId = user.id;
-    const [assigned] = await db
-      .select({ id: schema.shiftStaffAssignments.id })
-      .from(schema.shiftStaffAssignments)
-      .where(
-        and(
-          eq(schema.shiftStaffAssignments.shiftId, shiftId),
-          eq(schema.shiftStaffAssignments.userId, user.id),
-          eq(schema.shiftStaffAssignments.duId, duId),
-        ),
-      )
-      .limit(1);
-    if (!assigned) {
-      return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Not assigned to this dispenser unit' } }, 403);
-    }
-  }
-  // Per-terminal card/UPI breakdown. When present, the card/UPI aggregates are
-  // derived from these rows so the two can never drift apart.
-  const terminalEntries: { terminalId: string; duId?: string | null; cardAmount: number; upiAmount: number; batchRef?: string | null }[] =
-    Array.isArray(body.terminalEntries) ? body.terminalEntries : [];
-  const hasTerminalEntries = terminalEntries.length > 0;
-  const derivedCard = terminalEntries.reduce((acc, e) => acc + Number(e.cardAmount ?? 0), 0);
-  const derivedUpi = terminalEntries.reduce((acc, e) => acc + Number(e.upiAmount ?? 0), 0);
-  const values = {
-    organizationId: user.organizationId,
-    stationId: shift.stationId,
-    shiftId,
-    userId: effectiveUserId,
-    duId,
-    cashHandedOver: String(body.cashHandedOver ?? 0),
-    cardHandedOver: String(hasTerminalEntries ? derivedCard : body.cardHandedOver ?? 0),
-    upiHandedOver: String(hasTerminalEntries ? derivedUpi : body.upiHandedOver ?? 0),
-    creditHandedOver: String(body.creditHandedOver ?? 0),
-    testingVolume: String(body.testingVolume ?? 0),
-    expectedSales: String(body.expectedSales ?? 0),
-    varianceAmount: String(body.varianceAmount ?? 0),
-  };
-  // One handover per (shift, user, du): replace if re-declared. Per-terminal
-  // entries cascade-delete with the old handover row.
-  await db
-    .delete(schema.attendantHandovers)
-    .where(and(eq(schema.attendantHandovers.shiftId, shiftId), eq(schema.attendantHandovers.userId, effectiveUserId), eq(schema.attendantHandovers.duId, duId)));
-  const [row] = await db.insert(schema.attendantHandovers).values(values).returning();
-
-  if (hasTerminalEntries) {
-    await db.insert(schema.handoverTerminalEntries).values(
-      terminalEntries
-        .filter((e) => e?.terminalId)
-        .map((e) => ({
-          organizationId: user.organizationId,
-          stationId: shift.stationId,
-          handoverId: row.id,
-          shiftId,
-          terminalId: e.terminalId,
-          duId: e.duId ?? duId ?? null,
-          cardAmount: String(e.cardAmount ?? 0),
-          upiAmount: String(e.upiAmount ?? 0),
-          batchRef: e.batchRef ?? null,
-        })),
-    );
-  }
-
-  // Persist the closing nozzle readings declared in the handover so the shift
-  // close picks up the volumes (volume = closing - opening).
-  const readings: { nozzleId: string; closingReading: number; testingVolume?: number }[] = Array.isArray(body.nozzleReadings) ? body.nozzleReadings : [];
-  for (const r of readings) {
-    if (!r?.nozzleId || r.closingReading == null) continue;
-    const [existing] = await db
-      .select()
-      .from(schema.nozzleReadings)
-      .where(and(eq(schema.nozzleReadings.shiftId, shiftId), eq(schema.nozzleReadings.nozzleId, r.nozzleId)))
-      .limit(1);
-    if (!existing) continue;
-    const opening = Number(existing.openingReading);
-    const closing = Number(r.closingReading);
-    if (closing < opening) continue;
-    const gross = closing - opening;
-    const setFields: { closingReading: string; volumeSold: string; testingVolume?: string } = {
-      closingReading: String(closing),
-      volumeSold: String(gross),
-    };
-    // Only overwrite testing when the caller explicitly sent a value; otherwise
-    // preserve the previously-saved testing (a reading-only re-save must not
-    // silently zero the calibration volume).
-    if (r.testingVolume !== undefined && r.testingVolume !== null) {
-      setFields.testingVolume = String(Math.min(Math.max(Number(r.testingVolume), 0), gross));
-    }
-    await db
-      .update(schema.nozzleReadings)
-      .set(setFields)
-      .where(eq(schema.nozzleReadings.id, existing.id));
-  }
-
-  return c.json({ success: true, data: row });
+  const result = await runInTransaction(db, async (tx, events) => {
+    await lockStationInventory(tx, user.organizationId, shift.stationId);
+    return new RecordHandover({
+      shifts: new DrizzleShiftRepository(tx),
+      businessDays: new DrizzleBusinessDayRepository(tx),
+      context: new DrizzleHandoverContextReader(tx),
+      handovers: new DrizzleHandoverRepository(tx),
+      events,
+    }).execute({
+      shiftId,
+      attendantId,
+      duId,
+      cashHandedOver,
+      cardHandedOver,
+      upiHandedOver,
+      nozzleReadings,
+      terminalEntries,
+    }, buildContext(user, { stationId: shift.stationId, businessDayId: shift.businessDayId }));
+  });
+  return sendResult(c, result);
 });
 
 // POST /api/shifts/open
@@ -1064,16 +1053,17 @@ shiftsRouter.post('/open', async (c) => {
   }
   const db = c.var.db;
   const clock = await loadStationClock(db, body?.stationId);
-  const result = await runInTransaction(db, (tx, events) =>
-    new OpenShift({
+  const result = await runInTransaction(db, async (tx, events) => {
+    await lockStationInventory(tx, user.organizationId, body?.stationId);
+    return new OpenShift({
       shifts: new DrizzleShiftRepository(tx),
       businessDays: new DrizzleBusinessDayRepository(tx),
       nozzles: new DrizzleNozzleRepository(tx),
       nozzleReadings: new DrizzleNozzleReadingRepository(tx),
       fuelPrices: new DrizzleFuelPriceRepository(tx),
       events,
-    }).execute(body, buildContext(user, { stationId: body?.stationId, ...clock })),
-  );
+    }).execute(body, buildContext(user, { stationId: body?.stationId, ...clock }));
+  });
   return sendResult(c, result);
 });
 
@@ -1082,13 +1072,28 @@ shiftsRouter.put('/readings', async (c) => {
   const user = c.var.user;
   const body = await c.req.json().catch(() => ({}));
   const db = c.var.db;
-  const result = await runInTransaction(db, (tx, events) =>
-    new RecordNozzleReadings({
+  if (typeof body?.shiftId !== 'string' || body.shiftId.length === 0) {
+    return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Invalid RecordNozzleReadings command' } }, 400);
+  }
+  const [shift] = await db.select({ stationId: schema.shifts.stationId, businessDayId: schema.shifts.businessDayId }).from(schema.shifts).where(and(
+    eq(schema.shifts.id, body.shiftId),
+    eq(schema.shifts.organizationId, user.organizationId),
+  )).limit(1);
+  if (!shift) {
+    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Shift not found' } }, 404);
+  }
+  if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId: shift.stationId })) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+  }
+  const result = await runInTransaction(db, async (tx, events) => {
+    await lockStationInventory(tx, user.organizationId, shift.stationId);
+    return new RecordNozzleReadings({
       shifts: new DrizzleShiftRepository(tx),
+      businessDays: new DrizzleBusinessDayRepository(tx),
       nozzleReadings: new DrizzleNozzleReadingRepository(tx),
       events,
-    }).execute(body, buildContext(user)),
-  );
+    }).execute(body, buildContext(user, { stationId: shift.stationId, businessDayId: shift.businessDayId }));
+  });
   return sendResult(c, result);
 });
 
@@ -1099,9 +1104,24 @@ shiftsRouter.post('/close', async (c) => {
     return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions to close a shift' } }, 403);
   }
   const body = await c.req.json().catch(() => ({}));
-  const command = { shiftId: body?.shiftId, ...(body?.payload ?? {}) };
+  const command = { ...(body?.payload ?? {}), shiftId: body?.shiftId };
   const db = c.var.db;
+  // Authorize the shift's stored station (matches open/readings/reopen): a
+  // Manager assigned to Station A must not close Station B's shift.
+  const [target] = await db
+    .select({ stationId: schema.shifts.stationId })
+    .from(schema.shifts)
+    .where(and(eq(schema.shifts.id, body?.shiftId), eq(schema.shifts.organizationId, user.organizationId)))
+    .limit(1);
+  if (!target) {
+    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Shift not found' } }, 404);
+  }
+  if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId: target.stationId })) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+  }
   const result = await runInTransaction(db, async (tx, events) => {
+    const [shift] = await tx.select({ stationId: schema.shifts.stationId }).from(schema.shifts).where(and(eq(schema.shifts.id, body?.shiftId), eq(schema.shifts.organizationId, user.organizationId))).limit(1);
+    if (shift) await lockStationInventory(tx, user.organizationId, shift.stationId);
     const r = await new CloseShift({
       shifts: new DrizzleShiftRepository(tx),
       nozzles: new DrizzleNozzleRepository(tx),
@@ -1128,17 +1148,28 @@ shiftsRouter.post('/close', async (c) => {
 // POST /api/shifts/reopen
 shiftsRouter.post('/reopen', async (c) => {
   const user = c.var.user;
-  if (!canManageDay(user.role)) {
+  if (!canReopenShift(user.role)) {
     return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Only Owners/Managers can reopen a shift' } }, 403);
   }
   const body = await c.req.json().catch(() => ({}));
   const db = c.var.db;
+  const [shift] = await db.select({ stationId: schema.shifts.stationId, businessDayId: schema.shifts.businessDayId }).from(schema.shifts).where(and(
+    eq(schema.shifts.id, body?.shiftId),
+    eq(schema.shifts.organizationId, user.organizationId),
+  )).limit(1);
+  if (shift && !isAuthorizedForStation(user, { organizationId: user.organizationId, stationId: shift.stationId })) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+  }
   const result = await runInTransaction(db, async (tx, events) => {
+    if (shift) await lockStationInventory(tx, user.organizationId, shift.stationId);
+    const businessDays = new DrizzleBusinessDayRepository(tx);
     const r = await new ReopenShift({
       shifts: new DrizzleShiftRepository(tx),
+      businessDays,
       summaries: new DrizzleShiftSummaryWriter(tx),
+      stockVariances: new DrizzleStockVarianceRepository(tx),
       events,
-    }).execute(body, buildContext(user));
+    }).execute(body, buildContext(user, shift ? { stationId: shift.stationId, businessDayId: shift.businessDayId } : undefined));
     // Roll back the shift-close money postings; they will be re-posted on re-close.
     if (r.success && body?.shiftId) await new LedgerPostingService(tx).reverseShiftClose(body.shiftId);
     return r;
@@ -1153,9 +1184,22 @@ shiftsRouter.post('/lock', async (c) => {
     return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Only Owners/Managers can lock a shift' } }, 403);
   }
   const body = await c.req.json().catch(() => ({}));
+  if (!body?.shiftId) {
+    return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'shiftId is required' } }, 400);
+  }
   const db = c.var.db;
+  const [shift] = await db.select({ stationId: schema.shifts.stationId, businessDayId: schema.shifts.businessDayId }).from(schema.shifts).where(and(
+    eq(schema.shifts.id, body?.shiftId),
+    eq(schema.shifts.organizationId, user.organizationId),
+  )).limit(1);
+  if (!shift) {
+    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Shift not found' } }, 404);
+  }
+  if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId: shift.stationId })) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+  }
   const result = await runInTransaction(db, (tx, events) =>
-    new LockShift({ shifts: new DrizzleShiftRepository(tx), events }).execute(body, buildContext(user)),
+    new LockShift({ shifts: new DrizzleShiftRepository(tx), businessDays: new DrizzleBusinessDayRepository(tx), events }).execute(body, buildContext(user, shift)),
   );
   return sendResult(c, result);
 });
@@ -1168,6 +1212,9 @@ shiftsRouter.post('/business-day/open', async (c) => {
   }
   const body = await c.req.json().catch(() => ({}));
   const db = c.var.db;
+  if (!body?.stationId || !isAuthorizedForStation(user, { organizationId: user.organizationId, stationId: body.stationId })) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this Station' } }, 403);
+  }
   const clock = await loadStationClock(db, body?.stationId);
   const result = await runInTransaction(db, (tx, events) =>
     new OpenBusinessDay({ repository: new DrizzleBusinessDayRepository(tx), events }).execute(body, buildContext(user, { stationId: body?.stationId, ...clock })),
@@ -1183,9 +1230,19 @@ shiftsRouter.post('/business-day/close', async (c) => {
   }
   const body = await c.req.json().catch(() => ({}));
   const db = c.var.db;
-  const result = await runInTransaction(db, (tx, events) =>
-    new CloseBusinessDay({ repository: new DrizzleBusinessDayRepository(tx), events }).execute(body, buildContext(user)),
-  );
+  if (!body?.stationId || !isAuthorizedForStation(user, { organizationId: user.organizationId, stationId: body.stationId })) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this Station' } }, 403);
+  }
+  const result = await runInTransaction(db, async (tx, events) => {
+    const businessDays = new DrizzleBusinessDayRepository(tx);
+    return new CloseBusinessDayAndGenerateDssr({
+      businessDays,
+      openShifts: new DrizzleShiftRepository(tx),
+      snapshots: new DrizzleDssrSnapshotRepository(tx),
+      dssrData: new DrizzleDssrDataReader(tx),
+      events,
+    }).execute(body, buildContext(user, { stationId: body.stationId, businessDayId: body.businessDayId }));
+  });
   return sendResult(c, result);
 });
 
@@ -1195,6 +1252,9 @@ shiftsRouter.get('/shift-summaries', async (c) => {
   const stationId = c.req.query('stationId');
   if (!stationId) {
     return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'stationId is required' } }, 400);
+  }
+  if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId })) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
   }
   const db = c.var.db;
   const rows = await db

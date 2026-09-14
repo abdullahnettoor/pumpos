@@ -81,8 +81,10 @@ export class RecordCreditSale implements UseCase<RecordCreditSaleCommand, Custom
 
 ### Anchoring inside a use-case
 
-The recurring pattern: resolve `businessDayId` from a shift or the open business day,
-and set `shiftId` only when the money is drawer cash.
+Resolve the Business Date with the Station clock, then resolve the exact Business
+Day by `(Organization, Station, Business Date)`. Several Business Days may be open
+at once, so never use an ambiguous station-wide "open day" lookup. Set `shiftId`
+only when the money is drawer cash.
 
 ```ts
 let businessDayId: string;
@@ -93,8 +95,9 @@ if (cmd.shiftId) {
   businessDayId = shift.businessDayId;
   shiftId = affectsDrawer ? shift.id : null;
 } else if (cmd.stationId) {
-  const bd = await this.deps.businessDays.findOpenByStation(ctx.organizationId, cmd.stationId);
-  if (!bd) return err(invariantViolation('No open business day for this station'));
+  const date = resolveBusinessDate({ now: ctx.clock.now(), timeZone: ctx.timeZone, dayStartsAt: ctx.businessDayStartsAt });
+  const bd = await this.deps.businessDays.findByStationAndDate(ctx.organizationId, cmd.stationId, date);
+  if (!bd) return err(invariantViolation('No Business Day exists for this Station and Business Date'));
   businessDayId = bd.id;
   shiftId = null;
 }

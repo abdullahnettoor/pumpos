@@ -101,6 +101,26 @@ export function composeDssr(source: DssrSourceData): Record<string, unknown> {
   for (const sale of source.sales) salesByMethod[sale.paymentMethod] = (salesByMethod[sale.paymentMethod] ?? 0) + sale.totalAmount;
   const merchandiseSalesValue = sum(source.sales.map((s) => s.totalAmount));
 
+  // --- T5: output tax on sales, from the split frozen on each line ---
+  const gstLines = source.saleItems.filter((i) => i.taxCategory === 'GST');
+  const vatLines = source.saleItems.filter((i) => i.taxCategory === 'FUEL_VAT');
+  const salesGst = {
+    taxable: round2(sum(gstLines.map((i) => i.taxableAmount ?? 0))),
+    cgst: round2(sum(gstLines.map((i) => i.cgst ?? 0))),
+    sgst: round2(sum(gstLines.map((i) => i.sgst ?? 0))),
+    igst: round2(sum(gstLines.map((i) => i.igst ?? 0))),
+    cess: round2(sum(gstLines.map((i) => i.cess ?? 0))),
+  };
+  const salesVat = {
+    taxable: round2(sum(vatLines.map((i) => i.taxableAmount ?? 0))),
+    vat: round2(sum(vatLines.map((i) => i.vat ?? 0))),
+  };
+  const salesTax = {
+    gst: { ...salesGst, total: round2(salesGst.cgst + salesGst.sgst + salesGst.igst + salesGst.cess) },
+    // VAT is outside GST (no input credit for the buyer) — reported separately.
+    vat: salesVat,
+  };
+
   // --- Collections by method ---
   const collectionsByMethod = { Cash: 0, Card: 0, UPI: 0, BankTransfer: 0 } as Record<string, number>;
   for (const col of source.collections) collectionsByMethod[col.paymentMethod] = (collectionsByMethod[col.paymentMethod] ?? 0) + col.amount;
@@ -128,6 +148,18 @@ export function composeDssr(source: DssrSourceData): Record<string, unknown> {
     incomeByCategoryMap[key] = (incomeByCategoryMap[key] ?? 0) + i.amount;
   }
   const incomeByCategory = Object.entries(incomeByCategoryMap).map(([name, amount]) => ({ name, amount: round2(amount) }));
+
+  // --- FI4: output GST on other income (from the split frozen at capture) ---
+  const gstIncome = liveIncome.filter((i) => i.taxCategory === 'GST');
+  const incomeTax = {
+    taxable: round2(sum(gstIncome.map((i) => i.taxableAmount ?? 0))),
+    cgst: round2(sum(gstIncome.map((i) => i.cgst ?? 0))),
+    sgst: round2(sum(gstIncome.map((i) => i.sgst ?? 0))),
+    igst: round2(sum(gstIncome.map((i) => i.igst ?? 0))),
+    cess: round2(sum(gstIncome.map((i) => i.cess ?? 0))),
+    entries: gstIncome.length,
+  };
+  const incomeTaxTotal = round2(incomeTax.cgst + incomeTax.sgst + incomeTax.igst + incomeTax.cess);
 
   // --- Purchases & supplier payments ---
   const purchasesTotal = sum(source.purchases.map((p) => p.amount));
@@ -200,6 +232,7 @@ export function composeDssr(source: DssrSourceData): Record<string, unknown> {
       salesValue: merchandiseSalesValue,
       byPaymentMethod: salesByMethod,
     },
+    salesTax,
     collections: {
       ...collectionsByMethod,
       total: sum(source.collections.map((c) => c.amount)),
@@ -210,7 +243,13 @@ export function composeDssr(source: DssrSourceData): Record<string, unknown> {
       total: normalCredit + fleetCredit,
     },
     expenses: { drawer: drawerExpenses, business: businessExpenses, total: drawerExpenses + businessExpenses },
-    income: { drawer: round2(drawerIncome), business: round2(businessIncome), total: otherIncome, byCategory: incomeByCategory },
+    income: {
+      drawer: round2(drawerIncome),
+      business: round2(businessIncome),
+      total: otherIncome,
+      byCategory: incomeByCategory,
+      tax: { ...incomeTax, total: incomeTaxTotal },
+    },
     purchases: { total: purchasesTotal },
     supplierPayments: { drawer: drawerSupplierPayments, bank: bankSupplierPayments, total: drawerSupplierPayments + bankSupplierPayments },
     pnl: {

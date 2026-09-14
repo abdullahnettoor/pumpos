@@ -1,9 +1,10 @@
 import { Hono } from 'hono';
-import { and, desc, eq, gte, lte } from 'drizzle-orm';
+import { and, desc, eq, gte, lte, sql } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
-import { isAuthorizedForStation, canExportReports, type Role } from '@pump/shared';
+import { isAuthorizedForStation, canExportReports } from '@pump/shared';
 import { GenerateDssr, composeDssr, type Result } from '@pump/core';
 import { buildContext } from '../infra/context.js';
+import type { AuthenticatedPrincipal } from '../infra/authenticated-principal.js';
 import { runInTransaction } from '../infra/transaction.js';
 import {
   DrizzleDssrSnapshotRepository,
@@ -13,13 +14,7 @@ import { DrizzleBusinessDayRepository } from '../infra/repositories/station-ops-
 
 type Variables = {
   db: DbClient;
-  user: {
-    id: string;
-    email: string;
-    organizationId: string;
-    role: Role;
-    assignedStationIds: string[];
-  };
+  user: AuthenticatedPrincipal;
 };
 
 export const dssrRouter = new Hono<{ Variables: Variables }>();
@@ -39,6 +34,52 @@ function sendResult<T>(c: any, result: Result<T>) {
   return c.json({ success: false, error: result.error }, status);
 }
 
+async function buildLiveDssrPreview(
+  db: DbClient,
+  user: AuthenticatedPrincipal,
+  businessDay: { id: string; stationId: string; businessDate: string; status: string },
+) {
+  const generatedAt = new Date().toISOString();
+  const source = await new DrizzleDssrDataReader(db).readBusinessDay(businessDay.id);
+  const snapshotData = {
+    generatedAt,
+    businessDayId: businessDay.id,
+    businessDate: businessDay.businessDate,
+    stationId: businessDay.stationId,
+    organizationId: user.organizationId,
+    status: businessDay.status,
+    live: true,
+    ...composeDssr(source),
+  };
+  return { businessDate: businessDay.businessDate, generatedAt, live: true, snapshotData };
+}
+
+async function loadPersistedDssr(db: DbClient, organizationId: string, stationId: string, date: string) {
+  const [businessDay] = await db
+    .select({ status: schema.businessDays.status })
+    .from(schema.businessDays)
+    .where(and(
+      eq(schema.businessDays.organizationId, organizationId),
+      eq(schema.businessDays.stationId, stationId),
+      eq(schema.businessDays.businessDate, date),
+    ))
+    .limit(1);
+  if (businessDay?.status !== 'CLOSED') return null;
+  const snapshot = await new DrizzleDssrSnapshotRepository(db).findByStationDate(organizationId, stationId, date);
+  if (!snapshot) return null;
+  const [lateEntries] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(schema.events)
+    .innerJoin(schema.businessDays, eq(schema.events.businessDayId, schema.businessDays.id))
+    .where(and(
+      eq(schema.businessDays.organizationId, organizationId),
+      eq(schema.businessDays.stationId, stationId),
+      eq(schema.businessDays.businessDate, date),
+      sql`${schema.events.metadata} ->> 'lateEntryPrimary' = 'true'`,
+    ));
+  return { ...snapshot, lateEntryCount: Number(lateEntries?.count ?? 0) };
+}
+
 // POST /api/dssr/daily/generate — { stationId, businessDate } | { businessDayId }
 dssrRouter.post('/daily/generate', async (c) => {
   const db = c.var.db;
@@ -48,8 +89,9 @@ dssrRouter.post('/daily/generate', async (c) => {
   }
   const body = await c.req.json().catch(() => ({}));
   let businessDayId: string | undefined = body?.businessDayId;
-  const stationId: string | undefined = body?.stationId;
+  let stationId: string | undefined = body?.stationId;
   const businessDate: string | undefined = body?.businessDate;
+  let businessDay: { id: string; stationId: string; businessDate: string; status: string };
 
   if (!businessDayId) {
     if (!stationId || !businessDate) {
@@ -59,7 +101,7 @@ dssrRouter.post('/daily/generate', async (c) => {
       return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
     }
     const [bd] = await db
-      .select({ id: schema.businessDays.id })
+      .select({ id: schema.businessDays.id, stationId: schema.businessDays.stationId, businessDate: schema.businessDays.businessDate, status: schema.businessDays.status })
       .from(schema.businessDays)
       .where(
         and(
@@ -73,6 +115,25 @@ dssrRouter.post('/daily/generate', async (c) => {
       return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'No business day found for that station and date' } }, 404);
     }
     businessDayId = bd.id;
+    businessDay = bd;
+  } else {
+    const [bd] = await db
+      .select({ id: schema.businessDays.id, stationId: schema.businessDays.stationId, businessDate: schema.businessDays.businessDate, status: schema.businessDays.status })
+      .from(schema.businessDays)
+      .where(and(eq(schema.businessDays.id, businessDayId), eq(schema.businessDays.organizationId, user.organizationId)))
+      .limit(1);
+    if (!bd) {
+      return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Business day not found' } }, 404);
+    }
+    stationId = bd.stationId;
+    if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId })) {
+      return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+    }
+    businessDay = bd;
+  }
+
+  if (businessDay.status === 'OPEN') {
+    return c.json({ success: true, data: await buildLiveDssrPreview(db, user, businessDay) });
   }
 
   const result = await runInTransaction(db, (tx, events) =>
@@ -98,14 +159,11 @@ dssrRouter.get('/daily', async (c) => {
   if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId })) {
     return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
   }
-  const snapshot = await new DrizzleDssrSnapshotRepository(db).findByStationDate(user.organizationId, stationId, date);
-  return c.json({ success: true, data: snapshot });
+  return c.json({ success: true, data: await loadPersistedDssr(db, user.organizationId, stationId, date) });
 });
 
-// GET /api/dssr/daily/preview?stationId=&date= — LIVE (non-persisted) DSSR/P&L
-// for the given business day, composed from current data. Used for the open
-// day's "Today's P&L" so it reflects sales as they happen without writing a
-// snapshot (snapshots stay reserved for day close / explicit generation).
+// GET /api/dssr/daily/preview?stationId=&date= returns live data for an OPEN
+// day and the immutable persisted snapshot for a CLOSED day.
 dssrRouter.get('/daily/preview', async (c) => {
   const db = c.var.db;
   const user = c.var.user;
@@ -118,7 +176,7 @@ dssrRouter.get('/daily/preview', async (c) => {
     return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
   }
   const [bd] = await db
-    .select({ id: schema.businessDays.id, status: schema.businessDays.status })
+    .select({ id: schema.businessDays.id, stationId: schema.businessDays.stationId, businessDate: schema.businessDays.businessDate, status: schema.businessDays.status })
     .from(schema.businessDays)
     .where(
       and(
@@ -130,18 +188,14 @@ dssrRouter.get('/daily/preview', async (c) => {
     .limit(1);
   // No business day yet (no activity) → return null; the UI shows an empty state.
   if (!bd) return c.json({ success: true, data: null });
-  const source = await new DrizzleDssrDataReader(db).readBusinessDay(bd.id);
-  const snapshotData = {
-    generatedAt: new Date().toISOString(),
-    businessDayId: bd.id,
-    businessDate: date,
-    stationId,
-    organizationId: user.organizationId,
-    status: bd.status,
-    live: true,
-    ...composeDssr(source),
-  };
-  return c.json({ success: true, data: { businessDate: date, generatedAt: snapshotData.generatedAt, live: true, snapshotData } });
+  if (bd.status === 'CLOSED') {
+    const snapshot = await loadPersistedDssr(db, user.organizationId, stationId, date);
+    if (!snapshot) {
+      return c.json({ success: false, error: { code: 'CONFLICT', message: 'Closed business day has no persisted DSSR snapshot' } }, 409);
+    }
+    return c.json({ success: true, data: snapshot });
+  }
+  return c.json({ success: true, data: await buildLiveDssrPreview(db, user, bd) });
 });
 
 // GET /api/dssr/daily/range?stationId=&from=&to=

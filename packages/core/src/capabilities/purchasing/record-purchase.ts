@@ -1,10 +1,9 @@
 import { z } from 'zod';
-import { resolveBusinessDate } from '@pump/shared';
 import { BusinessEvents, err, eventFromContext, invariantViolation, notFoundError, ok, validationError } from '../../kernel/index.js';
 import type { DocumentNumberGenerator, DomainEvent, EventPublisher, ExecutionContext, Result, UseCase } from '../../kernel/index.js';
 import type { StockMovement, StockMovementRepository } from '../inventory/index.js';
-import type { ShiftRepository } from '../station-ops/shifts/index.js';
-import { ensureBusinessDayForDate, type BusinessDayRepository } from '../station-ops/business-days/index.js';
+import { resolveFinancialAnchor, type ShiftRepository } from '../station-ops/shifts/index.js';
+import type { BusinessDayWriteRepository } from '../station-ops/business-days/index.js';
 import type { SupplierRepository } from '../crm/suppliers/index.js';
 import type { ProductRepository } from '../station-setup/products/index.js';
 import type { StationRepository } from '../station-setup/stations/index.js';
@@ -76,7 +75,7 @@ export interface RecordPurchaseDeps {
   products: ProductRepository;
   stations: StationRepository;
   shifts: ShiftRepository;
-  businessDays: BusinessDayRepository;
+  businessDays: BusinessDayWriteRepository;
   docNumbers: DocumentNumberGenerator;
   events: EventPublisher;
 }
@@ -123,19 +122,12 @@ export class RecordPurchase implements UseCase<RecordPurchaseCommand, RecordPurc
     // drawer (so this is pure attribution, not a reconciliation input), but storing
     // it keeps shift-level provenance available for future reporting.
     let shiftIdToStore: string | null = null;
-    if (cmd.shiftId) {
-      const shift = await this.deps.shifts.findById(cmd.shiftId);
-      if (!shift || shift.organizationId !== ctx.organizationId) return err(notFoundError('Shift', cmd.shiftId));
-      businessDayId = shift.businessDayId;
-      stationId = shift.stationId;
-      shiftIdToStore = shift.id;
-    } else if (stationId) {
-      const date = cmd.transactionDate ?? resolveBusinessDate({ now: ctx.clock.now(), timeZone: ctx.timeZone, dayStartsAt: ctx.businessDayStartsAt });
-      const bd = await ensureBusinessDayForDate(this.deps.businessDays, ctx, stationId, date);
-      businessDayId = bd.id;
-    } else {
-      return err(validationError('Either shiftId or stationId is required'));
-    }
+    if (!cmd.shiftId && !stationId) return err(validationError('Either shiftId or stationId is required'));
+    const anchor = await resolveFinancialAnchor(this.deps, ctx, { shiftId: cmd.shiftId, stationId, transactionDate: cmd.transactionDate }, { kind: 'STOCK' });
+    if (!anchor.success) return anchor;
+    businessDayId = anchor.data.businessDayId;
+    stationId = anchor.data.stationId;
+    shiftIdToStore = anchor.data.shiftId;
 
     // Resolve inter-state status from supplier state vs buyer (station) state.
     const supplierStateCode = (supplier.metadata as Record<string, unknown> | null)?.stateCode as string | undefined;
@@ -152,6 +144,7 @@ export class RecordPurchase implements UseCase<RecordPurchaseCommand, RecordPurc
 
     const items: PurchaseItem[] = [];
     const movements: StockMovement[] = [];
+    const productNames = new Map<string, string>();
     const headerTotals = { taxable: 0, cgst: 0, sgst: 0, igst: 0, vat: 0, cess: 0, grand: 0 };
     // Per-product accumulator for the weighted-average cost recompute (FB1).
     // Keyed by productId; value = current cost basis + purchased qty & pre-tax
@@ -161,6 +154,7 @@ export class RecordPurchase implements UseCase<RecordPurchaseCommand, RecordPurc
     for (const line of rawLines) {
       const product = await this.deps.products.findById(line.productId);
       if (!product || product.organizationId !== ctx.organizationId) return err(notFoundError('Product', line.productId));
+      productNames.set(product.id, product.name);
 
       const quantity = Number(line.quantity);
       const unitPrice = Number(line.unitPrice);
@@ -316,6 +310,10 @@ export class RecordPurchase implements UseCase<RecordPurchaseCommand, RecordPurc
         stationId,
         businessDayId,
         payload: { purchaseId: purchase.id, supplierId: supplier.id, amount: purchase.amount, lineCount: items.length },
+        presentation: {
+          templateId: 'purchase.v1',
+          values: { supplierName: supplier.name, lineCount: items.length, amount: Number(purchase.amount) },
+        },
       }),
       ...items.map((it) =>
         eventFromContext(ctx, {
@@ -325,6 +323,15 @@ export class RecordPurchase implements UseCase<RecordPurchaseCommand, RecordPurc
           stationId,
           businessDayId,
           payload: { purchaseId: purchase.id, productId: it.productId, quantity: Number(it.quantity) },
+          presentation: {
+            templateId: 'goods-received.v1',
+            values: {
+              quantity: Number(it.quantity),
+              unit: 'units',
+              productName: productNames.get(it.productId) ?? 'product',
+              supplierName: supplier.name,
+            },
+          },
         }),
       ),
       eventFromContext(ctx, {
@@ -334,6 +341,14 @@ export class RecordPurchase implements UseCase<RecordPurchaseCommand, RecordPurc
         stationId,
         businessDayId,
         payload: { purchaseId: purchase.id, supplierId: supplier.id, amount: purchase.amount },
+        presentation: {
+          templateId: 'supplier-invoice.v1',
+          values: {
+            invoiceNumber: purchase.invoiceNumber ?? purchase.documentNumber,
+            supplierName: supplier.name,
+            amount: Number(purchase.amount),
+          },
+        },
       }),
     ];
     await this.deps.events.publish(events);
@@ -341,4 +356,3 @@ export class RecordPurchase implements UseCase<RecordPurchaseCommand, RecordPurc
     return ok({ purchase, items, movements, payable });
   }
 }
-

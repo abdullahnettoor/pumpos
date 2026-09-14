@@ -1,5 +1,5 @@
 import { pgTable, uuid, varchar, timestamp, boolean, integer, numeric, jsonb, primaryKey, index, uniqueIndex } from 'drizzle-orm/pg-core';
-import { sql } from 'drizzle-orm';
+import { desc, sql } from 'drizzle-orm';
 
 // ----------------------------------------------------
 // CORE DOMAIN
@@ -71,6 +71,7 @@ export const tanks = pgTable('tanks', {
   name: varchar('name', { length: 100 }).notNull(),
   productId: uuid('product_id').notNull(), // references products table defined below
   capacity: numeric('capacity', { precision: 12, scale: 2 }).notNull(), // Liters
+  status: varchar('status', { length: 20 }).default('ACTIVE').notNull(), // 'ACTIVE' | 'INACTIVE'
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
@@ -199,7 +200,9 @@ export const shifts = pgTable('shifts', {
   closingCash: numeric('closing_cash', { precision: 12, scale: 2 }),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
-});
+}, (t) => ({
+  oneOpenPerStation: uniqueIndex('shifts_station_open_uniq').on(t.organizationId, t.stationId).where(sql`${t.status} = 'OPEN'`),
+}));
 
 export const shiftStaffAssignments = pgTable('shift_staff_assignments', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -308,6 +311,7 @@ export const customerTransactions = pgTable('customer_transactions', {
   referenceType: varchar('reference_type', { length: 50 }),
   referenceId: uuid('reference_id'),
   notes: varchar('notes', { length: 500 }),
+  metadata: jsonb('metadata').default({}).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 }, (t) => ({
   shiftAttendantIdx: index('customer_txn_shift_attendant_idx').on(t.shiftId, t.attendantId),
@@ -340,6 +344,7 @@ export const supplierTransactions = pgTable('supplier_transactions', {
   referenceType: varchar('reference_type', { length: 50 }),
   referenceId: uuid('reference_id'),
   notes: varchar('notes', { length: 500 }),
+  metadata: jsonb('metadata').default({}).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
@@ -441,6 +446,22 @@ export const saleItems = pgTable('sale_items', {
   unitPrice: numeric('unit_price', { precision: 12, scale: 2 }).notNull(),
   discountAmount: numeric('discount_amount', { precision: 12, scale: 2 }).default('0').notNull(),
   taxAmount: numeric('tax_amount', { precision: 12, scale: 2 }).notNull(),
+  // T5 — output-tax split frozen at capture, same column shape as
+  // `purchase_items` (input side) and `other_income`. Re-rating a product must
+  // never restate a closed period, so the components live on the line rather
+  // than being recomputed from the product's current `tax_config`.
+  // Fuel is VAT (outside GST) → `vat`; merchandise is GST → cgst+sgst or igst.
+  taxCategory: varchar('tax_category', { length: 20 }).default('NON_TAXABLE').notNull(),
+  gstRate: numeric('gst_rate', { precision: 5, scale: 2 }),
+  vatRate: numeric('vat_rate', { precision: 5, scale: 2 }),
+  cessRate: numeric('cess_rate', { precision: 5, scale: 2 }),
+  hsnCode: varchar('hsn_code', { length: 50 }),
+  taxableAmount: numeric('taxable_amount', { precision: 12, scale: 2 }),
+  cgst: numeric('cgst', { precision: 12, scale: 2 }).default('0').notNull(),
+  sgst: numeric('sgst', { precision: 12, scale: 2 }).default('0').notNull(),
+  igst: numeric('igst', { precision: 12, scale: 2 }).default('0').notNull(),
+  vat: numeric('vat', { precision: 12, scale: 2 }).default('0').notNull(),
+  cess: numeric('cess', { precision: 12, scale: 2 }).default('0').notNull(),
   lineTotal: numeric('line_total', { precision: 12, scale: 2 }).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
@@ -474,6 +495,8 @@ export const stockVariances = pgTable('stock_variances', {
   varianceQuantity: numeric('variance_quantity', { precision: 12, scale: 3 }).notNull(),
   reason: varchar('reason', { length: 255 }),
   approvedBy: uuid('approved_by').references(() => users.id),
+  // e.g. { openShiftAtRecording: true } — mid-shift dip, no reconciliation.
+  metadata: jsonb('metadata').default({}).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
@@ -504,6 +527,7 @@ export const expenses = pgTable('expenses', {
   parentExpenseId: uuid('parent_expense_id'),
   adjustmentReason: varchar('adjustment_reason', { length: 255 }),
   status: varchar('status', { length: 20 }).default('ACTIVE').notNull(), // 'ACTIVE', 'ADJUSTMENT', 'VOIDED'
+  metadata: jsonb('metadata').default({}).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
@@ -542,7 +566,26 @@ export const otherIncome = pgTable('other_income', {
   referenceType: varchar('reference_type', { length: 50 }),
   referenceId: uuid('reference_id'),
   description: varchar('description', { length: 500 }),
+  // FI4 — GST on income. Computed at capture from the category's `tax_config`
+  // (rate + HSN/SAC) and frozen here so the split never drifts when a category
+  // is later re-rated. `amount` stays the money actually received; when the
+  // category is priced tax-inclusive, `taxable_amount` = amount − tax.
+  // Mirrors `purchase_items`: rate + HSN as explicit columns (returns group by
+  // them), money components as numerics (they are SUMmed), and only the residual
+  // audit evidence in JSONB — per the metadata rule.
+  taxCategory: varchar('tax_category', { length: 20 }).default('NON_TAXABLE').notNull(), // 'GST' | 'EXEMPT' | 'NON_TAXABLE'
+  gstRate: numeric('gst_rate', { precision: 5, scale: 2 }),
+  cessRate: numeric('cess_rate', { precision: 5, scale: 2 }),
+  hsnCode: varchar('hsn_code', { length: 50 }),
+  taxableAmount: numeric('taxable_amount', { precision: 12, scale: 2 }),
+  cgst: numeric('cgst', { precision: 12, scale: 2 }).default('0').notNull(),
+  sgst: numeric('sgst', { precision: 12, scale: 2 }).default('0').notNull(),
+  igst: numeric('igst', { precision: 12, scale: 2 }).default('0').notNull(),
+  cess: numeric('cess', { precision: 12, scale: 2 }).default('0').notNull(),
+  // Residual evidence only: { inclusive, supplier_state, buyer_state }.
+  taxSnapshot: jsonb('tax_snapshot'),
   status: varchar('status', { length: 20 }).default('ACTIVE').notNull(), // 'ACTIVE' | 'VOIDED'
+  metadata: jsonb('metadata').default({}).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 }, (t) => ({
@@ -563,6 +606,7 @@ export const collections = pgTable('collections', {
   amount: numeric('amount', { precision: 12, scale: 2 }).notNull(),
   paymentMethod: varchar('payment_method', { length: 50 }).notNull(),
   notes: varchar('notes', { length: 500 }),
+  metadata: jsonb('metadata').default({}).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
@@ -706,7 +750,17 @@ export const events = pgTable('events', {
   causationId: uuid('causation_id'),
   payload: jsonb('payload').notNull(),
   metadata: jsonb('metadata').default({}).notNull(),
-});
+}, (t) => ({
+  activityPrimaryTimelineIdx: index('events_activity_primary_timeline_idx')
+    .on(t.organizationId, desc(t.recordedAt), desc(t.eventId))
+    .where(sql`${t.correlationId} IS NULL OR (${t.metadata} -> 'grouping' ->> 'role') = 'primary'`),
+  activityCorrelationDetailIdx: index('events_activity_correlation_detail_idx')
+    .on(t.organizationId, t.correlationId, t.occurredAt, t.eventId)
+    .where(sql`${t.correlationId} IS NOT NULL`),
+  activityPrimaryCorrelationUniq: uniqueIndex('events_activity_primary_correlation_uniq')
+    .on(t.organizationId, t.correlationId)
+    .where(sql`${t.correlationId} IS NOT NULL AND (${t.metadata} -> 'grouping' ->> 'role') = 'primary'`),
+}));
 
 // Caches the result of a mutating request keyed by a client-supplied
 // Idempotency-Key header, so retries (after a timeout or offline replay) return
@@ -714,13 +768,18 @@ export const events = pgTable('events', {
 export const idempotencyKeys = pgTable('idempotency_keys', {
   id: uuid('id').defaultRandom().primaryKey(),
   organizationId: uuid('organization_id').references(() => organizations.id).notNull(),
-  idempotencyKey: varchar('idempotency_key', { length: 255 }).notNull().unique(),
+  idempotencyKey: varchar('idempotency_key', { length: 255 }).notNull(),
   requestPath: varchar('request_path', { length: 255 }),
+  // Actor + canonical body hash: replay only for the same user resending the
+  // same request content; anything else conflicts.
+  actorId: uuid('actor_id'),
+  requestHash: varchar('request_hash', { length: 64 }),
   responseStatus: integer('response_status'),
   responseBody: jsonb('response_body'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 }, (t) => ({
   orgIdx: index('idempotency_keys_org_idx').on(t.organizationId),
+  orgKeyUniq: uniqueIndex('idempotency_keys_org_key_uniq').on(t.organizationId, t.idempotencyKey),
 }));
 
 export const fuelPrices = pgTable('fuel_prices', {
@@ -748,7 +807,10 @@ export const attendantHandovers = pgTable('attendant_handovers', {
   expectedSales: numeric('expected_sales', { precision: 12, scale: 2 }).default('0').notNull(),
   varianceAmount: numeric('variance_amount', { precision: 12, scale: 2 }).default('0').notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
-});
+}, (t) => ({
+  currentHandoverUniq: uniqueIndex('attendant_handovers_org_station_shift_user_du_uniq')
+    .on(t.organizationId, t.stationId, t.shiftId, t.userId, t.duId),
+}));
 
 // Per-terminal card/UPI breakdown captured within an attendant handover. The
 // parent handover's card/upi aggregates are the sum of these rows when present.

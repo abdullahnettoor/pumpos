@@ -267,6 +267,13 @@ export class LedgerPostingService {
       .where(and(eq(schema.ledgerEntries.sourceType, 'SALE_OMC'), eq(schema.ledgerEntries.sourceId, sourceId)));
   }
 
+  /** Reverse the money-out for a voided expense. */
+  async reverseExpense(sourceId: string): Promise<void> {
+    await this.db
+      .delete(schema.ledgerEntries)
+      .where(and(eq(schema.ledgerEntries.sourceType, 'EXPENSE'), eq(schema.ledgerEntries.sourceId, sourceId)));
+  }
+
   /** Reverse the money-in for a voided income entry. */
   async reverseIncome(sourceId: string): Promise<void> {
     await this.db

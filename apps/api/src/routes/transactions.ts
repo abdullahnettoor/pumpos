@@ -8,6 +8,12 @@ import {
   canArchiveParty,
   canRecordPurchase,
   canManageExpenseCategory,
+  canVoidExpense,
+  canCreateExpense,
+  canRecordCollection,
+  canRecordIncome,
+  canRecordStockCount,
+  canRecordHandover,
   isAttendant,
   type Role,
 } from '@pump/shared';
@@ -23,6 +29,7 @@ import {
   AddVehicle,
   UpdateVehicle,
   RecordExpense,
+  VoidExpense,
   RecordIncome,
   VoidIncome,
   RecordCollection,
@@ -38,9 +45,10 @@ import {
   RecordMerchandiseHandover,
   type Result,
 } from '@pump/core';
-import { buildContext } from '../infra/context.js';
+import { buildContext, createCommandTrace } from '../infra/context.js';
+import type { AuthenticatedPrincipal } from '../infra/authenticated-principal.js';
 import { loadStationClock } from '../infra/station-clock.js';
-import { runInTransaction } from '../infra/transaction.js';
+import { lockStationInventory, runInTransaction } from '../infra/transaction.js';
 import { TimestampDocumentNumberGenerator } from '../infra/doc-numbers.js';
 import {
   DrizzleCustomerRepository,
@@ -54,12 +62,12 @@ import {
   DrizzlePurchaseItemRepository,
   DrizzleSupplierTransactionRepository,
 } from '../infra/repositories/purchasing-repositories.js';
-import { DrizzleExpenseRepository, DrizzleIncomeRepository } from '../infra/repositories/finance-repositories.js';
+import { DrizzleExpenseRepository, DrizzleIncomeRepository, DrizzleIncomeCategoryRepository } from '../infra/repositories/finance-repositories.js';
 import { DrizzleStockMovementRepository, DrizzleStockVarianceRepository } from '../infra/repositories/inventory-repositories.js';
 import { DrizzleSaleRepository, DrizzleMerchandiseHandoverRepository } from '../infra/repositories/retail-repositories.js';
 import { DrizzleInvoiceRepository, DrizzleDocumentSequenceRepository } from '../infra/repositories/invoicing-repositories.js';
 import { DrizzleProductRepository } from '../infra/repositories/product.repo.js';
-import { DrizzleStationRepository } from '../infra/repositories/setup-repositories.js';
+import { DrizzleStationRepository, DrizzleTankRepository } from '../infra/repositories/setup-repositories.js';
 import { LedgerPostingService } from '../infra/ledger-posting.js';
 import {
   DrizzleShiftRepository,
@@ -68,13 +76,7 @@ import {
 
 type Variables = {
   db: DbClient;
-  user: {
-    id: string;
-    email: string;
-    organizationId: string;
-    role: Role;
-    assignedStationIds: string[];
-  };
+  user: AuthenticatedPrincipal;
 };
 
 export const transactionsRouter = new Hono<{ Variables: Variables }>();
@@ -95,6 +97,37 @@ function sendResult<T>(c: any, result: Result<T>) {
 }
 
 const docNumbers = new TimestampDocumentNumberGenerator();
+
+/**
+ * Tenant guard for business-day-anchored rows (expenses / income): the row's
+ * business day must belong to the caller's organization before it can be
+ * mutated. Repository ports look records up by id alone, so scope here.
+ */
+/**
+ * The station's own GST state (supplier side of place-of-supply). Resolves from
+ * an explicit stationId, else via the shift the entry is anchored to.
+ */
+async function loadStationStateCode(db: DbClient, stationId?: string | null, shiftId?: string | null): Promise<string | null> {
+  let sid = stationId ?? null;
+  if (!sid && shiftId) {
+    const [sh] = await db.select({ stationId: schema.shifts.stationId }).from(schema.shifts).where(eq(schema.shifts.id, shiftId)).limit(1);
+    sid = sh?.stationId ?? null;
+  }
+  if (!sid) return null;
+  const [row] = await db.select({ settings: schema.stations.settings }).from(schema.stations).where(eq(schema.stations.id, sid)).limit(1);
+  const legal = ((row?.settings as any)?.legal) || {};
+  return typeof legal.stateCode === 'string' && legal.stateCode.trim() ? legal.stateCode.trim() : null;
+}
+
+async function belongsToOrg(db: DbClient, table: any, id: string, organizationId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ id: table.id })
+    .from(table)
+    .innerJoin(schema.businessDays, eq(table.businessDayId, schema.businessDays.id))
+    .where(and(eq(table.id, id), eq(schema.businessDays.organizationId, organizationId)))
+    .limit(1);
+  return !!row;
+}
 
 const DEFAULT_EXPENSE_CATEGORIES = [
   'Staff Tea & Snacks',
@@ -152,7 +185,11 @@ transactionsRouter.post('/suppliers', async (c) => {
   const openingStationId: string | undefined = body?.openingStationId ?? body?.stationId ?? undefined;
   const clock = openingDue > 0 && openingStationId ? await loadStationClock(c.var.db, openingStationId) : {};
   const result = await runInTransaction(c.var.db, async (tx, events) => {
-    const created = await new CreateSupplier({ repository: new DrizzleSupplierRepository(tx), events }).execute(body, buildContext(user));
+    const trace = createCommandTrace();
+    const created = await new CreateSupplier({ repository: new DrizzleSupplierRepository(tx), events }).execute(
+      body,
+      buildContext(user, { correlationId: trace.correlationId, groupingRole: 'primary' }),
+    );
     if (!created.success || !(openingDue > 0)) return created;
     if (!openingStationId) return err(validationError('A station is required to record an opening balance.'));
     const ob = await new SetSupplierOpeningBalance({
@@ -162,7 +199,12 @@ transactionsRouter.post('/suppliers', async (c) => {
       events,
     }).execute(
       { supplierId: created.data.id, amount: openingDue, stationId: openingStationId, asOfDate: body?.openingAsOf },
-      buildContext(user, { stationId: openingStationId, ...clock }),
+      buildContext(user, {
+        stationId: openingStationId,
+        correlationId: trace.correlationId,
+        groupingRole: 'related',
+        ...clock,
+      }),
     );
     return ob.success ? created : ob;
   });
@@ -265,7 +307,11 @@ transactionsRouter.post('/customers', async (c) => {
   const openingStationId: string | undefined = body?.openingStationId ?? body?.stationId ?? undefined;
   const clock = openingDue > 0 && openingStationId ? await loadStationClock(c.var.db, openingStationId) : {};
   const result = await runInTransaction(c.var.db, async (tx, events) => {
-    const created = await new CreateCustomer({ repository: new DrizzleCustomerRepository(tx), events }).execute(body, buildContext(user));
+    const trace = createCommandTrace();
+    const created = await new CreateCustomer({ repository: new DrizzleCustomerRepository(tx), events }).execute(
+      body,
+      buildContext(user, { correlationId: trace.correlationId, groupingRole: 'primary' }),
+    );
     if (!created.success || !(openingDue > 0)) return created;
     if (!openingStationId) return err(validationError('A station is required to record an opening balance.'));
     const ob = await new SetCustomerOpeningBalance({
@@ -275,7 +321,12 @@ transactionsRouter.post('/customers', async (c) => {
       events,
     }).execute(
       { customerId: created.data.id, amount: openingDue, stationId: openingStationId, asOfDate: body?.openingAsOf },
-      buildContext(user, { stationId: openingStationId, ...clock }),
+      buildContext(user, {
+        stationId: openingStationId,
+        correlationId: trace.correlationId,
+        groupingRole: 'related',
+        ...clock,
+      }),
     );
     return ob.success ? created : ob;
   });
@@ -661,8 +712,17 @@ transactionsRouter.put('/income-categories/:id', async (c) => {
 // ---- Other income (indirect income; money IN to drawer/bank/owner) ----
 transactionsRouter.post('/income', async (c) => {
   const user = c.var.user;
+  if (!canRecordIncome(user.role)) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions to record income' } }, 403);
+  }
   const body = await c.req.json().catch(() => ({}));
+  if (body?.stationId && !isAuthorizedForStation(user, { organizationId: user.organizationId, stationId: body.stationId })) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+  }
   const clock = await loadStationClock(c.var.db, body?.stationId);
+  // FI4 — place of supply: station state is the supplier side; the payer state
+  // (when the operator knows it) makes the entry inter-state (IGST).
+  const supplierStateCode = await loadStationStateCode(c.var.db, body?.stationId, body?.shiftId);
   const result = await runInTransaction(c.var.db, async (tx, events) => {
     // A chosen account overrides receivedInto/affectsDrawer by its type, so
     // drawer reconciliation stays correct (only shift Cash-in-Hand hits drawer).
@@ -682,8 +742,9 @@ transactionsRouter.post('/income', async (c) => {
       income: new DrizzleIncomeRepository(tx),
       shifts: new DrizzleShiftRepository(tx),
       businessDays: new DrizzleBusinessDayRepository(tx),
+      incomeCategories: new DrizzleIncomeCategoryRepository(tx),
       events,
-    }).execute(body, buildContext(user, { stationId: body?.stationId, ...clock }));
+    }).execute({ ...body, supplierStateCode: supplierStateCode ?? undefined }, buildContext(user, { stationId: body?.stationId, ...clock }));
     if (r.success) await new LedgerPostingService(tx).postIncome(user.organizationId, r.data, body?.accountId);
     return r;
   });
@@ -692,10 +753,16 @@ transactionsRouter.post('/income', async (c) => {
 
 transactionsRouter.post('/income/:id/void', async (c) => {
   const user = c.var.user;
+  if (!canVoidExpense(user.role)) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions to void income' } }, 403);
+  }
   const id = c.req.param('id');
   const body = await c.req.json().catch(() => ({}));
+  if (!(await belongsToOrg(c.var.db, schema.otherIncome, id, user.organizationId))) {
+    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Income entry not found' } }, 404);
+  }
   const result = await runInTransaction(c.var.db, async (tx, events) => {
-    const r = await new VoidIncome({ income: new DrizzleIncomeRepository(tx), events }).execute({ id, reason: body?.reason }, buildContext(user));
+    const r = await new VoidIncome({ income: new DrizzleIncomeRepository(tx), shifts: new DrizzleShiftRepository(tx), events }).execute({ id, reason: body?.reason }, buildContext(user));
     if (r.success) await new LedgerPostingService(tx).reverseIncome(id);
     return r;
   });
@@ -724,6 +791,14 @@ transactionsRouter.get('/income', async (c) => {
       description: schema.otherIncome.description,
       status: schema.otherIncome.status,
       shiftId: schema.otherIncome.shiftId,
+      taxCategory: schema.otherIncome.taxCategory,
+      gstRate: schema.otherIncome.gstRate,
+      hsnCode: schema.otherIncome.hsnCode,
+      taxableAmount: schema.otherIncome.taxableAmount,
+      cgst: schema.otherIncome.cgst,
+      sgst: schema.otherIncome.sgst,
+      igst: schema.otherIncome.igst,
+      cess: schema.otherIncome.cess,
       businessDate: schema.businessDays.businessDate,
       createdAt: schema.otherIncome.createdAt,
     })
@@ -736,9 +811,65 @@ transactionsRouter.get('/income', async (c) => {
 });
 
 
+/**
+ * FI4 — GST-on-income register: every GST-bearing income entry in the window
+ * with its frozen taxable value + CGST/SGST/IGST split and HSN/SAC. Mirrors
+ * `GET /purchases/gst-register` (input side) for the output side.
+ */
+transactionsRouter.get('/income/gst-register', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  const from = c.req.query('from');
+  const to = c.req.query('to');
+  const stationId = c.req.query('stationId');
+  const conds = [
+    eq(schema.businessDays.organizationId, user.organizationId),
+    eq(schema.otherIncome.taxCategory, 'GST'),
+    ne(schema.otherIncome.status, 'VOIDED'),
+  ];
+  if (stationId) conds.push(eq(schema.businessDays.stationId, stationId));
+  if (from) conds.push(gte(schema.businessDays.businessDate, from));
+  if (to) conds.push(lte(schema.businessDays.businessDate, to));
+  const rows = await db
+    .select({
+      id: schema.otherIncome.id,
+      businessDate: schema.businessDays.businessDate,
+      categoryName: schema.incomeCategories.name,
+      payer: schema.otherIncome.payer,
+      description: schema.otherIncome.description,
+      amount: schema.otherIncome.amount,
+      gstRate: schema.otherIncome.gstRate,
+      cessRate: schema.otherIncome.cessRate,
+      hsnCode: schema.otherIncome.hsnCode,
+      taxableAmount: schema.otherIncome.taxableAmount,
+      cgst: schema.otherIncome.cgst,
+      sgst: schema.otherIncome.sgst,
+      igst: schema.otherIncome.igst,
+      cess: schema.otherIncome.cess,
+    })
+    .from(schema.otherIncome)
+    .innerJoin(schema.businessDays, eq(schema.otherIncome.businessDayId, schema.businessDays.id))
+    .leftJoin(schema.incomeCategories, eq(schema.incomeCategories.id, schema.otherIncome.categoryId))
+    .where(and(...conds))
+    .orderBy(desc(schema.businessDays.businessDate));
+  const data = rows.map((r) => ({
+    ...r,
+    // Inter-state is derivable — IGST is only ever charged across states.
+    interState: Number(r.igst || 0) > 0,
+    categoryName: r.categoryName ?? 'Other Income',
+  }));
+  return c.json({ success: true, data });
+});
+
 transactionsRouter.post('/expenses', async (c) => {
   const user = c.var.user;
+  if (!canCreateExpense(user.role)) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions to record expenses' } }, 403);
+  }
   const body = await c.req.json().catch(() => ({}));
+  if (body?.stationId && !isAuthorizedForStation(user, { organizationId: user.organizationId, stationId: body.stationId })) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+  }
   const clock = await loadStationClock(c.var.db, body?.stationId);
   const result = await runInTransaction(c.var.db, async (tx, events) => {
     // When a specific pay-from account is chosen, derive paidFrom/affectsDrawer
@@ -768,9 +899,37 @@ transactionsRouter.post('/expenses', async (c) => {
   return sendResult(c, result);
 });
 
+transactionsRouter.post('/expenses/:id/void', async (c) => {
+  const user = c.var.user;
+  if (!canVoidExpense(user.role)) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions to void expenses' } }, 403);
+  }
+  const id = c.req.param('id');
+  const body = await c.req.json().catch(() => ({}));
+  if (!(await belongsToOrg(c.var.db, schema.expenses, id, user.organizationId))) {
+    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Expense not found' } }, 404);
+  }
+  const result = await runInTransaction(c.var.db, async (tx, events) => {
+    const r = await new VoidExpense({ expenses: new DrizzleExpenseRepository(tx), shifts: new DrizzleShiftRepository(tx), events }).execute({ id, reason: body?.reason }, buildContext(user));
+    if (r.success) await new LedgerPostingService(tx).reverseExpense(id);
+    return r;
+  });
+  return sendResult(c, result);
+});
+
 transactionsRouter.post('/collections', async (c) => {
   const user = c.var.user;
   const body = await c.req.json().catch(() => ({}));
+  // A 'Credit'/'OMC' "collection" is really a credit sale declared during a
+  // DU handover — Attendants may record those. True payment collections are
+  // desk operations and exclude the mobile-only Attendant.
+  const isHandoverCreditSale = body?.paymentMethod === 'Credit' || body?.paymentMethod === 'OMC';
+  if (isHandoverCreditSale ? !canRecordHandover(user.role) : !canRecordCollection(user.role)) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions to record collections' } }, 403);
+  }
+  if (body?.stationId && !isAuthorizedForStation(user, { organizationId: user.organizationId, stationId: body.stationId })) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+  }
   const clock = await loadStationClock(c.var.db, body?.stationId);
   // A "Credit" collection is a credit SALE (a receivable), not a payment. It is
   // recorded on the customer ledger with no drawer/stock impact.
@@ -818,11 +977,38 @@ transactionsRouter.post('/collections', async (c) => {
   return sendResult(c, result);
 });
 
+/**
+ * Authorization for in-shift ledger voids (credit / OMC card sales): the
+ * caller needs handover-recording permission, and the entry must resolve —
+ * through its owning business day — to a station the caller may act on within
+ * their organization. Returns an error Response, or null when authorized.
+ */
+async function authorizeLedgerVoid(db: DbClient, user: { organizationId: string; role: Role; assignedStationIds: string[] }, id: string) {
+  if (!canRecordHandover(user.role as Role)) {
+    return Response.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions to void this entry' } }, { status: 403 });
+  }
+  const [row] = await db
+    .select({ organizationId: schema.businessDays.organizationId, stationId: schema.businessDays.stationId })
+    .from(schema.customerTransactions)
+    .innerJoin(schema.businessDays, eq(schema.businessDays.id, schema.customerTransactions.businessDayId))
+    .where(eq(schema.customerTransactions.id, id))
+    .limit(1);
+  if (!row || row.organizationId !== user.organizationId) {
+    return Response.json({ success: false, error: { code: 'NOT_FOUND', message: 'Entry not found' } }, { status: 404 });
+  }
+  if (!isAuthorizedForStation(user as any, { organizationId: user.organizationId, stationId: row.stationId })) {
+    return Response.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, { status: 403 });
+  }
+  return null;
+}
+
 // Void a credit fuel sale (correction while the shift is still open). The
 // receivable is removed; allowed only before the originating shift closes.
 transactionsRouter.delete('/credit-sales/:id', async (c) => {
   const user = c.var.user;
   const id = c.req.param('id');
+  const guard = await authorizeLedgerVoid(c.var.db, user, id);
+  if (guard) return guard;
   const result = await runInTransaction(c.var.db, (tx, events) =>
     new VoidCreditSale({
       ledger: new DrizzleCustomerLedgerRepository(tx),
@@ -838,6 +1024,8 @@ transactionsRouter.delete('/credit-sales/:id', async (c) => {
 transactionsRouter.delete('/omc-card-sales/:id', async (c) => {
   const user = c.var.user;
   const id = c.req.param('id');
+  const guard = await authorizeLedgerVoid(c.var.db, user, id);
+  if (guard) return guard;
   const result = await runInTransaction(c.var.db, async (tx, events) => {
     const r = await new VoidOmcCardSale({
       ledger: new DrizzleCustomerLedgerRepository(tx),
@@ -858,7 +1046,13 @@ transactionsRouter.post('/purchases', async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const clock = await loadStationClock(c.var.db, body?.stationId);
   const result = await runInTransaction(c.var.db, async (tx, events) => {
-    const ctx = buildContext(user, { stationId: body?.stationId, ...clock });
+    const trace = createCommandTrace();
+    const ctx = buildContext(user, {
+      stationId: body?.stationId,
+      correlationId: trace.correlationId,
+      groupingRole: 'primary',
+      ...clock,
+    });
     const r = await new RecordPurchase({
       purchases: new DrizzlePurchaseRepository(tx),
       purchaseItems: new DrizzlePurchaseItemRepository(tx),
@@ -904,7 +1098,12 @@ transactionsRouter.post('/purchases', async (c) => {
         shifts: new DrizzleShiftRepository(tx),
         businessDays: new DrizzleBusinessDayRepository(tx),
         events,
-      }).execute(paymentBody, ctx);
+      }).execute(paymentBody, buildContext(user, {
+        stationId: body?.stationId,
+        correlationId: trace.correlationId,
+        groupingRole: 'related',
+        ...clock,
+      }));
       if (!pr.success) return pr; // roll the whole purchase back
       await new LedgerPostingService(tx).postSupplierPayment(user.organizationId, pr.data, accountId);
     }
@@ -954,7 +1153,10 @@ transactionsRouter.post('/sales', async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const rawBuyer = body.buyer && typeof body.buyer === 'object' ? body.buyer : null;
   const saveAsCustomer = !!body.saveAsCustomer;
+  // T5 — supplier side of place of supply for the frozen line-tax split.
+  const supplierStateCode = await loadStationStateCode(c.var.db, body?.stationId, body?.shiftId);
   const result = await runInTransaction(c.var.db, async (tx, events) => {
+    const trace = createCommandTrace();
     let customerId: string | null = body.customerId ?? null;
     let buyerDetails: { name: string; phone: string | null; gstin: string | null; stateCode: string | null } | null = null;
 
@@ -979,7 +1181,7 @@ transactionsRouter.post('/sales', async (c) => {
         } else {
           const created = await new CreateCustomer({ repository: custRepo, events }).execute(
             { name, customerType: 'Regular', phone, metadata: { ...(gstin ? { gstin } : {}), ...(stateCode ? { stateCode } : {}) } },
-            buildContext(user),
+            buildContext(user, { correlationId: trace.correlationId, groupingRole: 'related' }),
           );
           if (!created.success) return created;
           customerId = created.data.id;
@@ -995,9 +1197,14 @@ transactionsRouter.post('/sales', async (c) => {
       ledger: new DrizzleCustomerLedgerRepository(tx),
       customers: new DrizzleCustomerRepository(tx),
       shifts: new DrizzleShiftRepository(tx),
+      businessDays: new DrizzleBusinessDayRepository(tx),
+      products: new DrizzleProductRepository(tx),
       docNumbers,
       events,
-    }).execute({ ...body, customerId, buyerDetails }, buildContext(user));
+    }).execute(
+      { ...body, customerId, buyerDetails, supplierStateCode },
+      buildContext(user, { correlationId: trace.correlationId, groupingRole: 'primary' }),
+    );
   });
   return sendResult(c, result);
 });
@@ -1073,6 +1280,66 @@ transactionsRouter.get('/purchases/:id/items', async (c) => {
 
 // GST input-tax-credit (ITC) register: GST purchase lines over a date range.
 // Fuel (VAT) and exempt lines carry no input credit and are excluded.
+/**
+ * T5 — output-tax register for sales: every taxed sale line in the window with
+ * its frozen split. GST (merchandise) and VAT (fuel) are returned together but
+ * tagged by `taxCategory`, because fuel VAT is outside GST and must never be
+ * summed into GST totals. Mirrors the purchase ITC and income GST registers.
+ */
+transactionsRouter.get('/sales/tax-register', async (c) => {
+  const db = c.var.db;
+  const user = c.var.user;
+  const from = c.req.query('from');
+  const to = c.req.query('to');
+  const stationId = c.req.query('stationId');
+  const category = c.req.query('taxCategory');
+  const conds = [
+    eq(schema.businessDays.organizationId, user.organizationId),
+    category ? eq(schema.saleItems.taxCategory, category) : ne(schema.saleItems.taxCategory, 'NON_TAXABLE'),
+  ];
+  if (stationId) conds.push(eq(schema.businessDays.stationId, stationId));
+  if (from) conds.push(gte(schema.businessDays.businessDate, from));
+  if (to) conds.push(lte(schema.businessDays.businessDate, to));
+  const rows = await db
+    .select({
+      id: schema.saleItems.id,
+      businessDate: schema.businessDays.businessDate,
+      documentNumber: schema.sales.documentNumber,
+      paymentMethod: schema.sales.paymentMethod,
+      customerName: schema.customers.name,
+      productName: schema.products.name,
+      productCode: schema.products.code,
+      quantity: schema.saleItems.quantity,
+      taxCategory: schema.saleItems.taxCategory,
+      gstRate: schema.saleItems.gstRate,
+      vatRate: schema.saleItems.vatRate,
+      cessRate: schema.saleItems.cessRate,
+      hsnCode: schema.saleItems.hsnCode,
+      taxableAmount: schema.saleItems.taxableAmount,
+      cgst: schema.saleItems.cgst,
+      sgst: schema.saleItems.sgst,
+      igst: schema.saleItems.igst,
+      vat: schema.saleItems.vat,
+      cess: schema.saleItems.cess,
+      lineTotal: schema.saleItems.lineTotal,
+    })
+    .from(schema.saleItems)
+    .innerJoin(schema.sales, eq(schema.saleItems.saleId, schema.sales.id))
+    .innerJoin(schema.businessDays, eq(schema.sales.businessDayId, schema.businessDays.id))
+    .leftJoin(schema.customers, eq(schema.sales.customerId, schema.customers.id))
+    .leftJoin(schema.products, eq(schema.saleItems.productId, schema.products.id))
+    .where(and(...conds))
+    .orderBy(desc(schema.businessDays.businessDate));
+  const data = rows.map((r) => ({
+    ...r,
+    productName: r.productName ?? 'Product',
+    customerName: r.customerName ?? 'Walk-in',
+    // IGST is only ever charged across states.
+    interState: Number(r.igst || 0) > 0,
+  }));
+  return c.json({ success: true, data });
+});
+
 transactionsRouter.get('/purchases/gst-register', async (c) => {
   const db = c.var.db;
   const user = c.var.user;
@@ -1533,6 +1800,7 @@ transactionsRouter.post('/shifts/:id/merchandise-handover', async (c) => {
       stock: new DrizzleStockMovementRepository(tx),
       products: new DrizzleProductRepository(tx),
       shifts: new DrizzleShiftRepository(tx),
+      businessDays: new DrizzleBusinessDayRepository(tx),
       docNumbers: new TimestampDocumentNumberGenerator(),
       events,
     }).execute({ shiftId, attendantId, lines: body.lines ?? [], nonCashAmount: body.nonCashAmount }, buildContext(user)),
@@ -1677,7 +1945,20 @@ transactionsRouter.delete('/merchandise-handovers/:saleId', async (c) => {
 
 transactionsRouter.get('/shifts/:id/transactions', async (c) => {
   const db = c.var.db;
+  const user = c.var.user;
   const shiftId = c.req.param('id');
+  // Resolve the shift within the caller's organization and authorize its
+  // stored station before exposing any child records (tenant isolation).
+  const shift = await db.query.shifts.findFirst({
+    where: and(eq(schema.shifts.id, shiftId), eq(schema.shifts.organizationId, user.organizationId)),
+    columns: { id: true, stationId: true },
+  });
+  if (!shift) {
+    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Shift not found' } }, 404);
+  }
+  if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId: shift.stationId })) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+  }
   const [expenses, purchases, collections, sales, creditSales] = await Promise.all([
     db.select().from(schema.expenses).where(eq(schema.expenses.shiftId, shiftId)),
     db.select().from(schema.purchases).where(eq(schema.purchases.shiftId, shiftId)),
@@ -1748,7 +2029,7 @@ transactionsRouter.get('/inventory/status', async (c) => {
     .from(schema.tanks)
     .leftJoin(schema.products, eq(schema.products.id, schema.tanks.productId))
     .leftJoin(schema.stockMovements, eq(schema.stockMovements.tankId, schema.tanks.id))
-    .where(and(eq(schema.tanks.stationId, stationId), eq(schema.tanks.organizationId, user.organizationId)))
+    .where(and(eq(schema.tanks.stationId, stationId), eq(schema.tanks.organizationId, user.organizationId), eq(schema.tanks.status, 'ACTIVE')))
     .groupBy(schema.tanks.id, schema.products.name, schema.products.code, schema.products.unit);
 
   const enriched = rows.map((r) => ({
@@ -1801,19 +2082,25 @@ transactionsRouter.get('/inventory/items', async (c) => {
 // Reconciles book stock to the measured actual (tankId for fuel, productId for items).
 transactionsRouter.post('/inventory/count', async (c) => {
   const user = c.var.user;
+  if (!canRecordStockCount(user.role)) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions to record a stock count' } }, 403);
+  }
   const body = await c.req.json().catch(() => ({}));
   if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId: body?.stationId })) {
     return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
   }
   const stockClock = await loadStationClock(c.var.db, body?.stationId);
-  const result = await runInTransaction(c.var.db, (tx, events) =>
-    new RecordStockCount({
+  const result = await runInTransaction(c.var.db, async (tx, events) => {
+    await lockStationInventory(tx, user.organizationId, body?.stationId);
+    return new RecordStockCount({
       movements: new DrizzleStockMovementRepository(tx),
       variances: new DrizzleStockVarianceRepository(tx),
+      tanks: new DrizzleTankRepository(tx),
+      shifts: new DrizzleShiftRepository(tx),
       businessDays: new DrizzleBusinessDayRepository(tx),
       events,
-    }).execute(body, buildContext(user, { stationId: body?.stationId, ...stockClock })),
-  );
+    }).execute(body, buildContext(user, { stationId: body?.stationId, ...stockClock }));
+  });
   return sendResult(c, result);
 });
 

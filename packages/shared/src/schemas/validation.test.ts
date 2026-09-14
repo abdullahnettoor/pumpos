@@ -1,7 +1,22 @@
 import { describe, it, expect } from 'vitest';
-import { stationSchema, nozzleReadingSchema, supplierPaymentSchema, shiftPurchaseSchema, onboardingDraftSchema, finalizeOnboardingSchema } from './validation.js';
+import { stationSchema, nozzleReadingSchema, supplierPaymentSchema, shiftPurchaseSchema, onboardingDraftSchema, finalizeOnboardingSchema, createOpenShiftFormSchema, attendantHandoverSchema, shiftCloseSchema } from './validation.js';
 
 describe('Validation Schemas Tests', () => {
+  describe('createOpenShiftFormSchema', () => {
+    const values = { shiftTemplateId: 'template-1', businessDate: '2026-09-12', openingCash: 0 };
+
+    it('accepts current and earlier eligible Business Dates', () => {
+      const schema = createOpenShiftFormSchema('2026-09-12', 'NOT_CREATED');
+      expect(schema.safeParse(values).success).toBe(true);
+      expect(schema.safeParse({ ...values, businessDate: '2026-09-10' }).success).toBe(true);
+    });
+
+    it('rejects future and closed Business Dates', () => {
+      expect(createOpenShiftFormSchema('2026-09-12', 'NOT_CREATED').safeParse({ ...values, businessDate: '2026-09-13' }).success).toBe(false);
+      expect(createOpenShiftFormSchema('2026-09-12', 'CLOSED').safeParse(values).success).toBe(false);
+    });
+  });
+
   describe('stationSchema', () => {
     it('should validate correct station inputs', () => {
       const valid = {
@@ -75,6 +90,45 @@ describe('Validation Schemas Tests', () => {
       };
 
       const result = supplierPaymentSchema.safeParse(invalid);
+      expect(result.success).toBe(false);
+    });
+  });
+
+  describe('attendantHandoverSchema', () => {
+    const valid = {
+      shiftId: '550e8400-e29b-41d4-a716-446655440000',
+      userId: '550e8400-e29b-41d4-a716-446655440001',
+      duId: '550e8400-e29b-41d4-a716-446655440002',
+      cashHandedOver: 100,
+      cardHandedOver: 50,
+      upiHandedOver: 25,
+      nozzleReadings: [{
+        nozzleId: '550e8400-e29b-41d4-a716-446655440003',
+        closingReading: 1300,
+        testingVolume: 1,
+      }],
+    };
+
+    it('accepts declarations and source measurements', () => {
+      expect(attendantHandoverSchema.safeParse(valid).success).toBe(true);
+    });
+
+    it.each(['expectedSales', 'varianceAmount', 'creditHandedOver', 'creditSales', 'omcCardHandedOver', 'omcCardSales'])(
+      'rejects the client-supplied conclusion %s',
+      (field) => {
+        expect(attendantHandoverSchema.safeParse({ ...valid, [field]: 1 }).success).toBe(false);
+      },
+    );
+  });
+
+  describe('shiftCloseSchema', () => {
+    it('rejects Tank Dip input because dips are recorded after close as a separate action', () => {
+      const result = shiftCloseSchema.safeParse({
+        closingCash: 100,
+        nozzleReadings: [{ nozzleId: '550e8400-e29b-41d4-a716-446655440003', closingReading: 1300 }],
+        dipReadings: [{ tankId: '550e8400-e29b-41d4-a716-446655440004', actualQuantity: 5000 }],
+      });
+
       expect(result.success).toBe(false);
     });
   });

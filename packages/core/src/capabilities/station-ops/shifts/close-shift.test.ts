@@ -26,6 +26,7 @@ import type { Nozzle, NozzleRepository } from '../../station-setup/nozzles/index
 class ShiftRepo implements ShiftRepository {
   constructor(readonly rows: Shift[]) {}
   async findById(id: string) { return this.rows.find((r) => r.id === id) ?? null; }
+  async findByIdWithoutLock(id: string) { return this.findById(id); }
   async save(s: Shift) { const i = this.rows.findIndex((r) => r.id === s.id); if (i >= 0) this.rows[i] = s; else this.rows.push(s); }
   async findOpenByStation() { return null; }
   async addStaffAssignments() {}
@@ -111,6 +112,8 @@ describe('CloseShift', () => {
     expect(stock.saved).toHaveLength(1);
     expect(stock.saved[0].quantity).toBe('-100');
     expect(summaries.saved).not.toBeNull();
+    expect(summaries.saved?.snapshot).not.toHaveProperty('dipReadings');
+    expect(summaries.saved?.snapshot).not.toHaveProperty('stockVariances');
     const types = store.events.map((e) => e.eventType);
     expect(types).toContain(BusinessEvents.CASH_DECLARED);
     expect(types).toContain(BusinessEvents.SHIFT_CLOSED);
@@ -126,5 +129,17 @@ describe('CloseShift', () => {
     }).execute({ shiftId: 'sh-1', closingCash: 0 }, makeContext());
     expect(result.success).toBe(false);
     if (!result.success) expect(result.error.code).toBe('INVARIANT_VIOLATION');
+  });
+
+  it('rejects Tank Dip input because stock counts are a separate post-close action', async () => {
+    const result = await new CloseShift({
+      shifts: new ShiftRepo([openShiftRow()]), nozzles: new NozzleRepo([]), nozzleReadings: new ReadingRepo([]),
+      reconciliation: new ReconReader({ cashSales: 0, cashCollections: 0, cardCollections: 0, upiCollections: 0, creditCollections: 0, drawerExpenses: 0, drawerSupplierPayments: 0 }),
+      creditSales: new CreditSalesReaderMock([]),
+      stockMovements: new StockWriter(), summaries: new SummaryWriter(), events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
+    }).execute({ shiftId: 'sh-1', closingCash: 0, dipReadings: [{ tankId: 'tank-1', actualQuantity: 100 }] } as any, makeContext());
+
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error.code).toBe('VALIDATION_ERROR');
   });
 });

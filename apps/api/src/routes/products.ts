@@ -1,8 +1,9 @@
 import { Hono } from 'hono';
 import type { DbClient } from '@pump/db';
-import { canManageProduct, type Role } from '@pump/shared';
+import { canManageProduct } from '@pump/shared';
 import { CreateProduct, UpdateProduct, type Result } from '@pump/core';
 import { buildContext } from '../infra/context.js';
+import type { AuthenticatedPrincipal } from '../infra/authenticated-principal.js';
 import { createDispatcher } from '../infra/events.js';
 import { DrizzleProductRepository } from '../infra/repositories/product.repo.js';
 import { DrizzleStockMovementRepository } from '../infra/repositories/inventory-repositories.js';
@@ -12,13 +13,7 @@ import { runInTransaction } from '../infra/transaction.js';
 
 type Variables = {
   db: DbClient;
-  user: {
-    id: string;
-    email: string;
-    organizationId: string;
-    role: Role;
-    assignedStationIds: string[];
-  };
+  user: AuthenticatedPrincipal;
 };
 
 export const productsRouter = new Hono<{ Variables: Variables }>();

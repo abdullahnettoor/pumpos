@@ -2,6 +2,7 @@ import type { Result } from '@pump/shared';
 import type { Clock, IdGenerator } from './clock.js';
 import { createEvent } from './event.js';
 import type { DomainEvent } from './event.js';
+import type { EventActorSnapshot, EventGroupingRole, EventPresentationInput } from './event-activity.js';
 
 /**
  * Ambient context for a single use-case execution: who is acting and in which
@@ -14,6 +15,10 @@ export interface ExecutionContext {
   businessDayId: string | null;
   actorId: string | null;
   correlationId: string | null;
+  actorSnapshot?: EventActorSnapshot;
+  groupingRole?: EventGroupingRole;
+  /** Internal command-local emission count used to classify sibling facts. */
+  emittedEventCount?: number;
   /** IANA timezone of the active station, for business-date resolution. */
   timeZone?: string | null;
   /** Business-day start boundary 'HH:MM' (default '00:00'). */
@@ -41,6 +46,8 @@ export interface ContextEventInput<TType extends string, TPayload> {
   occurredAt?: Date | string;
   causationId?: string | null;
   metadata?: Record<string, unknown>;
+  groupingRole?: EventGroupingRole;
+  presentation?: EventPresentationInput;
   // Optional overrides (rarely needed):
   organizationId?: string;
   stationId?: string | null;
@@ -54,7 +61,16 @@ export function eventFromContext<TType extends string, TPayload>(
   ctx: ExecutionContext,
   input: ContextEventInput<TType, TPayload>,
 ): DomainEvent<TType, TPayload> {
-  return createEvent<TType, TPayload>(
+  const groupingRole = input.groupingRole
+    ?? (ctx.groupingRole === 'primary' && (ctx.emittedEventCount ?? 0) > 0 ? 'related' : ctx.groupingRole)
+    ?? 'primary';
+  const metadata = {
+    ...input.metadata,
+    grouping: { role: groupingRole },
+    ...(input.presentation ? { presentation: input.presentation } : {}),
+    ...(ctx.actorSnapshot ? { actorSnapshot: ctx.actorSnapshot } : {}),
+  };
+  const event = createEvent<TType, TPayload>(
     {
       eventType: input.eventType,
       aggregateType: input.aggregateType,
@@ -68,8 +84,18 @@ export function eventFromContext<TType extends string, TPayload>(
       version: input.version,
       occurredAt: input.occurredAt,
       causationId: input.causationId,
-      metadata: input.metadata,
+      metadata,
     },
     { ids: ctx.ids, clock: ctx.clock },
   );
+  ctx.emittedEventCount = (ctx.emittedEventCount ?? 0) + 1;
+  return event;
+}
+
+/** Build a same-command sibling event without fabricating a causal relationship. */
+export function relatedEventFromContext<TType extends string, TPayload>(
+  ctx: ExecutionContext,
+  input: Omit<ContextEventInput<TType, TPayload>, 'groupingRole' | 'causationId'>,
+): DomainEvent<TType, TPayload> {
+  return eventFromContext(ctx, { ...input, groupingRole: 'related' });
 }

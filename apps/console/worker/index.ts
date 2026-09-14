@@ -43,6 +43,17 @@ function isMobileRequest(request: Request): boolean {
   return MOBILE_UA.test(ua);
 }
 
+/**
+ * Clickjacking defence: the console is an authenticated operational app and
+ * must never render inside a frame on another origin.
+ */
+function withSecurityHeaders(res: Response): Response {
+  const out = new Response(res.body, res);
+  out.headers.set('X-Frame-Options', 'DENY');
+  out.headers.set('Content-Security-Policy', "frame-ancestors 'none'");
+  return out;
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
@@ -54,7 +65,7 @@ export default {
     // the emailed invite on a phone). It's a standalone responsive page, and the
     // mobile redirect would strip the invite token, so serve it directly.
     if (url.pathname.replace(/\/+$/, '') === '/accept-invite') {
-      return env.ASSETS.fetch(request);
+      return withSecurityHeaders(await env.ASSETS.fetch(request));
     }
 
     // Only redirect *top-level page navigations* to the mobile host — never
@@ -71,14 +82,14 @@ export default {
       const mobileHost = mobileHostFor(url.hostname);
       if (mobileHost !== url.hostname) {
         const target = `https://${mobileHost}/`;
-        return new Response(null, {
+        return withSecurityHeaders(new Response(null, {
           status: 302,
           headers: {
             Location: target,
             'Cache-Control': 'no-store',
             Vary: 'Sec-CH-UA-Mobile, User-Agent',
           },
-        });
+        }));
       }
       // No sibling mobile host configured (dev/workers.dev): fall through and
       // let the in-app gate handle it.
@@ -88,7 +99,7 @@ export default {
     // navigations without re-appending the query param.
     if (url.searchParams.get('desktop') === '1') {
       const assetResponse = await env.ASSETS.fetch(request);
-      const res = new Response(assetResponse.body, assetResponse);
+      const res = withSecurityHeaders(new Response(assetResponse.body, assetResponse));
       res.headers.append(
         'Set-Cookie',
         `${BYPASS_COOKIE}; Path=/; Max-Age=86400; SameSite=Lax`,
@@ -96,6 +107,6 @@ export default {
       return res;
     }
 
-    return env.ASSETS.fetch(request);
+    return withSecurityHeaders(await env.ASSETS.fetch(request));
   },
 };

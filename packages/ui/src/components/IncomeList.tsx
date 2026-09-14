@@ -1,24 +1,29 @@
 import React, { useMemo, useState, useEffect, useRef } from 'react';
 import type { ExpenseEntryFormValues } from '@pump/shared';
-import { canManageExpenseCategory } from '@pump/shared';
+import { canManageExpenseCategory, canVoidExpense } from '@pump/shared';
 import { CloudTransactionService } from '../services/cloud.js';
-import { Plus, HelpCircle, Tags, Banknote } from 'lucide-react';
+import { Plus, HelpCircle, Tags, Banknote, Percent, Info } from 'lucide-react';
 import { PageLayout } from './primitives/PageLayout.js';
 import { DataTable } from './primitives/DataTable.js';
 import { DateRangeField, computeRange } from './primitives/DateRangeField.js';
 import type { DateRange } from './primitives/DateRangeField.js';
 import { inr } from '../utils/format.js';
 import { useToast } from './primitives/ToastProvider.js';
+import { useAsk } from './primitives/ConfirmDialog.js';
 import { Drawer } from './Drawer.js';
 import { ExpenseEntryForm } from './transactions/ExpenseEntryForm.js';
 import { useIncome, useIncomeCategories, useInvalidateOperational } from '../query/hooks.js';
 import { useQueryClient } from '@tanstack/react-query';
-import { Panel, Button, KpiStrip, KpiTile, EmptyState, SearchInput, Select } from '../pump-ds/index.js';
+import { Panel, Button, KpiStrip, KpiTile, EmptyState, SearchInput, Select, DateText } from '../pump-ds/index.js';
+import { Tabs } from './primitives/Tabs.js';
+import { LoadingSpinner } from './LoadingSpinner.js';
 import type { NavIntent } from './AppShell.js';
-import { incomeColumns } from './income/columns.js';
+import { buildIncomeColumns } from './income/columns.js';
 import { IncomeCategoryManagerDrawer } from './income/IncomeCategoryManagerDrawer.js';
 
 const transactionService = new CloudTransactionService();
+
+type IncomeTab = 'ledger' | 'gst';
 
 interface IncomeListProps {
   selectedStation: any | null;
@@ -34,6 +39,7 @@ export const IncomeList: React.FC<IncomeListProps> = ({ selectedStation, userRol
   const invalidateOperational = useInvalidateOperational();
   const qc = useQueryClient();
   const toast = useToast();
+  const ask = useAsk();
 
   const s = (selectedStation as any)?.settings || {};
   const clock = { timeZone: s.timezone, dayStartsAt: s.business_day_starts_at };
@@ -41,7 +47,9 @@ export const IncomeList: React.FC<IncomeListProps> = ({ selectedStation, userRol
   const income = incomeQ.data ?? [];
   const categories = categoriesQ.data ?? [];
   const canManageCategories = canManageExpenseCategory((userRole as any) ?? 'Staff');
+  const canVoid = canVoidExpense((userRole as any) ?? 'Staff');
 
+  const [activeTab, setActiveTab] = useState<IncomeTab>('ledger');
   const [range, setRange] = useState<DateRange>(() => computeRange('this-month', clock));
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState('');
@@ -95,6 +103,34 @@ export const IncomeList: React.FC<IncomeListProps> = ({ selectedStation, userRol
 
   const refetchCategories = () => qc.invalidateQueries({ queryKey: ['income-categories'] });
 
+  // Corrections are never edits: an income entry is voided (status → VOIDED) and
+  // its ledger posting reversed, keeping history append-only.
+  const handleVoid = async (row: any) => {
+    const { confirmed, value } = await ask({
+      title: 'Void this income entry?',
+      message: (
+        <>
+          {inr(row.amount)} · {row.categoryName || 'Other Income'}. The entry stays in the ledger marked
+          <strong> Voided</strong> and its money posting is reversed. This cannot be undone.
+        </>
+      ),
+      input: { label: 'Reason (optional)', placeholder: 'e.g. duplicate entry, wrong amount' },
+      confirmLabel: 'Void income',
+      danger: true,
+    });
+    if (!confirmed) return;
+    try {
+      await transactionService.voidIncome(row.id, value);
+      invalidateOperational(stationId);
+      toast.success('Income voided.');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to void income');
+    }
+  };
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const ledgerColumns = useMemo(() => buildIncomeColumns(canVoid ? handleVoid : undefined), [canVoid, stationId]);
+
   // KPIs — fixed windows (today / this month), independent of the table range filter.
   const kpis = useMemo(() => {
     const today = computeRange('today', clock);
@@ -112,6 +148,48 @@ export const IncomeList: React.FC<IncomeListProps> = ({ selectedStation, userRol
     return { todayTotal, monthTotal, entriesMonth: monthRows.length, drawerMonth, otherMonth };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [income, clock.timeZone, clock.dayStartsAt]);
+
+  // FI4 — output GST register. Read straight from the API (not the tiered cache):
+  // it is a period report driven by its own date inputs, not the ledger range.
+  const [gstRange, setGstRange] = useState<DateRange>(() => computeRange('this-month', clock));
+  const [gstRows, setGstRows] = useState<any[]>([]);
+  const [gstLoading, setGstLoading] = useState(false);
+  const [gstError, setGstError] = useState<string | null>(null);
+
+  const loadGstRegister = async () => {
+    if (!stationId) return;
+    setGstLoading(true);
+    setGstError(null);
+    try {
+      setGstRows((await transactionService.getIncomeGstRegister(gstRange.from, gstRange.to, stationId)) || []);
+    } catch (e: any) {
+      setGstError(e.message || 'Failed to load GST register');
+    } finally {
+      setGstLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'gst') loadGstRegister();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, stationId]);
+
+  const gstTotals = useMemo(
+    () =>
+      gstRows.reduce(
+        (acc, r) => ({
+          taxable: acc.taxable + Number(r.taxableAmount || 0),
+          cgst: acc.cgst + Number(r.cgst || 0),
+          sgst: acc.sgst + Number(r.sgst || 0),
+          igst: acc.igst + Number(r.igst || 0),
+          cess: acc.cess + Number(r.cess || 0),
+          gross: acc.gross + Number(r.amount || 0),
+        }),
+        { taxable: 0, cgst: 0, sgst: 0, igst: 0, cess: 0, gross: 0 },
+      ),
+    [gstRows],
+  );
+  const gstOutputTotal = gstTotals.cgst + gstTotals.sgst + gstTotals.igst + gstTotals.cess;
 
   const filteredIncome = useMemo(
     () =>
@@ -145,7 +223,20 @@ export const IncomeList: React.FC<IncomeListProps> = ({ selectedStation, userRol
             <Button variant="primary" size="sm" leftIcon={<Plus />} onClick={openDrawer} disabled={categories.length === 0}>Add Income</Button>
           </div>
         }
+        toolbar={
+          <Tabs
+            variant="underline"
+            aria-label="Income"
+            activeId={activeTab}
+            onChange={(id) => setActiveTab(id as IncomeTab)}
+            tabs={[
+              { id: 'ledger', label: 'Income Ledger', icon: <Banknote size={15} /> },
+              { id: 'gst', label: 'GST on Income', icon: <Percent size={15} /> },
+            ]}
+          />
+        }
       >
+        {activeTab === 'ledger' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <KpiStrip columns="auto">
             <KpiTile dot="success" valueTone="success" label="Received Today" value={inr(kpis.todayTotal)} hint="business day" />
@@ -182,7 +273,7 @@ export const IncomeList: React.FC<IncomeListProps> = ({ selectedStation, userRol
             ) : (
               <DataTable
                 bare
-                columns={incomeColumns}
+                columns={ledgerColumns}
                 data={filteredIncome}
                 error={incomeQ.error as Error | null}
                 emptyMessage="No matching income found."
@@ -192,6 +283,85 @@ export const IncomeList: React.FC<IncomeListProps> = ({ selectedStation, userRol
             )}
           </Panel>
         </div>
+        )}
+
+        {activeTab === 'gst' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div style={{ backgroundColor: 'var(--state-info-bg)', color: 'var(--state-info-fg)', padding: '10px 12px', borderRadius: 'var(--radius-card)', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '8px', border: '1px solid var(--border-soft)' }}>
+              <Info size={14} />
+              <span>Output GST you collected on other income (rentals, commissions, advertising). The split is frozen from the category&rsquo;s GST rate at the time each entry was recorded. Voided entries are excluded.</span>
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+              <DateRangeField value={gstRange} onChange={setGstRange} clock={clock} size="sm" />
+              <Button variant="secondary" size="sm" onClick={loadGstRegister} loading={gstLoading}>Apply</Button>
+            </div>
+
+            <KpiStrip columns="auto">
+              <KpiTile label="Taxable Value" value={inr(gstTotals.taxable)} hint="net of GST" />
+              <KpiTile label="CGST" value={inr(gstTotals.cgst)} />
+              <KpiTile label="SGST" value={inr(gstTotals.sgst)} />
+              <KpiTile label="IGST" value={inr(gstTotals.igst)} />
+              <KpiTile dot="brand" valueTone="brand" label="Output GST" value={inr(gstOutputTotal)} hint={`${gstRows.length} ${gstRows.length === 1 ? 'entry' : 'entries'}`} />
+            </KpiStrip>
+
+            <Panel flush title="GST register">
+              {gstError ? (
+                <div style={{ padding: '12px', color: 'var(--state-danger-fg)', backgroundColor: 'var(--state-danger-bg)', fontSize: '12px' }}>{gstError}</div>
+              ) : gstLoading ? (
+                <div style={{ padding: '16px' }}><LoadingSpinner text="Loading GST register…" /></div>
+              ) : gstRows.length === 0 ? (
+                <div style={{ padding: '12px' }}><EmptyState compact icon={<Percent />} title="No GST income in this period" description="Income only appears here when its category carries a GST rate." /></div>
+              ) : (
+                <div style={{ overflow: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', textAlign: 'left' }}>
+                    <thead>
+                      <tr style={{ backgroundColor: 'var(--bg-surface-alt)', borderBottom: '1px solid var(--border-soft)', color: 'var(--text-muted)' }}>
+                        <th style={{ padding: '8px 10px', fontWeight: 600, whiteSpace: 'nowrap' }}>Date</th>
+                        <th style={{ padding: '8px 10px', fontWeight: 600 }}>Category</th>
+                        <th style={{ padding: '8px 10px', fontWeight: 600 }}>Payer / Description</th>
+                        <th style={{ padding: '8px 10px', fontWeight: 600, textAlign: 'right' }}>Rate</th>
+                        <th style={{ padding: '8px 10px', fontWeight: 600, textAlign: 'right' }}>Taxable</th>
+                        <th style={{ padding: '8px 10px', fontWeight: 600, textAlign: 'right' }}>CGST</th>
+                        <th style={{ padding: '8px 10px', fontWeight: 600, textAlign: 'right' }}>SGST</th>
+                        <th style={{ padding: '8px 10px', fontWeight: 600, textAlign: 'right' }}>IGST</th>
+                        <th style={{ padding: '8px 10px', fontWeight: 600, textAlign: 'right' }}>Received</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {gstRows.map((r) => (
+                        <tr key={r.id} style={{ borderBottom: '1px solid var(--border-soft)' }}>
+                          <td style={{ padding: '8px 10px', whiteSpace: 'nowrap' }}><DateText value={r.businessDate} variant="compact" tone="muted" /></td>
+                          <td style={{ padding: '8px 10px', color: 'var(--text-strong)', fontWeight: 600 }}>
+                            {r.categoryName}
+                            {r.hsnCode && <div style={{ fontSize: '10px', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontWeight: 400 }}>HSN/SAC {r.hsnCode}</div>}
+                          </td>
+                          <td style={{ padding: '8px 10px', color: 'var(--text-default)' }}>{r.payer || r.description || '—'}</td>
+                          <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>{Number(r.gstRate || 0)}%{r.interState ? ' · IGST' : ''}</td>
+                          <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{inr(Number(r.taxableAmount || 0))}</td>
+                          <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{inr(Number(r.cgst || 0))}</td>
+                          <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{inr(Number(r.sgst || 0))}</td>
+                          <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{inr(Number(r.igst || 0))}</td>
+                          <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--text-strong)' }}>{inr(Number(r.amount || 0))}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr style={{ backgroundColor: 'var(--bg-surface-alt)', fontWeight: 700, color: 'var(--text-strong)' }}>
+                        <td style={{ padding: '8px 10px' }} colSpan={4}>Total</td>
+                        <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{inr(gstTotals.taxable)}</td>
+                        <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{inr(gstTotals.cgst)}</td>
+                        <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{inr(gstTotals.sgst)}</td>
+                        <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{inr(gstTotals.igst)}</td>
+                        <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{inr(gstTotals.gross)}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              )}
+            </Panel>
+          </div>
+        )}
       </PageLayout>
 
       <Drawer isOpen={isDrawerOpen} onClose={closeDrawer} title="Record Income">

@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { resolveBusinessDate } from '@pump/shared';
 import { BusinessEvents, err, eventFromContext, notFoundError, ok, validationError } from '../../../kernel/index.js';
 import type { EventPublisher, ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
-import { ensureBusinessDayForDate, type BusinessDayRepository } from '../../station-ops/business-days/index.js';
+import { resolveBusinessDayWrite, type BusinessDayWriteRepository } from '../../station-ops/business-days/index.js';
 import type { CustomerLedgerEntry, CustomerLedgerRepository } from '../collections/index.js';
 import type { CustomerRepository } from './index.js';
 
@@ -26,7 +26,7 @@ const schema = z.object({
 export interface SetCustomerOpeningBalanceDeps {
   ledger: CustomerLedgerRepository;
   customers: CustomerRepository;
-  businessDays: BusinessDayRepository;
+  businessDays: BusinessDayWriteRepository;
   events: EventPublisher;
 }
 
@@ -51,7 +51,10 @@ export class SetCustomerOpeningBalance implements UseCase<SetCustomerOpeningBala
     if (!customer || customer.organizationId !== ctx.organizationId) return err(notFoundError('Customer', cmd.customerId));
 
     const date = cmd.asOfDate ?? resolveBusinessDate({ now: ctx.clock.now(), timeZone: ctx.timeZone, dayStartsAt: ctx.businessDayStartsAt });
-    const bd = await ensureBusinessDayForDate(this.deps.businessDays, ctx, cmd.stationId, date);
+    const eligibility = await resolveBusinessDayWrite(this.deps.businessDays, ctx, { stationId: cmd.stationId, businessDate: date, kind: 'FINANCIAL' });
+    if (!eligibility.success) return eligibility as unknown as Result<CustomerLedgerEntry>;
+    const bd = eligibility.data.businessDay;
+    const lateEntry = eligibility.data.lateEntry;
 
     const now = ctx.clock.now().toISOString();
     const entry: CustomerLedgerEntry = {
@@ -70,6 +73,7 @@ export class SetCustomerOpeningBalance implements UseCase<SetCustomerOpeningBala
       referenceType: 'OPENING_BALANCE',
       referenceId: null,
       notes: 'Opening balance (carried forward at onboarding)',
+      metadata: lateEntry ? { lateEntry: true } : {},
       createdAt: now,
     };
     await this.deps.ledger.save(entry);
@@ -80,6 +84,7 @@ export class SetCustomerOpeningBalance implements UseCase<SetCustomerOpeningBala
         aggregateType: 'Customer',
         aggregateId: customer.id,
         businessDayId: bd.id,
+        metadata: lateEntry ? { lateEntry: true, lateEntryPrimary: true } : undefined,
         payload: { customerId: customer.id, amount: entry.amount, asOfDate: date },
       }),
     ]);

@@ -9,17 +9,20 @@
     "dev:remote": "npm run dev",
     "deploy": "wrangler deploy",
     "deploy:dev": "wrangler deploy --env preview",
-    "build": "tsc -b"
+    "build": "tsc -b",
+    "test": "vitest run"
   },
   "dependencies": {
     "@hono/zod-validator": "^0.8.0",
     "@pump/core": "*",
     "@pump/db": "*",
     "@pump/shared": "*",
-    "hono": "^4.4.2"
+    "hono": "^4.4.2",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "typescript": "^5.4.5",
+    "vitest": "^1.6.0",
     "wrangler": "^4.21.0"
   }
 }
