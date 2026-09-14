@@ -814,7 +814,14 @@ platform.post('/owners/invite', async (c) => {
       return c.json({ success: false, error: { code: 'BAD_REQUEST', message: 'Password must be at least 8 characters' } }, 400);
     }
     try {
-      const created = await admin.createUser({ email, password, userMetadata: ownerMetadata });
+      const created = await admin.createUser({
+        email,
+        password,
+        userMetadata: ownerMetadata,
+        // Server-set authority for the gated handle_new_user() owner branch
+        // (admin-created accounts have no invited_at).
+        appMetadata: { signup_intent: 'owner' },
+      });
       return c.json({ success: true, data: { authUserId: created.id, email, password } });
     } catch (e: any) {
       const status = e?.status === 422 ? 409 : 400;
