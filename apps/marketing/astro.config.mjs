@@ -1,9 +1,9 @@
 // @ts-check
 import { defineConfig } from 'astro/config';
+import tailwindcss from '@tailwindcss/vite';
 import mdx from '@astrojs/mdx';
 import sitemap from '@astrojs/sitemap';
 import pagefind from 'astro-pagefind';
-import tailwindcss from '@tailwindcss/vite';
 
 // Canonical site host. Defaults to the CURRENT domain; overridden per-deploy
 // via the SITE env var (set SITE=https://pumpos.app at go-live) so the

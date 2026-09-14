@@ -4,13 +4,16 @@
   "version": "1.0.4",
   "description": "PumpOS Platform",
   "workspaces": [
-    "apps/*",
+    "apps/api",
+    "apps/console",
+    "apps/desktop",
+    "apps/mobile",
     "packages/*"
   ],
   "scripts": {
     "dev:desktop": "npm run dev --workspace=apps/desktop",
     "dev:console": "npm run dev --workspace=apps/console",
-    "dev:marketing": "npm run dev --workspace=apps/marketing",
+    "dev:marketing": "npm run dev --prefix apps/marketing",
     "dev:mobile": "npm run dev --workspace=apps/mobile",
     "dev:api": "npm run dev --workspace=apps/api",
     "dev:api:local": "npm run dev:local --workspace=apps/api",
@@ -22,7 +25,7 @@
     "build": "tsc -b && npm run build --workspaces --if-present",
     "build:api": "npm run build --workspace=apps/api",
     "build:ui-console": "npm run build --workspace=packages/ui && npm run build --workspace=apps/console",
-    "build:marketing": "npm run build --workspace=apps/marketing",
+    "build:marketing": "npm run build --prefix apps/marketing",
     "build:ui-mobile": "npm run build --workspace=packages/ui && npm run build --workspace=apps/mobile",
     "build:desktop": "npm run build --workspace=apps/desktop",
     "test": "npm run test --workspaces --if-present",
