@@ -63,6 +63,28 @@ period. Delayed Closure does not change the Shift Business Date; Closed At
 records when the close action occurred.
 _Avoid_: backdating the close
 
+**Day Seal**:
+What closing a Business Day protects: the day's sales and stock picture. A
+closed Business Day rejects Shift opening/reopening, Stock Counts, Tank Dips,
+Purchases, and opening-stock writes. It still accepts Late Entries on the
+financial ledger.
+_Avoid_: day lock, freeze
+
+**Late Entry**:
+A financial-ledger record (collection, expense, income, supplier payment,
+credit sale, opening balance) written to an already-closed Business Day,
+flagged as such at write time. Late Entries never move stock and never alter
+the day's DSSR Snapshot.
+_Avoid_: backdated entry, adjustment
+
+**Locked Shift**:
+A closed Shift whose parent Business Day has closed. It can no longer be
+reopened; its Shift Summary is final. Until the day closes, a closed Shift may
+be reopened by an Owner or Manager provided no other Shift is open at the
+station.
+_Avoid_: archived shift, frozen shift
+
+
 **Backdated Business-Date Assignment**:
 Recording an operation now while assigning it to an earlier Business Date. It
 does not alter audit or lifecycle timestamps.
@@ -278,7 +300,10 @@ _Avoid_: shift report, closing report, DSSR
 **DSSR Snapshot** (Daily Station Sales Report):
 Immutable snapshot created when a Business Day closes: composes the day's
 closed Shift Summaries plus day-anchored financials (collections, expenses,
-purchases, supplier payments, credit sales).
+purchases, supplier payments, credit sales). A snapshot exists if and only if
+its Business Day is closed; an open day's DSSR is a preview, computed on
+demand and never persisted. Financial sections are as of `generatedAt`; Late
+Entries recorded afterwards do not alter the snapshot.
 _Avoid_: Shift Summary, daily report, day summary
 
 **Snapshot Immutability**:

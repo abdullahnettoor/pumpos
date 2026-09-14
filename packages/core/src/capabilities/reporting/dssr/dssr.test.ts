@@ -4,7 +4,7 @@ import type { ExecutionContext } from '../../../kernel/index.js';
 import { GenerateDssr } from './generate-dssr.js';
 import { CloseBusinessDayAndGenerateDssr } from './close-business-day.js';
 import type { DssrDataReader, DssrSnapshot, DssrSnapshotRepository, DssrSourceData } from './ports.js';
-import type { BusinessDay, BusinessDayRepository } from '../../station-ops/business-days/index.js';
+import type { BusinessDay, BusinessDayWriteRepository } from '../../station-ops/business-days/index.js';
 
 class SnapRepo implements DssrSnapshotRepository {
   readonly rows: DssrSnapshot[] = [];
@@ -16,7 +16,7 @@ class SnapRepo implements DssrSnapshotRepository {
     if (i >= 0) this.rows[i] = s; else this.rows.push(s);
   }
 }
-class BdRepo implements BusinessDayRepository {
+class BdRepo implements BusinessDayWriteRepository {
   constructor(readonly rows: BusinessDay[]) {}
   async findById(id: string) { return this.rows.find((r) => r.id === id) ?? null; }
   async save(day: BusinessDay) {
@@ -27,6 +27,9 @@ class BdRepo implements BusinessDayRepository {
   async findByStationAndDate(orgId: string, stationId: string, date: string) {
     return this.rows.find((row) => row.organizationId === orgId && row.stationId === stationId && row.businessDate === date) ?? null;
   }
+  async lockStation() {}
+  async lockById() {}
+  async lockByStationAndDate() {}
 }
 class Reader implements DssrDataReader {
   constructor(private readonly data: DssrSourceData) {}
@@ -135,6 +138,24 @@ describe('GenerateDssr', () => {
     expect(snapshots.rows).toHaveLength(1);
   });
 
+  it('rejects an open Business Day without reading data, saving a snapshot, or publishing an event', async () => {
+    const snapshots = new SnapRepo();
+    const store = new InMemoryEventStore();
+    let readCount = 0;
+    const result = await new GenerateDssr({
+      businessDays: new BdRepo([{ ...bday(), status: 'OPEN', closedBy: null, closedAt: null }]),
+      snapshots,
+      reader: { readBusinessDay: async () => { readCount += 1; return source(); } },
+      events: new InProcessEventDispatcher({ store }),
+    }).execute({ businessDayId: 'bd-1' }, ctx());
+
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error).toMatchObject({ code: 'INVARIANT_VIOLATION', details: { businessDayId: 'bd-1', status: 'OPEN' } });
+    expect(readCount).toBe(0);
+    expect(snapshots.rows).toHaveLength(0);
+    expect(store.events).toHaveLength(0);
+  });
+
   it('rejects an unknown business day', async () => {
     const result = await new GenerateDssr({
       businessDays: new BdRepo([]), snapshots: new SnapRepo(), reader: new Reader(source()),
@@ -179,7 +200,7 @@ describe('CloseBusinessDayAndGenerateDssr', () => {
     const businessDays = new BdRepo([openDay()]);
     const snapshots = new SnapRepo();
     const result = await new CloseBusinessDayAndGenerateDssr({
-      businessDays, businessDayLock: { lockStation: async () => {}, lockById: async () => {}, lockByStationAndDate: async () => {} }, openShifts: { hasOpenShift: async () => false }, snapshots, dssrData: new Reader(source()),
+      businessDays, openShifts: { hasOpenShift: async () => false }, snapshots, dssrData: new Reader(source()),
       events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
     }).execute({ businessDayId: 'bd-1', stationId: 'st-1' }, ctx());
     expect(result.success).toBe(true);
@@ -190,7 +211,7 @@ describe('CloseBusinessDayAndGenerateDssr', () => {
   it('rejects closure while the day has an open Shift', async () => {
     const businessDays = new BdRepo([openDay()]);
     const result = await new CloseBusinessDayAndGenerateDssr({
-      businessDays, businessDayLock: { lockStation: async () => {}, lockById: async () => {}, lockByStationAndDate: async () => {} }, openShifts: { hasOpenShift: async () => true }, snapshots: new SnapRepo(), dssrData: new Reader(source()),
+      businessDays, openShifts: { hasOpenShift: async () => true }, snapshots: new SnapRepo(), dssrData: new Reader(source()),
       events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
     }).execute({ businessDayId: 'bd-1', stationId: 'st-1' }, ctx());
     expect(result.success).toBe(false);
@@ -200,9 +221,11 @@ describe('CloseBusinessDayAndGenerateDssr', () => {
 
   it('locks the Business Day before checking for an open Shift', async () => {
     const calls: string[] = [];
+    const businessDays = new BdRepo([openDay()]);
+    businessDays.lockStation = async () => { calls.push('station-lock'); };
+    businessDays.lockById = async () => { calls.push('day-lock'); };
     const result = await new CloseBusinessDayAndGenerateDssr({
-      businessDays: new BdRepo([openDay()]),
-      businessDayLock: { lockStation: async () => { calls.push('station-lock'); }, lockById: async () => { calls.push('day-lock'); }, lockByStationAndDate: async () => {} },
+      businessDays,
       openShifts: { hasOpenShift: async () => { calls.push('check'); return true; } },
       snapshots: new SnapRepo(),
       dssrData: new Reader(source()),
@@ -213,14 +236,18 @@ describe('CloseBusinessDayAndGenerateDssr', () => {
     expect(calls).toEqual(['station-lock', 'day-lock', 'check']);
   });
 
-  it('preserves an existing immutable DSSR during close', async () => {
+  it('force-regenerates an existing preview snapshot at close', async () => {
     const snapshots = new SnapRepo();
     snapshots.rows.push({ id: 'existing', organizationId: 'org-1', stationId: 'st-1', businessDate: '2026-03-15', generatedAt: 'earlier', snapshotData: { marker: 'original' } });
     const result = await new CloseBusinessDayAndGenerateDssr({
-      businessDays: new BdRepo([openDay()]), businessDayLock: { lockStation: async () => {}, lockById: async () => {}, lockByStationAndDate: async () => {} }, openShifts: { hasOpenShift: async () => false }, snapshots, dssrData: new Reader(source()),
+      businessDays: new BdRepo([openDay()]), openShifts: { hasOpenShift: async () => false }, snapshots, dssrData: new Reader(source()),
       events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
     }).execute({ businessDayId: 'bd-1', stationId: 'st-1' }, ctx());
     expect(result.success).toBe(true);
-    expect(snapshots.rows).toEqual([expect.objectContaining({ id: 'existing', generatedAt: 'earlier', snapshotData: { marker: 'original' } })]);
+    expect(snapshots.rows).toEqual([expect.objectContaining({
+      id: 'existing',
+      generatedAt: '2026-03-15T20:00:00.000Z',
+      snapshotData: expect.objectContaining({ businessDayId: 'bd-1', status: 'CLOSED', shiftsIncluded: 1 }),
+    })]);
   });
 });

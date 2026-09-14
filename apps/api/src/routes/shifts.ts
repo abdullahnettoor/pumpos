@@ -700,35 +700,34 @@ shiftsRouter.get('/status', async (c) => {
   let gracePeriodExpiresAt: string | null = null;
 
   if (dbLastShift) {
-    let currentStatus = dbLastShift.status;
-    let lockedAt = dbLastShift.lockedAt;
+    const currentStatus = dbLastShift.status;
+    const lockedAt = dbLastShift.lockedAt;
     if (currentStatus === 'CLOSED' && dbLastShift.closedAt) {
       const closedTime = new Date(dbLastShift.closedAt).getTime();
-      const lockExpiryTime = closedTime + lockGraceDays * 24 * 60 * 60 * 1000;
-      if (now > lockExpiryTime) {
-        lockedAt = new Date(lockExpiryTime);
-        currentStatus = 'LOCKED';
-      } else {
-        const reopenExpiryTime = closedTime + graceMinutes * 60 * 1000;
-        if (now <= reopenExpiryTime) gracePeriodExpiresAt = new Date(reopenExpiryTime).toISOString();
-      }
+      const reopenExpiryTime = closedTime + graceMinutes * 60 * 1000;
+      if (now <= reopenExpiryTime) gracePeriodExpiresAt = new Date(reopenExpiryTime).toISOString();
     }
-    const [lastTemplateRows, lastClosedByRows, lastSummaryRows] = await Promise.all([
+    const [lastTemplateRows, lastClosedByRows, lastSummaryRows, parentDayRows] = await Promise.all([
       db.select().from(schema.shiftTemplates).where(eq(schema.shiftTemplates.id, dbLastShift.shiftTemplateId)).limit(1),
       dbLastShift.closedBy
         ? db.select().from(schema.users).where(eq(schema.users.id, dbLastShift.closedBy)).limit(1)
         : Promise.resolve([] as any[]),
       db.select().from(schema.shiftSummaries).where(eq(schema.shiftSummaries.shiftId, dbLastShift.id)).limit(1),
+      db.select({ status: schema.businessDays.status }).from(schema.businessDays).where(and(
+        eq(schema.businessDays.id, dbLastShift.businessDayId),
+        eq(schema.businessDays.organizationId, orgId),
+        eq(schema.businessDays.stationId, stationId),
+      )).limit(1),
     ]);
     const template = lastTemplateRows[0];
     const closedByName = lastClosedByRows[0]?.fullName ?? 'System';
     const summary = lastSummaryRows[0];
-    if (currentStatus === 'CLOSED' && gracePeriodExpiresAt && canReopenShift(user.role) && !dbActiveShift) canReopenLastShift = true;
+    if (currentStatus === 'CLOSED' && parentDayRows[0]?.status === 'OPEN' && canReopenShift(user.role) && !dbActiveShift) canReopenLastShift = true;
     lastShift = { ...dbLastShift, status: currentStatus, lockedAt, templateName: template?.name ?? 'Custom', closedByName };
     lastDssr = summary ? { ...summary, snapshotData: await projectShiftSummary(db, dbLastShift, summary.snapshotData) } : null;
   }
 
-  // --- Recent closed (not lock-expired) shifts ---
+  // --- Recent closed (not attribution-grace-expired) shifts ---
   const dbClosedShifts = await db
     .select({ shift: schema.shifts, templateName: schema.shiftTemplates.name })
     .from(schema.shifts)
@@ -739,8 +738,8 @@ shiftsRouter.get('/status', async (c) => {
   for (const item of dbClosedShifts) {
     const s = item.shift;
     if (s.closedAt) {
-      const lockExpiryTime = new Date(s.closedAt).getTime() + lockGraceDays * 24 * 60 * 60 * 1000;
-      if (now <= lockExpiryTime) recentClosedShifts.push({ ...s, templateName: item.templateName ?? 'Custom' });
+      const attributionExpiryTime = new Date(s.closedAt).getTime() + lockGraceDays * 24 * 60 * 60 * 1000;
+      if (now <= attributionExpiryTime) recentClosedShifts.push({ ...s, templateName: item.templateName ?? 'Custom' });
     }
   }
 
@@ -1024,6 +1023,7 @@ shiftsRouter.post('/handovers', async (c) => {
     await lockStationInventory(tx, user.organizationId, shift.stationId);
     return new RecordHandover({
       shifts: new DrizzleShiftRepository(tx),
+      businessDays: new DrizzleBusinessDayRepository(tx),
       context: new DrizzleHandoverContextReader(tx),
       handovers: new DrizzleHandoverRepository(tx),
       events,
@@ -1058,7 +1058,6 @@ shiftsRouter.post('/open', async (c) => {
     return new OpenShift({
       shifts: new DrizzleShiftRepository(tx),
       businessDays: new DrizzleBusinessDayRepository(tx),
-      businessDayLock: new DrizzleBusinessDayRepository(tx),
       nozzles: new DrizzleNozzleRepository(tx),
       nozzleReadings: new DrizzleNozzleReadingRepository(tx),
       fuelPrices: new DrizzleFuelPriceRepository(tx),
@@ -1073,13 +1072,28 @@ shiftsRouter.put('/readings', async (c) => {
   const user = c.var.user;
   const body = await c.req.json().catch(() => ({}));
   const db = c.var.db;
-  const result = await runInTransaction(db, (tx, events) =>
-    new RecordNozzleReadings({
+  if (typeof body?.shiftId !== 'string' || body.shiftId.length === 0) {
+    return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Invalid RecordNozzleReadings command' } }, 400);
+  }
+  const [shift] = await db.select({ stationId: schema.shifts.stationId, businessDayId: schema.shifts.businessDayId }).from(schema.shifts).where(and(
+    eq(schema.shifts.id, body.shiftId),
+    eq(schema.shifts.organizationId, user.organizationId),
+  )).limit(1);
+  if (!shift) {
+    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Shift not found' } }, 404);
+  }
+  if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId: shift.stationId })) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+  }
+  const result = await runInTransaction(db, async (tx, events) => {
+    await lockStationInventory(tx, user.organizationId, shift.stationId);
+    return new RecordNozzleReadings({
       shifts: new DrizzleShiftRepository(tx),
+      businessDays: new DrizzleBusinessDayRepository(tx),
       nozzleReadings: new DrizzleNozzleReadingRepository(tx),
       events,
-    }).execute(body, buildContext(user)),
-  );
+    }).execute(body, buildContext(user, { stationId: shift.stationId, businessDayId: shift.businessDayId }));
+  });
   return sendResult(c, result);
 });
 
@@ -1121,20 +1135,28 @@ shiftsRouter.post('/close', async (c) => {
 // POST /api/shifts/reopen
 shiftsRouter.post('/reopen', async (c) => {
   const user = c.var.user;
-  if (!canManageDay(user.role)) {
+  if (!canReopenShift(user.role)) {
     return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Only Owners/Managers can reopen a shift' } }, 403);
   }
   const body = await c.req.json().catch(() => ({}));
   const db = c.var.db;
+  const [shift] = await db.select({ stationId: schema.shifts.stationId, businessDayId: schema.shifts.businessDayId }).from(schema.shifts).where(and(
+    eq(schema.shifts.id, body?.shiftId),
+    eq(schema.shifts.organizationId, user.organizationId),
+  )).limit(1);
+  if (shift && !isAuthorizedForStation(user, { organizationId: user.organizationId, stationId: shift.stationId })) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+  }
   const result = await runInTransaction(db, async (tx, events) => {
-    const [shift] = await tx.select({ stationId: schema.shifts.stationId }).from(schema.shifts).where(and(eq(schema.shifts.id, body?.shiftId), eq(schema.shifts.organizationId, user.organizationId))).limit(1);
     if (shift) await lockStationInventory(tx, user.organizationId, shift.stationId);
+    const businessDays = new DrizzleBusinessDayRepository(tx);
     const r = await new ReopenShift({
       shifts: new DrizzleShiftRepository(tx),
+      businessDays,
       summaries: new DrizzleShiftSummaryWriter(tx),
       stockVariances: new DrizzleStockVarianceRepository(tx),
       events,
-    }).execute(body, buildContext(user));
+    }).execute(body, buildContext(user, shift ? { stationId: shift.stationId, businessDayId: shift.businessDayId } : undefined));
     // Roll back the shift-close money postings; they will be re-posted on re-close.
     if (r.success && body?.shiftId) await new LedgerPostingService(tx).reverseShiftClose(body.shiftId);
     return r;
@@ -1149,9 +1171,22 @@ shiftsRouter.post('/lock', async (c) => {
     return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Only Owners/Managers can lock a shift' } }, 403);
   }
   const body = await c.req.json().catch(() => ({}));
+  if (!body?.shiftId) {
+    return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'shiftId is required' } }, 400);
+  }
   const db = c.var.db;
+  const [shift] = await db.select({ stationId: schema.shifts.stationId, businessDayId: schema.shifts.businessDayId }).from(schema.shifts).where(and(
+    eq(schema.shifts.id, body?.shiftId),
+    eq(schema.shifts.organizationId, user.organizationId),
+  )).limit(1);
+  if (!shift) {
+    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Shift not found' } }, 404);
+  }
+  if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId: shift.stationId })) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+  }
   const result = await runInTransaction(db, (tx, events) =>
-    new LockShift({ shifts: new DrizzleShiftRepository(tx), events }).execute(body, buildContext(user)),
+    new LockShift({ shifts: new DrizzleShiftRepository(tx), businessDays: new DrizzleBusinessDayRepository(tx), events }).execute(body, buildContext(user, shift)),
   );
   return sendResult(c, result);
 });
@@ -1186,7 +1221,6 @@ shiftsRouter.post('/business-day/close', async (c) => {
     const businessDays = new DrizzleBusinessDayRepository(tx);
     return new CloseBusinessDayAndGenerateDssr({
       businessDays,
-      businessDayLock: businessDays,
       openShifts: new DrizzleShiftRepository(tx),
       snapshots: new DrizzleDssrSnapshotRepository(tx),
       dssrData: new DrizzleDssrDataReader(tx),

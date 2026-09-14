@@ -201,7 +201,7 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
       : '';
     const ok = await confirm({
       title: 'Close this business day?',
-      message: `This generates the immutable DSSR snapshot for ${businessDate} and locks the day. Day-level entries can't be added afterwards.${eodNote}`,
+      message: `This generates the immutable DSSR snapshot for ${businessDate} and seals sales and stock. Late financial entries remain available and are flagged separately.${eodNote}`,
       confirmLabel: 'Close day',
     });
     if (!ok) return;
@@ -384,6 +384,13 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
                   ? " Fuel from the currently open shift isn't counted until it closes (nozzle readings are taken at close)."
                   : ' Fuel for a shift is counted once that shift closes.'}
               </span>
+            </div>
+          )}
+
+          {status === 'CLOSED' && Number((report as any)?.lateEntryCount ?? 0) > 0 && (
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', padding: '8px 12px', backgroundColor: 'var(--state-warning-bg)', color: 'var(--state-warning-fg)', borderRadius: 'var(--radius-input)', fontSize: '12px', border: '1px solid var(--border-soft)' }}>
+              <Info size={14} style={{ flexShrink: 0 }} />
+              <span>{Number((report as any).lateEntryCount)} financial {Number((report as any).lateEntryCount) === 1 ? 'entry was' : 'entries were'} recorded after this day closed. The DSSR snapshot is unchanged.</span>
             </div>
           )}
 

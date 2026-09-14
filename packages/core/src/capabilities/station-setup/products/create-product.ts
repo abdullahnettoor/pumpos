@@ -17,14 +17,14 @@ import type { CreateProductCommand } from './command.js';
 import { validateCreateProduct } from './validator.js';
 import { defaultInventoryType, type Product, type ProductRepository } from './ports.js';
 import type { StockMovement, StockMovementRepository } from '../../inventory/index.js';
-import { ensureBusinessDayForDate, type BusinessDayRepository } from '../../station-ops/business-days/index.js';
+import { resolveBusinessDayWrite, type BusinessDay, type BusinessDayWriteRepository } from '../../station-ops/business-days/index.js';
 
 export interface CreateProductDeps {
   repository: ProductRepository;
   events: EventPublisher;
   /** Optional: enables opening-stock seeding for merchandise (ITEM) products. */
   stock?: StockMovementRepository;
-  businessDays?: BusinessDayRepository;
+  businessDays?: BusinessDayWriteRepository;
 }
 
 /** Add a product to the unified catalog (fuel or merchandise). */
@@ -68,6 +68,16 @@ export class CreateProduct implements UseCase<CreateProductCommand, Product> {
       updatedAt: now,
     };
 
+    const openingStock = cmd.openingStock != null ? Number(cmd.openingStock) : 0;
+    const stationId = cmd.stationId ?? ctx.stationId ?? null;
+    let openingStockDay: BusinessDay | null = null;
+    if (openingStock > 0 && inventoryType === 'ITEM' && product.stockTracked && stationId && this.deps.stock && this.deps.businessDays) {
+      const date = resolveBusinessDate({ now: ctx.clock.now(), timeZone: ctx.timeZone, dayStartsAt: ctx.businessDayStartsAt });
+      const eligibility = await resolveBusinessDayWrite(this.deps.businessDays, ctx, { stationId, businessDate: date, kind: 'STOCK' });
+      if (!eligibility.success) return eligibility as unknown as Result<Product>;
+      openingStockDay = eligibility.data.businessDay;
+    }
+
     await this.deps.repository.save(product);
 
     const events: DomainEvent[] = [
@@ -88,22 +98,18 @@ export class CreateProduct implements UseCase<CreateProductCommand, Product> {
     // tanks). Posts a real OpeningBalance movement anchored to the station's
     // business day, so stock-on-hand and inventory valuation are correct from day
     // one. Requires the stock + business-day deps and a station in context.
-    const openingStock = cmd.openingStock != null ? Number(cmd.openingStock) : 0;
-    const stationId = cmd.stationId ?? ctx.stationId ?? null;
     if (
       openingStock > 0 &&
       inventoryType === 'ITEM' &&
       product.stockTracked &&
       stationId &&
       this.deps.stock &&
-      this.deps.businessDays
+      openingStockDay
     ) {
-      const date = resolveBusinessDate({ now: ctx.clock.now(), timeZone: ctx.timeZone, dayStartsAt: ctx.businessDayStartsAt });
-      const bd = await ensureBusinessDayForDate(this.deps.businessDays, ctx, stationId, date);
       const movement: StockMovement = {
         id: ctx.ids.newId(),
         shiftId: null,
-        businessDayId: bd.id,
+        businessDayId: openingStockDay.id,
         productId: product.id,
         tankId: null,
         movementType: 'OpeningBalance',
@@ -120,7 +126,7 @@ export class CreateProduct implements UseCase<CreateProductCommand, Product> {
           aggregateType: 'Product',
           aggregateId: product.id,
           stationId,
-          businessDayId: bd.id,
+          businessDayId: openingStockDay.id,
           payload: { productId: product.id, openingStock, movementType: 'OpeningBalance' },
         }),
       );

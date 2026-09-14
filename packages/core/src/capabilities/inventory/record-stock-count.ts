@@ -2,8 +2,8 @@ import { z } from 'zod';
 import { resolveBusinessDate } from '@pump/shared';
 import { BusinessEvents, err, eventFromContext, notFoundError, ok, relatedEventFromContext, validationError } from '../../kernel/index.js';
 import type { DomainEvent, EventPublisher, ExecutionContext, Result, UseCase } from '../../kernel/index.js';
-import { ensureBusinessDayForDate, type BusinessDayRepository } from '../station-ops/business-days/index.js';
-import type { ShiftRepository } from '../station-ops/shifts/index.js';
+import { resolveBusinessDayWrite, type BusinessDayWriteRepository } from '../station-ops/business-days/index.js';
+import { resolveShiftBusinessDayWrite, type ShiftRepository } from '../station-ops/shifts/index.js';
 import type { TankRepository } from '../station-setup/tanks/index.js';
 import type { StockMovement, StockMovementRepository, StockVariance, StockVarianceRepository } from './ports.js';
 
@@ -38,7 +38,7 @@ export interface RecordStockCountDeps {
   variances: StockVarianceRepository;
   tanks: TankRepository;
   shifts: ShiftRepository;
-  businessDays: BusinessDayRepository;
+  businessDays: BusinessDayWriteRepository;
   events: EventPublisher;
 }
 
@@ -71,8 +71,12 @@ export class RecordStockCount implements UseCase<RecordStockCountCommand, Record
     const productId = tank?.productId ?? cmd.productId!;
 
     let attributedShift = null;
+    let attributedDay = null;
     if (cmd.shiftId) {
-      attributedShift = await this.deps.shifts.findById(cmd.shiftId);
+      const eligibility = await resolveShiftBusinessDayWrite(this.deps.shifts, this.deps.businessDays, ctx, cmd.shiftId, 'STOCK');
+      if (!eligibility.success) return eligibility as unknown as Result<RecordStockCountResult>;
+      attributedShift = eligibility.data.shift;
+      attributedDay = eligibility.data.businessDay;
       if (!attributedShift || attributedShift.organizationId !== ctx.organizationId || attributedShift.stationId !== cmd.stationId || attributedShift.status === 'OPEN') {
         return err(notFoundError('Shift', cmd.shiftId));
       }
@@ -82,12 +86,13 @@ export class RecordStockCount implements UseCase<RecordStockCountCommand, Record
     }
 
     const date = resolveBusinessDate({ now: ctx.clock.now(), timeZone: ctx.timeZone, dayStartsAt: ctx.businessDayStartsAt });
-    const bd = attributedShift
-      ? await this.deps.businessDays.findById(attributedShift.businessDayId)
-      : await ensureBusinessDayForDate(this.deps.businessDays, ctx, cmd.stationId, date);
-    if (!bd || bd.organizationId !== ctx.organizationId || bd.stationId !== cmd.stationId) {
-      return err(notFoundError('Business Day', attributedShift?.businessDayId ?? date));
-    }
+    const eligibility = attributedDay ? ok({ businessDay: attributedDay, lateEntry: false }) : await resolveBusinessDayWrite(this.deps.businessDays, ctx, {
+      stationId: cmd.stationId,
+      businessDate: date,
+      kind: 'STOCK',
+    });
+    if (!eligibility.success) return eligibility as unknown as Result<RecordStockCountResult>;
+    const bd = eligibility.data.businessDay;
 
     const isBulk = !!cmd.tankId;
     const expected = isBulk

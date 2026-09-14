@@ -69,6 +69,7 @@ export class DrizzleSupplierTransactionRepository implements SupplierTransaction
       referenceType: t.referenceType,
       referenceId: t.referenceId,
       notes: t.notes,
+      metadata: t.metadata ?? {},
       createdAt: new Date(t.createdAt),
     });
   }

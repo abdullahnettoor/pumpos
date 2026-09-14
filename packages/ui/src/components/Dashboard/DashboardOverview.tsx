@@ -71,7 +71,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   const handleReopen = async (shiftId: string) => {
     if (!(await confirm({
       title: 'Reopen this shift?',
-      message: 'This will delete the generated DSSR snapshot and set the shift state back to OPEN.',
+      message: 'This will delete the compiled Shift Summary and set the shift state back to OPEN. Reopening is allowed until the Business Day closes, provided no other shift is open.',
       confirmLabel: 'Reopen',
       danger: true,
     }))) {
@@ -526,7 +526,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
         </div>
       )}
 
-      {/* Grace period remaining countdown notification */}
+      {/* Recommended correction window. The server permits reopening until day close. */}
       {gracePeriodExpiresAt && canReopenLastShift && (
         <div style={{
           backgroundColor: 'var(--bg-surface-alt)',
@@ -541,11 +541,11 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
           boxShadow: 'var(--shadow-sm)'
         }}>
           <span>
-            <AlertTriangle size={14} style={{ color: 'var(--state-warning-fg)', marginRight: '6px', verticalAlign: 'middle', display: 'inline' }} /> <strong>Reopen Window Active:</strong> You can reopen the recently closed shift until{' '}
+            <AlertTriangle size={14} style={{ color: 'var(--state-warning-fg)', marginRight: '6px', verticalAlign: 'middle', display: 'inline' }} /> <strong>Quick correction window:</strong> For the simplest handover, review and reopen by{' '}
             <strong>{new Date(gracePeriodExpiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</strong>.
           </span>
           <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-            Grace Timer Running
+            Reopen remains available until day close
           </span>
         </div>
       )}

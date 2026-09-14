@@ -13,6 +13,7 @@ import type { StockMovement, StockMovementRepository } from '../inventory/index.
 import type { CustomerLedgerEntry, CustomerLedgerRepository } from '../crm/collections/index.js';
 import type { Customer, CustomerRepository } from '../crm/customers/index.js';
 import type { Shift, ShiftRepository } from '../station-ops/shifts/index.js';
+import type { BusinessDay, BusinessDayWriteRepository } from '../station-ops/business-days/index.js';
 
 class SaleRepo implements SaleRepository {
   saved: { sale: Sale; lines: SaleLine[] } | null = null;
@@ -39,10 +40,21 @@ class CustomerRepo implements CustomerRepository {
 class ShiftRepo implements ShiftRepository {
   constructor(readonly rows: Shift[]) {}
   async findById(id: string) { return this.rows.find((r) => r.id === id) ?? null; }
+  async findByIdWithoutLock(id: string) { return this.findById(id); }
   async save() {}
   async findOpenByStation() { return null; }
   async addStaffAssignments() {}
   async addTerminalLinks() {}
+}
+class BusinessDayRepo implements BusinessDayWriteRepository {
+  readonly row: BusinessDay = { id: 'bd-1', organizationId: 'org-1', stationId: 'st-1', businessDate: '2026-03-15', status: 'OPEN', openedBy: 'u', openedAt: '', closedBy: null, closedAt: null, createdAt: '', updatedAt: '' };
+  async findById(id: string) { return id === this.row.id ? this.row : null; }
+  async save() {}
+  async findOpenByStation() { return this.row; }
+  async findByStationAndDate() { return this.row; }
+  async lockStation() {}
+  async lockById() {}
+  async lockByStationAndDate() {}
 }
 const docNumbers: DocumentNumberGenerator = { async next() { return 'SALE-000001'; } };
 
@@ -64,6 +76,7 @@ function deps(over: Partial<{ sales: SaleRepo; stock: StockRepo; ledger: LedgerR
     ledger: over.ledger ?? new LedgerRepo(),
     customers: over.customers ?? new CustomerRepo([customer()]),
     shifts: over.shifts ?? new ShiftRepo([shift()]),
+    businessDays: new BusinessDayRepo(),
     docNumbers,
     events: new InProcessEventDispatcher({ store }),
     store,

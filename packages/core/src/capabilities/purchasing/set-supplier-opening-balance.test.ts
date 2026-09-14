@@ -4,7 +4,7 @@ import type { ExecutionContext } from '../../kernel/index.js';
 import { SetSupplierOpeningBalance } from './set-supplier-opening-balance.js';
 import type { SupplierTransaction, SupplierTransactionRepository } from './ports.js';
 import type { Supplier, SupplierRepository } from '../crm/suppliers/index.js';
-import type { BusinessDay, BusinessDayRepository } from '../station-ops/business-days/index.js';
+import type { BusinessDay, BusinessDayWriteRepository } from '../station-ops/business-days/index.js';
 
 class TxnRepo implements SupplierTransactionRepository {
   readonly rows: SupplierTransaction[] = [];
@@ -17,7 +17,7 @@ class SupplierRepo implements SupplierRepository {
   async existsByName() { return false; }
   async listByOrganization() { return this.rows; }
 }
-class BdRepo implements BusinessDayRepository {
+class BdRepo implements BusinessDayWriteRepository {
   constructor(readonly rows: BusinessDay[]) {}
   async findById(id: string) { return this.rows.find((r) => r.id === id) ?? null; }
   async save() {}
@@ -25,6 +25,9 @@ class BdRepo implements BusinessDayRepository {
   async findByStationAndDate(orgId: string, stationId: string) {
     return this.rows.find((r) => r.organizationId === orgId && r.stationId === stationId) ?? null;
   }
+  async lockStation() {}
+  async lockById() {}
+  async lockByStationAndDate() {}
 }
 
 function ctx(): ExecutionContext {

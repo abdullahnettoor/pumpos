@@ -48,14 +48,18 @@ export class DrizzleBusinessDayStatusReader implements BusinessDayStatusReader {
   }
 
   private toItem(row: any): BusinessDayStatusItem {
+    // Raw SQL fragments (e.g. the GREATEST(...) lastActivityAt) bypass Drizzle's
+    // column mappers and arrive as strings from postgres-js, so normalize both.
+    const toIso = (v: Date | string | null | undefined): string | null =>
+      v == null ? null : v instanceof Date ? v.toISOString() : new Date(v).toISOString();
     return {
       ...row,
       status: row.status as BusinessDayStatusItem['status'],
-      openedAt: row.openedAt.toISOString(),
-      closedAt: row.closedAt?.toISOString() ?? null,
+      openedAt: toIso(row.openedAt)!,
+      closedAt: toIso(row.closedAt),
       openShiftCount: Number(row.openShiftCount),
       closedShiftCount: Number(row.closedShiftCount),
-      lastActivityAt: row.lastActivityAt.toISOString(),
+      lastActivityAt: toIso(row.lastActivityAt)!,
     };
   }
 
@@ -224,6 +228,10 @@ export class DrizzleShiftRepository implements ShiftRepository {
   }
   async findById(id: string): Promise<Shift | null> {
     const [r] = await this.db.select().from(schema.shifts).where(eq(schema.shifts.id, id)).limit(1).for('update');
+    return r ? this.toEntity(r) : null;
+  }
+  async findByIdWithoutLock(id: string): Promise<Shift | null> {
+    const [r] = await this.db.select().from(schema.shifts).where(eq(schema.shifts.id, id)).limit(1);
     return r ? this.toEntity(r) : null;
   }
   async save(s: Shift): Promise<void> {

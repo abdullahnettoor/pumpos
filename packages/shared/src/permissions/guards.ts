@@ -40,7 +40,7 @@ export function canCloseShift(role: Role): boolean {
 }
 
 export function canReopenShift(role: Role): boolean {
-  // Only Owners and Managers can reopen during grace period
+  // Only Owners and Managers can reopen before the parent Business Day closes.
   return role === 'Owner' || role === 'Manager';
 }
 

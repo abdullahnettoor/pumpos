@@ -5,7 +5,7 @@ import { RecordCreditSale } from './index.js';
 import type { CustomerLedgerEntry, CustomerLedgerRepository } from '../collections/index.js';
 import type { Customer, CustomerRepository } from '../customers/index.js';
 import type { Shift, ShiftRepository } from '../../station-ops/shifts/index.js';
-import type { BusinessDay, BusinessDayRepository } from '../../station-ops/business-days/index.js';
+import type { BusinessDay, BusinessDayWriteRepository } from '../../station-ops/business-days/index.js';
 
 class LedgerRepo implements CustomerLedgerRepository {
   readonly rows: CustomerLedgerEntry[] = [];
@@ -21,12 +21,13 @@ class CustomerRepo implements CustomerRepository {
 class ShiftRepo implements ShiftRepository {
   constructor(readonly rows: Shift[]) {}
   async findById(id: string) { return this.rows.find((r) => r.id === id) ?? null; }
+  async findByIdWithoutLock(id: string) { return this.findById(id); }
   async save() {}
   async findOpenByStation() { return null; }
   async addStaffAssignments() {}
   async addTerminalLinks() {}
 }
-class BdRepo implements BusinessDayRepository {
+class BdRepo implements BusinessDayWriteRepository {
   constructor(readonly rows: BusinessDay[]) {}
   async findById(id: string) { return this.rows.find((r) => r.id === id) ?? null; }
   async save() {}
@@ -36,6 +37,9 @@ class BdRepo implements BusinessDayRepository {
   async findByStationAndDate(orgId: string, stationId: string, _date: string) {
     return this.rows.find((r) => r.organizationId === orgId && r.stationId === stationId) ?? null;
   }
+  async lockStation() {}
+  async lockById() {}
+  async lockByStationAndDate() {}
 }
 
 function ctx(): ExecutionContext {
@@ -47,6 +51,9 @@ function customer(): Customer {
 function shift(): Shift {
   return { id: 'sh-1', organizationId: 'org-1', stationId: 'st-1', businessDayId: 'bd-1', shiftTemplateId: 't', status: 'OPEN', openedBy: 'u', openedAt: '', closedBy: null, closedAt: null, lockedAt: null, openingCash: '0', closingCash: null, createdAt: '', updatedAt: '' };
 }
+function bday(): BusinessDay {
+  return { id: 'bd-1', organizationId: 'org-1', stationId: 'st-1', businessDate: '2026-03-15', status: 'OPEN', openedBy: 'u', openedAt: '', closedBy: null, closedAt: null, createdAt: '', updatedAt: '' };
+}
 
 describe('RecordCreditSale', () => {
   it('records a receivable on the customer ledger, business-day anchored, no shift link', async () => {
@@ -54,7 +61,7 @@ describe('RecordCreditSale', () => {
     const store = new InMemoryEventStore();
     const result = await new RecordCreditSale({
       ledger, customers: new CustomerRepo([customer()]), shifts: new ShiftRepo([shift()]),
-      businessDays: new BdRepo([]), events: new InProcessEventDispatcher({ store }),
+      businessDays: new BdRepo([bday()]), events: new InProcessEventDispatcher({ store }),
     }).execute({ customerId: 'cust-1', amount: 4500, shiftId: 'sh-1', vehicleId: 'veh-1', productId: 'diesel-1', quantity: 50, unitPrice: 90 }, ctx());
     expect(result.success).toBe(true);
     if (result.success) {
@@ -80,6 +87,19 @@ describe('RecordCreditSale', () => {
       expect(result.data.shiftId).toBeNull();
       expect(result.data.attendantId).toBeNull();
     }
+  });
+
+  it('retains optional shift attribution for a credit sale after day close', async () => {
+    const ledger = new LedgerRepo();
+    const closedShift = { ...shift(), status: 'CLOSED' as const, closedAt: '2026-03-15T09:00:00Z' };
+    const closedDay = { ...bday(), status: 'CLOSED' as const, closedAt: '2026-03-15T09:30:00Z' };
+    const result = await new RecordCreditSale({
+      ledger, customers: new CustomerRepo([customer()]), shifts: new ShiftRepo([closedShift]),
+      businessDays: new BdRepo([closedDay]), events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
+    }).execute({ customerId: 'cust-1', amount: 1000, shiftId: 'sh-1' }, ctx());
+
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data).toMatchObject({ shiftId: 'sh-1', metadata: { lateEntry: true } });
   });
 
   it('rejects an unknown customer', async () => {

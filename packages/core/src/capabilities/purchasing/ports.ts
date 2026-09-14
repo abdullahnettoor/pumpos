@@ -60,6 +60,7 @@ export interface SupplierTransaction {
   referenceType: string | null;
   referenceId: string | null;
   notes: string | null;
+  metadata?: Record<string, unknown>;
   createdAt: string;
 }
 
