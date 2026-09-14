@@ -9,6 +9,7 @@ import {
   canRecordPurchase,
   canManageExpenseCategory,
   canVoidExpense,
+  canRecordHandover,
   isAttendant,
   type Role,
 } from '@pump/shared';
@@ -950,11 +951,38 @@ transactionsRouter.post('/collections', async (c) => {
   return sendResult(c, result);
 });
 
+/**
+ * Authorization for in-shift ledger voids (credit / OMC card sales): the
+ * caller needs handover-recording permission, and the entry must resolve —
+ * through its owning business day — to a station the caller may act on within
+ * their organization. Returns an error Response, or null when authorized.
+ */
+async function authorizeLedgerVoid(db: DbClient, user: { organizationId: string; role: Role; assignedStationIds: string[] }, id: string) {
+  if (!canRecordHandover(user.role as Role)) {
+    return Response.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions to void this entry' } }, { status: 403 });
+  }
+  const [row] = await db
+    .select({ organizationId: schema.businessDays.organizationId, stationId: schema.businessDays.stationId })
+    .from(schema.customerTransactions)
+    .innerJoin(schema.businessDays, eq(schema.businessDays.id, schema.customerTransactions.businessDayId))
+    .where(eq(schema.customerTransactions.id, id))
+    .limit(1);
+  if (!row || row.organizationId !== user.organizationId) {
+    return Response.json({ success: false, error: { code: 'NOT_FOUND', message: 'Entry not found' } }, { status: 404 });
+  }
+  if (!isAuthorizedForStation(user as any, { organizationId: user.organizationId, stationId: row.stationId })) {
+    return Response.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, { status: 403 });
+  }
+  return null;
+}
+
 // Void a credit fuel sale (correction while the shift is still open). The
 // receivable is removed; allowed only before the originating shift closes.
 transactionsRouter.delete('/credit-sales/:id', async (c) => {
   const user = c.var.user;
   const id = c.req.param('id');
+  const guard = await authorizeLedgerVoid(c.var.db, user, id);
+  if (guard) return guard;
   const result = await runInTransaction(c.var.db, (tx, events) =>
     new VoidCreditSale({
       ledger: new DrizzleCustomerLedgerRepository(tx),
@@ -970,6 +998,8 @@ transactionsRouter.delete('/credit-sales/:id', async (c) => {
 transactionsRouter.delete('/omc-card-sales/:id', async (c) => {
   const user = c.var.user;
   const id = c.req.param('id');
+  const guard = await authorizeLedgerVoid(c.var.db, user, id);
+  if (guard) return guard;
   const result = await runInTransaction(c.var.db, async (tx, events) => {
     const r = await new VoidOmcCardSale({
       ledger: new DrizzleCustomerLedgerRepository(tx),
@@ -1889,7 +1919,20 @@ transactionsRouter.delete('/merchandise-handovers/:saleId', async (c) => {
 
 transactionsRouter.get('/shifts/:id/transactions', async (c) => {
   const db = c.var.db;
+  const user = c.var.user;
   const shiftId = c.req.param('id');
+  // Resolve the shift within the caller's organization and authorize its
+  // stored station before exposing any child records (tenant isolation).
+  const shift = await db.query.shifts.findFirst({
+    where: and(eq(schema.shifts.id, shiftId), eq(schema.shifts.organizationId, user.organizationId)),
+    columns: { id: true, stationId: true },
+  });
+  if (!shift) {
+    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Shift not found' } }, 404);
+  }
+  if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId: shift.stationId })) {
+    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+  }
   const [expenses, purchases, collections, sales, creditSales] = await Promise.all([
     db.select().from(schema.expenses).where(eq(schema.expenses.shiftId, shiftId)),
     db.select().from(schema.purchases).where(eq(schema.purchases.shiftId, shiftId)),

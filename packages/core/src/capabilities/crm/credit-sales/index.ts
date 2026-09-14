@@ -146,7 +146,7 @@ export class VoidCreditSale implements UseCase<VoidCreditSaleCommand, { id: stri
     if (!this.deps.ledger.findById || !this.deps.ledger.delete) {
       return err(invariantViolation('Ledger repository does not support void'));
     }
-    const entry = await this.deps.ledger.findById(input.id);
+    const entry = await this.deps.ledger.findById(input.id, ctx.organizationId);
     if (!entry) return err(notFoundError('CreditSale', input.id));
     if (entry.transactionType !== 'Credit Sale' || entry.referenceType !== 'CREDIT_SALE') {
       return err(invariantViolation('Only a credit sale can be voided', { id: input.id, type: entry.transactionType }));
@@ -157,7 +157,7 @@ export class VoidCreditSale implements UseCase<VoidCreditSaleCommand, { id: stri
       if (shift.status !== 'OPEN') return err(invariantViolation('Cannot void a credit sale after its shift is closed', { shiftId: shift.id, status: shift.status }));
     }
 
-    await this.deps.ledger.delete(input.id);
+    await this.deps.ledger.delete(input.id, ctx.organizationId);
 
     await this.deps.events.publish([
       eventFromContext(ctx, {
@@ -311,7 +311,7 @@ export class VoidOmcCardSale implements UseCase<VoidOmcCardSaleCommand, { id: st
     if (!this.deps.ledger.findById || !this.deps.ledger.delete) {
       return err(invariantViolation('Ledger repository does not support void'));
     }
-    const entry = await this.deps.ledger.findById(input.id);
+    const entry = await this.deps.ledger.findById(input.id, ctx.organizationId);
     if (!entry) return err(notFoundError('OmcCardSale', input.id));
     if (entry.transactionType !== 'OMC Sale' || entry.referenceType !== 'OMC_CARD_SALE') {
       return err(invariantViolation('Only an OMC card sale can be voided', { id: input.id, type: entry.transactionType }));
@@ -322,7 +322,7 @@ export class VoidOmcCardSale implements UseCase<VoidOmcCardSaleCommand, { id: st
       if (shift.status !== 'OPEN') return err(invariantViolation('Cannot void an OMC card sale after its shift is closed', { shiftId: shift.id, status: shift.status }));
     }
 
-    await this.deps.ledger.delete(input.id);
+    await this.deps.ledger.delete(input.id, ctx.organizationId);
 
     await this.deps.events.publish([
       eventFromContext(ctx, {
