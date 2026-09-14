@@ -31,7 +31,7 @@ class InMemoryBusinessDayRepo implements BusinessDayWriteRepository {
   async lockByStationAndDate() {}
 }
 
-function makeContext(): ExecutionContext {
+function makeContext(overrides: Partial<ExecutionContext> = {}): ExecutionContext {
   return {
     organizationId: 'org-1',
     stationId: 'station-1',
@@ -40,6 +40,7 @@ function makeContext(): ExecutionContext {
     correlationId: null,
     clock: new FixedClock(new Date('2026-03-15T05:30:00.000Z')),
     ids: new SequentialIdGenerator('bd'),
+    ...overrides,
   };
 }
 
@@ -80,6 +81,43 @@ describe('OpenBusinessDay', () => {
     expect(first.success).toBe(true);
     expect(second.success).toBe(true);
     expect(repo.rows.filter((day) => day.status === 'OPEN')).toHaveLength(2);
+  });
+
+  it('rejects a calendar-invalid Business Date without saving or publishing an event', async () => {
+    const repo = new InMemoryBusinessDayRepo();
+    const store = new InMemoryEventStore();
+    const events = new InProcessEventDispatcher({ store });
+
+    const result = await new OpenBusinessDay({ repository: repo, events }).execute(
+      { stationId: 'station-1', businessDate: '2026-02-31' },
+      makeContext(),
+    );
+
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error.code).toBe('VALIDATION_ERROR');
+    expect(repo.rows).toHaveLength(0);
+    expect(store.events).toHaveLength(0);
+  });
+
+  it('rejects the local calendar date before the Station Day Start without saving or publishing an event', async () => {
+    const repo = new InMemoryBusinessDayRepo();
+    const store = new InMemoryEventStore();
+    const events = new InProcessEventDispatcher({ store });
+    const ctx = makeContext({
+      clock: new FixedClock(new Date('2026-03-01T00:29:00.000Z')),
+      timeZone: 'Asia/Kolkata',
+      businessDayStartsAt: '06:00',
+    });
+
+    const result = await new OpenBusinessDay({ repository: repo, events }).execute(
+      { stationId: 'station-1', businessDate: '2026-03-01' },
+      ctx,
+    );
+
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error.code).toBe('VALIDATION_ERROR');
+    expect(repo.rows).toHaveLength(0);
+    expect(store.events).toHaveLength(0);
   });
 });
 

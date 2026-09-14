@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { resolveBusinessDate } from '@pump/shared';
+import { isValidBusinessDate, resolveBusinessDate } from '@pump/shared';
 export * from './get-business-day-status.js';
 import { BusinessEvents, conflictError, err, eventFromContext, invariantViolation, notFoundError, ok, validationError } from '../../../kernel/index.js';
 import type { EventPublisher, ExecutionContext, Repository, Result, UseCase } from '../../../kernel/index.js';
@@ -116,10 +116,9 @@ export interface CloseBusinessDayCommand {
   businessDayId: string;
 }
 
-const dateRe = /^\d{4}-\d{2}-\d{2}$/;
 const openSchema = z.object({
   stationId: z.string().min(1, 'stationId is required'),
-  businessDate: z.string().regex(dateRe, 'businessDate must be YYYY-MM-DD').optional(),
+  businessDate: z.string().refine(isValidBusinessDate, 'businessDate must be a valid YYYY-MM-DD date').optional(),
 });
 
 export interface BusinessDayDeps {
@@ -138,7 +137,11 @@ export class OpenBusinessDay implements UseCase<OpenBusinessDayCommand, Business
     if (!p.success) return err(validationError('Invalid OpenBusinessDay command', { issues: p.error.flatten() }));
 
     const now = ctx.clock.now();
-    const businessDate = p.data.businessDate ?? resolveBusinessDate({ now, timeZone: ctx.timeZone, dayStartsAt: ctx.businessDayStartsAt });
+    const currentBusinessDate = resolveBusinessDate({ now, timeZone: ctx.timeZone, dayStartsAt: ctx.businessDayStartsAt });
+    const businessDate = p.data.businessDate ?? currentBusinessDate;
+    if (p.data.businessDate && businessDate > currentBusinessDate) {
+      return err(validationError('businessDate cannot be after the Current Business Date', { businessDate, currentBusinessDate }));
+    }
     // One business day per (station, date). Several dates may be open at once;
     // a past day stays open until explicitly closed (close day 1 on day 5).
     await this.deps.repository.lockStation(ctx.organizationId, p.data.stationId);

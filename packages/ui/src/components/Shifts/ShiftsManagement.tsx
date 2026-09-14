@@ -26,6 +26,7 @@ import { FileText, User, Lock, AlertTriangle, Check, Fuel, Info, Play, History, 
 import { LoadingSpinner } from '../LoadingSpinner.js';
 import type { NavIntent } from '../AppShell.js';
 import { useStationBusinessDate } from '../../hooks/useStationBusinessDate.js';
+import { refreshShiftStatus } from './refreshShiftStatus.js';
 
 const shiftService = new CloudShiftService();
 const transactionService = new CloudTransactionService();
@@ -389,9 +390,9 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statusQ.data]);
 
-  // Refreshing the shift workspace = invalidating the shared shift-status cache;
-  // the query refetches and the init effect above re-runs.
-  const loadShiftStatus = () => invalidateOperational(stationId);
+  // Keep broad operational invalidation, then wait for the active full status
+  // query so lifecycle transitions cannot render its stale active Shift.
+  const loadShiftStatus = () => refreshShiftStatus(qc, invalidateOperational, stationId);
 
   const handleOpenShift = async (values: OpenShiftFormValues) => {
     if (!selectedStation) return;
