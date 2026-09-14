@@ -64,7 +64,7 @@ const inputStyle: React.CSSProperties = {
 type StatusKind = 'active' | 'inactive' | 'nologin';
 function statusOf(u: any): StatusKind {
   if (u.status === 'INACTIVE') return 'inactive';
-  if (!u.authUserId) return 'nologin';
+  if (!u.hasLogin) return 'nologin';
   return 'active';
 }
 const STATUS_META: Record<StatusKind, { label: string; bg: string; fg: string }> = {
@@ -92,7 +92,7 @@ const buildUserColumns = (
     cell: ({ row }) => {
       const u = row.original;
       const id = loginIdentity(u);
-      return <span style={{ fontSize: '12px', color: u.authUserId ? 'var(--text-default)' : 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{id}</span>;
+      return <span style={{ fontSize: '12px', color: u.hasLogin ? 'var(--text-default)' : 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{id}</span>;
     },
   },
   {
@@ -134,12 +134,12 @@ const buildUserColumns = (
           <button onClick={() => startEdit(u)} title="Edit member" style={iconBtn}>
             <Edit size={14} />
           </button>
-          {u.authUserId && (
+          {u.hasLogin && (
             <button onClick={() => onReset(u)} title="Reset password" style={iconBtn}>
               <KeyRound size={14} />
             </button>
           )}
-          {u.authUserId && (
+          {u.hasLogin && (
             <span
               title={isActive ? 'Deactivate login' : 'Activate login'}
               style={{ display: 'inline-flex', alignItems: 'center' }}
@@ -308,7 +308,7 @@ export const UserRolesAssignment: React.FC = () => {
     setIdentityType(u.email ? 'Email' : 'Phone');
     reset({
       fullName: u.fullName,
-      enableAppAccess: !!u.authUserId,
+      enableAppAccess: !!u.hasLogin,
       email: u.email || '',
       phone: u.phone || '',
       password: '',
@@ -490,7 +490,7 @@ export const UserRolesAssignment: React.FC = () => {
               </div>
             )}
 
-            {(editingUser ? !!editingUser.authUserId : watchEnableAppAccess) && (
+            {(editingUser ? !!editingUser.hasLogin : watchEnableAppAccess) && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>System Role</label>
                 <select style={{ ...inputStyle, color: 'var(--text-strong)' }} {...register('role')}>
