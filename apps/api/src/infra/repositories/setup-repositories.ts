@@ -229,7 +229,18 @@ export class DrizzleUserRepository implements UserRepository {
       .values({ id: u.id, organizationId: u.organizationId, authUserId: u.authUserId, fullName: u.fullName, email: u.email, phone: u.phone, role: u.role, status: u.status, createdAt: new Date(u.createdAt), updatedAt: new Date(u.updatedAt) })
       .onConflictDoUpdate({ target: schema.users.id, set: { fullName: u.fullName, email: u.email, phone: u.phone, role: u.role, status: u.status, updatedAt: new Date(u.updatedAt) } });
   }
-  async setStationAssignments(userId: string, stationIds: string[]): Promise<void> {
+  async setStationAssignments(userId: string, stationIds: string[], organizationId: string): Promise<void> {
+    // Tenant integrity: every assigned station must belong to the same
+    // organization — cross-tenant assignments must be structurally impossible.
+    if (stationIds.length > 0) {
+      const owned = await this.db
+        .select({ id: schema.stations.id })
+        .from(schema.stations)
+        .where(and(inArray(schema.stations.id, stationIds), eq(schema.stations.organizationId, organizationId)));
+      if (owned.length !== new Set(stationIds).size) {
+        throw new Error('One or more stations do not belong to this organization');
+      }
+    }
     await this.db.delete(schema.userStationAssignments).where(eq(schema.userStationAssignments.userId, userId));
     if (stationIds.length > 0) {
       await this.db.insert(schema.userStationAssignments).values(stationIds.map((stationId) => ({ userId, stationId })));

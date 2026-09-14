@@ -101,6 +101,9 @@ describe('CreateProduct', () => {
       findOpenByStation: async () => null,
       // Pretend a day already exists so ensureBusinessDayForDate returns it.
       findByStationAndDate: async () => ({ id: 'bd-1', organizationId: 'org-1', stationId: 'st-1', businessDate: '2026-01-01', status: 'OPEN', openedBy: 'u', openedAt: '', closedBy: null, closedAt: null, createdAt: '', updatedAt: '' }),
+      lockStation: async () => {},
+      lockById: async () => {},
+      lockByStationAndDate: async () => {},
     };
     const useCase = new CreateProduct({ repository: repo, events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }), stock, businessDays });
     const result = await useCase.execute(
@@ -119,7 +122,7 @@ describe('CreateProduct', () => {
     const repo = new InMemoryProductRepo();
     const movements: any[] = [];
     const stock: any = { save: async (m: any) => { movements.push(m); }, saveMany: async () => {}, currentQuantityForTank: async () => 0, currentQuantityForProduct: async () => 0 };
-    const businessDays: any = { findById: async () => null, save: async () => {}, findOpenByStation: async () => null, findByStationAndDate: async () => ({ id: 'bd-1', organizationId: 'org-1', stationId: 'st-1', businessDate: '2026-01-01', status: 'OPEN', openedBy: 'u', openedAt: '', closedBy: null, closedAt: null, createdAt: '', updatedAt: '' }) };
+    const businessDays: any = { findById: async () => null, save: async () => {}, findOpenByStation: async () => null, findByStationAndDate: async () => ({ id: 'bd-1', organizationId: 'org-1', stationId: 'st-1', businessDate: '2026-01-01', status: 'OPEN', openedBy: 'u', openedAt: '', closedBy: null, closedAt: null, createdAt: '', updatedAt: '' }), lockStation: async () => {}, lockById: async () => {}, lockByStationAndDate: async () => {} };
     const useCase = new CreateProduct({ repository: repo, events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }), stock, businessDays });
     const result = await useCase.execute(
       { name: 'Petrol', code: 'FUEL-MS', productType: 'FUEL', unit: 'L', openingStock: 5000, stationId: 'st-1' },

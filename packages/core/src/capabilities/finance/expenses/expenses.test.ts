@@ -10,7 +10,7 @@ import type { ExecutionContext } from '../../../kernel/index.js';
 import { RecordExpense, VoidExpense } from './index.js';
 import type { Expense, ExpenseRepository } from './index.js';
 import type { Shift, ShiftRepository } from '../../station-ops/shifts/index.js';
-import type { BusinessDay, BusinessDayRepository } from '../../station-ops/business-days/index.js';
+import type { BusinessDay, BusinessDayWriteRepository } from '../../station-ops/business-days/index.js';
 
 class ExpenseRepo implements ExpenseRepository {
   readonly rows: Expense[] = [];
@@ -23,12 +23,13 @@ class ExpenseRepo implements ExpenseRepository {
 class ShiftRepo implements ShiftRepository {
   constructor(readonly rows: Shift[]) {}
   async findById(id: string) { return this.rows.find((r) => r.id === id) ?? null; }
+  async findByIdWithoutLock(id: string) { return this.findById(id); }
   async save() {}
   async findOpenByStation() { return null; }
   async addStaffAssignments() {}
   async addTerminalLinks() {}
 }
-class BdRepo implements BusinessDayRepository {
+class BdRepo implements BusinessDayWriteRepository {
   constructor(readonly rows: BusinessDay[]) {}
   async findById(id: string) { return this.rows.find((r) => r.id === id) ?? null; }
   async save() {}
@@ -38,6 +39,9 @@ class BdRepo implements BusinessDayRepository {
   async findByStationAndDate(orgId: string, stationId: string, _date: string) {
     return this.rows.find((r) => r.organizationId === orgId && r.stationId === stationId) ?? null;
   }
+  async lockStation() {}
+  async lockById() {}
+  async lockByStationAndDate() {}
 }
 
 function ctx(): ExecutionContext {
@@ -55,7 +59,7 @@ describe('RecordExpense', () => {
     const expenses = new ExpenseRepo();
     const store = new InMemoryEventStore();
     const events = new InProcessEventDispatcher({ store });
-    const result = await new RecordExpense({ expenses, shifts: new ShiftRepo([shift()]), businessDays: new BdRepo([]), events })
+    const result = await new RecordExpense({ expenses, shifts: new ShiftRepo([shift()]), businessDays: new BdRepo([bday()]), events })
       .execute({ shiftId: 'sh-1', categoryId: 'cat-1', amount: 350 }, ctx());
     expect(result.success).toBe(true);
     if (result.success) {
@@ -78,11 +82,30 @@ describe('RecordExpense', () => {
     }
   });
 
-  it('rejects an expense on a locked shift', async () => {
-    const result = await new RecordExpense({ expenses: new ExpenseRepo(), shifts: new ShiftRepo([shift('LOCKED')]), businessDays: new BdRepo([]), events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }) })
+  it('preserves explicit non-drawer handling for a petty-cash account', async () => {
+    const expenses = new ExpenseRepo();
+    const result = await new RecordExpense({ expenses, shifts: new ShiftRepo([shift()]), businessDays: new BdRepo([bday()]), events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }) })
+      .execute({ shiftId: 'sh-1', categoryId: 'cat-1', amount: 100, paidFrom: 'SHIFT_CASH', affectsDrawer: false }, ctx());
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.affectsDrawer).toBe(false);
+  });
+
+  it('rejects a drawer expense against a locked shift', async () => {
+    const expenses = new ExpenseRepo();
+    const result = await new RecordExpense({ expenses, shifts: new ShiftRepo([shift('LOCKED')]), businessDays: new BdRepo([bday()]), events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }) })
       .execute({ shiftId: 'sh-1', categoryId: 'cat-1', amount: 100 }, ctx());
     expect(result.success).toBe(false);
     if (!result.success) expect(result.error.code).toBe('INVARIANT_VIOLATION');
+    expect(expenses.rows).toHaveLength(0);
+  });
+
+  it('retains a closed shift on a non-drawer late expense', async () => {
+    const expenses = new ExpenseRepo();
+    const closedDay = { ...bday(), status: 'CLOSED' as const, closedAt: '2026-03-15T09:00:00Z' };
+    const result = await new RecordExpense({ expenses, shifts: new ShiftRepo([shift('CLOSED')]), businessDays: new BdRepo([closedDay]), events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }) })
+      .execute({ shiftId: 'sh-1', categoryId: 'cat-1', amount: 100, paidFrom: 'BANK' }, ctx());
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data).toMatchObject({ shiftId: 'sh-1', affectsDrawer: false, metadata: { lateEntry: true } });
   });
 });
 

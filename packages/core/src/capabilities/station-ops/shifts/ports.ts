@@ -31,6 +31,8 @@ export interface TerminalLinkInput {
 }
 
 export interface ShiftRepository extends Repository<Shift> {
+  /** Discovery read before Station -> Business Day -> Shift locks are acquired. */
+  findByIdWithoutLock(id: string): Promise<Shift | null>;
   findOpenByStation(organizationId: string, stationId: string): Promise<Shift | null>;
   addStaffAssignments(shiftId: string, assignments: StaffAssignmentInput[]): Promise<void>;
   addTerminalLinks(shiftId: string, links: TerminalLinkInput[]): Promise<void>;

@@ -1,7 +1,9 @@
 import { z } from 'zod';
-import { BusinessEvents, err, eventFromContext, invariantViolation, notFoundError, ok, validationError } from '../../../kernel/index.js';
+import { BusinessEvents, err, eventFromContext, invariantViolation, ok, validationError } from '../../../kernel/index.js';
 import type { EventPublisher, ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
+import type { BusinessDayWriteRepository } from '../business-days/index.js';
 import type { NozzleReadingRepository, ShiftRepository } from './ports.js';
+import { resolveShiftBusinessDayWrite } from './resolve-shift-write.js';
 
 export interface RecordNozzleReadingsCommand {
   shiftId: string;
@@ -15,6 +17,7 @@ const schema = z.object({
 
 export interface RecordNozzleReadingsDeps {
   shifts: ShiftRepository;
+  businessDays: BusinessDayWriteRepository;
   nozzleReadings: NozzleReadingRepository;
   events: EventPublisher;
 }
@@ -33,8 +36,9 @@ export class RecordNozzleReadings implements UseCase<RecordNozzleReadingsCommand
     const p = schema.safeParse(input);
     if (!p.success) return err(validationError('Invalid RecordNozzleReadings command', { issues: p.error.flatten() }));
 
-    const shift = await this.deps.shifts.findById(p.data.shiftId);
-    if (!shift || shift.organizationId !== ctx.organizationId) return err(notFoundError('Shift', p.data.shiftId));
+    const eligibility = await resolveShiftBusinessDayWrite(this.deps.shifts, this.deps.businessDays, ctx, p.data.shiftId, 'STOCK');
+    if (!eligibility.success) return eligibility;
+    const shift = eligibility.data.shift;
     if (shift.status !== 'OPEN') return err(invariantViolation('Shift is not open', { shiftId: shift.id, status: shift.status }));
 
     const dbReadings = await this.deps.nozzleReadings.listByShift(shift.id);

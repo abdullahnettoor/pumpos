@@ -1,6 +1,5 @@
 import React from 'react';
-import { ArrowLeft, Printer, Download, AlertTriangle } from 'lucide-react';
-import { exportReactPdf } from '../services/exportPdf.js';
+import { ArrowLeft, Printer, Download, AlertTriangle, Info } from 'lucide-react';
 import { DEFAULT_DSSR_CONFIG, paperFromStation } from '../services/reports/reportConfig.js';
 import { letterheadFromStation } from '../services/reports/letterhead.js';
 import { Button } from '../pump-ds/index.js';
@@ -31,6 +30,8 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
   const merchandiseStockVariance = (snapshot.merchandiseStockVariance || []) as Array<any>;
   const shifts = snapshot.shifts || [];
   const warnings = snapshot.warnings || [];
+  const generatedAt = dailyDssr?.generatedAt ?? snapshot.generatedAt;
+  const lateEntryCount = Number(dailyDssr?.lateEntryCount ?? 0);
 
   const totalGrossVolume = Number(fuel.totalGrossVolume ?? fuel.totalVolume ?? 0);
   const totalTestingVolume = Number(fuel.totalTestingVolume || 0);
@@ -116,8 +117,47 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
           Daily Sales Summary Record
         </h2>
         <p style={{ color: 'var(--text-muted)', fontSize: '12px', marginTop: '4px' }}>
-          Business Date {dailyDssr.businessDate} • Generated {formatDateTime(dailyDssr.generatedAt)}
+          Business Date {dailyDssr.businessDate} • Generated {formatDateTime(generatedAt)}
         </p>
+      </div>
+
+      {lateEntryCount > 0 && (
+        <div
+          className="no-print"
+          style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '8px',
+            padding: '10px 12px',
+            marginBottom: '12px',
+            border: '1px solid var(--state-warning-fg)',
+            borderRadius: 'var(--radius-input)',
+            backgroundColor: 'var(--state-warning-bg)',
+            color: 'var(--state-warning-fg)',
+            fontSize: '12px',
+          }}
+        >
+          <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: '1px' }} />
+          <span>{lateEntryCount} late {lateEntryCount === 1 ? 'entry was' : 'entries were'} recorded after day close. The immutable snapshot below was not changed.</span>
+        </div>
+      )}
+
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'flex-start',
+          gap: '8px',
+          padding: '10px 12px',
+          marginBottom: '20px',
+          border: '1px solid var(--border-soft)',
+          borderRadius: 'var(--radius-input)',
+          backgroundColor: 'var(--bg-surface-alt)',
+          color: 'var(--text-muted)',
+          fontSize: '11px',
+        }}
+      >
+        <Info size={14} style={{ flexShrink: 0, marginTop: '1px' }} />
+        <span>Financial sections include records available as of {formatDateTime(generatedAt)}. Financial entries recorded later are not included in this report.</span>
       </div>
 
       <div

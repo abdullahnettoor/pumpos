@@ -1,5 +1,5 @@
 import { err, invariantViolation, notFoundError, type EventPublisher, type ExecutionContext, type Result, type UseCase } from '../../../kernel/index.js';
-import { CloseBusinessDay, type BusinessDay, type BusinessDayLock, type BusinessDayRepository } from '../../station-ops/business-days/index.js';
+import { CloseBusinessDay, type BusinessDay, type BusinessDayWriteRepository } from '../../station-ops/business-days/index.js';
 import { GenerateDssr } from './generate-dssr.js';
 import type { DssrDataReader, DssrSnapshotRepository } from './ports.js';
 
@@ -13,8 +13,7 @@ export interface CloseBusinessDayAndGenerateDssrCommand {
 }
 
 export interface CloseBusinessDayAndGenerateDssrDeps {
-  businessDays: BusinessDayRepository;
-  businessDayLock: BusinessDayLock;
+  businessDays: BusinessDayWriteRepository;
   openShifts: BusinessDayOpenShiftReader;
   snapshots: DssrSnapshotRepository;
   dssrData: DssrDataReader;
@@ -26,8 +25,8 @@ export class CloseBusinessDayAndGenerateDssr implements UseCase<CloseBusinessDay
   constructor(private readonly deps: CloseBusinessDayAndGenerateDssrDeps) {}
 
   async execute(input: CloseBusinessDayAndGenerateDssrCommand, ctx: ExecutionContext): Promise<Result<BusinessDay>> {
-    await this.deps.businessDayLock.lockStation(ctx.organizationId, input.stationId);
-    await this.deps.businessDayLock.lockById(ctx.organizationId, input.businessDayId);
+    await this.deps.businessDays.lockStation(ctx.organizationId, input.stationId);
+    await this.deps.businessDays.lockById(ctx.organizationId, input.businessDayId);
     const day = await this.deps.businessDays.findById(input.businessDayId);
     if (!day || day.organizationId !== ctx.organizationId || day.stationId !== input.stationId) {
       return err(notFoundError('BusinessDay', input.businessDayId));
@@ -47,7 +46,7 @@ export class CloseBusinessDayAndGenerateDssr implements UseCase<CloseBusinessDay
       snapshots: this.deps.snapshots,
       reader: this.deps.dssrData,
       events: this.deps.events,
-    }).execute({ businessDayId: day.id }, { ...ctx, stationId: day.stationId, businessDayId: day.id });
+    }).execute({ businessDayId: day.id, force: true }, { ...ctx, stationId: day.stationId, businessDayId: day.id });
 
     return generated.success ? closed : err(generated.error);
   }

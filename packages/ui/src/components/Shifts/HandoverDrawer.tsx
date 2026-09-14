@@ -90,6 +90,9 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
 }) => {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Guard against a forgotten POS sheet: terminals configured but zero card/UPI
+  // declared needs one explicit confirmation before submit.
+  const [zeroTerminalsConfirmed, setZeroTerminalsConfirmed] = useState(false);
   const [acceptedResult, setAcceptedResult] = useState<RecordHandoverResult | null>(null);
   const handoverRequestRef = useRef<{ fingerprint: string; idempotencyKey: string } | null>(null);
   const recordHandover = useRecordHandoverMutation();
@@ -135,6 +138,7 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
 
     setError(null);
     setAcceptedResult(null);
+    setZeroTerminalsConfirmed(false);
     handoverRequestRef.current = stationId ? loadHandoverRequestIdentity(stationId, shiftId, userId, duId) : null;
     if (existingHandover) {
       setValue('cashHandedOver', (Number(existingHandover.cashHandedOver) || '') as any);
@@ -519,6 +523,22 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
 
   const onSubmit = async (values: HandoverFormValues) => {
     setError(null);
+
+    // Terminals are assigned but no card/UPI declared: legitimate when no
+    // customer paid by POS, but also the signature of a forgotten terminal
+    // sheet — require one explicit confirmation.
+    if (hasTerminals && !zeroTerminalsConfirmed) {
+      const terminalTotal = duTerminals.reduce(
+        (sum: number, t: any) =>
+          sum + Number(values.terminalCard?.[t.terminalId] ?? 0) + Number(values.terminalUpi?.[t.terminalId] ?? 0),
+        0,
+      );
+      if (terminalTotal === 0) {
+        setZeroTerminalsConfirmed(true);
+        setError('No card/UPI takings entered for the assigned terminal(s). If that is correct, submit again to confirm; otherwise enter the terminal amounts.');
+        return;
+      }
+    }
 
     // Validate reading constraints: closing cannot be less than opening
     for (const nz of calculatedNozzles) {

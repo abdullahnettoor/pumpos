@@ -1,0 +1,4 @@
+# Clickjacking defence for the mobile PWA (served by Workers Static Assets).
+/*
+  X-Frame-Options: DENY
+  Content-Security-Policy: frame-ancestors 'none'

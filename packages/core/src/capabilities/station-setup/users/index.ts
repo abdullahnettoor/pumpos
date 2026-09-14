@@ -22,7 +22,8 @@ export interface UserWithAssignments extends User {
 
 export interface UserRepository extends Repository<User> {
   save(user: User): Promise<void>;
-  setStationAssignments(userId: string, stationIds: string[]): Promise<void>;
+  /** Replace the user's station assignments; every station must belong to the organization. */
+  setStationAssignments(userId: string, stationIds: string[], organizationId: string): Promise<void>;
   listWithAssignments(organizationId: string): Promise<UserWithAssignments[]>;
 }
 
@@ -97,7 +98,7 @@ export class CreateUser implements UseCase<CreateUserCommand, User> {
     };
     await this.deps.repository.save(user);
     if (p.data.stationIds && p.data.stationIds.length > 0) {
-      await this.deps.repository.setStationAssignments(user.id, p.data.stationIds);
+      await this.deps.repository.setStationAssignments(user.id, p.data.stationIds, ctx.organizationId);
     }
     await this.deps.events.publish([
       eventFromContext(ctx, {
@@ -141,7 +142,7 @@ export class UpdateUser implements UseCase<UpdateUserCommand, User> {
     };
     await this.deps.repository.save(updated);
     if (p.data.stationIds !== undefined) {
-      await this.deps.repository.setStationAssignments(updated.id, p.data.stationIds);
+      await this.deps.repository.setStationAssignments(updated.id, p.data.stationIds, ctx.organizationId);
     }
     await this.deps.events.publish([
       eventFromContext(ctx, {

@@ -1,9 +1,8 @@
 import { z } from 'zod';
-import { resolveBusinessDate } from '@pump/shared';
 import { BusinessEvents, err, eventFromContext, invariantViolation, notFoundError, ok, validationError } from '../../../kernel/index.js';
 import type { EventPublisher, ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
-import type { ShiftRepository } from '../../station-ops/shifts/index.js';
-import { ensureBusinessDayForDate, type BusinessDayRepository } from '../../station-ops/business-days/index.js';
+import { resolveFinancialAnchor, type ShiftRepository } from '../../station-ops/shifts/index.js';
+import type { BusinessDayWriteRepository } from '../../station-ops/business-days/index.js';
 import { assertDrawerEntryVoidable } from '../void-guard.js';
 
 export type PaidFrom = 'SHIFT_CASH' | 'BANK' | 'OWNER';
@@ -26,6 +25,7 @@ export interface Expense {
   affectsDrawer: boolean;
   description: string | null;
   status: string;
+  metadata?: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
 }
@@ -61,14 +61,15 @@ const schema = z.object({
 export interface RecordExpenseDeps {
   expenses: ExpenseRepository;
   shifts: ShiftRepository;
-  businessDays: BusinessDayRepository;
+  businessDays: BusinessDayWriteRepository;
   events: EventPublisher;
 }
 
 /**
  * Record an expense anchored to a business day. Drawer expenses (paidFrom
  * SHIFT_CASH) attach to the open shift and reduce its drawer; business expenses
- * (BANK/OWNER) attach only to the business day and do not affect reconciliation.
+ * (BANK/OWNER) do not affect reconciliation and may retain optional shift
+ * attribution.
  */
 export class RecordExpense implements UseCase<RecordExpenseCommand, Expense> {
   constructor(private readonly deps: RecordExpenseDeps) {}
@@ -79,26 +80,17 @@ export class RecordExpense implements UseCase<RecordExpenseCommand, Expense> {
     const cmd = p.data;
 
     const paidFrom: PaidFrom = cmd.paidFrom ?? 'SHIFT_CASH';
-    let affectsDrawer = cmd.affectsDrawer ?? paidFrom === 'SHIFT_CASH';
+    const affectsDrawer = cmd.affectsDrawer ?? paidFrom === 'SHIFT_CASH';
 
     let businessDayId: string;
     let shiftId: string | null;
+    let stationId: string;
+    let lateEntry: boolean;
 
-    if (cmd.shiftId) {
-      const shift = await this.deps.shifts.findById(cmd.shiftId);
-      if (!shift || shift.organizationId !== ctx.organizationId) return err(notFoundError('Shift', cmd.shiftId));
-      if (shift.status === 'LOCKED') return err(invariantViolation('Shift is locked', { shiftId: shift.id }));
-      businessDayId = shift.businessDayId;
-      shiftId = affectsDrawer ? shift.id : null;
-    } else if (cmd.stationId) {
-      const date = cmd.transactionDate ?? resolveBusinessDate({ now: ctx.clock.now(), timeZone: ctx.timeZone, dayStartsAt: ctx.businessDayStartsAt });
-      const bd = await ensureBusinessDayForDate(this.deps.businessDays, ctx, cmd.stationId, date);
-      businessDayId = bd.id;
-      shiftId = null;
-      affectsDrawer = false;
-    } else {
-      return err(validationError('Either shiftId or stationId is required'));
-    }
+    if (!cmd.shiftId && !cmd.stationId) return err(validationError('Either shiftId or stationId is required'));
+    const anchor = await resolveFinancialAnchor(this.deps, ctx, cmd, { affectsDrawer, drawerLabel: 'Drawer expenses' });
+    if (!anchor.success) return anchor;
+    ({ businessDayId, shiftId, stationId, lateEntry } = anchor.data);
 
     const now = ctx.clock.now().toISOString();
     const expense: Expense = {
@@ -111,6 +103,7 @@ export class RecordExpense implements UseCase<RecordExpenseCommand, Expense> {
       affectsDrawer,
       description: cmd.description ?? null,
       status: 'ACTIVE',
+      metadata: anchor.data.recordMetadata,
       createdAt: now,
       updatedAt: now,
     };
@@ -121,7 +114,9 @@ export class RecordExpense implements UseCase<RecordExpenseCommand, Expense> {
         eventType: BusinessEvents.EXPENSE_RECORDED,
         aggregateType: 'Expense',
         aggregateId: expense.id,
+        stationId,
         businessDayId,
+        metadata: anchor.data.eventMetadata,
         payload: { expenseId: expense.id, amount: expense.amount, paidFrom, affectsDrawer, shiftId },
         presentation: {
           templateId: 'expense.v1',

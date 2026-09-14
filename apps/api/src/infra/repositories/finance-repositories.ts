@@ -20,6 +20,7 @@ function toExpense(r: typeof schema.expenses.$inferSelect): Expense {
     affectsDrawer: r.affectsDrawer,
     description: r.description ?? null,
     status: r.status,
+    metadata: (r.metadata as Record<string, unknown>) ?? {},
     createdAt: r.createdAt.toISOString(),
     updatedAt: r.updatedAt.toISOString(),
   };
@@ -44,6 +45,7 @@ export class DrizzleExpenseRepository implements ExpenseRepository {
         affectsDrawer: e.affectsDrawer,
         description: e.description,
         status: e.status,
+        metadata: e.metadata ?? {},
         createdAt: new Date(e.createdAt),
         updatedAt: new Date(e.updatedAt),
       })
@@ -55,6 +57,7 @@ export class DrizzleExpenseRepository implements ExpenseRepository {
           affectsDrawer: e.affectsDrawer,
           description: e.description,
           status: e.status,
+          metadata: e.metadata ?? {},
           updatedAt: new Date(e.updatedAt),
         },
       });
@@ -85,6 +88,7 @@ function toIncome(r: typeof schema.otherIncome.$inferSelect): OtherIncome {
     igst: r.igst ?? '0',
     cess: r.cess ?? '0',
     taxSnapshot: (r.taxSnapshot as Record<string, unknown> | null) ?? null,
+    metadata: (r.metadata as Record<string, unknown>) ?? {},
     createdAt: r.createdAt.toISOString(),
     updatedAt: r.updatedAt.toISOString(),
   };
@@ -122,6 +126,7 @@ export class DrizzleIncomeRepository implements IncomeRepository {
         igst: i.igst,
         cess: i.cess,
         taxSnapshot: i.taxSnapshot,
+        metadata: i.metadata ?? {},
         createdAt: new Date(i.createdAt),
         updatedAt: new Date(i.updatedAt),
       })
@@ -134,6 +139,7 @@ export class DrizzleIncomeRepository implements IncomeRepository {
           payer: i.payer,
           description: i.description,
           status: i.status,
+          metadata: i.metadata ?? {},
           updatedAt: new Date(i.updatedAt),
         },
       });

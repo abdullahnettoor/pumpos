@@ -1,4 +1,4 @@
-import { and, eq, ne } from 'drizzle-orm';
+import { and, eq, ne, sql } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
 import type {
   Customer,
@@ -125,11 +125,23 @@ export class DrizzleCustomerLedgerRepository implements CustomerLedgerRepository
       referenceType: e.referenceType,
       referenceId: e.referenceId,
       notes: e.notes,
+      metadata: e.metadata ?? {},
       createdAt: new Date(e.createdAt),
     });
   }
-  async findById(id: string): Promise<CustomerLedgerEntry | null> {
-    const [r] = await this.db.select().from(schema.customerTransactions).where(eq(schema.customerTransactions.id, id)).limit(1);
+  async findById(id: string, organizationId: string): Promise<CustomerLedgerEntry | null> {
+    // customer_transactions has no organization_id column: tenancy resolves
+    // through the owning business day, even for shiftless entries.
+    const [row] = await this.db
+      .select({ tx: schema.customerTransactions })
+      .from(schema.customerTransactions)
+      .innerJoin(schema.businessDays, eq(schema.businessDays.id, schema.customerTransactions.businessDayId))
+      .where(and(
+        eq(schema.customerTransactions.id, id),
+        eq(schema.businessDays.organizationId, organizationId),
+      ))
+      .limit(1);
+    const r = row?.tx;
     if (!r) return null;
     return {
       id: r.id,
@@ -147,11 +159,17 @@ export class DrizzleCustomerLedgerRepository implements CustomerLedgerRepository
       referenceType: r.referenceType,
       referenceId: r.referenceId,
       notes: r.notes,
+      metadata: (r.metadata as Record<string, unknown>) ?? {},
       createdAt: r.createdAt.toISOString(),
     };
   }
-  async delete(id: string): Promise<void> {
-    await this.db.delete(schema.customerTransactions).where(eq(schema.customerTransactions.id, id));
+  async delete(id: string, organizationId: string): Promise<void> {
+    // Tenancy-scoped delete: the row must belong to a business day of the
+    // caller's organization (shiftless entries included).
+    await this.db.delete(schema.customerTransactions).where(and(
+      eq(schema.customerTransactions.id, id),
+      sql`EXISTS (SELECT 1 FROM ${schema.businessDays} WHERE ${schema.businessDays.id} = ${schema.customerTransactions.businessDayId} AND ${schema.businessDays.organizationId} = ${organizationId})`,
+    ));
   }
 }
 
@@ -169,6 +187,7 @@ export class DrizzleCollectionRepository implements CollectionRepository {
       amount: c.amount,
       paymentMethod: c.paymentMethod,
       notes: c.notes,
+      metadata: c.metadata ?? {},
       createdAt: new Date(c.createdAt),
     });
   }

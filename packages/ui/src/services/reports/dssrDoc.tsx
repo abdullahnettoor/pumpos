@@ -24,6 +24,11 @@ const builders: Record<DssrSection, (d: any, cfg: DssrReportConfig) => React.Rea
       <Text style={s.sub}>
         Business Date {d.businessDate}{d.generatedAt ? ` \u2022 Generated ${fmtDateTime(d.generatedAt)}` : ''}
       </Text>
+      {d.generatedAt && (
+        <Text style={s.sub}>
+          Financial sections include records available as of {fmtDateTime(d.generatedAt)}. Financial entries recorded later are not included.
+        </Text>
+      )}
     </View>
   ),
   meta: (d) => {
@@ -231,7 +236,11 @@ const builders: Record<DssrSection, (d: any, cfg: DssrReportConfig) => React.Rea
  * reports stay visually identical. Reads the immutable DSSR snapshot.
  */
 export const DssrDoc: React.FC<{ dssr: any; config?: DssrReportConfig }> = ({ dssr, config = DEFAULT_DSSR_CONFIG }) => {
-  const d = { ...(dssr?.snapshotData || {}), businessDate: dssr?.businessDate, generatedAt: dssr?.generatedAt };
+  const d = {
+    ...(dssr?.snapshotData || {}),
+    businessDate: dssr?.businessDate ?? dssr?.snapshotData?.businessDate,
+    generatedAt: dssr?.generatedAt ?? dssr?.snapshotData?.generatedAt,
+  };
   return (
     <Document>
       <Page size={config.paper} style={s.page}>

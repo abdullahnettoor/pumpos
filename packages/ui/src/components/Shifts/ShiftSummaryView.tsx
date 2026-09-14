@@ -9,8 +9,9 @@ import { useConfirm } from '../primitives/ConfirmDialog.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import { inr } from '../../utils/format.js';
 import { isDesktopApp } from '../../utils/platform.js';
-import { formatStationDateTime, resolveBusinessDate } from '@pump/shared';
+import { formatStationDateTime } from '@pump/shared';
 import { ShiftBusinessDateContext } from './ShiftBusinessDateContext.js';
+import { useStationBusinessDate } from '../../hooks/useStationBusinessDate.js';
 
 const shiftService = new CloudShiftService();
 
@@ -44,7 +45,7 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
 
   const { snapshotData, generatedAt } = shiftSummary;
   const stationSettings = (station?.settings ?? {}) as { timezone?: string; business_day_starts_at?: string };
-  const currentBusinessDate = resolveBusinessDate({ timeZone: stationSettings.timezone, dayStartsAt: stationSettings.business_day_starts_at });
+  const currentBusinessDate = useStationBusinessDate(stationSettings.timezone, stationSettings.business_day_starts_at);
   const {
     shiftId,
     templateName,
@@ -88,7 +89,7 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
   const handleReopen = async () => {
     if (!(await confirm({
       title: 'Reopen this shift?',
-      message: 'Reopening will delete this compiled Shift Summary and set the shift state back to OPEN.',
+      message: 'Reopening will delete this compiled Shift Summary and set the shift state back to OPEN. It is allowed until the Business Day closes, provided no other shift is open.',
       confirmLabel: 'Reopen',
       danger: true,
     }))) {

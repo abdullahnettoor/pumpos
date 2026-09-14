@@ -14,7 +14,7 @@ import type { Supplier, SupplierRepository } from '../crm/suppliers/index.js';
 import type { Product, ProductRepository } from '../station-setup/products/index.js';
 import type { Station, StationRepository } from '../station-setup/stations/index.js';
 import type { Shift, ShiftRepository } from '../station-ops/shifts/index.js';
-import type { BusinessDay, BusinessDayRepository } from '../station-ops/business-days/index.js';
+import type { BusinessDay, BusinessDayWriteRepository } from '../station-ops/business-days/index.js';
 
 class PurchaseRepo implements PurchaseRepository {
   readonly rows: Purchase[] = [];
@@ -60,12 +60,13 @@ class StationRepo implements StationRepository {
 class ShiftRepo implements ShiftRepository {
   constructor(readonly rows: Shift[]) {}
   async findById(id: string) { return this.rows.find((r) => r.id === id) ?? null; }
+  async findByIdWithoutLock(id: string) { return this.findById(id); }
   async save() {}
   async findOpenByStation() { return null; }
   async addStaffAssignments() {}
   async addTerminalLinks() {}
 }
-class BdRepo implements BusinessDayRepository {
+class BdRepo implements BusinessDayWriteRepository {
   constructor(readonly rows: BusinessDay[]) {}
   async findById(id: string) { return this.rows.find((r) => r.id === id) ?? null; }
   async save() {}
@@ -75,6 +76,9 @@ class BdRepo implements BusinessDayRepository {
   async findByStationAndDate(orgId: string, stationId: string, _date: string) {
     return this.rows.find((r) => r.organizationId === orgId && r.stationId === stationId) ?? null;
   }
+  async lockStation() {}
+  async lockById() {}
+  async lockByStationAndDate() {}
 }
 const docNumbers: DocumentNumberGenerator = { async next() { return 'PUR-000001'; } };
 
@@ -101,6 +105,28 @@ function bday(): BusinessDay {
 }
 
 describe('RecordPurchase', () => {
+  it('rejects a purchase on a closed Business Day before writing anything', async () => {
+    const purchases = new PurchaseRepo();
+    const items = new PurchaseItemRepo();
+    const stock = new StockRepo();
+    const supplierTxns = new SupplierTxnRepo();
+    const store = new InMemoryEventStore();
+    const result = await new RecordPurchase({
+      purchases, purchaseItems: items, stock, supplierTxns,
+      suppliers: new SupplierRepo([supplier()]), products: new ProductRepo([fuelProduct()]), stations: new StationRepo([station()]),
+      shifts: new ShiftRepo([]), businessDays: new BdRepo([{ ...bday(), status: 'CLOSED', closedAt: '2026-03-15T09:00:00Z' }]), docNumbers,
+      events: new InProcessEventDispatcher({ store }),
+    }).execute({ supplierId: 'sup-1', productId: 'petrol-1', quantity: 5000, unitPrice: 90, stationId: 'st-1' }, ctx());
+
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error.code).toBe('INVARIANT_VIOLATION');
+    expect(purchases.rows).toHaveLength(0);
+    expect(items.rows).toHaveLength(0);
+    expect(stock.movements).toHaveLength(0);
+    expect(supplierTxns.rows).toHaveLength(0);
+    expect(store.events).toHaveLength(0);
+  });
+
   it('raises a payable and increments tank stock, anchored to the business day with no shift', async () => {
     const purchases = new PurchaseRepo();
     const stock = new StockRepo();
@@ -219,7 +245,7 @@ describe('RecordSupplierPayment', () => {
     const store = new InMemoryEventStore();
     const result = await new RecordSupplierPayment({
       supplierTxns, suppliers: new SupplierRepo([supplier()]), shifts: new ShiftRepo([shift()]),
-      businessDays: new BdRepo([]), events: new InProcessEventDispatcher({ store }),
+      businessDays: new BdRepo([{ ...bday(), id: 'bd-1' }]), events: new InProcessEventDispatcher({ store }),
     }).execute({ supplierId: 'sup-1', amount: 10000, paidFrom: 'SHIFT_CASH', shiftId: 'sh-1' }, ctx());
     expect(result.success).toBe(true);
     if (result.success) {
@@ -241,5 +267,39 @@ describe('RecordSupplierPayment', () => {
       expect(result.data.affectsDrawer).toBe(false);
       expect(result.data.businessDayId).toBe('bd-9');
     }
+  });
+
+  it('preserves explicit non-drawer handling for a petty-cash account', async () => {
+    const result = await new RecordSupplierPayment({
+      supplierTxns: new SupplierTxnRepo(), suppliers: new SupplierRepo([supplier()]), shifts: new ShiftRepo([shift()]),
+      businessDays: new BdRepo([{ ...bday(), id: 'bd-1' }]), events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
+    }).execute({ supplierId: 'sup-1', amount: 1000, paidFrom: 'SHIFT_CASH', affectsDrawer: false, shiftId: 'sh-1' }, ctx());
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.affectsDrawer).toBe(false);
+  });
+
+  it('rejects a drawer supplier payment after its shift closes', async () => {
+    const payments = new SupplierTxnRepo();
+    const result = await new RecordSupplierPayment({
+      supplierTxns: payments, suppliers: new SupplierRepo([supplier()]),
+      shifts: new ShiftRepo([{ ...shift(), status: 'CLOSED', closedAt: '2026-03-15T09:00:00Z' }]), businessDays: new BdRepo([{ ...bday(), id: 'bd-1' }]),
+      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
+    }).execute({ supplierId: 'sup-1', amount: 1000, paidFrom: 'SHIFT_CASH', shiftId: 'sh-1' }, ctx());
+
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error.code).toBe('INVARIANT_VIOLATION');
+    expect(payments.rows).toHaveLength(0);
+  });
+
+  it('retains a closed shift on a non-drawer late supplier payment', async () => {
+    const result = await new RecordSupplierPayment({
+      supplierTxns: new SupplierTxnRepo(), suppliers: new SupplierRepo([supplier()]),
+      shifts: new ShiftRepo([{ ...shift(), status: 'CLOSED', closedAt: '2026-03-15T09:00:00Z' }]),
+      businessDays: new BdRepo([{ ...bday(), id: 'bd-1', status: 'CLOSED', closedAt: '2026-03-15T09:30:00Z' }]),
+      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
+    }).execute({ supplierId: 'sup-1', amount: 1000, paidFrom: 'BANK', shiftId: 'sh-1' }, ctx());
+
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data).toMatchObject({ shiftId: 'sh-1', affectsDrawer: false, metadata: { lateEntry: true } });
   });
 });

@@ -7,10 +7,10 @@ import {
   BusinessEvents,
 } from '../../../kernel/index.js';
 import type { ExecutionContext } from '../../../kernel/index.js';
-import { OpenBusinessDay, CloseBusinessDay } from './index.js';
-import type { BusinessDay, BusinessDayRepository } from './index.js';
+import { OpenBusinessDay, CloseBusinessDay, resolveBusinessDayWrite } from './index.js';
+import type { BusinessDay, BusinessDayWriteRepository } from './index.js';
 
-class InMemoryBusinessDayRepo implements BusinessDayRepository {
+class InMemoryBusinessDayRepo implements BusinessDayWriteRepository {
   readonly rows: BusinessDay[] = [];
   async findById(id: string) {
     return this.rows.find((r) => r.id === id) ?? null;
@@ -26,9 +26,12 @@ class InMemoryBusinessDayRepo implements BusinessDayRepository {
   async findByStationAndDate(orgId: string, stationId: string, businessDate: string) {
     return this.rows.find((r) => r.organizationId === orgId && r.stationId === stationId && r.businessDate === businessDate) ?? null;
   }
+  async lockStation() {}
+  async lockById() {}
+  async lockByStationAndDate() {}
 }
 
-function makeContext(): ExecutionContext {
+function makeContext(overrides: Partial<ExecutionContext> = {}): ExecutionContext {
   return {
     organizationId: 'org-1',
     stationId: 'station-1',
@@ -37,6 +40,7 @@ function makeContext(): ExecutionContext {
     correlationId: null,
     clock: new FixedClock(new Date('2026-03-15T05:30:00.000Z')),
     ids: new SequentialIdGenerator('bd'),
+    ...overrides,
   };
 }
 
@@ -78,6 +82,43 @@ describe('OpenBusinessDay', () => {
     expect(second.success).toBe(true);
     expect(repo.rows.filter((day) => day.status === 'OPEN')).toHaveLength(2);
   });
+
+  it('rejects a calendar-invalid Business Date without saving or publishing an event', async () => {
+    const repo = new InMemoryBusinessDayRepo();
+    const store = new InMemoryEventStore();
+    const events = new InProcessEventDispatcher({ store });
+
+    const result = await new OpenBusinessDay({ repository: repo, events }).execute(
+      { stationId: 'station-1', businessDate: '2026-02-31' },
+      makeContext(),
+    );
+
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error.code).toBe('VALIDATION_ERROR');
+    expect(repo.rows).toHaveLength(0);
+    expect(store.events).toHaveLength(0);
+  });
+
+  it('rejects the local calendar date before the Station Day Start without saving or publishing an event', async () => {
+    const repo = new InMemoryBusinessDayRepo();
+    const store = new InMemoryEventStore();
+    const events = new InProcessEventDispatcher({ store });
+    const ctx = makeContext({
+      clock: new FixedClock(new Date('2026-03-01T00:29:00.000Z')),
+      timeZone: 'Asia/Kolkata',
+      businessDayStartsAt: '06:00',
+    });
+
+    const result = await new OpenBusinessDay({ repository: repo, events }).execute(
+      { stationId: 'station-1', businessDate: '2026-03-01' },
+      ctx,
+    );
+
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error.code).toBe('VALIDATION_ERROR');
+    expect(repo.rows).toHaveLength(0);
+    expect(store.events).toHaveLength(0);
+  });
 });
 
 describe('CloseBusinessDay', () => {
@@ -104,5 +145,34 @@ describe('CloseBusinessDay', () => {
     const again = await new CloseBusinessDay({ repository: repo, events }).execute({ businessDayId: id }, ctx);
     expect(again.success).toBe(false);
     if (!again.success) expect(again.error.code).toBe('INVARIANT_VIOLATION');
+  });
+});
+
+describe('resolveBusinessDayWrite', () => {
+  it('opens a nonexistent historical day for its first financial entry', async () => {
+    const repo = new InMemoryBusinessDayRepo();
+    const result = await resolveBusinessDayWrite(repo, makeContext(), {
+      stationId: 'station-1',
+      businessDate: '2026-03-14',
+      kind: 'FINANCIAL',
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.businessDay.status).toBe('OPEN');
+      expect(result.data.lateEntry).toBe(false);
+    }
+  });
+
+  it('accepts stock writes to a lazily-created historical day while it is open', async () => {
+    const repo = new InMemoryBusinessDayRepo();
+    const result = await resolveBusinessDayWrite(repo, makeContext(), {
+      stationId: 'station-1',
+      businessDate: '2026-03-14',
+      kind: 'STOCK',
+    });
+
+    expect(result.success).toBe(true);
+    expect(repo.rows[0]?.status).toBe('OPEN');
   });
 });

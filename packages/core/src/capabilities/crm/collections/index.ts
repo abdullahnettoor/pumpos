@@ -1,9 +1,8 @@
 import { z } from 'zod';
-import { resolveBusinessDate } from '@pump/shared';
 import { BusinessEvents, err, eventFromContext, invariantViolation, notFoundError, ok, validationError } from '../../../kernel/index.js';
 import type { DocumentNumberGenerator, EventPublisher, ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
-import type { ShiftRepository } from '../../station-ops/shifts/index.js';
-import { ensureBusinessDayForDate, type BusinessDayRepository } from '../../station-ops/business-days/index.js';
+import { resolveFinancialAnchor, type ShiftRepository } from '../../station-ops/shifts/index.js';
+import type { BusinessDayWriteRepository } from '../../station-ops/business-days/index.js';
 import type { CustomerRepository } from '../customers/index.js';
 
 export type CollectionPaymentMethod = 'Cash' | 'Card' | 'UPI' | 'BankTransfer';
@@ -18,6 +17,7 @@ export interface Collection {
   amount: string;
   paymentMethod: string;
   notes: string | null;
+  metadata?: Record<string, unknown>;
   createdAt: string;
 }
 
@@ -45,15 +45,16 @@ export interface CustomerLedgerEntry {
   referenceType: string | null;
   referenceId: string | null;
   notes: string | null;
+  metadata?: Record<string, unknown>;
   createdAt: string;
 }
 
 export interface CustomerLedgerRepository {
   save(entry: CustomerLedgerEntry): Promise<void>;
-  /** Look up a single ledger entry by id (for void/correction). */
-  findById?(id: string): Promise<CustomerLedgerEntry | null>;
-  /** Hard-delete a ledger entry (used to void an in-shift credit-sale correction). */
-  delete?(id: string): Promise<void>;
+  /** Look up a single ledger entry by id, scoped to the organization (for void/correction). */
+  findById?(id: string, organizationId: string): Promise<CustomerLedgerEntry | null>;
+  /** Hard-delete a ledger entry, scoped to the organization (void of an in-shift correction). */
+  delete?(id: string, organizationId: string): Promise<void>;
 }
 
 export interface RecordCollectionCommand {
@@ -83,15 +84,15 @@ export interface RecordCollectionDeps {
   ledger: CustomerLedgerRepository;
   customers: CustomerRepository;
   shifts: ShiftRepository;
-  businessDays: BusinessDayRepository;
+  businessDays: BusinessDayWriteRepository;
   docNumbers: DocumentNumberGenerator;
   events: EventPublisher;
 }
 
 /**
  * Record a payment received against a customer's receivable. Only CASH collected
- * at the counter touches the drawer/shift; bank/UPI/card collections (e.g. paid
- * to accounts or the owner) are anchored to the business day with no shift.
+ * at the counter touches the drawer/shift; bank/UPI/card collections do not
+ * affect the drawer but may retain optional shift attribution.
  */
 export class RecordCollection implements UseCase<RecordCollectionCommand, Collection> {
   constructor(private readonly deps: RecordCollectionDeps) {}
@@ -108,22 +109,14 @@ export class RecordCollection implements UseCase<RecordCollectionCommand, Collec
 
     let businessDayId: string;
     let shiftId: string | null;
-    if (cmd.shiftId) {
-      const shift = await this.deps.shifts.findById(cmd.shiftId);
-      if (!shift || shift.organizationId !== ctx.organizationId) return err(notFoundError('Shift', cmd.shiftId));
-      if (shift.status === 'LOCKED') return err(invariantViolation('Shift is locked', { shiftId: shift.id }));
-      businessDayId = shift.businessDayId;
-      shiftId = affectsDrawer ? shift.id : null;
-    } else if (cmd.stationId) {
-      const date = cmd.transactionDate ?? resolveBusinessDate({ now: ctx.clock.now(), timeZone: ctx.timeZone, dayStartsAt: ctx.businessDayStartsAt });
-      const bd = await ensureBusinessDayForDate(this.deps.businessDays, ctx, cmd.stationId, date);
-      businessDayId = bd.id;
-      shiftId = null;
-    } else {
-      return err(validationError('Either shiftId or stationId is required'));
-    }
+    let stationId: string;
+    if (!cmd.shiftId && !cmd.stationId) return err(validationError('Either shiftId or stationId is required'));
+    const anchor = await resolveFinancialAnchor(this.deps, ctx, cmd, { affectsDrawer, drawerLabel: 'Cash collections' });
+    if (!anchor.success) return anchor;
+    ({ businessDayId, shiftId, stationId } = anchor.data);
 
     const now = ctx.clock.now().toISOString();
+    const affectsDrawerToStore = shiftId !== null && affectsDrawer;
     const documentNumber = await this.deps.docNumbers.next('COLLECTION');
     const collection: Collection = {
       id: ctx.ids.newId(),
@@ -135,6 +128,7 @@ export class RecordCollection implements UseCase<RecordCollectionCommand, Collec
       amount: String(cmd.amount),
       paymentMethod: cmd.paymentMethod,
       notes: cmd.notes ?? null,
+      metadata: anchor.data.recordMetadata,
       createdAt: now,
     };
     await this.deps.collections.save(collection);
@@ -154,6 +148,7 @@ export class RecordCollection implements UseCase<RecordCollectionCommand, Collec
       referenceType: 'COLLECTION',
       referenceId: collection.id,
       notes: cmd.notes ?? null,
+      metadata: anchor.data.recordMetadata,
       createdAt: now,
     });
 
@@ -162,8 +157,10 @@ export class RecordCollection implements UseCase<RecordCollectionCommand, Collec
         eventType: BusinessEvents.CREDIT_PAYMENT_RECEIVED,
         aggregateType: 'Customer',
         aggregateId: customer.id,
+        stationId,
         businessDayId,
-        payload: { collectionId: collection.id, customerId: customer.id, amount: collection.amount, paymentMethod: cmd.paymentMethod, affectsDrawer, shiftId },
+        metadata: anchor.data.eventMetadata,
+        payload: { collectionId: collection.id, customerId: customer.id, amount: collection.amount, paymentMethod: cmd.paymentMethod, affectsDrawer: affectsDrawerToStore, shiftId },
         presentation: {
           templateId: 'credit-payment-received.v1',
           values: { customerName: customer.name, amount: Number(collection.amount), paymentMethod: cmd.paymentMethod },
