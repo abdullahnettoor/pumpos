@@ -18,6 +18,7 @@ const PERSIST_PREFIXES = new Set([
   'nozzles',
   'users',
   'shift-templates',
+  'payment-terminals',
   'pricing',
   'organization',
 ]);
@@ -101,6 +102,19 @@ export interface QueryProviderProps {
 let fallbackClient: QueryClient | null = null;
 
 /**
+ * The client used when a shell does not pass one in. Created on first use and
+ * shared thereafter, so every consumer sees one cache.
+ *
+ * Lazily created from a function rather than assigned during render: mutating
+ * module state while rendering is not safe under concurrent React, where a
+ * render can be started and thrown away.
+ */
+function getFallbackClient(): QueryClient {
+  fallbackClient ??= createQueryClient();
+  return fallbackClient;
+}
+
+/**
  * Persists the static/semi-static slices of the cache to localStorage so the
  * shell + dropdowns paint instantly on reload without a network wait. Called
  * once per client; no-op outside the browser (e.g. SSR / tests).
@@ -139,10 +153,10 @@ function enablePersistence(client: QueryClient) {
 }
 
 export const QueryProvider: React.FC<QueryProviderProps> = ({ client, children }) => {
-  if (!client && !fallbackClient) {
-    fallbackClient = createQueryClient();
-  }
-  const active = client ?? fallbackClient!;
+  // useState's initialiser runs once per mount and, unlike a bare assignment,
+  // is not a render-phase mutation of module scope.
+  const [fallback] = React.useState(() => (client ? null : getFallbackClient()));
+  const active = client ?? fallback!;
   React.useEffect(() => {
     enablePersistence(active);
   }, [active]);

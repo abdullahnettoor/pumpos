@@ -6,7 +6,14 @@ import {
   CloudProductService,
   CloudNozzleService,
 } from '../../services/cloud.js';
-import { queryKeys, TIER } from '../../query/hooks.js';
+import {
+  queryKeys,
+  TIER,
+  useDispensers,
+  useNozzles,
+  useProducts,
+  useTanks,
+} from '../../query/hooks.js';
 import { DispenserUnit, Tank, Product, Nozzle } from '@pump/shared';
 import { Drawer } from '../Drawer.js';
 import { useToast } from '../primitives/ToastProvider.js';
@@ -33,70 +40,38 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
   const qc = useQueryClient();
   const toast = useToast();
   const runTask = useRunTask();
-  const [dispensers, setDispensers] = useState<DispenserUnit[]>([]);
-  const [tanks, setTanks] = useState<Tank[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
-  const [nozzles, setNozzles] = useState<Nozzle[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Shared hooks rather than a loader copying four lists into local state.
+  const dispensersQ = useDispensers(stationId);
+  const tanksQ = useTanks(stationId);
+  const productsQ = useProducts();
+  const nozzlesQ = useNozzles(stationId);
+
+  const dispensers: DispenserUnit[] = (dispensersQ.data as DispenserUnit[]) ?? [];
+  const tanks: Tank[] = (tanksQ.data as Tank[]) ?? [];
+  const nozzles: Nozzle[] = (nozzlesQ.data as Nozzle[]) ?? [];
+  const products: Product[] = ((productsQ.data as Product[]) ?? []).filter(
+    (p) => p.productType === 'FUEL' && p.isActive,
+  );
+  const loading =
+    dispensersQ.isPending || tanksQ.isPending || productsQ.isPending || nozzlesQ.isPending;
+  const refreshDispensers = () =>
+    Promise.all([
+      qc.invalidateQueries({ queryKey: queryKeys.dispensers(stationId ?? '') }),
+      qc.invalidateQueries({ queryKey: queryKeys.nozzles(stationId ?? '') }),
+    ]);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isCodeEdited, setIsCodeEdited] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   // Form states
-  const [name, setName] = useState('');
-  const [code, setCode] = useState('');
+  const [nameRaw, setName] = useState('');
+  const [codeRaw, setCode] = useState('');
+
+  // Seeded by the loader's setState before; derived during render now, so the
+  // next unit number stays correct as the list changes.
+  const name = nameRaw || `Dispenser Unit ${dispensers.length + 1}`;
+  const code = codeRaw || `DU-${String(dispensers.length + 1).padStart(2, '0')}`;
   const [nozzlesList, setNozzlesList] = useState<NozzleInput[]>([]);
-
-  useEffect(() => {
-    runTask(loadData(), 'Could not load dispenser units.');
-  }, [stationId]);
-
-  const loadData = async (force = false) => {
-    if (!stationId) return;
-    try {
-      setLoading(true);
-      if (force)
-        await Promise.all([
-          qc.invalidateQueries({ queryKey: queryKeys.dispensers(stationId) }),
-          qc.invalidateQueries({ queryKey: queryKeys.nozzles(stationId) }),
-        ]);
-      const [duList, tankList, prodList, nozzleList] = await Promise.all([
-        qc.ensureQueryData({
-          queryKey: queryKeys.dispensers(stationId),
-          queryFn: () => dispenserService.listDispensers(stationId),
-          staleTime: TIER.static.staleTime,
-        }),
-        qc.ensureQueryData({
-          queryKey: queryKeys.tanks(stationId),
-          queryFn: () => tankService.listTanks(stationId),
-          staleTime: TIER.static.staleTime,
-        }),
-        qc.ensureQueryData({
-          queryKey: queryKeys.products(),
-          queryFn: () => productService.listProducts(),
-          staleTime: TIER.semi.staleTime,
-        }),
-        qc.ensureQueryData({
-          queryKey: queryKeys.nozzles(stationId),
-          queryFn: () => nozzleService.listNozzles(stationId),
-          staleTime: TIER.static.staleTime,
-        }),
-      ]);
-
-      setDispensers(duList);
-      setTanks(tankList);
-
-      const fuels = prodList.filter((p) => p.productType === 'FUEL' && p.isActive);
-      setProducts(fuels);
-      setNozzles(nozzleList);
-
-      // Setup defaults for form
-      setName(`Dispenser Unit ${duList.length + 1}`);
-      setCode(`DU-${String(duList.length + 1).padStart(2, '0')}`);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const resetForm = () => {
     setName(`Dispenser Unit ${dispensers.length + 1}`);
@@ -205,7 +180,7 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
 
       setIsFormOpen(false);
       resetForm();
-      runTask(loadData(true), 'Saved, but the dispenser list could not be refreshed.');
+      runTask(refreshDispensers(), 'Saved, but the dispenser list could not be refreshed.');
       toast.success('Dispenser unit created.');
     } catch (err: any) {
       toast.error(err.message || 'Failed to create dispenser unit and nozzles');

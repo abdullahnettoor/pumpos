@@ -126,14 +126,6 @@ export const App: React.FC = () => {
   const runTask = useRunTask();
   const isUnsupportedMobile = useIsUnsupportedMobile();
 
-  useEffect(() => {
-    // Reads the stored session, then keeps listening. A failed read falls back
-    // to the signed-out path rather than leaving the operator on a spinner —
-    // see startSession in @pump/ui, which is covered by its own tests.
-    const { stop } = startSession(handleSession);
-    return stop;
-  }, []);
-
   const handleSession = async (currentSession: any) => {
     const isSameUser = lastUserIdRef.current === (currentSession?.user?.id || null);
     setSession(currentSession);
@@ -222,6 +214,23 @@ export const App: React.FC = () => {
       clearStoredOnboardingDraft();
     }
   };
+
+  // handleSession is re-created on every render (it closes over most of this
+  // component's state), so the subscription reads it through a ref rather than
+  // depending on it. Depending on it would tear down and re-establish the auth
+  // listener — and re-read the stored session — on every single render.
+  const handleSessionRef = useRef(handleSession);
+  useEffect(() => {
+    handleSessionRef.current = handleSession;
+  });
+
+  useEffect(() => {
+    // Reads the stored session, then keeps listening. A failed read falls back
+    // to the signed-out path rather than leaving the operator on a spinner —
+    // see startSession in @pump/ui, which is covered by its own tests.
+    const { stop } = startSession((session) => handleSessionRef.current(session));
+    return stop;
+  }, []);
 
   const handleStationChange = (station: Station) => {
     setSelectedStation(station);

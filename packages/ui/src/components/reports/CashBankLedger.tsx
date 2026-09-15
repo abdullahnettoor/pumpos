@@ -102,11 +102,13 @@ export const CashBankLedger: React.FC<CashBankLedgerProps> = ({ selectedStation 
       bal += m.direction === 'in' ? Number(m.amount || 0) : -Number(m.amount || 0);
       map.set(`${m.id}-${i}`, bal);
     });
-    let idx = asc.length;
-    return rows.map((m: any) => {
-      idx -= 1;
-      return { ...m, runningBalance: map.get(`${m.id}-${idx}`) ?? 0 };
-    });
+    // `rows` is the descending view of `asc`, so the matching ascending index
+    // is a function of position. Derived from the map callback's own index
+    // rather than a counter decremented as a side effect of rendering.
+    return rows.map((m: any, i: number) => ({
+      ...m,
+      runningBalance: map.get(`${m.id}-${asc.length - 1 - i}`) ?? 0,
+    }));
   }, [rows, openingBalance]);
 
   return (

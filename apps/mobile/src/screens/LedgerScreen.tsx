@@ -36,13 +36,16 @@ const LedgerDetail: React.FC<{ kind: Kind; id: string; balance: number }> = ({
   const suppQ = useSupplierLedger(kind === 'suppliers' ? id : null);
   const q = kind === 'customers' ? custQ : suppQ;
 
-  // Running balance in chronological order, then show the latest first.
-  let running = 0;
-  const withRunning = (q.data || []).map((r: any) => {
+  // Running balance in chronological order, then show the latest first. The
+  // accumulator is threaded through the reduce rather than kept in a variable
+  // mutated during render — same arithmetic, but nothing outlives the render
+  // that produced it.
+  const withRunning = ((q.data as any[]) || []).reduce<any[]>((acc, r: any) => {
     const d = delta(kind, r.transactionType, Number(r.amount || 0));
-    running += d;
-    return { ...r, _delta: d, _running: running };
-  });
+    const running = (acc[acc.length - 1]?._running ?? 0) + d;
+    acc.push({ ...r, _delta: d, _running: running });
+    return acc;
+  }, []);
   const rows = withRunning.slice(-10).reverse();
 
   const phrase =

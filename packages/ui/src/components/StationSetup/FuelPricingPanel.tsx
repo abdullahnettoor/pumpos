@@ -8,7 +8,7 @@ import { Tabs } from '../primitives/Tabs.js';
 import { DataTable } from '../primitives/DataTable.js';
 import { Drawer } from '../Drawer.js';
 import { Field, NumberInput, Select } from '../primitives/Field.js';
-import { useProducts } from '../../query/hooks.js';
+import { queryKeys, useProducts, usePricing, usePricingHistory } from '../../query/hooks.js';
 import { useQueryClient } from '@tanstack/react-query';
 import { inr, formatDate } from '../../utils/format.js';
 import {
@@ -97,37 +97,31 @@ export const FuelPricingPanel: React.FC<FuelPricingPanelProps> = ({ selectedStat
   const [activeTab, setActiveTab] = useState<TabType>('fuels');
 
   // ---- Fuel pricing (time-effective, history-tracked) ----
-  const [currentPrices, setCurrentPrices] = useState<any[]>([]);
-  const [history, setHistory] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Shared hooks rather than a loader copying both lists into local state.
+  const pricingQ = usePricing(selectedStation?.id);
+  const historyQ = usePricingHistory(selectedStation?.id);
+  const currentPrices: any[] = (pricingQ.data as any[]) ?? [];
+  const history: any[] = (historyQ.data as any[]) ?? [];
+  const refreshPricing = () =>
+    Promise.all([
+      qc.invalidateQueries({ queryKey: queryKeys.pricing(selectedStation?.id ?? '') }),
+      qc.invalidateQueries({ queryKey: queryKeys.pricingHistory(selectedStation?.id ?? '') }),
+    ]);
+  const loading = pricingQ.isPending || historyQ.isPending;
   const [submitting, setSubmitting] = useState(false);
-  const [selectedProductId, setSelectedProductId] = useState('');
+  const [selectedProductIdRaw, setSelectedProductId] = useState('');
+
+  // The loader used to seed this once prices arrived. Derived instead: the
+  // operator's pick wins, otherwise the first priced product.
+  const selectedProductId = selectedProductIdRaw || currentPrices[0]?.productId || '';
   const [price, setPrice] = useState('');
-  const [effectiveFrom, setEffectiveFrom] = useState('');
-
-  useEffect(() => {
-    runTask(loadPricingData(), 'Could not load fuel pricing.');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedStation]);
-
-  const loadPricingData = async () => {
-    if (!selectedStation) return;
-    try {
-      setLoading(true);
-      const [pricesData, historyData] = await Promise.all([
-        pricingService.getPricing(selectedStation.id),
-        pricingService.getPricingHistory(selectedStation.id),
-      ]);
-      setCurrentPrices(pricesData);
-      setHistory(historyData);
-      if (pricesData.length > 0) setSelectedProductId(pricesData[0].productId);
-      const localNow = new Date();
-      localNow.setMinutes(localNow.getMinutes() - localNow.getTimezoneOffset());
-      setEffectiveFrom(localNow.toISOString().slice(0, 16));
-    } finally {
-      setLoading(false);
-    }
-  };
+  // "Now", in the operator's local time, computed once on mount. A render-time
+  // derivation would recompute on every pass and fight their edits.
+  const [effectiveFrom, setEffectiveFrom] = useState(() => {
+    const localNow = new Date();
+    localNow.setMinutes(localNow.getMinutes() - localNow.getTimezoneOffset());
+    return localNow.toISOString().slice(0, 16);
+  });
 
   const handleRecordPricing = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -141,7 +135,7 @@ export const FuelPricingPanel: React.FC<FuelPricingPanelProps> = ({ selectedStat
         effectiveFrom: new Date(effectiveFrom).toISOString(),
       });
       setPrice('');
-      runTask(loadPricingData(), 'Saved, but fuel pricing could not be refreshed.');
+      runTask(refreshPricing(), 'Saved, but fuel pricing could not be refreshed.');
       toast.success('Fuel rate updated.');
     } catch (err: any) {
       toast.error(err.message || 'Failed to record new price');

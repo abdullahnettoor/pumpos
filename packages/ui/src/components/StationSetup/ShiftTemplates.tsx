@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { CloudShiftTemplateService } from '../../services/cloud.js';
 import { ShiftTemplate } from '@pump/shared';
 import { Chip, Form } from '../../pump-ds/index.js';
@@ -20,13 +20,9 @@ export const ShiftTemplates: React.FC = () => {
   const [startTime, setStartTime] = useState('06:00');
   const [endTime, setEndTime] = useState('14:00');
 
-  useEffect(() => {
-    // runTask is stable (memoised, and the toast context value is memoised too),
-    // so listing it does not re-run this effect.
-    runTask(loadTemplates(), 'Could not load shift templates.');
-  }, [runTask]);
-
-  const loadTemplates = async () => {
+  // useCallback so the effect below can list it honestly: its identity only
+  // changes if something it closes over does, and it closes over nothing.
+  const loadTemplates = useCallback(async () => {
     try {
       setLoading(true);
       const data = await templateService.listTemplates();
@@ -50,7 +46,11 @@ export const ShiftTemplates: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    runTask(loadTemplates(), 'Could not load shift templates.');
+  }, [runTask, loadTemplates]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();

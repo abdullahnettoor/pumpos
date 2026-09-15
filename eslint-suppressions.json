@@ -1,20 +1,4 @@
 {
-  "apps/console/src/App.tsx": {
-    "react-hooks/exhaustive-deps": {
-      "count": 1
-    },
-    "react-hooks/immutability": {
-      "count": 1
-    }
-  },
-  "apps/desktop/src/App.tsx": {
-    "react-hooks/exhaustive-deps": {
-      "count": 1
-    },
-    "react-hooks/immutability": {
-      "count": 1
-    }
-  },
   "apps/mobile/src/App.tsx": {
     "react-hooks/exhaustive-deps": {
       "count": 2
@@ -29,11 +13,6 @@
     },
     "react-hooks/set-state-in-effect": {
       "count": 2
-    }
-  },
-  "apps/mobile/src/screens/LedgerScreen.tsx": {
-    "react-hooks/immutability": {
-      "count": 1
     }
   },
   "packages/ui/src/components/CustomersList.tsx": {
@@ -117,55 +96,13 @@
       "count": 1
     }
   },
-  "packages/ui/src/components/Shifts/ShiftTransactionsPanel.tsx": {
-    "react-hooks/exhaustive-deps": {
-      "count": 1
-    },
-    "react-hooks/immutability": {
-      "count": 1
-    }
-  },
   "packages/ui/src/components/Shifts/ShiftsManagement.tsx": {
     "react-hooks/exhaustive-deps": {
       "count": 1
     }
   },
-  "packages/ui/src/components/StationSetup/DispensersList.tsx": {
-    "react-hooks/exhaustive-deps": {
-      "count": 1
-    },
-    "react-hooks/immutability": {
-      "count": 1
-    }
-  },
-  "packages/ui/src/components/StationSetup/FuelPricingPanel.tsx": {
-    "react-hooks/immutability": {
-      "count": 1
-    }
-  },
-  "packages/ui/src/components/StationSetup/PaymentTerminalsPanel.tsx": {
-    "react-hooks/exhaustive-deps": {
-      "count": 1
-    },
-    "react-hooks/immutability": {
-      "count": 1
-    }
-  },
-  "packages/ui/src/components/StationSetup/ProductsCatalog.tsx": {
-    "react-hooks/exhaustive-deps": {
-      "count": 1
-    },
-    "react-hooks/immutability": {
-      "count": 1
-    }
-  },
   "packages/ui/src/components/StationSetup/ReportConfigPanel.tsx": {
     "react-hooks/set-state-in-effect": {
-      "count": 1
-    }
-  },
-  "packages/ui/src/components/StationSetup/ShiftTemplates.tsx": {
-    "react-hooks/immutability": {
       "count": 1
     }
   },
@@ -177,14 +114,6 @@
       "count": 1
     },
     "react-hooks/set-state-in-effect": {
-      "count": 1
-    }
-  },
-  "packages/ui/src/components/StationSetup/TanksGrid.tsx": {
-    "react-hooks/exhaustive-deps": {
-      "count": 1
-    },
-    "react-hooks/immutability": {
       "count": 1
     }
   },
@@ -218,11 +147,6 @@
       "count": 1
     }
   },
-  "packages/ui/src/components/reports/CashBankLedger.tsx": {
-    "react-hooks/immutability": {
-      "count": 1
-    }
-  },
   "packages/ui/src/components/reports/InvoicesPanel.tsx": {
     "react-hooks/exhaustive-deps": {
       "count": 1
@@ -236,11 +160,6 @@
   "packages/ui/src/components/transactions/PurchaseEntryForm.tsx": {
     "react-hooks/set-state-in-effect": {
       "count": 2
-    }
-  },
-  "packages/ui/src/query/queryClient.tsx": {
-    "react-hooks/globals": {
-      "count": 1
     }
   }
 }

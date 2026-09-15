@@ -18,6 +18,7 @@ import {
   CloudOrganizationService,
   CloudEventsService,
   CloudFinanceService,
+  CloudPaymentTerminalService,
 } from '../services/cloud.js';
 
 /**
@@ -41,6 +42,7 @@ const pricingSvc = new CloudPricingService();
 const orgSvc = new CloudOrganizationService();
 const eventsSvc = new CloudEventsService();
 const financeSvc = new CloudFinanceService();
+const terminalSvc = new CloudPaymentTerminalService();
 
 export const queryKeys = {
   shiftStatus: (stationId: string, lite = false) => ['shift-status', stationId, lite] as const,
@@ -82,7 +84,9 @@ export const queryKeys = {
   nozzles: (stationId: string) => ['nozzles', stationId] as const,
   users: () => ['users'] as const,
   shiftTemplates: () => ['shift-templates'] as const,
+  paymentTerminals: (stationId: string) => ['payment-terminals', stationId] as const,
   pricing: (stationId: string) => ['pricing', stationId] as const,
+  pricingHistory: (stationId: string) => ['pricing-history', stationId] as const,
   organization: () => ['organization'] as const,
   activityGroups: (stationId: string, type: string, limit: number) =>
     ['activity-groups', stationId, type, limit] as const,
@@ -178,10 +182,34 @@ export function useShiftTemplates(options?: Options<any[]>) {
   });
 }
 
+export function usePaymentTerminals(
+  stationId: string | null | undefined,
+  options?: Options<any[]>,
+) {
+  return useQuery({
+    queryKey: queryKeys.paymentTerminals(stationId ?? ''),
+    queryFn: () => terminalSvc.listTerminals(stationId!),
+    enabled: !!stationId,
+    ...TIER.static,
+    ...options,
+  });
+}
+
 export function usePricing(stationId: string | null | undefined, options?: Options<any[]>) {
   return useQuery({
     queryKey: queryKeys.pricing(stationId ?? ''),
     queryFn: () => pricingSvc.getPricing(stationId!),
+    enabled: !!stationId,
+    ...TIER.semi,
+    ...options,
+  });
+}
+
+/** Past price changes for a station. Semi-static: appended to, never edited. */
+export function usePricingHistory(stationId: string | null | undefined, options?: Options<any[]>) {
+  return useQuery({
+    queryKey: queryKeys.pricingHistory(stationId ?? ''),
+    queryFn: () => pricingSvc.getPricingHistory(stationId!),
     enabled: !!stationId,
     ...TIER.semi,
     ...options,
