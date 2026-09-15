@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { CloudTankService, CloudProductService } from '../../services/cloud.js';
-import { queryKeys, TIER } from '../../query/hooks.js';
+import { queryKeys, TIER, useProducts, useTanks } from '../../query/hooks.js';
 import { Tank, Product } from '@pump/shared';
 import { Chip, Form } from '../../pump-ds/index.js';
 import { Drawer } from '../Drawer.js';
@@ -19,55 +19,33 @@ export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
   const qc = useQueryClient();
   const toast = useToast();
   const runTask = useRunTask();
-  const [tanks, setTanks] = useState<Tank[]>([]);
-  const [fuelProducts, setFuelProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Shared hooks instead of a loader copying into local state behind an effect.
+  const tanksQ = useTanks(stationId);
+  const productsQ = useProducts();
+  const tanks: Tank[] = (tanksQ.data as Tank[]) ?? [];
+  const fuelProducts: Product[] = ((productsQ.data as Product[]) ?? []).filter(
+    (p) => p.productType === 'FUEL' && p.isActive,
+  );
+  const loading = tanksQ.isPending || productsQ.isPending;
+  const refreshTanks = () => qc.invalidateQueries({ queryKey: queryKeys.tanks(stationId ?? '') });
   const [isFormOpen, setIsFormOpen] = useState(false);
 
   // Form states
-  const [name, setName] = useState('');
-  const [productId, setProductId] = useState('');
+  const [nameRaw, setName] = useState('');
+  const [productIdRaw, setProductId] = useState('');
+
+  // The loader used to seed these with setState once the lists arrived. Derived
+  // during render instead: the operator's choice wins, otherwise the first fuel
+  // product and the next tank number. Same defaults, no cascading render, and
+  // they stay right if the lists change underneath.
+  const productId = productIdRaw || fuelProducts[0]?.id || '';
+  const name = nameRaw || `Tank ${tanks.length + 1}`;
   const [capacity, setCapacity] = useState(20000);
 
   // Quick add states
   const [quickPetrolCapacity, setQuickPetrolCapacity] = useState('15000');
   const [quickDieselCapacity, setQuickDieselCapacity] = useState('20000');
   const [quickSubmitting, setQuickSubmitting] = useState(false);
-
-  useEffect(() => {
-    runTask(loadData(), 'Could not load tanks.');
-  }, [stationId]);
-
-  const loadData = async (force = false) => {
-    if (!stationId) return;
-    try {
-      setLoading(true);
-      if (force) await qc.invalidateQueries({ queryKey: queryKeys.tanks(stationId) });
-      const [tankList, prodList] = await Promise.all([
-        qc.ensureQueryData({
-          queryKey: queryKeys.tanks(stationId),
-          queryFn: () => tankService.listTanks(stationId),
-          staleTime: TIER.static.staleTime,
-        }),
-        qc.ensureQueryData({
-          queryKey: queryKeys.products(),
-          queryFn: () => productService.listProducts(),
-          staleTime: TIER.semi.staleTime,
-        }),
-      ]);
-      setTanks(tankList);
-      const fuels = prodList.filter((p) => p.productType === 'FUEL' && p.isActive);
-      setFuelProducts(fuels);
-
-      // Initialize form defaults based on current state
-      if (fuels.length > 0) {
-        setProductId(fuels[0].id);
-      }
-      setName(`Tank ${tankList.length + 1}`);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -84,7 +62,7 @@ export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
       });
       setIsFormOpen(false);
       resetForm();
-      runTask(loadData(true), 'Saved, but the tank list could not be refreshed.');
+      runTask(refreshTanks(), 'Saved, but the tank list could not be refreshed.');
       toast.success('Tank created.');
     } catch (err: any) {
       toast.error(err.message || 'Failed to create tank');
@@ -120,7 +98,7 @@ export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
         capacity: cap,
       });
 
-      runTask(loadData(true), 'Saved, but the tank list could not be refreshed.');
+      runTask(refreshTanks(), 'Saved, but the tank list could not be refreshed.');
       toast.success('Tank created.');
     } catch (err: any) {
       toast.error(err.message || 'Failed to create tank');

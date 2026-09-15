@@ -9,6 +9,8 @@ import { ProviderField } from '../primitives/ProviderField.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import type { ColumnDef } from '@tanstack/react-table';
 import { useRunTask } from '../../utils/runTask.js';
+import { useQueryClient } from '@tanstack/react-query';
+import { queryKeys, useFinancialAccounts, usePaymentTerminals } from '../../query/hooks.js';
 
 const terminalService = new CloudPaymentTerminalService();
 const financeSvc = new CloudFinanceService();
@@ -139,8 +141,14 @@ const buildTerminalColumns = (
 export const PaymentTerminalsPanel: React.FC<PaymentTerminalsPanelProps> = ({ stationId }) => {
   const toast = useToast();
   const runTask = useRunTask();
-  const [terminals, setTerminals] = useState<PaymentTerminal[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Shared hooks rather than a loader copying into state behind an effect.
+  const qc = useQueryClient();
+  const terminalsQ = usePaymentTerminals(stationId);
+  const accountsQ = useFinancialAccounts(stationId);
+  const terminals: PaymentTerminal[] = (terminalsQ.data as PaymentTerminal[]) ?? [];
+  const loading = terminalsQ.isPending;
+  const refreshTerminals = () =>
+    qc.invalidateQueries({ queryKey: queryKeys.paymentTerminals(stationId ?? '') });
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -151,28 +159,12 @@ export const PaymentTerminalsPanel: React.FC<PaymentTerminalsPanelProps> = ({ st
   const [supportsCard, setSupportsCard] = useState(true);
   const [supportsUpi, setSupportsUpi] = useState(true);
   const [clearingAccountId, setClearingAccountId] = useState('');
-  const [clearingAccounts, setClearingAccounts] = useState<any[]>([]);
-
-  useEffect(() => {
-    runTask(loadData(), 'Could not load payment terminals.');
-  }, [stationId]);
-
-  const loadData = async () => {
-    if (!stationId) return;
-    try {
-      setLoading(true);
-      const [list, accounts] = await Promise.all([
-        terminalService.listTerminals(stationId),
-        financeSvc.listAccounts(stationId).catch(() => []),
-      ]);
-      setTerminals(list);
-      setClearingAccounts(
-        (accounts || []).filter((a: any) => a.accountType === 'MERCHANT_CLEARING'),
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Clearing accounts are a filtered view of the station's financial accounts,
+  // so derive rather than store. A failure here is non-fatal: the picker falls
+  // back to "Auto (by provider)".
+  const clearingAccounts: any[] = ((accountsQ.data as any[]) ?? []).filter(
+    (a: any) => a.accountType === 'MERCHANT_CLEARING',
+  );
 
   const clearingName = (id: string | null | undefined) => {
     if (!id) return 'Auto (by provider)';
@@ -226,7 +218,7 @@ export const PaymentTerminalsPanel: React.FC<PaymentTerminalsPanelProps> = ({ st
       }
       setIsFormOpen(false);
       resetForm();
-      runTask(loadData(), 'Saved, but the terminal list could not be refreshed.');
+      runTask(refreshTerminals(), 'Saved, but the terminal list could not be refreshed.');
       toast.success(editingId ? 'Terminal updated.' : 'Terminal added.');
     } catch (err: any) {
       toast.error(err.message || 'Failed to save payment terminal');
@@ -238,7 +230,7 @@ export const PaymentTerminalsPanel: React.FC<PaymentTerminalsPanelProps> = ({ st
   const toggleActive = async (t: PaymentTerminal) => {
     try {
       await terminalService.updateTerminal(t.id, { isActive: !t.isActive });
-      runTask(loadData(), 'Saved, but the terminal list could not be refreshed.');
+      runTask(refreshTerminals(), 'Saved, but the terminal list could not be refreshed.');
       toast.success(t.isActive ? 'Terminal disabled.' : 'Terminal enabled.');
     } catch (err: any) {
       toast.error(err.message || 'Failed to update terminal');

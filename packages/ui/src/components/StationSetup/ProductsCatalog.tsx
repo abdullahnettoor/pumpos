@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { CloudProductService } from '../../services/cloud.js';
-import { queryKeys, TIER } from '../../query/hooks.js';
+import { queryKeys, TIER, useProducts } from '../../query/hooks.js';
 import { Product, PRODUCT_UNITS } from '@pump/shared';
 import { Chip, Form } from '../../pump-ds/index.js';
 import { Drawer } from '../Drawer.js';
@@ -125,8 +125,13 @@ export const ProductsCatalog: React.FC<{ selectedStation?: any | null }> = ({
   const toast = useToast();
   const runTask = useRunTask();
   const confirm = useConfirm();
-  const [products, setProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Read through the shared hook instead of copying the list into local state
+  // behind an effect — that pattern was the source of this file's
+  // immutability + exhaustive-deps violations, and it bypassed the tiered cache.
+  const productsQ = useProducts();
+  const products: Product[] = (productsQ.data as Product[]) ?? [];
+  const loading = productsQ.isPending;
+  const refreshProducts = () => qc.invalidateQueries({ queryKey: queryKeys.products() });
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
@@ -162,25 +167,6 @@ export const ProductsCatalog: React.FC<{ selectedStation?: any | null }> = ({
   const [vatRate, setVatRate] = useState(0);
   const [priceInclusive, setPriceInclusive] = useState(true);
 
-  useEffect(() => {
-    runTask(loadProducts(), 'Could not load the product catalog.');
-  }, []);
-
-  const loadProducts = async (force = false) => {
-    try {
-      setLoading(true);
-      if (force) await qc.invalidateQueries({ queryKey: queryKeys.products() });
-      const data = await qc.ensureQueryData({
-        queryKey: queryKeys.products(),
-        queryFn: () => productService.listProducts(),
-        staleTime: TIER.semi.staleTime,
-      });
-      setProducts(data);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleQuickAdd = async (type: 'MS' | 'HSD') => {
     try {
       if (type === 'MS') {
@@ -206,7 +192,7 @@ export const ProductsCatalog: React.FC<{ selectedStation?: any | null }> = ({
           isActive: true,
         });
       }
-      runTask(loadProducts(true), 'Saved, but the product list could not be refreshed.');
+      runTask(refreshProducts(), 'Saved, but the product list could not be refreshed.');
       toast.success('Standard product added.');
     } catch (err: any) {
       toast.error(err.message || 'Failed to quick add standard product');
@@ -271,7 +257,7 @@ export const ProductsCatalog: React.FC<{ selectedStation?: any | null }> = ({
 
       resetForm();
       setIsFormOpen(false);
-      runTask(loadProducts(true), 'Saved, but the product list could not be refreshed.');
+      runTask(refreshProducts(), 'Saved, but the product list could not be refreshed.');
       toast.success(editingProduct ? 'Product updated.' : 'Product created.');
     } catch (err: any) {
       toast.error(err.message || 'Failed to save product');
@@ -327,7 +313,7 @@ export const ProductsCatalog: React.FC<{ selectedStation?: any | null }> = ({
       return;
     try {
       await productService.archiveProduct(id);
-      runTask(loadProducts(true), 'Saved, but the product list could not be refreshed.');
+      runTask(refreshProducts(), 'Saved, but the product list could not be refreshed.');
       toast.success('Product archived.');
     } catch (err: any) {
       toast.error(err.message);
@@ -936,7 +922,7 @@ export const ProductsCatalog: React.FC<{ selectedStation?: any | null }> = ({
         onClose={() => setIsImportOpen(false)}
         existingProducts={products}
         selectedStation={selectedStation}
-        onImported={() => loadProducts(true)}
+        onImported={() => refreshProducts()}
       />
     </div>
   );
