@@ -13,7 +13,7 @@ import { useToast, type ToastApi } from '../primitives/ToastProvider.js';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Edit, KeyRound } from 'lucide-react';
 import { useRunTask } from '../../utils/runTask.js';
-import { Form } from '../../pump-ds/index.js';
+import { Button, Form } from '../../pump-ds/index.js';
 
 const userService = new CloudUserAssignmentService();
 
@@ -259,6 +259,7 @@ export const UserRolesAssignment: React.FC = () => {
   const users = useMemo(() => usersQ.data ?? [], [usersQ.data]);
   const stations = useMemo<Station[]>(() => stationsQ.data ?? [], [stationsQ.data]);
   const loading = usersQ.isLoading || stationsQ.isLoading;
+  const loadError = usersQ.error ?? stationsQ.error;
 
   // Drawer visibility state
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -465,6 +466,33 @@ export const UserRolesAssignment: React.FC = () => {
     return (
       <div style={{ color: '#9ca3af', fontFamily: 'var(--font-mono)' }}>
         Loading team assignments...
+      </div>
+    );
+
+  // Without this the fetch failing would fall through to an empty team table,
+  // which reads as "this station has no members" rather than "we could not ask".
+  if (loadError)
+    return (
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          backgroundColor: 'var(--state-danger-bg)',
+          color: 'var(--state-danger-fg)',
+          padding: '12px 14px',
+          borderRadius: 'var(--radius-input)',
+          fontSize: '13px',
+        }}
+      >
+        <span>{loadError.message || 'Could not load team members.'}</span>
+        <Button
+          variant="secondary"
+          size="xs"
+          onClick={() => runTask(reloadData(), 'Could not reload team members.')}
+        >
+          Retry
+        </Button>
       </div>
     );
 

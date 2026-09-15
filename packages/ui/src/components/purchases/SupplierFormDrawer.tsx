@@ -44,14 +44,17 @@ const SupplierForm: React.FC<Omit<SupplierFormDrawerProps, 'isOpen'>> = ({
 }) => {
   const invalidateOperational = useInvalidateOperational();
   const toast = useToast();
-  const meta = editingSupplier?.metadata || {};
-  const [name, setName] = useState(editingSupplier?.name || '');
-  const [phone, setPhone] = useState(editingSupplier?.phone || '');
-  const [isActive, setIsActive] = useState(editingSupplier ? editingSupplier.isActive : true);
-  const [gstin, setGstin] = useState(meta.gstin || '');
-  const [pan, setPan] = useState(meta.pan || '');
-  const [tradeName, setTradeName] = useState(meta.tradeName || '');
-  const [billingAddress, setBillingAddress] = useState(meta.billingAddress || '');
+  const [name, setName] = useState(() => editingSupplier?.name || '');
+  const [phone, setPhone] = useState(() => editingSupplier?.phone || '');
+  const [isActive, setIsActive] = useState(() =>
+    editingSupplier ? editingSupplier.isActive : true,
+  );
+  const [gstin, setGstin] = useState(() => editingSupplier?.metadata?.gstin || '');
+  const [pan, setPan] = useState(() => editingSupplier?.metadata?.pan || '');
+  const [tradeName, setTradeName] = useState(() => editingSupplier?.metadata?.tradeName || '');
+  const [billingAddress, setBillingAddress] = useState(
+    () => editingSupplier?.metadata?.billingAddress || '',
+  );
   const [openingDue, setOpeningDue] = useState('');
   const [openingAsOf, setOpeningAsOf] = useState('');
   const [submitting, setSubmitting] = useState(false);

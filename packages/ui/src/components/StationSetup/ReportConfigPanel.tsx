@@ -69,15 +69,17 @@ export const ReportConfigPanel: React.FC<ReportConfigPanelProps> = (props) => (
 
 const ReportConfigForm: React.FC<ReportConfigPanelProps> = ({ selectedStation, onSaved }) => {
   const toast = useToast();
-  const savedConfig = selectedStation?.settings?.report_config || {};
-  const [paper, setPaper] = useState<'A4' | 'LETTER'>(
-    savedConfig.paper === 'LETTER' ? 'LETTER' : 'A4',
+  const [paper, setPaper] = useState<'A4' | 'LETTER'>(() =>
+    selectedStation?.settings?.report_config?.paper === 'LETTER' ? 'LETTER' : 'A4',
   );
   const [ss, setSs] = useState<OrderedSection[]>(() =>
-    buildOrdered(DEFAULT_SHIFT_SUMMARY_CONFIG.sections, savedConfig.shiftSummary),
+    buildOrdered(
+      DEFAULT_SHIFT_SUMMARY_CONFIG.sections,
+      selectedStation?.settings?.report_config?.shiftSummary,
+    ),
   );
   const [dssr, setDssr] = useState<OrderedSection[]>(() =>
-    buildOrdered(DEFAULT_DSSR_CONFIG.sections, savedConfig.dssr),
+    buildOrdered(DEFAULT_DSSR_CONFIG.sections, selectedStation?.settings?.report_config?.dssr),
   );
   const [previewDoc, setPreviewDoc] = useState<'shiftSummary' | 'dssr'>('shiftSummary');
   const [saving, setSaving] = useState(false);
