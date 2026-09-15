@@ -51,7 +51,11 @@ jobs:
   # Separate job so a lint failure is instantly distinguishable from a broken
   # test, and so lint problems never mask a real regression.
   #
-  # This is a RATCHET, not a wall. The 392 pre-existing violations are recorded
+  # Formatting is Prettier's, and it is absolute: `format:check` fails on any
+  # unformatted file. Run `npm run format` to fix. The lint config carries no
+  # stylistic rules, so the two tools never disagree.
+  #
+  # ESLint is a RATCHET, not a wall. The pre-existing violations are recorded
   # in eslint-suppressions.json, so today's code passes. Only NEW violations of
   # the error-level rules fail. Warnings (currently ~7.2k, mostly `any`-related)
   # never fail the build — run `npm run lint:warnings` to see them.
@@ -65,6 +69,10 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+
+      # Cheap and needs no build output, so it runs first and fails fast.
+      - name: Prettier
+        run: npm run format:check
 
       # Type-aware rules need the declaration output of the workspace packages.
       - name: Build types
