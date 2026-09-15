@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Drawer } from '../Drawer.js';
 import { Field, TextInput, Textarea } from '../primitives/Field.js';
 import { Checkbox } from '../primitives/Toggle.js';
-import { Button } from '../../pump-ds/index.js';
+import { Button, Form } from '../../pump-ds/index.js';
 import { CloudTransactionService } from '../../services/cloud.js';
 import { useInvalidateOperational } from '../../query/hooks.js';
 import { useToast } from '../primitives/ToastProvider.js';
@@ -103,7 +103,7 @@ export const SupplierFormDrawer: React.FC<SupplierFormDrawerProps> = ({
       onClose={onClose}
       title={editingSupplier ? 'Edit Supplier' : 'Register New Supplier'}
     >
-      <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      <Form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
         {error && (
           <div
             style={{
@@ -266,7 +266,7 @@ export const SupplierFormDrawer: React.FC<SupplierFormDrawerProps> = ({
             Cancel
           </Button>
         </div>
-      </form>
+      </Form>
     </Drawer>
   );
 };

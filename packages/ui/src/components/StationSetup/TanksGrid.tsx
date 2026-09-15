@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { CloudTankService, CloudProductService } from '../../services/cloud.js';
 import { queryKeys, TIER } from '../../query/hooks.js';
 import { Tank, Product } from '@pump/shared';
-import { Chip } from '../../pump-ds/index.js';
+import { Chip, Form } from '../../pump-ds/index.js';
 import { Drawer } from '../Drawer.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import { useRunTask } from '../../utils/runTask.js';
@@ -245,7 +245,9 @@ export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
                 />
                 <button
                   type="button"
-                  onClick={() => handleQuickAdd('MS', quickPetrolCapacity)}
+                  onClick={() =>
+                    runTask(handleQuickAdd('MS', quickPetrolCapacity), 'Could not add the tank.')
+                  }
                   disabled={quickSubmitting}
                   style={{
                     height: '28px',
@@ -288,7 +290,9 @@ export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
                 />
                 <button
                   type="button"
-                  onClick={() => handleQuickAdd('HSD', quickDieselCapacity)}
+                  onClick={() =>
+                    runTask(handleQuickAdd('HSD', quickDieselCapacity), 'Could not add the tank.')
+                  }
                   disabled={quickSubmitting}
                   style={{
                     height: '28px',
@@ -319,7 +323,7 @@ export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
         }}
         title="Add Storage Tank"
       >
-        <form
+        <Form
           onSubmit={handleCreate}
           style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
         >
@@ -426,7 +430,7 @@ export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
               Cancel
             </button>
           </div>
-        </form>
+        </Form>
       </Drawer>
 
       {/* Tanks Grid View */}

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { runTask } from '@pump/ui';
 
 const DownloadIcon: React.FC<{ size?: number }> = ({ size = 15 }) => (
   <svg
@@ -43,7 +44,7 @@ export const ShareButton: React.FC<Props> = ({ onShare, label = 'Share', onError
   return (
     <button
       type="button"
-      onClick={handle}
+      onClick={() => runTask(handle(), (error: unknown) => onError?.(String(error)))}
       disabled={busy}
       aria-label={label}
       className={

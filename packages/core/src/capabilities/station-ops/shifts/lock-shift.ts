@@ -35,7 +35,7 @@ export class LockShift implements UseCase<LockShiftCommand, Shift> {
       input.shiftId,
       'FINANCIAL',
     );
-    if (!eligibility.success) return eligibility as unknown as Result<Shift>;
+    if (!eligibility.success) return eligibility;
     const shift = eligibility.data.shift;
     if (shift.status !== 'CLOSED')
       return err(

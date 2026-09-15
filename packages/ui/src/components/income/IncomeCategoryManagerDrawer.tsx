@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Drawer } from '../Drawer.js';
-import { Button, Chip, EmptyState, Input } from '../../pump-ds/index.js';
+import { Button, Chip, EmptyState, Input, Form } from '../../pump-ds/index.js';
 import { CloudTransactionService } from '../../services/cloud.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import { Pencil, Plus, Check, X, Tag } from 'lucide-react';
@@ -12,7 +12,7 @@ export interface IncomeCategoryManagerDrawerProps {
   onClose: () => void;
   categories: any[];
   /** Called after a successful create/rename so the parent can refetch. */
-  onChanged: () => void;
+  onChanged: () => void | Promise<unknown>;
   canManage: boolean;
 }
 
@@ -72,7 +72,7 @@ export const IncomeCategoryManagerDrawer: React.FC<IncomeCategoryManagerDrawerPr
       setNewName('');
       setNewGst('');
       setNewHsn('');
-      onChanged();
+      await onChanged();
       toast.success('Category added.');
     } catch (err: any) {
       toast.error(err.message || 'Failed to add category');
@@ -100,7 +100,7 @@ export const IncomeCategoryManagerDrawer: React.FC<IncomeCategoryManagerDrawerPr
       setSavingId(id);
       await service.updateIncomeCategory(id, { name, taxConfig: buildTax(editGst, editHsn) });
       cancelEdit();
-      onChanged();
+      await onChanged();
       toast.success('Category saved.');
     } catch (err: any) {
       toast.error(err.message || 'Failed to save category');
@@ -121,7 +121,7 @@ export const IncomeCategoryManagerDrawer: React.FC<IncomeCategoryManagerDrawerPr
     <Drawer isOpen={isOpen} onClose={onClose} title="Manage income categories">
       <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
         {canManage && (
-          <form onSubmit={add}>
+          <Form onSubmit={add}>
             <label className="field-label">New category</label>
             <Input
               value={newName}
@@ -162,7 +162,7 @@ export const IncomeCategoryManagerDrawer: React.FC<IncomeCategoryManagerDrawerPr
                 Add
               </Button>
             </div>
-          </form>
+          </Form>
         )}
 
         <div>

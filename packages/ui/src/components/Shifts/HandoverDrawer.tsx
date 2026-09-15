@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Drawer } from '../Drawer.js';
-import { Button } from '../../pump-ds/index.js';
+import { Button, Form } from '../../pump-ds/index.js';
 import { Combobox } from '../primitives/Combobox.js';
 import { CashCountPopover, type CashBreakdown } from '../primitives/CashCountPopover.js';
 import { CustomerFormDrawer } from '../customers/CustomerFormDrawer.js';
@@ -21,6 +21,7 @@ import {
   useRecordHandoverMutation,
 } from '../../query/handoverMutation.js';
 import { inr } from '../../utils/format.js';
+import { useRunTask } from '../../utils/runTask.js';
 
 const transactionService = new CloudTransactionService();
 
@@ -248,6 +249,7 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
   const [ccAmount, setCcAmount] = useState('');
   const [ccNotes, setCcNotes] = useState('');
   const [ccBusy, setCcBusy] = useState(false);
+  const runTask = useRunTask();
   // Idempotency key for the line currently being added — held across a failed
   // retry (same key → server de-dupes) and cleared on success or any edit.
   const ccIdemKeyRef = useRef<string | null>(null);
@@ -757,7 +759,7 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
         onClose={onClose}
         title={`Attendant Handover: ${userName} (${duCode})`}
       >
-        <form
+        <Form
           onSubmit={handleSubmit(onSubmit)}
           style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}
         >
@@ -1281,7 +1283,9 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
                           </strong>
                           <button
                             type="button"
-                            onClick={() => removeCreditLine(l.id)}
+                            onClick={() =>
+                              runTask(removeCreditLine(l.id), 'Could not void the credit sale.')
+                            }
                             disabled={ccBusy}
                             title="Void this credit sale"
                             style={{
@@ -1371,7 +1375,9 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
                       </strong>
                       <button
                         type="button"
-                        onClick={() => removeOmcLine(l.id)}
+                        onClick={() =>
+                          runTask(removeOmcLine(l.id), 'Could not void the OMC card sale.')
+                        }
                         disabled={ccBusy}
                         title="Void this OMC card sale"
                         style={{
@@ -1947,7 +1953,7 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
               {acceptedResult ? 'Done' : 'Cancel'}
             </Button>
           </div>
-        </form>
+        </Form>
       </Drawer>
 
       {/* Inline create: reuse the standard customer / vehicle drawers, auto-select on save. */}

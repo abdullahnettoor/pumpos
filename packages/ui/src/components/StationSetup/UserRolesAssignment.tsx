@@ -9,10 +9,11 @@ import { Station } from '@pump/shared';
 import { Drawer } from '../Drawer.js';
 import { DataTable } from '../primitives/DataTable.js';
 import { Checkbox, Switch } from '../primitives/Toggle.js';
-import { useToast } from '../primitives/ToastProvider.js';
+import { useToast, type ToastApi } from '../primitives/ToastProvider.js';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Edit, KeyRound } from 'lucide-react';
 import { useRunTask } from '../../utils/runTask.js';
+import { Form } from '../../pump-ds/index.js';
 
 const userService = new CloudUserAssignmentService();
 const stationService = new CloudStationService();
@@ -52,6 +53,25 @@ async function copyText(text: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/**
+ * Copy + tell the operator whether it worked, in one place.
+ *
+ * Clipboard access is blocked often enough (insecure origin, permission denied)
+ * that "did it copy?" is a real question, and these credentials are the one
+ * thing the operator cannot re-read later. The trailing `.catch` is the
+ * rejection path for a `copy` that rejects rather than resolving false.
+ */
+function copyWithFeedback(
+  copy: (text: string) => Promise<boolean>,
+  text: string,
+  label: string,
+  toast: ToastApi,
+): void {
+  copy(text)
+    .then((ok) => (ok ? toast.success(`${label} copied.`) : toast.error('Copy failed.')))
+    .catch(() => toast.error('Copy failed.'));
 }
 
 const inputStyle: React.CSSProperties = {
@@ -527,7 +547,9 @@ export const UserRolesAssignment: React.FC = () => {
 
       {/* List / Table */}
       <DataTable
-        columns={buildUserColumns(stations, startEdit, openReset, toggleActive)}
+        columns={buildUserColumns(stations, startEdit, openReset, (u) =>
+          runTask(toggleActive(u), 'Could not update the team member.'),
+        )}
         data={users}
         emptyMessage="No team members yet."
         getRowId={(r: any) => r.id}
@@ -547,7 +569,7 @@ export const UserRolesAssignment: React.FC = () => {
             toast={toast}
           />
         ) : (
-          <form
+          <Form
             onSubmit={handleSubmit(handleCreateOrUpdate)}
             style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
           >
@@ -661,11 +683,7 @@ export const UserRolesAssignment: React.FC = () => {
                     </button>
                     <button
                       type="button"
-                      onClick={async () =>
-                        (await copyText(watchPassword))
-                          ? toast.success('Password copied.')
-                          : toast.error('Copy failed.')
-                      }
+                      onClick={() => copyWithFeedback(copyText, watchPassword, 'Password', toast)}
                       disabled={!watchPassword}
                       style={{
                         ...inputStyle,
@@ -767,7 +785,7 @@ export const UserRolesAssignment: React.FC = () => {
             >
               {isSubmitting ? 'Saving...' : editingUser ? 'Save Changes' : 'Add Member'}
             </button>
-          </form>
+          </Form>
         )}
       </Drawer>
 
@@ -804,11 +822,7 @@ export const UserRolesAssignment: React.FC = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={async () =>
-                    (await copyText(resetPassword))
-                      ? toast.success('Password copied.')
-                      : toast.error('Copy failed.')
-                  }
+                  onClick={() => copyWithFeedback(copyText, resetPassword, 'Password', toast)}
                   style={{
                     ...inputStyle,
                     cursor: 'pointer',
@@ -822,7 +836,7 @@ export const UserRolesAssignment: React.FC = () => {
             </div>
             <button
               type="button"
-              onClick={confirmReset}
+              onClick={() => runTask(confirmReset(), 'Could not reset the password.')}
               disabled={resetBusy || resetPassword.length < 8}
               style={{
                 height: '36px',
@@ -850,6 +864,7 @@ const CredentialsCard: React.FC<{
   onCopy: (text: string) => Promise<boolean>;
   toast: ReturnType<typeof useToast>;
 }> = ({ credentials, onDone, onCopy, toast }) => {
+  const runTask = useRunTask();
   const rowStyle: React.CSSProperties = {
     display: 'flex',
     justifyContent: 'space-between',
@@ -909,11 +924,7 @@ const CredentialsCard: React.FC<{
         <button
           type="button"
           style={copyBtn}
-          onClick={async () =>
-            (await onCopy(credentials.login))
-              ? toast.success('Login copied.')
-              : toast.error('Copy failed.')
-          }
+          onClick={() => copyWithFeedback(onCopy, credentials.login, 'Login', toast)}
         >
           Copy
         </button>
@@ -943,21 +954,21 @@ const CredentialsCard: React.FC<{
         <button
           type="button"
           style={copyBtn}
-          onClick={async () =>
-            (await onCopy(credentials.password))
-              ? toast.success('Password copied.')
-              : toast.error('Copy failed.')
-          }
+          onClick={() => copyWithFeedback(onCopy, credentials.password, 'Password', toast)}
         >
           Copy
         </button>
       </div>
       <button
         type="button"
-        onClick={async () => {
-          await onCopy(`Login: ${credentials.login}\nPassword: ${credentials.password}`);
-          toast.success('Credentials copied.');
-        }}
+        onClick={() =>
+          copyWithFeedback(
+            onCopy,
+            `Login: ${credentials.login}\nPassword: ${credentials.password}`,
+            'Credentials',
+            toast,
+          )
+        }
         style={{
           height: '32px',
           backgroundColor: 'var(--bg-surface)',

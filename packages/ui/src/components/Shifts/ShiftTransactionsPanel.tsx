@@ -16,13 +16,14 @@ import {
   Calendar,
 } from 'lucide-react';
 import { useRunTask } from '../../utils/runTask.js';
+import { Form } from '../../pump-ds/index.js';
 
 const transactionService = new CloudTransactionService();
 
 interface ShiftTransactionsPanelProps {
   shiftId: string;
   nozzles: any[];
-  onTransactionAdded?: () => void;
+  onTransactionAdded?: () => void | Promise<unknown>;
   isReadOnly?: boolean;
 }
 
@@ -152,7 +153,7 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
       // Reload
       const txs = await transactionService.getShiftTransactions(shiftId);
       setLoggedTransactions(txs);
-      onTransactionAdded?.();
+      await onTransactionAdded?.();
     } catch (err: any) {
       setError(err.message || 'Failed to record expense');
     } finally {
@@ -192,7 +193,7 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
       // Reload
       const txs = await transactionService.getShiftTransactions(shiftId);
       setLoggedTransactions(txs);
-      onTransactionAdded?.();
+      await onTransactionAdded?.();
     } catch (err: any) {
       setError(err.message || 'Failed to record purchase');
     } finally {
@@ -229,7 +230,7 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
       // Reload
       const txs = await transactionService.getShiftTransactions(shiftId);
       setLoggedTransactions(txs);
-      onTransactionAdded?.();
+      await onTransactionAdded?.();
     } catch (err: any) {
       setError(err.message || 'Failed to record collection');
     } finally {
@@ -340,7 +341,7 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
 
           {/* Tab Form: Expenses */}
           {activeTab === 'expenses' && (
-            <form
+            <Form
               onSubmit={handleAddExpense}
               style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}
             >
@@ -436,12 +437,12 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
               >
                 <Plus size={14} /> {submitting ? 'Recording...' : 'Add Expense'}
               </button>
-            </form>
+            </Form>
           )}
 
           {/* Tab Form: Purchases */}
           {activeTab === 'purchases' && (
-            <form
+            <Form
               onSubmit={handleAddPurchase}
               style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}
             >
@@ -608,12 +609,12 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
               >
                 <Plus size={14} /> {submitting ? 'Recording...' : 'Record Intake'}
               </button>
-            </form>
+            </Form>
           )}
 
           {/* Tab Form: Collections */}
           {activeTab === 'collections' && (
-            <form
+            <Form
               onSubmit={handleAddCollection}
               style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}
             >
@@ -750,7 +751,7 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
                     ? 'Log Credit Sale'
                     : 'Log Collection'}
               </button>
-            </form>
+            </Form>
           )}
         </div>
 

@@ -36,6 +36,7 @@ import { useBusinessDayStatus, useCustomers, useSuppliers, useProducts } from '.
 import { useStationAlerts } from '../query/useStationAlerts.js';
 import { inr } from '../utils/format.js';
 import { useStationBusinessDate } from '../hooks/useStationBusinessDate.js';
+import { useRunTask } from '../utils/runTask.js';
 
 /**
  * AppTopBar — the data container that wires the pure pump-ds `TopBar` +
@@ -57,7 +58,7 @@ export interface AppTopBarProps {
   syncStatus: SyncStatus;
   pendingSyncCount?: number;
   onNavigate: (path: string, intent?: NavIntent) => void;
-  onLogout: () => void;
+  onLogout: () => void | Promise<unknown>;
   onToggleSidebar?: () => void;
   /** When false the active station isn't operational yet (pre-onboarding hub):
    *  hide business day, station alerts, and operational quick-create; scope the
@@ -97,6 +98,7 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
   onToggleSidebar,
   stationReady = true,
 }) => {
+  const runTask = useRunTask();
   const { open, setOpen } = useCommandPalette();
   const canSeeFinancials = userRole !== 'Staff';
   const stationId = selectedStation?.id;
@@ -218,7 +220,13 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
 
   // --- user menu ---
   const userMenu: UserMenuAction[] = [
-    { id: 'logout', label: 'Log out', icon: <LogOut />, tone: 'danger', onSelect: onLogout },
+    {
+      id: 'logout',
+      label: 'Log out',
+      icon: <LogOut />,
+      tone: 'danger',
+      onSelect: () => runTask(onLogout(), 'Could not sign out.'),
+    },
   ];
 
   // --- notifications: shared station alerts (stock/oversold) + sync state ---

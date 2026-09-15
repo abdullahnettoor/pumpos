@@ -59,7 +59,7 @@ function pnlFromSnapshot(date: string, snapshotData: any, live: boolean): DayPnl
 }
 
 export const ProfitLossView: React.FC<ProfitLossViewProps> = ({ selectedStation }) => {
-  const s = (selectedStation as any)?.settings || {};
+  const s = selectedStation?.settings || {};
   const clock = { timeZone: s.timezone, dayStartsAt: s.business_day_starts_at };
   const todayBiz = resolveBusinessDate({
     timeZone: clock.timeZone,
@@ -85,17 +85,17 @@ export const ProfitLossView: React.FC<ProfitLossViewProps> = ({ selectedStation 
   const { data: shiftStatus } = useShiftStatus(selectedStation?.id, true, {
     enabled: !!selectedStation?.id && todayInRange,
   } as any);
-  const hasOpenShift = !!(shiftStatus as any)?.activeShift;
-  const closedShiftsToday = Number((preview as any)?.snapshotData?.shiftsIncluded || 0);
-  const liveAsOf = (preview as any)?.generatedAt
-    ? new Date((preview as any).generatedAt).toLocaleTimeString('en-IN')
+  const hasOpenShift = !!shiftStatus?.activeShift;
+  const closedShiftsToday = Number(preview?.snapshotData?.shiftsIncluded || 0);
+  const liveAsOf = preview?.generatedAt
+    ? new Date(preview.generatedAt).toLocaleTimeString('en-IN')
     : null;
 
   const loading = loadingRange || (todayInRange && loadingPreview);
 
   const days = useMemo(() => {
     const byDate = new Map<string, DayPnl>();
-    for (const snap of (snapshots || []) as any[]) {
+    for (const snap of snapshots || []) {
       byDate.set(snap.businessDate, pnlFromSnapshot(snap.businessDate, snap.snapshotData, false));
     }
     // Today: prefer the live preview (reflects current sales) over a stale snapshot.

@@ -33,6 +33,7 @@ import type { NavIntent } from './AppShell.js';
 import { buildExpenseColumns } from './expenses/columns.js';
 import { ExpenseAnalytics } from './expenses/ExpenseAnalytics.js';
 import { CategoryManagerDrawer } from './expenses/CategoryManagerDrawer.js';
+import { useRunTask } from '../utils/runTask.js';
 
 const transactionService = new CloudTransactionService();
 
@@ -60,9 +61,10 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
   const invalidateOperational = useInvalidateOperational();
   const qc = useQueryClient();
   const toast = useToast();
+  const runTask = useRunTask();
   const ask = useAsk();
 
-  const s = (selectedStation as any)?.settings || {};
+  const s = selectedStation?.settings || {};
   const clock = { timeZone: s.timezone, dayStartsAt: s.business_day_starts_at };
 
   const expenses = expensesQ.data ?? [];
@@ -172,7 +174,10 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
   };
 
   const ledgerColumns = useMemo(
-    () => buildExpenseColumns(canVoid ? handleVoid : undefined),
+    () =>
+      buildExpenseColumns(
+        canVoid ? (row) => runTask(handleVoid(row), 'Could not void the expense.') : undefined,
+      ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [canVoid, stationId],
   );
@@ -368,7 +373,7 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
                   bare
                   columns={ledgerColumns}
                   data={filteredExpenses}
-                  error={expensesQ.error as Error | null}
+                  error={expensesQ.error}
                   emptyMessage="No matching expenses found."
                   getRowId={(r: any) => r.id}
                   initialSorting={[{ id: 'businessDate', desc: true }]}

@@ -1,6 +1,15 @@
 import { verify, decode } from 'hono/jwt';
 
 /**
+ * The subset of a JWKS document this verifier needs. Typed rather than left as
+ * `any[]`: `kid` is the field the key lookup turns on, so a rename upstream
+ * should be a compile error, not a runtime "key not found".
+ */
+interface JsonWebKeySet {
+  keys: (JsonWebKey & { kid?: string })[];
+}
+
+/**
  * Supabase JWT verification, pinned to the configured project.
  *
  * Security invariants:
@@ -95,8 +104,11 @@ export async function verifySupabaseJwt(
         if (!response.ok) {
           throw new Error(`Failed to fetch JWKS from trusted issuer: ${response.statusText}`);
         }
-        const jwks = (await response.json()) as { keys: any[] };
-        const jwk = jwks.keys.find((k: any) => k.kid === kid);
+        // `response.json()` is `unknown` under tsc and `any` under the lint
+        // program, so annotate rather than assert: the annotation satisfies
+        // both, and the lint rule has nothing redundant to flag.
+        const jwks: JsonWebKeySet = await response.json();
+        const jwk = jwks.keys.find((k) => k.kid === kid);
         if (!jwk) {
           throw new Error(`Key with ID ${kid} not found in trusted JWKS`);
         }

@@ -158,7 +158,7 @@ export const CashCountSheet: React.FC<CashCountSheetProps> = ({
         >
           {hasMismatch && (
             <p className="text-[11px]" style={{ color: 'var(--state-warning-fg)' }}>
-              Field shows {inr(currentValue!)} — Apply to replace it.
+              Field shows {inr(currentValue)} — Apply to replace it.
             </p>
           )}
           <div

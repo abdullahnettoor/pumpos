@@ -4,6 +4,7 @@ import { useActivityGroup, useActivityGroups } from '../../query/hooks.js';
 import { Select } from '../primitives/Field.js';
 import { Panel } from '../../pump-ds/index.js';
 import type { ActivityEventItem, ActivityTone } from '../../services/cloud.js';
+import { useRunTask } from '../../utils/runTask.js';
 
 const TONE_STYLE: Record<ActivityTone, { bg: string; fg: string }> = {
   info: { bg: 'var(--state-info-bg)', fg: 'var(--state-info-fg)' },
@@ -36,6 +37,7 @@ export interface ActivityFeedProps {
  * Reads from GET /events; filter by station.
  */
 export const ActivityFeed: React.FC<ActivityFeedProps> = ({ stations }) => {
+  const runTask = useRunTask();
   const [stationId, setStationId] = useState('');
   const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null);
   const activity = useActivityGroups({ stationId: stationId || undefined, limit: 50 });
@@ -238,7 +240,7 @@ export const ActivityFeed: React.FC<ActivityFeedProps> = ({ stations }) => {
             <div style={{ padding: '10px 16px', borderTop: '1px solid var(--border-soft)' }}>
               <button
                 type="button"
-                onClick={() => activity.fetchNextPage()}
+                onClick={() => runTask(activity.fetchNextPage(), 'Could not load more activity.')}
                 disabled={activity.isFetchingNextPage}
                 style={{
                   padding: 0,

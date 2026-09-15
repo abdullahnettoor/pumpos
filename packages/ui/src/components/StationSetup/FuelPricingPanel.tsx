@@ -19,6 +19,7 @@ import {
   EmptyState,
   Chip,
   DateText,
+  Form,
 } from '../../pump-ds/index.js';
 import { Fuel, Package, Search } from 'lucide-react';
 import { useRunTask } from '../../utils/runTask.js';
@@ -338,7 +339,7 @@ export const FuelPricingPanel: React.FC<FuelPricingPanelProps> = ({ selectedStat
                   />
                 </div>
               ) : (
-                <form
+                <Form
                   onSubmit={handleRecordPricing}
                   style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}
                 >
@@ -396,7 +397,7 @@ export const FuelPricingPanel: React.FC<FuelPricingPanelProps> = ({ selectedStat
                       Apply New Rate
                     </Button>
                   </div>
-                </form>
+                </Form>
               )}
             </Panel>
 

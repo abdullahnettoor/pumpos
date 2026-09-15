@@ -5,7 +5,7 @@ import { customerCreateSchema } from '@pump/shared';
 import { Drawer } from '../Drawer.js';
 import { Field, TextInput, MoneyInput, Textarea, Select } from '../primitives/Field.js';
 import { Checkbox } from '../primitives/Toggle.js';
-import { Button } from '../../pump-ds/index.js';
+import { Button, Form } from '../../pump-ds/index.js';
 import { CloudTransactionService } from '../../services/cloud.js';
 import { useInvalidateOperational } from '../../query/hooks.js';
 import { useToast } from '../primitives/ToastProvider.js';
@@ -79,7 +79,9 @@ export const CustomerFormDrawer: React.FC<CustomerFormDrawerProps> = ({
         customerType: editingCustomer.customerType,
         creditLimit: editingCustomer.creditLimit
           ? Number(editingCustomer.creditLimit)
-          : ((editingCustomer.customerType === 'Regular' ? null : 50000) as any),
+          : editingCustomer.customerType === 'Regular'
+            ? null
+            : 50000,
         fleetCode: editingCustomer.fleetCode || '',
         isPrepaid: Boolean(editingCustomer.isPrepaid),
         settlementCycle: editingCustomer.settlementCycle === 'EOD' ? 'EOD' : 'OPEN',
@@ -97,7 +99,7 @@ export const CustomerFormDrawer: React.FC<CustomerFormDrawerProps> = ({
         name: '',
         phone: '',
         customerType: 'Regular',
-        creditLimit: 50000 as any,
+        creditLimit: 50000,
         fleetCode: '',
         isPrepaid: false,
         settlementCycle: 'OPEN',
@@ -113,6 +115,10 @@ export const CustomerFormDrawer: React.FC<CustomerFormDrawerProps> = ({
   const onSubmit = async (data: any) => {
     setDrawerError(null);
     try {
+      // Annotated, not asserted: inside an object literal the ternary would widen
+      // to `string` and stop matching the service's union. A named const keeps
+      // the narrow type without a cast for the lint rule to call redundant.
+      const settlementCycle: 'OPEN' | 'EOD' = data.settlementCycle === 'EOD' ? 'EOD' : 'OPEN';
       const payload = {
         name: data.name,
         phone: data.phone || null,
@@ -123,7 +129,7 @@ export const CustomerFormDrawer: React.FC<CustomerFormDrawerProps> = ({
             : null,
         fleetCode: data.customerType === 'Fleet' ? data.fleetCode : null,
         isPrepaid: data.customerType === 'Fleet' ? Boolean(data.isPrepaid) : false,
-        settlementCycle: (data.settlementCycle === 'EOD' ? 'EOD' : 'OPEN') as 'OPEN' | 'EOD',
+        settlementCycle,
         isActive: data.isActive,
         metadata: {
           gstin: data.metadata?.gstin || null,
@@ -162,7 +168,7 @@ export const CustomerFormDrawer: React.FC<CustomerFormDrawerProps> = ({
       onClose={onClose}
       title={editingCustomer ? 'Edit Customer Profile' : 'Register New Customer'}
     >
-      <form
+      <Form
         onSubmit={handleSubmit(onSubmit)}
         style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
       >
@@ -396,7 +402,7 @@ export const CustomerFormDrawer: React.FC<CustomerFormDrawerProps> = ({
             Cancel
           </Button>
         </div>
-      </form>
+      </Form>
     </Drawer>
   );
 };

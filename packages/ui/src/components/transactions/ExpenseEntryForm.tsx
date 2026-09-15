@@ -3,7 +3,7 @@ import { expenseEntryFormSchema, type ExpenseEntryFormValues } from '@pump/share
 import { useZodForm } from '../../forms/useZodForm.js';
 import { Field, TextInput, NumberInput, Select, DateField } from '../primitives/Field.js';
 import { AccountSelect } from '../primitives/AccountSelect.js';
-import { Button } from '../../pump-ds/index.js';
+import { Button, Form } from '../../pump-ds/index.js';
 
 export interface ShiftOption {
   id: string;
@@ -85,7 +85,7 @@ export const ExpenseEntryForm: React.FC<ExpenseEntryFormProps> = ({
   }, [serializedDefaults]);
 
   return (
-    <form
+    <Form
       onSubmit={handleSubmit((values) => onSubmit(values))}
       style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}
     >
@@ -190,6 +190,6 @@ export const ExpenseEntryForm: React.FC<ExpenseEntryFormProps> = ({
           {submitLabel}
         </Button>
       </div>
-    </form>
+    </Form>
   );
 };

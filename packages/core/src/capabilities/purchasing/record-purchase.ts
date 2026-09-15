@@ -182,8 +182,7 @@ export class RecordPurchase implements UseCase<RecordPurchaseCommand, RecordPurc
     const shiftIdToStore = anchor.data.shiftId;
 
     // Resolve inter-state status from supplier state vs buyer (station) state.
-    const supplierStateCode = (supplier.metadata as Record<string, unknown> | null)?.stateCode as
-      string | undefined;
+    const supplierStateCode = supplier.metadata?.stateCode as string | undefined;
     let buyerStateCode: string | undefined;
     if (stationId) {
       const station = await this.deps.stations.findById(stationId);

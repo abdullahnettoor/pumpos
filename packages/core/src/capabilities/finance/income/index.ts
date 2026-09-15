@@ -103,7 +103,7 @@ export function computeIncomeTax(
   category: IncomeCategory | null,
   states: { supplierStateCode?: string | null; buyerStateCode?: string | null } = {},
 ): IncomeTax {
-  const cfg = (category?.taxConfig ?? {}) as Record<string, unknown>;
+  const cfg = category?.taxConfig ?? {};
   const gstRate = num(cfg.gst_rate ?? cfg.gstRatePct) ?? 0;
   const cessRate = num(cfg.cess ?? cfg.cessPct) ?? 0;
   const exempt = cfg.tax_category === 'EXEMPT' || cfg.taxCategory === 'EXEMPT';
@@ -330,7 +330,7 @@ export class VoidIncome implements UseCase<VoidIncomeCommand, OtherIncome> {
       return err(invariantViolation('Income already voided', { id: existing.id }));
 
     const guard = await assertDrawerEntryVoidable(existing, this.deps.shifts, 'This income entry');
-    if (!guard.success) return guard as unknown as Result<OtherIncome>;
+    if (!guard.success) return guard;
 
     const now = ctx.clock.now().toISOString();
     const voided: OtherIncome = { ...existing, status: 'VOIDED', updatedAt: now };

@@ -11,6 +11,7 @@ import { DispenserUnit, Tank, Product, Nozzle } from '@pump/shared';
 import { Drawer } from '../Drawer.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import { useRunTask } from '../../utils/runTask.js';
+import { Form } from '../../pump-ds/index.js';
 
 const dispenserService = new CloudDispenserService();
 const tankService = new CloudTankService();
@@ -407,7 +408,7 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
         }}
         title="Add Dispenser Island"
       >
-        <form
+        <Form
           onSubmit={handleCreate}
           style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
         >
@@ -680,7 +681,7 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
               Cancel
             </button>
           </div>
-        </form>
+        </Form>
       </Drawer>
 
       {/* DU Grid View */}

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Drawer } from '../Drawer.js';
 import { Field, MoneyInput, Textarea, Select } from '../primitives/Field.js';
-import { Button } from '../../pump-ds/index.js';
+import { Button, Form } from '../../pump-ds/index.js';
 import { CloudTransactionService } from '../../services/cloud.js';
 import { useInvalidateOperational } from '../../query/hooks.js';
 import { useToast } from '../primitives/ToastProvider.js';
@@ -68,7 +68,7 @@ export const TopupDrawer: React.FC<TopupDrawerProps> = ({
 
   return (
     <Drawer isOpen={isOpen} onClose={onClose} title="Prepaid Wallet Top-Up">
-      <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      <Form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
         {error && (
           <div
             style={{
@@ -130,7 +130,7 @@ export const TopupDrawer: React.FC<TopupDrawerProps> = ({
             Cancel
           </Button>
         </div>
-      </form>
+      </Form>
     </Drawer>
   );
 };

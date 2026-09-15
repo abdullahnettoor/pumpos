@@ -30,6 +30,15 @@ export const useToast = (): ToastApi => {
   return ctx;
 };
 
+/**
+ * The toast api if there is a provider above, otherwise null.
+ *
+ * For shared primitives that want to report a failure when they are inside an
+ * app, but must still render in isolation — design-system pages, tests — where
+ * no provider exists. Application code should use `useToast` and fail loudly.
+ */
+export const useOptionalToast = (): ToastApi | null => useContext(ToastContext);
+
 const VARIANT_STYLE: Record<ToastVariant, { border: string; bg: string; fg: string }> = {
   error: {
     border: 'var(--brand-danger)',

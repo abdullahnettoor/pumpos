@@ -111,7 +111,7 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
   } as any);
   const shiftStatusQ = useShiftStatus(stationId, true, { enabled: !!stationId } as any);
   const shiftStatus = shiftStatusQ.data;
-  const activeShift = (shiftStatus as any)?.activeShift;
+  const activeShift = shiftStatus?.activeShift;
 
   // EOD-cycle customers still carrying a receivable that's expected cleared by
   // day close — surfaced as a (non-blocking) reminder before closing the day.
@@ -133,7 +133,7 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
   );
 
   const report = selectedState === 'CLOSED' ? snapshotQ.data : previewQ.data;
-  const snap = (report as any)?.snapshotData ?? null;
+  const snap = report?.snapshotData ?? null;
 
   const openBusinessDays = useMemo(() => {
     return [...(currentBusinessDayStatusQ.data?.openBusinessDays ?? [])].sort((a: any, b: any) =>
@@ -247,8 +247,8 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
   const selectedBusinessDay = businessDayStatusQ.data?.requestedBusinessDay;
   const hasOpenShift = !!activeShift && activeShift.businessDayId === selectedBusinessDay?.id;
   const liveAsOf =
-    status !== 'CLOSED' && (report as any)?.generatedAt
-      ? formatStationActivity((report as any).generatedAt, settings.timezone)
+    status !== 'CLOSED' && report?.generatedAt
+      ? formatStationActivity(report.generatedAt, settings.timezone)
       : null;
   const reportLoading =
     businessDayStatusQ.isPending ||
@@ -361,7 +361,7 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
           ) : (
             <StatusChip status={status === 'CLOSED' ? 'closed' : 'open'} size="sm" />
           )}
-          {(report as any)?.live && (
+          {report?.live && (
             <Chip tone="warning" size="xs">
               Live{liveAsOf ? ` · ${liveAsOf}` : ''}
             </Chip>
@@ -627,7 +627,7 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
             </div>
           )}
 
-          {status === 'CLOSED' && Number((report as any)?.lateEntryCount ?? 0) > 0 && (
+          {status === 'CLOSED' && Number(report?.lateEntryCount ?? 0) > 0 && (
             <div
               style={{
                 display: 'flex',
@@ -643,9 +643,9 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
             >
               <Info size={14} style={{ flexShrink: 0 }} />
               <span>
-                {Number((report as any).lateEntryCount)} financial{' '}
-                {Number((report as any).lateEntryCount) === 1 ? 'entry was' : 'entries were'}{' '}
-                recorded after this day closed. The DSSR snapshot is unchanged.
+                {Number(report.lateEntryCount)} financial{' '}
+                {Number(report.lateEntryCount) === 1 ? 'entry was' : 'entries were'} recorded after
+                this day closed. The DSSR snapshot is unchanged.
               </span>
             </div>
           )}

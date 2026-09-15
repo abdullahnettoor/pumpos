@@ -11,7 +11,7 @@ import { Tabs } from '../primitives/Tabs.js';
 import { Field, TextInput, Select } from '../primitives/Field.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import { LoadingSpinner } from '../LoadingSpinner.js';
-import { PageHeader, Panel, Button, EmptyState, Chip } from '../../pump-ds/index.js';
+import { PageHeader, Panel, Button, EmptyState, Chip, Form } from '../../pump-ds/index.js';
 import { Building2 } from 'lucide-react';
 import { PaymentTerminalsPanel } from './PaymentTerminalsPanel.js';
 import { ReportConfigPanel } from './ReportConfigPanel.js';
@@ -209,7 +209,7 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
             {activeTab === 'general' && (
               <div>
                 {editing ? (
-                  <form
+                  <Form
                     onSubmit={handleSaveGeneral}
                     style={{
                       display: 'flex',
@@ -314,7 +314,7 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
                         Save Configuration
                       </Button>
                     </div>
-                  </form>
+                  </Form>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                     <div
@@ -468,7 +468,7 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
             {activeTab === 'business' && (
               <div>
                 {editingBusiness ? (
-                  <form
+                  <Form
                     onSubmit={handleSaveBusiness}
                     style={{
                       display: 'flex',
@@ -641,7 +641,7 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
                         Save Configuration
                       </Button>
                     </div>
-                  </form>
+                  </Form>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                     <div

@@ -77,10 +77,10 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({
 
   const loading =
     purchasesQ.isLoading || statusQ.isLoading || suppliersActiveQ.isLoading || productsQ.isLoading;
-  const error = (purchasesQ.error || statusQ.error || suppliersActiveQ.error) as Error | null;
+  const error = purchasesQ.error || statusQ.error || suppliersActiveQ.error;
 
   // Business-date bucketing for purchase KPIs + a purchases search filter.
-  const stationSettings: any = (selectedStation as any)?.settings || {};
+  const stationSettings: any = selectedStation?.settings || {};
   const todayIso = resolveBusinessDate({
     timeZone: stationSettings.timezone,
     dayStartsAt: stationSettings.business_day_starts_at,

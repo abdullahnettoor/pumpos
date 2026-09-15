@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
+import { runTask } from '@pump/ui';
 
 interface Props {
   userName: string;
   role: string;
   stationName?: string;
-  onSignOut: () => void;
+  onSignOut: () => void | Promise<unknown>;
 }
 
 function initialsOf(name: string): string {
@@ -50,7 +51,9 @@ export const AccountMenu: React.FC<Props> = ({ userName, role, stationName, onSi
                 type="button"
                 onClick={() => {
                   setOpen(false);
-                  onSignOut();
+                  runTask(onSignOut(), (error: unknown) =>
+                    console.error('Sign out failed:', error),
+                  );
                 }}
                 className="w-full rounded-lg px-3 py-2 text-left text-sm font-medium"
                 style={{ color: 'var(--state-danger-fg)' }}

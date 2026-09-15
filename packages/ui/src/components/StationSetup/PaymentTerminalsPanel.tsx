@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { CloudPaymentTerminalService, CloudFinanceService } from '../../services/cloud.js';
 import { PaymentTerminal } from '@pump/shared';
-import { Chip } from '../../pump-ds/index.js';
+import { Chip, Form } from '../../pump-ds/index.js';
 import { Drawer } from '../Drawer.js';
 import { DataTable } from '../primitives/DataTable.js';
 import { Checkbox } from '../primitives/Toggle.js';
@@ -289,7 +289,11 @@ export const PaymentTerminalsPanel: React.FC<PaymentTerminalsPanelProps> = ({ st
       </div>
 
       <DataTable
-        columns={buildTerminalColumns(openEdit, toggleActive, clearingName)}
+        columns={buildTerminalColumns(
+          openEdit,
+          (t) => runTask(toggleActive(t), 'Could not update the terminal.'),
+          clearingName,
+        )}
         data={terminals}
         emptyMessage="No payment terminals yet. Add your first PoS machine."
         getRowId={(r: any) => r.id}
@@ -303,7 +307,7 @@ export const PaymentTerminalsPanel: React.FC<PaymentTerminalsPanelProps> = ({ st
         }}
         title={editingId ? 'Edit Payment Terminal' : 'Add Payment Terminal'}
       >
-        <form
+        <Form
           onSubmit={handleSubmit}
           style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
         >
@@ -421,7 +425,7 @@ export const PaymentTerminalsPanel: React.FC<PaymentTerminalsPanelProps> = ({ st
               {submitting ? 'Saving...' : editingId ? 'Save Changes' : 'Add Terminal'}
             </button>
           </div>
-        </form>
+        </Form>
       </Drawer>
     </div>
   );

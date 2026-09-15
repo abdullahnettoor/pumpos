@@ -178,7 +178,7 @@ export class VoidExpense implements UseCase<VoidExpenseCommand, Expense> {
       return err(invariantViolation('Expense already voided', { id: existing.id }));
 
     const guard = await assertDrawerEntryVoidable(existing, this.deps.shifts, 'This expense');
-    if (!guard.success) return guard as unknown as Result<Expense>;
+    if (!guard.success) return guard;
 
     const now = ctx.clock.now().toISOString();
     const voided: Expense = { ...existing, status: 'VOIDED', updatedAt: now };

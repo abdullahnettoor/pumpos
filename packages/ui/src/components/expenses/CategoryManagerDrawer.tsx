@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Drawer } from '../Drawer.js';
-import { Button, Chip, EmptyState, Input } from '../../pump-ds/index.js';
+import { Button, Chip, EmptyState, Input, Form } from '../../pump-ds/index.js';
 import { CloudTransactionService } from '../../services/cloud.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import { Pencil, Plus, Check, X, Tag } from 'lucide-react';
@@ -12,7 +12,7 @@ export interface CategoryManagerDrawerProps {
   onClose: () => void;
   categories: any[];
   /** Called after a successful create/rename so the parent can refetch. */
-  onChanged: () => void;
+  onChanged: () => void | Promise<unknown>;
   canManage: boolean;
 }
 
@@ -45,7 +45,7 @@ export const CategoryManagerDrawer: React.FC<CategoryManagerDrawerProps> = ({
       setAdding(true);
       await service.createExpenseCategory({ name });
       setNewName('');
-      onChanged();
+      await onChanged();
       toast.success('Category added.');
     } catch (err: any) {
       toast.error(err.message || 'Failed to add category');
@@ -69,7 +69,7 @@ export const CategoryManagerDrawer: React.FC<CategoryManagerDrawerProps> = ({
       setSavingId(id);
       await service.updateExpenseCategory(id, { name });
       cancelEdit();
-      onChanged();
+      await onChanged();
       toast.success('Category renamed.');
     } catch (err: any) {
       toast.error(err.message || 'Failed to rename category');
@@ -90,7 +90,7 @@ export const CategoryManagerDrawer: React.FC<CategoryManagerDrawerProps> = ({
     <Drawer isOpen={isOpen} onClose={onClose} title="Manage expense categories">
       <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
         {canManage && (
-          <form onSubmit={add}>
+          <Form onSubmit={add}>
             <label className="field-label">New category</label>
             <div style={{ display: 'flex', alignItems: 'stretch', gap: '8px' }}>
               <div style={{ flex: 1 }}>
@@ -112,7 +112,7 @@ export const CategoryManagerDrawer: React.FC<CategoryManagerDrawerProps> = ({
                 Add
               </Button>
             </div>
-          </form>
+          </Form>
         )}
 
         <div>

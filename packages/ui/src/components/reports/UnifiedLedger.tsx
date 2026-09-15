@@ -173,7 +173,7 @@ const REGISTRY: Record<EntityType, LedgerSource> = {
     resolve: (tx) => {
       // Owner-funded outflow raises what the business owes the owner (debit).
       const r = moneyResolve(tx);
-      return { ...r, direction: tx.direction === 'in' ? 'credit' : 'debit' } as LedgerResolved;
+      return { ...r, direction: tx.direction === 'in' ? 'credit' : 'debit' };
     },
   },
 };
@@ -208,7 +208,7 @@ interface Committed {
  * via the REGISTRY above.
  */
 export const UnifiedLedger: React.FC<UnifiedLedgerProps> = ({ selectedStation }) => {
-  const s = (selectedStation as any)?.settings || {};
+  const s = selectedStation?.settings || {};
   const clock = { timeZone: s.timezone, dayStartsAt: s.business_day_starts_at };
 
   // Draft form state (does NOT trigger any fetch).
@@ -473,8 +473,8 @@ export const UnifiedLedger: React.FC<UnifiedLedgerProps> = ({ selectedStation })
               const bt = resolvedCfg.balanceTone(totals.net);
               return (
                 <KpiTile
-                  dot={bt === 'default' ? 'brand' : (bt as any)}
-                  valueTone={bt === 'default' ? undefined : (bt as any)}
+                  dot={bt === 'default' ? 'brand' : bt}
+                  valueTone={bt === 'default' ? undefined : bt}
                   label={resolvedCfg.balanceLabel}
                   value={inr(totals.net)}
                 />

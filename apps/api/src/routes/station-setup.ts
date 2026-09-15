@@ -132,7 +132,7 @@ stationSetupRouter.post('/stations', validateJson(stationSchema), async (c) => {
     repository: new DrizzleStationRepository(db),
     events: createDispatcher(db),
   });
-  const result = await useCase.execute(body as any, buildContext(user));
+  const result = await useCase.execute(body, buildContext(user));
   return sendResult(c, result);
 });
 
@@ -155,7 +155,7 @@ stationSetupRouter.put('/stations/:id', validateJson(stationSchema.partial()), a
     repository: new DrizzleStationRepository(db),
     events: createDispatcher(db),
   });
-  const result = await useCase.execute({ ...body, id: stationId } as any, buildContext(user));
+  const result = await useCase.execute({ ...body, id: stationId }, buildContext(user));
   return sendResult(c, result);
 });
 
@@ -412,7 +412,7 @@ stationSetupRouter.post(
         403,
       );
     }
-    const body = c.req.valid('json') as any;
+    const body = c.req.valid('json');
     const targetRole: Role = body.role ?? 'Staff';
     if (!canActOnTarget(user, targetRole, body.stationIds ?? [])) {
       return c.json(
@@ -512,7 +512,7 @@ stationSetupRouter.post(
 stationSetupRouter.put('/users/:id', validateJson(userUpdateSchema, 'BAD_REQUEST'), async (c) => {
   const user = c.var.user;
   const id = c.req.param('id');
-  const body = c.req.valid('json') as any;
+  const body = c.req.valid('json');
   const repo = new DrizzleUserRepository(c.var.db);
   const target = await repo.findById(id);
   if (!target || target.organizationId !== user.organizationId) {
@@ -563,7 +563,7 @@ stationSetupRouter.post(
         404,
       );
     }
-    if (!canActOnTarget(user, target.role as Role, await loadTargetStationIds(db, id))) {
+    if (!canActOnTarget(user, target.role, await loadTargetStationIds(db, id))) {
       return c.json(
         {
           success: false,
@@ -636,7 +636,7 @@ async function setUserActive(c: any, active: boolean) {
   if (!target || target.organizationId !== user.organizationId) {
     return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'User not found' } }, 404);
   }
-  if (!canActOnTarget(user, target.role as Role, await loadTargetStationIds(db, id))) {
+  if (!canActOnTarget(user, target.role, await loadTargetStationIds(db, id))) {
     return c.json(
       { success: false, error: { code: 'FORBIDDEN', message: 'Not allowed to change this user' } },
       403,
@@ -1201,9 +1201,6 @@ stationSetupRouter.post('/pricing', validateJson(fuelPriceSchema), async (c) => 
     repository: new DrizzleFuelPriceRepository(db),
     events: createDispatcher(db),
   });
-  const result = await useCase.execute(
-    parsed as any,
-    buildContext(user, { stationId: parsed.stationId }),
-  );
+  const result = await useCase.execute(parsed, buildContext(user, { stationId: parsed.stationId }));
   return sendResult(c, result);
 });

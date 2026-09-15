@@ -72,7 +72,7 @@ class DrizzleIdempotencyStore implements IdempotencyStore {
   async complete(id: string, status: number, body: unknown): Promise<void> {
     await this.db
       .update(schema.idempotencyKeys)
-      .set({ responseStatus: status, responseBody: body as Record<string, unknown> | null })
+      .set({ responseStatus: status, responseBody: body })
       .where(eq(schema.idempotencyKeys.id, id));
   }
 }

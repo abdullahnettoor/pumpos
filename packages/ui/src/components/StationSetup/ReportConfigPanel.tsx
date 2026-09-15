@@ -309,7 +309,7 @@ export const ReportConfigPanel: React.FC<ReportConfigPanelProps> = ({
                   { value: 'dssr', label: 'DSSR' },
                 ]}
                 value={previewDoc}
-                onChange={(v) => setPreviewDoc(v as 'shiftSummary' | 'dssr')}
+                onChange={(v) => setPreviewDoc(v)}
                 aria-label="Preview report"
               />
             </div>

@@ -99,8 +99,7 @@ export class RecordMerchandiseHandover implements UseCase<
       cmd.shiftId,
       'STOCK',
     );
-    if (!eligibility.success)
-      return eligibility as unknown as Result<RecordMerchandiseHandoverResult>;
+    if (!eligibility.success) return eligibility;
     const shift = eligibility.data.shift;
     if (shift.status !== 'OPEN')
       return err(

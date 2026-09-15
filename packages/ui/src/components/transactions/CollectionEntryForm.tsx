@@ -5,7 +5,7 @@ import { Field, TextInput, NumberInput, Select, DateField } from '../primitives/
 import { Segmented } from '../primitives/Segmented.js';
 import { Combobox } from '../primitives/Combobox.js';
 import { AccountSelect } from '../primitives/AccountSelect.js';
-import { Button } from '../../pump-ds/index.js';
+import { Button, Form } from '../../pump-ds/index.js';
 
 export interface ShiftOption {
   id: string;
@@ -99,7 +99,7 @@ export const CollectionEntryForm: React.FC<CollectionEntryFormProps> = ({
   const customerId = watch('customerId');
 
   return (
-    <form
+    <Form
       onSubmit={handleSubmit((values) => {
         if (requireCustomer && !values.customerId) {
           setError('customerId', {
@@ -152,7 +152,7 @@ export const CollectionEntryForm: React.FC<CollectionEntryFormProps> = ({
             ]}
             value={paymentMethod}
             onChange={(v) => {
-              setValue('paymentMethod', v as typeof paymentMethod, { shouldValidate: true });
+              setValue('paymentMethod', v, { shouldValidate: true });
               if (v === 'Cash') setValue('accountId', '');
             }}
             disabled={submitting}
@@ -170,7 +170,7 @@ export const CollectionEntryForm: React.FC<CollectionEntryFormProps> = ({
 
       <Field
         label={requireCustomer ? 'Customer Account' : customerLabel}
-        error={errors.customerId?.message as string | undefined}
+        error={errors.customerId?.message}
       >
         <Combobox
           options={[
@@ -246,6 +246,6 @@ export const CollectionEntryForm: React.FC<CollectionEntryFormProps> = ({
           {submitLabel}
         </Button>
       </div>
-    </form>
+    </Form>
   );
 };

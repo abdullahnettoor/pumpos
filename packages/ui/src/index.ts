@@ -28,6 +28,12 @@ export { AccountsPanel } from './components/finance/AccountsPanel.js';
 export { LoadingSpinner } from './components/LoadingSpinner.js';
 export { ReportsOverview } from './components/ReportsOverview.js';
 export { supabase } from './services/supabase.js';
+export {
+  startSession,
+  bootstrapSession,
+  subscribeToSessionChanges,
+} from './services/auth/sessionBootstrap.js';
+export type { SessionReader, StoredSession } from './services/auth/sessionBootstrap.js';
 export * from './services/cloud.js';
 export { exportReportPdf, exportReactPdf, setPdfSaver } from './services/exportPdf.js';
 export {
@@ -115,3 +121,4 @@ export { Banner } from './components/primitives/Banner.js';
 export type { BannerProps, BannerSeverity } from './components/primitives/Banner.js';
 export { useZodForm } from './forms/useZodForm.js';
 export { formatMoney, inr, formatQty } from './utils/format.js';
+export { runTask, useRunTask } from './utils/runTask.js';

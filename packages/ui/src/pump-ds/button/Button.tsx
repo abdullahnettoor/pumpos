@@ -1,6 +1,12 @@
-import React, { forwardRef, type ButtonHTMLAttributes, type ReactNode } from 'react';
+import React, {
+  forwardRef,
+  type ButtonHTMLAttributes,
+  type MouseEvent,
+  type ReactNode,
+} from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '../lib/cn.js';
+import { useAsyncAction } from '../../utils/useAsyncAction.js';
 
 /**
  * Button — the single canonical action control for pump-ds. Replaces the
@@ -88,8 +94,20 @@ const Spinner = ({ className }: { className?: string }) => (
 
 export interface ButtonProps
   extends
-    Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'children'>,
+    Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'children' | 'onClick'>,
     Omit<VariantProps<typeof buttonVariants>, 'iconOnly' | 'fullWidth'> {
+  /**
+   * May be async. When it returns a promise the button shows its spinner and
+   * blocks further clicks until that promise settles, so the control stops
+   * claiming the work is finished the instant it was started.
+   */
+  onClick?: (event: MouseEvent<HTMLButtonElement>) => void | Promise<unknown>;
+  /**
+   * Called when an async `onClick` rejects. Defaults to logging and raising a
+   * generic toast — handlers that can say something useful to the operator
+   * should catch inside `onClick` instead.
+   */
+  onClickError?: (error: unknown) => void;
   /** Leading icon (lucide element). Ignored when `iconOnly` provides the icon via children. */
   leftIcon?: ReactNode;
   /** Trailing icon (lucide element). */
@@ -116,26 +134,36 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
     disabled,
     children,
     type = 'button',
+    onClick,
+    onClickError,
     ...rest
   },
   ref,
 ) {
-  const isDisabled = disabled || loading;
+  const { pending, run } = useAsyncAction(
+    onClick,
+    'That action could not be completed.',
+    onClickError,
+  );
+
+  const isBusy = loading || pending;
+  const isDisabled = disabled || isBusy;
   return (
     <button
       ref={ref}
       type={type}
       disabled={isDisabled}
-      aria-busy={loading || undefined}
+      aria-busy={isBusy || undefined}
+      onClick={run}
       className={cn(buttonVariants({ variant, size, iconOnly, fullWidth }), className)}
       {...rest}
     >
-      {loading && (
+      {isBusy && (
         <span className="absolute inset-0 flex items-center justify-center" aria-hidden="true">
           <Spinner className={size === 'lg' ? 'size-[18px]' : 'size-4'} />
         </span>
       )}
-      <span className={cn('inline-flex items-center gap-1.5', loading && 'invisible')}>
+      <span className={cn('inline-flex items-center gap-1.5', isBusy && 'invisible')}>
         {leftIcon && (
           <span className="inline-flex" aria-hidden="true">
             {leftIcon}
