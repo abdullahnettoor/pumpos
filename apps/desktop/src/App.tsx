@@ -25,6 +25,7 @@ import {
   clearClientSessionData,
   clearStoredOnboardingDraft,
   supabase,
+  startSession,
 } from '@pump/ui';
 import { Station } from '@pump/shared';
 
@@ -106,27 +107,11 @@ const App: React.FC = () => {
   const qc = useQueryClient();
 
   useEffect(() => {
-    // 1. Check current active session
-    supabase.auth
-      .getSession()
-      .then(({ data: { session } }) => handleSession(session))
-      // Desktop is the resilience tier and is the most likely to start on a
-      // flaky connection. If reading the session rejects, the `.then` never
-      // runs and `loading` stays true — a permanent spinner. Fall back to the
-      // signed-out path, which stops loading and routes to /login.
-      .catch((err: unknown) => {
-        console.error('Failed to read auth session:', err);
-        return handleSession(null);
-      });
-
-    // 2. Subscribe to auth changes (sign in, sign out, token refresh)
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      void handleSession(session);
-    });
-
-    return () => subscription.unsubscribe();
+    // Desktop is the resilience tier and the most likely to start on a flaky
+    // connection, so the failed-read fallback matters most here. It lives in
+    // startSession (@pump/ui) and is covered by its own tests.
+    const { stop } = startSession(handleSession);
+    return stop;
   }, []);
 
   const handleSession = async (currentSession: any) => {

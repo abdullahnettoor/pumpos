@@ -28,6 +28,12 @@ export { AccountsPanel } from './components/finance/AccountsPanel.js';
 export { LoadingSpinner } from './components/LoadingSpinner.js';
 export { ReportsOverview } from './components/ReportsOverview.js';
 export { supabase } from './services/supabase.js';
+export {
+  startSession,
+  bootstrapSession,
+  subscribeToSessionChanges,
+} from './services/auth/sessionBootstrap.js';
+export type { SessionReader, StoredSession } from './services/auth/sessionBootstrap.js';
 export * from './services/cloud.js';
 export { exportReportPdf, exportReactPdf, setPdfSaver } from './services/exportPdf.js';
 export {

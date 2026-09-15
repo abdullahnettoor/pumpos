@@ -6,6 +6,7 @@ import {
   setAuthToken,
   clearClientSessionData,
   supabase,
+  startSession,
 } from '@pump/ui';
 
 export type UserRole = 'Owner' | 'Manager' | 'Accountant' | 'Staff' | 'Attendant';
@@ -91,22 +92,11 @@ export function useSession(): SessionState {
       }
     };
 
-    supabase.auth
-      .getSession()
-      .then(({ data }: any) => handle(data.session))
-      // A rejected getSession left `status: 'loading'` set forever — an
-      // attendant staring at a spinner with no way forward. `handle(null)`
-      // resolves to the signed-out state so they can at least log in again.
-      .catch((err: any) => {
-        console.error('Failed to read auth session:', err);
-        return handle(null);
-      });
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_e: any, session: any) => {
-      void handle(session);
-    });
-    return () => subscription.unsubscribe();
+    // A rejected getSession used to leave `status: 'loading'` set forever — an
+    // attendant staring at a spinner with no way forward. startSession (@pump/ui)
+    // falls back to the signed-out state instead, and is covered by its tests.
+    const { stop } = startSession(handle);
+    return stop;
   }, [qc]);
 
   return state;

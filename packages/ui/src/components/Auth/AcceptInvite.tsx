@@ -85,8 +85,12 @@ export const AcceptInvite: React.FC<AcceptInviteProps> = ({ onDone }) => {
         if (cancelled) return;
         setHasSession(false);
         setEmail(null);
+      } finally {
+        // In a `finally`, not after the try: an unexpected throw anywhere above
+        // must still leave the screen interactive rather than parked on
+        // "Verifying your invite…" with nothing to click.
+        if (!cancelled) setReady(true);
       }
-      setReady(true);
     };
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       if (cancelled) return;

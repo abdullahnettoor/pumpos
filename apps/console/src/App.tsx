@@ -26,6 +26,7 @@ import {
   clearClientSessionData,
   clearStoredOnboardingDraft,
   supabase,
+  startSession,
 } from '@pump/ui';
 import type { NavIntent } from '@pump/ui';
 import { Station } from '@pump/shared';
@@ -124,28 +125,11 @@ export const App: React.FC = () => {
   const isUnsupportedMobile = useIsUnsupportedMobile();
 
   useEffect(() => {
-    // 1. Check current active session
-    supabase.auth
-      .getSession()
-      .then(({ data: { session } }) => handleSession(session))
-      // If we cannot read the stored session (network drop mid-refresh, or a
-      // corrupted token) the promise rejects. Without this the `.then` never
-      // runs, `loading` stays true and the operator is stuck on a spinner
-      // forever. Treat "cannot determine session" as signed out: handleSession
-      // (null) clears the token, stops loading and routes to /login.
-      .catch((err: unknown) => {
-        console.error('Failed to read auth session:', err);
-        return handleSession(null);
-      });
-
-    // 2. Subscribe to auth changes (sign in, sign out, token refresh)
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      void handleSession(session);
-    });
-
-    return () => subscription.unsubscribe();
+    // Reads the stored session, then keeps listening. A failed read falls back
+    // to the signed-out path rather than leaving the operator on a spinner —
+    // see startSession in @pump/ui, which is covered by its own tests.
+    const { stop } = startSession(handleSession);
+    return stop;
   }, []);
 
   const handleSession = async (currentSession: any) => {
