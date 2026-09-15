@@ -2,7 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { CloudTransactionService } from '../../services/cloud.js';
 import { inr } from '../../utils/format.js';
 import { useQueryClient } from '@tanstack/react-query';
-import { queryKeys, TIER } from '../../query/hooks.js';
+import {
+  queryKeys,
+  useCustomers,
+  useExpenseCategories,
+  useShiftTransactions,
+  useSuppliers,
+} from '../../query/hooks.js';
 import { Tabs } from '../primitives/Tabs.js';
 import {
   Plus,
@@ -36,19 +42,32 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
   const qc = useQueryClient();
   const runTask = useRunTask();
   const [activeTab, setActiveTab] = useState<'expenses' | 'purchases' | 'collections'>('expenses');
-  const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Lists fetched from DB
-  const [categories, setCategories] = useState<any[]>([]);
-  const [suppliers, setSuppliers] = useState<any[]>([]);
-  const [customers, setCustomers] = useState<any[]>([]);
-  const [loggedTransactions, setLoggedTransactions] = useState<{
-    expenses: any[];
-    purchases: any[];
-    collections: any[];
-  }>({ expenses: [], purchases: [], collections: [] });
+  // Read through the shared query hooks rather than copying server data into
+  // local state behind an effect. That was the source of three hook-rule
+  // violations at once (a loader referenced before declaration, an incomplete
+  // dependency list, and setState inside an effect) and it also bypassed the
+  // tiered cache that docs/DATA-CACHING.md asks every read to go through.
+  const categoriesQ = useExpenseCategories();
+  const suppliersQ = useSuppliers(true);
+  const customersQ = useCustomers(true);
+  const transactionsQ = useShiftTransactions(shiftId);
+
+  const categories: any[] = categoriesQ.data ?? [];
+  const suppliers: any[] = suppliersQ.data ?? [];
+  const customers: any[] = customersQ.data ?? [];
+  const loggedTransactions: { expenses: any[]; purchases: any[]; collections: any[] } =
+    transactionsQ.data ?? { expenses: [], purchases: [], collections: [] };
+
+  const loading =
+    categoriesQ.isPending ||
+    suppliersQ.isPending ||
+    customersQ.isPending ||
+    transactionsQ.isPending;
+  const loadError =
+    categoriesQ.error || suppliersQ.error || customersQ.error || transactionsQ.error;
 
   // Unique products derived from nozzles
   const products = React.useMemo(() => {
@@ -66,70 +85,34 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
   }, [nozzles]);
 
   // Form States - Expense
-  const [expenseCategoryId, setExpenseCategoryId] = useState('');
+  const [expenseCategoryIdRaw, setExpenseCategoryId] = useState('');
   const [expenseAmount, setExpenseAmount] = useState('');
   const [expenseDescription, setExpenseDescription] = useState('');
 
   // Form States - Purchase
-  const [purchaseSupplierId, setPurchaseSupplierId] = useState('');
-  const [purchaseProductId, setPurchaseProductId] = useState('');
+  const [purchaseSupplierIdRaw, setPurchaseSupplierId] = useState('');
+  const [purchaseProductIdRaw, setPurchaseProductId] = useState('');
   const [purchaseQuantity, setPurchaseQuantity] = useState('');
   const [purchaseUnitPrice, setPurchaseUnitPrice] = useState('');
   const [purchaseInvoice, setPurchaseInvoice] = useState('');
   const [purchaseNotes, setPurchaseNotes] = useState('');
 
   // Form States - Collection
-  const [collectionCustomerId, setCollectionCustomerId] = useState('');
+  const [collectionCustomerIdRaw, setCollectionCustomerId] = useState('');
   const [collectionAmount, setCollectionAmount] = useState('');
   const [collectionMethod, setCollectionMethod] = useState<'Cash' | 'Card' | 'UPI' | 'Credit'>(
     'Cash',
   );
   const [collectionNotes, setCollectionNotes] = useState('');
 
-  useEffect(() => {
-    runTask(loadData(), 'Could not load shift transactions.');
-  }, [shiftId]);
-
-  const loadData = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      const [cats, sups, custs, txs] = await Promise.all([
-        qc.ensureQueryData({
-          queryKey: queryKeys.expenseCategories(),
-          queryFn: () => transactionService.getExpenseCategories(),
-          staleTime: TIER.semi.staleTime,
-        }),
-        qc.ensureQueryData({
-          queryKey: queryKeys.suppliers(true),
-          queryFn: () => transactionService.getSuppliers(),
-          staleTime: TIER.semi.staleTime,
-        }),
-        qc.ensureQueryData({
-          queryKey: queryKeys.customers(true),
-          queryFn: () => transactionService.getCustomers(),
-          staleTime: TIER.semi.staleTime,
-        }),
-        transactionService.getShiftTransactions(shiftId),
-      ]);
-
-      setCategories(cats || []);
-      setSuppliers(sups || []);
-      setCustomers(custs || []);
-      setLoggedTransactions(txs || { expenses: [], purchases: [], collections: [] });
-
-      // Set initial defaults
-      if (cats && cats.length > 0) setExpenseCategoryId(cats[0].id);
-      if (sups && sups.length > 0) setPurchaseSupplierId(sups[0].id);
-      if (products && products.length > 0) setPurchaseProductId(products[0].id);
-      if (custs && custs.length > 0) setCollectionCustomerId(custs[0].id);
-    } catch (err: any) {
-      setError(err.message || 'Failed to load transaction settings');
-    } finally {
-      setLoading(false);
-    }
-  };
+  // The selects used to be seeded by the loader calling setState inside an
+  // effect. Derived during render instead: "whatever the operator picked, else
+  // the first available option". Same visible behaviour, no cascading render,
+  // and it now self-corrects when the lists arrive rather than only on mount.
+  const expenseCategoryId = expenseCategoryIdRaw || categories[0]?.id || '';
+  const purchaseSupplierId = purchaseSupplierIdRaw || suppliers[0]?.id || '';
+  const purchaseProductId = purchaseProductIdRaw || products[0]?.id || '';
+  const collectionCustomerId = collectionCustomerIdRaw || customers[0]?.id || '';
 
   const handleAddExpense = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -150,9 +133,7 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
       setExpenseAmount('');
       setExpenseDescription('');
 
-      // Reload
-      const txs = await transactionService.getShiftTransactions(shiftId);
-      setLoggedTransactions(txs);
+      await qc.invalidateQueries({ queryKey: queryKeys.shiftTransactions(shiftId) });
       await onTransactionAdded?.();
     } catch (err: any) {
       setError(err.message || 'Failed to record expense');
@@ -190,9 +171,7 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
       setPurchaseInvoice('');
       setPurchaseNotes('');
 
-      // Reload
-      const txs = await transactionService.getShiftTransactions(shiftId);
-      setLoggedTransactions(txs);
+      await qc.invalidateQueries({ queryKey: queryKeys.shiftTransactions(shiftId) });
       await onTransactionAdded?.();
     } catch (err: any) {
       setError(err.message || 'Failed to record purchase');
@@ -227,9 +206,7 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
       setCollectionAmount('');
       setCollectionNotes('');
 
-      // Reload
-      const txs = await transactionService.getShiftTransactions(shiftId);
-      setLoggedTransactions(txs);
+      await qc.invalidateQueries({ queryKey: queryKeys.shiftTransactions(shiftId) });
       await onTransactionAdded?.();
     } catch (err: any) {
       setError(err.message || 'Failed to record collection');
@@ -323,7 +300,7 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
       >
         {/* Left Column: Transaction Input Form */}
         <div style={{ borderRight: '1px solid var(--border-soft)', paddingRight: '20px' }}>
-          {error && (
+          {(error || loadError) && (
             <div
               style={{
                 backgroundColor: 'var(--state-danger-bg)',
@@ -335,7 +312,7 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
                 border: '1px solid var(--border-soft)',
               }}
             >
-              {error}
+              {error ?? 'Could not load transaction settings. Reopen the panel to retry.'}
             </div>
           )}
 
