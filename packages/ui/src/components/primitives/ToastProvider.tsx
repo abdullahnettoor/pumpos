@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
 
 export type ToastVariant = 'error' | 'success' | 'info';
 
@@ -62,12 +62,19 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     [remove],
   );
 
-  const api: ToastApi = {
-    show,
-    error: useCallback((m: string, o?: ToastOptions) => show(m, 'error', o), [show]),
-    success: useCallback((m: string, o?: ToastOptions) => show(m, 'success', o), [show]),
-    info: useCallback((m: string, o?: ToastOptions) => show(m, 'info', o), [show]),
-  };
+  const error = useCallback((m: string, o?: ToastOptions) => show(m, 'error', o), [show]);
+  const success = useCallback((m: string, o?: ToastOptions) => show(m, 'success', o), [show]);
+  const info = useCallback((m: string, o?: ToastOptions) => show(m, 'info', o), [show]);
+
+  // `show` and `remove` are already stable, so memoising the object makes the
+  // whole context value stable for the life of the provider. Without this the
+  // value was a fresh literal on every render, which (a) re-rendered every
+  // consumer each time a toast appeared or expired, and (b) would make anything
+  // derived from it — such as `useRunTask` — unusable as an effect dependency.
+  const api = useMemo<ToastApi>(
+    () => ({ show, error, success, info }),
+    [show, error, success, info],
+  );
 
   return (
     <ToastContext.Provider value={api}>

@@ -29,6 +29,7 @@ import { LoadingSpinner } from './LoadingSpinner.js';
 import type { NavIntent } from './AppShell.js';
 import { buildIncomeColumns } from './income/columns.js';
 import { IncomeCategoryManagerDrawer } from './income/IncomeCategoryManagerDrawer.js';
+import { useRunTask } from '../utils/runTask.js';
 
 const transactionService = new CloudTransactionService();
 
@@ -53,6 +54,7 @@ export const IncomeList: React.FC<IncomeListProps> = ({
   const invalidateOperational = useInvalidateOperational();
   const qc = useQueryClient();
   const toast = useToast();
+  const runTask = useRunTask();
   const ask = useAsk();
 
   const s = (selectedStation as any)?.settings || {};
@@ -114,8 +116,8 @@ export const IncomeList: React.FC<IncomeListProps> = ({
         accountId: values.accountId || undefined,
       });
       closeDrawer();
-      invalidateOperational(stationId);
       toast.success('Income recorded.');
+      await invalidateOperational(stationId);
     } catch (err: any) {
       setFormError(err.message || 'Failed to record income');
     } finally {
@@ -144,8 +146,8 @@ export const IncomeList: React.FC<IncomeListProps> = ({
     if (!confirmed) return;
     try {
       await transactionService.voidIncome(row.id, value);
-      invalidateOperational(stationId);
       toast.success('Income voided.');
+      await invalidateOperational(stationId);
     } catch (err: any) {
       toast.error(err.message || 'Failed to void income');
     }
@@ -203,7 +205,7 @@ export const IncomeList: React.FC<IncomeListProps> = ({
   };
 
   useEffect(() => {
-    if (activeTab === 'gst') loadGstRegister();
+    if (activeTab === 'gst') runTask(loadGstRegister(), 'Could not load the GST register.');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, stationId]);
 

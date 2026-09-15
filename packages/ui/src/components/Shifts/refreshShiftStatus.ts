@@ -6,10 +6,10 @@ interface ShiftStatusQueryClient {
 
 export async function refreshShiftStatus(
   queryClient: ShiftStatusQueryClient,
-  invalidateOperational: (stationId?: string | null) => void,
+  invalidateOperational: (stationId?: string | null) => Promise<void>,
   stationId: string | null,
 ): Promise<void> {
-  invalidateOperational(stationId);
+  await invalidateOperational(stationId);
   if (!stationId) return;
   await queryClient.refetchQueries({
     queryKey: queryKeys.shiftStatus(stationId, false),

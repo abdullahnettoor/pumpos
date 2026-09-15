@@ -8,6 +8,7 @@ import { Checkbox } from '../primitives/Toggle.js';
 import { ProviderField } from '../primitives/ProviderField.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import type { ColumnDef } from '@tanstack/react-table';
+import { useRunTask } from '../../utils/runTask.js';
 
 const terminalService = new CloudPaymentTerminalService();
 const financeSvc = new CloudFinanceService();
@@ -137,6 +138,7 @@ const buildTerminalColumns = (
 
 export const PaymentTerminalsPanel: React.FC<PaymentTerminalsPanelProps> = ({ stationId }) => {
   const toast = useToast();
+  const runTask = useRunTask();
   const [terminals, setTerminals] = useState<PaymentTerminal[]>([]);
   const [loading, setLoading] = useState(true);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -152,7 +154,7 @@ export const PaymentTerminalsPanel: React.FC<PaymentTerminalsPanelProps> = ({ st
   const [clearingAccounts, setClearingAccounts] = useState<any[]>([]);
 
   useEffect(() => {
-    loadData();
+    runTask(loadData(), 'Could not load payment terminals.');
   }, [stationId]);
 
   const loadData = async () => {
@@ -167,8 +169,6 @@ export const PaymentTerminalsPanel: React.FC<PaymentTerminalsPanelProps> = ({ st
       setClearingAccounts(
         (accounts || []).filter((a: any) => a.accountType === 'MERCHANT_CLEARING'),
       );
-    } catch (err) {
-      console.error('Failed to load payment terminals:', err);
     } finally {
       setLoading(false);
     }
@@ -226,7 +226,7 @@ export const PaymentTerminalsPanel: React.FC<PaymentTerminalsPanelProps> = ({ st
       }
       setIsFormOpen(false);
       resetForm();
-      loadData();
+      runTask(loadData(), 'Saved, but the terminal list could not be refreshed.');
       toast.success(editingId ? 'Terminal updated.' : 'Terminal added.');
     } catch (err: any) {
       toast.error(err.message || 'Failed to save payment terminal');
@@ -238,7 +238,7 @@ export const PaymentTerminalsPanel: React.FC<PaymentTerminalsPanelProps> = ({ st
   const toggleActive = async (t: PaymentTerminal) => {
     try {
       await terminalService.updateTerminal(t.id, { isActive: !t.isActive });
-      loadData();
+      runTask(loadData(), 'Saved, but the terminal list could not be refreshed.');
       toast.success(t.isActive ? 'Terminal disabled.' : 'Terminal enabled.');
     } catch (err: any) {
       toast.error(err.message || 'Failed to update terminal');

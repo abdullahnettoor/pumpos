@@ -656,40 +656,54 @@ export function useDailyDssrRange(
  * Returns a callback that invalidates the operational caches for a station after
  * a mutation (open/close shift, record expense/collection/etc.) so screens stay
  * fresh without manual refetch wiring.
+ *
+ * The returned callback resolves once every refetch it triggered has settled, so
+ * a caller that must not report success before the screen agrees can `await` it.
+ * Callers that only need the refresh to start may ignore the promise.
+ *
+ * It does NOT reject. `invalidateQueries` swallows fetch errors internally
+ * (query-core attaches `.catch(noop)` unless `throwOnError` is set) and surfaces
+ * them through each query's own error state, which the consuming screens render.
+ * So the promise is a "caches have settled" signal, not an error channel.
  */
 export function useInvalidateOperational() {
   const qc = useQueryClient();
   return (stationId?: string | null) => {
-    qc.invalidateQueries({ queryKey: ['shift-status'] });
-    qc.invalidateQueries({ queryKey: ['business-day-status'] });
-    qc.invalidateQueries({ queryKey: ['shift-summaries'] });
-    qc.invalidateQueries({ queryKey: ['shift-transactions'] });
-    qc.invalidateQueries({ queryKey: ['merchandise-handovers'] });
-    qc.invalidateQueries({ queryKey: ['merchandise-sales'] });
-    // Business Day cockpit + P&L read the live DSSR preview — refresh it too.
-    qc.invalidateQueries({ queryKey: ['dssr'] });
-    qc.invalidateQueries({ queryKey: ['dssr-preview'] });
-    qc.invalidateQueries({ queryKey: ['expenses'] });
-    qc.invalidateQueries({ queryKey: ['income'] });
-    qc.invalidateQueries({ queryKey: ['purchases'] });
-    qc.invalidateQueries({ queryKey: ['collections'] });
-    qc.invalidateQueries({ queryKey: ['customers'] });
-    // Money layer: account balances, statements and the Cash & Bank register all
-    // move with expenses / income / collections / payments.
-    qc.invalidateQueries({ queryKey: ['financial-accounts'] });
-    qc.invalidateQueries({ queryKey: ['account-ledger'] });
-    qc.invalidateQueries({ queryKey: ['finance-movements'] });
-    qc.invalidateQueries({ queryKey: ['money-movements'] });
-    // Suppliers carry computed payable balances that move with purchases/payments,
-    // and new suppliers are created from PurchasesList — keep them fresh too.
-    qc.invalidateQueries({ queryKey: ['suppliers'] });
-    qc.invalidateQueries({ queryKey: ['activity-groups'] });
-    qc.invalidateQueries({ queryKey: ['activity-group'] });
+    const invalidations = [
+      qc.invalidateQueries({ queryKey: ['shift-status'] }),
+      qc.invalidateQueries({ queryKey: ['business-day-status'] }),
+      qc.invalidateQueries({ queryKey: ['shift-summaries'] }),
+      qc.invalidateQueries({ queryKey: ['shift-transactions'] }),
+      qc.invalidateQueries({ queryKey: ['merchandise-handovers'] }),
+      qc.invalidateQueries({ queryKey: ['merchandise-sales'] }),
+      // Business Day cockpit + P&L read the live DSSR preview — refresh it too.
+      qc.invalidateQueries({ queryKey: ['dssr'] }),
+      qc.invalidateQueries({ queryKey: ['dssr-preview'] }),
+      qc.invalidateQueries({ queryKey: ['expenses'] }),
+      qc.invalidateQueries({ queryKey: ['income'] }),
+      qc.invalidateQueries({ queryKey: ['purchases'] }),
+      qc.invalidateQueries({ queryKey: ['collections'] }),
+      qc.invalidateQueries({ queryKey: ['customers'] }),
+      // Money layer: account balances, statements and the Cash & Bank register all
+      // move with expenses / income / collections / payments.
+      qc.invalidateQueries({ queryKey: ['financial-accounts'] }),
+      qc.invalidateQueries({ queryKey: ['account-ledger'] }),
+      qc.invalidateQueries({ queryKey: ['finance-movements'] }),
+      qc.invalidateQueries({ queryKey: ['money-movements'] }),
+      // Suppliers carry computed payable balances that move with purchases/payments,
+      // and new suppliers are created from PurchasesList — keep them fresh too.
+      qc.invalidateQueries({ queryKey: ['suppliers'] }),
+      qc.invalidateQueries({ queryKey: ['activity-groups'] }),
+      qc.invalidateQueries({ queryKey: ['activity-group'] }),
+    ];
     if (stationId) {
-      qc.invalidateQueries({ queryKey: ['inventory-status', stationId] });
-      qc.invalidateQueries({ queryKey: ['inventory-items', stationId] });
-      qc.invalidateQueries({ queryKey: ['inventory-movements', stationId] });
-      qc.invalidateQueries({ queryKey: ['inventory-variances', stationId] });
+      invalidations.push(
+        qc.invalidateQueries({ queryKey: ['inventory-status', stationId] }),
+        qc.invalidateQueries({ queryKey: ['inventory-items', stationId] }),
+        qc.invalidateQueries({ queryKey: ['inventory-movements', stationId] }),
+        qc.invalidateQueries({ queryKey: ['inventory-variances', stationId] }),
+      );
     }
+    return Promise.all(invalidations).then(() => undefined);
   };
 }

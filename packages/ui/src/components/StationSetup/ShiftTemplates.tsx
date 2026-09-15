@@ -4,11 +4,13 @@ import { ShiftTemplate } from '@pump/shared';
 import { Chip } from '../../pump-ds/index.js';
 import { Drawer } from '../Drawer.js';
 import { useToast } from '../primitives/ToastProvider.js';
+import { useRunTask } from '../../utils/runTask.js';
 
 const templateService = new CloudShiftTemplateService();
 
 export const ShiftTemplates: React.FC = () => {
   const toast = useToast();
+  const runTask = useRunTask();
   const [templates, setTemplates] = useState<ShiftTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -19,8 +21,10 @@ export const ShiftTemplates: React.FC = () => {
   const [endTime, setEndTime] = useState('14:00');
 
   useEffect(() => {
-    loadTemplates();
-  }, []);
+    // runTask is stable (memoised, and the toast context value is memoised too),
+    // so listing it does not re-run this effect.
+    runTask(loadTemplates(), 'Could not load shift templates.');
+  }, [runTask]);
 
   const loadTemplates = async () => {
     try {
@@ -43,8 +47,6 @@ export const ShiftTemplates: React.FC = () => {
         setStartTime('08:00');
         setEndTime('16:00');
       }
-    } catch (err) {
-      console.error('Failed to load shift templates:', err);
     } finally {
       setLoading(false);
     }
@@ -60,7 +62,7 @@ export const ShiftTemplates: React.FC = () => {
         isActive: true,
       });
       setIsFormOpen(false);
-      loadTemplates();
+      runTask(loadTemplates(), 'Saved, but the template list could not be refreshed.');
       toast.success('Shift template created.');
     } catch (err: any) {
       toast.error(err.message || 'Failed to create shift template');
@@ -88,7 +90,7 @@ export const ShiftTemplates: React.FC = () => {
         endTime: '06:00',
         isActive: true,
       });
-      await loadTemplates();
+      runTask(loadTemplates(), 'Saved, but the template list could not be refreshed.');
       toast.success('Default shifts created.');
     } catch (err: any) {
       toast.error(err.message || 'Failed to pre-fill default shifts');

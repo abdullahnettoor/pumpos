@@ -15,6 +15,7 @@ import { PageHeader, Panel, Button, EmptyState, Chip } from '../../pump-ds/index
 import { Building2 } from 'lucide-react';
 import { PaymentTerminalsPanel } from './PaymentTerminalsPanel.js';
 import { ReportConfigPanel } from './ReportConfigPanel.js';
+import { useRunTask } from '../../utils/runTask.js';
 
 const stationService = new CloudStationService();
 
@@ -31,6 +32,7 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
   const [loading, setLoading] = useState(true);
   const qc = useQueryClient();
   const toast = useToast();
+  const runTask = useRunTask();
   const [editing, setEditing] = useState(false);
   const [editingBusiness, setEditingBusiness] = useState(false);
   const [activeTab, setActiveTab] = useState<
@@ -64,7 +66,7 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
   const [onboardingStatus, setOnboardingStatus] = useState<string>('NOT_STARTED');
 
   useEffect(() => {
-    loadStations();
+    runTask(loadStations(), 'Could not load stations.');
   }, []);
 
   useEffect(() => {
@@ -104,8 +106,6 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
       if (list.length > 0 && !selectedStation) {
         onStationSelected(list[0]);
       }
-    } catch (err) {
-      console.error(err);
     } finally {
       setLoading(false);
     }
@@ -134,7 +134,7 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
       });
       onStationSelected(updated);
       setEditing(false);
-      loadStations(true);
+      runTask(loadStations(true), 'Saved, but the station list could not be refreshed.');
       toast.success('Station details saved.');
     } catch (err: any) {
       toast.error(err.message);
@@ -163,7 +163,7 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
       });
       onStationSelected(updated);
       setEditingBusiness(false);
-      loadStations(true);
+      runTask(loadStations(true), 'Saved, but the station list could not be refreshed.');
       toast.success('Business details saved.');
     } catch (err: any) {
       toast.error(err.message);
@@ -807,7 +807,7 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
                 selectedStation={selectedStation}
                 onSaved={(updated) => {
                   onStationSelected(updated);
-                  loadStations(true);
+                  runTask(loadStations(true), 'Could not refresh the station list.');
                 }}
               />
             )}

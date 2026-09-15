@@ -7,6 +7,7 @@ import { inr } from '../../utils/format.js';
 import { formatStationDateTime } from '@pump/shared';
 import { useShiftSummaries } from '../../query/hooks.js';
 import { ShiftSummaryView } from './ShiftSummaryView.js';
+import { useRunTask } from '../../utils/runTask.js';
 
 interface ShiftHistoryTabProps {
   selectedStation: any | null;
@@ -29,6 +30,7 @@ export const ShiftHistoryTab: React.FC<ShiftHistoryTabProps> = ({
   const stationId = selectedStation?.id ?? null;
   const timeZone = (selectedStation?.settings as { timezone?: string } | undefined)?.timezone;
   const summariesQ = useShiftSummaries(stationId);
+  const runTask = useRunTask();
   const summaries = summariesQ.data ?? [];
   const [activeSummary, setActiveSummary] = useState<any | null>(null);
 
@@ -163,7 +165,10 @@ export const ShiftHistoryTab: React.FC<ShiftHistoryTabProps> = ({
           shiftStatus={activeSummary.shiftStatus}
           station={selectedStation}
           onReopenSuccess={() => {
-            summariesQ.refetch();
+            runTask(
+              summariesQ.refetch(),
+              'Shift reopened, but the history could not be refreshed.',
+            );
             handleBack();
           }}
           onBack={handleBack}

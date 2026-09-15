@@ -291,9 +291,13 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
       setClosing(true);
       await shiftService.closeBusinessDay(snap.businessDayId, stationId);
       toast.success('Business day closed · DSSR generated.');
-      invalidateOperational(stationId);
-      qc.invalidateQueries({ queryKey: queryKeys.dssr(stationId, businessDate) });
-      qc.invalidateQueries({ queryKey: ['dssr-range'] });
+      await Promise.all([
+        invalidateOperational(stationId),
+        // The day's DSSR snapshot only exists once the close succeeds, so both
+        // the single-day and range views are stale until they refetch.
+        qc.invalidateQueries({ queryKey: queryKeys.dssr(stationId, businessDate) }),
+        qc.invalidateQueries({ queryKey: ['dssr-range'] }),
+      ]);
     } catch (err: any) {
       toast.error(err.message || 'Failed to close the business day.');
     } finally {

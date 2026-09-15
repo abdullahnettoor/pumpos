@@ -129,8 +129,8 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
     try {
       setIsReopening(true);
       await shiftService.reopenShift(shiftId);
-      invalidateOperational(selectedStation?.id);
       toast.success('Shift reopened.');
+      await invalidateOperational(selectedStation?.id);
       onNavigate('/shifts');
     } catch (err: any) {
       toast.error(err.message || 'Failed to reopen shift');

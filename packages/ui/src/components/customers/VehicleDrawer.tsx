@@ -104,9 +104,9 @@ export const VehicleDrawer: React.FC<VehicleDrawerProps> = ({
           defaultProductName: prod?.name ?? null,
         });
       }
-      qc.invalidateQueries({ queryKey: ['vehicles'] });
       toast.success(editingVehicle ? 'Vehicle updated.' : 'Vehicle added.');
       onClose();
+      await qc.invalidateQueries({ queryKey: ['vehicles'] });
     } catch (err: any) {
       setError(err.message || 'Failed to save vehicle');
     } finally {

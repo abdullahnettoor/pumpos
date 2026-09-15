@@ -87,8 +87,8 @@ export const SupplierFormDrawer: React.FC<SupplierFormDrawerProps> = ({
             : {}),
         });
       }
-      invalidateOperational(stationId);
       toast.success(editingSupplier ? 'Supplier updated.' : 'Supplier created.');
+      await invalidateOperational(stationId);
       onClose();
     } catch (err: any) {
       setError(err.message || 'Failed to save supplier');

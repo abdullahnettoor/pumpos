@@ -336,13 +336,6 @@ export const InventoryList: React.FC<InventoryListProps> = ({
   const movementsQ = useInventoryMovements(stationId);
   const variancesQ = useInventoryVariances(stationId);
 
-  const refresh = () => {
-    tanksQ.refetch();
-    itemsQ.refetch();
-    movementsQ.refetch();
-    variancesQ.refetch();
-  };
-
   // Deep-link focus (from a dashboard/bell stock alert): switch to the target
   // tab and highlight the offending tank card / merchandise row.
   const [highlightId, setHighlightId] = useState<string | null>(null);
@@ -464,10 +457,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({
       countRequestRef.current = null;
       savePendingStockCountRequest(null);
       setCountOpen(false);
-      // Not awaited: useInvalidateOperational is synchronous and its
-      // invalidateQueries calls float. See issue #41 before re-adding `await` —
-      // awaiting it today would await `undefined`, not the refetches.
-      invalidateOperational(stationId);
+      await invalidateOperational(stationId);
     } catch (err: any) {
       if (!isAmbiguousMutationError(err)) {
         countRequestRef.current = null;

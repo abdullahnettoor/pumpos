@@ -11,6 +11,7 @@ import { Checkbox } from '../primitives/Toggle.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import { useConfirm } from '../primitives/ConfirmDialog.js';
 import type { ColumnDef } from '@tanstack/react-table';
+import { useRunTask } from '../../utils/runTask.js';
 
 const productService = new CloudProductService();
 
@@ -122,6 +123,7 @@ export const ProductsCatalog: React.FC<{ selectedStation?: any | null }> = ({
 }) => {
   const qc = useQueryClient();
   const toast = useToast();
+  const runTask = useRunTask();
   const confirm = useConfirm();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -161,7 +163,7 @@ export const ProductsCatalog: React.FC<{ selectedStation?: any | null }> = ({
   const [priceInclusive, setPriceInclusive] = useState(true);
 
   useEffect(() => {
-    loadProducts();
+    runTask(loadProducts(), 'Could not load the product catalog.');
   }, []);
 
   const loadProducts = async (force = false) => {
@@ -174,8 +176,6 @@ export const ProductsCatalog: React.FC<{ selectedStation?: any | null }> = ({
         staleTime: TIER.semi.staleTime,
       });
       setProducts(data);
-    } catch (err) {
-      console.error('Failed to load products:', err);
     } finally {
       setLoading(false);
     }
@@ -206,7 +206,7 @@ export const ProductsCatalog: React.FC<{ selectedStation?: any | null }> = ({
           isActive: true,
         });
       }
-      loadProducts(true);
+      runTask(loadProducts(true), 'Saved, but the product list could not be refreshed.');
       toast.success('Standard product added.');
     } catch (err: any) {
       toast.error(err.message || 'Failed to quick add standard product');
@@ -271,7 +271,7 @@ export const ProductsCatalog: React.FC<{ selectedStation?: any | null }> = ({
 
       resetForm();
       setIsFormOpen(false);
-      loadProducts(true);
+      runTask(loadProducts(true), 'Saved, but the product list could not be refreshed.');
       toast.success(editingProduct ? 'Product updated.' : 'Product created.');
     } catch (err: any) {
       toast.error(err.message || 'Failed to save product');
@@ -327,7 +327,7 @@ export const ProductsCatalog: React.FC<{ selectedStation?: any | null }> = ({
       return;
     try {
       await productService.archiveProduct(id);
-      loadProducts(true);
+      runTask(loadProducts(true), 'Saved, but the product list could not be refreshed.');
       toast.success('Product archived.');
     } catch (err: any) {
       toast.error(err.message);

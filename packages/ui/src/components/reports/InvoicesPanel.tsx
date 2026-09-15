@@ -75,10 +75,12 @@ export const InvoicesPanel: React.FC<InvoicesPanelProps> = ({ selectedStation, u
       // Idempotent: issues a new invoice or returns the existing one.
       const invoice = await txService.issueInvoice(saleId);
       await exportInvoice(invoice);
-      qc.invalidateQueries({
-        queryKey: queryKeys.sales(selectedStation?.id ?? '', range.from, range.to),
-      });
-      qc.invalidateQueries({ queryKey: ['invoices'] });
+      await Promise.all([
+        qc.invalidateQueries({
+          queryKey: queryKeys.sales(selectedStation?.id ?? '', range.from, range.to),
+        }),
+        qc.invalidateQueries({ queryKey: ['invoices'] }),
+      ]);
     } catch (err: any) {
       toast.error(err.message || 'Failed to generate invoice.');
     } finally {
