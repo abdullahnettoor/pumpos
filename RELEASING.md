@@ -113,6 +113,60 @@ Preview without writing anything: `npm run release -- auto --dry`.
 
 ---
 
+## Guardrails on the production path
+
+These live in **repository settings**, not in this repo, so they are recorded
+here — settings have no diff and no review.
+
+### The production approval gate
+
+Production deploy jobs declare `environment: production`. That declaration only
+does something if the environment exists **and** carries a protection rule:
+
+- **Settings → Environments → `production` → Required reviewers** — at least one
+  person. Without this the declaration is decoration and a version bump deploys
+  to live fuel stations unattended.
+
+Verified by observation rather than by reading the setting: a job claiming the
+`production` environment parks in `waiting` with a pending deployment until a
+named reviewer approves.
+
+### Branch protection
+
+`main` and `dev` both require a pull request and these three status checks:
+
+```text
+verify      typecheck + tests + builds   (ci.yml)
+lint        Prettier + ESLint ratchet    (ci.yml)
+marketing   standalone install + build   (ci.yml)
+```
+
+Force pushes and deletions are off; conversation resolution is required. Set via
+the API, so to re-apply after a settings mishap:
+
+```bash
+gh api -X PUT repos/<owner>/<repo>/branches/main/protection --input - <<'JSON'
+{
+  "required_status_checks": {
+    "strict": true,
+    "checks": [{ "context": "verify" }, { "context": "lint" }, { "context": "marketing" }]
+  },
+  "enforce_admins": false,
+  "required_pull_request_reviews": {
+    "dismiss_stale_reviews": false,
+    "require_code_owner_reviews": false,
+    "required_approving_review_count": 0
+  },
+  "restrictions": null,
+  "allow_force_pushes": false,
+  "allow_deletions": false,
+  "required_conversation_resolution": true
+}
+JSON
+```
+
+---
+
 ## One-time setup checklist
 
 ### Now (to make releases work)
@@ -131,6 +185,11 @@ Preview without writing anything: `npm run release -- auto --dry`.
 - [ ] `DEV_SUPABASE_URL`, `DEV_SUPABASE_PUBLISHABLE_KEY`.
 - [ ] Repo variable `PREVIEW_API_URL=https://api.pumpos.abdullahnettoor.com`
       (optional; this is the default).
+- [ ] Smoke-check targets, all optional — the defaults match the wrangler
+      configs: `CONSOLE_URL`, `MOBILE_URL`, `MARKETING_SITE`,
+      `PREVIEW_CONSOLE_URL`, `PREVIEW_MOBILE_URL`, `PREVIEW_MARKETING_SITE`.
+- [ ] **workers.dev enabled** on the Cloudflare account — per-PR previews get
+      their URL from it (`pr-<n>-pumpos-<app>.<subdomain>.workers.dev`).
 
 ---
 
