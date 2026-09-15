@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
 import { useSales, useInvoices, queryKeys } from '../../query/hooks.js';
 import { useQueryClient } from '@tanstack/react-query';
@@ -41,7 +41,9 @@ export const InvoicesPanel: React.FC<InvoicesPanelProps> = ({ selectedStation, u
     error,
   } = useSales({ stationId: selectedStation?.id, from: range.from, to: range.to });
 
-  const rows = sales || [];
+  // Memoised so `kpis` below actually memoises: a bare `|| []` hands the
+  // dependency list a new array on every render while the query is loading.
+  const rows = useMemo(() => sales || [], [sales]);
   const kpis = useMemo(() => {
     let total = 0;
     let invoiced = 0;
@@ -52,41 +54,47 @@ export const InvoicesPanel: React.FC<InvoicesPanelProps> = ({ selectedStation, u
     return { total, invoiced, pending: rows.length - invoiced };
   }, [rows]);
 
-  const exportInvoice = async (invoice: any) => {
-    const [{ exportReactPdf }, { InvoiceDoc }] = await Promise.all([
-      import('../../services/exportPdf.js'),
-      import('../../services/reports/invoiceDoc.js'),
-    ]);
-    const element = React.createElement(InvoiceDoc, {
-      invoice,
-      stationName: selectedStation?.name,
-      letterhead: letterheadFromStation(selectedStation),
-      paper: paperFromStation(selectedStation),
-    });
-    await exportReactPdf(
-      element,
-      `Invoice_${String(invoice.invoiceNumber || 'draft').replace(/[^a-z0-9]+/gi, '-')}`,
-    );
-  };
-
-  const handleInvoice = async (saleId: string) => {
-    setBusyId(saleId);
-    try {
-      // Idempotent: issues a new invoice or returns the existing one.
-      const invoice = await txService.issueInvoice(saleId);
-      await exportInvoice(invoice);
-      await Promise.all([
-        qc.invalidateQueries({
-          queryKey: queryKeys.sales(selectedStation?.id ?? '', range.from, range.to),
-        }),
-        qc.invalidateQueries({ queryKey: ['invoices'] }),
+  const exportInvoice = useCallback(
+    async (invoice: any) => {
+      const [{ exportReactPdf }, { InvoiceDoc }] = await Promise.all([
+        import('../../services/exportPdf.js'),
+        import('../../services/reports/invoiceDoc.js'),
       ]);
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to generate invoice.');
-    } finally {
-      setBusyId(null);
-    }
-  };
+      const element = React.createElement(InvoiceDoc, {
+        invoice,
+        stationName: selectedStation?.name,
+        letterhead: letterheadFromStation(selectedStation),
+        paper: paperFromStation(selectedStation),
+      });
+      await exportReactPdf(
+        element,
+        `Invoice_${String(invoice.invoiceNumber || 'draft').replace(/[^a-z0-9]+/gi, '-')}`,
+      );
+    },
+    [selectedStation],
+  );
+
+  const handleInvoice = useCallback(
+    async (saleId: string) => {
+      setBusyId(saleId);
+      try {
+        // Idempotent: issues a new invoice or returns the existing one.
+        const invoice = await txService.issueInvoice(saleId);
+        await exportInvoice(invoice);
+        await Promise.all([
+          qc.invalidateQueries({
+            queryKey: queryKeys.sales(selectedStation?.id ?? '', range.from, range.to),
+          }),
+          qc.invalidateQueries({ queryKey: ['invoices'] }),
+        ]);
+      } catch (err: any) {
+        toast.error(err.message || 'Failed to generate invoice.');
+      } finally {
+        setBusyId(null);
+      }
+    },
+    [exportInvoice, qc, range.from, range.to, selectedStation, toast],
+  );
 
   const columns = useMemo<ColumnDef<any, any>[]>(
     () => [
@@ -158,8 +166,7 @@ export const InvoicesPanel: React.FC<InvoicesPanelProps> = ({ selectedStation, u
         },
       },
     ],
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [busyId, canIssue, range.from, range.to],
+    [busyId, canIssue, handleInvoice],
   );
 
   return (

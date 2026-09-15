@@ -35,8 +35,10 @@ export const TaxRegisterPanel: React.FC<TaxRegisterPanelProps> = ({ selectedStat
   const salesQ = useSalesTaxRegister({ stationId, from: range.from, to: range.to });
   const incomeQ = useIncomeGstRegister({ stationId, from: range.from, to: range.to });
 
-  const saleRows = salesQ.data ?? [];
-  const incomeRows = incomeQ.data ?? [];
+  // Memoised so the totals below actually memoise: a bare `?? []` hands the
+  // dependency list a new array on every render while the query is loading.
+  const saleRows = useMemo(() => salesQ.data ?? [], [salesQ.data]);
+  const incomeRows = useMemo(() => incomeQ.data ?? [], [incomeQ.data]);
 
   const totals = useMemo(() => {
     const gst = { taxable: 0, cgst: 0, sgst: 0, igst: 0, cess: 0 };

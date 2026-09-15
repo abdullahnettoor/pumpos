@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { CloudUserAssignmentService, CloudStationService } from '../../services/cloud.js';
+import { CloudUserAssignmentService } from '../../services/cloud.js';
 import { useQueryClient } from '@tanstack/react-query';
-import { queryKeys, TIER } from '../../query/hooks.js';
+import { queryKeys, useStations, useUsers } from '../../query/hooks.js';
 import { Station } from '@pump/shared';
 import { Drawer } from '../Drawer.js';
 import { DataTable } from '../primitives/DataTable.js';
@@ -16,7 +16,6 @@ import { useRunTask } from '../../utils/runTask.js';
 import { Form } from '../../pump-ds/index.js';
 
 const userService = new CloudUserAssignmentService();
-const stationService = new CloudStationService();
 
 const userFormSchema = z.object({
   fullName: z.string().min(2, 'Full name must be at least 2 characters'),
@@ -252,9 +251,14 @@ export const UserRolesAssignment: React.FC = () => {
   const qc = useQueryClient();
   const toast = useToast();
   const runTask = useRunTask();
-  const [users, setUsers] = useState<any[]>([]);
-  const [stations, setStations] = useState<Station[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Read through the shared static-tier hooks rather than fetching into local
+  // state: the team list is already cached, and `mergeUser` below writes the
+  // cache directly, so a local mirror would only be a second source of truth.
+  const usersQ = useUsers();
+  const stationsQ = useStations();
+  const users = useMemo(() => usersQ.data ?? [], [usersQ.data]);
+  const stations = useMemo<Station[]>(() => stationsQ.data ?? [], [stationsQ.data]);
+  const loading = usersQ.isLoading || stationsQ.isLoading;
 
   // Drawer visibility state
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -299,35 +303,12 @@ export const UserRolesAssignment: React.FC = () => {
   const watchRole = watch('role');
   const watchPassword = watch('password') || '';
 
-  useEffect(() => {
-    runTask(loadData(), 'Could not load team members.');
-  }, []);
-
-  const loadData = async (force = false) => {
-    try {
-      setLoading(true);
-      if (force)
-        await Promise.all([
-          qc.invalidateQueries({ queryKey: queryKeys.users() }),
-          qc.invalidateQueries({ queryKey: queryKeys.stations() }),
-        ]);
-      const [userList, stationList] = await Promise.all([
-        qc.ensureQueryData({
-          queryKey: queryKeys.users(),
-          queryFn: () => userService.listUsers(),
-          staleTime: TIER.static.staleTime,
-        }),
-        qc.ensureQueryData({
-          queryKey: queryKeys.stations(),
-          queryFn: () => stationService.getStations(),
-          staleTime: TIER.static.staleTime,
-        }),
-      ]);
-      setUsers(userList);
-      setStations(stationList);
-    } finally {
-      setLoading(false);
-    }
+  /** Force a refetch of both lists (used when a save could not be merged locally). */
+  const reloadData = async () => {
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: queryKeys.users() }),
+      qc.invalidateQueries({ queryKey: queryKeys.stations() }),
+    ]);
   };
 
   // The row is written straight into the cache, so this only marks the key stale
@@ -337,7 +318,6 @@ export const UserRolesAssignment: React.FC = () => {
       list.some((u) => u.id === row.id)
         ? list.map((u) => (u.id === row.id ? { ...u, ...row } : u))
         : [...list, row];
-    setUsers((prev) => merge(prev));
     qc.setQueryData(queryKeys.users(), (prev: any[] | undefined) => merge(prev));
     await qc.invalidateQueries({ queryKey: queryKeys.users(), refetchType: 'none' });
   };
@@ -394,7 +374,7 @@ export const UserRolesAssignment: React.FC = () => {
       if (rowId) {
         await mergeUser({ ...(editingUser || {}), id: rowId, ...(saved as any), ...payload });
       } else {
-        runTask(loadData(true), 'Saved, but the team list could not be refreshed.');
+        runTask(reloadData(), 'Saved, but the team list could not be refreshed.');
       }
       resetForm();
       toast.success(editingUser ? 'Team member updated.' : 'Team member added.');
@@ -864,7 +844,6 @@ const CredentialsCard: React.FC<{
   onCopy: (text: string) => Promise<boolean>;
   toast: ReturnType<typeof useToast>;
 }> = ({ credentials, onDone, onCopy, toast }) => {
-  const runTask = useRunTask();
   const rowStyle: React.CSSProperties = {
     display: 'flex',
     justifyContent: 'space-between',
