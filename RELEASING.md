@@ -29,11 +29,23 @@ Two guardrails sit on the production path:
 
 | Trigger                           | What deploys                                                  | Target                                           |
 | --------------------------------- | ------------------------------------------------------------- | ------------------------------------------------ |
+| Open / push to a **pull request** | Only the frontends that PR changes                            | Per-PR `*.workers.dev` URL, posted on the PR     |
 | `git push origin dev`             | Only changed web/API apps (path-filtered)                     | Preview custom domains (`*.abdullahnettoor.com`) |
 | `workflow_dispatch` on **Deploy** | Selected app (`all`, `console`, `marketing`, `mobile`, `api`) | Preview custom domains                           |
 | `vX.Y.Z` tag                      | Web/API production                                            | `*.pumpos.app`                                   |
 | `desktop-vX.Y.Z` tag              | Desktop installers only                                       | Draft GitHub Release                             |
 | Push to any non-`dev` branch      | Nothing                                                       | No CI deploy                                     |
+
+### Pull-request previews
+
+Every PR gets its own Worker per frontend it touches, named `pr-<n>-pumpos-<app>`,
+on a `workers.dev` URL posted as a sticky comment on the PR. Two PRs in flight no
+longer overwrite each other. The Workers are deleted when the PR closes.
+
+Previews use a route-free [`wrangler.pr.toml`](apps/console/wrangler.pr.toml) per
+app, so a preview can never claim a production hostname. The API is deliberately
+excluded — a per-PR API Worker would need its own Hyperdrive binding and Supabase
+secrets, so PR previews talk to the shared preview API instead.
 
 Path-filter behavior on `dev`:
 

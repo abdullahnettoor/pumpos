@@ -79,6 +79,9 @@ jobs:
       mobile: ${{ steps.filter.outputs.mobile }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          # paths-filter needs both ends of the range in the local history.
+          fetch-depth: 0
       - name: Resolve deploy mode
         id: mode
         run: |
@@ -87,9 +90,29 @@ jobs:
           else
             echo "mode=preview" >> "$GITHUB_OUTPUT"
           fi
+      # The diff base must be the previous commit on THIS branch, not the
+      # default branch. paths-filter defaults `base` to the repository default
+      # branch for push events, so whenever `dev` and `main` were level it saw
+      # no changes and skipped every preview — which, with a
+      # merge-to-main-soon-after habit, was most of the time.
+      #
+      # Left empty for anything that is not an ordinary push (manual dispatch,
+      # the production workflow_call, a brand-new branch whose `before` is all
+      # zeroes); those paths do not consult the filter anyway.
+      - name: Resolve diff base
+        id: base
+        run: |
+          before="${{ github.event.before }}"
+          empty="0000000000000000000000000000000000000000"
+          if [ "${{ github.event_name }}" != "push" ] || [ -z "$before" ] || [ "$before" = "$empty" ]; then
+            echo "base=" >> "$GITHUB_OUTPUT"
+          else
+            echo "base=$before" >> "$GITHUB_OUTPUT"
+          fi
       - uses: dorny/paths-filter@v4
         id: filter
         with:
+          base: ${{ steps.base.outputs.base }}
           filters: |
             api:
               - 'apps/api/**'
