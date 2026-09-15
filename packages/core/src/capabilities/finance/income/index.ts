@@ -223,10 +223,6 @@ export class RecordIncome implements UseCase<RecordIncomeCommand, OtherIncome> {
     const receivedInto: ReceivedInto = cmd.receivedInto ?? 'SHIFT_CASH';
     const affectsDrawer = cmd.affectsDrawer ?? receivedInto === 'SHIFT_CASH';
 
-    let businessDayId: string;
-    let shiftId: string | null;
-    let stationId: string;
-
     if (!cmd.shiftId && !cmd.stationId)
       return err(validationError('Either shiftId or stationId is required'));
     const anchor = await resolveFinancialAnchor(this.deps, ctx, cmd, {
@@ -234,7 +230,7 @@ export class RecordIncome implements UseCase<RecordIncomeCommand, OtherIncome> {
       drawerLabel: 'Drawer income entries',
     });
     if (!anchor.success) return anchor;
-    ({ businessDayId, shiftId, stationId } = anchor.data);
+    const { businessDayId, shiftId, stationId } = anchor.data;
 
     // FI4 — freeze the GST split from the category's tax_config at capture.
     const category = this.deps.incomeCategories

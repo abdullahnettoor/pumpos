@@ -1,15 +1,7 @@
 {
-  "apps/api/scripts/smoke-operational-loop.mjs": {
-    "@typescript-eslint/no-unused-vars": {
-      "count": 2
-    }
-  },
   "apps/api/src/index.ts": {
     "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 4
-    },
-    "prefer-const": {
-      "count": 1
     }
   },
   "apps/api/src/infra/idempotency.ts": {
@@ -122,19 +114,6 @@
       "count": 1
     }
   },
-  "packages/core/src/capabilities/crm/collections/index.ts": {
-    "prefer-const": {
-      "count": 3
-    }
-  },
-  "packages/core/src/capabilities/crm/credit-sales/index.ts": {
-    "no-useless-assignment": {
-      "count": 2
-    },
-    "prefer-const": {
-      "count": 4
-    }
-  },
   "packages/core/src/capabilities/crm/customers/set-opening-balance.ts": {
     "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 1
@@ -148,41 +127,21 @@
   "packages/core/src/capabilities/finance/expenses/index.ts": {
     "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 1
-    },
-    "prefer-const": {
-      "count": 4
     }
   },
   "packages/core/src/capabilities/finance/income/index.ts": {
     "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 2
-    },
-    "prefer-const": {
-      "count": 3
     }
   },
   "packages/core/src/capabilities/inventory/record-stock-count.ts": {
     "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 2
-    },
-    "no-useless-assignment": {
-      "count": 1
     }
   },
   "packages/core/src/capabilities/purchasing/record-purchase.ts": {
     "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 1
-    },
-    "no-useless-assignment": {
-      "count": 1
-    },
-    "prefer-const": {
-      "count": 1
-    }
-  },
-  "packages/core/src/capabilities/purchasing/record-supplier-payment.ts": {
-    "prefer-const": {
-      "count": 2
     }
   },
   "packages/core/src/capabilities/purchasing/set-supplier-opening-balance.ts": {
@@ -207,16 +166,6 @@
   },
   "packages/core/src/capabilities/station-setup/products/create-product.ts": {
     "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    }
-  },
-  "packages/core/src/kernel/event-activity.ts": {
-    "no-control-regex": {
-      "count": 1
-    }
-  },
-  "packages/db/apply-rls-direct.js": {
-    "@typescript-eslint/no-unused-vars": {
       "count": 1
     }
   },
@@ -256,9 +205,6 @@
     }
   },
   "packages/ui/src/components/Dashboard/DashboardOverview.tsx": {
-    "@typescript-eslint/no-base-to-string": {
-      "count": 1
-    },
     "@typescript-eslint/no-misused-promises": {
       "count": 2
     },
@@ -303,9 +249,6 @@
     }
   },
   "packages/ui/src/components/InventoryList.tsx": {
-    "@typescript-eslint/await-thenable": {
-      "count": 1
-    },
     "@typescript-eslint/no-floating-promises": {
       "count": 4
     },
@@ -389,9 +332,6 @@
     }
   },
   "packages/ui/src/components/Shifts/HandoverDrawer.tsx": {
-    "@typescript-eslint/await-thenable": {
-      "count": 1
-    },
     "@typescript-eslint/no-misused-promises": {
       "count": 4
     },
@@ -441,9 +381,6 @@
     },
     "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 1
-    },
-    "no-useless-assignment": {
-      "count": 2
     }
   },
   "packages/ui/src/components/Shifts/ShiftTransactionsPanel.tsx": {
@@ -461,9 +398,6 @@
     }
   },
   "packages/ui/src/components/Shifts/ShiftsManagement.tsx": {
-    "@typescript-eslint/await-thenable": {
-      "count": 1
-    },
     "@typescript-eslint/no-floating-promises": {
       "count": 2
     },

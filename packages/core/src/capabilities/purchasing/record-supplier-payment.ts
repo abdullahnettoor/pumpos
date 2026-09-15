@@ -93,19 +93,21 @@ export class RecordSupplierPayment implements UseCase<
     const paidFrom: SupplierPaidFrom = cmd.paidFrom ?? 'BANK';
     const affectsDrawer = cmd.affectsDrawer ?? paidFrom === 'SHIFT_CASH';
 
-    let businessDayId: string;
-    let shiftId: string | null;
-    let stationId = cmd.stationId ?? ctx.stationId ?? null;
-    if (!cmd.shiftId && !stationId)
+    const requestedStationId = cmd.stationId ?? ctx.stationId ?? null;
+    if (!cmd.shiftId && !requestedStationId)
       return err(validationError('Either shiftId or stationId is required'));
     const anchor = await resolveFinancialAnchor(
       this.deps,
       ctx,
-      { shiftId: cmd.shiftId, stationId, transactionDate: cmd.transactionDate },
+      {
+        shiftId: cmd.shiftId,
+        stationId: requestedStationId,
+        transactionDate: cmd.transactionDate,
+      },
       { affectsDrawer, drawerLabel: 'Drawer supplier payments' },
     );
     if (!anchor.success) return anchor;
-    ({ businessDayId, shiftId, stationId } = anchor.data);
+    const { businessDayId, shiftId, stationId } = anchor.data;
 
     const now = ctx.clock.now().toISOString();
     const payment: SupplierTransaction = {

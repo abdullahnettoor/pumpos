@@ -94,11 +94,6 @@ export class RecordExpense implements UseCase<RecordExpenseCommand, Expense> {
     const paidFrom: PaidFrom = cmd.paidFrom ?? 'SHIFT_CASH';
     const affectsDrawer = cmd.affectsDrawer ?? paidFrom === 'SHIFT_CASH';
 
-    let businessDayId: string;
-    let shiftId: string | null;
-    let stationId: string;
-    let lateEntry: boolean;
-
     if (!cmd.shiftId && !cmd.stationId)
       return err(validationError('Either shiftId or stationId is required'));
     const anchor = await resolveFinancialAnchor(this.deps, ctx, cmd, {
@@ -106,7 +101,7 @@ export class RecordExpense implements UseCase<RecordExpenseCommand, Expense> {
       drawerLabel: 'Drawer expenses',
     });
     if (!anchor.success) return anchor;
-    ({ businessDayId, shiftId, stationId, lateEntry } = anchor.data);
+    const { businessDayId, shiftId, stationId } = anchor.data;
 
     const now = ctx.clock.now().toISOString();
     const expense: Expense = {

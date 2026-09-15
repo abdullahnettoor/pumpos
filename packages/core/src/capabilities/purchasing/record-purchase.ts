@@ -159,25 +159,27 @@ export class RecordPurchase implements UseCase<RecordPurchaseCommand, RecordPurc
             },
           ];
 
-    let businessDayId: string;
-    let stationId = cmd.stationId ?? ctx.stationId ?? null;
-    // A purchase is always anchored to the business day. When it is recorded from
-    // within an open shift we ALSO stamp the shift id — purchases never touch the
-    // drawer (so this is pure attribution, not a reconciliation input), but storing
-    // it keeps shift-level provenance available for future reporting.
-    let shiftIdToStore: string | null = null;
-    if (!cmd.shiftId && !stationId)
+    const requestedStationId = cmd.stationId ?? ctx.stationId ?? null;
+    if (!cmd.shiftId && !requestedStationId)
       return err(validationError('Either shiftId or stationId is required'));
     const anchor = await resolveFinancialAnchor(
       this.deps,
       ctx,
-      { shiftId: cmd.shiftId, stationId, transactionDate: cmd.transactionDate },
+      {
+        shiftId: cmd.shiftId,
+        stationId: requestedStationId,
+        transactionDate: cmd.transactionDate,
+      },
       { kind: 'STOCK' },
     );
     if (!anchor.success) return anchor;
-    businessDayId = anchor.data.businessDayId;
-    stationId = anchor.data.stationId;
-    shiftIdToStore = anchor.data.shiftId;
+    const businessDayId = anchor.data.businessDayId;
+    const stationId = anchor.data.stationId;
+    // A purchase is always anchored to the business day. When it is recorded from
+    // within an open shift we ALSO stamp the shift id — purchases never touch the
+    // drawer (so this is pure attribution, not a reconciliation input), but storing
+    // it keeps shift-level provenance available for future reporting.
+    const shiftIdToStore = anchor.data.shiftId;
 
     // Resolve inter-state status from supplier state vs buyer (station) state.
     const supplierStateCode = (supplier.metadata as Record<string, unknown> | null)?.stateCode as

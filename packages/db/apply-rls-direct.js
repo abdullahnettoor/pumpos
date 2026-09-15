@@ -1,6 +1,5 @@
 import postgres from 'postgres';
 import fs from 'fs';
-import path from 'path';
 
 const dbUrl = process.env.DIRECT_DATABASE_URL || process.env.DATABASE_URL;
 

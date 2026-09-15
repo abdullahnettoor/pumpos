@@ -753,14 +753,12 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
                 const credit = Number(h.creditHandedOver || 0);
                 const expected = Number(h.expectedSales || 0);
                 const variance = Number(h.varianceAmount || 0);
-                let varColor = 'var(--text-strong)';
-                if (variance < 0) {
-                  varColor = 'var(--brand-danger)';
-                } else if (variance > 0) {
-                  varColor = 'var(--brand-warning)';
-                } else {
-                  varColor = 'var(--state-success-fg)';
-                }
+                const varColor =
+                  variance < 0
+                    ? 'var(--brand-danger)'
+                    : variance > 0
+                      ? 'var(--brand-warning)'
+                      : 'var(--state-success-fg)';
 
                 return (
                   <tr key={idx} style={{ borderBottom: '1px solid var(--border-soft)' }}>
@@ -846,14 +844,12 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
                   (s: number, h: any) => s + Number(h.varianceAmount || 0),
                   0,
                 );
-                let tVarColor = 'var(--text-strong)';
-                if (tVariance < 0) {
-                  tVarColor = 'var(--brand-danger)';
-                } else if (tVariance > 0) {
-                  tVarColor = 'var(--brand-warning)';
-                } else {
-                  tVarColor = 'var(--state-success-fg)';
-                }
+                const tVarColor =
+                  tVariance < 0
+                    ? 'var(--brand-danger)'
+                    : tVariance > 0
+                      ? 'var(--brand-warning)'
+                      : 'var(--state-success-fg)';
                 return (
                   <tr
                     style={{

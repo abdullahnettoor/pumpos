@@ -737,7 +737,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         );
       }
     }
-    await invalidateOperational(stationId);
+    invalidateOperational(stationId);
   };
 
   const discardTankDips = async () => {

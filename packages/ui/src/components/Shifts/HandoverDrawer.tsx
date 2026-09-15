@@ -742,7 +742,7 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
       setAcceptedResult(result);
       handoverRequestRef.current = null;
       if (stationId) saveHandoverRequestIdentity(stationId, shiftId, userId, duId, null);
-      await onSaveSuccess();
+      onSaveSuccess();
     } catch (err: any) {
       setError(err.message || 'Failed to save attendant handover');
     } finally {

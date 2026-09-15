@@ -131,9 +131,6 @@ export class RecordCollection implements UseCase<RecordCollectionCommand, Collec
 
     const affectsDrawer = cmd.paymentMethod === 'Cash';
 
-    let businessDayId: string;
-    let shiftId: string | null;
-    let stationId: string;
     if (!cmd.shiftId && !cmd.stationId)
       return err(validationError('Either shiftId or stationId is required'));
     const anchor = await resolveFinancialAnchor(this.deps, ctx, cmd, {
@@ -141,7 +138,7 @@ export class RecordCollection implements UseCase<RecordCollectionCommand, Collec
       drawerLabel: 'Cash collections',
     });
     if (!anchor.success) return anchor;
-    ({ businessDayId, shiftId, stationId } = anchor.data);
+    const { businessDayId, shiftId, stationId } = anchor.data;
 
     const now = ctx.clock.now().toISOString();
     const affectsDrawerToStore = shiftId !== null && affectsDrawer;

@@ -188,7 +188,7 @@ try {
       repository: new DrizzleBusinessDayRepository(tx),
       events,
     }).execute({ stationId: station.id }, ctx);
-    const bd = unwrap('OpenBusinessDay', bdRes);
+    unwrap('OpenBusinessDay', bdRes);
 
     // --- Open shift ---
     const shiftRes = await new OpenShift({
@@ -246,7 +246,7 @@ try {
     }).execute(
       {
         shiftId,
-        categoryId: await seedCategory(tx, organizationId, ids),
+        categoryId: await seedCategory(tx, organizationId),
         amount: 300,
         description: 'Tea',
         paidFrom: 'SHIFT_CASH',
@@ -302,7 +302,7 @@ try {
   }
 }
 
-async function seedCategory(tx, organizationId, ids) {
+async function seedCategory(tx, organizationId) {
   const [cat] = await tx
     .insert(schema.expenseCategories)
     .values({ organizationId, name: `Smoke Cat ${Date.now()}`, isSystem: false })

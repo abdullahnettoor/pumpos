@@ -464,7 +464,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({
       countRequestRef.current = null;
       savePendingStockCountRequest(null);
       setCountOpen(false);
-      await invalidateOperational(stationId);
+      invalidateOperational(stationId);
     } catch (err: any) {
       if (!isAmbiguousMutationError(err)) {
         countRequestRef.current = null;

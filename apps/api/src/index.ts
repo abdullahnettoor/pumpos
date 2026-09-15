@@ -499,13 +499,11 @@ api.use('*', async (c, next) => {
   };
 
   try {
-    let payload: any;
-
     // Verify token using JWT signature. Supabase's current recommendation is
     // asymmetric JWT signing (ES256) verified via the project's JWKS endpoint.
     // HS256 is kept only as an optional legacy fallback when the shared secret
     // is still configured.
-    payload = await verifySupabaseJwt(token, c.env, c.req.url);
+    const payload: any = await verifySupabaseJwt(token, c.env, c.req.url);
 
     const authId = payload.sub; // UUID from supabase auth.users
 

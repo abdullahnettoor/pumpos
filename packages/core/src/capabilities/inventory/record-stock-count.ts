@@ -117,7 +117,6 @@ export class RecordStockCount implements UseCase<RecordStockCountCommand, Record
     }
     const productId = tank?.productId ?? cmd.productId!;
 
-    let attributedShift = null;
     let attributedDay = null;
     if (cmd.shiftId) {
       const eligibility = await resolveShiftBusinessDayWrite(
@@ -128,7 +127,7 @@ export class RecordStockCount implements UseCase<RecordStockCountCommand, Record
         'STOCK',
       );
       if (!eligibility.success) return eligibility as unknown as Result<RecordStockCountResult>;
-      attributedShift = eligibility.data.shift;
+      const attributedShift = eligibility.data.shift;
       attributedDay = eligibility.data.businessDay;
       // Attribution to any tenant/station-valid shift is allowed, open or
       // closed — a dip may be measured while the shift it belongs to runs.

@@ -644,7 +644,9 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                         {(() => {
                           const snap = lastDssr.snapshotData || {};
                           const units = Array.from(
-                            new Set((snap.fuelByProduct || []).map((p: any) => p.unit || 'L')),
+                            new Set<string>(
+                              (snap.fuelByProduct || []).map((p: any) => String(p.unit || 'L')),
+                            ),
                           );
                           const label = units.length === 1 ? units[0] : units.length > 1 ? '' : 'L';
                           return `${Number(snap.totalVolumeSold || 0).toFixed(2)}${label ? ` ${label}` : ''}`;

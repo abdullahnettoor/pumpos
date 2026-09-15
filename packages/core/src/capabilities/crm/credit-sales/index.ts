@@ -85,14 +85,11 @@ export class RecordCreditSale implements UseCase<RecordCreditSaleCommand, Custom
     if (!customer || customer.organizationId !== ctx.organizationId)
       return err(notFoundError('Customer', cmd.customerId));
 
-    let businessDayId: string;
-    let shiftId: string | null = null;
-    let stationId: string;
     if (!cmd.shiftId && !cmd.stationId)
       return err(validationError('Either shiftId or stationId is required'));
     const anchor = await resolveFinancialAnchor(this.deps, ctx, cmd, {});
     if (!anchor.success) return anchor;
-    ({ businessDayId, shiftId, stationId } = anchor.data);
+    const { businessDayId, shiftId, stationId } = anchor.data;
 
     const now = ctx.clock.now().toISOString();
     // Attendant attribution applies only to shift-anchored credit sales; a
@@ -289,14 +286,11 @@ export class RecordOmcCardSale implements UseCase<RecordOmcCardSaleCommand, Cust
       customerId = customer.id;
     }
 
-    let businessDayId: string;
-    let shiftId: string | null = null;
-    let stationId: string;
     if (!cmd.shiftId && !cmd.stationId)
       return err(validationError('Either shiftId or stationId is required'));
     const anchor = await resolveFinancialAnchor(this.deps, ctx, cmd, {});
     if (!anchor.success) return anchor;
-    ({ businessDayId, shiftId, stationId } = anchor.data);
+    const { businessDayId, shiftId, stationId } = anchor.data;
 
     const now = ctx.clock.now().toISOString();
     const attendantId = shiftId ? (cmd.attendantId ?? ctx.actorId ?? null) : null;

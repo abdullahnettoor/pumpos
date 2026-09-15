@@ -426,6 +426,9 @@ function formatValue(value: ActivityValue, format: EventValueFormat): string | n
   if (format === 'text')
     return (
       String(value)
+        // Deliberate: activity text is rendered in a UI and in PDFs, so control
+        // characters from upstream payloads are stripped rather than escaped.
+        // eslint-disable-next-line no-control-regex
         .replace(/[\u0000-\u001F\u007F]/g, ' ')
         .trim() || null
     );
