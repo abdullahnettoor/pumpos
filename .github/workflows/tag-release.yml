@@ -39,7 +39,7 @@ jobs:
       tag: ${{ steps.version.outputs.tag }}
       created: ${{ steps.version.outputs.created }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
