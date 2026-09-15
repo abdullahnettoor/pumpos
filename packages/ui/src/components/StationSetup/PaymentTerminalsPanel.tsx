@@ -169,9 +169,6 @@ export const PaymentTerminalsPanel: React.FC<PaymentTerminalsPanelProps> = ({ st
       setClearingAccounts(
         (accounts || []).filter((a: any) => a.accountType === 'MERCHANT_CLEARING'),
       );
-    } catch (err) {
-      console.error('Failed to load payment terminals:', err);
-      toast.error('Could not load payment terminals. Reopen the tab to retry.');
     } finally {
       setLoading(false);
     }
@@ -229,7 +226,7 @@ export const PaymentTerminalsPanel: React.FC<PaymentTerminalsPanelProps> = ({ st
       }
       setIsFormOpen(false);
       resetForm();
-      await loadData();
+      runTask(loadData(), 'Saved, but the terminal list could not be refreshed.');
       toast.success(editingId ? 'Terminal updated.' : 'Terminal added.');
     } catch (err: any) {
       toast.error(err.message || 'Failed to save payment terminal');
@@ -241,7 +238,7 @@ export const PaymentTerminalsPanel: React.FC<PaymentTerminalsPanelProps> = ({ st
   const toggleActive = async (t: PaymentTerminal) => {
     try {
       await terminalService.updateTerminal(t.id, { isActive: !t.isActive });
-      await loadData();
+      runTask(loadData(), 'Saved, but the terminal list could not be refreshed.');
       toast.success(t.isActive ? 'Terminal disabled.' : 'Terminal enabled.');
     } catch (err: any) {
       toast.error(err.message || 'Failed to update terminal');

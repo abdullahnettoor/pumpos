@@ -123,9 +123,6 @@ export const FuelPricingPanel: React.FC<FuelPricingPanelProps> = ({ selectedStat
       const localNow = new Date();
       localNow.setMinutes(localNow.getMinutes() - localNow.getTimezoneOffset());
       setEffectiveFrom(localNow.toISOString().slice(0, 16));
-    } catch (err) {
-      console.error('Failed to load pricing data:', err);
-      toast.error('Could not load fuel pricing. Reopen the tab to retry.');
     } finally {
       setLoading(false);
     }
@@ -143,7 +140,7 @@ export const FuelPricingPanel: React.FC<FuelPricingPanelProps> = ({ selectedStat
         effectiveFrom: new Date(effectiveFrom).toISOString(),
       });
       setPrice('');
-      await loadPricingData();
+      runTask(loadPricingData(), 'Saved, but fuel pricing could not be refreshed.');
       toast.success('Fuel rate updated.');
     } catch (err: any) {
       toast.error(err.message || 'Failed to record new price');

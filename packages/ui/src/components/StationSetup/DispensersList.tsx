@@ -92,9 +92,6 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
       // Setup defaults for form
       setName(`Dispenser Unit ${duList.length + 1}`);
       setCode(`DU-${String(duList.length + 1).padStart(2, '0')}`);
-    } catch (err) {
-      console.error('Failed to load dispenser setup data:', err);
-      toast.error('Could not load dispenser units. Reopen the tab to retry.');
     } finally {
       setLoading(false);
     }
@@ -207,7 +204,7 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
 
       setIsFormOpen(false);
       resetForm();
-      await loadData(true);
+      runTask(loadData(true), 'Saved, but the dispenser list could not be refreshed.');
       toast.success('Dispenser unit created.');
     } catch (err: any) {
       toast.error(err.message || 'Failed to create dispenser unit and nozzles');

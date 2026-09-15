@@ -64,9 +64,6 @@ export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
         setProductId(fuels[0].id);
       }
       setName(`Tank ${tankList.length + 1}`);
-    } catch (err) {
-      console.error('Failed to load tanks data:', err);
-      toast.error('Could not load tanks. Reopen the tab to retry.');
     } finally {
       setLoading(false);
     }
@@ -87,7 +84,7 @@ export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
       });
       setIsFormOpen(false);
       resetForm();
-      await loadData(true);
+      runTask(loadData(true), 'Saved, but the tank list could not be refreshed.');
       toast.success('Tank created.');
     } catch (err: any) {
       toast.error(err.message || 'Failed to create tank');
@@ -123,7 +120,7 @@ export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
         capacity: cap,
       });
 
-      await loadData(true);
+      runTask(loadData(true), 'Saved, but the tank list could not be refreshed.');
       toast.success('Tank created.');
     } catch (err: any) {
       toast.error(err.message || 'Failed to create tank');

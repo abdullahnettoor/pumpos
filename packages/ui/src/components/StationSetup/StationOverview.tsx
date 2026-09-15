@@ -106,9 +106,6 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
       if (list.length > 0 && !selectedStation) {
         onStationSelected(list[0]);
       }
-    } catch (err) {
-      console.error('Failed to load stations:', err);
-      toast.error('Could not load stations. Reopen the tab to retry.');
     } finally {
       setLoading(false);
     }
@@ -137,7 +134,7 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
       });
       onStationSelected(updated);
       setEditing(false);
-      await loadStations(true);
+      runTask(loadStations(true), 'Saved, but the station list could not be refreshed.');
       toast.success('Station details saved.');
     } catch (err: any) {
       toast.error(err.message);
@@ -166,7 +163,7 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
       });
       onStationSelected(updated);
       setEditingBusiness(false);
-      await loadStations(true);
+      runTask(loadStations(true), 'Saved, but the station list could not be refreshed.');
       toast.success('Business details saved.');
     } catch (err: any) {
       toast.error(err.message);

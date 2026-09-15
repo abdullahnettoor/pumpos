@@ -305,9 +305,6 @@ export const UserRolesAssignment: React.FC = () => {
       ]);
       setUsers(userList);
       setStations(stationList);
-    } catch (err) {
-      console.error('Failed to load team members:', err);
-      toast.error('Could not load team members. Reopen the tab to retry.');
     } finally {
       setLoading(false);
     }
@@ -377,7 +374,7 @@ export const UserRolesAssignment: React.FC = () => {
       if (rowId) {
         await mergeUser({ ...(editingUser || {}), id: rowId, ...(saved as any), ...payload });
       } else {
-        await loadData(true);
+        runTask(loadData(true), 'Saved, but the team list could not be refreshed.');
       }
       resetForm();
       toast.success(editingUser ? 'Team member updated.' : 'Team member added.');

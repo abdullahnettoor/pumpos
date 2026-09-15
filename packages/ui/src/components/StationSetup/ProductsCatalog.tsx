@@ -176,9 +176,6 @@ export const ProductsCatalog: React.FC<{ selectedStation?: any | null }> = ({
         staleTime: TIER.semi.staleTime,
       });
       setProducts(data);
-    } catch (err) {
-      console.error('Failed to load products:', err);
-      toast.error('Could not load the product catalog. Reopen the tab to retry.');
     } finally {
       setLoading(false);
     }
@@ -209,7 +206,7 @@ export const ProductsCatalog: React.FC<{ selectedStation?: any | null }> = ({
           isActive: true,
         });
       }
-      await loadProducts(true);
+      runTask(loadProducts(true), 'Saved, but the product list could not be refreshed.');
       toast.success('Standard product added.');
     } catch (err: any) {
       toast.error(err.message || 'Failed to quick add standard product');
@@ -274,7 +271,7 @@ export const ProductsCatalog: React.FC<{ selectedStation?: any | null }> = ({
 
       resetForm();
       setIsFormOpen(false);
-      await loadProducts(true);
+      runTask(loadProducts(true), 'Saved, but the product list could not be refreshed.');
       toast.success(editingProduct ? 'Product updated.' : 'Product created.');
     } catch (err: any) {
       toast.error(err.message || 'Failed to save product');
@@ -330,7 +327,7 @@ export const ProductsCatalog: React.FC<{ selectedStation?: any | null }> = ({
       return;
     try {
       await productService.archiveProduct(id);
-      await loadProducts(true);
+      runTask(loadProducts(true), 'Saved, but the product list could not be refreshed.');
       toast.success('Product archived.');
     } catch (err: any) {
       toast.error(err.message);
