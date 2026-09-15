@@ -18,6 +18,16 @@ import { useStationBusinessDate } from '../../hooks/useStationBusinessDate.js';
 
 const shiftService = new CloudShiftService();
 
+// Variance is a first-class business concept, so its presentation is defined
+// once: short (negative) reads as an error, over (positive) as a caution, and
+// only an exact match reads as settled.
+const varianceColor = (variance: number): string =>
+  variance < 0
+    ? 'var(--brand-danger)'
+    : variance > 0
+      ? 'var(--brand-warning)'
+      : 'var(--state-success-fg)';
+
 interface ShiftSummaryViewProps {
   shiftSummary: any; // shiftSummaries record
   userRole: 'Owner' | 'Manager' | 'Accountant' | 'Staff';
@@ -753,12 +763,7 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
                 const credit = Number(h.creditHandedOver || 0);
                 const expected = Number(h.expectedSales || 0);
                 const variance = Number(h.varianceAmount || 0);
-                const varColor =
-                  variance < 0
-                    ? 'var(--brand-danger)'
-                    : variance > 0
-                      ? 'var(--brand-warning)'
-                      : 'var(--state-success-fg)';
+                const varColor = varianceColor(variance);
 
                 return (
                   <tr key={idx} style={{ borderBottom: '1px solid var(--border-soft)' }}>
@@ -840,16 +845,11 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
                   (s: number, h: any) => s + Number(h.expectedSales || 0),
                   0,
                 );
-                const tVariance = handovers.reduce(
+                const tVariance: number = handovers.reduce(
                   (s: number, h: any) => s + Number(h.varianceAmount || 0),
                   0,
                 );
-                const tVarColor =
-                  tVariance < 0
-                    ? 'var(--brand-danger)'
-                    : tVariance > 0
-                      ? 'var(--brand-warning)'
-                      : 'var(--state-success-fg)';
+                const tVarColor = varianceColor(tVariance);
                 return (
                   <tr
                     style={{

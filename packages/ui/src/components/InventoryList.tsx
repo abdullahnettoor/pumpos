@@ -464,6 +464,9 @@ export const InventoryList: React.FC<InventoryListProps> = ({
       countRequestRef.current = null;
       savePendingStockCountRequest(null);
       setCountOpen(false);
+      // Not awaited: useInvalidateOperational is synchronous and its
+      // invalidateQueries calls float. See issue #41 before re-adding `await` —
+      // awaiting it today would await `undefined`, not the refetches.
       invalidateOperational(stationId);
     } catch (err: any) {
       if (!isAmbiguousMutationError(err)) {

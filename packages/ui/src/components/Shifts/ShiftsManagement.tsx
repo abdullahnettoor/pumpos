@@ -737,6 +737,9 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         );
       }
     }
+    // Not awaited: useInvalidateOperational is synchronous and its
+    // invalidateQueries calls float. See issue #41 before re-adding `await` —
+    // awaiting it today would await `undefined`, not the refetches.
     invalidateOperational(stationId);
   };
 
