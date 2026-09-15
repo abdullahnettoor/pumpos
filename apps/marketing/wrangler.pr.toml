@@ -1,0 +1,10 @@
+# Per-pull-request preview config. See apps/console/wrangler.pr.toml for why
+# this is a separate file with no routes.
+
+name = "pr-pumpos-marketing"
+compatibility_date = "2026-06-24"
+workers_dev = true
+
+[assets]
+directory = "./dist"
+not_found_handling = "404-page"

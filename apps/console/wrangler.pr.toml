@@ -1,0 +1,20 @@
+# Per-pull-request preview config.
+#
+# Deliberately a SEPARATE file rather than an `[env.*]` block or a `--name`
+# override on the main config: both of those would still carry the production
+# `[[routes]]`, and a PR preview that can claim `console.pumpos.app` is a worse
+# problem than having no preview at all. There are no routes here at all — the
+# URL comes from workers.dev.
+#
+# The worker name is supplied per PR by the workflow (`--name pr-<n>-...`).
+
+name = "pr-pumpos-console"
+main = "worker/index.ts"
+compatibility_date = "2026-06-24"
+workers_dev = true
+
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+run_worker_first = true
