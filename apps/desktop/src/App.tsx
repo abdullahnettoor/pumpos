@@ -108,14 +108,6 @@ const App: React.FC = () => {
   const qc = useQueryClient();
   const runTask = useRunTask();
 
-  useEffect(() => {
-    // Desktop is the resilience tier and the most likely to start on a flaky
-    // connection, so the failed-read fallback matters most here. It lives in
-    // startSession (@pump/ui) and is covered by its own tests.
-    const { stop } = startSession(handleSession);
-    return stop;
-  }, []);
-
   const handleSession = async (currentSession: any) => {
     const isSameUser = lastUserIdRef.current === (currentSession?.user?.id || null);
     setSession(currentSession);
@@ -200,6 +192,22 @@ const App: React.FC = () => {
       clearStoredOnboardingDraft();
     }
   };
+
+  // handleSession is re-created on every render, so the subscription reads it
+  // through a ref rather than depending on it — depending on it would tear down
+  // and re-establish the auth listener on every render.
+  const handleSessionRef = useRef(handleSession);
+  useEffect(() => {
+    handleSessionRef.current = handleSession;
+  });
+
+  useEffect(() => {
+    // Desktop is the resilience tier and the most likely to start on a flaky
+    // connection, so the failed-read fallback matters most here. It lives in
+    // startSession (@pump/ui) and is covered by its own tests.
+    const { stop } = startSession((session) => handleSessionRef.current(session));
+    return stop;
+  }, []);
 
   const handleStationChange = (station: Station) => {
     setSelectedStation(station);

@@ -86,6 +86,7 @@ export const queryKeys = {
   shiftTemplates: () => ['shift-templates'] as const,
   paymentTerminals: (stationId: string) => ['payment-terminals', stationId] as const,
   pricing: (stationId: string) => ['pricing', stationId] as const,
+  pricingHistory: (stationId: string) => ['pricing-history', stationId] as const,
   organization: () => ['organization'] as const,
   activityGroups: (stationId: string, type: string, limit: number) =>
     ['activity-groups', stationId, type, limit] as const,
@@ -198,6 +199,17 @@ export function usePricing(stationId: string | null | undefined, options?: Optio
   return useQuery({
     queryKey: queryKeys.pricing(stationId ?? ''),
     queryFn: () => pricingSvc.getPricing(stationId!),
+    enabled: !!stationId,
+    ...TIER.semi,
+    ...options,
+  });
+}
+
+/** Past price changes for a station. Semi-static: appended to, never edited. */
+export function usePricingHistory(stationId: string | null | undefined, options?: Options<any[]>) {
+  return useQuery({
+    queryKey: queryKeys.pricingHistory(stationId ?? ''),
+    queryFn: () => pricingSvc.getPricingHistory(stationId!),
     enabled: !!stationId,
     ...TIER.semi,
     ...options,
