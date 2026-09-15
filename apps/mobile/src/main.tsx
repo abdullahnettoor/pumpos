@@ -1,6 +1,12 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { QueryProvider, createQueryClient, ErrorBoundary, ToastProvider, setPdfSaver } from '@pump/ui';
+import {
+  QueryProvider,
+  createQueryClient,
+  ErrorBoundary,
+  ToastProvider,
+  setPdfSaver,
+} from '@pump/ui';
 import '@pump/ui/src/index.css';
 import '@pump/ui/src/pump-ds/tailwind.css';
 import './mobile.css';
@@ -22,7 +28,9 @@ setPdfSaver(async (bytes, filename) => {
       /* user cancelled or share failed → fall through to download */
     }
   }
-  const url = URL.createObjectURL(new Blob([bytes as unknown as BlobPart], { type: 'application/pdf' }));
+  const url = URL.createObjectURL(
+    new Blob([bytes as unknown as BlobPart], { type: 'application/pdf' }),
+  );
   const a = document.createElement('a');
   a.href = url;
   a.download = filename;

@@ -11,7 +11,8 @@ import { inputVariants, type InputSize } from './Input.js';
  */
 
 export interface SelectProps
-  extends Omit<SelectHTMLAttributes<HTMLSelectElement>, 'size'>,
+  extends
+    Omit<SelectHTMLAttributes<HTMLSelectElement>, 'size'>,
     Omit<VariantProps<typeof inputVariants>, 'invalid'> {
   invalid?: boolean;
 }
@@ -30,14 +31,26 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
     <div style={{ position: 'relative', ...style }}>
       <select
         ref={ref}
-        className={cn(inputVariants({ inputSize, invalid }), 'appearance-none cursor-pointer', pad.cls, className)}
+        className={cn(
+          inputVariants({ inputSize, invalid }),
+          'appearance-none cursor-pointer',
+          pad.cls,
+          className,
+        )}
         {...rest}
       >
         {children}
       </select>
       <ChevronDown
         size={inputSize === 'sm' ? 14 : 16}
-        style={{ position: 'absolute', right: pad.pos, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }}
+        style={{
+          position: 'absolute',
+          right: pad.pos,
+          top: '50%',
+          transform: 'translateY(-50%)',
+          color: 'var(--text-muted)',
+          pointerEvents: 'none',
+        }}
         aria-hidden="true"
       />
     </div>

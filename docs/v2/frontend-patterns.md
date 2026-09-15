@@ -59,12 +59,12 @@ entry shared by Dashboard/Expenses/Purchases/Customers/Shifts (previously an N+1
 
 ```ts
 const stationId = selectedStation?.id ?? null;
-const { data, isLoading, error } = useShiftStatus(stationId);     // full status
-const expensesQ = useExpenses();                                  // list
-const invalidate = useInvalidateOperational();                    // after a mutation
+const { data, isLoading, error } = useShiftStatus(stationId); // full status
+const expensesQ = useExpenses(); // list
+const invalidate = useInvalidateOperational(); // after a mutation
 // ...
 await txService.recordExpense(payload);
-invalidate(stationId);   // refetches shift-status/expenses/etc.
+invalidate(stationId); // refetches shift-status/expenses/etc.
 ```
 
 Available hooks: `useShiftStatus`, `useShiftSummaries`, `useExpenses`, `usePurchases`,
@@ -78,18 +78,29 @@ cached data via an effect keyed on the query data.
 
 ## Primitives
 
-| Primitive | Use |
-|---|---|
-| `PageLayout` | screen header (title/subtitle/actions) + optional toolbar + content |
-| `KpiCard` | compact metric tile (mono numbers, semantic tone) |
-| `DataTable<T>` | dense, sortable TanStack Table with built-in loading/empty/error states |
-| `Drawer` | slide-in panel (prefer drawers over stacked modals) |
-| `StatusBadge`, `SyncIndicator`, `LoadingSpinner`, `ErrorBoundary` | state-forward UI |
+| Primitive                                                         | Use                                                                     |
+| ----------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `PageLayout`                                                      | screen header (title/subtitle/actions) + optional toolbar + content     |
+| `KpiCard`                                                         | compact metric tile (mono numbers, semantic tone)                       |
+| `DataTable<T>`                                                    | dense, sortable TanStack Table with built-in loading/empty/error states |
+| `Drawer`                                                          | slide-in panel (prefer drawers over stacked modals)                     |
+| `StatusBadge`, `SyncIndicator`, `LoadingSpinner`, `ErrorBoundary` | state-forward UI                                                        |
 
 ```tsx
-<PageLayout title="Inventory Management" subtitle="…" actions={<button className="btn btn-secondary btn-sm">Refresh</button>}>
-  <DataTable columns={cols} data={q.data} isLoading={q.isLoading} error={q.error as Error | null}
-    emptyMessage="No records." getRowId={(r) => r.id} initialSorting={[{ id: 'businessDate', desc: true }]} />
+<PageLayout
+  title="Inventory Management"
+  subtitle="…"
+  actions={<button className="btn btn-secondary btn-sm">Refresh</button>}
+>
+  <DataTable
+    columns={cols}
+    data={q.data}
+    isLoading={q.isLoading}
+    error={q.error as Error | null}
+    emptyMessage="No records."
+    getRowId={(r) => r.id}
+    initialSorting={[{ id: 'businessDate', desc: true }]}
+  />
 </PageLayout>
 ```
 
@@ -101,7 +112,11 @@ Use **React Hook Form + Zod**, reusing the Zod schemas already exported from
 `@pump/shared` (e.g. `customerCreateSchema`, `supplierPaymentSchema`):
 
 ```tsx
-const { register, handleSubmit, formState: { errors } } = useForm({ resolver: zodResolver(customerCreateSchema) });
+const {
+  register,
+  handleSubmit,
+  formState: { errors },
+} = useForm({ resolver: zodResolver(customerCreateSchema) });
 ```
 
 The `transactions/*EntryForm` components are presentational (props-driven) and reused by

@@ -7,8 +7,18 @@ import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persist
 // semi-static tiers). Operational/live data and anything auth-related are never
 // persisted. Bump CACHE_BUSTER on shape changes to drop stale persisted cache.
 const PERSIST_PREFIXES = new Set([
-  'tanks', 'products', 'customers', 'suppliers', 'expense-categories',
-  'stations', 'dispensers', 'nozzles', 'users', 'shift-templates', 'pricing', 'organization',
+  'tanks',
+  'products',
+  'customers',
+  'suppliers',
+  'expense-categories',
+  'stations',
+  'dispensers',
+  'nozzles',
+  'users',
+  'shift-templates',
+  'pricing',
+  'organization',
 ]);
 // Bump to invalidate all persisted client caches on next load. v3 drops stale
 // empty `stations` lists cached while a user briefly resolved to a wrong/empty
@@ -96,7 +106,10 @@ let fallbackClient: QueryClient | null = null;
  */
 function enablePersistence(client: QueryClient) {
   if (typeof window === 'undefined' || !window.localStorage) return;
-  const persister = createSyncStoragePersister({ storage: window.localStorage, key: PERSISTED_QUERY_CACHE_KEY });
+  const persister = createSyncStoragePersister({
+    storage: window.localStorage,
+    key: PERSISTED_QUERY_CACHE_KEY,
+  });
   persistQueryClient({
     queryClient: client as any,
     persister,

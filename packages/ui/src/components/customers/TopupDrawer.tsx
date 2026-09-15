@@ -19,11 +19,19 @@ interface TopupDrawerProps {
 }
 
 /** Prepaid wallet top-up. Self-contained: owns its form + save + toast. */
-export const TopupDrawer: React.FC<TopupDrawerProps> = ({ isOpen, customer, stationId, onClose, onDone }) => {
+export const TopupDrawer: React.FC<TopupDrawerProps> = ({
+  isOpen,
+  customer,
+  stationId,
+  onClose,
+  onDone,
+}) => {
   const invalidateOperational = useInvalidateOperational();
   const toast = useToast();
   const [amount, setAmount] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'Card' | 'UPI' | 'BankTransfer'>('Cash');
+  const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'Card' | 'UPI' | 'BankTransfer'>(
+    'Cash',
+  );
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -62,17 +70,35 @@ export const TopupDrawer: React.FC<TopupDrawerProps> = ({ isOpen, customer, stat
     <Drawer isOpen={isOpen} onClose={onClose} title="Prepaid Wallet Top-Up">
       <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
         {error && (
-          <div style={{ backgroundColor: 'var(--state-danger-bg)', color: 'var(--state-danger-fg)', padding: '8px 12px', borderRadius: 'var(--radius-input)', fontSize: '12px' }}>
+          <div
+            style={{
+              backgroundColor: 'var(--state-danger-bg)',
+              color: 'var(--state-danger-fg)',
+              padding: '8px 12px',
+              borderRadius: 'var(--radius-input)',
+              fontSize: '12px',
+            }}
+          >
             {error}
           </div>
         )}
 
         <Field label="Amount" required>
-          <MoneyInput value={amount} onChange={(e) => setAmount(e.target.value)} disabled={submitting} placeholder="0.00" step="0.01" />
+          <MoneyInput
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            disabled={submitting}
+            placeholder="0.00"
+            step="0.01"
+          />
         </Field>
 
         <Field label="Payment Method" required>
-          <Select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value as any)} disabled={submitting}>
+          <Select
+            value={paymentMethod}
+            onChange={(e) => setPaymentMethod(e.target.value as any)}
+            disabled={submitting}
+          >
             <option value="Cash">Cash</option>
             <option value="Card">Card</option>
             <option value="UPI">UPI</option>
@@ -81,12 +107,28 @@ export const TopupDrawer: React.FC<TopupDrawerProps> = ({ isOpen, customer, stat
         </Field>
 
         <Field label="Notes">
-          <Textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} disabled={submitting} placeholder="Optional reference or remark" />
+          <Textarea
+            rows={2}
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            disabled={submitting}
+            placeholder="Optional reference or remark"
+          />
         </Field>
 
         <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
-          <Button type="submit" variant="primary" fullWidth loading={submitting} disabled={!amount}>Record Top-Up</Button>
-          <Button type="button" variant="secondary" fullWidth disabled={submitting} onClick={onClose}>Cancel</Button>
+          <Button type="submit" variant="primary" fullWidth loading={submitting} disabled={!amount}>
+            Record Top-Up
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            fullWidth
+            disabled={submitting}
+            onClick={onClose}
+          >
+            Cancel
+          </Button>
         </div>
       </form>
     </Drawer>

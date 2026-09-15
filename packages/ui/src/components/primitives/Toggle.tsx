@@ -15,7 +15,10 @@ export interface CheckboxProps extends Omit<React.InputHTMLAttributes<HTMLInputE
  */
 export const Checkbox = React.forwardRef<HTMLInputElement, CheckboxProps>(
   ({ label, description, className, id, ...props }, ref) => (
-    <label className={cx('pump-check', props.disabled && 'pump-check--disabled', className)} htmlFor={id}>
+    <label
+      className={cx('pump-check', props.disabled && 'pump-check--disabled', className)}
+      htmlFor={id}
+    >
       <input ref={ref} id={id} type="checkbox" className="pump-check-input" {...props} />
       {(label || description) && (
         <span className="pump-check-text">
@@ -40,9 +43,21 @@ export interface SwitchProps extends Omit<React.InputHTMLAttributes<HTMLInputEle
  */
 export const Switch = React.forwardRef<HTMLInputElement, SwitchProps>(
   ({ label, description, className, id, ...props }, ref) => (
-    <label className={cx('pump-switch', props.disabled && 'pump-switch--disabled', className)} htmlFor={id}>
-      <input ref={ref} id={id} type="checkbox" role="switch" className="pump-switch-input" {...props} />
-      <span className="pump-switch-track" aria-hidden="true"><span className="pump-switch-thumb" /></span>
+    <label
+      className={cx('pump-switch', props.disabled && 'pump-switch--disabled', className)}
+      htmlFor={id}
+    >
+      <input
+        ref={ref}
+        id={id}
+        type="checkbox"
+        role="switch"
+        className="pump-switch-input"
+        {...props}
+      />
+      <span className="pump-switch-track" aria-hidden="true">
+        <span className="pump-switch-thumb" />
+      </span>
       {(label || description) && (
         <span className="pump-check-text">
           {label && <span className="pump-check-label">{label}</span>}

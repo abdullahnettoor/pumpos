@@ -87,22 +87,36 @@ export const WebOnboardingNotice: React.FC<WebOnboardingNoticeProps> = ({
           <Globe size={24} />
         </div>
 
-        <h2 style={{ fontSize: '17px', fontWeight: 700, color: 'var(--text-strong)', letterSpacing: '-0.01em' }}>
+        <h2
+          style={{
+            fontSize: '17px',
+            fontWeight: 700,
+            color: 'var(--text-strong)',
+            letterSpacing: '-0.01em',
+          }}
+        >
           {canOnboard ? "Let's finish setting up on the web" : 'Station setup isn’t finished yet'}
         </h2>
 
-        <p style={{ color: 'var(--text-muted)', fontSize: '13px', lineHeight: 1.5, marginTop: '10px' }}>
+        <p
+          style={{
+            color: 'var(--text-muted)',
+            fontSize: '13px',
+            lineHeight: 1.5,
+            marginTop: '10px',
+          }}
+        >
           {canOnboard ? (
             <>
               First-time station setup — tanks, dispensers, products and staff — is done once in the
-              PumpOS <strong style={{ color: 'var(--text-default)' }}>web console</strong>. As soon as it’s
-              complete, this desktop app unlocks for daily operations.
+              PumpOS <strong style={{ color: 'var(--text-default)' }}>web console</strong>. As soon
+              as it’s complete, this desktop app unlocks for daily operations.
             </>
           ) : (
             <>
               Your Owner or Manager needs to finish the station’s setup in the PumpOS
-              <strong style={{ color: 'var(--text-default)' }}> web console</strong>. This desktop app will
-              unlock automatically once that’s done.
+              <strong style={{ color: 'var(--text-default)' }}> web console</strong>. This desktop
+              app will unlock automatically once that’s done.
             </>
           )}
         </p>

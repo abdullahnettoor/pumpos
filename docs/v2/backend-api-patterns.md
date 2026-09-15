@@ -32,8 +32,8 @@ transactionsRouter.post('/sales', async (c) => {
       ledger: new DrizzleCustomerLedgerRepository(tx),
       customers: new DrizzleCustomerRepository(tx),
       shifts: new DrizzleShiftRepository(tx),
-      docNumbers,                       // module-level singleton
-      events,                           // tx-scoped dispatcher
+      docNumbers, // module-level singleton
+      events, // tx-scoped dispatcher
     }).execute(body, buildContext(user)),
   );
   return sendResult(c, result);
@@ -41,6 +41,7 @@ transactionsRouter.post('/sales', async (c) => {
 ```
 
 Key points:
+
 - Build every repository with the **transaction handle `tx`** so writes participate
   in the transaction.
 - `events` is a **tx-scoped** dispatcher (writes to the `events` table inside the same
@@ -58,9 +59,9 @@ export async function runInTransaction<T>(
   try {
     return await db.transaction(async (txRaw) => {
       const tx = txRaw as unknown as DbClient;
-      const events = createDispatcher(tx);          // DrizzleEventStore on tx
+      const events = createDispatcher(tx); // DrizzleEventStore on tx
       const result = await fn(tx, events);
-      if (!result.success) throw new RollbackSignal(result.error);  // roll back on err
+      if (!result.success) throw new RollbackSignal(result.error); // roll back on err
       return result;
     });
   } catch (e) {
@@ -79,8 +80,14 @@ Every response is `{ success: true, data }` or `{ success: false, error: { code,
 `sendResult` maps core `ErrorCodes` to HTTP status:
 
 ```ts
-const STATUS_BY_CODE = { VALIDATION_ERROR: 400, NOT_FOUND: 404, CONFLICT: 409,
-  FORBIDDEN: 403, UNAUTHORIZED: 401, INVARIANT_VIOLATION: 409 };
+const STATUS_BY_CODE = {
+  VALIDATION_ERROR: 400,
+  NOT_FOUND: 404,
+  CONFLICT: 409,
+  FORBIDDEN: 403,
+  UNAUTHORIZED: 401,
+  INVARIANT_VIOLATION: 409,
+};
 ```
 
 ## Authorization
@@ -89,18 +96,18 @@ const STATUS_BY_CODE = { VALIDATION_ERROR: 400, NOT_FOUND: 404, CONFLICT: 409,
 JWT auth middleware). Guards from `@pump/shared/permissions/guards.ts` gate mutations;
 they encode the Permissions Matrix. Current mapping:
 
-| Action | Guard | Roles |
-|---|---|---|
-| Open/close shift | `canOpenShift` / `canCloseShift` | Owner, Manager, Staff |
-| Reopen shift | `canReopenShift` | Owner, Manager |
-| Products / tanks / DU / nozzles / templates | `canManageProduct` / `canManageInfrastructure` | Owner, Manager |
-| Users | `canManageUsers` | Owner |
-| Create/edit customer · supplier · vehicle | `canManageCustomers` / `canManageSuppliers` | Owner, Manager, Accountant |
-| Archive customer/supplier/vehicle | `canArchiveParty` | Owner, Manager |
-| Record purchase / supplier payment | `canRecordPurchase` | Owner, Manager, Accountant |
-| Record expense / collection / sale | (none) | all roles (Staff records them) |
-| Generate DSSR | `canExportReports` | Owner, Manager, Accountant |
-| Station-scoped reads/writes | `isAuthorizedForStation(user, { organizationId, stationId })` | — |
+| Action                                      | Guard                                                         | Roles                          |
+| ------------------------------------------- | ------------------------------------------------------------- | ------------------------------ |
+| Open/close shift                            | `canOpenShift` / `canCloseShift`                              | Owner, Manager, Staff          |
+| Reopen shift                                | `canReopenShift`                                              | Owner, Manager                 |
+| Products / tanks / DU / nozzles / templates | `canManageProduct` / `canManageInfrastructure`                | Owner, Manager                 |
+| Users                                       | `canManageUsers`                                              | Owner                          |
+| Create/edit customer · supplier · vehicle   | `canManageCustomers` / `canManageSuppliers`                   | Owner, Manager, Accountant     |
+| Archive customer/supplier/vehicle           | `canArchiveParty`                                             | Owner, Manager                 |
+| Record purchase / supplier payment          | `canRecordPurchase`                                           | Owner, Manager, Accountant     |
+| Record expense / collection / sale          | (none)                                                        | all roles (Staff records them) |
+| Generate DSSR                               | `canExportReports`                                            | Owner, Manager, Accountant     |
+| Station-scoped reads/writes                 | `isAuthorizedForStation(user, { organizationId, stationId })` | —                              |
 
 Use-cases also re-check `ctx.organizationId` ownership; RLS is a third layer.
 
@@ -108,6 +115,7 @@ Use-cases also re-check `ctx.organizationId` ownership; RLS is a third layer.
 
 `infra/idempotency.ts` is mounted after auth (`api.use('*', idempotency)`). When a
 mutating request carries an `Idempotency-Key` header:
+
 - Reserve the key (`insert ... onConflictDoNothing`).
 - On a duplicate, return the **cached response** (or `409` if still in flight).
 - Cache 2xx/4xx responses; release the reservation on 5xx so transient failures retry.

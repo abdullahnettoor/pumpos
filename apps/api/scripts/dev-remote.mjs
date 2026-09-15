@@ -2,7 +2,7 @@
 
 /**
  * dev-remote.mjs
- * 
+ *
  * Local development against remote Supabase.
  * Launches local Wrangler dev server with proper local Hyperdrive binding.
  */
@@ -26,7 +26,10 @@ function loadValueFromDotEnv(filePath, key) {
     return '';
   }
 
-  return line.slice(key.length + 1).trim().replace(/^"|"$/g, '');
+  return line
+    .slice(key.length + 1)
+    .trim()
+    .replace(/^"|"$/g, '');
 }
 
 function loadRawValue(filePath) {
@@ -39,21 +42,26 @@ function loadRawValue(filePath) {
 
 const devVarsPath = path.resolve(projectRoot, '.dev.vars');
 
-const directUrl = process.env.DIRECT_DATABASE_URL
-  || loadValueFromDotEnv(devVarsPath, 'DIRECT_DATABASE_URL');
+const directUrl =
+  process.env.DIRECT_DATABASE_URL || loadValueFromDotEnv(devVarsPath, 'DIRECT_DATABASE_URL');
 
-const pooledUrl = process.env.DATABASE_URL
-  || loadValueFromDotEnv(devVarsPath, 'DATABASE_URL')
-  || loadRawValue(path.resolve(projectRoot, '../../supabase/.temp/pooler-url'));
+const pooledUrl =
+  process.env.DATABASE_URL ||
+  loadValueFromDotEnv(devVarsPath, 'DATABASE_URL') ||
+  loadRawValue(path.resolve(projectRoot, '../../supabase/.temp/pooler-url'));
 
 const connectionString = directUrl || pooledUrl;
 
 if (!connectionString) {
-  console.error('Missing DIRECT_DATABASE_URL and apps/api/.dev.vars. Set DIRECT_DATABASE_URL to your Supabase connection string.');
+  console.error(
+    'Missing DIRECT_DATABASE_URL and apps/api/.dev.vars. Set DIRECT_DATABASE_URL to your Supabase connection string.',
+  );
   process.exit(1);
 }
 
-console.log('🚀 Starting PumpOS API dev server (local Wrangler connecting to remote Supabase)...\n');
+console.log(
+  '🚀 Starting PumpOS API dev server (local Wrangler connecting to remote Supabase)...\n',
+);
 
 const child = spawn('wrangler', ['dev', 'src/index.ts'], {
   cwd: projectRoot,

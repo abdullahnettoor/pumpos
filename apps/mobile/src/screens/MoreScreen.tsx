@@ -1,5 +1,12 @@
 import React, { useState } from 'react';
-import { useDailyDssrRange, useInventoryStatus, useUsers, useOrganization, useStations, inr } from '@pump/ui';
+import {
+  useDailyDssrRange,
+  useInventoryStatus,
+  useUsers,
+  useOrganization,
+  useStations,
+  inr,
+} from '@pump/ui';
 import { resolveBusinessDate } from '@pump/shared';
 import type { Station } from '@pump/shared';
 import { Kpi } from '../components/Kpi.js';
@@ -21,7 +28,11 @@ function addDays(isoDate: string, delta: number): string {
 }
 const shortDate = (iso: string) => {
   const [y, m, d] = iso.split('-').map(Number);
-  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', timeZone: 'UTC' });
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    timeZone: 'UTC',
+  });
 };
 const numberFmt = (n: number, dec = 0) =>
   n.toLocaleString('en-IN', { minimumFractionDigits: dec, maximumFractionDigits: dec });
@@ -57,7 +68,9 @@ export const MoreScreen: React.FC<Props> = ({ station, onNavigate }) => {
   const org: any = orgQ.data || {};
   const orgGstin = org?.metadata?.gstin || org?.metadata?.legal?.gstin || null;
   const team: any[] = usersQ.data || [];
-  const stationNameById = new Map<string, string>((stationsQ.data || []).map((s: any) => [s.id, s.name]));
+  const stationNameById = new Map<string, string>(
+    (stationsQ.data || []).map((s: any) => [s.id, s.name]),
+  );
 
   const snaps = (rangeQ.data || [])
     .map((s: any) => ({ date: s.businessDate, d: s.snapshotData || {} }))
@@ -109,19 +122,39 @@ export const MoreScreen: React.FC<Props> = ({ station, onNavigate }) => {
       {/* Needs attention */}
       <Collapsible
         title="Needs attention"
-        summary={alerts.length ? `${alerts.length} item${alerts.length === 1 ? '' : 's'} to review` : 'All clear'}
-        badge={alerts.length ? { text: String(alerts.length), tone: alerts.some((a) => a.severity === 'danger') ? 'danger' : 'warning' } : undefined}
+        summary={
+          alerts.length
+            ? `${alerts.length} item${alerts.length === 1 ? '' : 's'} to review`
+            : 'All clear'
+        }
+        badge={
+          alerts.length
+            ? {
+                text: String(alerts.length),
+                tone: alerts.some((a) => a.severity === 'danger') ? 'danger' : 'warning',
+              }
+            : undefined
+        }
         defaultOpen={false}
       >
-        <AlertList alerts={alerts} onNavigate={onNavigate} emptyText="All clear — nothing needs attention." />
+        <AlertList
+          alerts={alerts}
+          onNavigate={onNavigate}
+          emptyText="All clear — nothing needs attention."
+        />
       </Collapsible>
 
       {/* Trends & analytics */}
       <Collapsible
         title="Trends & analytics"
-        summary={series.length ? `${inr(totalSales)} fuel sales · last ${days} days` : 'No closed days yet'}
+        summary={
+          series.length ? `${inr(totalSales)} fuel sales · last ${days} days` : 'No closed days yet'
+        }
       >
-        <div className="mb-3 grid grid-cols-2 gap-1 rounded-lg p-1" style={{ backgroundColor: 'var(--bg-surface-alt)' }}>
+        <div
+          className="mb-3 grid grid-cols-2 gap-1 rounded-lg p-1"
+          style={{ backgroundColor: 'var(--bg-surface-alt)' }}
+        >
           {[7, 30].map((d) => (
             <button
               key={d}
@@ -140,7 +173,9 @@ export const MoreScreen: React.FC<Props> = ({ station, onNavigate }) => {
         </div>
 
         {rangeQ.isLoading ? (
-          <p className="py-4 text-center text-sm" style={{ color: 'var(--text-muted)' }}>Loading trends…</p>
+          <p className="py-4 text-center text-sm" style={{ color: 'var(--text-muted)' }}>
+            Loading trends…
+          </p>
         ) : series.length === 0 ? (
           <p className="py-4 text-center text-sm" style={{ color: 'var(--text-muted)' }}>
             No closed business days in this period yet.
@@ -148,24 +183,51 @@ export const MoreScreen: React.FC<Props> = ({ station, onNavigate }) => {
         ) : (
           <div className="flex flex-col gap-4">
             <div className="grid grid-cols-2 gap-3">
-              <Kpi label="Fuel sales" value={inr(totalSales)} sub={`${daysWithData} day${daysWithData === 1 ? '' : 's'}`} tone="positive" />
+              <Kpi
+                label="Fuel sales"
+                value={inr(totalSales)}
+                sub={`${daysWithData} day${daysWithData === 1 ? '' : 's'}`}
+                tone="positive"
+              />
               <Kpi label="Avg / day" value={inr(avgSales)} />
               <Kpi label="Volume" value={`${numberFmt(totalVolume)} L`} sub="Net of testing" />
-              <Kpi label="Expense ratio" value={`${expenseRatio.toFixed(1)}%`} sub="of fuel sales" tone={expenseRatio > 5 ? 'warning' : 'default'} />
+              <Kpi
+                label="Expense ratio"
+                value={`${expenseRatio.toFixed(1)}%`}
+                sub="of fuel sales"
+                tone={expenseRatio > 5 ? 'warning' : 'default'}
+              />
             </div>
 
             <div>
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
+              <p
+                className="mb-2 text-xs font-semibold uppercase tracking-wide"
+                style={{ color: 'var(--text-muted)' }}
+              >
                 Daily fuel sales
               </p>
               <div className="flex h-28 items-end gap-1">
                 {series.map((s) => (
-                  <div key={s.date} className="flex flex-1 flex-col items-center justify-end" title={`${shortDate(s.date)} · ${inr(s.sales)}`}>
-                    <div className="w-full rounded-t" style={{ height: `${Math.max(2, (s.sales / maxSales) * 100)}%`, backgroundColor: 'var(--brand-primary)', opacity: 0.85 }} />
+                  <div
+                    key={s.date}
+                    className="flex flex-1 flex-col items-center justify-end"
+                    title={`${shortDate(s.date)} · ${inr(s.sales)}`}
+                  >
+                    <div
+                      className="w-full rounded-t"
+                      style={{
+                        height: `${Math.max(2, (s.sales / maxSales) * 100)}%`,
+                        backgroundColor: 'var(--brand-primary)',
+                        opacity: 0.85,
+                      }}
+                    />
                   </div>
                 ))}
               </div>
-              <div className="mt-2 flex justify-between text-[11px]" style={{ color: 'var(--text-faint)' }}>
+              <div
+                className="mt-2 flex justify-between text-[11px]"
+                style={{ color: 'var(--text-faint)' }}
+              >
                 <span>{shortDate(series[0].date)}</span>
                 <span>{shortDate(series[series.length - 1].date)}</span>
               </div>
@@ -173,7 +235,10 @@ export const MoreScreen: React.FC<Props> = ({ station, onNavigate }) => {
 
             {products.length > 0 && (
               <div>
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
+                <p
+                  className="mb-2 text-xs font-semibold uppercase tracking-wide"
+                  style={{ color: 'var(--text-muted)' }}
+                >
                   Product mix
                 </p>
                 <div className="flex flex-col gap-3">
@@ -183,12 +248,24 @@ export const MoreScreen: React.FC<Props> = ({ station, onNavigate }) => {
                       <div key={p.id}>
                         <div className="mb-1 flex items-center justify-between text-xs">
                           <span style={{ color: 'var(--text-default)' }}>{p.name}</span>
-                          <span className="font-mono tabular-nums" style={{ color: 'var(--text-muted)' }}>
+                          <span
+                            className="font-mono tabular-nums"
+                            style={{ color: 'var(--text-muted)' }}
+                          >
                             {inr(p.value)} · {pct.toFixed(0)}%
                           </span>
                         </div>
-                        <div className="h-2 w-full overflow-hidden rounded-full" style={{ backgroundColor: 'var(--bg-surface-alt)' }}>
-                          <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: PRODUCT_BAR[i % PRODUCT_BAR.length] }} />
+                        <div
+                          className="h-2 w-full overflow-hidden rounded-full"
+                          style={{ backgroundColor: 'var(--bg-surface-alt)' }}
+                        >
+                          <div
+                            className="h-full rounded-full"
+                            style={{
+                              width: `${pct}%`,
+                              backgroundColor: PRODUCT_BAR[i % PRODUCT_BAR.length],
+                            }}
+                          />
                         </div>
                       </div>
                     );
@@ -203,13 +280,21 @@ export const MoreScreen: React.FC<Props> = ({ station, onNavigate }) => {
       {/* Inventory & tanks */}
       <Collapsible
         title="Inventory & tanks"
-        summary={tanks.length ? `${tanks.length} tank${tanks.length === 1 ? '' : 's'}${lowTanks ? ` · ${lowTanks} low` : ''}` : 'No tanks configured'}
+        summary={
+          tanks.length
+            ? `${tanks.length} tank${tanks.length === 1 ? '' : 's'}${lowTanks ? ` · ${lowTanks} low` : ''}`
+            : 'No tanks configured'
+        }
         badge={lowTanks ? { text: `${lowTanks} low`, tone: 'warning' } : undefined}
       >
         {invQ.isLoading ? (
-          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Loading…</p>
+          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+            Loading…
+          </p>
         ) : tanks.length === 0 ? (
-          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>No tanks configured.</p>
+          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+            No tanks configured.
+          </p>
         ) : (
           <div className="flex flex-col gap-3">
             {tanks.map((t) => {
@@ -218,22 +303,38 @@ export const MoreScreen: React.FC<Props> = ({ station, onNavigate }) => {
               const pct = cap > 0 ? Math.min(100, (vol / cap) * 100) : 0;
               const cover = daysOfCover(t);
               const low = pct < 20;
-              const barColor = pct < 12 ? 'var(--state-danger-fg)' : pct < 25 ? 'var(--state-warning-fg)' : 'var(--brand-primary)';
+              const barColor =
+                pct < 12
+                  ? 'var(--state-danger-fg)'
+                  : pct < 25
+                    ? 'var(--state-warning-fg)'
+                    : 'var(--brand-primary)';
               return (
                 <div key={t.id}>
                   <div className="mb-1 flex items-center justify-between text-xs">
                     <span style={{ color: 'var(--text-default)' }}>
                       {t.name} · {t.productName}
                     </span>
-                    <span className="font-mono tabular-nums" style={{ color: low ? 'var(--state-danger-fg)' : 'var(--text-muted)' }}>
+                    <span
+                      className="font-mono tabular-nums"
+                      style={{ color: low ? 'var(--state-danger-fg)' : 'var(--text-muted)' }}
+                    >
                       {numberFmt(vol)} / {numberFmt(cap)} {t.productUnit || 'L'} · {pct.toFixed(0)}%
                     </span>
                   </div>
-                  <div className="h-2 w-full overflow-hidden rounded-full" style={{ backgroundColor: 'var(--bg-surface-alt)' }}>
-                    <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: barColor }} />
+                  <div
+                    className="h-2 w-full overflow-hidden rounded-full"
+                    style={{ backgroundColor: 'var(--bg-surface-alt)' }}
+                  >
+                    <div
+                      className="h-full rounded-full"
+                      style={{ width: `${pct}%`, backgroundColor: barColor }}
+                    />
                   </div>
                   <p className="mt-1 text-[11px]" style={{ color: 'var(--text-faint)' }}>
-                    {cover != null ? `~${Math.floor(cover)} days of cover at recent sales` : 'Days of cover: not enough sales history'}
+                    {cover != null
+                      ? `~${Math.floor(cover)} days of cover at recent sales`
+                      : 'Days of cover: not enough sales history'}
                   </p>
                 </div>
               );
@@ -245,9 +346,13 @@ export const MoreScreen: React.FC<Props> = ({ station, onNavigate }) => {
       {/* Team */}
       <Collapsible title="Team" summary={`${team.length} member${team.length === 1 ? '' : 's'}`}>
         {usersQ.isLoading ? (
-          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Loading…</p>
+          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+            Loading…
+          </p>
         ) : team.length === 0 ? (
-          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>No team members yet.</p>
+          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+            No team members yet.
+          </p>
         ) : (
           <div className="flex flex-col gap-2">
             {team.map((u) => {
@@ -257,20 +362,39 @@ export const MoreScreen: React.FC<Props> = ({ station, onNavigate }) => {
               const stationsLabel =
                 u.role === 'Owner'
                   ? 'All stations'
-                  : (u.stationIds || []).map((id: string) => stationNameById.get(id)).filter(Boolean).join(', ') || 'No station';
+                  : (u.stationIds || [])
+                      .map((id: string) => stationNameById.get(id))
+                      .filter(Boolean)
+                      .join(', ') || 'No station';
               return (
                 <div key={u.id} className="flex items-center justify-between">
                   <div className="min-w-0">
-                    <p className="truncate text-sm" style={{ color: u.status === 'INACTIVE' ? 'var(--text-faint)' : 'var(--text-default)' }}>
+                    <p
+                      className="truncate text-sm"
+                      style={{
+                        color:
+                          u.status === 'INACTIVE' ? 'var(--text-faint)' : 'var(--text-default)',
+                      }}
+                    >
                       {u.fullName}
                     </p>
-                    <p className="truncate text-[11px]" style={{ color: 'var(--text-faint)' }}>{stationsLabel}</p>
+                    <p className="truncate text-[11px]" style={{ color: 'var(--text-faint)' }}>
+                      {stationsLabel}
+                    </p>
                   </div>
                   <div className="flex flex-shrink-0 items-center gap-2">
                     {u.status === 'INACTIVE' && (
-                      <span className="text-[10px] font-medium" style={{ color: 'var(--text-faint)' }}>Inactive</span>
+                      <span
+                        className="text-[10px] font-medium"
+                        style={{ color: 'var(--text-faint)' }}
+                      >
+                        Inactive
+                      </span>
                     )}
-                    <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ backgroundColor: style.bg, color: style.fg }}>
+                    <span
+                      className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                      style={{ backgroundColor: style.bg, color: style.fg }}
+                    >
                       {tag}
                     </span>
                   </div>
@@ -283,8 +407,14 @@ export const MoreScreen: React.FC<Props> = ({ station, onNavigate }) => {
 
       {/* Organization */}
       <Collapsible title="Organization" summary={org?.name ?? undefined}>
-        <p className="text-sm font-semibold" style={{ color: 'var(--text-strong)' }}>{org?.name ?? '—'}</p>
-        {orgGstin && <p className="text-xs" style={{ color: 'var(--text-muted)' }}>GSTIN {orgGstin}</p>}
+        <p className="text-sm font-semibold" style={{ color: 'var(--text-strong)' }}>
+          {org?.name ?? '—'}
+        </p>
+        {orgGstin && (
+          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+            GSTIN {orgGstin}
+          </p>
+        )}
         <p className="mt-0.5 text-[11px]" style={{ color: 'var(--text-faint)' }}>
           {(stationsQ.data || []).length} station{(stationsQ.data || []).length === 1 ? '' : 's'}
         </p>

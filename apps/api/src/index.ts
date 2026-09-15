@@ -1,9 +1,29 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { createDb, DbClient, schema } from '@pump/db';
-import { eq, and, asc, desc, inArray, count, isNotNull, isNull, lt, or, sql, type SQL } from 'drizzle-orm';
+import {
+  eq,
+  and,
+  asc,
+  desc,
+  inArray,
+  count,
+  isNotNull,
+  isNull,
+  lt,
+  or,
+  sql,
+  type SQL,
+} from 'drizzle-orm';
 import { Role, canManageUsers, organizationUpdateSchema } from '@pump/shared';
-import { BusinessEvents, SystemClock, UuidGenerator, createEvent, type DomainEvent, type EventTone } from '@pump/core';
+import {
+  BusinessEvents,
+  SystemClock,
+  UuidGenerator,
+  createEvent,
+  type DomainEvent,
+  type EventTone,
+} from '@pump/core';
 import { stationSetupRouter } from './routes/station-setup.js';
 import { paymentTerminalsRouter } from './routes/payment-terminals.js';
 import { productsRouter } from './routes/products.js';
@@ -24,7 +44,6 @@ import {
   type ActivityActor,
   type ActivityGroupingRole,
 } from './infra/activity.js';
-
 
 // --- Auth cache (per-isolate) --------------------------------------------
 // Cloudflare Workers reuse isolates across many requests, so a module-level
@@ -102,7 +121,6 @@ type Variables = {
 
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
-
 function getDbFromHyperdrive(env: Bindings): DbClient {
   // Primary path: Hyperdrive (edge query cache + pooled connection).
   // Fallback path: SUPABASE_DIRECT_URL, used when either
@@ -111,13 +129,12 @@ function getDbFromHyperdrive(env: Bindings): DbClient {
   //       after a Hyperdrive-side failure such as a daily quota outage.
   const hyperdriveConn = env.HYPERDRIVE?.connectionString;
   const directConn = env.SUPABASE_DIRECT_URL;
-  const useDirect =
-    !!directConn && (!hyperdriveConn || isHyperdriveBreakerOpen());
+  const useDirect = !!directConn && (!hyperdriveConn || isHyperdriveBreakerOpen());
 
   const conn = useDirect ? directConn : hyperdriveConn;
   if (!conn) {
     throw new Error(
-      'No database connection available: HYPERDRIVE binding is missing and SUPABASE_DIRECT_URL is not set'
+      'No database connection available: HYPERDRIVE binding is missing and SUPABASE_DIRECT_URL is not set',
     );
   }
 
@@ -152,13 +169,15 @@ function tripHyperdriveBreaker(reason: string): void {
     new Date(now).getUTCFullYear(),
     new Date(now).getUTCMonth(),
     new Date(now).getUTCDate() + 1,
-    0, 0, 0
+    0,
+    0,
+    0,
   );
   const until = Math.max(now + 5 * 60_000, nextMidnightUtc);
   // Only log the first trip; subsequent trips extend silently.
   if (until > hyperdriveDisabledUntilMs) {
     console.warn(
-      `[HYPERDRIVE FALLBACK TRIPPED] Routing to SUPABASE_DIRECT_URL until ${new Date(until).toISOString()}. Reason: ${reason}`
+      `[HYPERDRIVE FALLBACK TRIPPED] Routing to SUPABASE_DIRECT_URL until ${new Date(until).toISOString()}. Reason: ${reason}`,
     );
   }
   hyperdriveDisabledUntilMs = until;
@@ -188,16 +207,19 @@ const allowedCorsOrigins = new Set([
 
 // Enable CORS for known browser/Tauri origins. Non-browser clients are not
 // blocked by CORS; requests without an Origin header are allowed through.
-app.use('*', cors({
-  origin: (origin) => {
-    if (!origin) return null;
-    return allowedCorsOrigins.has(origin) ? origin : null;
-  },
-  allowHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key'],
-  allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  exposeHeaders: ['Content-Length', 'Server-Timing'],
-  maxAge: 600,
-}));
+app.use(
+  '*',
+  cors({
+    origin: (origin) => {
+      if (!origin) return null;
+      return allowedCorsOrigins.has(origin) ? origin : null;
+    },
+    allowHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key'],
+    allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    exposeHeaders: ['Content-Length', 'Server-Timing'],
+    maxAge: 600,
+  }),
+);
 
 // Latency instrumentation: total per-request time as a Server-Timing header
 // (visible in the browser Network tab) + a log line, so slow routes are obvious.
@@ -215,13 +237,16 @@ app.use('*', async (c, next) => {
     c.set('db', getDbFromHyperdrive(c.env));
     await next();
   } catch (err: any) {
-    return c.json({
-      success: false,
-      error: {
-        code: 'CONFIGURATION_ERROR',
-        message: err?.message || 'Database runtime configuration is invalid',
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: 'CONFIGURATION_ERROR',
+          message: err?.message || 'Database runtime configuration is invalid',
+        },
       },
-    }, 500);
+      500,
+    );
   }
 });
 
@@ -329,7 +354,10 @@ function decodeActivityCursor(value: string | undefined): ActivityCursor | null 
   }
 
   try {
-    const padded = value.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(value.length / 4) * 4, '=');
+    const padded = value
+      .replace(/-/g, '+')
+      .replace(/_/g, '/')
+      .padEnd(Math.ceil(value.length / 4) * 4, '=');
     const decoded: unknown = JSON.parse(atob(padded));
     if (
       !decoded ||
@@ -399,9 +427,7 @@ function activityGroupFilter(
   const stationFilter = stationId
     ? sql` AND activity_group_members.station_id = ${stationId}`
     : sql``;
-  const typeFilter = type
-    ? sql` AND activity_group_members.event_type = ${type}`
-    : sql``;
+  const typeFilter = type ? sql` AND activity_group_members.event_type = ${type}` : sql``;
   return sql`EXISTS (
     SELECT 1
     FROM events AS activity_group_members
@@ -438,9 +464,15 @@ api.use('*', async (c, next) => {
   }
 
   const authHeader = c.req.header('Authorization');
-  
+
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return c.json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Missing or invalid authentication token' } }, 401);
+    return c.json(
+      {
+        success: false,
+        error: { code: 'UNAUTHORIZED', message: 'Missing or invalid authentication token' },
+      },
+      401,
+    );
   }
 
   const token = authHeader.split(' ')[1];
@@ -467,13 +499,11 @@ api.use('*', async (c, next) => {
   };
 
   try {
-    let payload: any;
-
     // Verify token using JWT signature. Supabase's current recommendation is
     // asymmetric JWT signing (ES256) verified via the project's JWKS endpoint.
     // HS256 is kept only as an optional legacy fallback when the shared secret
     // is still configured.
-    payload = await verifySupabaseJwt(token, c.env, c.req.url);
+    const payload: any = await verifySupabaseJwt(token, c.env, c.req.url);
 
     const authId = payload.sub; // UUID from supabase auth.users
 
@@ -485,18 +515,24 @@ api.use('*', async (c, next) => {
       const dbUser = await runWithFallback((client) =>
         client.query.users.findFirst({
           where: eq(schema.users.authUserId, authId),
-        })
+        }),
       );
 
       if (!dbUser || dbUser.status === 'INACTIVE') {
-        return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'User profile inactive or not found' } }, 403);
+        return c.json(
+          {
+            success: false,
+            error: { code: 'FORBIDDEN', message: 'User profile inactive or not found' },
+          },
+          403,
+        );
       }
 
       const assigns = await runWithFallback((client) =>
         client
           .select()
           .from(schema.userStationAssignments)
-          .where(eq(schema.userStationAssignments.userId, dbUser.id))
+          .where(eq(schema.userStationAssignments.userId, dbUser.id)),
       );
 
       cachedUser = {
@@ -520,13 +556,16 @@ api.use('*', async (c, next) => {
       message: err?.message,
       cause: err?.cause?.message ?? err?.cause,
     });
-    return c.json({
-      success: false,
-      error: {
-        code: 'UNAUTHORIZED',
-        message: 'Invalid or expired authentication token',
-      }
-    }, 401);
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: 'UNAUTHORIZED',
+          message: 'Invalid or expired authentication token',
+        },
+      },
+      401,
+    );
   }
 });
 
@@ -545,9 +584,14 @@ api.get('/session', (c) => {
 api.get('/organization', async (c) => {
   const user = c.var.user;
   const db = c.var.db;
-  const org = await db.query.organizations.findFirst({ where: eq(schema.organizations.id, user.organizationId) });
+  const org = await db.query.organizations.findFirst({
+    where: eq(schema.organizations.id, user.organizationId),
+  });
   if (!org) {
-    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Organization not found' } }, 404);
+    return c.json(
+      { success: false, error: { code: 'NOT_FOUND', message: 'Organization not found' } },
+      404,
+    );
   }
   return c.json({ success: true, data: org });
 });
@@ -556,12 +600,27 @@ api.get('/organization', async (c) => {
 api.put('/organization', async (c) => {
   const user = c.var.user;
   if (!canManageUsers(user.role)) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Only Owners can manage the organization' } }, 403);
+    return c.json(
+      {
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'Only Owners can manage the organization' },
+      },
+      403,
+    );
   }
   const body = await c.req.json().catch(() => ({}));
   const parsed = organizationUpdateSchema.safeParse(body);
   if (!parsed.success) {
-    return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: parsed.error.issues[0]?.message || 'Invalid input' } }, 400);
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: parsed.error.issues[0]?.message || 'Invalid input',
+        },
+      },
+      400,
+    );
   }
   const db = c.var.db;
   const [updated] = await db
@@ -577,7 +636,13 @@ api.put('/organization', async (c) => {
 api.get('/activity', async (c) => {
   const user = c.var.user;
   if (!canManageUsers(user.role)) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Only Owners can view the activity log' } }, 403);
+    return c.json(
+      {
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'Only Owners can view the activity log' },
+      },
+      403,
+    );
   }
   const stationId = c.req.query('stationId');
   const type = c.req.query('type');
@@ -587,10 +652,16 @@ api.get('/activity', async (c) => {
     limit = parseActivityLimit(c.req.query('limit'));
     cursor = decodeActivityCursor(c.req.query('cursor'));
   } catch (error) {
-    return c.json({
-      success: false,
-      error: { code: 'VALIDATION_ERROR', message: error instanceof Error ? error.message : 'Invalid activity query' },
-    }, 400);
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: error instanceof Error ? error.message : 'Invalid activity query',
+        },
+      },
+      400,
+    );
   }
 
   const primaryRole = sql`${schema.events.metadata} -> 'grouping' ->> 'role'`;
@@ -604,10 +675,15 @@ api.get('/activity', async (c) => {
   const memberFilter = activityGroupFilter(user.organizationId, stationId, type);
   if (memberFilter) conds.push(memberFilter);
   if (cursor) {
-    conds.push(or(
-      lt(schema.events.recordedAt, cursor.recordedAt),
-      and(eq(schema.events.recordedAt, cursor.recordedAt), lt(schema.events.eventId, cursor.eventId)),
-    )!);
+    conds.push(
+      or(
+        lt(schema.events.recordedAt, cursor.recordedAt),
+        and(
+          eq(schema.events.recordedAt, cursor.recordedAt),
+          lt(schema.events.eventId, cursor.eventId),
+        ),
+      )!,
+    );
   }
 
   const joins = activityJoins(user.organizationId);
@@ -619,7 +695,9 @@ api.get('/activity', async (c) => {
       WHERE activity_group_members.organization_id = ${user.organizationId}
         AND activity_group_members.correlation_id = ${schema.events.correlationId}
     )
-  END`.mapWith(Number).as('related_count');
+  END`
+    .mapWith(Number)
+    .as('related_count');
 
   const rows = await c.var.db
     .select({ ...activityEventFields, relatedCount })
@@ -643,9 +721,8 @@ api.get('/activity', async (c) => {
         isLegacy,
       };
     }),
-    nextCursor: hasMore && pageRows.length > 0
-      ? encodeActivityCursor(pageRows[pageRows.length - 1]!)
-      : null,
+    nextCursor:
+      hasMore && pageRows.length > 0 ? encodeActivityCursor(pageRows[pageRows.length - 1]!) : null,
   };
   return c.json({ success: true, data });
 });
@@ -654,37 +731,54 @@ api.get('/activity', async (c) => {
 api.get('/activity/:groupId', async (c) => {
   const user = c.var.user;
   if (!canManageUsers(user.role)) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Only Owners can view the activity log' } }, 403);
+    return c.json(
+      {
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'Only Owners can view the activity log' },
+      },
+      403,
+    );
   }
   const groupId = c.req.param('groupId');
   if (!isValidActivityGroupId(groupId)) {
-    return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Invalid activity group ID' } }, 400);
+    return c.json(
+      { success: false, error: { code: 'VALIDATION_ERROR', message: 'Invalid activity group ID' } },
+      400,
+    );
   }
 
   const joins = activityJoins(user.organizationId);
-  const selectActivityRows = (where: SQL) => c.var.db
-    .select(activityEventFields)
-    .from(schema.events)
-    .leftJoin(schema.stations, joins.station)
-    .leftJoin(schema.users, joins.actor)
-    .where(where)
-    .orderBy(asc(schema.events.occurredAt), asc(schema.events.eventId));
+  const selectActivityRows = (where: SQL) =>
+    c.var.db
+      .select(activityEventFields)
+      .from(schema.events)
+      .leftJoin(schema.stations, joins.station)
+      .leftJoin(schema.users, joins.actor)
+      .where(where)
+      .orderBy(asc(schema.events.occurredAt), asc(schema.events.eventId));
 
-  let rows = await selectActivityRows(and(
-    eq(schema.events.organizationId, user.organizationId),
-    eq(schema.events.correlationId, groupId),
-  )!);
+  let rows = await selectActivityRows(
+    and(
+      eq(schema.events.organizationId, user.organizationId),
+      eq(schema.events.correlationId, groupId),
+    )!,
+  );
   let isLegacy = false;
   if (rows.length === 0) {
     isLegacy = true;
-    rows = await selectActivityRows(and(
-      eq(schema.events.organizationId, user.organizationId),
-      eq(schema.events.eventId, groupId),
-      isNull(schema.events.correlationId),
-    )!);
+    rows = await selectActivityRows(
+      and(
+        eq(schema.events.organizationId, user.organizationId),
+        eq(schema.events.eventId, groupId),
+        isNull(schema.events.correlationId),
+      )!,
+    );
   }
   if (rows.length === 0) {
-    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Activity group not found' } }, 404);
+    return c.json(
+      { success: false, error: { code: 'NOT_FOUND', message: 'Activity group not found' } },
+      404,
+    );
   }
 
   const primaryRow = isLegacy
@@ -695,7 +789,10 @@ api.get('/activity/:groupId', async (c) => {
       organizationId: user.organizationId,
       correlationId: groupId,
     });
-    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Activity group not found' } }, 404);
+    return c.json(
+      { success: false, error: { code: 'NOT_FOUND', message: 'Activity group not found' } },
+      404,
+    );
   }
 
   const data: ActivityGroupDetail = {
@@ -724,7 +821,6 @@ api.route('/transactions', transactionsRouter);
 api.route('/dssr', dssrRouter);
 api.route('/finance', financeRouter);
 
-
 // Mount authenticated group
 app.route('/api', api);
 
@@ -746,7 +842,13 @@ platform.use('*', async (c, next) => {
   }
   const authHeader = c.req.header('Authorization');
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return c.json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Missing or invalid authentication token' } }, 401);
+    return c.json(
+      {
+        success: false,
+        error: { code: 'UNAUTHORIZED', message: 'Missing or invalid authentication token' },
+      },
+      401,
+    );
   }
   const token = authHeader.split(' ')[1];
   let payload: any;
@@ -754,15 +856,26 @@ platform.use('*', async (c, next) => {
     payload = await verifySupabaseJwt(token, c.env, c.req.url);
   } catch (err: any) {
     console.error('[PLATFORM AUTH] Token validation failed', { message: err?.message });
-    return c.json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Invalid or expired authentication token' } }, 401);
+    return c.json(
+      {
+        success: false,
+        error: { code: 'UNAUTHORIZED', message: 'Invalid or expired authentication token' },
+      },
+      401,
+    );
   }
-  const email = String(payload?.email ?? '').trim().toLowerCase();
+  const email = String(payload?.email ?? '')
+    .trim()
+    .toLowerCase();
   const allow = (c.env.PLATFORM_ADMIN_EMAILS ?? '')
     .split(',')
     .map((s) => s.trim().toLowerCase())
     .filter(Boolean);
   if (!email || allow.length === 0 || !allow.includes(email)) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Not a platform administrator' } }, 403);
+    return c.json(
+      { success: false, error: { code: 'FORBIDDEN', message: 'Not a platform administrator' } },
+      403,
+    );
   }
   c.set('platformAdmin', {
     email,
@@ -781,21 +894,42 @@ platform.use('*', async (c, next) => {
 //     account with an owner-set/generated password and return the credentials
 //     to hand over. Use when email delivery is unavailable.
 platform.post('/owners/invite', async (c) => {
-  const admin = c.env.SUPABASE_URL && c.env.SUPABASE_SECRET_KEY
-    ? new SupabaseAdmin({ url: c.env.SUPABASE_URL, secretKey: c.env.SUPABASE_SECRET_KEY })
-    : null;
+  const admin =
+    c.env.SUPABASE_URL && c.env.SUPABASE_SECRET_KEY
+      ? new SupabaseAdmin({ url: c.env.SUPABASE_URL, secretKey: c.env.SUPABASE_SECRET_KEY })
+      : null;
   if (!admin) {
-    return c.json({ success: false, error: { code: 'CONFIG_ERROR', message: 'Auth provisioning is not configured on the server' } }, 500);
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: 'CONFIG_ERROR',
+          message: 'Auth provisioning is not configured on the server',
+        },
+      },
+      500,
+    );
   }
   const body = await c.req.json().catch(() => ({}));
-  const email = String(body?.email ?? '').trim().toLowerCase();
+  const email = String(body?.email ?? '')
+    .trim()
+    .toLowerCase();
   const fullName = String(body?.fullName ?? '').trim();
   const organizationName = String(body?.organizationName ?? '').trim();
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
-    return c.json({ success: false, error: { code: 'BAD_REQUEST', message: 'A valid email is required' } }, 400);
+    return c.json(
+      { success: false, error: { code: 'BAD_REQUEST', message: 'A valid email is required' } },
+      400,
+    );
   }
   if (fullName.length < 2 || organizationName.length < 2) {
-    return c.json({ success: false, error: { code: 'BAD_REQUEST', message: 'fullName and organizationName are required' } }, 400);
+    return c.json(
+      {
+        success: false,
+        error: { code: 'BAD_REQUEST', message: 'fullName and organizationName are required' },
+      },
+      400,
+    );
   }
   const ownerMetadata = {
     signup_intent: 'owner',
@@ -807,11 +941,18 @@ platform.post('/owners/invite', async (c) => {
   // No-SMTP fallback: create a verified account with a password and return it.
   const passwordMode = body?.mode === 'password' || typeof body?.password === 'string';
   if (passwordMode) {
-    const password = typeof body?.password === 'string' && body.password.trim()
-      ? String(body.password)
-      : generateOwnerPassword();
+    const password =
+      typeof body?.password === 'string' && body.password.trim()
+        ? String(body.password)
+        : generateOwnerPassword();
     if (password.length < 8) {
-      return c.json({ success: false, error: { code: 'BAD_REQUEST', message: 'Password must be at least 8 characters' } }, 400);
+      return c.json(
+        {
+          success: false,
+          error: { code: 'BAD_REQUEST', message: 'Password must be at least 8 characters' },
+        },
+        400,
+      );
     }
     try {
       const created = await admin.createUser({
@@ -825,7 +966,13 @@ platform.post('/owners/invite', async (c) => {
       return c.json({ success: true, data: { authUserId: created.id, email, password } });
     } catch (e: any) {
       const status = e?.status === 422 ? 409 : 400;
-      return c.json({ success: false, error: { code: 'PROVISION_FAILED', message: e?.message ?? 'Could not provision owner' } }, status);
+      return c.json(
+        {
+          success: false,
+          error: { code: 'PROVISION_FAILED', message: e?.message ?? 'Could not provision owner' },
+        },
+        status,
+      );
     }
   }
 
@@ -837,7 +984,13 @@ platform.post('/owners/invite', async (c) => {
     return c.json({ success: true, data: { authUserId: invited.id, email } });
   } catch (e: any) {
     const status = e?.status === 422 ? 409 : 400;
-    return c.json({ success: false, error: { code: 'INVITE_FAILED', message: e?.message ?? 'Could not send invite' } }, status);
+    return c.json(
+      {
+        success: false,
+        error: { code: 'INVITE_FAILED', message: e?.message ?? 'Could not send invite' },
+      },
+      status,
+    );
   }
 });
 
@@ -860,13 +1013,13 @@ function generateOwnerPassword(): string {
   const pick = (set: string) => set[Math.floor(Math.random() * set.length)];
   let out = pick(upper) + pick(lower) + pick(digits);
   for (let i = 0; i < 9; i++) out += pick(all);
-  return out.split('').sort(() => Math.random() - 0.5).join('');
+  return out
+    .split('')
+    .sort(() => Math.random() - 0.5)
+    .join('');
 }
 
-async function appendPlatformEvent(
-  db: DbClient,
-  event: DomainEvent<any, unknown>,
-): Promise<void> {
+async function appendPlatformEvent(db: DbClient, event: DomainEvent<any, unknown>): Promise<void> {
   await new DrizzleEventStore(db).append([event]);
 }
 
@@ -906,7 +1059,11 @@ type OwnerStatus = 'invited' | 'active' | 'deactivated' | 'unlinked' | 'unknown'
 
 function deriveOwnerStatus(
   userStatus: string,
-  authUser: { email_confirmed_at?: string | null; banned_until?: string | null; last_sign_in_at?: string | null } | null,
+  authUser: {
+    email_confirmed_at?: string | null;
+    banned_until?: string | null;
+    last_sign_in_at?: string | null;
+  } | null,
 ): OwnerStatus {
   if (userStatus === 'INACTIVE') return 'deactivated';
   if (!authUser) return 'unlinked';
@@ -920,10 +1077,15 @@ function deriveOwnerStatus(
 // state. Revoked orgs are hidden by default; pass ?includeRevoked=1 to show them.
 platform.get('/owners', async (c) => {
   const db = c.var.db;
-  const includeRevoked = ['1', 'true', 'yes'].includes((c.req.query('includeRevoked') ?? '').toLowerCase());
+  const includeRevoked = ['1', 'true', 'yes'].includes(
+    (c.req.query('includeRevoked') ?? '').toLowerCase(),
+  );
   // Pull all orgs + their Owner user (there is exactly one Owner per org in the
   // current model; if a legacy org has 0 or >1 Owners we still show it).
-  const allOrgs = await db.select().from(schema.organizations).orderBy(desc(schema.organizations.createdAt));
+  const allOrgs = await db
+    .select()
+    .from(schema.organizations)
+    .orderBy(desc(schema.organizations.createdAt));
   const orgs = includeRevoked ? allOrgs : allOrgs.filter((o) => o.subscriptionStatus !== 'Revoked');
   if (orgs.length === 0) {
     return c.json({ success: true, data: [] });
@@ -942,7 +1104,7 @@ platform.get('/owners', async (c) => {
     .from(schema.stations)
     .where(inArray(schema.stations.organizationId, orgIds));
 
-  const ownersByOrg = new Map<string, typeof owners[number]>();
+  const ownersByOrg = new Map<string, (typeof owners)[number]>();
   for (const u of owners) {
     // If multiple Owner rows exist, prefer the linked (authUserId set) one.
     const prev = ownersByOrg.get(u.organizationId);
@@ -956,52 +1118,59 @@ platform.get('/owners', async (c) => {
     stationCounts.set(s.organizationId, bucket);
   }
 
-  const admin = c.env.SUPABASE_URL && c.env.SUPABASE_SECRET_KEY
-    ? new SupabaseAdmin({ url: c.env.SUPABASE_URL, secretKey: c.env.SUPABASE_SECRET_KEY })
-    : null;
+  const admin =
+    c.env.SUPABASE_URL && c.env.SUPABASE_SECRET_KEY
+      ? new SupabaseAdmin({ url: c.env.SUPABASE_URL, secretKey: c.env.SUPABASE_SECRET_KEY })
+      : null;
 
-  const data = await Promise.all(orgs.map(async (org) => {
-    const owner = ownersByOrg.get(org.id) ?? null;
-    let authUser: Awaited<ReturnType<SupabaseAdmin['getUserById']>> | null = null;
-    if (admin && owner?.authUserId) {
-      try {
-        authUser = await admin.getUserById(owner.authUserId);
-      } catch {
-        authUser = null;
+  const data = await Promise.all(
+    orgs.map(async (org) => {
+      const owner = ownersByOrg.get(org.id) ?? null;
+      let authUser: Awaited<ReturnType<SupabaseAdmin['getUserById']>> | null = null;
+      if (admin && owner?.authUserId) {
+        try {
+          authUser = await admin.getUserById(owner.authUserId);
+        } catch {
+          authUser = null;
+        }
       }
-    }
-    const stations = stationCounts.get(org.id) ?? { total: 0, ready: 0 };
-    return {
-      organizationId: org.id,
-      organizationName: org.name,
-      subscriptionPlan: org.subscriptionPlan,
-      subscriptionStatus: org.subscriptionStatus,
-      createdAt: org.createdAt,
-      owner: owner
-        ? {
-            userId: owner.id,
-            authUserId: owner.authUserId,
-            email: owner.email,
-            fullName: owner.fullName,
-            userStatus: owner.status,
-            emailConfirmedAt: authUser?.email_confirmed_at ?? null,
-            invitedAt: authUser?.invited_at ?? null,
-            lastSignInAt: authUser?.last_sign_in_at ?? null,
-            bannedUntil: authUser?.banned_until ?? null,
-            status: deriveOwnerStatus(owner.status, authUser),
-          }
-        : null,
-      stationCount: stations.total,
-      readyStationCount: stations.ready,
-    };
-  }));
+      const stations = stationCounts.get(org.id) ?? { total: 0, ready: 0 };
+      return {
+        organizationId: org.id,
+        organizationName: org.name,
+        subscriptionPlan: org.subscriptionPlan,
+        subscriptionStatus: org.subscriptionStatus,
+        createdAt: org.createdAt,
+        owner: owner
+          ? {
+              userId: owner.id,
+              authUserId: owner.authUserId,
+              email: owner.email,
+              fullName: owner.fullName,
+              userStatus: owner.status,
+              emailConfirmedAt: authUser?.email_confirmed_at ?? null,
+              invitedAt: authUser?.invited_at ?? null,
+              lastSignInAt: authUser?.last_sign_in_at ?? null,
+              bannedUntil: authUser?.banned_until ?? null,
+              status: deriveOwnerStatus(owner.status, authUser),
+            }
+          : null,
+        stationCount: stations.total,
+        readyStationCount: stations.ready,
+      };
+    }),
+  );
 
   return c.json({ success: true, data });
 });
 
 // Resolve an org id + its Owner (must be linked to auth) for a row-action route.
 async function loadOwnerForOrg(db: DbClient, orgId: string) {
-  const [org] = await db.select().from(schema.organizations).where(eq(schema.organizations.id, orgId)).limit(1);
+  const [org] = await db
+    .select()
+    .from(schema.organizations)
+    .where(eq(schema.organizations.id, orgId))
+    .limit(1);
   if (!org) return { org: null as null, owner: null as null };
   const [owner] = await db
     .select()
@@ -1017,40 +1186,66 @@ async function loadOwnerForOrg(db: DbClient, orgId: string) {
 // no-SMTP password mode (createUser + email_confirm), so it cannot distinguish
 // a never-used password owner from an accepted email invite; `last_sign_in_at`
 // can. resend/revoke are refused only once the owner has signed in.
-function ownerHasSignedIn(
-  authUser: { last_sign_in_at?: string | null } | null,
-): boolean {
+function ownerHasSignedIn(authUser: { last_sign_in_at?: string | null } | null): boolean {
   return !!authUser?.last_sign_in_at;
 }
 
 // POST /platform/owners/:orgId/resend — re-send the invite email. Only useful
 // while the owner has not signed in; refuse once they have.
 platform.post('/owners/:orgId/resend', async (c) => {
-  const admin = c.env.SUPABASE_URL && c.env.SUPABASE_SECRET_KEY
-    ? new SupabaseAdmin({ url: c.env.SUPABASE_URL, secretKey: c.env.SUPABASE_SECRET_KEY })
-    : null;
+  const admin =
+    c.env.SUPABASE_URL && c.env.SUPABASE_SECRET_KEY
+      ? new SupabaseAdmin({ url: c.env.SUPABASE_URL, secretKey: c.env.SUPABASE_SECRET_KEY })
+      : null;
   if (!admin) {
-    return c.json({ success: false, error: { code: 'CONFIG_ERROR', message: 'Auth provisioning is not configured on the server' } }, 500);
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: 'CONFIG_ERROR',
+          message: 'Auth provisioning is not configured on the server',
+        },
+      },
+      500,
+    );
   }
   const orgId = c.req.param('orgId');
   const { org, owner } = await loadOwnerForOrg(c.var.db, orgId);
   if (!org || !owner) {
-    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Organization or owner not found' } }, 404);
+    return c.json(
+      { success: false, error: { code: 'NOT_FOUND', message: 'Organization or owner not found' } },
+      404,
+    );
   }
   if (!owner.email) {
-    return c.json({ success: false, error: { code: 'BAD_REQUEST', message: 'Owner has no email on file' } }, 400);
+    return c.json(
+      { success: false, error: { code: 'BAD_REQUEST', message: 'Owner has no email on file' } },
+      400,
+    );
   }
   if (owner.authUserId) {
     const authUser = await admin.getUserById(owner.authUserId);
     if (ownerHasSignedIn(authUser)) {
-      return c.json({ success: false, error: { code: 'ALREADY_ACCEPTED', message: 'Owner has already signed in' } }, 409);
+      return c.json(
+        {
+          success: false,
+          error: { code: 'ALREADY_ACCEPTED', message: 'Owner has already signed in' },
+        },
+        409,
+      );
     }
     // Delete the pending auth user so the re-invite goes through cleanly
     // (Supabase 422s on re-invite for an existing auth user).
     try {
       await admin.deleteUser(owner.authUserId);
     } catch (e: any) {
-      return c.json({ success: false, error: { code: 'INVITE_FAILED', message: e?.message ?? 'Could not clear pending invite' } }, 400);
+      return c.json(
+        {
+          success: false,
+          error: { code: 'INVITE_FAILED', message: e?.message ?? 'Could not clear pending invite' },
+        },
+        400,
+      );
     }
   }
   try {
@@ -1071,11 +1266,23 @@ platform.post('/owners/:orgId/resend', async (c) => {
       .where(eq(schema.users.id, owner.id));
     await appendPlatformEvent(
       c.var.db,
-      buildPlatformEvent(BusinessEvents.OWNER_INVITE_RESENT, org.id, owner.id, { email: owner.email }, c.var.platformAdmin),
+      buildPlatformEvent(
+        BusinessEvents.OWNER_INVITE_RESENT,
+        org.id,
+        owner.id,
+        { email: owner.email },
+        c.var.platformAdmin,
+      ),
     );
     return c.json({ success: true, data: { authUserId: invited.id, email: owner.email } });
   } catch (e: any) {
-    return c.json({ success: false, error: { code: 'INVITE_FAILED', message: e?.message ?? 'Could not send invite' } }, 400);
+    return c.json(
+      {
+        success: false,
+        error: { code: 'INVITE_FAILED', message: e?.message ?? 'Could not send invite' },
+      },
+      400,
+    );
   }
 });
 
@@ -1086,14 +1293,18 @@ platform.post('/owners/:orgId/resend', async (c) => {
 // the audit event are preserved). Refused once the owner has signed in or if
 // any station has been onboarded.
 platform.post('/owners/:orgId/revoke', async (c) => {
-  const admin = c.env.SUPABASE_URL && c.env.SUPABASE_SECRET_KEY
-    ? new SupabaseAdmin({ url: c.env.SUPABASE_URL, secretKey: c.env.SUPABASE_SECRET_KEY })
-    : null;
+  const admin =
+    c.env.SUPABASE_URL && c.env.SUPABASE_SECRET_KEY
+      ? new SupabaseAdmin({ url: c.env.SUPABASE_URL, secretKey: c.env.SUPABASE_SECRET_KEY })
+      : null;
   const db = c.var.db;
   const orgId = c.req.param('orgId');
   const { org, owner } = await loadOwnerForOrg(db, orgId);
   if (!org) {
-    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Organization not found' } }, 404);
+    return c.json(
+      { success: false, error: { code: 'NOT_FOUND', message: 'Organization not found' } },
+      404,
+    );
   }
   // Refuse if any station already exists — operator data must not be touched.
   const [{ n }] = await db
@@ -1101,17 +1312,44 @@ platform.post('/owners/:orgId/revoke', async (c) => {
     .from(schema.stations)
     .where(eq(schema.stations.organizationId, orgId));
   if (Number(n) > 0) {
-    return c.json({ success: false, error: { code: 'ORG_NOT_EMPTY', message: 'Organization has stations; use deactivate instead of revoke' } }, 409);
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: 'ORG_NOT_EMPTY',
+          message: 'Organization has stations; use deactivate instead of revoke',
+        },
+      },
+      409,
+    );
   }
   if (owner?.authUserId && admin) {
     const authUser = await admin.getUserById(owner.authUserId);
     if (ownerHasSignedIn(authUser)) {
-      return c.json({ success: false, error: { code: 'ALREADY_ACCEPTED', message: 'Owner has already signed in; use deactivate instead of revoke' } }, 409);
+      return c.json(
+        {
+          success: false,
+          error: {
+            code: 'ALREADY_ACCEPTED',
+            message: 'Owner has already signed in; use deactivate instead of revoke',
+          },
+        },
+        409,
+      );
     }
     try {
       await admin.deleteUser(owner.authUserId);
     } catch (e: any) {
-      return c.json({ success: false, error: { code: 'AUTH_DELETE_FAILED', message: e?.message ?? 'Could not delete auth user' } }, 400);
+      return c.json(
+        {
+          success: false,
+          error: {
+            code: 'AUTH_DELETE_FAILED',
+            message: e?.message ?? 'Could not delete auth user',
+          },
+        },
+        400,
+      );
     }
   }
   // Soft-cancel: keep rows (+ audit) but make the invite dead and drop it from
@@ -1140,21 +1378,34 @@ platform.post('/owners/:orgId/revoke', async (c) => {
 });
 
 async function setOwnerActive(c: any, active: boolean): Promise<Response> {
-  const admin = c.env.SUPABASE_URL && c.env.SUPABASE_SECRET_KEY
-    ? new SupabaseAdmin({ url: c.env.SUPABASE_URL, secretKey: c.env.SUPABASE_SECRET_KEY })
-    : null;
+  const admin =
+    c.env.SUPABASE_URL && c.env.SUPABASE_SECRET_KEY
+      ? new SupabaseAdmin({ url: c.env.SUPABASE_URL, secretKey: c.env.SUPABASE_SECRET_KEY })
+      : null;
   const db = c.var.db as DbClient;
   const orgId = c.req.param('orgId');
   const { org, owner } = await loadOwnerForOrg(db, orgId);
   if (!org || !owner) {
-    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Organization or owner not found' } }, 404);
+    return c.json(
+      { success: false, error: { code: 'NOT_FOUND', message: 'Organization or owner not found' } },
+      404,
+    );
   }
   if (owner.authUserId && admin) {
     try {
       if (active) await admin.unbanUser(owner.authUserId);
       else await admin.banUser(owner.authUserId);
     } catch (e: any) {
-      return c.json({ success: false, error: { code: 'AUTH_BAN_FAILED', message: e?.message ?? 'Could not update login account' } }, 400);
+      return c.json(
+        {
+          success: false,
+          error: {
+            code: 'AUTH_BAN_FAILED',
+            message: e?.message ?? 'Could not update login account',
+          },
+        },
+        400,
+      );
     }
   }
   await db

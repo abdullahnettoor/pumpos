@@ -27,7 +27,7 @@ export const ShiftTemplates: React.FC = () => {
       setLoading(true);
       const data = await templateService.listTemplates();
       setTemplates(data);
-      
+
       // Default name for next shift
       setName(`Shift ${data.length + 1}`);
       if (data.length === 0) {
@@ -114,16 +114,27 @@ export const ShiftTemplates: React.FC = () => {
     }
   };
 
-  if (loading) return <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>Loading shift templates...</div>;
+  if (loading)
+    return (
+      <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+        Loading shift templates...
+      </div>
+    );
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }} className="animate-fade-in">
-      
+    <div
+      style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
+      className="animate-fade-in"
+    >
       {/* Header & Add Button */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h2 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-strong)' }}>Shift Schedules</h2>
-          <p style={{ color: 'var(--text-muted)', fontSize: '12px' }}>Configure standard timing templates for station operators.</p>
+          <h2 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-strong)' }}>
+            Shift Schedules
+          </h2>
+          <p style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
+            Configure standard timing templates for station operators.
+          </p>
         </div>
         {!isFormOpen && (
           <button
@@ -149,20 +160,25 @@ export const ShiftTemplates: React.FC = () => {
       </div>
 
       {templates.length === 0 && (
-        <div style={{
-          backgroundColor: 'var(--bg-surface-alt)',
-          padding: '16px 20px',
-          borderRadius: 'var(--radius-card)',
-          border: '1px solid var(--border-soft)',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          gap: '16px'
-        }}>
+        <div
+          style={{
+            backgroundColor: 'var(--bg-surface-alt)',
+            padding: '16px 20px',
+            borderRadius: 'var(--radius-card)',
+            border: '1px solid var(--border-soft)',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            gap: '16px',
+          }}
+        >
           <div>
-            <span style={{ fontWeight: 600, fontSize: '13px', color: 'var(--text-strong)' }}>Recommended Shifts Setup</span>
+            <span style={{ fontWeight: 600, fontSize: '13px', color: 'var(--text-strong)' }}>
+              Recommended Shifts Setup
+            </span>
             <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
-              Create standard 8-hour operational shifts with a single click: Morning (06:00 - 14:00), Evening (14:00 - 22:00), and Night (22:00 - 06:00).
+              Create standard 8-hour operational shifts with a single click: Morning (06:00 -
+              14:00), Evening (14:00 - 22:00), and Night (22:00 - 06:00).
             </p>
           </div>
           <button
@@ -177,7 +193,7 @@ export const ShiftTemplates: React.FC = () => {
               fontWeight: 600,
               fontSize: '12px',
               cursor: 'pointer',
-              whiteSpace: 'nowrap'
+              whiteSpace: 'nowrap',
             }}
           >
             Pre-fill Default Shifts
@@ -194,9 +210,14 @@ export const ShiftTemplates: React.FC = () => {
         }}
         title="Add Shift Template"
       >
-        <form onSubmit={handleCreate} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <form
+          onSubmit={handleCreate}
+          style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
+        >
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Shift Name *</label>
+            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
+              Shift Name *
+            </label>
             <input
               type="text"
               style={{
@@ -214,7 +235,9 @@ export const ShiftTemplates: React.FC = () => {
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Start Time *</label>
+            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
+              Start Time *
+            </label>
             <input
               type="time"
               style={{
@@ -231,7 +254,9 @@ export const ShiftTemplates: React.FC = () => {
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>End Time *</label>
+            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
+              End Time *
+            </label>
             <input
               type="time"
               style={{
@@ -289,7 +314,13 @@ export const ShiftTemplates: React.FC = () => {
       </Drawer>
 
       {/* Shifts Grid View */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '16px' }}>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
+          gap: '16px',
+        }}
+      >
         {templates.map((t) => (
           <div
             key={t.id}
@@ -301,16 +332,38 @@ export const ShiftTemplates: React.FC = () => {
               display: 'flex',
               flexDirection: 'column',
               gap: '12px',
-              boxShadow: '0 2px 4px rgba(0, 0, 0, 0.01)'
+              boxShadow: '0 2px 4px rgba(0, 0, 0, 0.01)',
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text-strong)' }}>{t.name}</span>
-              <Chip tone={t.isActive ? 'success' : 'neutral'} size="sm">{t.isActive ? 'ACTIVE' : 'INACTIVE'}</Chip>
+              <span style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text-strong)' }}>
+                {t.name}
+              </span>
+              <Chip tone={t.isActive ? 'success' : 'neutral'} size="sm">
+                {t.isActive ? 'ACTIVE' : 'INACTIVE'}
+              </Chip>
             </div>
             <div>
-              <span style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>OPERATING HOURS</span>
-              <p style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-strong)', fontFamily: 'var(--font-mono)', marginTop: '2px' }}>
+              <span
+                style={{
+                  fontSize: '10px',
+                  color: 'var(--text-muted)',
+                  fontWeight: 600,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                }}
+              >
+                OPERATING HOURS
+              </span>
+              <p
+                style={{
+                  fontSize: '16px',
+                  fontWeight: 600,
+                  color: 'var(--text-strong)',
+                  fontFamily: 'var(--font-mono)',
+                  marginTop: '2px',
+                }}
+              >
                 {t.startTime} - {t.endTime}
               </p>
             </div>

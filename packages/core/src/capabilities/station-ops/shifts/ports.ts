@@ -78,8 +78,21 @@ export interface HandoverTerminal {
 }
 
 export interface HandoverContext {
-  attendant: { id: string; organizationId: string; fullName: string; role: string; status: string } | null;
-  dispenser: { id: string; organizationId: string; stationId: string; name: string; code: string; status: string } | null;
+  attendant: {
+    id: string;
+    organizationId: string;
+    fullName: string;
+    role: string;
+    status: string;
+  } | null;
+  dispenser: {
+    id: string;
+    organizationId: string;
+    stationId: string;
+    name: string;
+    code: string;
+    status: string;
+  } | null;
   assigned: boolean;
   nozzleReadings: HandoverNozzleReading[];
   missingReadingNozzleIds: string[];
@@ -90,7 +103,13 @@ export interface HandoverContext {
 }
 
 export interface HandoverContextReader {
-  load(organizationId: string, stationId: string, shiftId: string, attendantId: string, duId: string): Promise<HandoverContext>;
+  load(
+    organizationId: string,
+    stationId: string,
+    shiftId: string,
+    attendantId: string,
+    duId: string,
+  ): Promise<HandoverContext>;
 }
 
 export interface AttendantHandover {
@@ -137,7 +156,11 @@ export interface HandoverRepository {
   replaceCurrent(
     handover: AttendantHandover,
     terminalEntries: HandoverTerminalEntry[],
-  ): Promise<{ handover: AttendantHandover; terminalEntries: HandoverTerminalEntry[]; replaced: boolean }>;
+  ): Promise<{
+    handover: AttendantHandover;
+    terminalEntries: HandoverTerminalEntry[];
+    replaced: boolean;
+  }>;
   updateReadings(readings: AcceptedHandoverReading[]): Promise<void>;
 }
 

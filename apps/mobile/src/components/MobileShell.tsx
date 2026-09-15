@@ -57,7 +57,9 @@ export const MobileShell: React.FC<MobileShellProps> = ({
             <p className="truncate text-sm font-semibold" style={{ color: 'var(--text-strong)' }}>
               {stations.find((s) => s.id === selectedStationId)?.name ?? 'PumpOS'}
             </p>
-            <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>{title}</p>
+            <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+              {title}
+            </p>
           </div>
         </div>
         <AccountMenu
@@ -74,7 +76,11 @@ export const MobileShell: React.FC<MobileShellProps> = ({
       />
       {showBusinessDay && businessDate && maxBusinessDate && onChangeBusinessDate && (
         <div className="px-4 pb-2">
-          <BusinessDayPill value={businessDate} max={maxBusinessDate} onChange={onChangeBusinessDate} />
+          <BusinessDayPill
+            value={businessDate}
+            max={maxBusinessDate}
+            onChange={onChangeBusinessDate}
+          />
         </div>
       )}
     </header>

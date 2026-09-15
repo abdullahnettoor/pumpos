@@ -1,7 +1,22 @@
 import { z } from 'zod';
 import type { CustomerType } from '@pump/shared';
-import { BusinessEvents, conflictError, err, eventFromContext, forbiddenError, notFoundError, ok, validationError } from '../../../kernel/index.js';
-import type { EventPublisher, ExecutionContext, Repository, Result, UseCase } from '../../../kernel/index.js';
+import {
+  BusinessEvents,
+  conflictError,
+  err,
+  eventFromContext,
+  forbiddenError,
+  notFoundError,
+  ok,
+  validationError,
+} from '../../../kernel/index.js';
+import type {
+  EventPublisher,
+  ExecutionContext,
+  Repository,
+  Result,
+  UseCase,
+} from '../../../kernel/index.js';
 
 export interface Customer {
   id: string;
@@ -89,9 +104,12 @@ export class CreateCustomer implements UseCase<CreateCustomerCommand, Customer> 
   constructor(private readonly deps: CustomerDeps) {}
   async execute(input: CreateCustomerCommand, ctx: ExecutionContext): Promise<Result<Customer>> {
     const p = createSchema.safeParse(input);
-    if (!p.success) return err(validationError('Invalid CreateCustomer command', { issues: p.error.flatten() }));
+    if (!p.success)
+      return err(validationError('Invalid CreateCustomer command', { issues: p.error.flatten() }));
     if (await this.deps.repository.existsByName(ctx.organizationId, p.data.name)) {
-      return err(conflictError(`A customer named "${p.data.name}" already exists`, { name: p.data.name }));
+      return err(
+        conflictError(`A customer named "${p.data.name}" already exists`, { name: p.data.name }),
+      );
     }
     const now = ctx.clock.now().toISOString();
     const customer: Customer = {
@@ -117,7 +135,11 @@ export class CreateCustomer implements UseCase<CreateCustomerCommand, Customer> 
         eventType: BusinessEvents.CUSTOMER_CREATED,
         aggregateType: 'Customer',
         aggregateId: customer.id,
-        payload: { customerId: customer.id, customerType: customer.customerType, name: customer.name },
+        payload: {
+          customerId: customer.id,
+          customerType: customer.customerType,
+          name: customer.name,
+        },
       }),
     ]);
     return ok(customer);
@@ -128,12 +150,20 @@ export class UpdateCustomer implements UseCase<UpdateCustomerCommand, Customer> 
   constructor(private readonly deps: CustomerDeps) {}
   async execute(input: UpdateCustomerCommand, ctx: ExecutionContext): Promise<Result<Customer>> {
     const p = updateSchema.safeParse(input);
-    if (!p.success) return err(validationError('Invalid UpdateCustomer command', { issues: p.error.flatten() }));
+    if (!p.success)
+      return err(validationError('Invalid UpdateCustomer command', { issues: p.error.flatten() }));
     const existing = await this.deps.repository.findById(p.data.id);
     if (!existing) return err(notFoundError('Customer', p.data.id));
-    if (existing.organizationId !== ctx.organizationId) return err(forbiddenError('Customer belongs to another organization'));
-    if (p.data.name !== undefined && p.data.name !== existing.name && (await this.deps.repository.existsByName(ctx.organizationId, p.data.name, existing.id))) {
-      return err(conflictError(`A customer named "${p.data.name}" already exists`, { name: p.data.name }));
+    if (existing.organizationId !== ctx.organizationId)
+      return err(forbiddenError('Customer belongs to another organization'));
+    if (
+      p.data.name !== undefined &&
+      p.data.name !== existing.name &&
+      (await this.deps.repository.existsByName(ctx.organizationId, p.data.name, existing.id))
+    ) {
+      return err(
+        conflictError(`A customer named "${p.data.name}" already exists`, { name: p.data.name }),
+      );
     }
     const updated: Customer = {
       ...existing,

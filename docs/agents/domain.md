@@ -6,7 +6,7 @@ How the engineering skills should consume this repo's domain documentation when 
 
 - **`CONTEXT.md`** at the repo root (this repo is single-context)
 - **`docs/adr/`**: read ADRs that touch the area you're about to work in.
-- Also read **`AGENTS.md`** for hard architectural rules (anchoring, multi-tenancy, event model). `CONTEXT.md` is the shared *language*; `AGENTS.md` is the rulebook. When they disagree, `AGENTS.md` wins and the conflict should be surfaced.
+- Also read **`AGENTS.md`** for hard architectural rules (anchoring, multi-tenancy, event model). `CONTEXT.md` is the shared _language_; `AGENTS.md` is the rulebook. When they disagree, `AGENTS.md` wins and the conflict should be surfaced.
 
 If any of these files don't exist, **proceed silently**. Don't flag their absence; don't suggest creating them upfront. The `/domain-modeling` skill (reached via `/grill-with-docs` and `/improve-codebase-architecture`) creates them lazily when terms or decisions actually get resolved.
 

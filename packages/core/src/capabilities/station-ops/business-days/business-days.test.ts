@@ -21,10 +21,21 @@ class InMemoryBusinessDayRepo implements BusinessDayWriteRepository {
     else this.rows.push(d);
   }
   async findOpenByStation(orgId: string, stationId: string) {
-    return this.rows.find((r) => r.organizationId === orgId && r.stationId === stationId && r.status === 'OPEN') ?? null;
+    return (
+      this.rows.find(
+        (r) => r.organizationId === orgId && r.stationId === stationId && r.status === 'OPEN',
+      ) ?? null
+    );
   }
   async findByStationAndDate(orgId: string, stationId: string, businessDate: string) {
-    return this.rows.find((r) => r.organizationId === orgId && r.stationId === stationId && r.businessDate === businessDate) ?? null;
+    return (
+      this.rows.find(
+        (r) =>
+          r.organizationId === orgId &&
+          r.stationId === stationId &&
+          r.businessDate === businessDate,
+      ) ?? null
+    );
   }
   async lockStation() {}
   async lockById() {}
@@ -49,7 +60,10 @@ describe('OpenBusinessDay', () => {
     const repo = new InMemoryBusinessDayRepo();
     const store = new InMemoryEventStore();
     const events = new InProcessEventDispatcher({ store });
-    const result = await new OpenBusinessDay({ repository: repo, events }).execute({ stationId: 'station-1' }, makeContext());
+    const result = await new OpenBusinessDay({ repository: repo, events }).execute(
+      { stationId: 'station-1' },
+      makeContext(),
+    );
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.status).toBe('OPEN');
@@ -63,8 +77,14 @@ describe('OpenBusinessDay', () => {
     const repo = new InMemoryBusinessDayRepo();
     const events = new InProcessEventDispatcher({ store: new InMemoryEventStore() });
     const ctx = makeContext();
-    await new OpenBusinessDay({ repository: repo, events }).execute({ stationId: 'station-1' }, ctx);
-    const second = await new OpenBusinessDay({ repository: repo, events }).execute({ stationId: 'station-1' }, ctx);
+    await new OpenBusinessDay({ repository: repo, events }).execute(
+      { stationId: 'station-1' },
+      ctx,
+    );
+    const second = await new OpenBusinessDay({ repository: repo, events }).execute(
+      { stationId: 'station-1' },
+      ctx,
+    );
     expect(second.success).toBe(false);
     if (!second.success) expect(second.error.code).toBe('CONFLICT');
   });
@@ -75,8 +95,14 @@ describe('OpenBusinessDay', () => {
     const useCase = new OpenBusinessDay({ repository: repo, events });
     const ctx = makeContext();
 
-    const first = await useCase.execute({ stationId: 'station-1', businessDate: '2026-03-14' }, ctx);
-    const second = await useCase.execute({ stationId: 'station-1', businessDate: '2026-03-15' }, ctx);
+    const first = await useCase.execute(
+      { stationId: 'station-1', businessDate: '2026-03-14' },
+      ctx,
+    );
+    const second = await useCase.execute(
+      { stationId: 'station-1', businessDate: '2026-03-15' },
+      ctx,
+    );
 
     expect(first.success).toBe(true);
     expect(second.success).toBe(true);
@@ -127,9 +153,15 @@ describe('CloseBusinessDay', () => {
     const store = new InMemoryEventStore();
     const events = new InProcessEventDispatcher({ store });
     const ctx = makeContext();
-    const opened = await new OpenBusinessDay({ repository: repo, events }).execute({ stationId: 'station-1' }, ctx);
+    const opened = await new OpenBusinessDay({ repository: repo, events }).execute(
+      { stationId: 'station-1' },
+      ctx,
+    );
     const id = opened.success ? opened.data.id : '';
-    const result = await new CloseBusinessDay({ repository: repo, events }).execute({ businessDayId: id }, ctx);
+    const result = await new CloseBusinessDay({ repository: repo, events }).execute(
+      { businessDayId: id },
+      ctx,
+    );
     expect(result.success).toBe(true);
     if (result.success) expect(result.data.status).toBe('CLOSED');
     expect(store.events.some((e) => e.eventType === BusinessEvents.BUSINESS_DAY_CLOSED)).toBe(true);
@@ -139,10 +171,16 @@ describe('CloseBusinessDay', () => {
     const repo = new InMemoryBusinessDayRepo();
     const events = new InProcessEventDispatcher({ store: new InMemoryEventStore() });
     const ctx = makeContext();
-    const opened = await new OpenBusinessDay({ repository: repo, events }).execute({ stationId: 'station-1' }, ctx);
+    const opened = await new OpenBusinessDay({ repository: repo, events }).execute(
+      { stationId: 'station-1' },
+      ctx,
+    );
     const id = opened.success ? opened.data.id : '';
     await new CloseBusinessDay({ repository: repo, events }).execute({ businessDayId: id }, ctx);
-    const again = await new CloseBusinessDay({ repository: repo, events }).execute({ businessDayId: id }, ctx);
+    const again = await new CloseBusinessDay({ repository: repo, events }).execute(
+      { businessDayId: id },
+      ctx,
+    );
     expect(again.success).toBe(false);
     if (!again.success) expect(again.error.code).toBe('INVARIANT_VIOLATION');
   });

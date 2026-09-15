@@ -4,7 +4,7 @@ import {
   CloudDispenserService,
   CloudTankService,
   CloudProductService,
-  CloudNozzleService
+  CloudNozzleService,
 } from '../../services/cloud.js';
 import { queryKeys, TIER } from '../../query/hooks.js';
 import { DispenserUnit, Tank, Product, Nozzle } from '@pump/shared';
@@ -52,15 +52,32 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
     if (!stationId) return;
     try {
       setLoading(true);
-      if (force) await Promise.all([
-        qc.invalidateQueries({ queryKey: queryKeys.dispensers(stationId) }),
-        qc.invalidateQueries({ queryKey: queryKeys.nozzles(stationId) }),
-      ]);
+      if (force)
+        await Promise.all([
+          qc.invalidateQueries({ queryKey: queryKeys.dispensers(stationId) }),
+          qc.invalidateQueries({ queryKey: queryKeys.nozzles(stationId) }),
+        ]);
       const [duList, tankList, prodList, nozzleList] = await Promise.all([
-        qc.ensureQueryData({ queryKey: queryKeys.dispensers(stationId), queryFn: () => dispenserService.listDispensers(stationId), staleTime: TIER.static.staleTime }),
-        qc.ensureQueryData({ queryKey: queryKeys.tanks(stationId), queryFn: () => tankService.listTanks(stationId), staleTime: TIER.static.staleTime }),
-        qc.ensureQueryData({ queryKey: queryKeys.products(), queryFn: () => productService.listProducts(), staleTime: TIER.semi.staleTime }),
-        qc.ensureQueryData({ queryKey: queryKeys.nozzles(stationId), queryFn: () => nozzleService.listNozzles(stationId), staleTime: TIER.static.staleTime }),
+        qc.ensureQueryData({
+          queryKey: queryKeys.dispensers(stationId),
+          queryFn: () => dispenserService.listDispensers(stationId),
+          staleTime: TIER.static.staleTime,
+        }),
+        qc.ensureQueryData({
+          queryKey: queryKeys.tanks(stationId),
+          queryFn: () => tankService.listTanks(stationId),
+          staleTime: TIER.static.staleTime,
+        }),
+        qc.ensureQueryData({
+          queryKey: queryKeys.products(),
+          queryFn: () => productService.listProducts(),
+          staleTime: TIER.semi.staleTime,
+        }),
+        qc.ensureQueryData({
+          queryKey: queryKeys.nozzles(stationId),
+          queryFn: () => nozzleService.listNozzles(stationId),
+          staleTime: TIER.static.staleTime,
+        }),
       ]);
 
       setDispensers(duList);
@@ -96,57 +113,65 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
           .replace(/[^A-Z0-9]/g, '_')
           .replace(/_+/g, '_')
           .replace(/^_+|_+$/g, '')
-          .slice(0, 10)
+          .slice(0, 10),
       );
     }
   };
 
   const addNozzleRow = () => {
     const defaultProduct = products[0]?.id || '';
-    const defaultTank = tanks.find(t => t.productId === defaultProduct)?.id || '';
+    const defaultTank = tanks.find((t) => t.productId === defaultProduct)?.id || '';
     const nextNozzleNum = nozzles.length + nozzlesList.length + 1;
-    setNozzlesList(prev => [
+    setNozzlesList((prev) => [
       ...prev,
       {
         name: `N${nextNozzleNum}`,
         productId: defaultProduct,
         tankId: defaultTank,
-        currentReading: 1000
-      }
+        currentReading: 1000,
+      },
     ]);
   };
 
   const removeNozzleRow = (idx: number) => {
-    setNozzlesList(prev => prev.filter((_, i) => i !== idx));
+    setNozzlesList((prev) => prev.filter((_, i) => i !== idx));
   };
 
   const handleNozzleProductChange = (idx: number, prodId: string) => {
-    const defaultTank = tanks.find(t => t.productId === prodId)?.id || '';
-    setNozzlesList(prev => prev.map((item, i) => {
-      if (i !== idx) return item;
-      return { ...item, productId: prodId, tankId: defaultTank };
-    }));
+    const defaultTank = tanks.find((t) => t.productId === prodId)?.id || '';
+    setNozzlesList((prev) =>
+      prev.map((item, i) => {
+        if (i !== idx) return item;
+        return { ...item, productId: prodId, tankId: defaultTank };
+      }),
+    );
   };
 
   const handleNozzleTankChange = (idx: number, tankId: string) => {
-    setNozzlesList(prev => prev.map((item, i) => {
-      if (i !== idx) return item;
-      return { ...item, tankId };
-    }));
+    setNozzlesList((prev) =>
+      prev.map((item, i) => {
+        if (i !== idx) return item;
+        return { ...item, tankId };
+      }),
+    );
   };
 
   const handleNozzleNameChange = (idx: number, nozzleName: string) => {
-    setNozzlesList(prev => prev.map((item, i) => {
-      if (i !== idx) return item;
-      return { ...item, name: nozzleName };
-    }));
+    setNozzlesList((prev) =>
+      prev.map((item, i) => {
+        if (i !== idx) return item;
+        return { ...item, name: nozzleName };
+      }),
+    );
   };
 
   const handleNozzleReadingChange = (idx: number, reading: number) => {
-    setNozzlesList(prev => prev.map((item, i) => {
-      if (i !== idx) return item;
-      return { ...item, currentReading: reading };
-    }));
+    setNozzlesList((prev) =>
+      prev.map((item, i) => {
+        if (i !== idx) return item;
+        return { ...item, currentReading: reading };
+      }),
+    );
   };
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -173,7 +198,7 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
           tankId: nozzleInput.tankId,
           productId: nozzleInput.productId,
           name: nozzleInput.name,
-          currentReading: nozzleInput.currentReading
+          currentReading: nozzleInput.currentReading,
         });
       }
 
@@ -189,10 +214,10 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
   };
 
   const prefillDualNozzles = () => {
-    const petrol = products.find(p => p.code === 'MS');
-    const diesel = products.find(p => p.code === 'HSD');
-    const petrolTank = tanks.find(t => t.productId === petrol?.id);
-    const dieselTank = tanks.find(t => t.productId === diesel?.id);
+    const petrol = products.find((p) => p.code === 'MS');
+    const diesel = products.find((p) => p.code === 'HSD');
+    const petrolTank = tanks.find((t) => t.productId === petrol?.id);
+    const dieselTank = tanks.find((t) => t.productId === diesel?.id);
 
     setName(`Dispenser Unit ${dispensers.length + 1}`);
     setCode(`DU-${String(dispensers.length + 1).padStart(2, '0')}`);
@@ -205,7 +230,7 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
         name: `N${baseNozzleNum}`,
         productId: petrol.id,
         tankId: petrolTank.id,
-        currentReading: 1000
+        currentReading: 1000,
       });
     }
     if (diesel && dieselTank) {
@@ -213,7 +238,7 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
         name: `N${baseNozzleNum + recommendedNozzles.length}`,
         productId: diesel.id,
         tankId: dieselTank.id,
-        currentReading: 1000
+        currentReading: 1000,
       });
     }
 
@@ -222,10 +247,10 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
   };
 
   const prefillQuadNozzles = () => {
-    const petrol = products.find(p => p.code === 'MS');
-    const diesel = products.find(p => p.code === 'HSD');
-    const petrolTank = tanks.find(t => t.productId === petrol?.id);
-    const dieselTank = tanks.find(t => t.productId === diesel?.id);
+    const petrol = products.find((p) => p.code === 'MS');
+    const diesel = products.find((p) => p.code === 'HSD');
+    const petrolTank = tanks.find((t) => t.productId === petrol?.id);
+    const dieselTank = tanks.find((t) => t.productId === diesel?.id);
 
     setName(`Dispenser Unit ${dispensers.length + 1}`);
     setCode(`DU-${String(dispensers.length + 1).padStart(2, '0')}`);
@@ -238,13 +263,13 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
         name: `N${baseNozzleNum}`,
         productId: petrol.id,
         tankId: petrolTank.id,
-        currentReading: 1000
+        currentReading: 1000,
       });
       recommendedNozzles.push({
         name: `N${baseNozzleNum + 1}`,
         productId: petrol.id,
         tankId: petrolTank.id,
-        currentReading: 1000
+        currentReading: 1000,
       });
     }
     if (diesel && dieselTank) {
@@ -253,13 +278,13 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
         name: `N${baseNozzleNum + currentLen}`,
         productId: diesel.id,
         tankId: dieselTank.id,
-        currentReading: 1000
+        currentReading: 1000,
       });
       recommendedNozzles.push({
         name: `N${baseNozzleNum + currentLen + 1}`,
         productId: diesel.id,
         tankId: dieselTank.id,
-        currentReading: 1000
+        currentReading: 1000,
       });
     }
 
@@ -267,16 +292,27 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
     setIsFormOpen(true);
   };
 
-  if (loading) return <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>Loading dispenser units...</div>;
+  if (loading)
+    return (
+      <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+        Loading dispenser units...
+      </div>
+    );
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }} className="animate-fade-in">
-
+    <div
+      style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
+      className="animate-fade-in"
+    >
       {/* Header & Add Button */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h2 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-strong)' }}>Dispenser Units (DUs)</h2>
-          <p style={{ color: 'var(--text-muted)', fontSize: '12px' }}>Configure physical fuel pump islands, linked underground tanks, and nozzles.</p>
+          <h2 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-strong)' }}>
+            Dispenser Units (DUs)
+          </h2>
+          <p style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
+            Configure physical fuel pump islands, linked underground tanks, and nozzles.
+          </p>
         </div>
         {!isFormOpen && (
           <button
@@ -303,18 +339,22 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
 
       {/* Recommended Configuration Suggestions Banner */}
       {products.length > 0 && tanks.length > 0 && (
-        <div style={{
-          backgroundColor: 'var(--bg-surface-alt)',
-          padding: '16px 20px',
-          borderRadius: 'var(--radius-card)',
-          border: '1px solid var(--border-soft)',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          gap: '16px'
-        }}>
+        <div
+          style={{
+            backgroundColor: 'var(--bg-surface-alt)',
+            padding: '16px 20px',
+            borderRadius: 'var(--radius-card)',
+            border: '1px solid var(--border-soft)',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            gap: '16px',
+          }}
+        >
           <div>
-            <span style={{ fontWeight: 600, fontSize: '13px', color: 'var(--text-strong)' }}>Recommended Layout Templates</span>
+            <span style={{ fontWeight: 600, fontSize: '13px', color: 'var(--text-strong)' }}>
+              Recommended Layout Templates
+            </span>
             <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
               Select a template to pre-fill the form with standard dispenser configurations:
             </p>
@@ -332,7 +372,7 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
                 fontWeight: 600,
                 fontSize: '12px',
                 cursor: 'pointer',
-                whiteSpace: 'nowrap'
+                whiteSpace: 'nowrap',
               }}
             >
               Auto-fill Dual Dispenser (2 Nozzles)
@@ -349,7 +389,7 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
                 fontWeight: 600,
                 fontSize: '12px',
                 cursor: 'pointer',
-                whiteSpace: 'nowrap'
+                whiteSpace: 'nowrap',
               }}
             >
               Auto-fill Quad Dispenser (4 Nozzles)
@@ -367,9 +407,14 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
         }}
         title="Add Dispenser Island"
       >
-        <form onSubmit={handleCreate} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <form
+          onSubmit={handleCreate}
+          style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
+        >
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Dispenser Name *</label>
+            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
+              Dispenser Name *
+            </label>
             <input
               type="text"
               style={{
@@ -387,7 +432,9 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Code / Reference ID *</label>
+            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
+              Code / Reference ID *
+            </label>
             <input
               type="text"
               style={{
@@ -399,15 +446,28 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
               }}
               placeholder="e.g. DU-01"
               value={code}
-              onChange={(e) => { setCode(e.target.value); setIsCodeEdited(true); }}
+              onChange={(e) => {
+                setCode(e.target.value);
+                setIsCodeEdited(true);
+              }}
               required
             />
           </div>
 
           {/* Nozzles Mapping Section */}
-          <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div
+            style={{
+              borderTop: '1px solid var(--border-soft)',
+              paddingTop: '16px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '12px',
+            }}
+          >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-strong)' }}>Map Nozzles</span>
+              <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-strong)' }}>
+                Map Nozzles
+              </span>
               <button
                 type="button"
                 onClick={addNozzleRow}
@@ -429,7 +489,7 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
             {nozzlesList.length > 0 ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 {nozzlesList.map((nozzle, idx) => {
-                  const filteredTanks = tanks.filter(t => t.productId === nozzle.productId);
+                  const filteredTanks = tanks.filter((t) => t.productId === nozzle.productId);
                   return (
                     <div
                       key={idx}
@@ -440,11 +500,21 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
                         backgroundColor: 'var(--bg-surface-alt)',
                         display: 'flex',
                         flexDirection: 'column',
-                        gap: '8px'
+                        gap: '8px',
                       }}
                     >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)' }}>Nozzle #{idx + 1}</span>
+                      <div
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                        }}
+                      >
+                        <span
+                          style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)' }}
+                        >
+                          Nozzle #{idx + 1}
+                        </span>
                         <button
                           type="button"
                           onClick={() => removeNozzleRow(idx)}
@@ -454,7 +524,7 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
                             color: 'var(--state-danger-fg)',
                             cursor: 'pointer',
                             fontSize: '11px',
-                            fontWeight: 600
+                            fontWeight: 600,
                           }}
                         >
                           Remove
@@ -463,7 +533,9 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
 
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                          <label style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Name</label>
+                          <label style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                            Name
+                          </label>
                           <input
                             type="text"
                             value={nozzle.name}
@@ -479,11 +551,16 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
                           />
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                          <label style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Reading ({products.find((p) => p.id === nozzle.productId)?.unit || 'L'})</label>
+                          <label style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                            Reading ({products.find((p) => p.id === nozzle.productId)?.unit || 'L'})
+                          </label>
                           <input
-                            type="number" min="0"
+                            type="number"
+                            min="0"
                             value={nozzle.currentReading}
-                            onChange={(e) => handleNozzleReadingChange(idx, parseFloat(e.target.value) || 0)}
+                            onChange={(e) =>
+                              handleNozzleReadingChange(idx, parseFloat(e.target.value) || 0)
+                            }
                             style={{
                               height: '28px',
                               padding: '0 8px',
@@ -498,7 +575,9 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
 
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                          <label style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Fuel</label>
+                          <label style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                            Fuel
+                          </label>
                           <select
                             value={nozzle.productId}
                             onChange={(e) => handleNozzleProductChange(idx, e.target.value)}
@@ -508,16 +587,20 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
                               borderRadius: 'var(--radius-input)',
                               border: '1px solid var(--border-strong)',
                               fontSize: '12px',
-                              backgroundColor: 'var(--bg-surface)'
+                              backgroundColor: 'var(--bg-surface)',
                             }}
                           >
-                            {products.map(p => (
-                              <option key={p.id} value={p.id}>{p.name}</option>
+                            {products.map((p) => (
+                              <option key={p.id} value={p.id}>
+                                {p.name}
+                              </option>
                             ))}
                           </select>
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                          <label style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Tank</label>
+                          <label style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                            Tank
+                          </label>
                           <select
                             value={nozzle.tankId}
                             onChange={(e) => handleNozzleTankChange(idx, e.target.value)}
@@ -527,12 +610,14 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
                               borderRadius: 'var(--radius-input)',
                               border: '1px solid var(--border-strong)',
                               fontSize: '12px',
-                              backgroundColor: 'var(--bg-surface)'
+                              backgroundColor: 'var(--bg-surface)',
                             }}
                           >
                             <option value="">-- Select Tank --</option>
-                            {filteredTanks.map(t => (
-                              <option key={t.id} value={t.id}>{t.name}</option>
+                            {filteredTanks.map((t) => (
+                              <option key={t.id} value={t.id}>
+                                {t.name}
+                              </option>
                             ))}
                           </select>
                         </div>
@@ -542,7 +627,15 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
                 })}
               </div>
             ) : (
-              <p style={{ fontSize: '11px', color: 'var(--text-muted)', fontStyle: 'italic', textAlign: 'center', padding: '12px' }}>
+              <p
+                style={{
+                  fontSize: '11px',
+                  color: 'var(--text-muted)',
+                  fontStyle: 'italic',
+                  textAlign: 'center',
+                  padding: '12px',
+                }}
+              >
                 No nozzles mapped yet. Click "+ Add Nozzle" to connect fuel lines to this dispenser.
               </p>
             )}
@@ -591,7 +684,13 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
       </Drawer>
 
       {/* DU Grid View */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px' }}>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+          gap: '16px',
+        }}
+      >
         {dispensers.map((du) => {
           const duNozzles = nozzles.filter((n) => n.duId === du.id);
           return (
@@ -605,53 +704,126 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
                 display: 'flex',
                 flexDirection: 'column',
                 gap: '12px',
-                boxShadow: '0 2px 4px rgba(0, 0, 0, 0.01)'
+                boxShadow: '0 2px 4px rgba(0, 0, 0, 0.01)',
               }}
             >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text-strong)' }}>{du.name}</span>
+              <div
+                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+              >
+                <span style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text-strong)' }}>
+                  {du.name}
+                </span>
                 <span
                   style={{
                     fontSize: '10px',
                     fontWeight: 700,
                     padding: '2px 6px',
                     borderRadius: '4px',
-                    backgroundColor: du.status === 'ACTIVE' ? 'var(--state-success-bg)' : 'var(--state-danger-bg)',
-                    color: du.status === 'ACTIVE' ? 'var(--state-success-fg)' : 'var(--state-danger-fg)',
+                    backgroundColor:
+                      du.status === 'ACTIVE' ? 'var(--state-success-bg)' : 'var(--state-danger-bg)',
+                    color:
+                      du.status === 'ACTIVE' ? 'var(--state-success-fg)' : 'var(--state-danger-fg)',
                   }}
                 >
                   {du.status}
                 </span>
               </div>
               <div>
-                <span style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>ISLAND CODE</span>
-                <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)', marginTop: '2px' }}>
+                <span
+                  style={{
+                    fontSize: '10px',
+                    color: 'var(--text-muted)',
+                    fontWeight: 600,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                  }}
+                >
+                  ISLAND CODE
+                </span>
+                <p
+                  style={{
+                    fontSize: '14px',
+                    fontWeight: 600,
+                    color: 'var(--text-strong)',
+                    marginTop: '2px',
+                  }}
+                >
                   {du.code}
                 </p>
               </div>
 
               {/* Nozzles Sub-list */}
-              <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: '10px', marginTop: '4px' }}>
-                <span style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Nozzles</span>
+              <div
+                style={{
+                  borderTop: '1px solid var(--border-soft)',
+                  paddingTop: '10px',
+                  marginTop: '4px',
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: '10px',
+                    color: 'var(--text-muted)',
+                    fontWeight: 600,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                  }}
+                >
+                  Nozzles
+                </span>
                 {duNozzles.length > 0 ? (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '6px' }}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '6px',
+                      marginTop: '6px',
+                    }}
+                  >
                     {duNozzles.map((n) => {
                       const prod = products.find((p) => p.id === n.productId);
                       const tank = tanks.find((t) => t.id === n.tankId);
                       return (
-                        <div key={n.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-default)' }}>
+                        <div
+                          key={n.id}
+                          style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            fontSize: '12px',
+                            color: 'var(--text-default)',
+                          }}
+                        >
                           <span style={{ fontWeight: 500 }}>
-                            {n.name} → <span style={{ color: 'var(--text-muted)' }}>{tank?.name || 'No Tank'} ({prod?.name || 'No Fuel'})</span>
+                            {n.name} →{' '}
+                            <span style={{ color: 'var(--text-muted)' }}>
+                              {tank?.name || 'No Tank'} ({prod?.name || 'No Fuel'})
+                            </span>
                           </span>
-                          <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--text-strong)' }}>
-                            {parseFloat(n.currentReading.toString()).toLocaleString(undefined, { minimumFractionDigits: 1 })} {prod?.unit || 'L'}
+                          <span
+                            style={{
+                              fontFamily: 'var(--font-mono)',
+                              fontWeight: 600,
+                              color: 'var(--text-strong)',
+                            }}
+                          >
+                            {parseFloat(n.currentReading.toString()).toLocaleString(undefined, {
+                              minimumFractionDigits: 1,
+                            })}{' '}
+                            {prod?.unit || 'L'}
                           </span>
                         </div>
                       );
                     })}
                   </div>
                 ) : (
-                  <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px', fontStyle: 'italic' }}>
+                  <p
+                    style={{
+                      fontSize: '11px',
+                      color: 'var(--text-muted)',
+                      marginTop: '4px',
+                      fontStyle: 'italic',
+                    }}
+                  >
                     No nozzles connected to this dispenser.
                   </p>
                 )}

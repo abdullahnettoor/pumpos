@@ -10,31 +10,49 @@ import type { ExecutionContext } from '../../../kernel/index.js';
 import { RecordExpense, VoidExpense } from './index.js';
 import type { Expense, ExpenseRepository } from './index.js';
 import type { Shift, ShiftRepository } from '../../station-ops/shifts/index.js';
-import type { BusinessDay, BusinessDayWriteRepository } from '../../station-ops/business-days/index.js';
+import type {
+  BusinessDay,
+  BusinessDayWriteRepository,
+} from '../../station-ops/business-days/index.js';
 
 class ExpenseRepo implements ExpenseRepository {
   readonly rows: Expense[] = [];
   async save(e: Expense) {
     const i = this.rows.findIndex((r) => r.id === e.id);
-    if (i >= 0) this.rows[i] = e; else this.rows.push(e);
+    if (i >= 0) this.rows[i] = e;
+    else this.rows.push(e);
   }
-  async findById(id: string) { return this.rows.find((r) => r.id === id) ?? null; }
+  async findById(id: string) {
+    return this.rows.find((r) => r.id === id) ?? null;
+  }
 }
 class ShiftRepo implements ShiftRepository {
   constructor(readonly rows: Shift[]) {}
-  async findById(id: string) { return this.rows.find((r) => r.id === id) ?? null; }
-  async findByIdWithoutLock(id: string) { return this.findById(id); }
+  async findById(id: string) {
+    return this.rows.find((r) => r.id === id) ?? null;
+  }
+  async findByIdWithoutLock(id: string) {
+    return this.findById(id);
+  }
   async save() {}
-  async findOpenByStation() { return null; }
+  async findOpenByStation() {
+    return null;
+  }
   async addStaffAssignments() {}
   async addTerminalLinks() {}
 }
 class BdRepo implements BusinessDayWriteRepository {
   constructor(readonly rows: BusinessDay[]) {}
-  async findById(id: string) { return this.rows.find((r) => r.id === id) ?? null; }
+  async findById(id: string) {
+    return this.rows.find((r) => r.id === id) ?? null;
+  }
   async save() {}
   async findOpenByStation(orgId: string, stationId: string) {
-    return this.rows.find((r) => r.organizationId === orgId && r.stationId === stationId && r.status === 'OPEN') ?? null;
+    return (
+      this.rows.find(
+        (r) => r.organizationId === orgId && r.stationId === stationId && r.status === 'OPEN',
+      ) ?? null
+    );
   }
   async findByStationAndDate(orgId: string, stationId: string, _date: string) {
     return this.rows.find((r) => r.organizationId === orgId && r.stationId === stationId) ?? null;
@@ -45,13 +63,49 @@ class BdRepo implements BusinessDayWriteRepository {
 }
 
 function ctx(): ExecutionContext {
-  return { organizationId: 'org-1', stationId: 'st-1', businessDayId: null, actorId: 'u', correlationId: null, clock: new FixedClock(new Date('2026-03-15T10:00:00Z')), ids: new SequentialIdGenerator('e') };
+  return {
+    organizationId: 'org-1',
+    stationId: 'st-1',
+    businessDayId: null,
+    actorId: 'u',
+    correlationId: null,
+    clock: new FixedClock(new Date('2026-03-15T10:00:00Z')),
+    ids: new SequentialIdGenerator('e'),
+  };
 }
 function shift(status: Shift['status'] = 'OPEN'): Shift {
-  return { id: 'sh-1', organizationId: 'org-1', stationId: 'st-1', businessDayId: 'bd-1', shiftTemplateId: 't', status, openedBy: 'u', openedAt: '', closedBy: null, closedAt: null, lockedAt: null, openingCash: '0', closingCash: null, createdAt: '', updatedAt: '' };
+  return {
+    id: 'sh-1',
+    organizationId: 'org-1',
+    stationId: 'st-1',
+    businessDayId: 'bd-1',
+    shiftTemplateId: 't',
+    status,
+    openedBy: 'u',
+    openedAt: '',
+    closedBy: null,
+    closedAt: null,
+    lockedAt: null,
+    openingCash: '0',
+    closingCash: null,
+    createdAt: '',
+    updatedAt: '',
+  };
 }
 function bday(): BusinessDay {
-  return { id: 'bd-1', organizationId: 'org-1', stationId: 'st-1', businessDate: '2026-03-15', status: 'OPEN', openedBy: 'u', openedAt: '', closedBy: null, closedAt: null, createdAt: '', updatedAt: '' };
+  return {
+    id: 'bd-1',
+    organizationId: 'org-1',
+    stationId: 'st-1',
+    businessDate: '2026-03-15',
+    status: 'OPEN',
+    openedBy: 'u',
+    openedAt: '',
+    closedBy: null,
+    closedAt: null,
+    createdAt: '',
+    updatedAt: '',
+  };
 }
 
 describe('RecordExpense', () => {
@@ -59,8 +113,12 @@ describe('RecordExpense', () => {
     const expenses = new ExpenseRepo();
     const store = new InMemoryEventStore();
     const events = new InProcessEventDispatcher({ store });
-    const result = await new RecordExpense({ expenses, shifts: new ShiftRepo([shift()]), businessDays: new BdRepo([bday()]), events })
-      .execute({ shiftId: 'sh-1', categoryId: 'cat-1', amount: 350 }, ctx());
+    const result = await new RecordExpense({
+      expenses,
+      shifts: new ShiftRepo([shift()]),
+      businessDays: new BdRepo([bday()]),
+      events,
+    }).execute({ shiftId: 'sh-1', categoryId: 'cat-1', amount: 350 }, ctx());
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.shiftId).toBe('sh-1');
@@ -72,8 +130,12 @@ describe('RecordExpense', () => {
 
   it('business expense (BANK via stationId) does not affect drawer and has no shift', async () => {
     const expenses = new ExpenseRepo();
-    const result = await new RecordExpense({ expenses, shifts: new ShiftRepo([]), businessDays: new BdRepo([bday()]), events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }) })
-      .execute({ stationId: 'st-1', categoryId: 'cat-1', amount: 12000, paidFrom: 'BANK' }, ctx());
+    const result = await new RecordExpense({
+      expenses,
+      shifts: new ShiftRepo([]),
+      businessDays: new BdRepo([bday()]),
+      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
+    }).execute({ stationId: 'st-1', categoryId: 'cat-1', amount: 12000, paidFrom: 'BANK' }, ctx());
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.shiftId).toBeNull();
@@ -84,16 +146,33 @@ describe('RecordExpense', () => {
 
   it('preserves explicit non-drawer handling for a petty-cash account', async () => {
     const expenses = new ExpenseRepo();
-    const result = await new RecordExpense({ expenses, shifts: new ShiftRepo([shift()]), businessDays: new BdRepo([bday()]), events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }) })
-      .execute({ shiftId: 'sh-1', categoryId: 'cat-1', amount: 100, paidFrom: 'SHIFT_CASH', affectsDrawer: false }, ctx());
+    const result = await new RecordExpense({
+      expenses,
+      shifts: new ShiftRepo([shift()]),
+      businessDays: new BdRepo([bday()]),
+      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
+    }).execute(
+      {
+        shiftId: 'sh-1',
+        categoryId: 'cat-1',
+        amount: 100,
+        paidFrom: 'SHIFT_CASH',
+        affectsDrawer: false,
+      },
+      ctx(),
+    );
     expect(result.success).toBe(true);
     if (result.success) expect(result.data.affectsDrawer).toBe(false);
   });
 
   it('rejects a drawer expense against a locked shift', async () => {
     const expenses = new ExpenseRepo();
-    const result = await new RecordExpense({ expenses, shifts: new ShiftRepo([shift('LOCKED')]), businessDays: new BdRepo([bday()]), events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }) })
-      .execute({ shiftId: 'sh-1', categoryId: 'cat-1', amount: 100 }, ctx());
+    const result = await new RecordExpense({
+      expenses,
+      shifts: new ShiftRepo([shift('LOCKED')]),
+      businessDays: new BdRepo([bday()]),
+      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
+    }).execute({ shiftId: 'sh-1', categoryId: 'cat-1', amount: 100 }, ctx());
     expect(result.success).toBe(false);
     if (!result.success) expect(result.error.code).toBe('INVARIANT_VIOLATION');
     expect(expenses.rows).toHaveLength(0);
@@ -102,10 +181,19 @@ describe('RecordExpense', () => {
   it('retains a closed shift on a non-drawer late expense', async () => {
     const expenses = new ExpenseRepo();
     const closedDay = { ...bday(), status: 'CLOSED' as const, closedAt: '2026-03-15T09:00:00Z' };
-    const result = await new RecordExpense({ expenses, shifts: new ShiftRepo([shift('CLOSED')]), businessDays: new BdRepo([closedDay]), events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }) })
-      .execute({ shiftId: 'sh-1', categoryId: 'cat-1', amount: 100, paidFrom: 'BANK' }, ctx());
+    const result = await new RecordExpense({
+      expenses,
+      shifts: new ShiftRepo([shift('CLOSED')]),
+      businessDays: new BdRepo([closedDay]),
+      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
+    }).execute({ shiftId: 'sh-1', categoryId: 'cat-1', amount: 100, paidFrom: 'BANK' }, ctx());
     expect(result.success).toBe(true);
-    if (result.success) expect(result.data).toMatchObject({ shiftId: 'sh-1', affectsDrawer: false, metadata: { lateEntry: true } });
+    if (result.success)
+      expect(result.data).toMatchObject({
+        shiftId: 'sh-1',
+        affectsDrawer: false,
+        metadata: { lateEntry: true },
+      });
   });
 });
 
@@ -114,8 +202,17 @@ describe('VoidExpense', () => {
     const expenses = new ExpenseRepo();
     const store = new InMemoryEventStore();
     const events = new InProcessEventDispatcher({ store });
-    const rec = await new RecordExpense({ expenses, shifts, businessDays: new BdRepo([bday()]), events })
-      .execute(paidFrom === 'SHIFT_CASH' ? { shiftId: 'sh-1', categoryId: 'cat-1', amount: 350 } : { stationId: 'st-1', categoryId: 'cat-1', amount: 350, paidFrom: 'BANK' }, ctx());
+    const rec = await new RecordExpense({
+      expenses,
+      shifts,
+      businessDays: new BdRepo([bday()]),
+      events,
+    }).execute(
+      paidFrom === 'SHIFT_CASH'
+        ? { shiftId: 'sh-1', categoryId: 'cat-1', amount: 350 }
+        : { stationId: 'st-1', categoryId: 'cat-1', amount: 350, paidFrom: 'BANK' },
+      ctx(),
+    );
     if (!rec.success) throw new Error('seed failed');
     return { expenses, store, events, id: rec.data.id };
   }
@@ -123,7 +220,10 @@ describe('VoidExpense', () => {
   it('voids an entry, keeps it (soft) and emits EXPENSE_VOIDED', async () => {
     const shifts = new ShiftRepo([shift()]);
     const { expenses, store, events, id } = await seed('SHIFT_CASH', shifts);
-    const result = await new VoidExpense({ expenses, shifts, events }).execute({ id, reason: 'duplicate' }, ctx());
+    const result = await new VoidExpense({ expenses, shifts, events }).execute(
+      { id, reason: 'duplicate' },
+      ctx(),
+    );
     expect(result.success).toBe(true);
     if (result.success) expect(result.data.status).toBe('VOIDED');
     expect(expenses.rows).toHaveLength(1);

@@ -1,9 +1,19 @@
 import { z } from 'zod';
 import { resolveBusinessDate } from '@pump/shared';
-import { BusinessEvents, conflictError, err, eventFromContext, forbiddenError, notFoundError, ok, validationError } from '../../../kernel/index.js';
+import {
+  BusinessEvents,
+  conflictError,
+  err,
+  eventFromContext,
+  forbiddenError,
+  notFoundError,
+  ok,
+  validationError,
+} from '../../../kernel/index.js';
 import type { EventPublisher, ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
 
-export type FinancialAccountType = 'CASH_IN_HAND' | 'PETTY_CASH' | 'BANK' | 'MERCHANT_CLEARING' | 'CMS' | 'OWNER';
+export type FinancialAccountType =
+  'CASH_IN_HAND' | 'PETTY_CASH' | 'BANK' | 'MERCHANT_CLEARING' | 'CMS' | 'OWNER';
 export type LedgerDirection = 'in' | 'out';
 export type LedgerSourceType =
   | 'OPENING'
@@ -55,7 +65,12 @@ export interface LedgerEntry {
 
 export interface FinancialAccountRepository {
   findById(id: string): Promise<FinancialAccount | null>;
-  existsByName(organizationId: string, stationId: string | null, name: string, excludeId?: string): Promise<boolean>;
+  existsByName(
+    organizationId: string,
+    stationId: string | null,
+    name: string,
+    excludeId?: string,
+  ): Promise<boolean>;
   save(account: FinancialAccount): Promise<void>;
 }
 
@@ -88,7 +103,14 @@ export interface LedgerEntryRepository {
   deleteByAccountAndSource(accountId: string, sourceType: LedgerSourceType): Promise<void>;
 }
 
-const accountTypeEnum = z.enum(['CASH_IN_HAND', 'PETTY_CASH', 'BANK', 'MERCHANT_CLEARING', 'CMS', 'OWNER']);
+const accountTypeEnum = z.enum([
+  'CASH_IN_HAND',
+  'PETTY_CASH',
+  'BANK',
+  'MERCHANT_CLEARING',
+  'CMS',
+  'OWNER',
+]);
 
 const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 
@@ -119,7 +141,10 @@ const createSchema = z.object({
   accountType: accountTypeEnum,
   name: z.string().trim().min(1, 'name is required').max(150),
   openingBalance: z.union([z.coerce.number(), z.string()]).optional(),
-  openingDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'openingDate must be YYYY-MM-DD').nullish(),
+  openingDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'openingDate must be YYYY-MM-DD')
+    .nullish(),
   metadata: z.record(z.any()).nullish(),
 });
 
@@ -133,7 +158,10 @@ const updateSchema = z.object({
 const setOpeningSchema = z.object({
   id: z.string().min(1),
   openingBalance: z.coerce.number(),
-  openingDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'openingDate must be YYYY-MM-DD').nullish(),
+  openingDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'openingDate must be YYYY-MM-DD')
+    .nullish(),
 });
 
 export interface FinancialAccountDeps {
@@ -148,22 +176,39 @@ export interface FinancialAccountDeps {
  * (in when positive, out when negative) so balances reconcile from day one.
  * Run inside runInTransaction.
  */
-export class CreateFinancialAccount implements UseCase<CreateFinancialAccountCommand, FinancialAccount> {
+export class CreateFinancialAccount implements UseCase<
+  CreateFinancialAccountCommand,
+  FinancialAccount
+> {
   constructor(private readonly deps: FinancialAccountDeps) {}
 
-  async execute(input: CreateFinancialAccountCommand, ctx: ExecutionContext): Promise<Result<FinancialAccount>> {
+  async execute(
+    input: CreateFinancialAccountCommand,
+    ctx: ExecutionContext,
+  ): Promise<Result<FinancialAccount>> {
     const p = createSchema.safeParse(input);
-    if (!p.success) return err(validationError('Invalid CreateFinancialAccount command', { issues: p.error.flatten() }));
+    if (!p.success)
+      return err(
+        validationError('Invalid CreateFinancialAccount command', { issues: p.error.flatten() }),
+      );
     const cmd = p.data;
 
     const stationId = cmd.stationId ?? null;
     if (await this.deps.accounts.existsByName(ctx.organizationId, stationId, cmd.name)) {
-      return err(conflictError(`An account named "${cmd.name}" already exists`, { name: cmd.name }));
+      return err(
+        conflictError(`An account named "${cmd.name}" already exists`, { name: cmd.name }),
+      );
     }
 
     const now = ctx.clock.now().toISOString();
     const openingBalance = cmd.openingBalance != null ? Number(cmd.openingBalance) : 0;
-    const openingDate = cmd.openingDate ?? resolveBusinessDate({ now: ctx.clock.now(), timeZone: ctx.timeZone, dayStartsAt: ctx.businessDayStartsAt });
+    const openingDate =
+      cmd.openingDate ??
+      resolveBusinessDate({
+        now: ctx.clock.now(),
+        timeZone: ctx.timeZone,
+        dayStartsAt: ctx.businessDayStartsAt,
+      });
 
     const account: FinancialAccount = {
       id: ctx.ids.newId(),
@@ -210,7 +255,12 @@ export class CreateFinancialAccount implements UseCase<CreateFinancialAccountCom
         aggregateType: 'FinancialAccount',
         aggregateId: account.id,
         stationId: stationId ?? undefined,
-        payload: { accountId: account.id, accountType: account.accountType, name: account.name, openingBalance: account.openingBalance },
+        payload: {
+          accountId: account.id,
+          accountType: account.accountType,
+          name: account.name,
+          openingBalance: account.openingBalance,
+        },
       }),
     ]);
 
@@ -220,19 +270,40 @@ export class CreateFinancialAccount implements UseCase<CreateFinancialAccountCom
 
 /** Edit an account's name / metadata / active flag. Opening balance is immutable
  * once set (correct it with an ADJUSTMENT entry, not by editing). */
-export class UpdateFinancialAccount implements UseCase<UpdateFinancialAccountCommand, FinancialAccount> {
+export class UpdateFinancialAccount implements UseCase<
+  UpdateFinancialAccountCommand,
+  FinancialAccount
+> {
   constructor(private readonly deps: FinancialAccountDeps) {}
 
-  async execute(input: UpdateFinancialAccountCommand, ctx: ExecutionContext): Promise<Result<FinancialAccount>> {
+  async execute(
+    input: UpdateFinancialAccountCommand,
+    ctx: ExecutionContext,
+  ): Promise<Result<FinancialAccount>> {
     const p = updateSchema.safeParse(input);
-    if (!p.success) return err(validationError('Invalid UpdateFinancialAccount command', { issues: p.error.flatten() }));
+    if (!p.success)
+      return err(
+        validationError('Invalid UpdateFinancialAccount command', { issues: p.error.flatten() }),
+      );
     const cmd = p.data;
 
     const existing = await this.deps.accounts.findById(cmd.id);
     if (!existing) return err(notFoundError('FinancialAccount', cmd.id));
-    if (existing.organizationId !== ctx.organizationId) return err(forbiddenError('Account belongs to another organization'));
-    if (cmd.name !== undefined && cmd.name !== existing.name && (await this.deps.accounts.existsByName(ctx.organizationId, existing.stationId, cmd.name, existing.id))) {
-      return err(conflictError(`An account named "${cmd.name}" already exists`, { name: cmd.name }));
+    if (existing.organizationId !== ctx.organizationId)
+      return err(forbiddenError('Account belongs to another organization'));
+    if (
+      cmd.name !== undefined &&
+      cmd.name !== existing.name &&
+      (await this.deps.accounts.existsByName(
+        ctx.organizationId,
+        existing.stationId,
+        cmd.name,
+        existing.id,
+      ))
+    ) {
+      return err(
+        conflictError(`An account named "${cmd.name}" already exists`, { name: cmd.name }),
+      );
     }
 
     const updated: FinancialAccount = {
@@ -268,21 +339,32 @@ export class UpdateFinancialAccount implements UseCase<UpdateFinancialAccountCom
 export class SetOpeningBalance implements UseCase<SetOpeningBalanceCommand, FinancialAccount> {
   constructor(private readonly deps: FinancialAccountDeps) {}
 
-  async execute(input: SetOpeningBalanceCommand, ctx: ExecutionContext): Promise<Result<FinancialAccount>> {
+  async execute(
+    input: SetOpeningBalanceCommand,
+    ctx: ExecutionContext,
+  ): Promise<Result<FinancialAccount>> {
     const p = setOpeningSchema.safeParse(input);
-    if (!p.success) return err(validationError('Invalid SetOpeningBalance command', { issues: p.error.flatten() }));
+    if (!p.success)
+      return err(
+        validationError('Invalid SetOpeningBalance command', { issues: p.error.flatten() }),
+      );
     const cmd = p.data;
 
     const existing = await this.deps.accounts.findById(cmd.id);
     if (!existing) return err(notFoundError('FinancialAccount', cmd.id));
-    if (existing.organizationId !== ctx.organizationId) return err(forbiddenError('Account belongs to another organization'));
+    if (existing.organizationId !== ctx.organizationId)
+      return err(forbiddenError('Account belongs to another organization'));
 
     const now = ctx.clock.now().toISOString();
     const opening = round2(Number(cmd.openingBalance));
     const openingDate =
       cmd.openingDate ??
       existing.openingDate ??
-      resolveBusinessDate({ now: ctx.clock.now(), timeZone: ctx.timeZone, dayStartsAt: ctx.businessDayStartsAt });
+      resolveBusinessDate({
+        now: ctx.clock.now(),
+        timeZone: ctx.timeZone,
+        dayStartsAt: ctx.businessDayStartsAt,
+      });
 
     const updated: FinancialAccount = {
       ...existing,
@@ -350,7 +432,10 @@ const transferSchema = z.object({
   fromAccountId: z.string().min(1, 'fromAccountId is required'),
   toAccountId: z.string().min(1, 'toAccountId is required'),
   amount: z.coerce.number().positive('amount must be positive'),
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date must be YYYY-MM-DD').nullish(),
+  date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'date must be YYYY-MM-DD')
+    .nullish(),
   notes: z.string().max(500).nullish(),
 });
 
@@ -363,24 +448,39 @@ const transferSchema = z.object({
 export class RecordTransfer implements UseCase<RecordTransferCommand, TransferResult> {
   constructor(private readonly deps: FinancialAccountDeps) {}
 
-  async execute(input: RecordTransferCommand, ctx: ExecutionContext): Promise<Result<TransferResult>> {
+  async execute(
+    input: RecordTransferCommand,
+    ctx: ExecutionContext,
+  ): Promise<Result<TransferResult>> {
     const p = transferSchema.safeParse(input);
-    if (!p.success) return err(validationError('Invalid RecordTransfer command', { issues: p.error.flatten() }));
+    if (!p.success)
+      return err(validationError('Invalid RecordTransfer command', { issues: p.error.flatten() }));
     const cmd = p.data;
 
-    if (cmd.fromAccountId === cmd.toAccountId) return err(validationError('Cannot transfer to the same account'));
+    if (cmd.fromAccountId === cmd.toAccountId)
+      return err(validationError('Cannot transfer to the same account'));
 
     const from = await this.deps.accounts.findById(cmd.fromAccountId);
-    if (!from || from.organizationId !== ctx.organizationId) return err(notFoundError('FinancialAccount', cmd.fromAccountId));
+    if (!from || from.organizationId !== ctx.organizationId)
+      return err(notFoundError('FinancialAccount', cmd.fromAccountId));
     const to = await this.deps.accounts.findById(cmd.toAccountId);
-    if (!to || to.organizationId !== ctx.organizationId) return err(notFoundError('FinancialAccount', cmd.toAccountId));
+    if (!to || to.organizationId !== ctx.organizationId)
+      return err(notFoundError('FinancialAccount', cmd.toAccountId));
 
     const now = ctx.clock.now().toISOString();
-    const entryDate = cmd.date ?? resolveBusinessDate({ now: ctx.clock.now(), timeZone: ctx.timeZone, dayStartsAt: ctx.businessDayStartsAt });
+    const entryDate =
+      cmd.date ??
+      resolveBusinessDate({
+        now: ctx.clock.now(),
+        timeZone: ctx.timeZone,
+        dayStartsAt: ctx.businessDayStartsAt,
+      });
     const transferId = ctx.ids.newId();
     const amount = String(cmd.amount);
     const stationId = from.stationId ?? to.stationId ?? null;
-    const isDeposit = (from.accountType === 'CASH_IN_HAND' || from.accountType === 'PETTY_CASH') && to.accountType === 'BANK';
+    const isDeposit =
+      (from.accountType === 'CASH_IN_HAND' || from.accountType === 'PETTY_CASH') &&
+      to.accountType === 'BANK';
     const sourceType: LedgerSourceType = isDeposit ? 'DEPOSIT' : 'TRANSFER';
     const label = cmd.notes ?? `${isDeposit ? 'Deposit' : 'Transfer'} ${from.name} → ${to.name}`;
 
@@ -459,7 +559,10 @@ const settlementSchema = z.object({
   bankAccountId: z.string().min(1, 'bankAccountId is required'),
   grossAmount: z.coerce.number().positive('grossAmount must be positive'),
   feeAmount: z.coerce.number().min(0).optional(),
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date must be YYYY-MM-DD').nullish(),
+  date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'date must be YYYY-MM-DD')
+    .nullish(),
   notes: z.string().max(500).nullish(),
 });
 
@@ -473,22 +576,37 @@ const settlementSchema = z.object({
 export class RecordSettlement implements UseCase<RecordSettlementCommand, SettlementResult> {
   constructor(private readonly deps: FinancialAccountDeps) {}
 
-  async execute(input: RecordSettlementCommand, ctx: ExecutionContext): Promise<Result<SettlementResult>> {
+  async execute(
+    input: RecordSettlementCommand,
+    ctx: ExecutionContext,
+  ): Promise<Result<SettlementResult>> {
     const p = settlementSchema.safeParse(input);
-    if (!p.success) return err(validationError('Invalid RecordSettlement command', { issues: p.error.flatten() }));
+    if (!p.success)
+      return err(
+        validationError('Invalid RecordSettlement command', { issues: p.error.flatten() }),
+      );
     const cmd = p.data;
 
-    if (cmd.clearingAccountId === cmd.bankAccountId) return err(validationError('Clearing and bank must be different accounts'));
+    if (cmd.clearingAccountId === cmd.bankAccountId)
+      return err(validationError('Clearing and bank must be different accounts'));
     const fee = cmd.feeAmount ?? 0;
     if (fee > cmd.grossAmount) return err(validationError('Fee cannot exceed the gross amount'));
 
     const clearing = await this.deps.accounts.findById(cmd.clearingAccountId);
-    if (!clearing || clearing.organizationId !== ctx.organizationId) return err(notFoundError('FinancialAccount', cmd.clearingAccountId));
+    if (!clearing || clearing.organizationId !== ctx.organizationId)
+      return err(notFoundError('FinancialAccount', cmd.clearingAccountId));
     const bank = await this.deps.accounts.findById(cmd.bankAccountId);
-    if (!bank || bank.organizationId !== ctx.organizationId) return err(notFoundError('FinancialAccount', cmd.bankAccountId));
+    if (!bank || bank.organizationId !== ctx.organizationId)
+      return err(notFoundError('FinancialAccount', cmd.bankAccountId));
 
     const now = ctx.clock.now().toISOString();
-    const entryDate = cmd.date ?? resolveBusinessDate({ now: ctx.clock.now(), timeZone: ctx.timeZone, dayStartsAt: ctx.businessDayStartsAt });
+    const entryDate =
+      cmd.date ??
+      resolveBusinessDate({
+        now: ctx.clock.now(),
+        timeZone: ctx.timeZone,
+        dayStartsAt: ctx.businessDayStartsAt,
+      });
     const settlementId = ctx.ids.newId();
     const net = round2(cmd.grossAmount - fee);
     const stationId = clearing.stationId ?? bank.stationId ?? null;
@@ -557,11 +675,24 @@ export class RecordSettlement implements UseCase<RecordSettlementCommand, Settle
         aggregateType: 'MerchantSettlement',
         aggregateId: settlementId,
         stationId: stationId ?? undefined,
-        payload: { settlementId, clearingAccountId: clearing.id, bankAccountId: bank.id, gross: String(round2(cmd.grossAmount)), fee: String(round2(fee)), net: String(net) },
+        payload: {
+          settlementId,
+          clearingAccountId: clearing.id,
+          bankAccountId: bank.id,
+          gross: String(round2(cmd.grossAmount)),
+          fee: String(round2(fee)),
+          net: String(net),
+        },
       }),
     ]);
 
-    return ok({ settlementId, gross: String(round2(cmd.grossAmount)), fee: String(round2(fee)), net: String(net), entryDate });
+    return ok({
+      settlementId,
+      gross: String(round2(cmd.grossAmount)),
+      fee: String(round2(fee)),
+      net: String(net),
+      entryDate,
+    });
   }
 }
 
@@ -580,7 +711,10 @@ const adjustmentSchema = z.object({
   direction: z.enum(['in', 'out']),
   amount: z.coerce.number().positive('amount must be positive'),
   sourceType: z.enum(['BANK_CHARGE', 'INTEREST', 'ADJUSTMENT']).optional(),
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date must be YYYY-MM-DD').nullish(),
+  date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'date must be YYYY-MM-DD')
+    .nullish(),
   notes: z.string().max(500).nullish(),
 });
 
@@ -593,16 +727,29 @@ const adjustmentSchema = z.object({
 export class RecordLedgerAdjustment implements UseCase<RecordLedgerAdjustmentCommand, LedgerEntry> {
   constructor(private readonly deps: FinancialAccountDeps) {}
 
-  async execute(input: RecordLedgerAdjustmentCommand, ctx: ExecutionContext): Promise<Result<LedgerEntry>> {
+  async execute(
+    input: RecordLedgerAdjustmentCommand,
+    ctx: ExecutionContext,
+  ): Promise<Result<LedgerEntry>> {
     const p = adjustmentSchema.safeParse(input);
-    if (!p.success) return err(validationError('Invalid RecordLedgerAdjustment command', { issues: p.error.flatten() }));
+    if (!p.success)
+      return err(
+        validationError('Invalid RecordLedgerAdjustment command', { issues: p.error.flatten() }),
+      );
     const cmd = p.data;
 
     const account = await this.deps.accounts.findById(cmd.accountId);
-    if (!account || account.organizationId !== ctx.organizationId) return err(notFoundError('FinancialAccount', cmd.accountId));
+    if (!account || account.organizationId !== ctx.organizationId)
+      return err(notFoundError('FinancialAccount', cmd.accountId));
 
     const now = ctx.clock.now().toISOString();
-    const entryDate = cmd.date ?? resolveBusinessDate({ now: ctx.clock.now(), timeZone: ctx.timeZone, dayStartsAt: ctx.businessDayStartsAt });
+    const entryDate =
+      cmd.date ??
+      resolveBusinessDate({
+        now: ctx.clock.now(),
+        timeZone: ctx.timeZone,
+        dayStartsAt: ctx.businessDayStartsAt,
+      });
     const entry: LedgerEntry = {
       id: ctx.ids.newId(),
       organizationId: ctx.organizationId,
@@ -628,7 +775,12 @@ export class RecordLedgerAdjustment implements UseCase<RecordLedgerAdjustmentCom
         aggregateType: 'LedgerEntry',
         aggregateId: entry.id,
         stationId: account.stationId ?? undefined,
-        payload: { accountId: account.id, direction: entry.direction, amount: entry.amount, sourceType: entry.sourceType },
+        payload: {
+          accountId: account.id,
+          direction: entry.direction,
+          amount: entry.amount,
+          sourceType: entry.sourceType,
+        },
       }),
     ]);
 

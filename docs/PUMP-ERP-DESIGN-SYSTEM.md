@@ -686,12 +686,14 @@ For owners/managers:
 Station Setup is divided into two distinct lifecycle phases:
 
 ### 1. Guided Onboarding (First-Run UX)
+
 - Designed as a linear multi-step progress wizard.
 - Steps are sequential: Basics ➜ Products ➜ Tanks ➜ Dispensers ➜ Nozzles ➜ Shifts (optional).
 - Emphasizes single-focus forms per step with clear instructions and validation checklist rules.
 - Prevents skipping critical steps unless dependencies are resolved.
 
 ### 2. Station Overview (Post-Onboarding Rare-Edit UX)
+
 - All separate setup route screens are collapsed into a single, consolidated Station Overview.
 - Layout uses a clean tabbed panel (`var(--bg-surface)`) to switch between entity contexts.
 - Editing actions open clean detail drawers or inline forms to preserve location context.

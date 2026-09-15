@@ -35,67 +35,89 @@ export const Login: React.FC = () => {
   };
 
   return (
-    <div style={{
-      display: 'flex',
-      minHeight: '100vh',
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: 'var(--bg-canvas)',
-      fontFamily: 'var(--font-sans)',
-      padding: '20px'
-    }}>
-      <div style={{
-        width: '100%',
-        maxWidth: '380px',
-        backgroundColor: 'var(--bg-surface)',
-        border: '1px solid var(--border-soft)',
-        borderRadius: 'var(--radius-card)',
-        padding: '32px 24px',
+    <div
+      style={{
         display: 'flex',
-        flexDirection: 'column',
-        gap: '20px',
-        boxShadow: 'var(--shadow-1)'
-      }} className="animate-fade-in">
-
+        minHeight: '100vh',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: 'var(--bg-canvas)',
+        fontFamily: 'var(--font-sans)',
+        padding: '20px',
+      }}
+    >
+      <div
+        style={{
+          width: '100%',
+          maxWidth: '380px',
+          backgroundColor: 'var(--bg-surface)',
+          border: '1px solid var(--border-soft)',
+          borderRadius: 'var(--radius-card)',
+          padding: '32px 24px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '20px',
+          boxShadow: 'var(--shadow-1)',
+        }}
+        className="animate-fade-in"
+      >
         {/* Brand header */}
         <div style={{ textAlign: 'center' }}>
-          <span style={{
-            fontSize: '18px',
-            fontWeight: 700,
-            color: 'var(--brand-primary)',
-            letterSpacing: '-0.01em'
-          }}>
+          <span
+            style={{
+              fontSize: '18px',
+              fontWeight: 700,
+              color: 'var(--brand-primary)',
+              letterSpacing: '-0.01em',
+            }}
+          >
             PumpOS
           </span>
-          <h1 style={{
-            fontSize: '14px',
-            fontWeight: 600,
-            color: 'var(--text-strong)',
-            marginTop: '8px'
-          }}>
+          <h1
+            style={{
+              fontSize: '14px',
+              fontWeight: 600,
+              color: 'var(--text-strong)',
+              marginTop: '8px',
+            }}
+          >
             Sign in to operational console
           </h1>
         </div>
 
         {/* Error message */}
         {errorMsg && (
-          <div style={{
-            backgroundColor: 'var(--state-danger-bg)',
-            border: '1px solid var(--border-soft)',
-            color: 'var(--state-danger-fg)',
-            padding: '10px 12px',
-            borderRadius: 'var(--radius-input)',
-            fontSize: '12px',
-            fontWeight: 500,
-          }}>
+          <div
+            style={{
+              backgroundColor: 'var(--state-danger-bg)',
+              border: '1px solid var(--border-soft)',
+              color: 'var(--state-danger-fg)',
+              padding: '10px 12px',
+              borderRadius: 'var(--radius-input)',
+              fontSize: '12px',
+              fontWeight: 500,
+            }}
+          >
             ⚠️ {errorMsg}
           </div>
         )}
 
         {/* Login Form */}
-        <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+        <form
+          onSubmit={handleLogin}
+          style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}
+        >
           <div className="form-group">
-            <label className="form-label" style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600, color: 'var(--text-muted)' }}>
+            <label
+              className="form-label"
+              style={{
+                fontSize: '11px',
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+                fontWeight: 600,
+                color: 'var(--text-muted)',
+              }}
+            >
               Email or phone
             </label>
             <input
@@ -118,13 +140,22 @@ export const Login: React.FC = () => {
                 backgroundColor: 'var(--bg-surface)',
                 color: 'var(--text-strong)',
                 outline: 'none',
-                boxSizing: 'border-box'
+                boxSizing: 'border-box',
               }}
             />
           </div>
 
           <div className="form-group">
-            <label className="form-label" style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600, color: 'var(--text-muted)' }}>
+            <label
+              className="form-label"
+              style={{
+                fontSize: '11px',
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+                fontWeight: 600,
+                color: 'var(--text-muted)',
+              }}
+            >
               Password
             </label>
             <input
@@ -145,7 +176,7 @@ export const Login: React.FC = () => {
                 backgroundColor: 'var(--bg-surface)',
                 color: 'var(--text-strong)',
                 outline: 'none',
-                boxSizing: 'border-box'
+                boxSizing: 'border-box',
               }}
             />
           </div>
@@ -164,20 +195,22 @@ export const Login: React.FC = () => {
               cursor: loading ? 'not-allowed' : 'pointer',
               marginTop: '8px',
               transition: 'background-color 0.15s ease',
-              width: '100%'
+              width: '100%',
             }}
           >
             {loading ? 'Authenticating...' : 'Sign In ➜'}
           </button>
         </form>
 
-        <div style={{
-          borderTop: '1px solid var(--border-soft)',
-          paddingTop: '12px',
-          textAlign: 'center',
-          fontSize: '11px',
-          color: 'var(--text-muted)'
-        }}>
+        <div
+          style={{
+            borderTop: '1px solid var(--border-soft)',
+            paddingTop: '12px',
+            textAlign: 'center',
+            fontSize: '11px',
+            color: 'var(--text-muted)',
+          }}
+        >
           Contact system administrator for credential changes.
         </div>
       </div>

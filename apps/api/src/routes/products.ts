@@ -42,7 +42,13 @@ productsRouter.get('/products', async (c) => {
 // POST /api/setup/products
 productsRouter.post('/products', async (c) => {
   if (!canManageProduct(c.var.user.role)) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions to create products' } }, 403);
+    return c.json(
+      {
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'Insufficient permissions to create products' },
+      },
+      403,
+    );
   }
   const body = await c.req.json().catch(() => ({}));
   const db = c.var.db;
@@ -67,15 +73,30 @@ productsRouter.post('/products', async (c) => {
 // returned. Rows are expected pre-validated by the UI.
 productsRouter.post('/products/import', async (c) => {
   if (!canManageProduct(c.var.user.role)) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions to import products' } }, 403);
+    return c.json(
+      {
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'Insufficient permissions to import products' },
+      },
+      403,
+    );
   }
   const body = await c.req.json().catch(() => ({}));
   const rows: any[] = Array.isArray(body?.products) ? body.products : [];
   if (rows.length === 0) {
-    return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'No products to import' } }, 400);
+    return c.json(
+      { success: false, error: { code: 'VALIDATION_ERROR', message: 'No products to import' } },
+      400,
+    );
   }
   if (rows.length > 2000) {
-    return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Import is limited to 2000 rows at a time' } }, 400);
+    return c.json(
+      {
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: 'Import is limited to 2000 rows at a time' },
+      },
+      400,
+    );
   }
   const db = c.var.db;
   const stationId = body?.stationId ?? undefined;
@@ -94,13 +115,22 @@ productsRouter.post('/products/import', async (c) => {
     if (result.success) created.push({ id: result.data.id, code: result.data.code });
     else failed.push({ code: row?.code, name: row?.name, error: result.error.message });
   }
-  return c.json({ success: true, data: { total: rows.length, createdCount: created.length, created, failed } });
+  return c.json({
+    success: true,
+    data: { total: rows.length, createdCount: created.length, created, failed },
+  });
 });
 
 // PUT /api/setup/products/:id
 productsRouter.put('/products/:id', async (c) => {
   if (!canManageProduct(c.var.user.role)) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions to modify products' } }, 403);
+    return c.json(
+      {
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'Insufficient permissions to modify products' },
+      },
+      403,
+    );
   }
   const id = c.req.param('id');
   const body = await c.req.json().catch(() => ({}));
@@ -116,7 +146,13 @@ productsRouter.put('/products/:id', async (c) => {
 // DELETE /api/setup/products/:id  (archive -> isActive=false)
 productsRouter.delete('/products/:id', async (c) => {
   if (!canManageProduct(c.var.user.role)) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions to modify products' } }, 403);
+    return c.json(
+      {
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'Insufficient permissions to modify products' },
+      },
+      403,
+    );
   }
   const id = c.req.param('id');
   const db = c.var.db;

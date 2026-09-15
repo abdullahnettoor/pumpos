@@ -73,7 +73,11 @@ export const TaxRegisterPanel: React.FC<TaxRegisterPanelProps> = ({ selectedStat
   const vatSaleRows = saleRows.filter((r: any) => r.taxCategory === 'FUEL_VAT');
 
   if (!selectedStation) {
-    return <div style={{ color: 'var(--text-muted)', padding: '24px' }}>Please select a station to view the tax register.</div>;
+    return (
+      <div style={{ color: 'var(--text-muted)', padding: '24px' }}>
+        Please select a station to view the tax register.
+      </div>
+    );
   }
 
   return (
@@ -86,24 +90,67 @@ export const TaxRegisterPanel: React.FC<TaxRegisterPanelProps> = ({ selectedStat
       />
 
       <KpiStrip columns="auto">
-        <KpiTile dot="brand" valueTone="brand" label="Output GST" value={inr(totals.totalGst)} hint="merchandise + income" />
-        <KpiTile label="— on Merchandise" value={inr(totals.gstOutput)} hint={`${gstSaleRows.length} lines`} />
-        <KpiTile label="— on Other Income" value={inr(totals.incomeOutput)} hint={`${incomeRows.length} entries`} />
-        <KpiTile dot="warning" label="Output VAT (Fuel)" value={inr(totals.vat.vat)} hint="no input credit" />
+        <KpiTile
+          dot="brand"
+          valueTone="brand"
+          label="Output GST"
+          value={inr(totals.totalGst)}
+          hint="merchandise + income"
+        />
+        <KpiTile
+          label="— on Merchandise"
+          value={inr(totals.gstOutput)}
+          hint={`${gstSaleRows.length} lines`}
+        />
+        <KpiTile
+          label="— on Other Income"
+          value={inr(totals.incomeOutput)}
+          hint={`${incomeRows.length} entries`}
+        />
+        <KpiTile
+          dot="warning"
+          label="Output VAT (Fuel)"
+          value={inr(totals.vat.vat)}
+          hint="no input credit"
+        />
       </KpiStrip>
 
       {loading ? (
-        <Panel flush title="Tax register"><div style={{ padding: '16px' }}><LoadingSpinner text="Loading tax register…" /></div></Panel>
+        <Panel flush title="Tax register">
+          <div style={{ padding: '16px' }}>
+            <LoadingSpinner text="Loading tax register…" />
+          </div>
+        </Panel>
       ) : (
         <>
           <Panel flush title="GST on merchandise sales">
             {gstSaleRows.length === 0 ? (
-              <div style={{ padding: '12px' }}><EmptyState compact icon={<Percent />} title="No GST sales in this period" description="Merchandise lines appear here once their product carries a GST rate." /></div>
+              <div style={{ padding: '12px' }}>
+                <EmptyState
+                  compact
+                  icon={<Percent />}
+                  title="No GST sales in this period"
+                  description="Merchandise lines appear here once their product carries a GST rate."
+                />
+              </div>
             ) : (
               <div style={{ overflow: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', textAlign: 'left' }}>
+                <table
+                  style={{
+                    width: '100%',
+                    borderCollapse: 'collapse',
+                    fontSize: '12px',
+                    textAlign: 'left',
+                  }}
+                >
                   <thead>
-                    <tr style={{ backgroundColor: 'var(--bg-surface-alt)', borderBottom: '1px solid var(--border-soft)', color: 'var(--text-muted)' }}>
+                    <tr
+                      style={{
+                        backgroundColor: 'var(--bg-surface-alt)',
+                        borderBottom: '1px solid var(--border-soft)',
+                        color: 'var(--text-muted)',
+                      }}
+                    >
                       <th style={{ ...th, whiteSpace: 'nowrap' }}>Date</th>
                       <th style={th}>Document</th>
                       <th style={th}>Product</th>
@@ -119,25 +166,50 @@ export const TaxRegisterPanel: React.FC<TaxRegisterPanelProps> = ({ selectedStat
                   <tbody>
                     {gstSaleRows.map((r: any) => (
                       <tr key={r.id} style={{ borderBottom: '1px solid var(--border-soft)' }}>
-                        <td style={{ ...td, whiteSpace: 'nowrap' }}><DateText value={r.businessDate} variant="compact" tone="muted" /></td>
+                        <td style={{ ...td, whiteSpace: 'nowrap' }}>
+                          <DateText value={r.businessDate} variant="compact" tone="muted" />
+                        </td>
                         <td style={td}>{r.documentNumber || '—'}</td>
                         <td style={{ ...td, color: 'var(--text-strong)', fontWeight: 600 }}>
                           {r.productName}
-                          {r.hsnCode && <div style={{ fontSize: '10px', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontWeight: 400 }}>HSN {r.hsnCode}</div>}
+                          {r.hsnCode && (
+                            <div
+                              style={{
+                                fontSize: '10px',
+                                color: 'var(--text-muted)',
+                                fontFamily: 'var(--font-mono)',
+                                fontWeight: 400,
+                              }}
+                            >
+                              HSN {r.hsnCode}
+                            </div>
+                          )}
                         </td>
                         <td style={td}>{r.customerName}</td>
-                        <td style={{ ...tdR, color: 'var(--text-muted)' }}>{Number(r.gstRate || 0)}%{r.interState ? ' · IGST' : ''}</td>
+                        <td style={{ ...tdR, color: 'var(--text-muted)' }}>
+                          {Number(r.gstRate || 0)}%{r.interState ? ' · IGST' : ''}
+                        </td>
                         <td style={tdR}>{inr(Number(r.taxableAmount || 0))}</td>
                         <td style={tdR}>{inr(Number(r.cgst || 0))}</td>
                         <td style={tdR}>{inr(Number(r.sgst || 0))}</td>
                         <td style={tdR}>{inr(Number(r.igst || 0))}</td>
-                        <td style={{ ...tdR, fontWeight: 700, color: 'var(--text-strong)' }}>{inr(Number(r.lineTotal || 0))}</td>
+                        <td style={{ ...tdR, fontWeight: 700, color: 'var(--text-strong)' }}>
+                          {inr(Number(r.lineTotal || 0))}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                   <tfoot>
-                    <tr style={{ backgroundColor: 'var(--bg-surface-alt)', fontWeight: 700, color: 'var(--text-strong)' }}>
-                      <td style={td} colSpan={5}>Total</td>
+                    <tr
+                      style={{
+                        backgroundColor: 'var(--bg-surface-alt)',
+                        fontWeight: 700,
+                        color: 'var(--text-strong)',
+                      }}
+                    >
+                      <td style={td} colSpan={5}>
+                        Total
+                      </td>
                       <td style={tdR}>{inr(totals.gst.taxable)}</td>
                       <td style={tdR}>{inr(totals.gst.cgst)}</td>
                       <td style={tdR}>{inr(totals.gst.sgst)}</td>
@@ -152,12 +224,32 @@ export const TaxRegisterPanel: React.FC<TaxRegisterPanelProps> = ({ selectedStat
 
           <Panel flush title="VAT on fuel sales">
             {vatSaleRows.length === 0 ? (
-              <div style={{ padding: '12px' }}><EmptyState compact icon={<Percent />} title="No VAT fuel lines in this period" description="Fuel lines appear here once the product carries a VAT rate." /></div>
+              <div style={{ padding: '12px' }}>
+                <EmptyState
+                  compact
+                  icon={<Percent />}
+                  title="No VAT fuel lines in this period"
+                  description="Fuel lines appear here once the product carries a VAT rate."
+                />
+              </div>
             ) : (
               <div style={{ overflow: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', textAlign: 'left' }}>
+                <table
+                  style={{
+                    width: '100%',
+                    borderCollapse: 'collapse',
+                    fontSize: '12px',
+                    textAlign: 'left',
+                  }}
+                >
                   <thead>
-                    <tr style={{ backgroundColor: 'var(--bg-surface-alt)', borderBottom: '1px solid var(--border-soft)', color: 'var(--text-muted)' }}>
+                    <tr
+                      style={{
+                        backgroundColor: 'var(--bg-surface-alt)',
+                        borderBottom: '1px solid var(--border-soft)',
+                        color: 'var(--text-muted)',
+                      }}
+                    >
                       <th style={{ ...th, whiteSpace: 'nowrap' }}>Date</th>
                       <th style={th}>Document</th>
                       <th style={th}>Product</th>
@@ -171,20 +263,36 @@ export const TaxRegisterPanel: React.FC<TaxRegisterPanelProps> = ({ selectedStat
                   <tbody>
                     {vatSaleRows.map((r: any) => (
                       <tr key={r.id} style={{ borderBottom: '1px solid var(--border-soft)' }}>
-                        <td style={{ ...td, whiteSpace: 'nowrap' }}><DateText value={r.businessDate} variant="compact" tone="muted" /></td>
+                        <td style={{ ...td, whiteSpace: 'nowrap' }}>
+                          <DateText value={r.businessDate} variant="compact" tone="muted" />
+                        </td>
                         <td style={td}>{r.documentNumber || '—'}</td>
-                        <td style={{ ...td, color: 'var(--text-strong)', fontWeight: 600 }}>{r.productName}</td>
+                        <td style={{ ...td, color: 'var(--text-strong)', fontWeight: 600 }}>
+                          {r.productName}
+                        </td>
                         <td style={tdR}>{Number(r.quantity || 0)}</td>
-                        <td style={{ ...tdR, color: 'var(--text-muted)' }}>{Number(r.vatRate || 0)}%</td>
+                        <td style={{ ...tdR, color: 'var(--text-muted)' }}>
+                          {Number(r.vatRate || 0)}%
+                        </td>
                         <td style={tdR}>{inr(Number(r.taxableAmount || 0))}</td>
                         <td style={tdR}>{inr(Number(r.vat || 0))}</td>
-                        <td style={{ ...tdR, fontWeight: 700, color: 'var(--text-strong)' }}>{inr(Number(r.lineTotal || 0))}</td>
+                        <td style={{ ...tdR, fontWeight: 700, color: 'var(--text-strong)' }}>
+                          {inr(Number(r.lineTotal || 0))}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                   <tfoot>
-                    <tr style={{ backgroundColor: 'var(--bg-surface-alt)', fontWeight: 700, color: 'var(--text-strong)' }}>
-                      <td style={td} colSpan={5}>Total</td>
+                    <tr
+                      style={{
+                        backgroundColor: 'var(--bg-surface-alt)',
+                        fontWeight: 700,
+                        color: 'var(--text-strong)',
+                      }}
+                    >
+                      <td style={td} colSpan={5}>
+                        Total
+                      </td>
                       <td style={tdR}>{inr(totals.vat.taxable)}</td>
                       <td style={tdR}>{inr(totals.vat.vat)}</td>
                       <td style={tdR}>{inr(totals.vat.taxable + totals.vat.vat)}</td>

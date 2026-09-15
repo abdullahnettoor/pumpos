@@ -13,12 +13,12 @@ phase.
 
 ## Target topology
 
-| Surface     | Dev host                                | Prod host                     | Purpose |
-|-------------|-----------------------------------------|-------------------------------|---------|
-| Marketing   | `pumpos.abdullahnettoor.com`            | `pumpos.app`                  | Landing, downloads, (later) docs/blog. Static, SEO-first. |
-| Console     | `console.pumpos.abdullahnettoor.com`    | `console.pumpos.app`          | Current `apps/web` — full operational SPA. Desktop browsers only. |
-| Mobile      | `m.pumpos.abdullahnettoor.com`          | `m.pumpos.app`                | Owner-focused PWA — read-mostly. |
-| API         | `pumpos-api.abdullahnettoor.workers.dev` (unchanged) → later `api.pumpos.app` | `api.pumpos.app` | Hono on Workers. |
+| Surface   | Dev host                                                                      | Prod host            | Purpose                                                           |
+| --------- | ----------------------------------------------------------------------------- | -------------------- | ----------------------------------------------------------------- |
+| Marketing | `pumpos.abdullahnettoor.com`                                                  | `pumpos.app`         | Landing, downloads, (later) docs/blog. Static, SEO-first.         |
+| Console   | `console.pumpos.abdullahnettoor.com`                                          | `console.pumpos.app` | Current `apps/web` — full operational SPA. Desktop browsers only. |
+| Mobile    | `m.pumpos.abdullahnettoor.com`                                                | `m.pumpos.app`       | Owner-focused PWA — read-mostly.                                  |
+| API       | `pumpos-api.abdullahnettoor.workers.dev` (unchanged) → later `api.pumpos.app` | `api.pumpos.app`     | Hono on Workers.                                                  |
 
 All three sites deploy as Cloudflare **Workers with Static Assets** (matches
 `apps/web` today; keeps the deploy model uniform).
@@ -47,6 +47,7 @@ never build — so syncing WIP between machines costs no CI minutes.
   `@pump/{db,core,shared}/dist`.
 
 ### GitHub Actions minute cost (Free plan, private repo = 2,000 min/mo)
+
 - Web jobs run on Linux (**1×**) and are short. Tag-only triggering keeps usage
   low.
 - Desktop runners are billed at **macOS 10× / Windows 2×**, so desktop CI is
@@ -57,11 +58,11 @@ never build — so syncing WIP between machines costs no CI minutes.
 
 One codebase, config selected at build time:
 
-| | Preview (manual run) | Production (tag) |
-|---|---|---|
-| Frontends | `dev-pumpos-*` (workers.dev) | top-level custom domains |
-| Supabase | dev (via `DEV_*` or fallback) | `PROD_*` if set, else current (warns) |
-| API worker | `pumpos-api` (top-level) | top-level, or `--env $API_DEPLOY_ENV` |
+|            | Preview (manual run)          | Production (tag)                      |
+| ---------- | ----------------------------- | ------------------------------------- |
+| Frontends  | `dev-pumpos-*` (workers.dev)  | top-level custom domains              |
+| Supabase   | dev (via `DEV_*` or fallback) | `PROD_*` if set, else current (warns) |
+| API worker | `pumpos-api` (top-level)      | top-level, or `--env $API_DEPLOY_ENV` |
 
 - **Frontend** Supabase URL + publishable key + API URL are injected from repo
   secrets: `PROD_*` on tags, `DEV_*` on manual runs. Injection is **soft** —
@@ -141,12 +142,14 @@ Ships a clean topology with zero new features. Everything else builds on this.
 Supabase steps that can't be done from the repo — see "Manual steps" below.
 
 ### M1.a — Rename `apps/web` → `apps/console` ✅
+
 - `mv apps/web apps/console`; update workspace globs in root `package.json`,
   `tsconfig.json`, and any `wrangler.toml` references.
 - Rename Worker: `pumpos-web` → `pumpos-console`; `dev-pumpos` → `dev-pumpos-console`.
 - Update deploy scripts and `VITE_API_URL` bake-in to reflect the new name.
 
 ### M1.b — Route console under `console.` subdomain
+
 - Add a Cloudflare Route: `console.pumpos.abdullahnettoor.com/*` → `dev-pumpos-console` Worker.
 - Update `resolveApiUrl()` in `apps/console/src/App.tsx` to match new hostnames
   (`console.pumpos.abdullahnettoor.com`, later `console.pumpos.app`).
@@ -154,17 +157,21 @@ Supabase steps that can't be done from the repo — see "Manual steps" below.
   console hostnames (and remove the old apex once marketing is up).
 
 ### M1.c — Edge mobile gate on console Worker
+
 Add a tiny fetch handler in front of static assets that:
+
 1. Reads `Sec-CH-UA-Mobile` (preferred) and falls back to a UA regex.
 2. On mobile → `302` to `https://m.<same-zone>/` **without downloading the SPA**.
 3. Emits `Vary: Sec-CH-UA-Mobile, User-Agent` to keep CDN caching correct.
 4. Bypass with `?desktop=1` cookie for on-device debugging.
 
 Acceptance:
+
 - Curl with a mobile UA → `302` to `m.…`.
 - Curl with a desktop UA → SPA shell served, no redirect, cache hits.
 
 ### M1.d — In-app fallback gate
+
 Belt + braces: `AppShell` renders a "PumpOS console isn't supported on this
 device — open on desktop or visit `m.<domain>`" splash when
 `window.matchMedia('(pointer: coarse) and (max-width: 900px)').matches`.
@@ -175,8 +182,10 @@ desktop, redirects on mobile. Old `pumpos.abdullahnettoor.com` route freed for
 Phase M2.
 
 ### Manual steps (not doable from the repo)
+
 These must be done in the Cloudflare dashboard / Supabase once, then a deploy
 activates the split:
+
 1. **Deploy** the console: `npm run deploy --workspace=apps/console` (prod, uses
    the `console.pumpos.abdullahnettoor.com` custom-domain route) or
    `npm run deploy:dev --workspace=apps/console` (preview → workers.dev).
@@ -197,6 +206,7 @@ activates the split:
    gate's "open mobile app" link (harmless dead link) — or use `?desktop=1`.
 
 ### What shipped in code
+
 - `apps/web` → `apps/console` (git-tracked rename); workspace globs, root
   scripts (`dev:console`, `deploy:console`, `build:ui-console`), `tsconfig.json`
   project ref, Tailwind `@source`, and `download-fonts.mjs` targets updated.
@@ -218,6 +228,7 @@ build to static HTML. Remaining: real OG raster image, analytics beacon, and the
 Cloudflare custom-domain deploy (manual, same pattern as M1).
 
 ### Stack
+
 - **Astro 4+** (static output, SSR possible via Workers if needed later).
 - **MDX** for content (landing sections, and later docs/blog).
 - **Tailwind** matching PumpOS design tokens (share `@pump/ui/tokens.css`
@@ -226,6 +237,7 @@ Cloudflare custom-domain deploy (manual, same pattern as M1).
   we won't publish any yet.
 
 ### Scope for v1
+
 - `/` landing page: hero, tagline ("The operating system for fuel retail"),
   problem → solution → features → screenshots → CTA (Download / Talk to us).
 - `/download`: OS-detected primary CTA (auto-detects Win/Mac/Linux),
@@ -236,6 +248,7 @@ Cloudflare custom-domain deploy (manual, same pattern as M1).
 - Analytics: Cloudflare Web Analytics beacon (no cookies, no consent banner).
 
 ### Download component data contract
+
 ```jsonc
 // /downloads/manifest.json (served by marketing Worker, hand-written for now)
 {
@@ -245,16 +258,18 @@ Cloudflare custom-domain deploy (manual, same pattern as M1).
   "artifacts": {
     "windows-x64": { "url": "…", "size": 0, "sha256": "…" },
     "macos-arm64": { "url": "…", "size": 0, "sha256": "…" },
-    "macos-x64":   { "url": "…", "size": 0, "sha256": "…" },
-    "linux-x64-deb":     { "url": "…", "size": 0, "sha256": "…" },
-    "linux-x64-appimage":{ "url": "…", "size": 0, "sha256": "…" }
-  }
+    "macos-x64": { "url": "…", "size": 0, "sha256": "…" },
+    "linux-x64-deb": { "url": "…", "size": 0, "sha256": "…" },
+    "linux-x64-appimage": { "url": "…", "size": 0, "sha256": "…" },
+  },
 }
 ```
+
 The `<DownloadPicker />` component only reads this manifest; **swapping to
 GitHub Releases or R2 later is a URL change, not a UI change.**
 
 ### Deploy
+
 - Worker: `pumpos-marketing` (`env.preview` = `dev-pumpos-marketing`).
 - Route: `pumpos.abdullahnettoor.com/*` (and later `pumpos.app/*`).
 
@@ -263,6 +278,7 @@ practices; download page renders manifest correctly; console redirect from
 apex root removed.
 
 ### What shipped in code
+
 - `apps/marketing` — Astro 5 (`output: 'static'`) + `@astrojs/mdx`,
   `@astrojs/sitemap`, and Tailwind v4 via `@tailwindcss/vite`. Brand tokens
   mirrored from `packages/ui` in `src/styles/global.css`.
@@ -282,6 +298,7 @@ apex root removed.
   `deploy:marketing`, `build:marketing`; `.gitignore` ignores `.astro/`.
 
 ### Manual / follow-up
+
 1. **Deploy:** `npm run deploy:dev --workspace=apps/marketing` (preview →
    workers.dev) or `npm run deploy --workspace=apps/marketing` (prod → apex
    custom domain, auto-provisions DNS + cert like M1).
@@ -301,6 +318,7 @@ type-check. Remaining: real device QA, `m.` custom-domain deploy (manual), and
 raster PWA icons (currently SVG).
 
 ### Stack
+
 - Vite + React (same as console).
 - Uses `@pump/ui` **primitives + hooks + services** (design tokens, TanStack
   Query wiring, Supabase auth, `CloudStationService`).
@@ -310,6 +328,7 @@ raster PWA icons (currently SVG).
   extra plugin dependency).
 
 ### Information architecture (v1)
+
 ```
 Bottom tab bar
 ├── Home        → Owner dashboard: today's KPIs (sales, cash, variance),
@@ -323,16 +342,19 @@ Bottom tab bar
 ```
 
 ### Auth
+
 - Shared Supabase session (cookie scoped to `.pumpos.app` / `.pumpos.abdullahnettoor.com`).
 - Role gate: only `Owner` role sees Home dashboard tab; `Manager`/`Accountant`
   see Shifts + DSSR + Ledger; `Staff` sees "Not authorized on mobile".
 
 ### Explicit non-goals for v1
+
 - No offline (per AGENTS.md).
 - No mutations of financial/operational records.
 - No approvals (deferred to M3.5 if demand appears).
 
 ### Deploy
+
 - Worker: `pumpos-mobile` (`env.preview` = `dev-pumpos-mobile`).
 - Route: `m.pumpos.abdullahnettoor.com/*`.
 
@@ -341,6 +363,7 @@ demo org; Lighthouse mobile perf ≥90; installable on iOS/Android home screen;
 data caching follows the `pump-data-caching` tiers (operational = 15s).
 
 ### What shipped in code
+
 - `apps/mobile` — Vite + React PWA reusing `@pump/ui` (services, TanStack Query
   hooks, Supabase auth, design tokens). No operational/desktop screens imported.
 - Auth: `src/lib/session.ts` mirrors the console wiring (`setApiBaseUrl` for
@@ -367,6 +390,7 @@ data caching follows the `pump-data-caching` tiers (operational = 15s).
   `apps/mobile/src` added to the shared Tailwind `@source`; fonts vendored.
 
 ### Manual / follow-up
+
 1. **Deploy:** `npm run deploy:dev --workspace=apps/mobile` (preview →
    workers.dev) or `npm run deploy --workspace=apps/mobile` (prod → `m.` custom
    domain).
@@ -386,6 +410,7 @@ render; two sample docs + one sample post ship as starters. Remaining: author
 real content.
 
 ### Scope
+
 - `/docs` — user manual and admin guide (MDX). Sidebar generated from
   frontmatter. Search via Pagefind (static, no server).
 - `/blog` — MDX posts, RSS feed, category tags.
@@ -393,6 +418,7 @@ real content.
   deploy on Cloudflare Worker `env.preview`.
 
 ### Not doing (unless asked)
+
 - Headless CMS (Sanity/Contentful) — MDX in repo is enough at this stage.
 - Comments / newsletter signup (add via a third-party embed later).
 
@@ -400,6 +426,7 @@ real content.
 sitemap includes both trees.
 
 ### What shipped in code
+
 - **Blog** — `/blog` index + `/blog/[slug]` post pages (Astro 5 content
   collections), `/rss.xml` feed (`@astrojs/rss`), sample post
   `introducing-pumpos.mdx`.

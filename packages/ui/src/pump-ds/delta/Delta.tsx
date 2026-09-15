@@ -29,17 +29,17 @@ const deltaVariants = cva(
       },
       tone: {
         // Auto-tone: derived from `direction` × `invert`.
-        up:      'bg-success-bg text-success-fg',
-        down:    'bg-danger-bg text-danger-fg',
-        flat:    'bg-surface-alt text-ink-muted',
-        goodUp:  'bg-success-bg text-success-fg',
-        badUp:   'bg-danger-bg text-danger-fg',
-        goodDown:'bg-success-bg text-success-fg',
+        up: 'bg-success-bg text-success-fg',
+        down: 'bg-danger-bg text-danger-fg',
+        flat: 'bg-surface-alt text-ink-muted',
+        goodUp: 'bg-success-bg text-success-fg',
+        badUp: 'bg-danger-bg text-danger-fg',
+        goodDown: 'bg-success-bg text-success-fg',
         badDown: 'bg-danger-bg text-danger-fg',
       },
     },
     defaultVariants: { size: 'sm', tone: 'flat' },
-  }
+  },
 );
 
 /**
@@ -59,7 +59,8 @@ function inferDirection(value: unknown): DeltaDirection {
 }
 
 export interface DeltaProps
-  extends Omit<HTMLAttributes<HTMLSpanElement>, 'children'>,
+  extends
+    Omit<HTMLAttributes<HTMLSpanElement>, 'children'>,
     Pick<VariantProps<typeof deltaVariants>, 'size'> {
   /** Text or number rendered after the arrow. */
   value: ReactNode;
@@ -77,12 +78,24 @@ export interface DeltaProps
 
 const ArrowUp = (
   <svg viewBox="0 0 8 8" fill="none" aria-hidden="true">
-    <path d="M4 6.5V1.5M4 1.5L1.5 4M4 1.5L6.5 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+    <path
+      d="M4 6.5V1.5M4 1.5L1.5 4M4 1.5L6.5 4"
+      stroke="currentColor"
+      strokeWidth="1.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
   </svg>
 );
 const ArrowDown = (
   <svg viewBox="0 0 8 8" fill="none" aria-hidden="true">
-    <path d="M4 1.5V6.5M4 6.5L1.5 4M4 6.5L6.5 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+    <path
+      d="M4 1.5V6.5M4 6.5L1.5 4M4 6.5L6.5 4"
+      stroke="currentColor"
+      strokeWidth="1.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
   </svg>
 );
 const DashFlat = (
@@ -93,14 +106,20 @@ const DashFlat = (
 
 export const Delta = forwardRef<HTMLSpanElement, DeltaProps>(function Delta(
   { className, size, value, direction, invert, showArrow = true, ...rest },
-  ref
+  ref,
 ) {
   const dir = direction ?? inferDirection(value);
   // Resolve tone from direction × invert.
   const tone =
-    dir === 'flat' ? 'flat'
-    : dir === 'up'   ? (invert ? 'badUp'   : 'goodUp')
-    :                  (invert ? 'goodDown' : 'badDown');
+    dir === 'flat'
+      ? 'flat'
+      : dir === 'up'
+        ? invert
+          ? 'badUp'
+          : 'goodUp'
+        : invert
+          ? 'goodDown'
+          : 'badDown';
 
   const arrow = dir === 'up' ? ArrowUp : dir === 'down' ? ArrowDown : DashFlat;
 

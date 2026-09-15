@@ -24,9 +24,12 @@ export const Step8Review: React.FC<Step8ReviewProps> = ({
         <div style={panelStyle}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
-              <h2 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-strong)' }}>Review & Provision</h2>
+              <h2 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-strong)' }}>
+                Review & Provision
+              </h2>
               <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px' }}>
-                Review the full setup, resolve any issues, then provision the entire station in one shot.
+                Review the full setup, resolve any issues, then provision the entire station in one
+                shot.
               </p>
             </div>
             <Chip tone={validationIssues.length === 0 ? 'success' : 'warning'} size="sm">
@@ -35,15 +38,19 @@ export const Step8Review: React.FC<Step8ReviewProps> = ({
           </div>
 
           {validationIssues.length > 0 ? (
-            <div style={{
-              backgroundColor: 'var(--state-warning-bg)',
-              color: 'var(--state-warning-fg)',
-              borderRadius: 'var(--radius-card)',
-              padding: '12px 14px',
-              border: '1px solid rgba(138, 97, 22, 0.15)',
-              fontSize: '12px',
-            }}>
-              <div style={{ fontWeight: 700, marginBottom: '8px' }}>Resolve these before provisioning:</div>
+            <div
+              style={{
+                backgroundColor: 'var(--state-warning-bg)',
+                color: 'var(--state-warning-fg)',
+                borderRadius: 'var(--radius-card)',
+                padding: '12px 14px',
+                border: '1px solid rgba(138, 97, 22, 0.15)',
+                fontSize: '12px',
+              }}
+            >
+              <div style={{ fontWeight: 700, marginBottom: '8px' }}>
+                Resolve these before provisioning:
+              </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 {validationIssues.map((issue, idx) => (
                   <button
@@ -58,7 +65,7 @@ export const Step8Review: React.FC<Step8ReviewProps> = ({
                       color: 'inherit',
                       cursor: 'pointer',
                       fontSize: '12px',
-                      textDecoration: 'underline'
+                      textDecoration: 'underline',
                     }}
                   >
                     Step {issue.step}: {issue.message}
@@ -67,15 +74,17 @@ export const Step8Review: React.FC<Step8ReviewProps> = ({
               </div>
             </div>
           ) : (
-            <div style={{
-              backgroundColor: 'var(--state-success-bg)',
-              color: 'var(--state-success-fg)',
-              borderRadius: 'var(--radius-card)',
-              padding: '12px 14px',
-              border: '1px solid rgba(30, 106, 78, 0.15)',
-              fontSize: '12px',
-              fontWeight: 600,
-            }}>
+            <div
+              style={{
+                backgroundColor: 'var(--state-success-bg)',
+                color: 'var(--state-success-fg)',
+                borderRadius: 'var(--radius-card)',
+                padding: '12px 14px',
+                border: '1px solid rgba(30, 106, 78, 0.15)',
+                fontSize: '12px',
+                fontWeight: 600,
+              }}
+            >
               All required onboarding sections are provision-ready.
             </div>
           )}
@@ -83,52 +92,153 @@ export const Step8Review: React.FC<Step8ReviewProps> = ({
 
         <div style={panelStyle}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)' }}>Station & Rules</h3>
-            <Button type="button" variant="secondary" size="xs" onClick={() => moveToStep(1)}>Edit</Button>
+            <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)' }}>
+              Station & Rules
+            </h3>
+            <Button type="button" variant="secondary" size="xs" onClick={() => moveToStep(1)}>
+              Edit
+            </Button>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
             <div>
               <div style={fieldLabelStyle}>Station</div>
-              <div style={{ marginTop: '4px', fontWeight: 600, color: 'var(--text-strong)' }}>{draft.station.name || '—'}</div>
-              <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>{draft.station.code || 'No code yet'}</div>
+              <div style={{ marginTop: '4px', fontWeight: 600, color: 'var(--text-strong)' }}>
+                {draft.station.name || '—'}
+              </div>
+              <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                {draft.station.code || 'No code yet'}
+              </div>
             </div>
             <div>
               <div style={fieldLabelStyle}>Business Day Starts</div>
-              <div style={{ marginTop: '4px', fontWeight: 600, color: 'var(--text-strong)' }}>{draft.businessRules.businessDayStartsAt}</div>
-              <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>{draft.station.timezone}</div>
+              <div style={{ marginTop: '4px', fontWeight: 600, color: 'var(--text-strong)' }}>
+                {draft.businessRules.businessDayStartsAt}
+              </div>
+              <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                {draft.station.timezone}
+              </div>
             </div>
           </div>
         </div>
 
         <div style={panelStyle}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)' }}>Infrastructure & Values</h3>
+            <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)' }}>
+              Infrastructure & Values
+            </h3>
             <div style={{ display: 'flex', gap: '8px' }}>
-              <Button type="button" variant="secondary" size="xs" onClick={() => moveToStep(3)}>Fuels</Button>
-              <Button type="button" variant="secondary" size="xs" onClick={() => moveToStep(4)}>Tanks</Button>
-              <Button type="button" variant="secondary" size="xs" onClick={() => moveToStep(5)}>Dispensers</Button>
+              <Button type="button" variant="secondary" size="xs" onClick={() => moveToStep(3)}>
+                Fuels
+              </Button>
+              <Button type="button" variant="secondary" size="xs" onClick={() => moveToStep(4)}>
+                Tanks
+              </Button>
+              <Button type="button" variant="secondary" size="xs" onClick={() => moveToStep(5)}>
+                Dispensers
+              </Button>
             </div>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '12px' }}>
-            <div style={{ backgroundColor: 'var(--bg-surface-alt)', borderRadius: 'var(--radius-card)', padding: '12px' }}>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+              gap: '12px',
+            }}
+          >
+            <div
+              style={{
+                backgroundColor: 'var(--bg-surface-alt)',
+                borderRadius: 'var(--radius-card)',
+                padding: '12px',
+              }}
+            >
               <div style={fieldLabelStyle}>Fuels</div>
-              <div style={{ marginTop: '4px', fontSize: '18px', fontWeight: 700, color: 'var(--text-strong)' }}>{draft.products.length}</div>
+              <div
+                style={{
+                  marginTop: '4px',
+                  fontSize: '18px',
+                  fontWeight: 700,
+                  color: 'var(--text-strong)',
+                }}
+              >
+                {draft.products.length}
+              </div>
             </div>
-            <div style={{ backgroundColor: 'var(--bg-surface-alt)', borderRadius: 'var(--radius-card)', padding: '12px' }}>
+            <div
+              style={{
+                backgroundColor: 'var(--bg-surface-alt)',
+                borderRadius: 'var(--radius-card)',
+                padding: '12px',
+              }}
+            >
               <div style={fieldLabelStyle}>Tanks</div>
-              <div style={{ marginTop: '4px', fontSize: '18px', fontWeight: 700, color: 'var(--text-strong)' }}>{draft.tanks.length}</div>
+              <div
+                style={{
+                  marginTop: '4px',
+                  fontSize: '18px',
+                  fontWeight: 700,
+                  color: 'var(--text-strong)',
+                }}
+              >
+                {draft.tanks.length}
+              </div>
             </div>
-            <div style={{ backgroundColor: 'var(--bg-surface-alt)', borderRadius: 'var(--radius-card)', padding: '12px' }}>
+            <div
+              style={{
+                backgroundColor: 'var(--bg-surface-alt)',
+                borderRadius: 'var(--radius-card)',
+                padding: '12px',
+              }}
+            >
               <div style={fieldLabelStyle}>Dispensers</div>
-              <div style={{ marginTop: '4px', fontSize: '18px', fontWeight: 700, color: 'var(--text-strong)' }}>{draft.dispensers.length}</div>
+              <div
+                style={{
+                  marginTop: '4px',
+                  fontSize: '18px',
+                  fontWeight: 700,
+                  color: 'var(--text-strong)',
+                }}
+              >
+                {draft.dispensers.length}
+              </div>
             </div>
-            <div style={{ backgroundColor: 'var(--bg-surface-alt)', borderRadius: 'var(--radius-card)', padding: '12px' }}>
+            <div
+              style={{
+                backgroundColor: 'var(--bg-surface-alt)',
+                borderRadius: 'var(--radius-card)',
+                padding: '12px',
+              }}
+            >
               <div style={fieldLabelStyle}>Nozzles</div>
-              <div style={{ marginTop: '4px', fontSize: '18px', fontWeight: 700, color: 'var(--text-strong)' }}>{draft.nozzles.length}</div>
+              <div
+                style={{
+                  marginTop: '4px',
+                  fontSize: '18px',
+                  fontWeight: 700,
+                  color: 'var(--text-strong)',
+                }}
+              >
+                {draft.nozzles.length}
+              </div>
             </div>
-            <div style={{ backgroundColor: 'var(--bg-surface-alt)', borderRadius: 'var(--radius-card)', padding: '12px' }}>
+            <div
+              style={{
+                backgroundColor: 'var(--bg-surface-alt)',
+                borderRadius: 'var(--radius-card)',
+                padding: '12px',
+              }}
+            >
               <div style={fieldLabelStyle}>Payment Terminals</div>
-              <div style={{ marginTop: '4px', fontSize: '18px', fontWeight: 700, color: 'var(--text-strong)' }}>{(draft.paymentTerminals ?? []).length}</div>
+              <div
+                style={{
+                  marginTop: '4px',
+                  fontSize: '18px',
+                  fontWeight: 700,
+                  color: 'var(--text-strong)',
+                }}
+              >
+                {(draft.paymentTerminals ?? []).length}
+              </div>
             </div>
           </div>
         </div>
@@ -136,12 +246,15 @@ export const Step8Review: React.FC<Step8ReviewProps> = ({
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
         <div style={panelStyle}>
-          <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)' }}>Opening Values Snapshot</h3>
+          <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)' }}>
+            Opening Values Snapshot
+          </h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '12px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span style={{ color: 'var(--text-muted)' }}>Fuel rates</span>
               <span style={{ color: 'var(--text-strong)', fontWeight: 600 }}>
-                {draft.products.filter((product) => product.currentPrice > 0).length} / {draft.products.length}
+                {draft.products.filter((product) => product.currentPrice > 0).length} /{' '}
+                {draft.products.length}
               </span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -150,10 +263,13 @@ export const Step8Review: React.FC<Step8ReviewProps> = ({
                 {(() => {
                   const byUnit: Record<string, number> = {};
                   for (const tank of draft.tanks) {
-                    const unit = draft.products.find((p) => p.draftId === tank.productDraftId)?.unit || 'L';
+                    const unit =
+                      draft.products.find((p) => p.draftId === tank.productDraftId)?.unit || 'L';
                     byUnit[unit] = (byUnit[unit] || 0) + Number(tank.openingQuantity || 0);
                   }
-                  const parts = Object.entries(byUnit).map(([u, v]) => `${v.toLocaleString('en-IN')} ${u}`);
+                  const parts = Object.entries(byUnit).map(
+                    ([u, v]) => `${v.toLocaleString('en-IN')} ${u}`,
+                  );
                   return parts.length ? parts.join(' · ') : '0 L';
                 })()}
               </span>
@@ -162,7 +278,9 @@ export const Step8Review: React.FC<Step8ReviewProps> = ({
         </div>
 
         <div style={panelStyle}>
-          <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)' }}>Shift Templates</h3>
+          <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)' }}>
+            Shift Templates
+          </h3>
           <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
             {draft.shiftTemplates.length > 0
               ? `${draft.shiftTemplates.length} template(s) will be created.`

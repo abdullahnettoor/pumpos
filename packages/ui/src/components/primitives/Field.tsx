@@ -26,16 +26,33 @@ export interface FieldProps {
   style?: React.CSSProperties;
 }
 
-export const Field: React.FC<FieldProps> = ({ label, htmlFor, required, hint, error, children, className, style }) => (
+export const Field: React.FC<FieldProps> = ({
+  label,
+  htmlFor,
+  required,
+  hint,
+  error,
+  children,
+  className,
+  style,
+}) => (
   <div className={className} style={{ marginBottom: 'var(--space-4)', ...style }}>
     {label && (
       <label className="field-label" htmlFor={htmlFor}>
         {label}
-        {required && <span className="field-required" aria-hidden="true">*</span>}
+        {required && (
+          <span className="field-required" aria-hidden="true">
+            *
+          </span>
+        )}
       </label>
     )}
     {children}
-    {error ? <span className="field-error">{error}</span> : hint ? <span className="field-hint">{hint}</span> : null}
+    {error ? (
+      <span className="field-error">{error}</span>
+    ) : hint ? (
+      <span className="field-hint">{hint}</span>
+    ) : null}
   </div>
 );
 
@@ -59,7 +76,12 @@ TextInput.displayName = 'TextInput';
  */
 export const DateField = React.forwardRef<HTMLInputElement, TextInputProps>(
   ({ invalid, className, ...props }, ref) => (
-    <input ref={ref} type="date" className={cx('input', invalid && 'input-invalid', className)} {...props} />
+    <input
+      ref={ref}
+      type="date"
+      className={cx('input', invalid && 'input-invalid', className)}
+      {...props}
+    />
   ),
 );
 DateField.displayName = 'DateField';
@@ -124,7 +146,11 @@ export interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextArea
 
 export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
   ({ invalid, className, ...props }, ref) => (
-    <textarea ref={ref} className={cx('textarea', invalid && 'input-invalid', className)} {...props} />
+    <textarea
+      ref={ref}
+      className={cx('textarea', invalid && 'input-invalid', className)}
+      {...props}
+    />
   ),
 );
 Textarea.displayName = 'Textarea';

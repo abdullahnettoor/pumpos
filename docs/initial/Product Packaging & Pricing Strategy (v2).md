@@ -5,11 +5,10 @@ The pricing model is designed around the operational maturity of a fuel station 
 Each tier should provide complete value for its target customer:
 
 - **Core** is intended for small independent stations that need reliable daily operations and cash control.
-    
+
 - **Pro** is intended for stations that actively manage stock, credit customers, accounting, and business performance.
-    
+
 - **Enterprise** is intended for dealer groups and organizations operating multiple stations with centralized oversight requirements.
-    
 
 The objective is to ensure that every tier can operate independently while creating natural upgrade paths as operational complexity increases.
 
@@ -17,11 +16,11 @@ The objective is to ensure that every tier can operate independently while creat
 
 # Pricing Structure
 
-|Plan|Monthly Price|Target Customer|
-|---|---|---|
-|Core|₹799/month|Single-station operators focused on daily operations|
-|Pro|₹1,999–₹2,399/month|Growth-focused stations requiring financial control and automation|
-|Enterprise|₹4,999–₹5,999/month|Multi-station operators requiring centralized management|
+| Plan       | Monthly Price       | Target Customer                                                    |
+| ---------- | ------------------- | ------------------------------------------------------------------ |
+| Core       | ₹799/month          | Single-station operators focused on daily operations               |
+| Pro        | ₹1,999–₹2,399/month | Growth-focused stations requiring financial control and automation |
+| Enterprise | ₹4,999–₹5,999/month | Multi-station operators requiring centralized management           |
 
 ---
 
@@ -38,64 +37,58 @@ This plan should not attempt to provide advanced accounting, stock analytics, or
 #### Sales & Operations
 
 - Cash Balance Tracking
-    
+
 - DSSR (Daily Summary & Sales Report)
-    
+
 - UPI and Card Sales Recording
-    
+
 - Credit Sale Entry Recording
-    
+
 - Daily Shift Logs
-    
+
 - Shift Closing Reconciliation
-    
+
 - Full-Day Closing Reports
-    
 
 #### Purchase Management
 
 - Purchase Entry Management
-    
+
 - Creditors Tracking
-    
+
 - Product Catalog Management
-    
+
 - Basic Stock Calculation
-    
 
 #### Staff Management
 
 - Employee Records
-    
+
 - Attendance Tracking
-    
+
 - Leave Tracking
-    
+
 - Basic Salary Calculations
-    
 
 #### Platform Access
 
 - Tauri Desktop Application
-    
+
 - Web Application
-    
+
 - Mobile PWA Access
-    
 
 #### Security
 
 - Multi-Tenant Data Isolation
-    
+
 - Role-Based Owner Access
-    
 
 #### Support
 
 - Email Support
-    
+
 - Chat Support
-    
 
 ---
 
@@ -104,23 +97,22 @@ This plan should not attempt to provide advanced accounting, stock analytics, or
 The Core Plan should not include:
 
 - Fleet Customer Management
-    
+
 - Debtor Aging
-    
+
 - Financial Ledgers
-    
+
 - P&L Statements
-    
+
 - Balance Sheets
-    
+
 - GST Reporting
-    
+
 - Stock Shortage Detection
-    
+
 - WhatsApp Automations
-    
+
 - Advanced Audit Trails
-    
 
 The purpose of Core is operational visibility, not business intelligence.
 
@@ -145,104 +137,96 @@ Plus:
 ### Advanced Stock Management
 
 - Stock Arrival Tracking
-    
+
 - Decantation Logging
-    
+
 - Bay Stock Management
-    
+
 - Warehouse Stock Management
-    
+
 - Weekly Audits
-    
+
 - Advanced Stock Reconciliation
-    
+
 - Shortage Detection
-    
+
 - Evaporation Calculations
-    
 
 ### Fleet & Credit Management
 
 - Fleet Customer Profiles
-    
+
 - Debtor Management
-    
+
 - Credit Aging Reports
-    
+
 - Fleet Payment Tracking
-    
+
 - Customer Statements
-    
 
 ### Accounting & Finance
 
 - Cash Ledgers
-    
+
 - Bank Ledgers
-    
+
 - Petty Cash Management
-    
+
 - Full Financial Ledger
-    
+
 - Profit & Loss Statements
-    
+
 - Balance Sheet Generation
-    
+
 - Budget Planning
-    
+
 - Monthly Financial Tracking
-    
 
 ### Tax & Compliance
 
 - GST R1 Exports
-    
+
 - GST 3B Exports
-    
+
 - KGST Tracking
-    
+
 - TDS Tracking
-    
 
 ### Automation
 
 - Payment Reminder Automation
-    
+
 - WhatsApp Reminder System
-    
+
 - License Renewal Alerts
-    
+
 - Safety Compliance Notifications
-    
 
 ### Staff Performance
 
 - Staff Sales Tracking
-    
+
 - Performance Verification
-    
+
 - Incentive Tracking
-    
+
 - Bonus Tracking
-    
 
 ### Reliability & Auditability
 
 - Offline Transaction Protection
-    
+
 - 60-Day Local Data Protection Window
-    
+
 - Automatic Synchronization Recovery
-    
+
 - Financial Audit Trail
-    
+
 - Event-Sourced Activity Logs
-    
 
 ### Support
 
 - Standard Phone Support
-    
 
 ---
 
@@ -287,62 +271,56 @@ Plus:
 ### Multi-Station Management
 
 - Up to 4 Fuel Stations Under One Contract
-    
+
 - Centralized Ownership Dashboard
-    
+
 - Cross-Station Performance Comparison
-    
+
 - Consolidated Operational Reporting
-    
 
 ### Consolidated Financial Reporting
 
 - Group-Level Profit & Loss Statements
-    
+
 - Consolidated Balance Sheets
-    
+
 - Combined GST Reporting
-    
+
 - Multi-Station Financial Analytics
-    
 
 ### Advanced Security & Governance
 
 - Granular User Permissions
-    
+
 - Hierarchical Role Management
-    
+
 - Regional Manager Access Controls
-    
+
 - Advanced Approval Workflows
-    
 
 ### Hardware Integration
 
 - POS Controller Integration
-    
+
 - Serial Device Connectivity
-    
+
 - Forecourt Hardware Integrations
-    
 
 ### Backup & Disaster Recovery
 
 - Automated Nightly Cloud Backups
-    
+
 - Google Drive Backup Integration
-    
+
 - Enhanced Data Recovery Procedures
-    
 
 ### Premium Support
 
 - Priority Support Queue
-    
+
 - Dedicated Hotline Access
-    
+
 - Accelerated Issue Resolution
-    
 
 ---
 
@@ -353,15 +331,14 @@ Enterprise customers are not purchasing additional screens.
 They are purchasing:
 
 - Operational oversight
-    
+
 - Multi-location visibility
-    
+
 - Governance controls
-    
+
 - Reduced management effort
-    
+
 - Centralized reporting
-    
 
 The Enterprise tier should be positioned as a management platform rather than a station management tool.
 
@@ -426,31 +403,29 @@ The platform should be sold based on outcomes rather than technical implementati
 Avoid marketing technical terms such as:
 
 - SQLite
-    
+
 - Event Sourcing
-    
+
 - RLS
-    
+
 - Sync Engine
-    
+
 - Local Database
-    
 
 Instead communicate business benefits:
 
 - Works during internet outages
-    
+
 - Automatically recovers when connectivity returns
-    
+
 - Protects transaction history
-    
+
 - Reduces stock losses
-    
+
 - Improves collections
-    
+
 - Simplifies accounting
-    
+
 - Provides complete financial visibility
-    
 
 Customers buy operational confidence and financial control, not infrastructure details.

@@ -82,19 +82,26 @@ const REGISTRY: Record<EntityType, LedgerSource> = {
     kpiDebitLabel: 'Credit Sales',
     kpiCreditLabel: 'Collections',
     emptyText: 'No transactions for this customer in the selected range.',
-    caption: 'Debit = credit sale / adjustment · Credit = collection. Closing balance = amount receivable.',
+    caption:
+      'Debit = credit sale / adjustment · Credit = collection. Closing balance = amount receivable.',
     balanceTone: (net) => (net > 0 ? 'warning' : 'success'),
     resolve: (tx) => {
       const type = tx.transactionType;
       const direction: 'debit' | 'credit' =
-        type === 'Credit Sale' || type === 'Adjustment' || type === 'Prepaid Top-up' ? 'debit' : 'credit';
+        type === 'Credit Sale' || type === 'Adjustment' || type === 'Prepaid Top-up'
+          ? 'debit'
+          : 'credit';
       return {
         id: tx.id,
         date: tx.businessDate || tx.createdAt,
         dateLabel: fmtDate(tx.businessDate || tx.createdAt),
         type,
         typeColor:
-          type === 'Credit Sale' ? 'var(--brand-warning)' : type === 'Prepaid Top-up' ? 'var(--state-success-fg)' : undefined,
+          type === 'Credit Sale'
+            ? 'var(--brand-warning)'
+            : type === 'Prepaid Top-up'
+              ? 'var(--state-success-fg)'
+              : undefined,
         notes: tx.notes,
         amount: Number(tx.amount),
         direction,
@@ -112,7 +119,8 @@ const REGISTRY: Record<EntityType, LedgerSource> = {
     balanceTone: (net) => (net > 0 ? 'warning' : 'success'),
     resolve: (tx) => {
       const type = tx.transactionType;
-      const direction: 'debit' | 'credit' = type === 'Purchase' || type === 'Adjustment' ? 'debit' : 'credit';
+      const direction: 'debit' | 'credit' =
+        type === 'Purchase' || type === 'Adjustment' ? 'debit' : 'credit';
       return {
         id: tx.id,
         date: tx.businessDate || tx.createdAt,
@@ -133,7 +141,8 @@ const REGISTRY: Record<EntityType, LedgerSource> = {
     kpiDebitLabel: 'Received',
     kpiCreditLabel: 'Paid Out',
     emptyText: 'No cash movements in the selected range.',
-    caption: 'Recorded cash receipts & payments only — fuel/drawer reconciliation lives in the DSSR. Opening balance is carried from before the range.',
+    caption:
+      'Recorded cash receipts & payments only — fuel/drawer reconciliation lives in the DSSR. Opening balance is carried from before the range.',
     balanceTone: (net) => (net < 0 ? 'danger' : 'default'),
     resolve: (tx) => moneyResolve(tx),
   },
@@ -145,7 +154,8 @@ const REGISTRY: Record<EntityType, LedgerSource> = {
     kpiDebitLabel: 'Received',
     kpiCreditLabel: 'Paid Out',
     emptyText: 'No bank movements in the selected range.',
-    caption: 'Recorded bank/card/UPI receipts & payments. Opening balance is carried from before the range.',
+    caption:
+      'Recorded bank/card/UPI receipts & payments. Opening balance is carried from before the range.',
     balanceTone: (net) => (net < 0 ? 'danger' : 'default'),
     resolve: (tx) => moneyResolve(tx),
   },
@@ -157,7 +167,8 @@ const REGISTRY: Record<EntityType, LedgerSource> = {
     kpiDebitLabel: 'Owner Funded',
     kpiCreditLabel: 'Repaid / Drawn',
     emptyText: 'No owner-funded movements in the selected range.',
-    caption: 'Expenses & supplier payments funded from the owner\u2019s pocket. Balance = net amount the business owes the owner.',
+    caption:
+      'Expenses & supplier payments funded from the owner\u2019s pocket. Balance = net amount the business owes the owner.',
     balanceTone: (net) => (net > 0 ? 'warning' : 'default'),
     resolve: (tx) => {
       // Owner-funded outflow raises what the business owes the owner (debit).
@@ -224,8 +235,12 @@ export const UnifiedLedger: React.FC<UnifiedLedgerProps> = ({ selectedStation })
   }, [type, customers, suppliers]);
 
   // Ledger data hooks — enabled ONLY when the committed type matches.
-  const customerLedger = useCustomerLedger(committed?.type === 'customer' ? committed.entityId : undefined);
-  const supplierLedger = useSupplierLedger(committed?.type === 'supplier' ? committed.entityId : undefined);
+  const customerLedger = useCustomerLedger(
+    committed?.type === 'customer' ? committed.entityId : undefined,
+  );
+  const supplierLedger = useSupplierLedger(
+    committed?.type === 'supplier' ? committed.entityId : undefined,
+  );
   const isMoneyCommitted = !!committed && REGISTRY[committed.type].moneyAccount != null;
   const money = useMoneyMovements({
     stationId: isMoneyCommitted ? selectedStation?.id : undefined,
@@ -240,7 +255,13 @@ export const UnifiedLedger: React.FC<UnifiedLedgerProps> = ({ selectedStation })
   // the opening balance carried from before the range so the running balance is
   // period-accurate instead of restarting at zero.
   const { entries, openingBalance, loading, error } = useMemo(() => {
-    if (!committed) return { entries: [] as any[], openingBalance: 0, loading: false, error: null as string | null };
+    if (!committed)
+      return {
+        entries: [] as any[],
+        openingBalance: 0,
+        loading: false,
+        error: null as string | null,
+      };
     const resolve = REGISTRY[committed.type].resolve;
     // Opening for a party ledger = Σ(debit − credit) over rows dated before the
     // range start, using the same resolver as the running balance so they agree.
@@ -276,17 +297,37 @@ export const UnifiedLedger: React.FC<UnifiedLedgerProps> = ({ selectedStation })
     // Money openings come from the backend as raw signed net (in − out). Cash/Bank
     // resolve in→debit so the debit-positive opening is that value directly; Owner
     // flips (out→debit), so its opening is negated.
-    const rawOpening = Number((money.data?.openings || []).find((o: any) => o.account === account)?.opening ?? 0);
+    const rawOpening = Number(
+      (money.data?.openings || []).find((o: any) => o.account === account)?.opening ?? 0,
+    );
     return {
       entries: (money.data?.movements || []).filter((m: any) => m.account === account),
       openingBalance: committed.type === 'owner' ? -rawOpening : rawOpening,
       loading: money.isLoading,
       error: money.error ? 'Failed to load movements.' : null,
     };
-  }, [committed, customerLedger.data, customerLedger.isLoading, customerLedger.error, supplierLedger.data, supplierLedger.isLoading, supplierLedger.error, money.data, money.isLoading, money.error]);
+  }, [
+    committed,
+    customerLedger.data,
+    customerLedger.isLoading,
+    customerLedger.error,
+    supplierLedger.data,
+    supplierLedger.isLoading,
+    supplierLedger.error,
+    money.data,
+    money.isLoading,
+    money.error,
+  ]);
 
-  const computed = useMemo(() => computeLedgerRows(entries, resolvedCfg.resolve, openingBalance), [entries, resolvedCfg, openingBalance]);
-  const totals = { debit: computed.totalDebit, credit: computed.totalCredit, net: computed.closingBalance };
+  const computed = useMemo(
+    () => computeLedgerRows(entries, resolvedCfg.resolve, openingBalance),
+    [entries, resolvedCfg, openingBalance],
+  );
+  const totals = {
+    debit: computed.totalDebit,
+    credit: computed.totalCredit,
+    net: computed.closingBalance,
+  };
 
   const [downloading, setDownloading] = useState(false);
   const downloadPdf = async () => {
@@ -305,7 +346,8 @@ export const UnifiedLedger: React.FC<UnifiedLedgerProps> = ({ selectedStation })
         credit: r.direction === 'credit' ? r.amount : 0,
         balance: r.runningBalance,
       }));
-      const entityName = committed.entityLabel || labelForType(committed.type) || TYPE_LABEL[committed.type];
+      const entityName =
+        committed.entityLabel || labelForType(committed.type) || TYPE_LABEL[committed.type];
       const element = React.createElement(LedgerDoc, {
         title: `${TYPE_LABEL[committed.type].toUpperCase()} LEDGER`,
         entityName,
@@ -328,7 +370,11 @@ export const UnifiedLedger: React.FC<UnifiedLedgerProps> = ({ selectedStation })
   };
 
   const needsEntity = cfg.needsEntity;
-  const canSubmit = (!needsEntity || !!entityId) && !!range.from && !!range.to && (!!selectedStation || needsEntity);
+  const canSubmit =
+    (!needsEntity || !!entityId) &&
+    !!range.from &&
+    !!range.to &&
+    (!!selectedStation || needsEntity);
 
   const submit = () => {
     if (!canSubmit) return;
@@ -376,19 +422,46 @@ export const UnifiedLedger: React.FC<UnifiedLedgerProps> = ({ selectedStation })
       </Panel>
 
       {!committed ? (
-        <EmptyState compact icon={<BookOpen />} title="Select a ledger" description="Pick an entity and period, then View Ledger to load the statement." />
+        <EmptyState
+          compact
+          icon={<BookOpen />}
+          title="Select a ledger"
+          description="Pick an entity and period, then View Ledger to load the statement."
+        />
       ) : (
         <>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', justifyContent: 'space-between' }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              flexWrap: 'wrap',
+              justifyContent: 'space-between',
+            }}
+          >
             <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', flexWrap: 'wrap' }}>
-              <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-strong)', margin: 0 }}>
+              <h3
+                style={{
+                  fontSize: '15px',
+                  fontWeight: 600,
+                  color: 'var(--text-strong)',
+                  margin: 0,
+                }}
+              >
                 {committed.entityLabel || labelForType(committed.type)}
               </h3>
               <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
                 {fmtDate(committed.from)} — {fmtDate(committed.to)}
               </span>
             </div>
-            <Button variant="secondary" size="sm" leftIcon={<Download />} onClick={downloadPdf} loading={downloading} disabled={loading || computed.rows.length === 0}>
+            <Button
+              variant="secondary"
+              size="sm"
+              leftIcon={<Download />}
+              onClick={downloadPdf}
+              loading={downloading}
+              disabled={loading || computed.rows.length === 0}
+            >
               Download PDF
             </Button>
           </div>
@@ -398,7 +471,14 @@ export const UnifiedLedger: React.FC<UnifiedLedgerProps> = ({ selectedStation })
             <KpiTile dot="neutral" label={resolvedCfg.kpiCreditLabel} value={inr(totals.credit)} />
             {(() => {
               const bt = resolvedCfg.balanceTone(totals.net);
-              return <KpiTile dot={bt === 'default' ? 'brand' : (bt as any)} valueTone={bt === 'default' ? undefined : (bt as any)} label={resolvedCfg.balanceLabel} value={inr(totals.net)} />;
+              return (
+                <KpiTile
+                  dot={bt === 'default' ? 'brand' : (bt as any)}
+                  valueTone={bt === 'default' ? undefined : (bt as any)}
+                  label={resolvedCfg.balanceLabel}
+                  value={inr(totals.net)}
+                />
+              );
             })()}
           </KpiStrip>
 
@@ -422,7 +502,13 @@ export const UnifiedLedger: React.FC<UnifiedLedgerProps> = ({ selectedStation })
 };
 
 function labelForType(t: EntityType): string {
-  return t === 'cash' ? 'Cash Ledger' : t === 'bank' ? 'Bank Ledger' : t === 'owner' ? 'Owner Ledger' : '';
+  return t === 'cash'
+    ? 'Cash Ledger'
+    : t === 'bank'
+      ? 'Bank Ledger'
+      : t === 'owner'
+        ? 'Owner Ledger'
+        : '';
 }
 
 // Clamp party-ledger rows (which come for all-time) to the committed date range.

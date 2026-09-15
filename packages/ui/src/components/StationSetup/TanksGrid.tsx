@@ -42,13 +42,21 @@ export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
       setLoading(true);
       if (force) await qc.invalidateQueries({ queryKey: queryKeys.tanks(stationId) });
       const [tankList, prodList] = await Promise.all([
-        qc.ensureQueryData({ queryKey: queryKeys.tanks(stationId), queryFn: () => tankService.listTanks(stationId), staleTime: TIER.static.staleTime }),
-        qc.ensureQueryData({ queryKey: queryKeys.products(), queryFn: () => productService.listProducts(), staleTime: TIER.semi.staleTime }),
+        qc.ensureQueryData({
+          queryKey: queryKeys.tanks(stationId),
+          queryFn: () => tankService.listTanks(stationId),
+          staleTime: TIER.static.staleTime,
+        }),
+        qc.ensureQueryData({
+          queryKey: queryKeys.products(),
+          queryFn: () => productService.listProducts(),
+          staleTime: TIER.semi.staleTime,
+        }),
       ]);
       setTanks(tankList);
       const fuels = prodList.filter((p) => p.productType === 'FUEL' && p.isActive);
       setFuelProducts(fuels);
-      
+
       // Initialize form defaults based on current state
       if (fuels.length > 0) {
         setProductId(fuels[0].id);
@@ -84,9 +92,11 @@ export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
   };
 
   const handleQuickAdd = async (fuelCode: 'MS' | 'HSD', capStr: string) => {
-    const fuel = fuelProducts.find(p => p.code === fuelCode);
+    const fuel = fuelProducts.find((p) => p.code === fuelCode);
     if (!fuel) {
-      toast.error(`Please define active ${fuelCode === 'MS' ? 'Petrol (MS)' : 'Diesel (HSD)'} in the catalog first.`);
+      toast.error(
+        `Please define active ${fuelCode === 'MS' ? 'Petrol (MS)' : 'Diesel (HSD)'} in the catalog first.`,
+      );
       return;
     }
     const cap = parseInt(capStr);
@@ -97,10 +107,11 @@ export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
 
     try {
       setQuickSubmitting(true);
-      const sameProductTanksCount = tanks.filter(t => t.productId === fuel.id).length;
-      const tankName = fuelCode === 'MS' 
-        ? `Petrol Tank ${sameProductTanksCount + 1}` 
-        : `Diesel Tank ${sameProductTanksCount + 1}`;
+      const sameProductTanksCount = tanks.filter((t) => t.productId === fuel.id).length;
+      const tankName =
+        fuelCode === 'MS'
+          ? `Petrol Tank ${sameProductTanksCount + 1}`
+          : `Diesel Tank ${sameProductTanksCount + 1}`;
 
       await tankService.createTank({
         stationId,
@@ -119,12 +130,14 @@ export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
   };
 
   const prefillSuggestion = (fuelCode: 'MS' | 'HSD') => {
-    const fuel = fuelProducts.find(p => p.code === fuelCode);
+    const fuel = fuelProducts.find((p) => p.code === fuelCode);
     if (!fuel) {
-      toast.error(`Please define active ${fuelCode === 'MS' ? 'Petrol (MS)' : 'Diesel (HSD)'} in step 2 first.`);
+      toast.error(
+        `Please define active ${fuelCode === 'MS' ? 'Petrol (MS)' : 'Diesel (HSD)'} in step 2 first.`,
+      );
       return;
     }
-    
+
     setName(fuelCode === 'MS' ? 'Petrol Tank 1' : 'Diesel Tank 1');
     setCapacity(fuelCode === 'MS' ? 15000 : 20000);
     setProductId(fuel.id);
@@ -139,16 +152,27 @@ export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
     setCapacity(20000);
   };
 
-  if (loading) return <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>Loading storage tanks...</div>;
+  if (loading)
+    return (
+      <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+        Loading storage tanks...
+      </div>
+    );
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }} className="animate-fade-in">
-      
+    <div
+      style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
+      className="animate-fade-in"
+    >
       {/* Tanks Header & Add button */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h2 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-strong)' }}>Storage Tanks</h2>
-          <p style={{ color: 'var(--text-muted)', fontSize: '12px' }}>Monitor underground fuel reserves, capacity, and product configurations.</p>
+          <h2 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-strong)' }}>
+            Storage Tanks
+          </h2>
+          <p style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
+            Monitor underground fuel reserves, capacity, and product configurations.
+          </p>
         </div>
         {!isFormOpen && (
           <button
@@ -175,29 +199,37 @@ export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
 
       {/* Quick Add Tanks Panel */}
       {fuelProducts.length > 0 && (
-        <div style={{
-          backgroundColor: 'var(--bg-surface-alt)',
-          padding: '14px 20px',
-          borderRadius: 'var(--radius-card)',
-          border: '1px solid var(--border-soft)',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '12px'
-        }}>
+        <div
+          style={{
+            backgroundColor: 'var(--bg-surface-alt)',
+            padding: '14px 20px',
+            borderRadius: 'var(--radius-card)',
+            border: '1px solid var(--border-soft)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '12px',
+          }}
+        >
           <div>
-            <span style={{ fontWeight: 600, fontSize: '13px', color: 'var(--text-strong)' }}>Quick Add Storage Tanks</span>
+            <span style={{ fontWeight: 600, fontSize: '13px', color: 'var(--text-strong)' }}>
+              Quick Add Storage Tanks
+            </span>
             <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
-              Add a new Petrol or Diesel underground storage tank instantly by entering its capacity:
+              Add a new Petrol or Diesel underground storage tank instantly by entering its
+              capacity:
             </p>
           </div>
 
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '24px', alignItems: 'center' }}>
             {/* Petrol Quick Add */}
-            {fuelProducts.some(p => p.code === 'MS') && (
+            {fuelProducts.some((p) => p.code === 'MS') && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-strong)' }}>Petrol Tank (MS):</span>
+                <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-strong)' }}>
+                  Petrol Tank (MS):
+                </span>
                 <input
-                  type="number" min="0"
+                  type="number"
+                  min="0"
                   placeholder="Capacity"
                   value={quickPetrolCapacity}
                   onChange={(e) => setQuickPetrolCapacity(e.target.value)}
@@ -233,11 +265,14 @@ export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
             )}
 
             {/* Diesel Quick Add */}
-            {fuelProducts.some(p => p.code === 'HSD') && (
+            {fuelProducts.some((p) => p.code === 'HSD') && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-strong)' }}>Diesel Tank (HSD):</span>
+                <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-strong)' }}>
+                  Diesel Tank (HSD):
+                </span>
                 <input
-                  type="number" min="0"
+                  type="number"
+                  min="0"
                   placeholder="Capacity"
                   value={quickDieselCapacity}
                   onChange={(e) => setQuickDieselCapacity(e.target.value)}
@@ -284,9 +319,14 @@ export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
         }}
         title="Add Storage Tank"
       >
-        <form onSubmit={handleCreate} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <form
+          onSubmit={handleCreate}
+          style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
+        >
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Tank Identifier *</label>
+            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
+              Tank Identifier *
+            </label>
             <input
               type="text"
               style={{
@@ -304,7 +344,9 @@ export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Linked Fuel Product *</label>
+            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
+              Linked Fuel Product *
+            </label>
             <select
               value={productId}
               onChange={(e) => setProductId(e.target.value)}
@@ -314,7 +356,7 @@ export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
                 borderRadius: 'var(--radius-input)',
                 border: '1px solid var(--border-strong)',
                 fontSize: '13px',
-                backgroundColor: 'var(--bg-surface)'
+                backgroundColor: 'var(--bg-surface)',
               }}
             >
               {fuelProducts.map((p) => (
@@ -326,9 +368,12 @@ export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Capacity ({fuelProducts.find((p) => p.id === productId)?.unit || 'L'}) *</label>
+            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
+              Capacity ({fuelProducts.find((p) => p.id === productId)?.unit || 'L'}) *
+            </label>
             <input
-              type="number" min="0"
+              type="number"
+              min="0"
               style={{
                 height: '32px',
                 padding: '0 8px',
@@ -385,7 +430,13 @@ export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
       </Drawer>
 
       {/* Tanks Grid View */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '16px' }}>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
+          gap: '16px',
+        }}
+      >
         {tanks.map((t) => {
           const product = fuelProducts.find((p) => p.id === t.productId);
           return (
@@ -399,16 +450,40 @@ export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
                 display: 'flex',
                 flexDirection: 'column',
                 gap: '12px',
-                boxShadow: '0 2px 4px rgba(0, 0, 0, 0.01)'
+                boxShadow: '0 2px 4px rgba(0, 0, 0, 0.01)',
               }}
             >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontWeight: 600, color: 'var(--text-strong)', fontSize: '14px' }}>{t.name}</span>
-                <Chip tone="info" size="sm">{product?.name || 'Unknown'}</Chip>
+              <div
+                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+              >
+                <span style={{ fontWeight: 600, color: 'var(--text-strong)', fontSize: '14px' }}>
+                  {t.name}
+                </span>
+                <Chip tone="info" size="sm">
+                  {product?.name || 'Unknown'}
+                </Chip>
               </div>
               <div>
-                <span style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Capacity</span>
-                <p style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text-strong)', fontFamily: 'var(--font-mono)', marginTop: '2px' }}>
+                <span
+                  style={{
+                    fontSize: '10px',
+                    color: 'var(--text-muted)',
+                    fontWeight: 600,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                  }}
+                >
+                  Capacity
+                </span>
+                <p
+                  style={{
+                    fontSize: '18px',
+                    fontWeight: 700,
+                    color: 'var(--text-strong)',
+                    fontFamily: 'var(--font-mono)',
+                    marginTop: '2px',
+                  }}
+                >
                   {t.capacity.toLocaleString()} {product?.unit || 'L'}
                 </p>
               </div>

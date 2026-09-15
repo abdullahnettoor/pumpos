@@ -1,6 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { RecordStockCountPayload } from '../services/cloud.js';
-import { discardUnrecordedTankDips, isAmbiguousMutationError, loadPendingStockCountRequest, loadPendingTankDipWorkflow, resolveStockCountRequestIdentity, savePendingStockCountRequest, savePendingTankDipWorkflow, shouldResetTankDipDraft } from './stockCountMutation.js';
+import {
+  discardUnrecordedTankDips,
+  isAmbiguousMutationError,
+  loadPendingStockCountRequest,
+  loadPendingTankDipWorkflow,
+  resolveStockCountRequestIdentity,
+  savePendingStockCountRequest,
+  savePendingTankDipWorkflow,
+  shouldResetTankDipDraft,
+} from './stockCountMutation.js';
 
 const payload: RecordStockCountPayload = {
   stationId: 'station-1',
@@ -28,8 +37,20 @@ describe('Stock Count mutation identity', () => {
       closedAt: '2026-09-12T14:00:00.000Z',
       closeStatus: 'closed' as const,
       tankDips: [
-        { tankId: 'tank-1', tankName: 'Tank 1', actualQuantity: 1000, status: 'saved' as const, idempotencyKey: 'key-1' },
-        { tankId: 'tank-2', tankName: 'Tank 2', actualQuantity: 2000, status: 'failed' as const, idempotencyKey: 'key-2' },
+        {
+          tankId: 'tank-1',
+          tankName: 'Tank 1',
+          actualQuantity: 1000,
+          status: 'saved' as const,
+          idempotencyKey: 'key-1',
+        },
+        {
+          tankId: 'tank-2',
+          tankName: 'Tank 2',
+          actualQuantity: 2000,
+          status: 'failed' as const,
+          idempotencyKey: 'key-2',
+        },
       ],
     };
 
@@ -50,7 +71,11 @@ describe('Stock Count mutation identity', () => {
     let created = 0;
     const createKey = () => `key-${++created}`;
     const first = resolveStockCountRequestIdentity(null, payload, createKey);
-    const edited = resolveStockCountRequestIdentity(first, { ...payload, actualQuantity: 4890 }, createKey);
+    const edited = resolveStockCountRequestIdentity(
+      first,
+      { ...payload, actualQuantity: 4890 },
+      createKey,
+    );
 
     expect(edited.idempotencyKey).toBe('key-2');
   });
@@ -72,12 +97,23 @@ describe('Stock Count mutation identity', () => {
       currentBusinessDate: '2026-09-12',
       openedAt: '2026-09-12T06:00:00.000Z',
       closedAt: '2026-09-12T14:00:00.000Z',
-      tankDips: [{ tankId: 'tank-1', tankName: 'MS Tank', actualQuantity: 4900, status: 'saving' as const, idempotencyKey: 'key-1' }],
+      tankDips: [
+        {
+          tankId: 'tank-1',
+          tankName: 'MS Tank',
+          actualQuantity: 4900,
+          status: 'saving' as const,
+          idempotencyKey: 'key-1',
+        },
+      ],
     };
 
     savePendingTankDipWorkflow('station-1', workflow);
 
-    expect(loadPendingTankDipWorkflow('station-1')?.tankDips[0]).toMatchObject({ status: 'pending', idempotencyKey: 'key-1' });
+    expect(loadPendingTankDipWorkflow('station-1')?.tankDips[0]).toMatchObject({
+      status: 'pending',
+      idempotencyKey: 'key-1',
+    });
     vi.unstubAllGlobals();
   });
 

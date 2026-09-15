@@ -1,7 +1,15 @@
 import { Hono } from 'hono';
 import { type DbClient } from '@pump/db';
 import { canManageFinancialAccounts, isAuthorizedForStation } from '@pump/shared';
-import { CreateFinancialAccount, UpdateFinancialAccount, SetOpeningBalance, RecordTransfer, RecordSettlement, RecordLedgerAdjustment, type Result } from '@pump/core';
+import {
+  CreateFinancialAccount,
+  UpdateFinancialAccount,
+  SetOpeningBalance,
+  RecordTransfer,
+  RecordSettlement,
+  RecordLedgerAdjustment,
+  type Result,
+} from '@pump/core';
 import { buildContext } from '../infra/context.js';
 import type { AuthenticatedPrincipal } from '../infra/authenticated-principal.js';
 import { loadStationClock } from '../infra/station-clock.js';
@@ -34,7 +42,8 @@ function sendResult<T>(c: any, result: Result<T>) {
   return c.json({ success: false, error: result.error }, status);
 }
 
-const forbidden = (c: any) => c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Not permitted' } }, 403);
+const forbidden = (c: any) =>
+  c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Not permitted' } }, 403);
 
 // GET /finance/accounts?stationId= — list money accounts with current balances.
 financeRouter.get('/accounts', async (c) => {
@@ -42,7 +51,10 @@ financeRouter.get('/accounts', async (c) => {
   const user = c.var.user;
   if (!canManageFinancialAccounts(user.role)) return forbidden(c);
   const stationId = c.req.query('stationId') || undefined;
-  const accounts = await new DrizzleFinancialAccountReader(db).listWithBalances(user.organizationId, stationId);
+  const accounts = await new DrizzleFinancialAccountReader(db).listWithBalances(
+    user.organizationId,
+    stationId,
+  );
   return c.json({ success: true, data: accounts });
 });
 
@@ -53,8 +65,17 @@ financeRouter.get('/accounts/:id/ledger', async (c) => {
   if (!canManageFinancialAccounts(user.role)) return forbidden(c);
   const from = c.req.query('from') || undefined;
   const to = c.req.query('to') || undefined;
-  const data = await new DrizzleFinancialAccountReader(db).accountLedger(user.organizationId, c.req.param('id'), from, to);
-  if (!data) return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Account not found' } }, 404);
+  const data = await new DrizzleFinancialAccountReader(db).accountLedger(
+    user.organizationId,
+    c.req.param('id'),
+    from,
+    to,
+  );
+  if (!data)
+    return c.json(
+      { success: false, error: { code: 'NOT_FOUND', message: 'Account not found' } },
+      404,
+    );
   return c.json({ success: true, data });
 });
 
@@ -65,10 +86,19 @@ financeRouter.get('/movements', async (c) => {
   const user = c.var.user;
   if (!canManageFinancialAccounts(user.role)) return forbidden(c);
   const stationId = c.req.query('stationId');
-  if (!stationId) return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'stationId is required' } }, 400);
+  if (!stationId)
+    return c.json(
+      { success: false, error: { code: 'VALIDATION_ERROR', message: 'stationId is required' } },
+      400,
+    );
   const from = c.req.query('from') || undefined;
   const to = c.req.query('to') || undefined;
-  const data = await new DrizzleFinancialAccountReader(db).stationMovements(user.organizationId, stationId, from, to);
+  const data = await new DrizzleFinancialAccountReader(db).stationMovements(
+    user.organizationId,
+    stationId,
+    from,
+    to,
+  );
   return c.json({ success: true, data });
 });
 
@@ -79,8 +109,14 @@ financeRouter.post('/accounts', async (c) => {
   if (!canManageFinancialAccounts(user.role)) return forbidden(c);
   const body = await c.req.json().catch(() => ({}));
   const stationId: string | null = body?.stationId ?? null;
-  if (stationId && !isAuthorizedForStation(user, { organizationId: user.organizationId, stationId })) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+  if (
+    stationId &&
+    !isAuthorizedForStation(user, { organizationId: user.organizationId, stationId })
+  ) {
+    return c.json(
+      { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
+      403,
+    );
   }
   const clock = stationId ? await loadStationClock(db, stationId) : {};
   const result = await runInTransaction(db, (tx, events) =>

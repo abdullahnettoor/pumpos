@@ -6,8 +6,10 @@ import { Segmented } from '../primitives/Segmented.js';
 import { Field, Select } from '../primitives/Field.js';
 import { Button } from '../../pump-ds/index.js';
 import {
-  DEFAULT_SHIFT_SUMMARY_CONFIG, SHIFT_SUMMARY_SECTION_LABELS,
-  DEFAULT_DSSR_CONFIG, DSSR_SECTION_LABELS,
+  DEFAULT_SHIFT_SUMMARY_CONFIG,
+  SHIFT_SUMMARY_SECTION_LABELS,
+  DEFAULT_DSSR_CONFIG,
+  DSSR_SECTION_LABELS,
 } from '../../services/reports/reportConfig.js';
 import { Save, GripVertical } from 'lucide-react';
 
@@ -55,7 +57,10 @@ type ListId = 'ss' | 'dssr';
  * live preview of the letterhead + ordered sections. Ordering is persisted (the
  * enabled sections are stored in display order).
  */
-export const ReportConfigPanel: React.FC<ReportConfigPanelProps> = ({ selectedStation, onSaved }) => {
+export const ReportConfigPanel: React.FC<ReportConfigPanelProps> = ({
+  selectedStation,
+  onSaved,
+}) => {
   const toast = useToast();
   const [paper, setPaper] = useState<'A4' | 'LETTER'>('A4');
   const [ss, setSs] = useState<OrderedSection[]>([]);
@@ -80,10 +85,13 @@ export const ReportConfigPanel: React.FC<ReportConfigPanelProps> = ({ selectedSt
     legal.roCode ? `RO: ${legal.roCode}` : '',
     fuelBrand || '',
     [legal.addressLine, legal.pincode].filter(Boolean).join(', '),
-  ].filter(Boolean).join('  •  ');
+  ]
+    .filter(Boolean)
+    .join('  •  ');
 
   const activeList = previewDoc === 'shiftSummary' ? ss : dssr;
-  const activeLabels: Record<string, string> = previewDoc === 'shiftSummary' ? SHIFT_SUMMARY_SECTION_LABELS : DSSR_SECTION_LABELS;
+  const activeLabels: Record<string, string> =
+    previewDoc === 'shiftSummary' ? SHIFT_SUMMARY_SECTION_LABELS : DSSR_SECTION_LABELS;
   const previewSections = useMemo(
     () => activeList.filter((s) => s.enabled).map((s) => activeLabels[s.key] || s.key),
     [activeList, activeLabels],
@@ -125,8 +133,25 @@ export const ReportConfigPanel: React.FC<ReportConfigPanelProps> = ({ selectedSt
     labels: Record<string, string>,
   ) => (
     <div>
-      <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-default)', marginBottom: '8px' }}>{title}</div>
-      <div style={{ display: 'flex', flexDirection: 'column', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-card)', overflow: 'hidden' }}>
+      <div
+        style={{
+          fontSize: '12px',
+          fontWeight: 600,
+          color: 'var(--text-default)',
+          marginBottom: '8px',
+        }}
+      >
+        {title}
+      </div>
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          border: '1px solid var(--border-soft)',
+          borderRadius: 'var(--radius-card)',
+          overflow: 'hidden',
+        }}
+      >
         {list.map((s, i) => {
           const isDragging = drag?.list === listId && drag.index === i;
           return (
@@ -139,16 +164,29 @@ export const ReportConfigPanel: React.FC<ReportConfigPanelProps> = ({ selectedSt
                 setDrag({ list: listId, index: i });
               }}
               style={{
-                display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 10px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '6px 10px',
                 borderBottom: i < list.length - 1 ? '1px solid var(--border-soft)' : 'none',
-                backgroundColor: isDragging ? 'var(--bg-surface-hover, var(--bg-surface-alt))' : s.enabled ? 'transparent' : 'var(--bg-surface-alt)',
+                backgroundColor: isDragging
+                  ? 'var(--bg-surface-hover, var(--bg-surface-alt))'
+                  : s.enabled
+                    ? 'transparent'
+                    : 'var(--bg-surface-alt)',
                 opacity: isDragging ? 0.6 : 1,
               }}
             >
               {s.key === 'header' ? (
                 <span
                   title="Header is always first"
-                  style={{ display: 'flex', alignItems: 'center', color: 'var(--text-faint)', opacity: 0.35, cursor: 'not-allowed' }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    color: 'var(--text-faint)',
+                    opacity: 0.35,
+                    cursor: 'not-allowed',
+                  }}
                 >
                   <GripVertical size={14} />
                 </span>
@@ -162,7 +200,13 @@ export const ReportConfigPanel: React.FC<ReportConfigPanelProps> = ({ selectedSt
                   onDragEnd={() => setDrag(null)}
                   title="Drag to reorder"
                   aria-label={`Drag ${labels[s.key] || s.key} to reorder`}
-                  style={{ display: 'flex', alignItems: 'center', color: 'var(--text-faint)', cursor: 'grab', touchAction: 'none' }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    color: 'var(--text-faint)',
+                    cursor: 'grab',
+                    touchAction: 'none',
+                  }}
                 >
                   <GripVertical size={14} />
                 </span>
@@ -182,17 +226,43 @@ export const ReportConfigPanel: React.FC<ReportConfigPanelProps> = ({ selectedSt
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '8px',
+        }}
+      >
         <div>
-          <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-strong)' }}>Report Configuration</h3>
-          <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Choose paper size, and which sections appear (and in what order) on each PDF report.</p>
+          <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-strong)' }}>
+            Report Configuration
+          </h3>
+          <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+            Choose paper size, and which sections appear (and in what order) on each PDF report.
+          </p>
         </div>
-        <Button variant="primary" size="sm" onClick={handleSave} disabled={saving} loading={saving} leftIcon={<Save size={13} />}>
+        <Button
+          variant="primary"
+          size="sm"
+          onClick={handleSave}
+          disabled={saving}
+          loading={saving}
+          leftIcon={<Save size={13} />}
+        >
           {saving ? 'Saving…' : 'Save Configuration'}
         </Button>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 0.9fr)', gap: '24px', alignItems: 'start' }}>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 0.9fr)',
+          gap: '24px',
+          alignItems: 'start',
+        }}
+      >
         {/* Editor */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <Field label="Paper Size" style={{ maxWidth: '240px' }}>
@@ -205,17 +275,39 @@ export const ReportConfigPanel: React.FC<ReportConfigPanelProps> = ({ selectedSt
           {renderList('Shift Summary', 'ss', ss, setSs, SHIFT_SUMMARY_SECTION_LABELS)}
           {renderList('Daily DSSR', 'dssr', dssr, setDssr, DSSR_SECTION_LABELS)}
           <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-            Toggle sections on/off and drag the handle to reorder them. “Header / Letterhead” is always first.
+            Toggle sections on/off and drag the handle to reorder them. “Header / Letterhead” is
+            always first.
           </span>
         </div>
 
         {/* Live preview */}
-        <div style={{ position: 'sticky', top: '8px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        <div
+          style={{
+            position: 'sticky',
+            top: '8px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '10px',
+          }}
+        >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Preview</span>
+            <span
+              style={{
+                fontSize: '11px',
+                color: 'var(--text-muted)',
+                fontWeight: 600,
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+              }}
+            >
+              Preview
+            </span>
             <div style={{ minWidth: 220 }}>
               <Segmented
-                options={[{ value: 'shiftSummary', label: 'Shift Summary' }, { value: 'dssr', label: 'DSSR' }]}
+                options={[
+                  { value: 'shiftSummary', label: 'Shift Summary' },
+                  { value: 'dssr', label: 'DSSR' },
+                ]}
                 value={previewDoc}
                 onChange={(v) => setPreviewDoc(v as 'shiftSummary' | 'dssr')}
                 aria-label="Preview report"
@@ -225,23 +317,55 @@ export const ReportConfigPanel: React.FC<ReportConfigPanelProps> = ({ selectedSt
 
           <div
             style={{
-              border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-card)',
-              background: '#fff', padding: paper === 'LETTER' ? '18px 20px' : '16px 18px',
+              border: '1px solid var(--border-soft)',
+              borderRadius: 'var(--radius-card)',
+              background: '#fff',
+              padding: paper === 'LETTER' ? '18px 20px' : '16px 18px',
               aspectRatio: paper === 'LETTER' ? '8.5 / 11' : '210 / 297',
-              overflow: 'hidden', boxShadow: 'var(--shadow-sm, 0 1px 3px rgba(0,0,0,0.08))',
+              overflow: 'hidden',
+              boxShadow: 'var(--shadow-sm, 0 1px 3px rgba(0,0,0,0.08))',
             }}
           >
             {/* Letterhead band */}
-            <div style={{ background: 'var(--brand-primary, #1F6A53)', borderRadius: 6, padding: '10px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div
+              style={{
+                background: 'var(--brand-primary, #1F6A53)',
+                borderRadius: 6,
+                padding: '10px 12px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+              }}
+            >
               <div>
                 <div style={{ color: '#fff', fontWeight: 700, fontSize: 13 }}>{heading}</div>
-                <div style={{ color: '#fff', fontSize: 8, letterSpacing: 1.2, fontWeight: 700, marginTop: 2 }}>
-                  {previewDoc === 'shiftSummary' ? 'SHIFT SUMMARY RECORD' : 'DAILY SALES SUMMARY RECORD'}
+                <div
+                  style={{
+                    color: '#fff',
+                    fontSize: 8,
+                    letterSpacing: 1.2,
+                    fontWeight: 700,
+                    marginTop: 2,
+                  }}
+                >
+                  {previewDoc === 'shiftSummary'
+                    ? 'SHIFT SUMMARY RECORD'
+                    : 'DAILY SALES SUMMARY RECORD'}
                 </div>
               </div>
-              {logo ? <img src={logo} alt="logo" style={{ width: 34, height: 34, objectFit: 'contain' }} /> : null}
+              {logo ? (
+                <img
+                  src={logo}
+                  alt="logo"
+                  style={{ width: 34, height: 34, objectFit: 'contain' }}
+                />
+              ) : null}
             </div>
-            {legalBits ? <div style={{ fontSize: 7.5, color: 'var(--text-muted)', marginTop: 5 }}>{legalBits}</div> : null}
+            {legalBits ? (
+              <div style={{ fontSize: 7.5, color: 'var(--text-muted)', marginTop: 5 }}>
+                {legalBits}
+              </div>
+            ) : null}
 
             {/* Ordered section blocks */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12 }}>
@@ -250,15 +374,42 @@ export const ReportConfigPanel: React.FC<ReportConfigPanelProps> = ({ selectedSt
               ) : (
                 previewSections.map((label, i) => (
                   <div key={`${label}-${i}`}>
-                    <div style={{ fontSize: 8.5, fontWeight: 700, color: 'var(--brand-primary, #1F6A53)', letterSpacing: 0.4, textTransform: 'uppercase', marginBottom: 3 }}>{label}</div>
-                    <div style={{ height: 5, background: 'var(--bg-surface-alt)', borderRadius: 2, marginBottom: 3 }} />
-                    <div style={{ height: 5, background: 'var(--bg-surface-alt)', borderRadius: 2, width: '85%' }} />
+                    <div
+                      style={{
+                        fontSize: 8.5,
+                        fontWeight: 700,
+                        color: 'var(--brand-primary, #1F6A53)',
+                        letterSpacing: 0.4,
+                        textTransform: 'uppercase',
+                        marginBottom: 3,
+                      }}
+                    >
+                      {label}
+                    </div>
+                    <div
+                      style={{
+                        height: 5,
+                        background: 'var(--bg-surface-alt)',
+                        borderRadius: 2,
+                        marginBottom: 3,
+                      }}
+                    />
+                    <div
+                      style={{
+                        height: 5,
+                        background: 'var(--bg-surface-alt)',
+                        borderRadius: 2,
+                        width: '85%',
+                      }}
+                    />
                   </div>
                 ))
               )}
             </div>
           </div>
-          <span style={{ fontSize: '11px', color: 'var(--text-faint)' }}>Representative layout — actual PDF renders full data.</span>
+          <span style={{ fontSize: '11px', color: 'var(--text-faint)' }}>
+            Representative layout — actual PDF renders full data.
+          </span>
         </div>
       </div>
     </div>

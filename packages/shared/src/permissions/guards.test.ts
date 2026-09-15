@@ -7,7 +7,7 @@ import {
   canCreatePurchase,
   isAuthorizedForStation,
   UserContext,
-  ResourceContext
+  ResourceContext,
 } from './guards.js';
 
 describe('Role and Shift Permissions Guards', () => {

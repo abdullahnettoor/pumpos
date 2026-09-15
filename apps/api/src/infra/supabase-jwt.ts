@@ -63,14 +63,20 @@ function isLocalRequest(url: string): boolean {
  * middleware and the platform-admin middleware so JWT verification has a single
  * source of truth.
  */
-export async function verifySupabaseJwt(token: string, env: SupabaseJwtEnv, reqUrl: string): Promise<any> {
+export async function verifySupabaseJwt(
+  token: string,
+  env: SupabaseJwtEnv,
+  reqUrl: string,
+): Promise<any> {
   const { header, payload: decodedPayload } = decode(token);
   const expectedIssuer = expectedSupabaseIssuer(env);
 
   if (header.alg === 'HS256') {
     const secret = env.SUPABASE_JWT_SECRET;
     if (!secret) {
-      throw new Error('Received legacy HS256 token but SUPABASE_JWT_SECRET is not configured. Enable asymmetric JWTs or set the legacy secret.');
+      throw new Error(
+        'Received legacy HS256 token but SUPABASE_JWT_SECRET is not configured. Enable asymmetric JWTs or set the legacy secret.',
+      );
     }
     return assertTrustedClaims(await verify(token, secret, 'HS256'), expectedIssuer);
   }
@@ -89,7 +95,7 @@ export async function verifySupabaseJwt(token: string, env: SupabaseJwtEnv, reqU
         if (!response.ok) {
           throw new Error(`Failed to fetch JWKS from trusted issuer: ${response.statusText}`);
         }
-        const jwks = await response.json() as { keys: any[] };
+        const jwks = (await response.json()) as { keys: any[] };
         const jwk = jwks.keys.find((k: any) => k.kid === kid);
         if (!jwk) {
           throw new Error(`Key with ID ${kid} not found in trusted JWKS`);
@@ -99,7 +105,7 @@ export async function verifySupabaseJwt(token: string, env: SupabaseJwtEnv, reqU
           jwk,
           { name: 'ECDSA', namedCurve: 'P-256' },
           true,
-          ['verify']
+          ['verify'],
         );
         keyCache.set(cacheKey, publicKey);
       }
@@ -110,10 +116,18 @@ export async function verifySupabaseJwt(token: string, env: SupabaseJwtEnv, reqU
       // AND for localhost requests. The decoded claims must still name the
       // trusted issuer.
       const isDevelopment = env.ENVIRONMENT === 'development' || env.ENVIRONMENT === 'local';
-      if (isDevelopment && isLocalRequest(reqUrl) && decodedPayload?.sub && decodedPayload?.iss === expectedIssuer) {
-        console.warn('[JWT DEV FALLBACK] JWKS fetch/verify failed locally; using decoded token claims only.', {
-          reason: jwksError?.message || String(jwksError),
-        });
+      if (
+        isDevelopment &&
+        isLocalRequest(reqUrl) &&
+        decodedPayload?.sub &&
+        decodedPayload?.iss === expectedIssuer
+      ) {
+        console.warn(
+          '[JWT DEV FALLBACK] JWKS fetch/verify failed locally; using decoded token claims only.',
+          {
+            reason: jwksError?.message || String(jwksError),
+          },
+        );
         return decodedPayload;
       }
       throw jwksError;

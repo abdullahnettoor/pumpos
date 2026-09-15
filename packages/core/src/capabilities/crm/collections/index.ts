@@ -1,6 +1,20 @@
 import { z } from 'zod';
-import { BusinessEvents, err, eventFromContext, invariantViolation, notFoundError, ok, validationError } from '../../../kernel/index.js';
-import type { DocumentNumberGenerator, EventPublisher, ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
+import {
+  BusinessEvents,
+  err,
+  eventFromContext,
+  invariantViolation,
+  notFoundError,
+  ok,
+  validationError,
+} from '../../../kernel/index.js';
+import type {
+  DocumentNumberGenerator,
+  EventPublisher,
+  ExecutionContext,
+  Result,
+  UseCase,
+} from '../../../kernel/index.js';
 import { resolveFinancialAnchor, type ShiftRepository } from '../../station-ops/shifts/index.js';
 import type { BusinessDayWriteRepository } from '../../station-ops/business-days/index.js';
 import type { CustomerRepository } from '../customers/index.js';
@@ -76,7 +90,10 @@ const schema = z.object({
   stationId: z.string().min(1).optional(),
   vehicleId: z.string().nullish(),
   notes: z.string().max(500).optional(),
-  transactionDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'transactionDate must be YYYY-MM-DD').optional(),
+  transactionDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'transactionDate must be YYYY-MM-DD')
+    .optional(),
 });
 
 export interface RecordCollectionDeps {
@@ -97,23 +114,31 @@ export interface RecordCollectionDeps {
 export class RecordCollection implements UseCase<RecordCollectionCommand, Collection> {
   constructor(private readonly deps: RecordCollectionDeps) {}
 
-  async execute(input: RecordCollectionCommand, ctx: ExecutionContext): Promise<Result<Collection>> {
+  async execute(
+    input: RecordCollectionCommand,
+    ctx: ExecutionContext,
+  ): Promise<Result<Collection>> {
     const p = schema.safeParse(input);
-    if (!p.success) return err(validationError('Invalid RecordCollection command', { issues: p.error.flatten() }));
+    if (!p.success)
+      return err(
+        validationError('Invalid RecordCollection command', { issues: p.error.flatten() }),
+      );
     const cmd = p.data;
 
     const customer = await this.deps.customers.findById(cmd.customerId);
-    if (!customer || customer.organizationId !== ctx.organizationId) return err(notFoundError('Customer', cmd.customerId));
+    if (!customer || customer.organizationId !== ctx.organizationId)
+      return err(notFoundError('Customer', cmd.customerId));
 
     const affectsDrawer = cmd.paymentMethod === 'Cash';
 
-    let businessDayId: string;
-    let shiftId: string | null;
-    let stationId: string;
-    if (!cmd.shiftId && !cmd.stationId) return err(validationError('Either shiftId or stationId is required'));
-    const anchor = await resolveFinancialAnchor(this.deps, ctx, cmd, { affectsDrawer, drawerLabel: 'Cash collections' });
+    if (!cmd.shiftId && !cmd.stationId)
+      return err(validationError('Either shiftId or stationId is required'));
+    const anchor = await resolveFinancialAnchor(this.deps, ctx, cmd, {
+      affectsDrawer,
+      drawerLabel: 'Cash collections',
+    });
     if (!anchor.success) return anchor;
-    ({ businessDayId, shiftId, stationId } = anchor.data);
+    const { businessDayId, shiftId, stationId } = anchor.data;
 
     const now = ctx.clock.now().toISOString();
     const affectsDrawerToStore = shiftId !== null && affectsDrawer;
@@ -160,10 +185,21 @@ export class RecordCollection implements UseCase<RecordCollectionCommand, Collec
         stationId,
         businessDayId,
         metadata: anchor.data.eventMetadata,
-        payload: { collectionId: collection.id, customerId: customer.id, amount: collection.amount, paymentMethod: cmd.paymentMethod, affectsDrawer: affectsDrawerToStore, shiftId },
+        payload: {
+          collectionId: collection.id,
+          customerId: customer.id,
+          amount: collection.amount,
+          paymentMethod: cmd.paymentMethod,
+          affectsDrawer: affectsDrawerToStore,
+          shiftId,
+        },
         presentation: {
           templateId: 'credit-payment-received.v1',
-          values: { customerName: customer.name, amount: Number(collection.amount), paymentMethod: cmd.paymentMethod },
+          values: {
+            customerName: customer.name,
+            amount: Number(collection.amount),
+            paymentMethod: cmd.paymentMethod,
+          },
         },
       }),
     ]);

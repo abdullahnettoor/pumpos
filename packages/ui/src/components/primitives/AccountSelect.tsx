@@ -29,12 +29,24 @@ export interface AccountSelectProps {
  * / a specific bank / owner). The default "Auto" ('') lets the backend resolve by
  * payment method / paid-from. Filters to active accounts of the allowed types.
  */
-export const AccountSelect: React.FC<AccountSelectProps> = ({ stationId, value, onChange, types, disabled, autoLabel = 'Auto (by default)' }) => {
+export const AccountSelect: React.FC<AccountSelectProps> = ({
+  stationId,
+  value,
+  onChange,
+  types,
+  disabled,
+  autoLabel = 'Auto (by default)',
+}) => {
   const { data: accounts } = useFinancialAccounts(stationId);
-  const allowed = types ?? (['CASH_IN_HAND', 'PETTY_CASH', 'BANK', 'CMS', 'OWNER'] as AccountType[]);
+  const allowed =
+    types ?? (['CASH_IN_HAND', 'PETTY_CASH', 'BANK', 'CMS', 'OWNER'] as AccountType[]);
   const opts = (accounts || [])
     .filter((a: any) => allowed.includes(a.accountType) && a.isActive !== false)
-    .map((a: any) => ({ value: a.id, label: a.name, sublabel: `${TYPE_LABEL[a.accountType as AccountType] ?? a.accountType} · ${inr(a.balance)}` }));
+    .map((a: any) => ({
+      value: a.id,
+      label: a.name,
+      sublabel: `${TYPE_LABEL[a.accountType as AccountType] ?? a.accountType} · ${inr(a.balance)}`,
+    }));
   const options = [{ value: '', label: autoLabel }, ...opts];
   return (
     <Combobox

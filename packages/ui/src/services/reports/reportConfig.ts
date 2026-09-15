@@ -5,13 +5,30 @@
 import type { Letterhead } from './letterhead.js';
 
 export type ShiftSummarySection =
-  | 'header' | 'meta' | 'warnings' | 'nozzles' | 'handovers' | 'terminals'
-  | 'creditSales' | 'cashRecon' | 'nonCash'
-  | 'expenses' | 'purchases' | 'collections' | 'signatures';
+  | 'header'
+  | 'meta'
+  | 'warnings'
+  | 'nozzles'
+  | 'handovers'
+  | 'terminals'
+  | 'creditSales'
+  | 'cashRecon'
+  | 'nonCash'
+  | 'expenses'
+  | 'purchases'
+  | 'collections'
+  | 'signatures';
 
 export type DssrSection =
-  | 'header' | 'meta' | 'kpis' | 'financial' | 'fuelByProduct'
-  | 'nozzles' | 'fuelStockVariance' | 'merchandiseStockVariance' | 'shifts';
+  | 'header'
+  | 'meta'
+  | 'kpis'
+  | 'financial'
+  | 'fuelByProduct'
+  | 'nozzles'
+  | 'fuelStockVariance'
+  | 'merchandiseStockVariance'
+  | 'shifts';
 
 export interface ReportConfig {
   sections: ShiftSummarySection[];
@@ -30,31 +47,66 @@ export interface DssrReportConfig {
 
 export const DEFAULT_SHIFT_SUMMARY_CONFIG: ReportConfig = {
   sections: [
-    'header', 'meta', 'warnings', 'nozzles', 'handovers', 'terminals', 'creditSales',
-    'cashRecon', 'nonCash', 'expenses', 'purchases', 'collections', 'signatures',
+    'header',
+    'meta',
+    'warnings',
+    'nozzles',
+    'handovers',
+    'terminals',
+    'creditSales',
+    'cashRecon',
+    'nonCash',
+    'expenses',
+    'purchases',
+    'collections',
+    'signatures',
   ],
   showLogo: true,
   paper: 'A4',
 };
 
 export const DEFAULT_DSSR_CONFIG: DssrReportConfig = {
-  sections: ['header', 'meta', 'kpis', 'financial', 'fuelByProduct', 'nozzles', 'fuelStockVariance', 'merchandiseStockVariance', 'shifts'],
+  sections: [
+    'header',
+    'meta',
+    'kpis',
+    'financial',
+    'fuelByProduct',
+    'nozzles',
+    'fuelStockVariance',
+    'merchandiseStockVariance',
+    'shifts',
+  ],
   paper: 'A4',
 };
 
 /** Human labels for the section-config UI (R2). `header` is always rendered. */
 export const SHIFT_SUMMARY_SECTION_LABELS: Record<ShiftSummarySection, string> = {
-  header: 'Header / Letterhead', meta: 'Shift Meta', warnings: 'Warnings',
-  nozzles: 'Nozzle Reconciliation', handovers: 'Attendant Handovers', terminals: 'POS Terminals',
+  header: 'Header / Letterhead',
+  meta: 'Shift Meta',
+  warnings: 'Warnings',
+  nozzles: 'Nozzle Reconciliation',
+  handovers: 'Attendant Handovers',
+  terminals: 'POS Terminals',
   creditSales: 'Fuel-on-Credit Sales',
-  cashRecon: 'Cash Reconciliation', nonCash: 'Non-Cash Collections', expenses: 'Expenses',
-  purchases: 'Purchases', collections: 'Collections', signatures: 'Signatures',
+  cashRecon: 'Cash Reconciliation',
+  nonCash: 'Non-Cash Collections',
+  expenses: 'Expenses',
+  purchases: 'Purchases',
+  collections: 'Collections',
+  signatures: 'Signatures',
 };
 
 export const DSSR_SECTION_LABELS: Record<DssrSection, string> = {
-  header: 'Header / Letterhead', meta: 'Day Meta', kpis: 'KPIs',
-  financial: 'Financial Summary', fuelByProduct: 'Fuel Sales by Product', nozzles: 'Nozzle Aggregation',
-  fuelStockVariance: 'Tank Dip & Fuel Variance', merchandiseStockVariance: 'Merchandise Variance', shifts: 'Included Shifts',
+  header: 'Header / Letterhead',
+  meta: 'Day Meta',
+  kpis: 'KPIs',
+  financial: 'Financial Summary',
+  fuelByProduct: 'Fuel Sales by Product',
+  nozzles: 'Nozzle Aggregation',
+  fuelStockVariance: 'Tank Dip & Fuel Variance',
+  merchandiseStockVariance: 'Merchandise Variance',
+  shifts: 'Included Shifts',
 };
 
 /** Resolve the configured paper size from a station's settings (default A4). */

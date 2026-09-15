@@ -1,17 +1,48 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
-import { Database, ArrowUpRight, ArrowDownRight, ClipboardCheck, Package, ArrowLeftRight, Scale, Search } from 'lucide-react';
+import {
+  Database,
+  ArrowUpRight,
+  ArrowDownRight,
+  ClipboardCheck,
+  Package,
+  ArrowLeftRight,
+  Scale,
+  Search,
+} from 'lucide-react';
 import { PageLayout } from './primitives/PageLayout.js';
 import { DataTable } from './primitives/DataTable.js';
 import { Tabs } from './primitives/Tabs.js';
 import { Drawer } from './Drawer.js';
 import { Field, NumberInput, TextInput, Select } from './primitives/Field.js';
 import { CloudTransactionService } from '../services/cloud.js';
-import { useInventoryStatus, useInventoryItems, useInventoryMovements, useInventoryVariances, useInvalidateOperational } from '../query/hooks.js';
-import { Panel, Button, KpiStrip, KpiTile, StatusChip, Chip, MeterRow, EmptyState, DateText } from '../pump-ds/index.js';
+import {
+  useInventoryStatus,
+  useInventoryItems,
+  useInventoryMovements,
+  useInventoryVariances,
+  useInvalidateOperational,
+} from '../query/hooks.js';
+import {
+  Panel,
+  Button,
+  KpiStrip,
+  KpiTile,
+  StatusChip,
+  Chip,
+  MeterRow,
+  EmptyState,
+  DateText,
+} from '../pump-ds/index.js';
 import { tankPct, classifyTank } from '../utils/stock.js';
 import type { NavIntent } from './AppShell.js';
-import { isAmbiguousMutationError, loadPendingStockCountRequest, resolveStockCountRequestIdentity, savePendingStockCountRequest, type StockCountRequestIdentity } from '../query/stockCountMutation.js';
+import {
+  isAmbiguousMutationError,
+  loadPendingStockCountRequest,
+  resolveStockCountRequestIdentity,
+  savePendingStockCountRequest,
+  type StockCountRequestIdentity,
+} from '../query/stockCountMutation.js';
 
 const transactionService = new CloudTransactionService();
 
@@ -23,25 +54,77 @@ interface InventoryListProps {
 
 type TabType = 'tanks' | 'items' | 'movements' | 'variances';
 
-const fmtL = (n: number) => `${Number(n).toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} L`;
+const fmtL = (n: number) =>
+  `${Number(n).toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} L`;
 
-const SearchBox: React.FC<{ value: string; onChange: (v: string) => void; placeholder?: string }> = ({ value, onChange, placeholder }) => (
+const SearchBox: React.FC<{
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+}> = ({ value, onChange, placeholder }) => (
   <div style={{ position: 'relative' }}>
-    <Search size={13} style={{ position: 'absolute', left: '8px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-    <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} style={{ height: '28px', padding: '0 8px 0 26px', width: '220px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', fontSize: '12px', background: 'var(--bg-surface)' }} />
+    <Search
+      size={13}
+      style={{
+        position: 'absolute',
+        left: '8px',
+        top: '50%',
+        transform: 'translateY(-50%)',
+        color: 'var(--text-muted)',
+      }}
+    />
+    <input
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      style={{
+        height: '28px',
+        padding: '0 8px 0 26px',
+        width: '220px',
+        borderRadius: 'var(--radius-input)',
+        border: '1px solid var(--border-strong)',
+        fontSize: '12px',
+        background: 'var(--bg-surface)',
+      }}
+    />
   </div>
 );
 
 const movementColumns: ColumnDef<any, any>[] = [
-  { accessorKey: 'businessDate', header: 'Business Day', cell: ({ getValue }) => <DateText value={getValue() as string} tone="muted" /> },
-  { accessorKey: 'productName', header: 'Product', cell: ({ row }) => <span style={{ fontWeight: 500, color: 'var(--text-strong)' }}>{row.original.productName}</span> },
+  {
+    accessorKey: 'businessDate',
+    header: 'Business Day',
+    cell: ({ getValue }) => <DateText value={getValue() as string} tone="muted" />,
+  },
+  {
+    accessorKey: 'productName',
+    header: 'Product',
+    cell: ({ row }) => (
+      <span style={{ fontWeight: 500, color: 'var(--text-strong)' }}>
+        {row.original.productName}
+      </span>
+    ),
+  },
   {
     accessorKey: 'movementType',
     header: 'Type',
     cell: ({ getValue }) => {
       const t = getValue() as string;
-      const tone = t === 'Purchase' ? 'info' : t === 'Variance' ? 'danger' : t === 'Adjustment' ? 'warning' : t === 'Sale' ? 'success' : 'neutral';
-      return <Chip tone={tone} size="xs">{t}</Chip>;
+      const tone =
+        t === 'Purchase'
+          ? 'info'
+          : t === 'Variance'
+            ? 'danger'
+            : t === 'Adjustment'
+              ? 'warning'
+              : t === 'Sale'
+                ? 'success'
+                : 'neutral';
+      return (
+        <Chip tone={tone} size="xs">
+          {t}
+        </Chip>
+      );
     },
   },
   {
@@ -52,32 +135,97 @@ const movementColumns: ColumnDef<any, any>[] = [
       const unit = row.original.productUnit ?? 'L';
       const positive = q > 0;
       return (
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '2px', fontFamily: 'var(--font-mono)', color: positive ? 'var(--state-success-fg)' : 'var(--text-strong)', fontWeight: positive ? 600 : 400 }}>
+        <span
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '2px',
+            fontFamily: 'var(--font-mono)',
+            color: positive ? 'var(--state-success-fg)' : 'var(--text-strong)',
+            fontWeight: positive ? 600 : 400,
+          }}
+        >
           {positive ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
           {Math.abs(q).toLocaleString('en-IN', { maximumFractionDigits: 3 })} {unit}
         </span>
       );
     },
   },
-  { accessorKey: 'referenceType', header: 'Reference', cell: ({ getValue }) => <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>{(getValue() as string) ?? 'N/A'}</span> },
-  { accessorKey: 'tankName', header: 'Tank', cell: ({ getValue }) => <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>{(getValue() as string) ?? '—'}</span> },
+  {
+    accessorKey: 'referenceType',
+    header: 'Reference',
+    cell: ({ getValue }) => (
+      <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
+        {(getValue() as string) ?? 'N/A'}
+      </span>
+    ),
+  },
+  {
+    accessorKey: 'tankName',
+    header: 'Tank',
+    cell: ({ getValue }) => (
+      <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
+        {(getValue() as string) ?? '—'}
+      </span>
+    ),
+  },
 ];
 
 const varianceColumns: ColumnDef<any, any>[] = [
-  { accessorKey: 'businessDate', header: 'Business Day', cell: ({ getValue }) => <DateText value={getValue() as string} tone="muted" /> },
-  { accessorKey: 'productName', header: 'Product', cell: ({ row }) => <span style={{ fontWeight: 500, color: 'var(--text-strong)' }}>{row.original.productName}</span> },
-  { accessorKey: 'expectedQuantity', header: 'Expected', cell: ({ row }) => <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>{Number(row.original.expectedQuantity).toLocaleString('en-IN', { maximumFractionDigits: 3 })} {row.original.productUnit ?? 'L'}</span> },
-  { accessorKey: 'actualQuantity', header: 'Actual', cell: ({ row }) => <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-strong)' }}>{Number(row.original.actualQuantity).toLocaleString('en-IN', { maximumFractionDigits: 3 })} {row.original.productUnit ?? 'L'}</span> },
+  {
+    accessorKey: 'businessDate',
+    header: 'Business Day',
+    cell: ({ getValue }) => <DateText value={getValue() as string} tone="muted" />,
+  },
+  {
+    accessorKey: 'productName',
+    header: 'Product',
+    cell: ({ row }) => (
+      <span style={{ fontWeight: 500, color: 'var(--text-strong)' }}>
+        {row.original.productName}
+      </span>
+    ),
+  },
+  {
+    accessorKey: 'expectedQuantity',
+    header: 'Expected',
+    cell: ({ row }) => (
+      <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>
+        {Number(row.original.expectedQuantity).toLocaleString('en-IN', {
+          maximumFractionDigits: 3,
+        })}{' '}
+        {row.original.productUnit ?? 'L'}
+      </span>
+    ),
+  },
+  {
+    accessorKey: 'actualQuantity',
+    header: 'Actual',
+    cell: ({ row }) => (
+      <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-strong)' }}>
+        {Number(row.original.actualQuantity).toLocaleString('en-IN', { maximumFractionDigits: 3 })}{' '}
+        {row.original.productUnit ?? 'L'}
+      </span>
+    ),
+  },
   {
     accessorKey: 'varianceQuantity',
     header: 'Variance',
     cell: ({ row }) => {
       const diff = Number(row.original.varianceQuantity);
       const unit = row.original.productUnit ?? 'L';
-      const color = diff < 0 ? 'var(--state-danger-fg)' : diff > 0 ? 'var(--state-info-fg)' : 'var(--text-strong)';
+      const color =
+        diff < 0
+          ? 'var(--state-danger-fg)'
+          : diff > 0
+            ? 'var(--state-info-fg)'
+            : 'var(--text-strong)';
       return (
         <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, color }}>
-          {diff > 0 ? `+${diff.toLocaleString('en-IN', { maximumFractionDigits: 3 })}` : diff.toLocaleString('en-IN', { maximumFractionDigits: 3 })} {unit}
+          {diff > 0
+            ? `+${diff.toLocaleString('en-IN', { maximumFractionDigits: 3 })}`
+            : diff.toLocaleString('en-IN', { maximumFractionDigits: 3 })}{' '}
+          {unit}
         </span>
       );
     },
@@ -93,14 +241,54 @@ const varianceColumns: ColumnDef<any, any>[] = [
       return <StatusChip status={status} size="xs" />;
     },
   },
-  { accessorKey: 'reason', header: 'Reason', cell: ({ getValue }) => <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>{(getValue() as string) ?? 'Reconciliation run'}</span> },
+  {
+    accessorKey: 'reason',
+    header: 'Reason',
+    cell: ({ getValue }) => (
+      <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
+        {(getValue() as string) ?? 'Reconciliation run'}
+      </span>
+    ),
+  },
 ];
 
 const itemColumns: ColumnDef<any, any>[] = [
-  { accessorKey: 'name', header: 'Product', cell: ({ row }) => <span style={{ fontWeight: 600, color: 'var(--text-strong)' }}>{row.original.name}</span> },
-  { accessorKey: 'code', header: 'Code', cell: ({ getValue }) => <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', fontSize: '12px' }}>{(getValue() as string) ?? '—'}</span> },
-  { accessorKey: 'productType', header: 'Type', cell: ({ getValue }) => <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>{(getValue() as string) ?? '—'}</span> },
-  { accessorKey: 'unit', header: 'Unit', cell: ({ getValue }) => <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>{(getValue() as string) ?? '—'}</span> },
+  {
+    accessorKey: 'name',
+    header: 'Product',
+    cell: ({ row }) => (
+      <span style={{ fontWeight: 600, color: 'var(--text-strong)' }}>{row.original.name}</span>
+    ),
+  },
+  {
+    accessorKey: 'code',
+    header: 'Code',
+    cell: ({ getValue }) => (
+      <span
+        style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', fontSize: '12px' }}
+      >
+        {(getValue() as string) ?? '—'}
+      </span>
+    ),
+  },
+  {
+    accessorKey: 'productType',
+    header: 'Type',
+    cell: ({ getValue }) => (
+      <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
+        {(getValue() as string) ?? '—'}
+      </span>
+    ),
+  },
+  {
+    accessorKey: 'unit',
+    header: 'Unit',
+    cell: ({ getValue }) => (
+      <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
+        {(getValue() as string) ?? '—'}
+      </span>
+    ),
+  },
   {
     accessorKey: 'quantity',
     header: 'On Hand',
@@ -108,19 +296,37 @@ const itemColumns: ColumnDef<any, any>[] = [
       const q = Number(row.original.quantity);
       const oversold = q < 0;
       const empty = q === 0;
-      const color = oversold ? 'var(--state-danger-fg)' : empty ? 'var(--state-warning-fg)' : 'var(--text-strong)';
+      const color = oversold
+        ? 'var(--state-danger-fg)'
+        : empty
+          ? 'var(--state-warning-fg)'
+          : 'var(--text-strong)';
       return (
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-          <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, color }}>{q.toLocaleString('en-IN', { maximumFractionDigits: 2 })} {row.original.unit ?? ''}</span>
-          {oversold && <Chip tone="danger" size="xs">Oversold</Chip>}
-          {empty && <Chip tone="warning" size="xs">Out of stock</Chip>}
+          <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, color }}>
+            {q.toLocaleString('en-IN', { maximumFractionDigits: 2 })} {row.original.unit ?? ''}
+          </span>
+          {oversold && (
+            <Chip tone="danger" size="xs">
+              Oversold
+            </Chip>
+          )}
+          {empty && (
+            <Chip tone="warning" size="xs">
+              Out of stock
+            </Chip>
+          )}
         </span>
       );
     },
   },
 ];
 
-export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation, intent, onIntentConsumed }) => {
+export const InventoryList: React.FC<InventoryListProps> = ({
+  selectedStation,
+  intent,
+  onIntentConsumed,
+}) => {
   const [activeTab, setActiveTab] = useState<TabType>('tanks');
   const stationId = selectedStation?.id ?? null;
   const invalidateOperational = useInvalidateOperational();
@@ -172,15 +378,27 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation, i
 
   const kpis = useMemo(() => {
     const fuelByUnit: Record<string, number> = {};
-    for (const t of tanksData as any[]) { const u = t.productUnit || 'L'; fuelByUnit[u] = (fuelByUnit[u] || 0) + Number(t.currentVolume || 0); }
+    for (const t of tanksData as any[]) {
+      const u = t.productUnit || 'L';
+      fuelByUnit[u] = (fuelByUnit[u] || 0) + Number(t.currentVolume || 0);
+    }
     // Liquids first, then gaseous — so the L total is the headline value and any
     // kg total moves into the hint (a single-line KPI can't add L + kg anyway).
-    const entries = Object.entries(fuelByUnit).sort((a, b) => (/^(l|liters?|litres?)$/i.test(a[0]) ? 0 : 1) - (/^(l|liters?|litres?)$/i.test(b[0]) ? 0 : 1));
-    const fmtV = (v: number) => Number(v).toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+    const entries = Object.entries(fuelByUnit).sort(
+      (a, b) =>
+        (/^(l|liters?|litres?)$/i.test(a[0]) ? 0 : 1) -
+        (/^(l|liters?|litres?)$/i.test(b[0]) ? 0 : 1),
+    );
+    const fmtV = (v: number) =>
+      Number(v).toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
     const tankCount = `${tanksData.length} ${tanksData.length === 1 ? 'tank' : 'tanks'}`;
     const totalFuelValue = entries.length ? `${fmtV(entries[0][1])} ${entries[0][0]}` : fmtL(0);
-    const totalFuelHint = [...entries.slice(1).map(([u, v]) => `${fmtV(v)} ${u}`), tankCount].join(' · ');
-    const lowTanks = tanksData.filter((t: any) => classifyTank(tankPct(t.currentVolume, t.capacity)) !== 'ok').length;
+    const totalFuelHint = [...entries.slice(1).map(([u, v]) => `${fmtV(v)} ${u}`), tankCount].join(
+      ' · ',
+    );
+    const lowTanks = tanksData.filter(
+      (t: any) => classifyTank(tankPct(t.currentVolume, t.capacity)) !== 'ok',
+    ).length;
     const oversold = items.filter((i: any) => Number(i.quantity) < 0).length;
     const outOfStock = items.filter((i: any) => Number(i.quantity) === 0).length;
     const variances = (variancesQ.data ?? []).length;
@@ -193,12 +411,20 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation, i
     const q = movementSearch.trim().toLowerCase();
     const d = movementsQ.data ?? [];
     if (!q) return d;
-    return d.filter((m: any) => (m.productName || '').toLowerCase().includes(q) || (m.movementType || '').toLowerCase().includes(q) || (m.tankName || '').toLowerCase().includes(q));
+    return d.filter(
+      (m: any) =>
+        (m.productName || '').toLowerCase().includes(q) ||
+        (m.movementType || '').toLowerCase().includes(q) ||
+        (m.tankName || '').toLowerCase().includes(q),
+    );
   }, [movementsQ.data, movementSearch]);
   const filteredItems = useMemo(() => {
     const q = itemSearch.trim().toLowerCase();
     if (!q) return items;
-    return items.filter((i: any) => (i.name || '').toLowerCase().includes(q) || (i.code || '').toLowerCase().includes(q));
+    return items.filter(
+      (i: any) =>
+        (i.name || '').toLowerCase().includes(q) || (i.code || '').toLowerCase().includes(q),
+    );
   }, [items, itemSearch]);
 
   const openCount = (scope: 'item' | 'tank') => {
@@ -232,11 +458,16 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation, i
       };
       countRequestRef.current = resolveStockCountRequestIdentity(countRequestRef.current, payload);
       savePendingStockCountRequest({ ...countRequestRef.current, payload });
-      await transactionService.recordStockCount(payload, { idempotencyKey: countRequestRef.current.idempotencyKey });
+      await transactionService.recordStockCount(payload, {
+        idempotencyKey: countRequestRef.current.idempotencyKey,
+      });
       countRequestRef.current = null;
       savePendingStockCountRequest(null);
       setCountOpen(false);
-      await invalidateOperational(stationId);
+      // Not awaited: useInvalidateOperational is synchronous and its
+      // invalidateQueries calls float. See issue #41 before re-adding `await` —
+      // awaiting it today would await `undefined`, not the refetches.
+      invalidateOperational(stationId);
     } catch (err: any) {
       if (!isAmbiguousMutationError(err)) {
         countRequestRef.current = null;
@@ -264,7 +495,12 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation, i
         title="Inventory Management"
         subtitle="Monitor tank stock levels, audit physical dip variances, and inspect fuel movements."
         actions={
-          <Button variant="primary" size="sm" leftIcon={<ClipboardCheck />} onClick={() => openCount(activeTab === 'tanks' ? 'tank' : 'item')}>
+          <Button
+            variant="primary"
+            size="sm"
+            leftIcon={<ClipboardCheck />}
+            onClick={() => openCount(activeTab === 'tanks' ? 'tank' : 'item')}
+          >
             Reconcile Stock
           </Button>
         }
@@ -285,76 +521,260 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation, i
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <KpiStrip columns="auto">
-            <KpiTile dot="brand" label="Total Fuel Stock" value={kpis.totalFuelValue} hint={kpis.totalFuelHint} />
-            <KpiTile dot={kpis.lowTanks > 0 ? 'warning' : 'success'} valueTone={kpis.lowTanks > 0 ? 'warning' : undefined} label="Tanks Low / Critical" value={String(kpis.lowTanks)} hint="below 35% capacity" />
-            <KpiTile dot={kpis.outOfStock > 0 ? 'warning' : 'success'} valueTone={kpis.outOfStock > 0 ? 'warning' : undefined} label="Out of Stock" value={String(kpis.outOfStock)} hint="zero on-hand" />
-            <KpiTile dot={kpis.oversold > 0 ? 'danger' : 'success'} valueTone={kpis.oversold > 0 ? 'danger' : undefined} label="Oversold Items" value={String(kpis.oversold)} hint="negative on-hand" />
-            <KpiTile dot="neutral" label="Reconciliations" value={String(kpis.variances)} hint="variances logged" />
+            <KpiTile
+              dot="brand"
+              label="Total Fuel Stock"
+              value={kpis.totalFuelValue}
+              hint={kpis.totalFuelHint}
+            />
+            <KpiTile
+              dot={kpis.lowTanks > 0 ? 'warning' : 'success'}
+              valueTone={kpis.lowTanks > 0 ? 'warning' : undefined}
+              label="Tanks Low / Critical"
+              value={String(kpis.lowTanks)}
+              hint="below 35% capacity"
+            />
+            <KpiTile
+              dot={kpis.outOfStock > 0 ? 'warning' : 'success'}
+              valueTone={kpis.outOfStock > 0 ? 'warning' : undefined}
+              label="Out of Stock"
+              value={String(kpis.outOfStock)}
+              hint="zero on-hand"
+            />
+            <KpiTile
+              dot={kpis.oversold > 0 ? 'danger' : 'success'}
+              valueTone={kpis.oversold > 0 ? 'danger' : undefined}
+              label="Oversold Items"
+              value={String(kpis.oversold)}
+              hint="negative on-hand"
+            />
+            <KpiTile
+              dot="neutral"
+              label="Reconciliations"
+              value={String(kpis.variances)}
+              hint="variances logged"
+            />
           </KpiStrip>
 
-          {activeTab === 'tanks' && (
-            tanksQ.isLoading ? (
-              <div style={{ padding: '16px' }}><EmptyState compact icon={<Database />} title="Loading tanks…" description="Fetching current tank levels." /></div>
+          {activeTab === 'tanks' &&
+            (tanksQ.isLoading ? (
+              <div style={{ padding: '16px' }}>
+                <EmptyState
+                  compact
+                  icon={<Database />}
+                  title="Loading tanks…"
+                  description="Fetching current tank levels."
+                />
+              </div>
             ) : tanks.length === 0 ? (
-              <EmptyState compact icon={<Database />} title="No fuel tanks" description="No fuel tanks configured for this station." />
+              <EmptyState
+                compact
+                icon={<Database />}
+                title="No fuel tanks"
+                description="No fuel tanks configured for this station."
+              />
             ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '12px' }}>
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+                  gap: '12px',
+                }}
+              >
                 {tanks.map((tank: any) => {
                   const cap = Number(tank.capacity) || 0;
                   const vol = Number(tank.currentVolume) || 0;
                   const pct = tankPct(vol, cap);
                   const level = classifyTank(pct);
-                  const tone = level === 'critical' ? 'danger' : level === 'low' ? 'warning' : 'success';
+                  const tone =
+                    level === 'critical' ? 'danger' : level === 'low' ? 'warning' : 'success';
                   const label = level === 'critical' ? 'Critical' : level === 'low' ? 'Low' : 'OK';
                   const highlighted = highlightId === tank.id;
                   return (
                     <div
                       key={tank.id}
-                      ref={(el) => { if (el && highlighted) el.scrollIntoView({ behavior: 'smooth', block: 'center' }); }}
-                      style={{ backgroundColor: 'var(--bg-surface)', border: `1px solid ${highlighted ? 'var(--state-info-fg)' : 'var(--border-soft)'}`, borderRadius: 'var(--radius-card)', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: '12px', boxShadow: highlighted ? '0 0 0 3px var(--state-info-bg)' : undefined, transition: 'border-color 0.4s ease, box-shadow 0.4s ease' }}
+                      ref={(el) => {
+                        if (el && highlighted)
+                          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                      }}
+                      style={{
+                        backgroundColor: 'var(--bg-surface)',
+                        border: `1px solid ${highlighted ? 'var(--state-info-fg)' : 'var(--border-soft)'}`,
+                        borderRadius: 'var(--radius-card)',
+                        padding: '14px 16px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '12px',
+                        boxShadow: highlighted ? '0 0 0 3px var(--state-info-bg)' : undefined,
+                        transition: 'border-color 0.4s ease, box-shadow 0.4s ease',
+                      }}
                     >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
+                      <div
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'flex-start',
+                          gap: '8px',
+                        }}
+                      >
                         <div style={{ minWidth: 0 }}>
-                          <h4 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)' }}>{tank.name}</h4>
-                          <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 500 }}>{tank.productName} · {tank.productCode}</span>
+                          <h4
+                            style={{
+                              fontSize: '14px',
+                              fontWeight: 600,
+                              color: 'var(--text-strong)',
+                            }}
+                          >
+                            {tank.name}
+                          </h4>
+                          <span
+                            style={{
+                              fontSize: '11px',
+                              color: 'var(--text-muted)',
+                              fontWeight: 500,
+                            }}
+                          >
+                            {tank.productName} · {tank.productCode}
+                          </span>
                         </div>
-                        <Chip tone={tone} size="xs">{label}</Chip>
+                        <Chip tone={tone} size="xs">
+                          {label}
+                        </Chip>
                       </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                        <span style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text-strong)', fontFamily: 'var(--font-mono)' }}>
+                      <div
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'baseline',
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontSize: '22px',
+                            fontWeight: 700,
+                            color: 'var(--text-strong)',
+                            fontFamily: 'var(--font-mono)',
+                          }}
+                        >
                           {vol.toLocaleString('en-IN', { maximumFractionDigits: 1 })}
-                          <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-muted)', marginLeft: '4px' }}>{tank.productUnit || 'L'}</span>
+                          <span
+                            style={{
+                              fontSize: '12px',
+                              fontWeight: 500,
+                              color: 'var(--text-muted)',
+                              marginLeft: '4px',
+                            }}
+                          >
+                            {tank.productUnit || 'L'}
+                          </span>
                         </span>
-                        <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>of {cap.toLocaleString('en-IN')} {tank.productUnit || 'L'}</span>
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                          of {cap.toLocaleString('en-IN')} {tank.productUnit || 'L'}
+                        </span>
                       </div>
-                      <MeterRow label="" value={vol} max={cap || 1} tone="auto" valueLabel={`${pct.toFixed(0)}% capacity`} />
+                      <MeterRow
+                        label=""
+                        value={vol}
+                        max={cap || 1}
+                        tone="auto"
+                        valueLabel={`${pct.toFixed(0)}% capacity`}
+                      />
                     </div>
                   );
                 })}
               </div>
-            )
-          )}
+            ))}
 
           {activeTab === 'items' && (
-            <Panel flush title="Merchandise stock" action={<SearchBox value={itemSearch} onChange={setItemSearch} placeholder="Search product / code…" />}>
+            <Panel
+              flush
+              title="Merchandise stock"
+              action={
+                <SearchBox
+                  value={itemSearch}
+                  onChange={setItemSearch}
+                  placeholder="Search product / code…"
+                />
+              }
+            >
               {itemsQ.isLoading ? (
-                <div style={{ padding: '16px' }}><EmptyState compact icon={<Package />} title="Loading…" description="Fetching merchandise stock." /></div>
+                <div style={{ padding: '16px' }}>
+                  <EmptyState
+                    compact
+                    icon={<Package />}
+                    title="Loading…"
+                    description="Fetching merchandise stock."
+                  />
+                </div>
               ) : filteredItems.length === 0 ? (
-                <div style={{ padding: '12px' }}><EmptyState compact icon={<Package />} title={items.length === 0 ? 'No merchandise' : 'No matches'} description={items.length === 0 ? 'Add non-fuel products in Station Overview → Products.' : 'Try a different search.'} /></div>
+                <div style={{ padding: '12px' }}>
+                  <EmptyState
+                    compact
+                    icon={<Package />}
+                    title={items.length === 0 ? 'No merchandise' : 'No matches'}
+                    description={
+                      items.length === 0
+                        ? 'Add non-fuel products in Station Overview → Products.'
+                        : 'Try a different search.'
+                    }
+                  />
+                </div>
               ) : (
-                <DataTable bare columns={itemColumns} data={filteredItems} emptyMessage="No merchandise." getRowId={(r: any) => r.productId} initialSorting={[{ id: 'name', desc: false }]} highlightRowId={highlightId} />
+                <DataTable
+                  bare
+                  columns={itemColumns}
+                  data={filteredItems}
+                  emptyMessage="No merchandise."
+                  getRowId={(r: any) => r.productId}
+                  initialSorting={[{ id: 'name', desc: false }]}
+                  highlightRowId={highlightId}
+                />
               )}
             </Panel>
           )}
 
           {activeTab === 'movements' && (
-            <Panel flush title="Stock movements" action={<SearchBox value={movementSearch} onChange={setMovementSearch} placeholder="Search product / type / tank…" />}>
+            <Panel
+              flush
+              title="Stock movements"
+              action={
+                <SearchBox
+                  value={movementSearch}
+                  onChange={setMovementSearch}
+                  placeholder="Search product / type / tank…"
+                />
+              }
+            >
               {movementsQ.isLoading ? (
-                <div style={{ padding: '16px' }}><EmptyState compact icon={<ArrowLeftRight />} title="Loading…" description="Fetching movements." /></div>
+                <div style={{ padding: '16px' }}>
+                  <EmptyState
+                    compact
+                    icon={<ArrowLeftRight />}
+                    title="Loading…"
+                    description="Fetching movements."
+                  />
+                </div>
               ) : filteredMovements.length === 0 ? (
-                <div style={{ padding: '12px' }}><EmptyState compact icon={<ArrowLeftRight />} title={(movementsQ.data ?? []).length === 0 ? 'No movements' : 'No matches'} description={(movementsQ.data ?? []).length === 0 ? 'No stock movements recorded.' : 'Try a different search.'} /></div>
+                <div style={{ padding: '12px' }}>
+                  <EmptyState
+                    compact
+                    icon={<ArrowLeftRight />}
+                    title={(movementsQ.data ?? []).length === 0 ? 'No movements' : 'No matches'}
+                    description={
+                      (movementsQ.data ?? []).length === 0
+                        ? 'No stock movements recorded.'
+                        : 'Try a different search.'
+                    }
+                  />
+                </div>
               ) : (
-                <DataTable bare columns={movementColumns} data={filteredMovements} emptyMessage="No stock movements." getRowId={(r: any) => r.id} />
+                <DataTable
+                  bare
+                  columns={movementColumns}
+                  data={filteredMovements}
+                  emptyMessage="No stock movements."
+                  getRowId={(r: any) => r.id}
+                />
               )}
             </Panel>
           )}
@@ -362,11 +782,31 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation, i
           {activeTab === 'variances' && (
             <Panel flush title="Reconciliations">
               {variancesQ.isLoading ? (
-                <div style={{ padding: '16px' }}><EmptyState compact icon={<Scale />} title="Loading…" description="Fetching variances." /></div>
+                <div style={{ padding: '16px' }}>
+                  <EmptyState
+                    compact
+                    icon={<Scale />}
+                    title="Loading…"
+                    description="Fetching variances."
+                  />
+                </div>
               ) : (variancesQ.data ?? []).length === 0 ? (
-                <div style={{ padding: '12px' }}><EmptyState compact icon={<Scale />} title="No reconciliations" description="No reconciliation logs or physical variances logged yet." /></div>
+                <div style={{ padding: '12px' }}>
+                  <EmptyState
+                    compact
+                    icon={<Scale />}
+                    title="No reconciliations"
+                    description="No reconciliation logs or physical variances logged yet."
+                  />
+                </div>
               ) : (
-                <DataTable bare columns={varianceColumns} data={variancesQ.data} emptyMessage="No variances." getRowId={(r: any) => r.id} />
+                <DataTable
+                  bare
+                  columns={varianceColumns}
+                  data={variancesQ.data}
+                  emptyMessage="No variances."
+                  getRowId={(r: any) => r.id}
+                />
               )}
             </Panel>
           )}
@@ -374,17 +814,43 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation, i
       </PageLayout>
 
       <Drawer isOpen={countOpen} onClose={() => setCountOpen(false)} title="Stock Reconciliation">
-        <form onSubmit={submitCount} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <form
+          onSubmit={submitCount}
+          style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}
+        >
           <div style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-            Enter the physically measured quantity. Book stock is reconciled to it (a variance is logged and an adjustment movement posts the difference). Use this to set an opening balance for a new product or correct a count.
+            Enter the physically measured quantity. Book stock is reconciled to it (a variance is
+            logged and an adjustment movement posts the difference). Use this to set an opening
+            balance for a new product or correct a count.
           </div>
           {countScope === 'tank' && (
-            <div style={{ backgroundColor: 'var(--state-warning-bg)', color: 'var(--state-warning-fg)', padding: '8px 12px', borderRadius: 'var(--radius-input)', fontSize: '12px', lineHeight: 1.5 }}>
-              A dip taken while a Shift is open records the measurement and variance, but book stock is NOT adjusted — fuel dispensed during the open Shift is not yet booked, so the variance may include un-booked sales.
+            <div
+              style={{
+                backgroundColor: 'var(--state-warning-bg)',
+                color: 'var(--state-warning-fg)',
+                padding: '8px 12px',
+                borderRadius: 'var(--radius-input)',
+                fontSize: '12px',
+                lineHeight: 1.5,
+              }}
+            >
+              A dip taken while a Shift is open records the measurement and variance, but book stock
+              is NOT adjusted — fuel dispensed during the open Shift is not yet booked, so the
+              variance may include un-booked sales.
             </div>
           )}
           {countError && (
-            <div style={{ backgroundColor: 'var(--state-danger-bg)', color: 'var(--state-danger-fg)', padding: '8px 12px', borderRadius: 'var(--radius-input)', fontSize: '12px' }}>{countError}</div>
+            <div
+              style={{
+                backgroundColor: 'var(--state-danger-bg)',
+                color: 'var(--state-danger-fg)',
+                padding: '8px 12px',
+                borderRadius: 'var(--radius-input)',
+                fontSize: '12px',
+              }}
+            >
+              {countError}
+            </div>
           )}
           <Field label="Scope">
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
@@ -396,7 +862,12 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation, i
                   size="sm"
                   fullWidth
                   leftIcon={s === 'item' ? <Package /> : <Database />}
-                  onClick={() => { setCountScope(s); setCountTargetId(s === 'item' ? (items[0]?.productId ?? '') : (tanksData[0]?.id ?? '')); }}
+                  onClick={() => {
+                    setCountScope(s);
+                    setCountTargetId(
+                      s === 'item' ? (items[0]?.productId ?? '') : (tanksData[0]?.id ?? ''),
+                    );
+                  }}
                 >
                   {s === 'item' ? 'Merchandise' : 'Fuel Tank'}
                 </Button>
@@ -404,23 +875,63 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation, i
             </div>
           </Field>
           <Field label={countScope === 'item' ? 'Product' : 'Tank'}>
-            <Select value={countTargetId} onChange={(e) => setCountTargetId(e.target.value)} required>
+            <Select
+              value={countTargetId}
+              onChange={(e) => setCountTargetId(e.target.value)}
+              required
+            >
               {countScope === 'item'
-                ? items.map((i: any) => <option key={i.productId} value={i.productId}>{i.name} ({i.code}) — on hand {Number(i.quantity).toLocaleString('en-IN')} {i.unit ?? ''}</option>)
-                : tanksData.map((t: any) => <option key={t.id} value={t.id}>{t.name} — {t.productName} — {Number(t.currentVolume).toLocaleString('en-IN')} L</option>)}
+                ? items.map((i: any) => (
+                    <option key={i.productId} value={i.productId}>
+                      {i.name} ({i.code}) — on hand {Number(i.quantity).toLocaleString('en-IN')}{' '}
+                      {i.unit ?? ''}
+                    </option>
+                  ))
+                : tanksData.map((t: any) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name} — {t.productName} — {Number(t.currentVolume).toLocaleString('en-IN')}{' '}
+                      L
+                    </option>
+                  ))}
             </Select>
           </Field>
           <Field label="Actual Counted Quantity">
-            <NumberInput min="0" step="any" value={countActual} onChange={(e) => setCountActual(e.target.value)} placeholder="Measured quantity" required />
+            <NumberInput
+              min="0"
+              step="any"
+              value={countActual}
+              onChange={(e) => setCountActual(e.target.value)}
+              placeholder="Measured quantity"
+              required
+            />
           </Field>
           <Field label="Reason" hint="optional">
-            <TextInput value={countReason} onChange={(e) => setCountReason(e.target.value)} placeholder="e.g. opening stock, monthly count, breakage" />
+            <TextInput
+              value={countReason}
+              onChange={(e) => setCountReason(e.target.value)}
+              placeholder="e.g. opening stock, monthly count, breakage"
+            />
           </Field>
           <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
-            <Button type="submit" variant="primary" size="md" fullWidth loading={countSubmitting} disabled={!countTargetId || countActual === ''}>
+            <Button
+              type="submit"
+              variant="primary"
+              size="md"
+              fullWidth
+              loading={countSubmitting}
+              disabled={!countTargetId || countActual === ''}
+            >
               Reconcile Stock
             </Button>
-            <Button type="button" variant="secondary" size="md" onClick={() => setCountOpen(false)} disabled={countSubmitting}>Cancel</Button>
+            <Button
+              type="button"
+              variant="secondary"
+              size="md"
+              onClick={() => setCountOpen(false)}
+              disabled={countSubmitting}
+            >
+              Cancel
+            </Button>
           </div>
         </form>
       </Drawer>

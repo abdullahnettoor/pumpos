@@ -1,6 +1,14 @@
 import { z } from 'zod';
 import type { TaxCategory } from '@pump/shared';
-import { BusinessEvents, err, eventFromContext, invariantViolation, notFoundError, ok, validationError } from '../../../kernel/index.js';
+import {
+  BusinessEvents,
+  err,
+  eventFromContext,
+  invariantViolation,
+  notFoundError,
+  ok,
+  validationError,
+} from '../../../kernel/index.js';
 import type { EventPublisher, ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
 import { resolveFinancialAnchor, type ShiftRepository } from '../../station-ops/shifts/index.js';
 import type { BusinessDayWriteRepository } from '../../station-ops/business-days/index.js';
@@ -122,7 +130,13 @@ export function computeIncomeTax(
   const inclusive = cfg.price_inclusive === undefined ? true : !!cfg.price_inclusive;
   const interState = isInterState(states);
   const r = computeLineTax(
-    { taxCategory: 'GST', taxableAmount: amount, gstRatePct: gstRate, cessPct: cessRate, inclusive },
+    {
+      taxCategory: 'GST',
+      taxableAmount: amount,
+      gstRatePct: gstRate,
+      cessPct: cessRate,
+      inclusive,
+    },
     interState,
   );
   return {
@@ -173,7 +187,10 @@ const schema = z.object({
   affectsDrawer: z.boolean().optional(),
   payer: z.string().max(255).optional(),
   description: z.string().max(500).optional(),
-  transactionDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'transactionDate must be YYYY-MM-DD').optional(),
+  transactionDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'transactionDate must be YYYY-MM-DD')
+    .optional(),
   supplierStateCode: z.string().max(10).optional(),
   buyerStateCode: z.string().max(10).optional(),
 });
@@ -199,25 +216,32 @@ export class RecordIncome implements UseCase<RecordIncomeCommand, OtherIncome> {
 
   async execute(input: RecordIncomeCommand, ctx: ExecutionContext): Promise<Result<OtherIncome>> {
     const p = schema.safeParse(input);
-    if (!p.success) return err(validationError('Invalid RecordIncome command', { issues: p.error.flatten() }));
+    if (!p.success)
+      return err(validationError('Invalid RecordIncome command', { issues: p.error.flatten() }));
     const cmd = p.data;
 
     const receivedInto: ReceivedInto = cmd.receivedInto ?? 'SHIFT_CASH';
     const affectsDrawer = cmd.affectsDrawer ?? receivedInto === 'SHIFT_CASH';
 
-    let businessDayId: string;
-    let shiftId: string | null;
-    let stationId: string;
-
-    if (!cmd.shiftId && !cmd.stationId) return err(validationError('Either shiftId or stationId is required'));
-    const anchor = await resolveFinancialAnchor(this.deps, ctx, cmd, { affectsDrawer, drawerLabel: 'Drawer income entries' });
+    if (!cmd.shiftId && !cmd.stationId)
+      return err(validationError('Either shiftId or stationId is required'));
+    const anchor = await resolveFinancialAnchor(this.deps, ctx, cmd, {
+      affectsDrawer,
+      drawerLabel: 'Drawer income entries',
+    });
     if (!anchor.success) return anchor;
-    ({ businessDayId, shiftId, stationId } = anchor.data);
+    const { businessDayId, shiftId, stationId } = anchor.data;
 
     // FI4 — freeze the GST split from the category's tax_config at capture.
-    const category = this.deps.incomeCategories ? await this.deps.incomeCategories.findById(cmd.categoryId) : null;
-    if (category && category.organizationId !== ctx.organizationId) return err(notFoundError('IncomeCategory', cmd.categoryId));
-    const tax = computeIncomeTax(cmd.amount, category, { supplierStateCode: cmd.supplierStateCode, buyerStateCode: cmd.buyerStateCode });
+    const category = this.deps.incomeCategories
+      ? await this.deps.incomeCategories.findById(cmd.categoryId)
+      : null;
+    if (category && category.organizationId !== ctx.organizationId)
+      return err(notFoundError('IncomeCategory', cmd.categoryId));
+    const tax = computeIncomeTax(cmd.amount, category, {
+      supplierStateCode: cmd.supplierStateCode,
+      buyerStateCode: cmd.buyerStateCode,
+    });
 
     const now = ctx.clock.now().toISOString();
     const income: OtherIncome = {
@@ -257,7 +281,16 @@ export class RecordIncome implements UseCase<RecordIncomeCommand, OtherIncome> {
         stationId,
         businessDayId,
         metadata: anchor.data.eventMetadata,
-        payload: { incomeId: income.id, amount: income.amount, receivedInto, affectsDrawer, shiftId, categoryId: income.categoryId, taxCategory: income.taxCategory, taxableAmount: income.taxableAmount },
+        payload: {
+          incomeId: income.id,
+          amount: income.amount,
+          receivedInto,
+          affectsDrawer,
+          shiftId,
+          categoryId: income.categoryId,
+          taxCategory: income.taxCategory,
+          taxableAmount: income.taxableAmount,
+        },
       }),
     ]);
 
@@ -270,7 +303,10 @@ export interface VoidIncomeCommand {
   reason?: string;
 }
 
-const voidSchema = z.object({ id: z.string().min(1, 'id is required'), reason: z.string().max(255).optional() });
+const voidSchema = z.object({
+  id: z.string().min(1, 'id is required'),
+  reason: z.string().max(255).optional(),
+});
 
 export interface VoidIncomeDeps {
   income: IncomeRepository;
@@ -285,11 +321,13 @@ export class VoidIncome implements UseCase<VoidIncomeCommand, OtherIncome> {
 
   async execute(input: VoidIncomeCommand, ctx: ExecutionContext): Promise<Result<OtherIncome>> {
     const p = voidSchema.safeParse(input);
-    if (!p.success) return err(validationError('Invalid VoidIncome command', { issues: p.error.flatten() }));
+    if (!p.success)
+      return err(validationError('Invalid VoidIncome command', { issues: p.error.flatten() }));
 
     const existing = await this.deps.income.findById(p.data.id);
     if (!existing) return err(notFoundError('Income', p.data.id));
-    if (existing.status === 'VOIDED') return err(invariantViolation('Income already voided', { id: existing.id }));
+    if (existing.status === 'VOIDED')
+      return err(invariantViolation('Income already voided', { id: existing.id }));
 
     const guard = await assertDrawerEntryVoidable(existing, this.deps.shifts, 'This income entry');
     if (!guard.success) return guard as unknown as Result<OtherIncome>;

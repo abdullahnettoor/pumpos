@@ -46,18 +46,33 @@ export class DrizzleFinancialAccountRepository implements FinancialAccountReposi
   constructor(private readonly db: DbClient) {}
 
   async findById(id: string): Promise<FinancialAccount | null> {
-    const rows = await this.db.select().from(schema.financialAccounts).where(eq(schema.financialAccounts.id, id)).limit(1);
+    const rows = await this.db
+      .select()
+      .from(schema.financialAccounts)
+      .where(eq(schema.financialAccounts.id, id))
+      .limit(1);
     return rows[0] ? toAccount(rows[0]) : null;
   }
 
-  async existsByName(organizationId: string, stationId: string | null, name: string, excludeId?: string): Promise<boolean> {
+  async existsByName(
+    organizationId: string,
+    stationId: string | null,
+    name: string,
+    excludeId?: string,
+  ): Promise<boolean> {
     const conds = [
       eq(schema.financialAccounts.organizationId, organizationId),
-      stationId ? eq(schema.financialAccounts.stationId, stationId) : isNull(schema.financialAccounts.stationId),
+      stationId
+        ? eq(schema.financialAccounts.stationId, stationId)
+        : isNull(schema.financialAccounts.stationId),
       sql`lower(${schema.financialAccounts.name}) = lower(${name})`,
       ...(excludeId ? [ne(schema.financialAccounts.id, excludeId)] : []),
     ];
-    const rows = await this.db.select({ id: schema.financialAccounts.id }).from(schema.financialAccounts).where(and(...conds)).limit(1);
+    const rows = await this.db
+      .select({ id: schema.financialAccounts.id })
+      .from(schema.financialAccounts)
+      .where(and(...conds))
+      .limit(1);
     return rows.length > 0;
   }
 
@@ -117,10 +132,18 @@ export class DrizzleLedgerEntryRepository implements LedgerEntryRepository {
     );
   }
 
-  async deleteByAccountAndSource(accountId: string, sourceType: LedgerEntry['sourceType']): Promise<void> {
+  async deleteByAccountAndSource(
+    accountId: string,
+    sourceType: LedgerEntry['sourceType'],
+  ): Promise<void> {
     await this.db
       .delete(schema.ledgerEntries)
-      .where(and(eq(schema.ledgerEntries.accountId, accountId), eq(schema.ledgerEntries.sourceType, sourceType)));
+      .where(
+        and(
+          eq(schema.ledgerEntries.accountId, accountId),
+          eq(schema.ledgerEntries.sourceType, sourceType),
+        ),
+      );
   }
 }
 
@@ -136,7 +159,10 @@ export interface AccountWithBalance extends FinancialAccount {
 export class DrizzleFinancialAccountReader {
   constructor(private readonly db: DbClient) {}
 
-  async listWithBalances(organizationId: string, stationId?: string | null): Promise<AccountWithBalance[]> {
+  async listWithBalances(
+    organizationId: string,
+    stationId?: string | null,
+  ): Promise<AccountWithBalance[]> {
     const conds = [eq(schema.financialAccounts.organizationId, organizationId)];
     if (stationId) conds.push(eq(schema.financialAccounts.stationId, stationId));
     const rows = await this.db
@@ -145,7 +171,10 @@ export class DrizzleFinancialAccountReader {
         balance: sql<string>`COALESCE(SUM(CASE WHEN ${schema.ledgerEntries.direction} = 'in' THEN ${schema.ledgerEntries.amount} ELSE -${schema.ledgerEntries.amount} END), 0)`,
       })
       .from(schema.financialAccounts)
-      .leftJoin(schema.ledgerEntries, eq(schema.ledgerEntries.accountId, schema.financialAccounts.id))
+      .leftJoin(
+        schema.ledgerEntries,
+        eq(schema.ledgerEntries.accountId, schema.financialAccounts.id),
+      )
       .where(and(...conds))
       .groupBy(schema.financialAccounts.id)
       .orderBy(asc(schema.financialAccounts.accountType), asc(schema.financialAccounts.name));
@@ -162,7 +191,12 @@ export class DrizzleFinancialAccountReader {
     const accRows = await this.db
       .select()
       .from(schema.financialAccounts)
-      .where(and(eq(schema.financialAccounts.id, accountId), eq(schema.financialAccounts.organizationId, organizationId)))
+      .where(
+        and(
+          eq(schema.financialAccounts.id, accountId),
+          eq(schema.financialAccounts.organizationId, organizationId),
+        ),
+      )
       .limit(1);
     if (!accRows[0]) return null;
 
@@ -173,7 +207,12 @@ export class DrizzleFinancialAccountReader {
           bal: sql<string>`COALESCE(SUM(CASE WHEN ${schema.ledgerEntries.direction} = 'in' THEN ${schema.ledgerEntries.amount} ELSE -${schema.ledgerEntries.amount} END), 0)`,
         })
         .from(schema.ledgerEntries)
-        .where(and(eq(schema.ledgerEntries.accountId, accountId), sql`${schema.ledgerEntries.entryDate} < ${from}`));
+        .where(
+          and(
+            eq(schema.ledgerEntries.accountId, accountId),
+            sql`${schema.ledgerEntries.entryDate} < ${from}`,
+          ),
+        );
       periodOpeningBalance = String(openRow?.bal ?? '0');
     }
 
@@ -194,9 +233,15 @@ export class DrizzleFinancialAccountReader {
         omcNotes: schema.customerTransactions.notes,
       })
       .from(schema.ledgerEntries)
-      .leftJoin(schema.customerTransactions, eq(schema.customerTransactions.id, schema.ledgerEntries.sourceId))
+      .leftJoin(
+        schema.customerTransactions,
+        eq(schema.customerTransactions.id, schema.ledgerEntries.sourceId),
+      )
       .leftJoin(schema.customers, eq(schema.customers.id, schema.customerTransactions.customerId))
-      .leftJoin(schema.customerVehicles, eq(schema.customerVehicles.id, schema.customerTransactions.vehicleId))
+      .leftJoin(
+        schema.customerVehicles,
+        eq(schema.customerVehicles.id, schema.customerTransactions.vehicleId),
+      )
       .leftJoin(schema.products, eq(schema.products.id, schema.customerTransactions.productId))
       .where(and(...rangeConds))
       .orderBy(asc(schema.ledgerEntries.entryDate), asc(schema.ledgerEntries.createdAt));
@@ -223,7 +268,18 @@ export class DrizzleFinancialAccountReader {
     from?: string,
     to?: string,
   ): Promise<{
-    movements: Array<{ id: string; entryDate: string; accountId: string; accountType: string; accountName: string; direction: string; amount: string; sourceType: string; notes: string | null; createdAt: string }>;
+    movements: Array<{
+      id: string;
+      entryDate: string;
+      accountId: string;
+      accountType: string;
+      accountName: string;
+      direction: string;
+      amount: string;
+      sourceType: string;
+      notes: string | null;
+      createdAt: string;
+    }>;
     openings: Array<{ accountType: string; opening: string }>;
   }> {
     const conds = [
@@ -244,14 +300,22 @@ export class DrizzleFinancialAccountReader {
           opening: sql<string>`COALESCE(SUM(CASE WHEN ${schema.ledgerEntries.direction} = 'in' THEN ${schema.ledgerEntries.amount} ELSE -${schema.ledgerEntries.amount} END), 0)`,
         })
         .from(schema.ledgerEntries)
-        .innerJoin(schema.financialAccounts, eq(schema.financialAccounts.id, schema.ledgerEntries.accountId))
-        .where(and(
-          eq(schema.ledgerEntries.organizationId, organizationId),
-          eq(schema.ledgerEntries.stationId, stationId),
-          sql`${schema.ledgerEntries.entryDate} < ${from}`,
-        ))
+        .innerJoin(
+          schema.financialAccounts,
+          eq(schema.financialAccounts.id, schema.ledgerEntries.accountId),
+        )
+        .where(
+          and(
+            eq(schema.ledgerEntries.organizationId, organizationId),
+            eq(schema.ledgerEntries.stationId, stationId),
+            sql`${schema.ledgerEntries.entryDate} < ${from}`,
+          ),
+        )
         .groupBy(schema.financialAccounts.accountType);
-      openings = openRows.map((r) => ({ accountType: r.accountType, opening: String(r.opening ?? '0') }));
+      openings = openRows.map((r) => ({
+        accountType: r.accountType,
+        opening: String(r.opening ?? '0'),
+      }));
     }
 
     const rows = await this.db
@@ -268,9 +332,15 @@ export class DrizzleFinancialAccountReader {
         createdAt: schema.ledgerEntries.createdAt,
       })
       .from(schema.ledgerEntries)
-      .innerJoin(schema.financialAccounts, eq(schema.financialAccounts.id, schema.ledgerEntries.accountId))
+      .innerJoin(
+        schema.financialAccounts,
+        eq(schema.financialAccounts.id, schema.ledgerEntries.accountId),
+      )
       .where(and(...conds))
       .orderBy(schema.ledgerEntries.entryDate, schema.ledgerEntries.createdAt);
-    return { movements: rows.map((r) => ({ ...r, createdAt: r.createdAt.toISOString() })), openings };
+    return {
+      movements: rows.map((r) => ({ ...r, createdAt: r.createdAt.toISOString() })),
+      openings,
+    };
   }
 }

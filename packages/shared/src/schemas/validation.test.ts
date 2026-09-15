@@ -1,5 +1,15 @@
 import { describe, it, expect } from 'vitest';
-import { stationSchema, nozzleReadingSchema, supplierPaymentSchema, shiftPurchaseSchema, onboardingDraftSchema, finalizeOnboardingSchema, createOpenShiftFormSchema, attendantHandoverSchema, shiftCloseSchema } from './validation.js';
+import {
+  stationSchema,
+  nozzleReadingSchema,
+  supplierPaymentSchema,
+  shiftPurchaseSchema,
+  onboardingDraftSchema,
+  finalizeOnboardingSchema,
+  createOpenShiftFormSchema,
+  attendantHandoverSchema,
+  shiftCloseSchema,
+} from './validation.js';
 
 describe('Validation Schemas Tests', () => {
   describe('createOpenShiftFormSchema', () => {
@@ -12,8 +22,15 @@ describe('Validation Schemas Tests', () => {
     });
 
     it('rejects future and closed Business Dates', () => {
-      expect(createOpenShiftFormSchema('2026-09-12', 'NOT_CREATED').safeParse({ ...values, businessDate: '2026-09-13' }).success).toBe(false);
-      expect(createOpenShiftFormSchema('2026-09-12', 'CLOSED').safeParse(values).success).toBe(false);
+      expect(
+        createOpenShiftFormSchema('2026-09-12', 'NOT_CREATED').safeParse({
+          ...values,
+          businessDate: '2026-09-13',
+        }).success,
+      ).toBe(false);
+      expect(createOpenShiftFormSchema('2026-09-12', 'CLOSED').safeParse(values).success).toBe(
+        false,
+      );
     });
   });
 
@@ -102,30 +119,38 @@ describe('Validation Schemas Tests', () => {
       cashHandedOver: 100,
       cardHandedOver: 50,
       upiHandedOver: 25,
-      nozzleReadings: [{
-        nozzleId: '550e8400-e29b-41d4-a716-446655440003',
-        closingReading: 1300,
-        testingVolume: 1,
-      }],
+      nozzleReadings: [
+        {
+          nozzleId: '550e8400-e29b-41d4-a716-446655440003',
+          closingReading: 1300,
+          testingVolume: 1,
+        },
+      ],
     };
 
     it('accepts declarations and source measurements', () => {
       expect(attendantHandoverSchema.safeParse(valid).success).toBe(true);
     });
 
-    it.each(['expectedSales', 'varianceAmount', 'creditHandedOver', 'creditSales', 'omcCardHandedOver', 'omcCardSales'])(
-      'rejects the client-supplied conclusion %s',
-      (field) => {
-        expect(attendantHandoverSchema.safeParse({ ...valid, [field]: 1 }).success).toBe(false);
-      },
-    );
+    it.each([
+      'expectedSales',
+      'varianceAmount',
+      'creditHandedOver',
+      'creditSales',
+      'omcCardHandedOver',
+      'omcCardSales',
+    ])('rejects the client-supplied conclusion %s', (field) => {
+      expect(attendantHandoverSchema.safeParse({ ...valid, [field]: 1 }).success).toBe(false);
+    });
   });
 
   describe('shiftCloseSchema', () => {
     it('rejects Tank Dip input because dips are recorded after close as a separate action', () => {
       const result = shiftCloseSchema.safeParse({
         closingCash: 100,
-        nozzleReadings: [{ nozzleId: '550e8400-e29b-41d4-a716-446655440003', closingReading: 1300 }],
+        nozzleReadings: [
+          { nozzleId: '550e8400-e29b-41d4-a716-446655440003', closingReading: 1300 },
+        ],
         dipReadings: [{ tankId: '550e8400-e29b-41d4-a716-446655440004', actualQuantity: 5000 }],
       });
 
@@ -175,9 +200,7 @@ describe('Validation Schemas Tests', () => {
         productId: '550e8400-e29b-41d4-a716-446655440002',
         quantity: 12000,
         unitPrice: 96.5,
-        tankAllocations: [
-          { tankId: '550e8400-e29b-41d4-a716-446655440003', quantity: -100 },
-        ],
+        tankAllocations: [{ tankId: '550e8400-e29b-41d4-a716-446655440003', quantity: -100 }],
       };
 
       const result = shiftPurchaseSchema.safeParse(invalid);

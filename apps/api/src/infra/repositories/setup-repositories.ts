@@ -40,25 +40,62 @@ export class DrizzleTankRepository implements TankRepository {
     return r ? this.toEntity(r) : null;
   }
   async findByIdForUpdate(id: string): Promise<Tank | null> {
-    const [r] = await this.db.select().from(schema.tanks).where(eq(schema.tanks.id, id)).limit(1).for('update');
+    const [r] = await this.db
+      .select()
+      .from(schema.tanks)
+      .where(eq(schema.tanks.id, id))
+      .limit(1)
+      .for('update');
     return r ? this.toEntity(r) : null;
   }
   async hasNozzles(id: string): Promise<boolean> {
-    const [r] = await this.db.select({ id: schema.nozzles.id }).from(schema.nozzles).where(eq(schema.nozzles.tankId, id)).limit(1);
+    const [r] = await this.db
+      .select({ id: schema.nozzles.id })
+      .from(schema.nozzles)
+      .where(eq(schema.nozzles.tankId, id))
+      .limit(1);
     return Boolean(r);
   }
   async save(t: Tank): Promise<void> {
     await this.db
       .insert(schema.tanks)
-      .values({ id: t.id, organizationId: t.organizationId, stationId: t.stationId, name: t.name, productId: t.productId, capacity: t.capacity, status: t.status, createdAt: new Date(t.createdAt), updatedAt: new Date(t.updatedAt) })
-      .onConflictDoUpdate({ target: schema.tanks.id, set: { name: t.name, productId: t.productId, capacity: t.capacity, status: t.status, updatedAt: new Date(t.updatedAt) } });
+      .values({
+        id: t.id,
+        organizationId: t.organizationId,
+        stationId: t.stationId,
+        name: t.name,
+        productId: t.productId,
+        capacity: t.capacity,
+        status: t.status,
+        createdAt: new Date(t.createdAt),
+        updatedAt: new Date(t.updatedAt),
+      })
+      .onConflictDoUpdate({
+        target: schema.tanks.id,
+        set: {
+          name: t.name,
+          productId: t.productId,
+          capacity: t.capacity,
+          status: t.status,
+          updatedAt: new Date(t.updatedAt),
+        },
+      });
   }
   async deactivateById(id: string): Promise<boolean> {
-    const rows = await this.db.update(schema.tanks).set({ status: 'INACTIVE', updatedAt: new Date() }).where(eq(schema.tanks.id, id)).returning({ id: schema.tanks.id });
+    const rows = await this.db
+      .update(schema.tanks)
+      .set({ status: 'INACTIVE', updatedAt: new Date() })
+      .where(eq(schema.tanks.id, id))
+      .returning({ id: schema.tanks.id });
     return rows.length > 0;
   }
   async listByStation(organizationId: string, stationId: string): Promise<Tank[]> {
-    const rows = await this.db.select().from(schema.tanks).where(and(eq(schema.tanks.organizationId, organizationId), eq(schema.tanks.stationId, stationId)));
+    const rows = await this.db
+      .select()
+      .from(schema.tanks)
+      .where(
+        and(eq(schema.tanks.organizationId, organizationId), eq(schema.tanks.stationId, stationId)),
+      );
     return rows.map((r) => this.toEntity(r));
   }
 }
@@ -79,21 +116,48 @@ export class DrizzleDispenserRepository implements DispenserRepository {
     };
   }
   async findById(id: string): Promise<DispenserUnit | null> {
-    const [r] = await this.db.select().from(schema.dispenserUnits).where(eq(schema.dispenserUnits.id, id)).limit(1);
+    const [r] = await this.db
+      .select()
+      .from(schema.dispenserUnits)
+      .where(eq(schema.dispenserUnits.id, id))
+      .limit(1);
     return r ? this.toEntity(r) : null;
   }
   async save(d: DispenserUnit): Promise<void> {
     await this.db
       .insert(schema.dispenserUnits)
-      .values({ id: d.id, organizationId: d.organizationId, stationId: d.stationId, name: d.name, code: d.code, status: d.status, createdAt: new Date(d.createdAt), updatedAt: new Date(d.updatedAt) })
-      .onConflictDoUpdate({ target: schema.dispenserUnits.id, set: { name: d.name, code: d.code, status: d.status, updatedAt: new Date(d.updatedAt) } });
+      .values({
+        id: d.id,
+        organizationId: d.organizationId,
+        stationId: d.stationId,
+        name: d.name,
+        code: d.code,
+        status: d.status,
+        createdAt: new Date(d.createdAt),
+        updatedAt: new Date(d.updatedAt),
+      })
+      .onConflictDoUpdate({
+        target: schema.dispenserUnits.id,
+        set: { name: d.name, code: d.code, status: d.status, updatedAt: new Date(d.updatedAt) },
+      });
   }
   async deleteById(id: string): Promise<boolean> {
-    const rows = await this.db.delete(schema.dispenserUnits).where(eq(schema.dispenserUnits.id, id)).returning({ id: schema.dispenserUnits.id });
+    const rows = await this.db
+      .delete(schema.dispenserUnits)
+      .where(eq(schema.dispenserUnits.id, id))
+      .returning({ id: schema.dispenserUnits.id });
     return rows.length > 0;
   }
   async listByStation(organizationId: string, stationId: string): Promise<DispenserUnit[]> {
-    const rows = await this.db.select().from(schema.dispenserUnits).where(and(eq(schema.dispenserUnits.organizationId, organizationId), eq(schema.dispenserUnits.stationId, stationId)));
+    const rows = await this.db
+      .select()
+      .from(schema.dispenserUnits)
+      .where(
+        and(
+          eq(schema.dispenserUnits.organizationId, organizationId),
+          eq(schema.dispenserUnits.stationId, stationId),
+        ),
+      );
     return rows.map((r) => this.toEntity(r));
   }
 }
@@ -116,21 +180,57 @@ export class DrizzleNozzleRepository implements NozzleRepository {
     };
   }
   async findById(id: string): Promise<Nozzle | null> {
-    const [r] = await this.db.select().from(schema.nozzles).where(eq(schema.nozzles.id, id)).limit(1);
+    const [r] = await this.db
+      .select()
+      .from(schema.nozzles)
+      .where(eq(schema.nozzles.id, id))
+      .limit(1);
     return r ? this.toEntity(r) : null;
   }
   async save(n: Nozzle): Promise<void> {
     await this.db
       .insert(schema.nozzles)
-      .values({ id: n.id, organizationId: n.organizationId, stationId: n.stationId, duId: n.duId, tankId: n.tankId, productId: n.productId, name: n.name, currentReading: n.currentReading, createdAt: new Date(n.createdAt), updatedAt: new Date(n.updatedAt) })
-      .onConflictDoUpdate({ target: schema.nozzles.id, set: { duId: n.duId, tankId: n.tankId, productId: n.productId, name: n.name, currentReading: n.currentReading, updatedAt: new Date(n.updatedAt) } });
+      .values({
+        id: n.id,
+        organizationId: n.organizationId,
+        stationId: n.stationId,
+        duId: n.duId,
+        tankId: n.tankId,
+        productId: n.productId,
+        name: n.name,
+        currentReading: n.currentReading,
+        createdAt: new Date(n.createdAt),
+        updatedAt: new Date(n.updatedAt),
+      })
+      .onConflictDoUpdate({
+        target: schema.nozzles.id,
+        set: {
+          duId: n.duId,
+          tankId: n.tankId,
+          productId: n.productId,
+          name: n.name,
+          currentReading: n.currentReading,
+          updatedAt: new Date(n.updatedAt),
+        },
+      });
   }
   async deleteById(id: string): Promise<boolean> {
-    const rows = await this.db.delete(schema.nozzles).where(eq(schema.nozzles.id, id)).returning({ id: schema.nozzles.id });
+    const rows = await this.db
+      .delete(schema.nozzles)
+      .where(eq(schema.nozzles.id, id))
+      .returning({ id: schema.nozzles.id });
     return rows.length > 0;
   }
   async listByStation(organizationId: string, stationId: string): Promise<Nozzle[]> {
-    const rows = await this.db.select().from(schema.nozzles).where(and(eq(schema.nozzles.organizationId, organizationId), eq(schema.nozzles.stationId, stationId)));
+    const rows = await this.db
+      .select()
+      .from(schema.nozzles)
+      .where(
+        and(
+          eq(schema.nozzles.organizationId, organizationId),
+          eq(schema.nozzles.stationId, stationId),
+        ),
+      );
     return rows.map((r) => this.toEntity(r));
   }
 }
@@ -149,21 +249,41 @@ export class DrizzleShiftTemplateRepository implements ShiftTemplateRepository {
     };
   }
   async findById(id: string): Promise<ShiftTemplate | null> {
-    const [r] = await this.db.select().from(schema.shiftTemplates).where(eq(schema.shiftTemplates.id, id)).limit(1);
+    const [r] = await this.db
+      .select()
+      .from(schema.shiftTemplates)
+      .where(eq(schema.shiftTemplates.id, id))
+      .limit(1);
     return r ? this.toEntity(r) : null;
   }
   async save(t: ShiftTemplate): Promise<void> {
     await this.db
       .insert(schema.shiftTemplates)
-      .values({ id: t.id, organizationId: t.organizationId, name: t.name, startTime: t.startTime, endTime: t.endTime, isActive: t.isActive })
-      .onConflictDoUpdate({ target: schema.shiftTemplates.id, set: { name: t.name, startTime: t.startTime, endTime: t.endTime, isActive: t.isActive } });
+      .values({
+        id: t.id,
+        organizationId: t.organizationId,
+        name: t.name,
+        startTime: t.startTime,
+        endTime: t.endTime,
+        isActive: t.isActive,
+      })
+      .onConflictDoUpdate({
+        target: schema.shiftTemplates.id,
+        set: { name: t.name, startTime: t.startTime, endTime: t.endTime, isActive: t.isActive },
+      });
   }
   async deleteById(id: string): Promise<boolean> {
-    const rows = await this.db.delete(schema.shiftTemplates).where(eq(schema.shiftTemplates.id, id)).returning({ id: schema.shiftTemplates.id });
+    const rows = await this.db
+      .delete(schema.shiftTemplates)
+      .where(eq(schema.shiftTemplates.id, id))
+      .returning({ id: schema.shiftTemplates.id });
     return rows.length > 0;
   }
   async listByOrganization(organizationId: string): Promise<ShiftTemplate[]> {
-    const rows = await this.db.select().from(schema.shiftTemplates).where(eq(schema.shiftTemplates.organizationId, organizationId));
+    const rows = await this.db
+      .select()
+      .from(schema.shiftTemplates)
+      .where(eq(schema.shiftTemplates.organizationId, organizationId));
     return rows.map((r) => this.toEntity(r));
   }
 }
@@ -187,17 +307,48 @@ export class DrizzleStationRepository implements StationRepository {
     };
   }
   async findById(id: string): Promise<Station | null> {
-    const [r] = await this.db.select().from(schema.stations).where(eq(schema.stations.id, id)).limit(1);
+    const [r] = await this.db
+      .select()
+      .from(schema.stations)
+      .where(eq(schema.stations.id, id))
+      .limit(1);
     return r ? this.toEntity(r) : null;
   }
   async save(s: Station): Promise<void> {
     await this.db
       .insert(schema.stations)
-      .values({ id: s.id, organizationId: s.organizationId, name: s.name, code: s.code, address: s.address, phone: s.phone, settings: s.settings, onboardingStatus: s.onboardingStatus, isActive: s.isActive, createdAt: new Date(s.createdAt), updatedAt: new Date(s.updatedAt) })
-      .onConflictDoUpdate({ target: schema.stations.id, set: { name: s.name, code: s.code, address: s.address, phone: s.phone, settings: s.settings, onboardingStatus: s.onboardingStatus, isActive: s.isActive, updatedAt: new Date(s.updatedAt) } });
+      .values({
+        id: s.id,
+        organizationId: s.organizationId,
+        name: s.name,
+        code: s.code,
+        address: s.address,
+        phone: s.phone,
+        settings: s.settings,
+        onboardingStatus: s.onboardingStatus,
+        isActive: s.isActive,
+        createdAt: new Date(s.createdAt),
+        updatedAt: new Date(s.updatedAt),
+      })
+      .onConflictDoUpdate({
+        target: schema.stations.id,
+        set: {
+          name: s.name,
+          code: s.code,
+          address: s.address,
+          phone: s.phone,
+          settings: s.settings,
+          onboardingStatus: s.onboardingStatus,
+          isActive: s.isActive,
+          updatedAt: new Date(s.updatedAt),
+        },
+      });
   }
   async listByOrganization(organizationId: string): Promise<Station[]> {
-    const rows = await this.db.select().from(schema.stations).where(eq(schema.stations.organizationId, organizationId));
+    const rows = await this.db
+      .select()
+      .from(schema.stations)
+      .where(eq(schema.stations.organizationId, organizationId));
     return rows.map((r) => this.toEntity(r));
   }
 }
@@ -226,32 +377,73 @@ export class DrizzleUserRepository implements UserRepository {
   async save(u: User): Promise<void> {
     await this.db
       .insert(schema.users)
-      .values({ id: u.id, organizationId: u.organizationId, authUserId: u.authUserId, fullName: u.fullName, email: u.email, phone: u.phone, role: u.role, status: u.status, createdAt: new Date(u.createdAt), updatedAt: new Date(u.updatedAt) })
-      .onConflictDoUpdate({ target: schema.users.id, set: { fullName: u.fullName, email: u.email, phone: u.phone, role: u.role, status: u.status, updatedAt: new Date(u.updatedAt) } });
+      .values({
+        id: u.id,
+        organizationId: u.organizationId,
+        authUserId: u.authUserId,
+        fullName: u.fullName,
+        email: u.email,
+        phone: u.phone,
+        role: u.role,
+        status: u.status,
+        createdAt: new Date(u.createdAt),
+        updatedAt: new Date(u.updatedAt),
+      })
+      .onConflictDoUpdate({
+        target: schema.users.id,
+        set: {
+          fullName: u.fullName,
+          email: u.email,
+          phone: u.phone,
+          role: u.role,
+          status: u.status,
+          updatedAt: new Date(u.updatedAt),
+        },
+      });
   }
-  async setStationAssignments(userId: string, stationIds: string[], organizationId: string): Promise<void> {
+  async setStationAssignments(
+    userId: string,
+    stationIds: string[],
+    organizationId: string,
+  ): Promise<void> {
     // Tenant integrity: every assigned station must belong to the same
     // organization — cross-tenant assignments must be structurally impossible.
     if (stationIds.length > 0) {
       const owned = await this.db
         .select({ id: schema.stations.id })
         .from(schema.stations)
-        .where(and(inArray(schema.stations.id, stationIds), eq(schema.stations.organizationId, organizationId)));
+        .where(
+          and(
+            inArray(schema.stations.id, stationIds),
+            eq(schema.stations.organizationId, organizationId),
+          ),
+        );
       if (owned.length !== new Set(stationIds).size) {
         throw new Error('One or more stations do not belong to this organization');
       }
     }
-    await this.db.delete(schema.userStationAssignments).where(eq(schema.userStationAssignments.userId, userId));
+    await this.db
+      .delete(schema.userStationAssignments)
+      .where(eq(schema.userStationAssignments.userId, userId));
     if (stationIds.length > 0) {
-      await this.db.insert(schema.userStationAssignments).values(stationIds.map((stationId) => ({ userId, stationId })));
+      await this.db
+        .insert(schema.userStationAssignments)
+        .values(stationIds.map((stationId) => ({ userId, stationId })));
     }
   }
   async listWithAssignments(organizationId: string): Promise<UserWithAssignments[]> {
-    const rows = await this.db.select().from(schema.users).where(eq(schema.users.organizationId, organizationId));
+    const rows = await this.db
+      .select()
+      .from(schema.users)
+      .where(eq(schema.users.organizationId, organizationId));
     const ids = rows.map((r) => r.id);
-    const assigns = ids.length > 0
-      ? await this.db.select().from(schema.userStationAssignments).where(inArray(schema.userStationAssignments.userId, ids))
-      : [];
+    const assigns =
+      ids.length > 0
+        ? await this.db
+            .select()
+            .from(schema.userStationAssignments)
+            .where(inArray(schema.userStationAssignments.userId, ids))
+        : [];
     const byUser = new Map<string, string[]>();
     for (const a of assigns) {
       const arr = byUser.get(a.userId) ?? [];
@@ -277,13 +469,26 @@ export class DrizzleFuelPriceRepository implements FuelPriceRepository {
     };
   }
   async save(p: FuelPrice): Promise<void> {
-    await this.db.insert(schema.fuelPrices).values({ id: p.id, organizationId: p.organizationId, stationId: p.stationId, productId: p.productId, price: p.price, effectiveFrom: new Date(p.effectiveFrom), createdAt: new Date(p.createdAt) });
+    await this.db.insert(schema.fuelPrices).values({
+      id: p.id,
+      organizationId: p.organizationId,
+      stationId: p.stationId,
+      productId: p.productId,
+      price: p.price,
+      effectiveFrom: new Date(p.effectiveFrom),
+      createdAt: new Date(p.createdAt),
+    });
   }
   async listByStation(organizationId: string, stationId: string): Promise<FuelPrice[]> {
     const rows = await this.db
       .select()
       .from(schema.fuelPrices)
-      .where(and(eq(schema.fuelPrices.organizationId, organizationId), eq(schema.fuelPrices.stationId, stationId)))
+      .where(
+        and(
+          eq(schema.fuelPrices.organizationId, organizationId),
+          eq(schema.fuelPrices.stationId, stationId),
+        ),
+      )
       .orderBy(desc(schema.fuelPrices.effectiveFrom));
     return rows.map((r) => this.toEntity(r));
   }

@@ -5,15 +5,14 @@ This document defines how the Fuel Pump ERP operates from a business and operati
 It intentionally avoids implementation details and focuses on:
 
 - Operational workflows
-    
+
 - Business rules
-    
+
 - Data ownership
-    
+
 - User responsibilities
-    
+
 - Product behavior
-    
 
 This document serves as the primary reference for product decisions.
 
@@ -28,19 +27,18 @@ It is not intended to be a billing-first or POS-first solution.
 The primary objective is to provide visibility and control over:
 
 - Fuel sales
-    
+
 - Shift operations
-    
+
 - Stock movement
-    
+
 - Cash management
-    
+
 - Credit customers
-    
+
 - Expenses
-    
+
 - Station performance
-    
 
 ---
 
@@ -74,24 +72,22 @@ Each station operates independently while remaining visible to organization-leve
 Initial system roles:
 
 - Owner
-    
+
 - General Manager
-    
+
 - Manager
-    
+
 - Accountant
-    
+
 - Staff
-    
 
 Future versions may introduce:
 
 - Auditor
-    
+
 - Regional Manager
-    
+
 - Multi-Station Supervisor
-    
 
 The permission model should remain flexible enough to support custom roles in the future.
 
@@ -108,15 +104,14 @@ Every business activity occurs within a shift.
 Examples:
 
 - Fuel sales
-    
+
 - Expenses
-    
+
 - Collections
-    
+
 - Credit sales
-    
+
 - Cash reconciliation
-    
 
 A shift represents the primary operational unit of the system.
 
@@ -152,13 +147,12 @@ The operator typically only enters closing readings.
 Products such as:
 
 - Lubricants
-    
+
 - Engine Oil
-    
+
 - Coolants
-    
+
 - Accessories
-    
 
 are entered manually.
 
@@ -173,11 +167,10 @@ These sales remain separate from fuel sales while contributing to operational re
 At the beginning of a shift:
 
 - Opening cash is recorded
-    
+
 - Previous readings are loaded
-    
+
 - Operational status begins
-    
 
 ---
 
@@ -186,15 +179,14 @@ At the beginning of a shift:
 The station records:
 
 - Expenses
-    
+
 - Credit sales
-    
+
 - Collections
-    
+
 - Product sales
-    
+
 - Operational notes
-    
 
 ---
 
@@ -203,20 +195,18 @@ The station records:
 The operator records:
 
 - Closing nozzle readings
-    
+
 - Closing cash balances
-    
 
 The system calculates:
 
 - Fuel sales
-    
+
 - Shift totals
-    
+
 - Reconciliation values
-    
+
 - Variance reports
-    
 
 ---
 
@@ -273,15 +263,14 @@ During a connectivity drop, the desktop app should let users continue an
 **in-progress** flow:
 
 - Open shifts
-    
+
 - Close shifts
-    
+
 - Record sales
-    
+
 - Record expenses
-    
+
 - Record collections
-    
 
 These queue locally (durable write outbox) and sync when back online, rather than
 being blocked on the network.
@@ -304,13 +293,12 @@ prolonged disconnection surfaces a clear sync warning (online / pending / failed
 The mobile experience is primarily intended for:
 
 - Monitoring
-    
+
 - Reporting
-    
+
 - Approvals
-    
+
 - Business oversight
-    
 
 The desktop application remains the primary operational workstation.
 
@@ -321,13 +309,12 @@ The desktop application remains the primary operational workstation.
 The system supports:
 
 - Credit customers
-    
+
 - Fleet customers
-    
+
 - Outstanding balances
-    
+
 - Collection tracking
-    
 
 These features are intended to help stations improve cash recovery and reduce receivable risk.
 
@@ -340,15 +327,14 @@ The system prioritizes operational reporting.
 Examples:
 
 - DSSR
-    
+
 - Shift Reports
-    
+
 - Stock Reports
-    
+
 - Credit Reports
-    
+
 - Collection Reports
-    
 
 Future accounting features may expand reporting capabilities.
 
@@ -363,13 +349,12 @@ The platform is not initially intended to replace dedicated accounting software.
 Future versions may introduce:
 
 - Journal Entries
-    
+
 - Ledgers
-    
+
 - Trial Balance
-    
+
 - Double Entry Accounting
-    
 
 if sufficient customer demand exists.
 
@@ -382,13 +367,12 @@ if sufficient customer demand exists.
 Stations may import:
 
 - Opening Cash
-    
+
 - Opening Stock
-    
+
 - Debtors
-    
+
 - Creditors
-    
 
 ---
 
@@ -397,13 +381,12 @@ Stations may import:
 Future imports may include:
 
 - Products
-    
+
 - Customers
-    
+
 - Suppliers
-    
+
 - Employees
-    
 
 via spreadsheet templates.
 
@@ -414,32 +397,31 @@ via spreadsheet templates.
 Future enterprise capabilities include:
 
 - Multi-station management
-    
+
 - Consolidated reporting
-    
+
 - Regional manager oversight
-    
+
 - Approval workflows
-    
+
 - Advanced permissions
-    
 
 ---
 
 # Business Principles
 
 1. Shifts are the core operational unit.
-    
+
 2. Fuel sales are derived from nozzle readings.
-    
+
 3. Historical financial records should not be overwritten.
-    
+
 4. Adjustments preserve accountability.
-    
+
 5. Desktop operation must continue during internet outages.
-    
+
 6. Mobile access is primarily for monitoring and oversight.
-    
+
 7. Operational reporting takes priority over advanced accounting.
-    
+
 8. Multi-station support must be possible without redesign.

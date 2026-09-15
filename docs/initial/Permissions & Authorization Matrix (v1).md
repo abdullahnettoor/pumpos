@@ -5,17 +5,16 @@ This document defines role-based access control (RBAC) for the Fuel Pump ERP pla
 It serves as the foundation for:
 
 - Backend authorization
-    
+
 - Frontend access control
-    
+
 - Screen visibility
-    
+
 - API permissions
-    
+
 - Row-Level Security (RLS)
-    
+
 - Future Enterprise permission customization
-    
 
 This document reflects the MVP authorization model and intentionally prioritizes simplicity over complexity.
 
@@ -88,15 +87,14 @@ Highest authority within an organization.
 Responsibilities:
 
 - Manage stations
-    
+
 - Manage users
-    
+
 - View all reports
-    
+
 - Configure system settings
-    
+
 - Access audit logs
-    
 
 Access Scope:
 
@@ -114,15 +112,14 @@ Operational administrator.
 Responsibilities:
 
 - Manage day-to-day operations
-    
+
 - Manage shifts
-    
+
 - Manage products
-    
+
 - Manage customers
-    
+
 - Manage suppliers
-    
 
 Access Scope:
 
@@ -139,13 +136,12 @@ Financial operator.
 Responsibilities:
 
 - Record expenses
-    
+
 - Record purchases
-    
+
 - Record collections
-    
+
 - View financial reports
-    
 
 Access Scope:
 
@@ -162,11 +158,10 @@ Operational user.
 Responsibilities:
 
 - Open shifts
-    
+
 - Close shifts
-    
+
 - Record operational transactions
-    
 
 Access Scope:
 
@@ -178,81 +173,81 @@ Assigned Stations
 
 # Shift Permissions
 
-|Action|Owner|Manager|Accountant|Staff|
-|---|---|---|---|---|
-|View Shift|✅|✅|✅|✅|
-|Open Shift|✅|✅|❌|✅|
-|Close Shift|✅|✅|❌|✅|
-|Reopen Shift (Grace Period)|✅|✅|❌|❌|
-|View DSSR|✅|✅|✅|✅|
+| Action                      | Owner | Manager | Accountant | Staff |
+| --------------------------- | ----- | ------- | ---------- | ----- |
+| View Shift                  | ✅    | ✅      | ✅         | ✅    |
+| Open Shift                  | ✅    | ✅      | ❌         | ✅    |
+| Close Shift                 | ✅    | ✅      | ❌         | ✅    |
+| Reopen Shift (Grace Period) | ✅    | ✅      | ❌         | ❌    |
+| View DSSR                   | ✅    | ✅      | ✅         | ✅    |
 
 ---
 
 # Expense Permissions
 
-|Action|Owner|Manager|Accountant|Staff|
-|---|---|---|---|---|
-|View Expenses|✅|✅|✅|✅|
-|Create Expense|✅|✅|✅|✅|
-|Edit Expense (Open Shift)|✅|✅|✅|✅|
-|Create Expense Adjustment|✅|✅|✅|❌|
-|Void Expense|✅|✅|❌|❌|
+| Action                    | Owner | Manager | Accountant | Staff |
+| ------------------------- | ----- | ------- | ---------- | ----- |
+| View Expenses             | ✅    | ✅      | ✅         | ✅    |
+| Create Expense            | ✅    | ✅      | ✅         | ✅    |
+| Edit Expense (Open Shift) | ✅    | ✅      | ✅         | ✅    |
+| Create Expense Adjustment | ✅    | ✅      | ✅         | ❌    |
+| Void Expense              | ✅    | ✅      | ❌         | ❌    |
 
 ---
 
 # Purchase Permissions
 
-|Action|Owner|Manager|Accountant|Staff|
-|---|---|---|---|---|
-|View Purchases|✅|✅|✅|✅|
-|Create Purchase|✅|✅|✅|❌|
-|Edit Purchase (Open Shift)|✅|✅|✅|❌|
-|Create Purchase Adjustment|✅|✅|✅|❌|
+| Action                     | Owner | Manager | Accountant | Staff |
+| -------------------------- | ----- | ------- | ---------- | ----- |
+| View Purchases             | ✅    | ✅      | ✅         | ✅    |
+| Create Purchase            | ✅    | ✅      | ✅         | ❌    |
+| Edit Purchase (Open Shift) | ✅    | ✅      | ✅         | ❌    |
+| Create Purchase Adjustment | ✅    | ✅      | ✅         | ❌    |
 
 ---
 
 # Customer Permissions
 
-|Action|Owner|Manager|Accountant|Staff|
-|---|---|---|---|---|
-|View Customers|✅|✅|✅|✅|
-|Create Customer|✅|✅|✅|❌|
-|Edit Customer|✅|✅|✅|❌|
-|Change Credit Limit|✅|✅|❌|❌|
-|Archive Customer|✅|✅|❌|❌|
+| Action              | Owner | Manager | Accountant | Staff |
+| ------------------- | ----- | ------- | ---------- | ----- |
+| View Customers      | ✅    | ✅      | ✅         | ✅    |
+| Create Customer     | ✅    | ✅      | ✅         | ❌    |
+| Edit Customer       | ✅    | ✅      | ✅         | ❌    |
+| Change Credit Limit | ✅    | ✅      | ❌         | ❌    |
+| Archive Customer    | ✅    | ✅      | ❌         | ❌    |
 
 ---
 
 # Supplier Permissions
 
-|Action|Owner|Manager|Accountant|Staff|
-|---|---|---|---|---|
-|View Suppliers|✅|✅|✅|✅|
-|Create Supplier|✅|✅|✅|❌|
-|Edit Supplier|✅|✅|✅|❌|
-|Archive Supplier|✅|✅|❌|❌|
+| Action           | Owner | Manager | Accountant | Staff |
+| ---------------- | ----- | ------- | ---------- | ----- |
+| View Suppliers   | ✅    | ✅      | ✅         | ✅    |
+| Create Supplier  | ✅    | ✅      | ✅         | ❌    |
+| Edit Supplier    | ✅    | ✅      | ✅         | ❌    |
+| Archive Supplier | ✅    | ✅      | ❌         | ❌    |
 
 ---
 
 # Collection Permissions
 
-|Action|Owner|Manager|Accountant|Staff|
-|---|---|---|---|---|
-|View Collections|✅|✅|✅|✅|
-|Record Collection|✅|✅|✅|✅|
-|Edit Collection (Open Shift)|✅|✅|✅|✅|
-|Create Collection Adjustment|✅|✅|✅|❌|
+| Action                       | Owner | Manager | Accountant | Staff |
+| ---------------------------- | ----- | ------- | ---------- | ----- |
+| View Collections             | ✅    | ✅      | ✅         | ✅    |
+| Record Collection            | ✅    | ✅      | ✅         | ✅    |
+| Edit Collection (Open Shift) | ✅    | ✅      | ✅         | ✅    |
+| Create Collection Adjustment | ✅    | ✅      | ✅         | ❌    |
 
 ---
 
 # Product Permissions
 
-|Action|Owner|Manager|Accountant|Staff|
-|---|---|---|---|---|
-|View Products|✅|✅|✅|✅|
-|Create Product|✅|✅|❌|❌|
-|Edit Product|✅|✅|❌|❌|
-|Archive Product|✅|✅|❌|❌|
+| Action          | Owner | Manager | Accountant | Staff |
+| --------------- | ----- | ------- | ---------- | ----- |
+| View Products   | ✅    | ✅      | ✅         | ✅    |
+| Create Product  | ✅    | ✅      | ❌         | ❌    |
+| Edit Product    | ✅    | ✅      | ❌         | ❌    |
+| Archive Product | ✅    | ✅      | ❌         | ❌    |
 
 ---
 
@@ -260,40 +255,40 @@ Assigned Stations
 
 ## Tanks
 
-|Action|Owner|Manager|Accountant|Staff|
-|---|---|---|---|---|
-|View Tanks|✅|✅|✅|✅|
-|Create Tank|✅|✅|❌|❌|
-|Edit Tank|✅|✅|❌|❌|
+| Action      | Owner | Manager | Accountant | Staff |
+| ----------- | ----- | ------- | ---------- | ----- |
+| View Tanks  | ✅    | ✅      | ✅         | ✅    |
+| Create Tank | ✅    | ✅      | ❌         | ❌    |
+| Edit Tank   | ✅    | ✅      | ❌         | ❌    |
 
 ---
 
 ## Dispenser Units (DU)
 
-|Action|Owner|Manager|Accountant|Staff|
-|---|---|---|---|---|
-|View DU|✅|✅|✅|✅|
-|Create DU|✅|✅|❌|❌|
-|Edit DU|✅|✅|❌|❌|
+| Action    | Owner | Manager | Accountant | Staff |
+| --------- | ----- | ------- | ---------- | ----- |
+| View DU   | ✅    | ✅      | ✅         | ✅    |
+| Create DU | ✅    | ✅      | ❌         | ❌    |
+| Edit DU   | ✅    | ✅      | ❌         | ❌    |
 
 ---
 
 ## Nozzles
 
-|Action|Owner|Manager|Accountant|Staff|
-|---|---|---|---|---|
-|View Nozzles|✅|✅|✅|✅|
-|Create Nozzle|✅|✅|❌|❌|
-|Edit Nozzle|✅|✅|❌|❌|
+| Action        | Owner | Manager | Accountant | Staff |
+| ------------- | ----- | ------- | ---------- | ----- |
+| View Nozzles  | ✅    | ✅      | ✅         | ✅    |
+| Create Nozzle | ✅    | ✅      | ❌         | ❌    |
+| Edit Nozzle   | ✅    | ✅      | ❌         | ❌    |
 
 ---
 
 # Variance Permissions
 
-|Action|Owner|Manager|Accountant|Staff|
-|---|---|---|---|---|
-|View Variance|✅|✅|✅|✅|
-|Record Variance|✅|✅|✅|✅|
+| Action          | Owner | Manager | Accountant | Staff |
+| --------------- | ----- | ------- | ---------- | ----- |
+| View Variance   | ✅    | ✅      | ✅         | ✅    |
+| Record Variance | ✅    | ✅      | ✅         | ✅    |
 
 ### Notes
 
@@ -311,20 +306,20 @@ Variance Escalation
 
 # User Management Permissions
 
-|Action|Owner|Manager|Accountant|Staff|
-|---|---|---|---|---|
-|Create User|✅|❌|❌|❌|
-|Disable User|✅|❌|❌|❌|
-|Reset Password|✅|❌|❌|❌|
-|Assign Roles|✅|❌|❌|❌|
+| Action         | Owner | Manager | Accountant | Staff |
+| -------------- | ----- | ------- | ---------- | ----- |
+| Create User    | ✅    | ❌      | ❌         | ❌    |
+| Disable User   | ✅    | ❌      | ❌         | ❌    |
+| Reset Password | ✅    | ❌      | ❌         | ❌    |
+| Assign Roles   | ✅    | ❌      | ❌         | ❌    |
 
 ---
 
 # Audit Permissions
 
-|Action|Owner|Manager|Accountant|Staff|
-|---|---|---|---|---|
-|View Audit Logs|✅|✅|✅|✅|
+| Action          | Owner | Manager | Accountant | Staff |
+| --------------- | ----- | ------- | ---------- | ----- |
+| View Audit Logs | ✅    | ✅      | ✅         | ✅    |
 
 ### Notes
 
@@ -336,13 +331,13 @@ Operational transparency is considered a deterrent against malpractice and unaut
 
 # Reporting Permissions
 
-|Action|Owner|Manager|Accountant|Staff|
-|---|---|---|---|---|
-|View Dashboard|✅|✅|✅|✅|
-|View DSSR|✅|✅|✅|✅|
-|View Sales Reports|✅|✅|✅|✅|
-|View Customer Reports|✅|✅|✅|✅|
-|Export Reports|✅|✅|✅|❌|
+| Action                | Owner | Manager | Accountant | Staff |
+| --------------------- | ----- | ------- | ---------- | ----- |
+| View Dashboard        | ✅    | ✅      | ✅         | ✅    |
+| View DSSR             | ✅    | ✅      | ✅         | ✅    |
+| View Sales Reports    | ✅    | ✅      | ✅         | ✅    |
+| View Customer Reports | ✅    | ✅      | ✅         | ✅    |
+| Export Reports        | ✅    | ✅      | ✅         | ❌    |
 
 ---
 
@@ -364,13 +359,13 @@ Desktop applications remain the primary operational workstation.
 
 ## Mobile Permissions
 
-|Feature|Owner|Manager|Accountant|Staff|
-|---|---|---|---|---|
-|View Dashboard|✅|✅|✅|✅|
-|View Reports|✅|✅|✅|✅|
-|View DSSR|✅|✅|✅|✅|
-|Record Transactions|❌|❌|❌|❌|
-|Edit Transactions|❌|❌|❌|❌|
+| Feature             | Owner | Manager | Accountant | Staff |
+| ------------------- | ----- | ------- | ---------- | ----- |
+| View Dashboard      | ✅    | ✅      | ✅         | ✅    |
+| View Reports        | ✅    | ✅      | ✅         | ✅    |
+| View DSSR           | ✅    | ✅      | ✅         | ✅    |
+| Record Transactions | ❌    | ❌      | ❌         | ❌    |
+| Edit Transactions   | ❌    | ❌      | ❌         | ❌    |
 
 ---
 
@@ -419,21 +414,21 @@ Credit Limit Approval
 # Authorization Principles Summary
 
 1. MVP uses fixed system roles.
-    
+
 2. Owners manage users and system configuration.
-    
+
 3. Managers operate stations.
-    
+
 4. Accountants manage financial operations.
-    
+
 5. Staff manage operational transactions.
-    
+
 6. Closed shifts cannot be modified directly.
-    
+
 7. Mobile is monitoring-first.
-    
+
 8. Audit logs are visible to all station users.
-    
+
 9. Enterprise introduces custom roles and permissions.
-    
+
 10. Authorization must never bypass business rules.

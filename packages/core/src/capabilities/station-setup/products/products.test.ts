@@ -22,7 +22,9 @@ class InMemoryProductRepo implements ProductRepository {
     else this.rows.push(p);
   }
   async existsByCode(orgId: string, code: string, excludeId?: string) {
-    return this.rows.some((r) => r.organizationId === orgId && r.code === code && r.id !== excludeId);
+    return this.rows.some(
+      (r) => r.organizationId === orgId && r.code === code && r.id !== excludeId,
+    );
   }
   async listByOrganization(orgId: string) {
     return this.rows.filter((r) => r.organizationId === orgId);
@@ -49,7 +51,10 @@ describe('CreateProduct', () => {
   it('defaults inventoryType=BULK and isTaxable=false for FUEL', async () => {
     const repo = new InMemoryProductRepo();
     const store = new InMemoryEventStore();
-    const useCase = new CreateProduct({ repository: repo, events: new InProcessEventDispatcher({ store }) });
+    const useCase = new CreateProduct({
+      repository: repo,
+      events: new InProcessEventDispatcher({ store }),
+    });
 
     const result = await useCase.execute(
       { name: 'Petrol XP95', code: 'FUEL-PET', productType: 'FUEL', unit: 'L' },
@@ -66,7 +71,10 @@ describe('CreateProduct', () => {
 
   it('defaults inventoryType=ITEM for merchandise', async () => {
     const repo = new InMemoryProductRepo();
-    const useCase = new CreateProduct({ repository: repo, events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }) });
+    const useCase = new CreateProduct({
+      repository: repo,
+      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
+    });
     const result = await useCase.execute(
       { name: 'Servo 20W40', code: 'LUB-2040', productType: 'LUBRICANT', unit: 'pc' },
       makeContext(),
@@ -77,7 +85,10 @@ describe('CreateProduct', () => {
 
   it('rejects a duplicate code', async () => {
     const repo = new InMemoryProductRepo();
-    const useCase = new CreateProduct({ repository: repo, events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }) });
+    const useCase = new CreateProduct({
+      repository: repo,
+      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
+    });
     const ctx = makeContext();
     const cmd = { name: 'Diesel', code: 'FUEL-DSL', productType: 'FUEL' as const, unit: 'L' };
     await useCase.execute(cmd, ctx);
@@ -90,7 +101,9 @@ describe('CreateProduct', () => {
     const repo = new InMemoryProductRepo();
     const movements: any[] = [];
     const stock: any = {
-      save: async (m: any) => { movements.push(m); },
+      save: async (m: any) => {
+        movements.push(m);
+      },
       saveMany: async () => {},
       currentQuantityForTank: async () => 0,
       currentQuantityForProduct: async () => 0,
@@ -100,14 +113,38 @@ describe('CreateProduct', () => {
       save: async () => {},
       findOpenByStation: async () => null,
       // Pretend a day already exists so ensureBusinessDayForDate returns it.
-      findByStationAndDate: async () => ({ id: 'bd-1', organizationId: 'org-1', stationId: 'st-1', businessDate: '2026-01-01', status: 'OPEN', openedBy: 'u', openedAt: '', closedBy: null, closedAt: null, createdAt: '', updatedAt: '' }),
+      findByStationAndDate: async () => ({
+        id: 'bd-1',
+        organizationId: 'org-1',
+        stationId: 'st-1',
+        businessDate: '2026-01-01',
+        status: 'OPEN',
+        openedBy: 'u',
+        openedAt: '',
+        closedBy: null,
+        closedAt: null,
+        createdAt: '',
+        updatedAt: '',
+      }),
       lockStation: async () => {},
       lockById: async () => {},
       lockByStationAndDate: async () => {},
     };
-    const useCase = new CreateProduct({ repository: repo, events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }), stock, businessDays });
+    const useCase = new CreateProduct({
+      repository: repo,
+      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
+      stock,
+      businessDays,
+    });
     const result = await useCase.execute(
-      { name: 'Engine Oil', code: 'LUB-EO', productType: 'LUBRICANT', unit: 'pc', openingStock: 20, stationId: 'st-1' },
+      {
+        name: 'Engine Oil',
+        code: 'LUB-EO',
+        productType: 'LUBRICANT',
+        unit: 'pc',
+        openingStock: 20,
+        stationId: 'st-1',
+      },
       makeContext(),
     );
     expect(result.success).toBe(true);
@@ -121,11 +158,50 @@ describe('CreateProduct', () => {
   it('does not post opening stock for fuel products', async () => {
     const repo = new InMemoryProductRepo();
     const movements: any[] = [];
-    const stock: any = { save: async (m: any) => { movements.push(m); }, saveMany: async () => {}, currentQuantityForTank: async () => 0, currentQuantityForProduct: async () => 0 };
-    const businessDays: any = { findById: async () => null, save: async () => {}, findOpenByStation: async () => null, findByStationAndDate: async () => ({ id: 'bd-1', organizationId: 'org-1', stationId: 'st-1', businessDate: '2026-01-01', status: 'OPEN', openedBy: 'u', openedAt: '', closedBy: null, closedAt: null, createdAt: '', updatedAt: '' }), lockStation: async () => {}, lockById: async () => {}, lockByStationAndDate: async () => {} };
-    const useCase = new CreateProduct({ repository: repo, events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }), stock, businessDays });
+    const stock: any = {
+      save: async (m: any) => {
+        movements.push(m);
+      },
+      saveMany: async () => {},
+      currentQuantityForTank: async () => 0,
+      currentQuantityForProduct: async () => 0,
+    };
+    const businessDays: any = {
+      findById: async () => null,
+      save: async () => {},
+      findOpenByStation: async () => null,
+      findByStationAndDate: async () => ({
+        id: 'bd-1',
+        organizationId: 'org-1',
+        stationId: 'st-1',
+        businessDate: '2026-01-01',
+        status: 'OPEN',
+        openedBy: 'u',
+        openedAt: '',
+        closedBy: null,
+        closedAt: null,
+        createdAt: '',
+        updatedAt: '',
+      }),
+      lockStation: async () => {},
+      lockById: async () => {},
+      lockByStationAndDate: async () => {},
+    };
+    const useCase = new CreateProduct({
+      repository: repo,
+      events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
+      stock,
+      businessDays,
+    });
     const result = await useCase.execute(
-      { name: 'Petrol', code: 'FUEL-MS', productType: 'FUEL', unit: 'L', openingStock: 5000, stationId: 'st-1' },
+      {
+        name: 'Petrol',
+        code: 'FUEL-MS',
+        productType: 'FUEL',
+        unit: 'L',
+        openingStock: 5000,
+        stationId: 'st-1',
+      },
       makeContext(),
     );
     expect(result.success).toBe(true);
@@ -145,7 +221,10 @@ describe('UpdateProduct', () => {
     );
     const id = created.success ? created.data.id : '';
 
-    const result = await new UpdateProduct({ repository: repo, events }).execute({ id, isActive: false }, ctx);
+    const result = await new UpdateProduct({ repository: repo, events }).execute(
+      { id, isActive: false },
+      ctx,
+    );
 
     expect(result.success).toBe(true);
     if (result.success) expect(result.data.isActive).toBe(false);

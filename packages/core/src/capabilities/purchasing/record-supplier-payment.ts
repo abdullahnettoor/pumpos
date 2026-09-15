@@ -1,6 +1,20 @@
 import { z } from 'zod';
-import { BusinessEvents, err, eventFromContext, invariantViolation, notFoundError, ok, validationError } from '../../kernel/index.js';
-import type { DomainEvent, EventPublisher, ExecutionContext, Result, UseCase } from '../../kernel/index.js';
+import {
+  BusinessEvents,
+  err,
+  eventFromContext,
+  invariantViolation,
+  notFoundError,
+  ok,
+  validationError,
+} from '../../kernel/index.js';
+import type {
+  DomainEvent,
+  EventPublisher,
+  ExecutionContext,
+  Result,
+  UseCase,
+} from '../../kernel/index.js';
 import { resolveFinancialAnchor, type ShiftRepository } from '../station-ops/shifts/index.js';
 import type { BusinessDayWriteRepository } from '../station-ops/business-days/index.js';
 import type { SupplierRepository } from '../crm/suppliers/index.js';
@@ -36,7 +50,10 @@ const schema = z.object({
   shiftId: z.string().min(1).optional(),
   stationId: z.string().min(1).optional(),
   notes: z.string().max(500).optional(),
-  transactionDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'transactionDate must be YYYY-MM-DD').optional(),
+  transactionDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'transactionDate must be YYYY-MM-DD')
+    .optional(),
 });
 
 export interface RecordSupplierPaymentDeps {
@@ -52,27 +69,45 @@ export interface RecordSupplierPaymentDeps {
  * from SHIFT_CASH touches the drawer and requires an open shift; BANK/OWNER
  * payments may retain optional shift attribution without changing the drawer.
  */
-export class RecordSupplierPayment implements UseCase<RecordSupplierPaymentCommand, SupplierTransaction> {
+export class RecordSupplierPayment implements UseCase<
+  RecordSupplierPaymentCommand,
+  SupplierTransaction
+> {
   constructor(private readonly deps: RecordSupplierPaymentDeps) {}
 
-  async execute(input: RecordSupplierPaymentCommand, ctx: ExecutionContext): Promise<Result<SupplierTransaction>> {
+  async execute(
+    input: RecordSupplierPaymentCommand,
+    ctx: ExecutionContext,
+  ): Promise<Result<SupplierTransaction>> {
     const p = schema.safeParse(input);
-    if (!p.success) return err(validationError('Invalid RecordSupplierPayment command', { issues: p.error.flatten() }));
+    if (!p.success)
+      return err(
+        validationError('Invalid RecordSupplierPayment command', { issues: p.error.flatten() }),
+      );
     const cmd = p.data;
 
     const supplier = await this.deps.suppliers.findById(cmd.supplierId);
-    if (!supplier || supplier.organizationId !== ctx.organizationId) return err(notFoundError('Supplier', cmd.supplierId));
+    if (!supplier || supplier.organizationId !== ctx.organizationId)
+      return err(notFoundError('Supplier', cmd.supplierId));
 
     const paidFrom: SupplierPaidFrom = cmd.paidFrom ?? 'BANK';
     const affectsDrawer = cmd.affectsDrawer ?? paidFrom === 'SHIFT_CASH';
 
-    let businessDayId: string;
-    let shiftId: string | null;
-    let stationId = cmd.stationId ?? ctx.stationId ?? null;
-    if (!cmd.shiftId && !stationId) return err(validationError('Either shiftId or stationId is required'));
-    const anchor = await resolveFinancialAnchor(this.deps, ctx, { shiftId: cmd.shiftId, stationId, transactionDate: cmd.transactionDate }, { affectsDrawer, drawerLabel: 'Drawer supplier payments' });
+    const requestedStationId = cmd.stationId ?? ctx.stationId ?? null;
+    if (!cmd.shiftId && !requestedStationId)
+      return err(validationError('Either shiftId or stationId is required'));
+    const anchor = await resolveFinancialAnchor(
+      this.deps,
+      ctx,
+      {
+        shiftId: cmd.shiftId,
+        stationId: requestedStationId,
+        transactionDate: cmd.transactionDate,
+      },
+      { affectsDrawer, drawerLabel: 'Drawer supplier payments' },
+    );
     if (!anchor.success) return anchor;
-    ({ businessDayId, shiftId, stationId } = anchor.data);
+    const { businessDayId, shiftId, stationId } = anchor.data;
 
     const now = ctx.clock.now().toISOString();
     const payment: SupplierTransaction = {
@@ -100,10 +135,20 @@ export class RecordSupplierPayment implements UseCase<RecordSupplierPaymentComma
         stationId,
         businessDayId,
         metadata: anchor.data.eventMetadata,
-        payload: { supplierId: supplier.id, amount: payment.amount, paidFrom, affectsDrawer: payment.affectsDrawer, shiftId },
+        payload: {
+          supplierId: supplier.id,
+          amount: payment.amount,
+          paidFrom,
+          affectsDrawer: payment.affectsDrawer,
+          shiftId,
+        },
         presentation: {
           templateId: 'supplier-paid.v1',
-          values: { supplierName: supplier.name, amount: Number(payment.amount), accountName: accountLabel(paidFrom) },
+          values: {
+            supplierName: supplier.name,
+            amount: Number(payment.amount),
+            accountName: accountLabel(paidFrom),
+          },
         },
       }),
       eventFromContext(ctx, {
@@ -116,7 +161,11 @@ export class RecordSupplierPayment implements UseCase<RecordSupplierPaymentComma
         payload: { supplierId: supplier.id, amount: payment.amount, paidFrom },
         presentation: {
           templateId: 'payment-made.v1',
-          values: { partyName: supplier.name, amount: Number(payment.amount), accountName: accountLabel(paidFrom) },
+          values: {
+            partyName: supplier.name,
+            amount: Number(payment.amount),
+            accountName: accountLabel(paidFrom),
+          },
         },
       }),
     ];

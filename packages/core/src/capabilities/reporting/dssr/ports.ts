@@ -8,7 +8,11 @@ export interface DssrSnapshot {
 }
 
 export interface DssrSnapshotRepository {
-  findByStationDate(organizationId: string, stationId: string, businessDate: string): Promise<DssrSnapshot | null>;
+  findByStationDate(
+    organizationId: string,
+    stationId: string,
+    businessDate: string,
+  ): Promise<DssrSnapshot | null>;
   save(snapshot: DssrSnapshot): Promise<void>;
 }
 

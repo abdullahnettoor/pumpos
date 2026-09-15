@@ -29,7 +29,11 @@ function toExpense(r: typeof schema.expenses.$inferSelect): Expense {
 export class DrizzleExpenseRepository implements ExpenseRepository {
   constructor(private readonly db: DbClient) {}
   async findById(id: string): Promise<Expense | null> {
-    const [r] = await this.db.select().from(schema.expenses).where(eq(schema.expenses.id, id)).limit(1);
+    const [r] = await this.db
+      .select()
+      .from(schema.expenses)
+      .where(eq(schema.expenses.id, id))
+      .limit(1);
     return r ? toExpense(r) : null;
   }
   async save(e: Expense): Promise<void> {
@@ -97,7 +101,11 @@ function toIncome(r: typeof schema.otherIncome.$inferSelect): OtherIncome {
 export class DrizzleIncomeRepository implements IncomeRepository {
   constructor(private readonly db: DbClient) {}
   async findById(id: string): Promise<OtherIncome | null> {
-    const [r] = await this.db.select().from(schema.otherIncome).where(eq(schema.otherIncome.id, id)).limit(1);
+    const [r] = await this.db
+      .select()
+      .from(schema.otherIncome)
+      .where(eq(schema.otherIncome.id, id))
+      .limit(1);
     return r ? toIncome(r) : null;
   }
   async save(i: OtherIncome): Promise<void> {
@@ -149,7 +157,11 @@ export class DrizzleIncomeRepository implements IncomeRepository {
 export class DrizzleIncomeCategoryRepository implements IncomeCategoryRepository {
   constructor(private readonly db: DbClient) {}
   async findById(id: string): Promise<IncomeCategory | null> {
-    const [r] = await this.db.select().from(schema.incomeCategories).where(eq(schema.incomeCategories.id, id)).limit(1);
+    const [r] = await this.db
+      .select()
+      .from(schema.incomeCategories)
+      .where(eq(schema.incomeCategories.id, id))
+      .limit(1);
     if (!r) return null;
     return {
       id: r.id,

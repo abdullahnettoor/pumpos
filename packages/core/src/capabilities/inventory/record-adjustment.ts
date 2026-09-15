@@ -1,5 +1,12 @@
 import { z } from 'zod';
-import { BusinessEvents, err, eventFromContext, invariantViolation, ok, validationError } from '../../kernel/index.js';
+import {
+  BusinessEvents,
+  err,
+  eventFromContext,
+  invariantViolation,
+  ok,
+  validationError,
+} from '../../kernel/index.js';
 import type { EventPublisher, ExecutionContext, Result, UseCase } from '../../kernel/index.js';
 import type { BusinessDayRepository } from '../station-ops/business-days/index.js';
 import type { StockMovement, StockMovementRepository } from './ports.js';
@@ -28,16 +35,28 @@ export interface RecordInventoryAdjustmentDeps {
 }
 
 /** Manually adjust stock (correction, write-off, found stock). */
-export class RecordInventoryAdjustment implements UseCase<RecordInventoryAdjustmentCommand, StockMovement> {
+export class RecordInventoryAdjustment implements UseCase<
+  RecordInventoryAdjustmentCommand,
+  StockMovement
+> {
   constructor(private readonly deps: RecordInventoryAdjustmentDeps) {}
 
-  async execute(input: RecordInventoryAdjustmentCommand, ctx: ExecutionContext): Promise<Result<StockMovement>> {
+  async execute(
+    input: RecordInventoryAdjustmentCommand,
+    ctx: ExecutionContext,
+  ): Promise<Result<StockMovement>> {
     const p = schema.safeParse(input);
-    if (!p.success) return err(validationError('Invalid RecordInventoryAdjustment command', { issues: p.error.flatten() }));
+    if (!p.success)
+      return err(
+        validationError('Invalid RecordInventoryAdjustment command', { issues: p.error.flatten() }),
+      );
     const cmd = p.data;
 
     const bd = await this.deps.businessDays.findOpenByStation(ctx.organizationId, cmd.stationId);
-    if (!bd) return err(invariantViolation('No open business day for this station', { stationId: cmd.stationId }));
+    if (!bd)
+      return err(
+        invariantViolation('No open business day for this station', { stationId: cmd.stationId }),
+      );
 
     const now = ctx.clock.now().toISOString();
     const movement: StockMovement = {
@@ -62,7 +81,12 @@ export class RecordInventoryAdjustment implements UseCase<RecordInventoryAdjustm
         aggregateId: movement.id,
         stationId: cmd.stationId,
         businessDayId: bd.id,
-        payload: { productId: cmd.productId, tankId: movement.tankId, quantity: movement.quantity, reason: movement.notes },
+        payload: {
+          productId: cmd.productId,
+          tankId: movement.tankId,
+          quantity: movement.quantity,
+          reason: movement.notes,
+        },
       }),
     ]);
 

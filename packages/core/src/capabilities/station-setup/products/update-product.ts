@@ -7,12 +7,7 @@ import {
   notFoundError,
   ok,
 } from '../../../kernel/index.js';
-import type {
-  EventPublisher,
-  ExecutionContext,
-  Result,
-  UseCase,
-} from '../../../kernel/index.js';
+import type { EventPublisher, ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
 import type { UpdateProductCommand } from './command.js';
 import { validateUpdateProduct } from './validator.js';
 import type { Product, ProductRepository } from './ports.js';
@@ -26,10 +21,7 @@ export interface UpdateProductDeps {
 export class UpdateProduct implements UseCase<UpdateProductCommand, Product> {
   constructor(private readonly deps: UpdateProductDeps) {}
 
-  async execute(
-    input: UpdateProductCommand,
-    ctx: ExecutionContext,
-  ): Promise<Result<Product>> {
+  async execute(input: UpdateProductCommand, ctx: ExecutionContext): Promise<Result<Product>> {
     const validated = validateUpdateProduct(input);
     if (!validated.success) return validated;
     const cmd = validated.data;
@@ -45,7 +37,9 @@ export class UpdateProduct implements UseCase<UpdateProductCommand, Product> {
       cmd.code !== existing.code &&
       (await this.deps.repository.existsByCode(ctx.organizationId, cmd.code, existing.id))
     ) {
-      return err(conflictError(`A product with code "${cmd.code}" already exists`, { code: cmd.code }));
+      return err(
+        conflictError(`A product with code "${cmd.code}" already exists`, { code: cmd.code }),
+      );
     }
 
     const changes: Record<string, unknown> = {};

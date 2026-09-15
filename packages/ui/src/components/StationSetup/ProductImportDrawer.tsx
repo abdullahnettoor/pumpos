@@ -7,7 +7,16 @@ import { PRODUCT_UNITS } from '@pump/shared';
 
 const productService = new CloudProductService();
 
-const PRODUCT_TYPES = ['FUEL', 'LUBRICANT', 'ADDITIVE', 'ACCESSORY', 'CONSUMABLE', 'SPARE_PART', 'SERVICE', 'OTHER'];
+const PRODUCT_TYPES = [
+  'FUEL',
+  'LUBRICANT',
+  'ADDITIVE',
+  'ACCESSORY',
+  'CONSUMABLE',
+  'SPARE_PART',
+  'SERVICE',
+  'OTHER',
+];
 const TAX_CATEGORIES = ['FUEL_VAT', 'GST', 'EXEMPT', 'NON_TAXABLE'];
 
 // Canonical units keyed by lowercase, so a case-only difference ('l' -> 'L')
@@ -17,16 +26,66 @@ const UNIT_BY_LOWER = new Map(PRODUCT_UNITS.map((u) => [u.value.toLowerCase(), u
 // not a canonical unit) is imported as 'Nos' with a warning so the row is never
 // silently wrong nor blocked.
 const UNIT_SYNONYMS: Record<string, string> = {
-  ltr: 'L', ltrs: 'L', liter: 'L', liters: 'L', litre: 'L', litres: 'L',
-  kgs: 'kg', kilo: 'kg', kilos: 'kg', kilogram: 'kg', kilograms: 'kg',
-  milliliter: 'ml', millilitre: 'ml', milliliters: 'ml', millilitres: 'ml',
-  no: 'Nos', 'no.': 'Nos', 'nos.': 'Nos', pc: 'Nos', pcs: 'Nos', pce: 'Nos', piece: 'Nos', pieces: 'Nos',
-  unit: 'Nos', units: 'Nos', ea: 'Nos', each: 'Nos', qty: 'Nos', number: 'Nos', numbers: 'Nos',
-  box: 'Nos', boxes: 'Nos', set: 'Nos', sets: 'Nos', pair: 'Nos', pairs: 'Nos', meter: 'Nos', metre: 'Nos',
-  bottles: 'Bottle', btl: 'Bottle', btls: 'Bottle',
-  cans: 'Can', tin: 'Can', tins: 'Can',
-  packets: 'Packet', pkt: 'Packet', pkts: 'Packet', pouch: 'Packet', pouches: 'Packet', sachet: 'Packet', sachets: 'Packet', pack: 'Packet', packs: 'Packet',
-  service: 'Service', services: 'Service', job: 'Service', jobs: 'Service', labour: 'Service', labor: 'Service', svc: 'Service',
+  ltr: 'L',
+  ltrs: 'L',
+  liter: 'L',
+  liters: 'L',
+  litre: 'L',
+  litres: 'L',
+  kgs: 'kg',
+  kilo: 'kg',
+  kilos: 'kg',
+  kilogram: 'kg',
+  kilograms: 'kg',
+  milliliter: 'ml',
+  millilitre: 'ml',
+  milliliters: 'ml',
+  millilitres: 'ml',
+  no: 'Nos',
+  'no.': 'Nos',
+  'nos.': 'Nos',
+  pc: 'Nos',
+  pcs: 'Nos',
+  pce: 'Nos',
+  piece: 'Nos',
+  pieces: 'Nos',
+  unit: 'Nos',
+  units: 'Nos',
+  ea: 'Nos',
+  each: 'Nos',
+  qty: 'Nos',
+  number: 'Nos',
+  numbers: 'Nos',
+  box: 'Nos',
+  boxes: 'Nos',
+  set: 'Nos',
+  sets: 'Nos',
+  pair: 'Nos',
+  pairs: 'Nos',
+  meter: 'Nos',
+  metre: 'Nos',
+  bottles: 'Bottle',
+  btl: 'Bottle',
+  btls: 'Bottle',
+  cans: 'Can',
+  tin: 'Can',
+  tins: 'Can',
+  packets: 'Packet',
+  pkt: 'Packet',
+  pkts: 'Packet',
+  pouch: 'Packet',
+  pouches: 'Packet',
+  sachet: 'Packet',
+  sachets: 'Packet',
+  pack: 'Packet',
+  packs: 'Packet',
+  service: 'Service',
+  services: 'Service',
+  job: 'Service',
+  jobs: 'Service',
+  labour: 'Service',
+  labor: 'Service',
+  svc: 'Service',
 };
 
 /** Resolve a free-text unit to a curated one. `known` is false when we had to
@@ -41,7 +100,20 @@ function normalizeUnit(raw: string): { value: string; known: boolean } {
 }
 
 // Header columns (case-insensitive). Order in the sample; parsing maps by name.
-const COLUMNS = ['name', 'code', 'productType', 'unit', 'taxCategory', 'gstRate', 'hsnCode', 'brand', 'category', 'sellingPrice', 'costPriceExGst', 'openingStock'];
+const COLUMNS = [
+  'name',
+  'code',
+  'productType',
+  'unit',
+  'taxCategory',
+  'gstRate',
+  'hsnCode',
+  'brand',
+  'category',
+  'sellingPrice',
+  'costPriceExGst',
+  'openingStock',
+];
 
 const SAMPLE_CSV = [
   COLUMNS.join(','),
@@ -75,8 +147,10 @@ function splitCsvLine(line: string): string[] {
     const ch = line[i];
     if (inQuotes) {
       if (ch === '"') {
-        if (line[i + 1] === '"') { cur += '"'; i++; }
-        else inQuotes = false;
+        if (line[i + 1] === '"') {
+          cur += '"';
+          i++;
+        } else inQuotes = false;
       } else cur += ch;
     } else if (ch === '"') {
       inQuotes = true;
@@ -91,13 +165,22 @@ function splitCsvLine(line: string): string[] {
   return out.map((s) => s.trim());
 }
 
-export const ProductImportDrawer: React.FC<ProductImportDrawerProps> = ({ isOpen, onClose, existingProducts, selectedStation, onImported }) => {
+export const ProductImportDrawer: React.FC<ProductImportDrawerProps> = ({
+  isOpen,
+  onClose,
+  existingProducts,
+  selectedStation,
+  onImported,
+}) => {
   const toast = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
   const [fileName, setFileName] = useState('');
   const [rows, setRows] = useState<ParsedRow[]>([]);
   const [importing, setImporting] = useState(false);
-  const [result, setResult] = useState<{ createdCount: number; failed: { code?: string; name?: string; error: string }[] } | null>(null);
+  const [result, setResult] = useState<{
+    createdCount: number;
+    failed: { code?: string; name?: string; error: string }[];
+  } | null>(null);
 
   const existingCodes = useMemo(
     () => new Set(existingProducts.map((p) => (p.code || '').toUpperCase())),
@@ -105,7 +188,10 @@ export const ProductImportDrawer: React.FC<ProductImportDrawerProps> = ({ isOpen
   );
 
   const validCount = useMemo(() => rows.filter((r) => r.errors.length === 0).length, [rows]);
-  const warningCount = useMemo(() => rows.filter((r) => r.errors.length === 0 && r.warnings.length > 0).length, [rows]);
+  const warningCount = useMemo(
+    () => rows.filter((r) => r.errors.length === 0 && r.warnings.length > 0).length,
+    [rows],
+  );
 
   const reset = () => {
     setFileName('');
@@ -126,8 +212,15 @@ export const ProductImportDrawer: React.FC<ProductImportDrawerProps> = ({ isOpen
     }
     const header = splitCsvLine(lines[0]).map((h) => h.toLowerCase());
     const colIndex: Record<string, number> = {};
-    COLUMNS.forEach((c) => { colIndex[c] = header.indexOf(c.toLowerCase()); });
-    if (colIndex['name'] < 0 || colIndex['code'] < 0 || colIndex['producttype'] < 0 || colIndex['unit'] < 0) {
+    COLUMNS.forEach((c) => {
+      colIndex[c] = header.indexOf(c.toLowerCase());
+    });
+    if (
+      colIndex['name'] < 0 ||
+      colIndex['code'] < 0 ||
+      colIndex['producttype'] < 0 ||
+      colIndex['unit'] < 0
+    ) {
       toast.error('CSV must include at least: name, code, productType, unit.');
       setRows([]);
       return;
@@ -136,9 +229,14 @@ export const ProductImportDrawer: React.FC<ProductImportDrawerProps> = ({ isOpen
     const seenCodes = new Set<string>();
     const parsed: ParsedRow[] = lines.slice(1).map((line, i) => {
       const cells = splitCsvLine(line);
-      const get = (c: string) => { const idx = colIndex[c]; return idx >= 0 ? (cells[idx] ?? '').trim() : ''; };
+      const get = (c: string) => {
+        const idx = colIndex[c];
+        return idx >= 0 ? (cells[idx] ?? '').trim() : '';
+      };
       const raw: Record<string, string> = {};
-      COLUMNS.forEach((c) => { raw[c] = get(c); });
+      COLUMNS.forEach((c) => {
+        raw[c] = get(c);
+      });
 
       const errors: string[] = [];
       const warnings: string[] = [];
@@ -152,7 +250,8 @@ export const ProductImportDrawer: React.FC<ProductImportDrawerProps> = ({ isOpen
       else if (seenCodes.has(code)) errors.push(`duplicate code "${code}" in file`);
       else if (existingCodes.has(code)) errors.push(`code "${code}" already exists`);
       if (code) seenCodes.add(code);
-      if (!PRODUCT_TYPES.includes(productType)) errors.push(`invalid productType "${raw.productType}"`);
+      if (!PRODUCT_TYPES.includes(productType))
+        errors.push(`invalid productType "${raw.productType}"`);
       // Unit: required, then normalized to a curated value. Synonyms map silently
       // (with a note); unrecognized free text imports as 'Nos' with a warning.
       let unit = '';
@@ -162,18 +261,24 @@ export const ProductImportDrawer: React.FC<ProductImportDrawerProps> = ({ isOpen
         const norm = normalizeUnit(raw.unit);
         unit = norm.value;
         if (norm.value.toLowerCase() !== raw.unit.trim().toLowerCase()) {
-          warnings.push(norm.known
-            ? `unit "${raw.unit}" mapped to "${norm.value}"`
-            : `unrecognized unit "${raw.unit}" — set to "${norm.value}"; adjust the product after import if needed`);
+          warnings.push(
+            norm.known
+              ? `unit "${raw.unit}" mapped to "${norm.value}"`
+              : `unrecognized unit "${raw.unit}" — set to "${norm.value}"; adjust the product after import if needed`,
+          );
         }
       }
       const taxCategory = taxCategoryRaw || (productType === 'FUEL' ? 'FUEL_VAT' : 'GST');
-      if (taxCategoryRaw && !TAX_CATEGORIES.includes(taxCategoryRaw)) errors.push(`invalid taxCategory "${raw.taxCategory}"`);
+      if (taxCategoryRaw && !TAX_CATEGORIES.includes(taxCategoryRaw))
+        errors.push(`invalid taxCategory "${raw.taxCategory}"`);
 
       const num = (v: string, label: string): number | null => {
         if (v === '') return null;
         const n = Number(v);
-        if (Number.isNaN(n) || n < 0) { errors.push(`${label} must be a non-negative number`); return null; }
+        if (Number.isNaN(n) || n < 0) {
+          errors.push(`${label} must be a non-negative number`);
+          return null;
+        }
         return n;
       };
       const gstRate = num(raw.gstRate, 'gstRate');
@@ -222,13 +327,20 @@ export const ProductImportDrawer: React.FC<ProductImportDrawerProps> = ({ isOpen
 
   const runImport = async () => {
     const payloads = rows.filter((r) => r.errors.length === 0 && r.payload).map((r) => r.payload);
-    if (payloads.length === 0) { toast.error('No valid rows to import.'); return; }
+    if (payloads.length === 0) {
+      toast.error('No valid rows to import.');
+      return;
+    }
     try {
       setImporting(true);
       const res = await productService.importProducts(payloads, selectedStation?.id);
       setResult({ createdCount: res.createdCount, failed: res.failed });
-      if (res.createdCount > 0) toast.success(`Imported ${res.createdCount} product${res.createdCount === 1 ? '' : 's'}.`);
-      if (res.failed.length > 0) toast.error(`${res.failed.length} row${res.failed.length === 1 ? '' : 's'} failed — see details.`);
+      if (res.createdCount > 0)
+        toast.success(`Imported ${res.createdCount} product${res.createdCount === 1 ? '' : 's'}.`);
+      if (res.failed.length > 0)
+        toast.error(
+          `${res.failed.length} row${res.failed.length === 1 ? '' : 's'} failed — see details.`,
+        );
       onImported();
     } catch (err: any) {
       toast.error(err.message || 'Import failed');
@@ -237,40 +349,97 @@ export const ProductImportDrawer: React.FC<ProductImportDrawerProps> = ({ isOpen
     }
   };
 
-  const cellStyle: React.CSSProperties = { padding: '6px 8px', fontSize: '12px', borderBottom: '1px solid var(--border-soft)', whiteSpace: 'nowrap' };
+  const cellStyle: React.CSSProperties = {
+    padding: '6px 8px',
+    fontSize: '12px',
+    borderBottom: '1px solid var(--border-soft)',
+    whiteSpace: 'nowrap',
+  };
 
   return (
-    <Drawer isOpen={isOpen} onClose={() => { reset(); onClose(); }} title="Import Products (CSV)" widthVariant="wide">
+    <Drawer
+      isOpen={isOpen}
+      onClose={() => {
+        reset();
+        onClose();
+      }}
+      title="Import Products (CSV)"
+      widthVariant="wide"
+    >
       <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
         <div style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-          Upload a CSV to bulk-add products. Rows are validated here before anything is sent. Columns:
-          <code style={{ display: 'block', marginTop: '6px', fontSize: '11px', color: 'var(--text-default)' }}>{COLUMNS.join(', ')}</code>
-          <span style={{ fontSize: '11px' }}>Cost is entered <strong>ex-GST</strong> (pre-tax). Opening stock applies to non-fuel items and needs a selected station.</span>
-          <span style={{ display: 'block', fontSize: '11px', marginTop: '4px' }}>Accepted units: <code style={{ fontSize: '11px' }}>{PRODUCT_UNITS.map((u) => u.value).join(', ')}</code>. Common spellings (pc, litre, kgs, job…) are auto-mapped; anything unrecognized imports as <code style={{ fontSize: '11px' }}>Nos</code> with a warning.</span>
+          Upload a CSV to bulk-add products. Rows are validated here before anything is sent.
+          Columns:
+          <code
+            style={{
+              display: 'block',
+              marginTop: '6px',
+              fontSize: '11px',
+              color: 'var(--text-default)',
+            }}
+          >
+            {COLUMNS.join(', ')}
+          </code>
+          <span style={{ fontSize: '11px' }}>
+            Cost is entered <strong>ex-GST</strong> (pre-tax). Opening stock applies to non-fuel
+            items and needs a selected station.
+          </span>
+          <span style={{ display: 'block', fontSize: '11px', marginTop: '4px' }}>
+            Accepted units:{' '}
+            <code style={{ fontSize: '11px' }}>{PRODUCT_UNITS.map((u) => u.value).join(', ')}</code>
+            . Common spellings (pc, litre, kgs, job…) are auto-mapped; anything unrecognized imports
+            as <code style={{ fontSize: '11px' }}>Nos</code> with a warning.
+          </span>
         </div>
 
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
           <button
             type="button"
             onClick={() => fileRef.current?.click()}
-            style={{ height: '32px', padding: '0 14px', fontSize: '13px', fontWeight: 600, backgroundColor: 'var(--brand-primary)', color: '#fff', border: 'none', borderRadius: 'var(--radius-input)', cursor: 'pointer' }}
+            style={{
+              height: '32px',
+              padding: '0 14px',
+              fontSize: '13px',
+              fontWeight: 600,
+              backgroundColor: 'var(--brand-primary)',
+              color: '#fff',
+              border: 'none',
+              borderRadius: 'var(--radius-input)',
+              cursor: 'pointer',
+            }}
           >
             Choose CSV file
           </button>
           <button
             type="button"
             onClick={downloadSample}
-            style={{ height: '32px', padding: '0 14px', fontSize: '13px', backgroundColor: 'var(--bg-surface)', color: 'var(--text-default)', border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-input)', cursor: 'pointer' }}
+            style={{
+              height: '32px',
+              padding: '0 14px',
+              fontSize: '13px',
+              backgroundColor: 'var(--bg-surface)',
+              color: 'var(--text-default)',
+              border: '1px solid var(--border-strong)',
+              borderRadius: 'var(--radius-input)',
+              cursor: 'pointer',
+            }}
           >
             Download sample CSV
           </button>
-          {fileName && <span style={{ fontSize: '12px', color: 'var(--text-muted)', alignSelf: 'center' }}>{fileName}</span>}
+          {fileName && (
+            <span style={{ fontSize: '12px', color: 'var(--text-muted)', alignSelf: 'center' }}>
+              {fileName}
+            </span>
+          )}
           <input
             ref={fileRef}
             type="file"
             accept=".csv,text/csv"
             style={{ display: 'none' }}
-            onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) handleFile(f);
+            }}
           />
         </div>
 
@@ -278,29 +447,81 @@ export const ProductImportDrawer: React.FC<ProductImportDrawerProps> = ({ isOpen
           <>
             <div style={{ display: 'flex', gap: '16px', fontSize: '12px', fontWeight: 600 }}>
               <span style={{ color: 'var(--state-success-fg)' }}>{validCount} valid</span>
-              {warningCount > 0 && <span style={{ color: 'var(--state-warning-fg)' }}>{warningCount} with warnings</span>}
-              <span style={{ color: 'var(--state-danger-fg)' }}>{rows.length - validCount} with errors</span>
+              {warningCount > 0 && (
+                <span style={{ color: 'var(--state-warning-fg)' }}>
+                  {warningCount} with warnings
+                </span>
+              )}
+              <span style={{ color: 'var(--state-danger-fg)' }}>
+                {rows.length - validCount} with errors
+              </span>
               <span style={{ color: 'var(--text-muted)' }}>{rows.length} total</span>
             </div>
 
-            <div style={{ maxHeight: '340px', overflow: 'auto', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-card)' }}>
+            <div
+              style={{
+                maxHeight: '340px',
+                overflow: 'auto',
+                border: '1px solid var(--border-soft)',
+                borderRadius: 'var(--radius-card)',
+              }}
+            >
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
-                  <tr style={{ backgroundColor: 'var(--bg-surface-alt)', textAlign: 'left', position: 'sticky', top: 0 }}>
+                  <tr
+                    style={{
+                      backgroundColor: 'var(--bg-surface-alt)',
+                      textAlign: 'left',
+                      position: 'sticky',
+                      top: 0,
+                    }}
+                  >
                     {['#', 'Name', 'Code', 'Type', 'Status'].map((h) => (
-                      <th key={h} style={{ ...cellStyle, fontWeight: 600, color: 'var(--text-muted)' }}>{h}</th>
+                      <th
+                        key={h}
+                        style={{ ...cellStyle, fontWeight: 600, color: 'var(--text-muted)' }}
+                      >
+                        {h}
+                      </th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {rows.map((r) => (
-                    <tr key={r.rowNumber} style={{ backgroundColor: r.errors.length ? 'var(--state-danger-bg)' : r.warnings.length ? 'var(--state-warning-bg)' : 'transparent' }}>
+                    <tr
+                      key={r.rowNumber}
+                      style={{
+                        backgroundColor: r.errors.length
+                          ? 'var(--state-danger-bg)'
+                          : r.warnings.length
+                            ? 'var(--state-warning-bg)'
+                            : 'transparent',
+                      }}
+                    >
                       <td style={{ ...cellStyle, color: 'var(--text-muted)' }}>{r.rowNumber}</td>
-                      <td style={{ ...cellStyle, color: 'var(--text-strong)' }}>{r.raw.name || '—'}</td>
-                      <td style={{ ...cellStyle, fontFamily: 'var(--font-mono)' }}>{r.raw.code || '—'}</td>
+                      <td style={{ ...cellStyle, color: 'var(--text-strong)' }}>
+                        {r.raw.name || '—'}
+                      </td>
+                      <td style={{ ...cellStyle, fontFamily: 'var(--font-mono)' }}>
+                        {r.raw.code || '—'}
+                      </td>
                       <td style={{ ...cellStyle }}>{r.raw.productType || '—'}</td>
-                      <td style={{ ...cellStyle, whiteSpace: 'normal', color: r.errors.length ? 'var(--state-danger-fg)' : r.warnings.length ? 'var(--state-warning-fg)' : 'var(--state-success-fg)' }}>
-                        {r.errors.length ? r.errors.join('; ') : r.warnings.length ? r.warnings.join('; ') : 'OK'}
+                      <td
+                        style={{
+                          ...cellStyle,
+                          whiteSpace: 'normal',
+                          color: r.errors.length
+                            ? 'var(--state-danger-fg)'
+                            : r.warnings.length
+                              ? 'var(--state-warning-fg)'
+                              : 'var(--state-success-fg)',
+                        }}
+                      >
+                        {r.errors.length
+                          ? r.errors.join('; ')
+                          : r.warnings.length
+                            ? r.warnings.join('; ')
+                            : 'OK'}
                       </td>
                     </tr>
                   ))}
@@ -309,11 +530,30 @@ export const ProductImportDrawer: React.FC<ProductImportDrawerProps> = ({ isOpen
             </div>
 
             {result && (
-              <div style={{ fontSize: '12px', padding: '10px 12px', borderRadius: 'var(--radius-input)', backgroundColor: 'var(--bg-surface-alt)' }}>
-                <div style={{ fontWeight: 600, color: 'var(--text-strong)' }}>Imported {result.createdCount} of {rows.length} rows.</div>
+              <div
+                style={{
+                  fontSize: '12px',
+                  padding: '10px 12px',
+                  borderRadius: 'var(--radius-input)',
+                  backgroundColor: 'var(--bg-surface-alt)',
+                }}
+              >
+                <div style={{ fontWeight: 600, color: 'var(--text-strong)' }}>
+                  Imported {result.createdCount} of {rows.length} rows.
+                </div>
                 {result.failed.length > 0 && (
-                  <ul style={{ margin: '6px 0 0', paddingLeft: '18px', color: 'var(--state-danger-fg)' }}>
-                    {result.failed.map((f, i) => <li key={i}>{f.code || f.name || 'row'}: {f.error}</li>)}
+                  <ul
+                    style={{
+                      margin: '6px 0 0',
+                      paddingLeft: '18px',
+                      color: 'var(--state-danger-fg)',
+                    }}
+                  >
+                    {result.failed.map((f, i) => (
+                      <li key={i}>
+                        {f.code || f.name || 'row'}: {f.error}
+                      </li>
+                    ))}
                   </ul>
                 )}
               </div>
@@ -323,7 +563,16 @@ export const ProductImportDrawer: React.FC<ProductImportDrawerProps> = ({ isOpen
               <button
                 type="button"
                 onClick={reset}
-                style={{ height: '34px', padding: '0 16px', fontSize: '13px', backgroundColor: 'var(--bg-surface)', color: 'var(--text-default)', border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-input)', cursor: 'pointer' }}
+                style={{
+                  height: '34px',
+                  padding: '0 16px',
+                  fontSize: '13px',
+                  backgroundColor: 'var(--bg-surface)',
+                  color: 'var(--text-default)',
+                  border: '1px solid var(--border-strong)',
+                  borderRadius: 'var(--radius-input)',
+                  cursor: 'pointer',
+                }}
               >
                 Clear
               </button>
@@ -331,9 +580,23 @@ export const ProductImportDrawer: React.FC<ProductImportDrawerProps> = ({ isOpen
                 type="button"
                 onClick={runImport}
                 disabled={importing || validCount === 0}
-                style={{ height: '34px', padding: '0 16px', fontSize: '13px', fontWeight: 600, backgroundColor: validCount === 0 ? 'var(--border-strong)' : 'var(--brand-primary)', color: '#fff', border: 'none', borderRadius: 'var(--radius-input)', cursor: validCount === 0 ? 'not-allowed' : 'pointer', opacity: importing ? 0.7 : 1 }}
+                style={{
+                  height: '34px',
+                  padding: '0 16px',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  backgroundColor:
+                    validCount === 0 ? 'var(--border-strong)' : 'var(--brand-primary)',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: 'var(--radius-input)',
+                  cursor: validCount === 0 ? 'not-allowed' : 'pointer',
+                  opacity: importing ? 0.7 : 1,
+                }}
               >
-                {importing ? 'Importing…' : `Import ${validCount} product${validCount === 1 ? '' : 's'}`}
+                {importing
+                  ? 'Importing…'
+                  : `Import ${validCount} product${validCount === 1 ? '' : 's'}`}
               </button>
             </div>
           </>

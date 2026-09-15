@@ -4,7 +4,7 @@
 > wording below, this is substantially built: `projectShiftSummary` carries `unit` on
 > nozzle readings / `fuelByProduct` / credit lines, `ShiftSummaryView` handles L/kg,
 > the Dashboard + ReportsOverview render per-unit subtotals, and `formatQty(value,
-> decimals, unit?)` takes a unit. **Remaining:** Phase 5 QA — verify onboarding/setup
+decimals, unit?)` takes a unit. **Remaining:** Phase 5 QA — verify onboarding/setup
 > unit labels and render a real mixed-unit (CNG kg) station end to end.
 
 Make fuel quantities unit-aware across PumpOS so a CNG / Auto-LPG station reads in
@@ -30,6 +30,7 @@ Make fuel quantities unit-aware across PumpOS so a CNG / Auto-LPG station reads 
 ## Work
 
 ### Phase 1 — API data plumbing
+
 - `projectShiftSummary` (`apps/api/src/routes/shifts.ts`): add `unit` (from the joined
   product) to each `nozzleReading`, `fuelByProduct` group, `dipReading`, `stockVariance`,
   and credit-sale line.
@@ -38,29 +39,33 @@ Make fuel quantities unit-aware across PumpOS so a CNG / Auto-LPG station reads 
 - Inventory + DSSR stock-variance already carry `unit` — verify only.
 
 ### Phase 2 — Shift summary (view + PDF)
+
 - `formatQty(value, decimals, unit?)` appends the unit; replace hardcoded ` L` / `(L)`.
 - Nozzle table, product-wise table, dip reconciliation, stock variance, credit qty.
 - **Per-unit subtotals** on the nozzle grand-total row and the "Net Volume Sold" KPI.
 
 ### Phase 3 — Onboarding & setup UI
+
 - Tank capacity + opening-stock labels derive `(kg)`/`(L)` from the mapped product's unit
   (`Step4Tanks`, `Step6OpeningValues`, `Step8Review`, `TanksGrid`).
 - Nozzle current-reading label (`DispensersList`).
 
 ### Phase 4 — Live shift flow + dashboards/reports
+
 - `OpenShiftForm`, `NozzleReadingsGrid`, `HandoverDrawer` volume labels.
 - `DailyDssrView`, `ReportsOverview`, `InventoryList`, customer credit-qty column,
   `ProfitLossView` volume, pricing panel `₹/unit`.
 
 ### Phase 5 — QA
+
 - Seed a CNG product → kg tank → nozzle; run a full shift; verify summary / PDF / DSSR /
   inventory read kg.
 - Verify a mixed L+kg station never shows an added-together total.
 
 ## Fuel → unit reference
 
-| Fuel | Unit |
-|---|---|
-| Petrol / MS, Diesel / HSD, Ethanol blends | L |
-| CNG, Auto-LPG, LNG, CBG (Bio-CNG) | kg |
-| EV charging (future) | kWh |
+| Fuel                                      | Unit |
+| ----------------------------------------- | ---- |
+| Petrol / MS, Diesel / HSD, Ethanol blends | L    |
+| CNG, Auto-LPG, LNG, CBG (Bio-CNG)         | kg   |
+| EV charging (future)                      | kWh  |

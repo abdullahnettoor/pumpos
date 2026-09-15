@@ -7,12 +7,7 @@ import {
   notFoundError,
   ok,
 } from '../../../kernel/index.js';
-import type {
-  EventPublisher,
-  ExecutionContext,
-  Result,
-  UseCase,
-} from '../../../kernel/index.js';
+import type { EventPublisher, ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
 import type { UpdatePaymentTerminalCommand } from './command.js';
 import { validateUpdatePaymentTerminal } from './validator.js';
 import type { PaymentTerminal, PaymentTerminalRepository } from './ports.js';
@@ -23,9 +18,10 @@ export interface UpdatePaymentTerminalDeps {
 }
 
 /** Update a payment terminal's details or active state. */
-export class UpdatePaymentTerminal
-  implements UseCase<UpdatePaymentTerminalCommand, PaymentTerminal>
-{
+export class UpdatePaymentTerminal implements UseCase<
+  UpdatePaymentTerminalCommand,
+  PaymentTerminal
+> {
   constructor(private readonly deps: UpdatePaymentTerminalDeps) {}
 
   async execute(
@@ -61,7 +57,14 @@ export class UpdatePaymentTerminal
 
     const changes: Record<string, unknown> = {};
     const updated: PaymentTerminal = { ...existing };
-    for (const key of ['label', 'provider', 'terminalCode', 'supportsCard', 'supportsUpi', 'isActive'] as const) {
+    for (const key of [
+      'label',
+      'provider',
+      'terminalCode',
+      'supportsCard',
+      'supportsUpi',
+      'isActive',
+    ] as const) {
       const value = cmd[key];
       if (value !== undefined) {
         (updated as unknown as Record<string, unknown>)[key] = value;

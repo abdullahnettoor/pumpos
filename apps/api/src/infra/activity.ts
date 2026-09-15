@@ -51,10 +51,7 @@ function parseActorSnapshot(value: unknown): ActivityActorSnapshot | null {
   if (!isRecord(value)) return null;
   const kind = value.kind;
   const displayName = nonEmptyString(value.displayName);
-  if (
-    (kind !== 'tenant_user' && kind !== 'platform_admin' && kind !== 'system') ||
-    !displayName
-  ) {
+  if ((kind !== 'tenant_user' && kind !== 'platform_admin' && kind !== 'system') || !displayName) {
     return null;
   }
 
@@ -94,7 +91,8 @@ export function resolveActivityActor(
   if (snapshot) {
     return {
       kind: snapshot.kind,
-      displayName: snapshot.kind === 'system' ? snapshot.displayName || 'System' : snapshot.displayName,
+      displayName:
+        snapshot.kind === 'system' ? snapshot.displayName || 'System' : snapshot.displayName,
       role: snapshot.role,
       actorId,
       subjectId: snapshot.subjectId ?? actorId,

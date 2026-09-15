@@ -11,7 +11,10 @@ export function formatMoney(
   const n = Number(value ?? 0);
   const safe = Number.isFinite(n) ? n : 0;
   const decimals = opts.decimals ?? 2;
-  const body = safe.toLocaleString('en-IN', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+  const body = safe.toLocaleString('en-IN', {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
   return opts.symbol === false ? body : `₹${body}`;
 }
 
@@ -22,10 +25,17 @@ export const inr = (value: number | string | null | undefined): string => format
  * Quantity / volume formatting (e.g. liters). Grouped, no currency symbol.
  * Defaults to 2 decimals; pass 3 for precise nozzle/dip readings.
  */
-export function formatQty(value: number | string | null | undefined, decimals = 2, unit?: string | null): string {
+export function formatQty(
+  value: number | string | null | undefined,
+  decimals = 2,
+  unit?: string | null,
+): string {
   const n = Number(value ?? 0);
   const safe = Number.isFinite(n) ? n : 0;
-  const num = safe.toLocaleString('en-IN', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+  const num = safe.toLocaleString('en-IN', {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
   return unit ? `${num} ${unit}` : num;
 }
 
@@ -59,7 +69,10 @@ export function formatDate(
 ): string {
   const d = toDate(value);
   if (!d) return opts.fallback ?? '—';
-  return d.toLocaleDateString('en-IN', opts.compact ? { day: '2-digit', month: 'short', year: '2-digit' } : DATE_FULL);
+  return d.toLocaleDateString(
+    'en-IN',
+    opts.compact ? { day: '2-digit', month: 'short', year: '2-digit' } : DATE_FULL,
+  );
 }
 
 /** Canonical date + time: `11 Jul 2026, 06:30 am`. */

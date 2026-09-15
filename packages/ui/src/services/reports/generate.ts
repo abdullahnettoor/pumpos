@@ -1,6 +1,10 @@
 import React from 'react';
 import { exportReactPdf } from '../exportPdf.js';
-import { DEFAULT_DSSR_CONFIG, DEFAULT_SHIFT_SUMMARY_CONFIG, paperFromStation } from './reportConfig.js';
+import {
+  DEFAULT_DSSR_CONFIG,
+  DEFAULT_SHIFT_SUMMARY_CONFIG,
+  paperFromStation,
+} from './reportConfig.js';
 import { letterheadFromStation } from './letterhead.js';
 
 /**

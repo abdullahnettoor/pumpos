@@ -5,17 +5,16 @@ This document defines the logical database architecture for the Fuel Pump ERP pl
 It serves as the foundation for:
 
 - PostgreSQL schema design
-    
+
 - Drizzle ORM implementation
-    
+
 - Multi-tenant architecture
-    
+
 - Offline synchronization
-    
+
 - Reporting
-    
+
 - Future expansion
-    
 
 This specification intentionally focuses on business entities and relationships rather than API implementation details.
 
@@ -30,13 +29,12 @@ Supabase PostgreSQL is the system of record.
 Local SQLite exists only for:
 
 - Offline operation
-    
+
 - Event buffering
-    
+
 - Local caching
-    
+
 - Temporary reporting
-    
 
 ---
 
@@ -113,11 +111,10 @@ version
 Used for:
 
 - Auditability
-    
+
 - Synchronization
-    
+
 - Conflict detection
-    
 
 ---
 
@@ -198,7 +195,6 @@ Example:
 ```
 
 ---
-
 
 ## document_sequences
 
@@ -502,7 +498,6 @@ Future Tax Rules
 External Product Mappings
 ```
 
-
 ---
 
 # SHIFT DOMAIN
@@ -693,24 +688,22 @@ Example:
 Use dedicated columns when data is:
 
 - Frequently filtered
-    
+
 - Frequently searched
-    
+
 - Frequently reported
-    
+
 - Used in business rules
-    
 
 Use JSONB when data is:
 
 - Optional
-    
+
 - Rarely queried
-    
+
 - Customer-specific
-    
+
 - Future extensibility data
-    
 
 For fuel station ERP systems, fleet identification fields such as `fleet_code` should remain top-level columns because fleet customer filtering and reporting are expected to be common operations.
 
@@ -830,11 +823,13 @@ Adjustment
 ```
 
 ---
+
 # SALES DOMAIN
 
 ## sales
 
 Represents completed commercial transactions.
+
 ### Fields
 
 ```text
@@ -914,16 +909,17 @@ created_at
 Supports:
 
 - Product sales
-    
+
 - GST reporting
-    
+
 - Inventory deduction
-    
+
 - Invoice generation
-    
+
 - Future e-invoicing support
 
 ---
+
 # INVENTORY DOMAIN
 
 ## stock_movements
@@ -1099,9 +1095,9 @@ COL-000002
 Used for:
 
 - Receipts
-    
+
 - Statements
-    
+
 - Audit references
 
 ---
@@ -1328,29 +1324,29 @@ Recommended retention:
 # Final Database Decisions
 
 1. PostgreSQL is the authoritative source of truth.
-    
+
 2. SQLite acts as an offline operational cache.
-    
+
 3. All operational transactions belong to shifts.
-    
+
 4. Stock movements are the inventory source of truth.
-    
+
 5. Current stock is derived, not stored.
-    
+
 6. DSSR is stored as immutable snapshots.
-    
+
 7. Closed shifts become immutable.
-    
+
 8. Financial corrections use adjustment records within the same tables.
-    
+
 9. HSN and GST information are stored directly on products.
-    
+
 10. Shift templates support configurable station operations.
-    
+
 11. RLS enforces tenant isolation.
-    
+
 12. Event records and business tables coexist.
-    
+
 13. Soft deletes are preferred over physical deletes.
-    
+
 14. Future accounting modules can be added without redesigning the core schema.

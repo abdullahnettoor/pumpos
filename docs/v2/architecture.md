@@ -26,7 +26,7 @@ built as a TypeScript monorepo with a **ports & adapters** (hexagonal) core.
 ```
 
 **Rule:** `@pump/core` never imports Hono, Drizzle, React or SQL. It declares
-repository *ports* (interfaces); `apps/api` injects Drizzle *adapters*.
+repository _ports_ (interfaces); `apps/api` injects Drizzle _adapters_.
 
 ## Business-day & shift anchoring (the core domain rule)
 
@@ -53,13 +53,13 @@ DSSR                ← immutable snapshot, created on BUSINESS-DAY close (dssr_
 Reports
 ```
 
-| Record | shift_id | Reason |
-|---|---|---|
-| Fuel/merchandise sale | **set** | operator accountability within a shift |
-| Cash collection, cash supplier payment, drawer (`SHIFT_CASH`) expense | **set** | touches the drawer |
-| Card / UPI / bank / online collection | NULL by default | no drawer impact; passable/preselectable for shift attribution |
-| Bank/owner expense, purchase, supplier bank payment | NULL by default | business-day anchored; passable for shift attribution |
-| Credit sale (receivable) | NULL by default | not drawer cash; a customer-ledger debit |
+| Record                                                                | shift_id        | Reason                                                         |
+| --------------------------------------------------------------------- | --------------- | -------------------------------------------------------------- |
+| Fuel/merchandise sale                                                 | **set**         | operator accountability within a shift                         |
+| Cash collection, cash supplier payment, drawer (`SHIFT_CASH`) expense | **set**         | touches the drawer                                             |
+| Card / UPI / bank / online collection                                 | NULL by default | no drawer impact; passable/preselectable for shift attribution |
+| Bank/owner expense, purchase, supplier bank payment                   | NULL by default | business-day anchored; passable for shift attribution          |
+| Credit sale (receivable)                                              | NULL by default | not drawer cash; a customer-ledger debit                       |
 
 Drawer reconciliation keys off **movement kind**, never off `shift_id`
 presence — anchoring a card/UPI collection to a shift never pulls it into
@@ -121,7 +121,7 @@ is explicit and idempotent (`GenerateDssr` returns the existing snapshot unless 
   and **also enforces org isolation in application code** (every use-case checks
   `ctx.organizationId`).
 - Roles: **Owner, Manager, Accountant, Staff** (see
-  [`docs/initial/Permissions & Authorization Matrix (v1).md`](../initial/Permissions%20&%20Authorization%20Matrix%20(v1).md)).
+  [`docs/initial/Permissions & Authorization Matrix (v1).md`](<../initial/Permissions%20&%20Authorization%20Matrix%20(v1).md>)).
   Guards live in `@pump/shared/permissions/guards.ts` and are applied in routes.
 
 ## Resilience (Level 2 — graceful degradation, deferred)
