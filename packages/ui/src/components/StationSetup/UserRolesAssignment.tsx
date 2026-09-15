@@ -9,7 +9,7 @@ import { Station } from '@pump/shared';
 import { Drawer } from '../Drawer.js';
 import { DataTable } from '../primitives/DataTable.js';
 import { Checkbox, Switch } from '../primitives/Toggle.js';
-import { useToast } from '../primitives/ToastProvider.js';
+import { useToast, type ToastApi } from '../primitives/ToastProvider.js';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Edit, KeyRound } from 'lucide-react';
 import { useRunTask } from '../../utils/runTask.js';
@@ -53,6 +53,25 @@ async function copyText(text: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/**
+ * Copy + tell the operator whether it worked, in one place.
+ *
+ * Clipboard access is blocked often enough (insecure origin, permission denied)
+ * that "did it copy?" is a real question, and these credentials are the one
+ * thing the operator cannot re-read later. The trailing `.catch` is the
+ * rejection path for a `copy` that rejects rather than resolving false.
+ */
+function copyWithFeedback(
+  copy: (text: string) => Promise<boolean>,
+  text: string,
+  label: string,
+  toast: ToastApi,
+): void {
+  copy(text)
+    .then((ok) => (ok ? toast.success(`${label} copied.`) : toast.error('Copy failed.')))
+    .catch(() => toast.error('Copy failed.'));
 }
 
 const inputStyle: React.CSSProperties = {
@@ -664,14 +683,7 @@ export const UserRolesAssignment: React.FC = () => {
                     </button>
                     <button
                       type="button"
-                      onClick={() =>
-                        runTask(
-                          copyText(watchPassword).then((ok) =>
-                            ok ? toast.success('Password copied.') : toast.error('Copy failed.'),
-                          ),
-                          'Could not copy the password.',
-                        )
-                      }
+                      onClick={() => copyWithFeedback(copyText, watchPassword, 'Password', toast)}
                       disabled={!watchPassword}
                       style={{
                         ...inputStyle,
@@ -810,14 +822,7 @@ export const UserRolesAssignment: React.FC = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={() =>
-                    runTask(
-                      copyText(resetPassword).then((ok) =>
-                        ok ? toast.success('Password copied.') : toast.error('Copy failed.'),
-                      ),
-                      'Could not copy the password.',
-                    )
-                  }
+                  onClick={() => copyWithFeedback(copyText, resetPassword, 'Password', toast)}
                   style={{
                     ...inputStyle,
                     cursor: 'pointer',
@@ -919,14 +924,7 @@ const CredentialsCard: React.FC<{
         <button
           type="button"
           style={copyBtn}
-          onClick={() =>
-            runTask(
-              onCopy(credentials.login).then((ok) =>
-                ok ? toast.success('Login copied.') : toast.error('Copy failed.'),
-              ),
-              'Could not copy the login.',
-            )
-          }
+          onClick={() => copyWithFeedback(onCopy, credentials.login, 'Login', toast)}
         >
           Copy
         </button>
@@ -956,14 +954,7 @@ const CredentialsCard: React.FC<{
         <button
           type="button"
           style={copyBtn}
-          onClick={() =>
-            runTask(
-              onCopy(credentials.password).then((ok) =>
-                ok ? toast.success('Password copied.') : toast.error('Copy failed.'),
-              ),
-              'Could not copy the password.',
-            )
-          }
+          onClick={() => copyWithFeedback(onCopy, credentials.password, 'Password', toast)}
         >
           Copy
         </button>
@@ -971,11 +962,11 @@ const CredentialsCard: React.FC<{
       <button
         type="button"
         onClick={() =>
-          runTask(
-            onCopy(`Login: ${credentials.login}\nPassword: ${credentials.password}`).then(() =>
-              toast.success('Credentials copied.'),
-            ),
-            'Could not copy the credentials.',
+          copyWithFeedback(
+            onCopy,
+            `Login: ${credentials.login}\nPassword: ${credentials.password}`,
+            'Credentials',
+            toast,
           )
         }
         style={{

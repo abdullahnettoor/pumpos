@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useRef, useState, type FormHTMLAttributes } from 'react';
-import { useOptionalToast } from '../../components/primitives/ToastProvider.js';
+import React, { useEffect, useRef, type FormHTMLAttributes } from 'react';
+import { useAsyncAction } from '../../utils/useAsyncAction.js';
 
 export interface FormProps extends Omit<FormHTMLAttributes<HTMLFormElement>, 'onSubmit'> {
   /**
@@ -38,44 +38,21 @@ export const Form: React.FC<FormProps> = ({
   children,
   ...rest
 }) => {
-  const toast = useOptionalToast();
-  // A successful submit usually closes the drawer that owns this form, so the
-  // promise can settle after unmount.
-  const mounted = useRef(true);
-  useEffect(() => {
-    mounted.current = true;
-    return () => {
-      mounted.current = false;
-    };
-  }, []);
-  const [, setSubmitting] = useState(false);
+  const { pending, run } = useAsyncAction(onSubmit, 'That could not be saved.', onSubmitError);
 
-  const handleSubmit = useCallback(
-    (event: React.FormEvent<HTMLFormElement>) => {
-      const result = onSubmit?.(event);
-      if (!(result instanceof Promise)) return;
-      setSubmitting(true);
-      onSubmittingChange?.(true);
-      result
-        .catch((error: unknown) => {
-          if (onSubmitError) {
-            onSubmitError(error);
-            return;
-          }
-          console.error('Form submit failed:', error);
-          toast?.error('That could not be saved.');
-        })
-        .finally(() => {
-          if (!mounted.current) return;
-          setSubmitting(false);
-          onSubmittingChange?.(false);
-        });
-    },
-    [onSubmit, onSubmitError, onSubmittingChange, toast],
-  );
+  // Mirror the in-flight flag out to the caller, which owns the fieldset and
+  // the submit button. Form itself renders nothing from it. The mount pass is
+  // skipped: a form that has never been submitted should not announce that it
+  // is not submitting.
+  const notified = useRef(false);
+  useEffect(() => {
+    if (!notified.current && !pending) return;
+    notified.current = true;
+    onSubmittingChange?.(pending);
+  }, [pending, onSubmittingChange]);
 
   return (
-    <form {...rest} onSubmit={handleSubmit}>
+    <form {...rest} onSubmit={run}>
       {children}
     </form>
   );

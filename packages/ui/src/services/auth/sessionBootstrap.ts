@@ -1,4 +1,5 @@
 import { supabase } from '../supabase.js';
+import { runTask } from '../../utils/runTask.js';
 
 /**
  * The shape of a stored auth session, as far as bootstrap cares. Deliberately
@@ -60,7 +61,12 @@ export function subscribeToSessionChanges(
   const {
     data: { subscription },
   } = client.auth.onAuthStateChange((_event, session) => {
-    void onSession(session);
+    // Same reasoning as the initial read: this callback is a void slot, so a
+    // rejected handler would vanish. Nothing here can show the operator a
+    // message — the shell may be mid-teardown — but it must not be silent.
+    runTask(onSession(session), (error) => {
+      console.error('Failed to apply an auth state change:', error);
+    });
   });
   return () => subscription.unsubscribe();
 }

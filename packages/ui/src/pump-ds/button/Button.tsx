@@ -1,16 +1,12 @@
 import React, {
   forwardRef,
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
   type ButtonHTMLAttributes,
   type MouseEvent,
   type ReactNode,
 } from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '../lib/cn.js';
-import { useOptionalToast } from '../../components/primitives/ToastProvider.js';
+import { useAsyncAction } from '../../utils/useAsyncAction.js';
 
 /**
  * Button — the single canonical action control for pump-ds. Replaces the
@@ -144,40 +140,13 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
   },
   ref,
 ) {
-  const toast = useOptionalToast();
-  // A click can outlive the button: submitting a drawer form usually closes it.
-  // Track mounted state so settling never writes to an unmounted component.
-  const mounted = useRef(true);
-  useEffect(() => {
-    mounted.current = true;
-    return () => {
-      mounted.current = false;
-    };
-  }, []);
-  const [running, setRunning] = useState(false);
-
-  const handleClick = useCallback(
-    (event: MouseEvent<HTMLButtonElement>) => {
-      const result = onClick?.(event);
-      if (!(result instanceof Promise)) return;
-      setRunning(true);
-      result
-        .catch((error: unknown) => {
-          if (onClickError) {
-            onClickError(error);
-            return;
-          }
-          console.error('Button action failed:', error);
-          toast?.error('That action could not be completed.');
-        })
-        .finally(() => {
-          if (mounted.current) setRunning(false);
-        });
-    },
-    [onClick, onClickError, toast],
+  const { pending, run } = useAsyncAction(
+    onClick,
+    'That action could not be completed.',
+    onClickError,
   );
 
-  const isBusy = loading || running;
+  const isBusy = loading || pending;
   const isDisabled = disabled || isBusy;
   return (
     <button
@@ -185,7 +154,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       type={type}
       disabled={isDisabled}
       aria-busy={isBusy || undefined}
-      onClick={handleClick}
+      onClick={run}
       className={cn(buttonVariants({ variant, size, iconOnly, fullWidth }), className)}
       {...rest}
     >
