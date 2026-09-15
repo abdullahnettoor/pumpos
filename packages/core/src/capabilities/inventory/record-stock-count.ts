@@ -126,7 +126,7 @@ export class RecordStockCount implements UseCase<RecordStockCountCommand, Record
         cmd.shiftId,
         'STOCK',
       );
-      if (!eligibility.success) return eligibility as unknown as Result<RecordStockCountResult>;
+      if (!eligibility.success) return eligibility;
       const attributedShift = eligibility.data.shift;
       attributedDay = eligibility.data.businessDay;
       // Attribution to any tenant/station-valid shift is allowed, open or
@@ -160,7 +160,7 @@ export class RecordStockCount implements UseCase<RecordStockCountCommand, Record
           businessDate: date,
           kind: 'STOCK',
         });
-    if (!eligibility.success) return eligibility as unknown as Result<RecordStockCountResult>;
+    if (!eligibility.success) return eligibility;
     const bd = eligibility.data.businessDay;
 
     const isBulk = !!cmd.tankId;

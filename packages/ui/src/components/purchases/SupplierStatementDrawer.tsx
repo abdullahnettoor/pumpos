@@ -167,7 +167,7 @@ export const SupplierStatementDrawer: React.FC<SupplierStatementDrawerProps> = (
               <LedgerView
                 entries={ledgerQ.data ?? []}
                 loading={ledgerQ.isLoading}
-                error={ledgerQ.error ? (ledgerQ.error as Error).message : null}
+                error={ledgerQ.error ? ledgerQ.error.message : null}
                 amountLabel="Amount"
                 balanceLabel="Owed Bal"
                 emptyText="No transaction ledger events found."

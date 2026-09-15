@@ -383,7 +383,7 @@ const App: React.FC = () => {
       return (
         <WebOnboardingNotice
           webUrl={webConsoleUrl}
-          role={(userRole as string) || 'Staff'}
+          role={userRole || 'Staff'}
           userName={userName}
           onRecheck={handleOnboardingRecheck}
           onSignOut={handleLogout}

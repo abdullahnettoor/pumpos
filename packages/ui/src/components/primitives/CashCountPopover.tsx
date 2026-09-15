@@ -76,7 +76,6 @@ export const CashCountPopover: React.FC<CashCountPopoverProps> = ({
 
   useLayoutEffect(() => {
     if (open) compute();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   useEffect(() => {
@@ -101,7 +100,6 @@ export const CashCountPopover: React.FC<CashCountPopoverProps> = ({
       document.removeEventListener('mousedown', onDown);
       document.removeEventListener('keydown', onKey);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   const setCount = (d: number, raw: string) => {
@@ -237,7 +235,7 @@ export const CashCountPopover: React.FC<CashCountPopoverProps> = ({
 
       {hasManualMismatch && (
         <div style={{ fontSize: '10px', color: 'var(--state-warning-fg)' }}>
-          Field shows {inr(currentValue!)} — Apply to replace with the counted total.
+          Field shows {inr(currentValue)} — Apply to replace with the counted total.
         </div>
       )}
 

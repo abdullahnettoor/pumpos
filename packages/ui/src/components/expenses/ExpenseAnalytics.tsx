@@ -27,7 +27,7 @@ interface CategoryRow {
  * "By Category" tab and the Reports "Expense Register" tab. VOIDED excluded.
  */
 export const ExpenseAnalytics: React.FC<ExpenseAnalyticsProps> = ({ selectedStation }) => {
-  const s = (selectedStation as any)?.settings || {};
+  const s = selectedStation?.settings || {};
   const clock = { timeZone: s.timezone, dayStartsAt: s.business_day_starts_at };
   const [range, setRange] = useState<DateRange>(() => computeRange('this-month', clock));
 

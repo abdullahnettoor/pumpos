@@ -92,8 +92,8 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   const { data: pnlPreview } = useDailyDssrPreview(selectedStation?.id, pnlTodayBiz, {
     enabled: isOwner && !!selectedStation?.id,
   } as any);
-  const livePnl = (pnlPreview as any)?.snapshotData?.pnl || null;
-  const pnlShiftsClosed = Number((pnlPreview as any)?.snapshotData?.shiftsIncluded || 0);
+  const livePnl = pnlPreview?.snapshotData?.pnl || null;
+  const pnlShiftsClosed = Number(pnlPreview?.snapshotData?.shiftsIncluded || 0);
   const invalidateOperational = useInvalidateOperational();
   const confirm = useConfirm();
   const toast = useToast();

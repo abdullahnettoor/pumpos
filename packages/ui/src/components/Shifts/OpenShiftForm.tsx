@@ -327,7 +327,7 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
                         step="0.001"
                         min="0"
                         placeholder="0"
-                        value={(initial?.openingReading || '') as any}
+                        value={initial?.openingReading || ''}
                         onChange={(e) => onInitialReadingChange(nz.id, Number(e.target.value))}
                       />
                     </Field>

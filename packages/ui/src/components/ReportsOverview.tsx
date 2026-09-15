@@ -91,7 +91,7 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
   const qc = useQueryClient();
   const runTask = useRunTask();
   const stationId = selectedStation?.id ?? null;
-  const s = (selectedStation as any)?.settings || {};
+  const s = selectedStation?.settings || {};
   const clock = { timeZone: s.timezone, dayStartsAt: s.business_day_starts_at };
 
   const [activeTab, setActiveTab] = useState<ReportsTab>('daily-dssr');
@@ -119,7 +119,7 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
     let volume = 0;
     let cash = 0;
     for (const d of dssrList) {
-      const x = (d as any).snapshotData || {};
+      const x = d.snapshotData || {};
       volume += Number(x.totalVolumeSold || 0);
       cash += Number(x.totalCashCollections || 0);
     }
@@ -292,7 +292,7 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
                 bare
                 columns={dssrColumns}
                 data={dssrList}
-                error={dssrQ.error as Error | null}
+                error={dssrQ.error}
                 emptyMessage="No daily DSSR reports."
                 getRowId={(r: any) => r.id}
                 onRowClick={(r: any) => setActiveDailyDssr(r)}

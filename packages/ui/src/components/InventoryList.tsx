@@ -372,7 +372,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({
 
   const kpis = useMemo(() => {
     const fuelByUnit: Record<string, number> = {};
-    for (const t of tanksData as any[]) {
+    for (const t of tanksData) {
       const u = t.productUnit || 'L';
       fuelByUnit[u] = (fuelByUnit[u] || 0) + Number(t.currentVolume || 0);
     }

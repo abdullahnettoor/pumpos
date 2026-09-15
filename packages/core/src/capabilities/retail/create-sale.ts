@@ -133,7 +133,7 @@ export class CreateSale implements UseCase<CreateSaleCommand, CreateSaleResult> 
       cmd.shiftId,
       'STOCK',
     );
-    if (!eligibility.success) return eligibility as unknown as Result<CreateSaleResult>;
+    if (!eligibility.success) return eligibility;
     const shift = eligibility.data.shift;
     if (shift.status !== 'OPEN')
       return err(

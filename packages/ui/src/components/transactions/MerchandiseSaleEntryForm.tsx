@@ -336,9 +336,7 @@ export const MerchandiseSaleEntryForm: React.FC<MerchandiseSaleEntryFormProps> =
             { value: 'Credit', label: 'Credit' },
           ]}
           value={paymentMethod}
-          onChange={(v) =>
-            setValue('paymentMethod', v as typeof paymentMethod, { shouldValidate: true })
-          }
+          onChange={(v) => setValue('paymentMethod', v, { shouldValidate: true })}
           disabled={submitting}
           aria-label="Payment Method"
         />

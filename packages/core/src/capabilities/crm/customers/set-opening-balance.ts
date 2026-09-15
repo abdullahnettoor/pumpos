@@ -85,7 +85,7 @@ export class SetCustomerOpeningBalance implements UseCase<
       businessDate: date,
       kind: 'FINANCIAL',
     });
-    if (!eligibility.success) return eligibility as unknown as Result<CustomerLedgerEntry>;
+    if (!eligibility.success) return eligibility;
     const bd = eligibility.data.businessDay;
     const lateEntry = eligibility.data.lateEntry;
 

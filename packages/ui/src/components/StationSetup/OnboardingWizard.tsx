@@ -691,9 +691,9 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     try {
       await wait(150);
       setProvisioning((prev) => ({ ...prev, stageIndex: 1 }));
-      const result = (await stationService.finalizeOnboarding({
+      const result = await stationService.finalizeOnboarding({
         draft,
-      })) as FinalizeOnboardingResult;
+      });
 
       setProvisioning((prev) => ({ ...prev, stageIndex: 2 }));
       await wait(150);

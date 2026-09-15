@@ -152,7 +152,7 @@ export const CollectionEntryForm: React.FC<CollectionEntryFormProps> = ({
             ]}
             value={paymentMethod}
             onChange={(v) => {
-              setValue('paymentMethod', v as typeof paymentMethod, { shouldValidate: true });
+              setValue('paymentMethod', v, { shouldValidate: true });
               if (v === 'Cash') setValue('accountId', '');
             }}
             disabled={submitting}
@@ -170,7 +170,7 @@ export const CollectionEntryForm: React.FC<CollectionEntryFormProps> = ({
 
       <Field
         label={requireCustomer ? 'Customer Account' : customerLabel}
-        error={errors.customerId?.message as string | undefined}
+        error={errors.customerId?.message}
       >
         <Combobox
           options={[

@@ -350,7 +350,7 @@ export const buildCreditSaleColumns = (): ColumnDef<any, any>[] => [
       const q = getValue();
       return q ? (
         <span style={{ fontFamily: 'var(--font-mono)', fontSize: '12px' }}>
-          {Number(q).toLocaleString('en-IN')} {(row.original as any).unit || 'L'}
+          {Number(q).toLocaleString('en-IN')} {row.original.unit || 'L'}
         </span>
       ) : (
         <span style={{ color: 'var(--text-faint)' }}>—</span>

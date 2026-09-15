@@ -85,7 +85,7 @@ export class SetSupplierOpeningBalance implements UseCase<
       businessDate: date,
       kind: 'FINANCIAL',
     });
-    if (!eligibility.success) return eligibility as unknown as Result<SupplierTransaction>;
+    if (!eligibility.success) return eligibility;
     const bd = eligibility.data.businessDay;
     const lateEntry = eligibility.data.lateEntry;
 

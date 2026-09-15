@@ -40,7 +40,7 @@ const SOURCE_LABEL: Record<string, string> = {
  * subset. Per-account statements + true opening balances live on the Accounts page.
  */
 export const CashBankLedger: React.FC<CashBankLedgerProps> = ({ selectedStation }) => {
-  const s = (selectedStation as any)?.settings || {};
+  const s = selectedStation?.settings || {};
   const clock = { timeZone: s.timezone, dayStartsAt: s.business_day_starts_at };
   const [range, setRange] = useState<DateRange>(() => computeRange('this-month', clock));
   const [account, setAccount] = useState<'Cash' | 'Bank'>('Cash');
@@ -123,7 +123,7 @@ export const CashBankLedger: React.FC<CashBankLedgerProps> = ({ selectedStation 
                 { value: 'Bank', label: 'Bank' },
               ]}
               value={account}
-              onChange={(v) => setAccount(v as 'Cash' | 'Bank')}
+              onChange={(v) => setAccount(v)}
               aria-label="Account"
             />
           </div>

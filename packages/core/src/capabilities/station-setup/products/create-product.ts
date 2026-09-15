@@ -90,7 +90,7 @@ export class CreateProduct implements UseCase<CreateProductCommand, Product> {
         businessDate: date,
         kind: 'STOCK',
       });
-      if (!eligibility.success) return eligibility as unknown as Result<Product>;
+      if (!eligibility.success) return eligibility;
       openingStockDay = eligibility.data.businessDay;
     }
 

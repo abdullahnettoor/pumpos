@@ -80,7 +80,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({
   );
 
   // Business date (station-timezone aware) used to bucket "today" collections.
-  const stationSettings: any = (selectedStation as any)?.settings || {};
+  const stationSettings: any = selectedStation?.settings || {};
   const todayIso = resolveBusinessDate({
     timeZone: stationSettings.timezone,
     dayStartsAt: stationSettings.business_day_starts_at,
@@ -158,7 +158,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({
   }, [allCreditSales, salesSearch]);
 
   const loading = customersActiveQ.isLoading || statusQ.isLoading;
-  const error = (customersActiveQ.error || statusQ.error) as Error | null;
+  const error = customersActiveQ.error || statusQ.error;
 
   const eligibleCustomers = allCustomers.filter(
     (c: any) => c.customerType === 'Credit' || c.customerType === 'Fleet',

@@ -201,7 +201,7 @@ dssrRouter.post('/daily/generate', async (c) => {
       reader: new DrizzleDssrDataReader(tx),
       events,
     }).execute(
-      { businessDayId: businessDayId!, force: Boolean(body?.force) },
+      { businessDayId: businessDayId, force: Boolean(body?.force) },
       buildContext(user, { stationId, businessDayId }),
     ),
   );

@@ -674,7 +674,7 @@ export const HandoverPanel: React.FC = () => {
   // instead of wiping it (the server replaces the whole handover on each save).
   useEffect(() => {
     if (merchSeeded || !attendantId || !merchHandoversQ.data) return;
-    const mine = (merchHandoversQ.data as any[]).find((h) => h.attendantId === attendantId);
+    const mine = merchHandoversQ.data.find((h) => h.attendantId === attendantId);
     if (mine && (mine.items?.length ?? 0) > 0) {
       setMerchRows(
         mine.items.map((it: any) => ({

@@ -234,7 +234,7 @@ export const StatementDrawer: React.FC<StatementDrawerProps> = ({
               <LedgerView
                 entries={ledgerQ.data ?? []}
                 loading={ledgerQ.isLoading}
-                error={ledgerQ.error ? (ledgerQ.error as Error).message : null}
+                error={ledgerQ.error ? ledgerQ.error.message : null}
                 amountLabel="Amount"
                 balanceLabel="Balance"
                 emptyText="No transaction history found for this account."

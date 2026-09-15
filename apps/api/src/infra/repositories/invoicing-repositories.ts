@@ -63,7 +63,7 @@ export class DrizzleInvoiceRepository implements InvoiceRepository {
       cessTotal: inv.cessTotal,
       roundOff: inv.roundOff,
       totalAmount: inv.totalAmount,
-      snapshotData: inv.snapshotData as Record<string, unknown>,
+      snapshotData: inv.snapshotData,
       createdAt: new Date(inv.createdAt),
     });
   }

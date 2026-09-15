@@ -119,7 +119,7 @@ export const AccountsPanel: React.FC<AccountsPanelProps> = ({ selectedStation })
   const toast = useToast();
   const qc = useQueryClient();
   const stationId = selectedStation?.id ?? null;
-  const s = (selectedStation as any)?.settings || {};
+  const s = selectedStation?.settings || {};
   const clock = { timeZone: s.timezone, dayStartsAt: s.business_day_starts_at };
 
   const { data: accounts, isLoading } = useFinancialAccounts(stationId);

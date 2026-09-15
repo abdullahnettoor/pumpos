@@ -112,7 +112,7 @@ function enablePersistence(client: QueryClient) {
     key: PERSISTED_QUERY_CACHE_KEY,
   });
   const [, restored] = persistQueryClient({
-    queryClient: client as any,
+    queryClient: client,
     persister,
     maxAge: 24 * 60 * 60_000,
     buster: CACHE_BUSTER,

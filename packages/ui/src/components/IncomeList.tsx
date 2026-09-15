@@ -57,7 +57,7 @@ export const IncomeList: React.FC<IncomeListProps> = ({
   const runTask = useRunTask();
   const ask = useAsk();
 
-  const s = (selectedStation as any)?.settings || {};
+  const s = selectedStation?.settings || {};
   const clock = { timeZone: s.timezone, dayStartsAt: s.business_day_starts_at };
 
   const income = incomeQ.data ?? [];
@@ -398,7 +398,7 @@ export const IncomeList: React.FC<IncomeListProps> = ({
                   bare
                   columns={ledgerColumns}
                   data={filteredIncome}
-                  error={incomeQ.error as Error | null}
+                  error={incomeQ.error}
                   emptyMessage="No matching income found."
                   getRowId={(r: any) => r.id}
                   initialSorting={[{ id: 'businessDate', desc: true }]}

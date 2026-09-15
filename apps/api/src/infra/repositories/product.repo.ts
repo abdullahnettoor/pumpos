@@ -20,7 +20,7 @@ function toEntity(row: Row): Product {
     category: row.category ?? null,
     sellingPrice: row.sellingPrice ?? null,
     costBasis: row.costBasis ?? null,
-    taxConfig: (row.taxConfig ?? {}) as Product['taxConfig'],
+    taxConfig: row.taxConfig ?? {},
     isActive: row.isActive,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),

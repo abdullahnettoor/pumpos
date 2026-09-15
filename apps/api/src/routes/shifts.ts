@@ -1066,7 +1066,7 @@ shiftsRouter.get('/my-assignment', async (c) => {
   // An attendant works one active shift at a time; anchor on the first.
   const shift = assignmentRows[0].shift;
   const myRows = assignmentRows.filter((r) => r.sa.shiftId === shift.id && r.sa.duId);
-  const duIds = [...new Set(myRows.map((r) => r.sa.duId as string))];
+  const duIds = [...new Set(myRows.map((r) => r.sa.duId))];
 
   const [
     templateRows,
@@ -1159,7 +1159,7 @@ shiftsRouter.get('/my-assignment', async (c) => {
 
   const dispenserUnits = duIds.map((duId) => {
     const du = myRows.find((r) => r.sa.duId === duId)?.du;
-    const nozzles = (nozzleRows as any[])
+    const nozzles = nozzleRows
       .filter((r) => r.nz.duId === duId)
       .map(({ nr, nz, prod, tnk }) => ({
         nozzleId: nz.id,

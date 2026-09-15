@@ -722,7 +722,7 @@ api.get('/activity', async (c) => {
       };
     }),
     nextCursor:
-      hasMore && pageRows.length > 0 ? encodeActivityCursor(pageRows[pageRows.length - 1]!) : null,
+      hasMore && pageRows.length > 0 ? encodeActivityCursor(pageRows[pageRows.length - 1]) : null,
   };
   return c.json({ success: true, data });
 });
@@ -782,7 +782,7 @@ api.get('/activity/:groupId', async (c) => {
   }
 
   const primaryRow = isLegacy
-    ? rows[0]!
+    ? rows[0]
     : rows.find((row) => readActivityMetadata(row.metadata).groupingRole === 'primary');
   if (!primaryRow) {
     console.warn('[ACTIVITY_MALFORMED_GROUP] Correlated activity group has no primary event', {
@@ -1171,7 +1171,7 @@ async function loadOwnerForOrg(db: DbClient, orgId: string) {
     .from(schema.organizations)
     .where(eq(schema.organizations.id, orgId))
     .limit(1);
-  if (!org) return { org: null as null, owner: null as null };
+  if (!org) return { org: null, owner: null };
   const [owner] = await db
     .select()
     .from(schema.users)

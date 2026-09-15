@@ -27,7 +27,7 @@ const tdR: React.CSSProperties = { ...td, textAlign: 'right', fontFamily: 'var(-
  * later rate change can never restate a closed period.
  */
 export const TaxRegisterPanel: React.FC<TaxRegisterPanelProps> = ({ selectedStation }) => {
-  const s = (selectedStation as any)?.settings || {};
+  const s = selectedStation?.settings || {};
   const clock = { timeZone: s.timezone, dayStartsAt: s.business_day_starts_at };
   const [range, setRange] = useState<DateRange>(() => computeRange('this-month', clock));
   const stationId = selectedStation?.id ?? null;

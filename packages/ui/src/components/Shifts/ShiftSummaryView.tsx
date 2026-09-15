@@ -171,7 +171,7 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
                 : DEFAULT_SHIFT_SUMMARY_CONFIG.sections;
               const config = {
                 ...DEFAULT_SHIFT_SUMMARY_CONFIG,
-                sections: sections as any,
+                sections: sections,
                 stationName: station?.name || templateName,
                 letterhead: letterheadFromStation(station),
                 paper: paperFromStation(station),

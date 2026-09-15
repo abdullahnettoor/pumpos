@@ -1359,7 +1359,7 @@ async function authorizeLedgerVoid(
   user: { organizationId: string; role: Role; assignedStationIds: string[] },
   id: string,
 ) {
-  if (!canRecordHandover(user.role as Role)) {
+  if (!canRecordHandover(user.role)) {
     return Response.json(
       {
         success: false,
@@ -1387,7 +1387,7 @@ async function authorizeLedgerVoid(
     );
   }
   if (
-    !isAuthorizedForStation(user as any, {
+    !isAuthorizedForStation(user, {
       organizationId: user.organizationId,
       stationId: row.stationId,
     })

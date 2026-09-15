@@ -29,7 +29,7 @@ export interface InvoicesPanelProps {
 export const InvoicesPanel: React.FC<InvoicesPanelProps> = ({ selectedStation, userRole }) => {
   const toast = useToast();
   const qc = useQueryClient();
-  const s = (selectedStation as any)?.settings || {};
+  const s = selectedStation?.settings || {};
   const clock = { timeZone: s.timezone, dayStartsAt: s.business_day_starts_at };
   const [range, setRange] = useState<DateRange>(() => computeRange('this-month', clock));
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -206,7 +206,7 @@ export const InvoicesPanel: React.FC<InvoicesPanelProps> = ({ selectedStation, u
             bare
             columns={columns}
             data={rows}
-            error={error as Error | null}
+            error={error}
             emptyMessage="No merchandise sales in this range."
             getRowId={(r: any) => r.id}
             initialSorting={[{ id: 'businessDate', desc: true }]}

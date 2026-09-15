@@ -119,7 +119,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   const confirm = useConfirm();
   const data = statusQ.data ?? null;
   const loading = statusQ.isLoading;
-  const error = statusQ.error as Error | null;
+  const error = statusQ.error;
   const [viewingShiftSummary, setViewingShiftSummary] = useState(false);
 
   // Shift Tab Sub-Navigation

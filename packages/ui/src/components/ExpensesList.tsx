@@ -64,7 +64,7 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
   const runTask = useRunTask();
   const ask = useAsk();
 
-  const s = (selectedStation as any)?.settings || {};
+  const s = selectedStation?.settings || {};
   const clock = { timeZone: s.timezone, dayStartsAt: s.business_day_starts_at };
 
   const expenses = expensesQ.data ?? [];
@@ -373,7 +373,7 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
                   bare
                   columns={ledgerColumns}
                   data={filteredExpenses}
-                  error={expensesQ.error as Error | null}
+                  error={expensesQ.error}
                   emptyMessage="No matching expenses found."
                   getRowId={(r: any) => r.id}
                   initialSorting={[{ id: 'businessDate', desc: true }]}
