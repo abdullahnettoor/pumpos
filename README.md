@@ -100,6 +100,13 @@ For local API setup (Hyperdrive local connection + required secrets) and product
 
 - `docs/API-HYPERDRIVE-DEPLOYMENT.md`
 
+### Releasing & incident response
+
+- [`RELEASING.md`](RELEASING.md) — how a release is cut and what deploys when
+- [`docs/rollback-runbook.md`](docs/rollback-runbook.md) — **how to undo a bad
+  production release.** Read it before you need it; the first section is the
+  judgement about whether a code rollback is safe at all once a migration has run
+
 ---
 
 ## 🔒 Multi-Tenancy & Security

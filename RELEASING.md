@@ -14,6 +14,17 @@ Workflows: [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) (web),
 [`.github/workflows/desktop-release.yml`](.github/workflows/desktop-release.yml)
 (desktop), [`.github/workflows/migrate.yml`](.github/workflows/migrate.yml) (DB).
 
+> **A release went wrong?** → **[Rollback runbook](docs/rollback-runbook.md)**.
+> Read its first section before touching anything: whether a code rollback is
+> safe depends entirely on whether a migration has already run.
+
+Two guardrails sit on the production path:
+
+- Production deploys run in the `production` GitHub Environment, which has a
+  **required reviewer**. A production release pauses until a human approves it.
+- Every deploy ends with a **smoke check** ([`scripts/smoke-deploy.mjs`](scripts/smoke-deploy.mjs))
+  that asserts the surface actually answers. Upload success is not health.
+
 ## Trigger matrix
 
 | Trigger                           | What deploys                                                  | Target                                           |
