@@ -61,23 +61,52 @@ package-lock.json or deploy.yml                       → affected deploy jobs
 
 ## Cut a release
 
+**You do not pick the version.** Open a PR from `dev` into `main` and the
+[Release version](.github/workflows/release-version.yml) workflow derives it
+from what the PR contains, then pushes the bump onto the PR branch. Merge, and
+`tag-release.yml` tags it, publishes the GitHub Release, and runs the production
+deploy — which then waits for approval.
+
+The bump is read off commit subjects (Conventional Commits):
+
+| Commit                                              | Bump                  |
+| --------------------------------------------------- | --------------------- |
+| `feat!:` … or `BREAKING CHANGE:` in the body        | major                 |
+| `feat:`                                             | minor                 |
+| `fix:` / `perf:`                                    | patch                 |
+| `docs:` `ci:` `test:` `chore:` `style:` `refactor:` | **none — no release** |
+
+"None" is a supported answer, not a failure. A docs-or-CI-only PR should not put
+a build in front of the production gate.
+
+Check what any change set would produce, at any time:
+
 ```bash
-# 1. Commit any pending work (the release script requires a clean tree)
-git add -A && git commit -m "…"
+node scripts/next-version.mjs                    # current -> bump -> version
+node scripts/next-version.mjs --range v1.0.8..HEAD
+```
 
-# 2. Bump the unified version everywhere + create the web/API release tag
-npm run release -- patch      # 1.0.1 -> 1.0.2   (or: minor | major | 1.5.0)
-#   updates all package.json + tauri.conf.json + Cargo.toml, commits, tags
+Desktop installers stay opt-in and are **not** produced by an ordinary release:
 
-# 3. Push the tag → triggers prod web/API deploy
-git push --follow-tags
-
-# 4. Optional: build desktop installers only when you intentionally need them
+```bash
 git tag -a desktop-v1.0.2 -m "PumpOS desktop v1.0.2"
 git push origin desktop-v1.0.2
 ```
 
-Preview a bump without writing anything: `npm run release -- patch --dry`.
+### Manual releases (deprecated)
+
+Still works for the rare case where CI cannot, but it is no longer the normal
+route — it was the source of both quiet failure modes this replaced (forget to
+bump → silent no-op; push tags early → the workflow skips for the opposite
+reason).
+
+```bash
+npm run release -- auto      # derive the bump, then commit + tag
+npm run release -- patch     # or force a specific bump
+git push --follow-tags
+```
+
+Preview without writing anything: `npm run release -- auto --dry`.
 
 > Cost note: desktop CI uses macOS (**10×** minutes) + Windows (**2×**) runners.
 > It only runs on `desktop-v*.*.*` tags now, not normal `v*.*.*` releases.

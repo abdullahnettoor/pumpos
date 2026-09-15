@@ -8,13 +8,19 @@
  * Desktop release workflows trigger on.
  *
  * Usage:
+ *   npm run release -- auto           # derive the bump from merged commits
  *   npm run release -- patch          # 1.2.3 -> 1.2.4
  *   npm run release -- minor          # 1.2.3 -> 1.3.0
  *   npm run release -- major          # 1.2.3 -> 2.0.0
  *   npm run release -- 1.5.0          # explicit version
  *   npm run release -- patch --dry    # preview only, no writes/commit/tag
+ *   npm run release -- auto --no-git  # write version files only (CI uses this)
  *
  * After it runs:  git push --follow-tags
+ *
+ * `auto` is the path CI uses and the one to prefer by hand: it reads the bump
+ * off the commit subjects since the last tag (see next-version.mjs) instead of
+ * relying on someone remembering which kind of release this is.
  */
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { execSync } from 'node:child_process';
@@ -24,6 +30,7 @@ import { fileURLToPath } from 'node:url';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const args = process.argv.slice(2);
 const dry = args.includes('--dry');
+const noGit = args.includes('--no-git');
 const bump = args.find((a) => !a.startsWith('--')) ?? 'patch';
 
 const rootPkgPath = join(root, 'package.json');
@@ -32,6 +39,20 @@ const current = rootPkg.version;
 
 function nextVersion(cur, kind) {
   if (/^\d+\.\d+\.\d+$/.test(kind)) return kind; // explicit
+  if (kind === 'auto') {
+    const derived = JSON.parse(
+      execSync('node scripts/next-version.mjs --json', { cwd: root }).toString(),
+    );
+    if (derived.bump === 'none') {
+      console.log(
+        `Nothing release-worthy since the last tag (${derived.range}). No release.\n` +
+          'Only feat/fix/perf commits, or a breaking change, produce a version.',
+      );
+      process.exit(0);
+    }
+    console.log(`Derived bump "${derived.bump}" from ${derived.commits} commit(s).`);
+    return derived.version;
+  }
   const [maj, min, pat] = cur.split('.').map(Number);
   if (kind === 'major') return `${maj + 1}.0.0`;
   if (kind === 'minor') return `${maj}.${min + 1}.0`;
@@ -42,9 +63,10 @@ function nextVersion(cur, kind) {
 const version = nextVersion(current, bump);
 const tag = `v${version}`;
 
-// Abort on a dirty tree (except in --dry) so the release commit stays clean.
+// Abort on a dirty tree so the release commit stays clean. Irrelevant when we
+// are not making one (--dry, --no-git).
 const status = execSync('git status --porcelain', { cwd: root }).toString().trim();
-if (status && !dry) {
+if (status && !dry && !noGit) {
   console.error('✗ Working tree is not clean. Commit or stash changes first.\n' + status);
   process.exit(1);
 }
@@ -110,6 +132,13 @@ for (const e of edits) {
 
 if (dry) {
   console.log('\nDry run — no files written, no commit/tag created.');
+  process.exit(0);
+}
+
+if (noGit) {
+  // CI writes the version files inside a PR and lets the normal review + merge
+  // path carry them, rather than committing straight to a protected branch.
+  console.log(`\n✓ Version files written for ${version} (no commit/tag).`);
   process.exit(0);
 }
 
