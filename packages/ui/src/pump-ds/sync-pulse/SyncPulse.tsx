@@ -26,7 +26,11 @@ function metaFor(status: SyncStatus, pendingCount: number): SyncMeta {
     case 'synced':
       return { tone: 'success', label: 'Live', pulse: true };
     case 'pending':
-      return { tone: 'warning', label: pendingCount > 0 ? `Pending ${pendingCount}` : 'Pending', pulse: true };
+      return {
+        tone: 'warning',
+        label: pendingCount > 0 ? `Pending ${pendingCount}` : 'Pending',
+        pulse: true,
+      };
     case 'failed':
       return { tone: 'danger', label: 'Sync failed', pulse: true };
     case 'offline':
@@ -45,7 +49,7 @@ export interface SyncPulseProps extends Omit<HTMLAttributes<HTMLSpanElement>, 'c
 
 export const SyncPulse = forwardRef<HTMLSpanElement, SyncPulseProps>(function SyncPulse(
   { className, status, pendingCount = 0, compact = false, ...rest },
-  ref
+  ref,
 ) {
   const meta = metaFor(status, pendingCount);
   return (

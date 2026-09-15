@@ -173,33 +173,33 @@ The completion report compares imported source totals with PumpOS results.
 
 ## What is selectable and what stays manual
 
-| Item | Imported as draft | User can select or exclude | Manual confirmation required | Created by domain side effects |
-|---|---:|---:|---:|---:|
-| Fuel price change | Yes | Yes | No | No |
-| Open business day | Synthetic dependency | No | No separate ceremony | No |
-| Open shift | Yes | No | Yes | No |
-| Merchandise sale | Yes | Yes | No | No |
-| Attendant handover | Yes | Yes | Review required | No |
-| Credit sale | Yes | Yes | No | No |
-| OMC fleet-card sale | Yes | Yes | No | No |
-| Collection | Yes | Yes | No | No |
-| Expense | Yes | Yes | No | No |
-| Other income | Yes | Yes | No | No |
-| Purchase | Yes | Yes | No | No |
-| Supplier payment | Yes | Yes | No | No |
-| Closing nozzle readings | Yes | No | Submitted with shift close | No |
-| Testing volume | Yes | No | Submitted with shift close or handover | No |
-| Closing cash | Yes | No | Submitted with shift close | No |
-| Tank dip or stock count | Yes | Yes | Review required | No |
-| Close shift | Yes | No | Yes | No |
-| Close business day | Yes | No | Yes | No |
-| Fuel sale | No | No | No | Yes, derived from nozzle readings |
-| Fuel stock movement | No | No | No | Yes, created by shift close |
-| Customer or supplier ledger row | No | No | No | Yes |
-| Financial account posting | No | No | No | Yes |
-| Shift summary | No | No | No | Yes |
-| Business event | No | No | No | Yes |
-| DSSR snapshot | No | No | No | Yes, created by day close |
+| Item                            |    Imported as draft | User can select or exclude |           Manual confirmation required |    Created by domain side effects |
+| ------------------------------- | -------------------: | -------------------------: | -------------------------------------: | --------------------------------: |
+| Fuel price change               |                  Yes |                        Yes |                                     No |                                No |
+| Open business day               | Synthetic dependency |                         No |                   No separate ceremony |                                No |
+| Open shift                      |                  Yes |                         No |                                    Yes |                                No |
+| Merchandise sale                |                  Yes |                        Yes |                                     No |                                No |
+| Attendant handover              |                  Yes |                        Yes |                        Review required |                                No |
+| Credit sale                     |                  Yes |                        Yes |                                     No |                                No |
+| OMC fleet-card sale             |                  Yes |                        Yes |                                     No |                                No |
+| Collection                      |                  Yes |                        Yes |                                     No |                                No |
+| Expense                         |                  Yes |                        Yes |                                     No |                                No |
+| Other income                    |                  Yes |                        Yes |                                     No |                                No |
+| Purchase                        |                  Yes |                        Yes |                                     No |                                No |
+| Supplier payment                |                  Yes |                        Yes |                                     No |                                No |
+| Closing nozzle readings         |                  Yes |                         No |             Submitted with shift close |                                No |
+| Testing volume                  |                  Yes |                         No | Submitted with shift close or handover |                                No |
+| Closing cash                    |                  Yes |                         No |             Submitted with shift close |                                No |
+| Tank dip or stock count         |                  Yes |                        Yes |                        Review required |                                No |
+| Close shift                     |                  Yes |                         No |                                    Yes |                                No |
+| Close business day              |                  Yes |                         No |                                    Yes |                                No |
+| Fuel sale                       |                   No |                         No |                                     No | Yes, derived from nozzle readings |
+| Fuel stock movement             |                   No |                         No |                                     No |       Yes, created by shift close |
+| Customer or supplier ledger row |                   No |                         No |                                     No |                               Yes |
+| Financial account posting       |                   No |                         No |                                     No |                               Yes |
+| Shift summary                   |                   No |                         No |                                     No |                               Yes |
+| Business event                  |                   No |                         No |                                     No |                               Yes |
+| DSSR snapshot                   |                   No |                         No |                                     No |         Yes, created by day close |
 
 Required lifecycle items cannot be skipped. Optional imported operations can be skipped only with a reason.
 
@@ -483,23 +483,23 @@ The manifest must use source keys and logical references. It must not depend on 
 
 The replay executor uses an allowlisted registry. Unknown operation types fail validation.
 
-| Replay operation | Core or application path | Notes |
-|---|---|---|
-| `SET_FUEL_PRICE` | `RecordFuelPrice` | Must resolve price effective at shift time |
-| `OPEN_SHIFT` | `OpenShift` | Manual confirmation, creates or reuses an OPEN day |
-| `RECORD_MERCHANDISE_SALE` | `CreateSale` | Non-fuel products only |
-| `RECORD_MERCHANDISE_HANDOVER` | `RecordMerchandiseHandover` | Freeze imported unit prices |
-| `RECORD_CREDIT_SALE` | `RecordCreditSale` | No second fuel stock movement |
-| `RECORD_OMC_CARD_SALE` | `RecordOmcCardSale` plus CMS ledger posting | Include in DSSR |
-| `RECORD_COLLECTION` | `RecordCollection` plus money ledger posting | Shift only for cash drawer collection |
-| `RECORD_EXPENSE` | `RecordExpense` plus money ledger posting | Shift only for `SHIFT_CASH` |
-| `RECORD_INCOME` | `RecordIncome` plus money ledger posting | Shift only when cash enters drawer |
-| `RECORD_PURCHASE` | `RecordPurchase` | Business-day anchored, no shift |
-| `RECORD_SUPPLIER_PAYMENT` | `RecordSupplierPayment` plus money ledger posting | Shift only for drawer cash |
-| `RECORD_ATTENDANT_HANDOVER` | New core use-case | Required before replay handovers |
-| `RECORD_STOCK_COUNT` | `RecordStockCount` | Must accept target business day |
-| `CLOSE_SHIFT` | `CloseShift` plus shift-close ledger posting | Manual confirmation and idempotent effects |
-| `CLOSE_BUSINESS_DAY` | New atomic close-day application command | Manual confirmation and final DSSR |
+| Replay operation              | Core or application path                          | Notes                                              |
+| ----------------------------- | ------------------------------------------------- | -------------------------------------------------- |
+| `SET_FUEL_PRICE`              | `RecordFuelPrice`                                 | Must resolve price effective at shift time         |
+| `OPEN_SHIFT`                  | `OpenShift`                                       | Manual confirmation, creates or reuses an OPEN day |
+| `RECORD_MERCHANDISE_SALE`     | `CreateSale`                                      | Non-fuel products only                             |
+| `RECORD_MERCHANDISE_HANDOVER` | `RecordMerchandiseHandover`                       | Freeze imported unit prices                        |
+| `RECORD_CREDIT_SALE`          | `RecordCreditSale`                                | No second fuel stock movement                      |
+| `RECORD_OMC_CARD_SALE`        | `RecordOmcCardSale` plus CMS ledger posting       | Include in DSSR                                    |
+| `RECORD_COLLECTION`           | `RecordCollection` plus money ledger posting      | Shift only for cash drawer collection              |
+| `RECORD_EXPENSE`              | `RecordExpense` plus money ledger posting         | Shift only for `SHIFT_CASH`                        |
+| `RECORD_INCOME`               | `RecordIncome` plus money ledger posting          | Shift only when cash enters drawer                 |
+| `RECORD_PURCHASE`             | `RecordPurchase`                                  | Business-day anchored, no shift                    |
+| `RECORD_SUPPLIER_PAYMENT`     | `RecordSupplierPayment` plus money ledger posting | Shift only for drawer cash                         |
+| `RECORD_ATTENDANT_HANDOVER`   | New core use-case                                 | Required before replay handovers                   |
+| `RECORD_STOCK_COUNT`          | `RecordStockCount`                                | Must accept target business day                    |
+| `CLOSE_SHIFT`                 | `CloseShift` plus shift-close ledger posting      | Manual confirmation and idempotent effects         |
+| `CLOSE_BUSINESS_DAY`          | New atomic close-day application command          | Manual confirmation and final DSSR                 |
 
 The executor must call shared application command handlers, not HTTP routes and not bare core use-cases where the live route has extra ledger or account-posting behavior.
 
@@ -629,10 +629,7 @@ A failed domain command rolls back all domain effects. The item records a saniti
 {
   "businessDate": "2026-07-01",
   "shiftKey": "2026-07-01:morning",
-  "operationTypes": [
-    "RECORD_EXPENSE",
-    "RECORD_COLLECTION"
-  ],
+  "operationTypes": ["RECORD_EXPENSE", "RECORD_COLLECTION"],
   "itemIds": [],
   "limit": 25,
   "stopOnError": true
@@ -912,11 +909,11 @@ The station timezone and `business_day_starts_at` define date limits. Do not use
 
 Use a dense table rather than more dashboard cards.
 
-| Shift | Import | Meter review | Operations | Lifecycle | Action |
-|---|---|---|---|---|---|
-| Morning | Ready | 6 of 6 valid | 4 selected | Not opened | Review |
-| Evening | Applied | Valid | 5 applied | Closed | Summary |
-| Night | Blocked | 1 mismatch | 2 blocked | Draft | Resolve |
+| Shift   | Import  | Meter review | Operations | Lifecycle  | Action  |
+| ------- | ------- | ------------ | ---------- | ---------- | ------- |
+| Morning | Ready   | 6 of 6 valid | 4 selected | Not opened | Review  |
+| Evening | Applied | Valid        | 5 applied  | Closed     | Summary |
+| Night   | Blocked | 1 mismatch   | 2 blocked  | Draft      | Resolve |
 
 Selecting a row opens a right-side review drawer.
 
@@ -986,11 +983,11 @@ Replay and day workspace data are operational. Use the existing operational tier
 Add centralized keys:
 
 ```ts
-businessDays(stationId, from, to)
-businessDayWorkspace(stationId, businessDate)
-historicalReplay(sessionId)
-historicalReplayItems(sessionId, filters)
-historicalReplayDay(sessionId, businessDate)
+businessDays(stationId, from, to);
+businessDayWorkspace(stationId, businessDate);
+historicalReplay(sessionId);
+historicalReplayItems(sessionId, filters);
+historicalReplayDay(sessionId, businessDate);
 ```
 
 Mutation invalidation:
@@ -1066,16 +1063,16 @@ Do not call replay services directly from component bodies. Use TanStack Query h
 
 Initial role policy:
 
-| Action | Owner | Manager | Accountant | Staff |
-|---|---:|---:|---:|---:|
-| Create and upload session | Yes | No | No | No |
-| Validate session | Yes | Yes | View only | No |
-| Activate or cancel session | Yes | No | No | No |
-| Edit mappings and draft values | Yes | Yes | View only | No |
-| Apply selected operations | Yes | Yes | Permitted non-drawer items only in a later phase | No |
-| Open or close historical shift | Yes | Yes | No | No |
-| Close historical business day | Yes | Yes | No | No |
-| View replay audit | Yes | Yes | Yes | No |
+| Action                         | Owner | Manager |                                       Accountant | Staff |
+| ------------------------------ | ----: | ------: | -----------------------------------------------: | ----: |
+| Create and upload session      |   Yes |      No |                                               No |    No |
+| Validate session               |   Yes |     Yes |                                        View only |    No |
+| Activate or cancel session     |   Yes |      No |                                               No |    No |
+| Edit mappings and draft values |   Yes |     Yes |                                        View only |    No |
+| Apply selected operations      |   Yes |     Yes | Permitted non-drawer items only in a later phase |    No |
+| Open or close historical shift |   Yes |     Yes |                                               No |    No |
+| Close historical business day  |   Yes |     Yes |                                               No |    No |
+| View replay audit              |   Yes |     Yes |                                              Yes |    No |
 
 Every endpoint derives organization identity from the authenticated user. Payload organization IDs are ignored or rejected.
 
@@ -1230,4 +1227,3 @@ The implementation should not start until these decisions are accepted:
 6. **Batch execution:** bounded synchronous batches with one transaction per item, not a month-wide background job. Recommended: accept for the first release.
 7. **Raw source retention:** keep source name and hash only. Recommended: accept unless audit policy requires encrypted file retention.
 8. **Production backfill:** defer until as-of stock and cost support exists. Recommended: accept.
-

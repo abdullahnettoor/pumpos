@@ -1,6 +1,19 @@
 import { z } from 'zod';
-import { BusinessEvents, err, eventFromContext, notFoundError, ok, validationError } from '../../../kernel/index.js';
-import type { EventPublisher, ExecutionContext, Repository, Result, UseCase } from '../../../kernel/index.js';
+import {
+  BusinessEvents,
+  err,
+  eventFromContext,
+  notFoundError,
+  ok,
+  validationError,
+} from '../../../kernel/index.js';
+import type {
+  EventPublisher,
+  ExecutionContext,
+  Repository,
+  Result,
+  UseCase,
+} from '../../../kernel/index.js';
 
 export interface Station {
   id: string;
@@ -77,7 +90,8 @@ export class CreateStation implements UseCase<CreateStationCommand, Station> {
   constructor(private readonly deps: StationDeps) {}
   async execute(input: CreateStationCommand, ctx: ExecutionContext): Promise<Result<Station>> {
     const p = createSchema.safeParse(input);
-    if (!p.success) return err(validationError('Invalid CreateStation command', { issues: p.error.flatten() }));
+    if (!p.success)
+      return err(validationError('Invalid CreateStation command', { issues: p.error.flatten() }));
     const now = ctx.clock.now().toISOString();
     const station: Station = {
       id: ctx.ids.newId(),
@@ -110,9 +124,11 @@ export class UpdateStation implements UseCase<UpdateStationCommand, Station> {
   constructor(private readonly deps: StationDeps) {}
   async execute(input: UpdateStationCommand, ctx: ExecutionContext): Promise<Result<Station>> {
     const p = updateSchema.safeParse(input);
-    if (!p.success) return err(validationError('Invalid UpdateStation command', { issues: p.error.flatten() }));
+    if (!p.success)
+      return err(validationError('Invalid UpdateStation command', { issues: p.error.flatten() }));
     const existing = await this.deps.repository.findById(p.data.id);
-    if (!existing || existing.organizationId !== ctx.organizationId) return err(notFoundError('Station', p.data.id));
+    if (!existing || existing.organizationId !== ctx.organizationId)
+      return err(notFoundError('Station', p.data.id));
     const updated: Station = {
       ...existing,
       name: p.data.name ?? existing.name,

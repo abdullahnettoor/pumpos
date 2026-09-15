@@ -17,12 +17,38 @@ import { OpenShiftForm } from './OpenShiftForm.js';
 import { Tabs } from '../primitives/Tabs.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import { useConfirm } from '../primitives/ConfirmDialog.js';
-import { useShiftStatus, useShiftTransactions, useInventoryStatus, useInvalidateOperational, queryKeys } from '../../query/hooks.js';
-import { createStockCountIdempotencyKey, discardUnrecordedTankDips, isAmbiguousMutationError, loadPendingTankDipWorkflow, savePendingTankDipWorkflow, shouldResetTankDipDraft, type PendingTankDipWorkflow } from '../../query/stockCountMutation.js';
+import {
+  useShiftStatus,
+  useShiftTransactions,
+  useInventoryStatus,
+  useInvalidateOperational,
+  queryKeys,
+} from '../../query/hooks.js';
+import {
+  createStockCountIdempotencyKey,
+  discardUnrecordedTankDips,
+  isAmbiguousMutationError,
+  loadPendingTankDipWorkflow,
+  savePendingTankDipWorkflow,
+  shouldResetTankDipDraft,
+  type PendingTankDipWorkflow,
+} from '../../query/stockCountMutation.js';
 import { openQuickEntry, useQuickEntry, type QuickEntryType } from '../../quick-entry/store.js';
 import { Station, resolveBusinessDate } from '@pump/shared';
 import type { OpenShiftFormValues } from '@pump/shared';
-import { FileText, User, Lock, AlertTriangle, Check, Fuel, Info, Play, History, Clock3, CalendarRange } from 'lucide-react';
+import {
+  FileText,
+  User,
+  Lock,
+  AlertTriangle,
+  Check,
+  Fuel,
+  Info,
+  Play,
+  History,
+  Clock3,
+  CalendarRange,
+} from 'lucide-react';
 import { LoadingSpinner } from '../LoadingSpinner.js';
 import type { NavIntent } from '../AppShell.js';
 import { useStationBusinessDate } from '../../hooks/useStationBusinessDate.js';
@@ -48,12 +74,17 @@ function computeShiftTotals(txs: any): ShiftTotals {
   const expenses = txs?.expenses ?? [];
   const purchases = txs?.purchases ?? [];
   const byMethod = (method: string) =>
-    collections.filter((c: any) => c.paymentMethod === method).reduce((sum: number, c: any) => sum + Number(c.amount), 0);
+    collections
+      .filter((c: any) => c.paymentMethod === method)
+      .reduce((sum: number, c: any) => sum + Number(c.amount), 0);
   return {
     cashCollections: byMethod('Cash'),
     cardCollections: byMethod('Card'),
     upiCollections: byMethod('UPI'),
-    creditSales: (txs?.creditSales ?? []).reduce((sum: number, r: any) => sum + Number(r.amount), 0),
+    creditSales: (txs?.creditSales ?? []).reduce(
+      (sum: number, r: any) => sum + Number(r.amount),
+      0,
+    ),
     cashExpenses: expenses.reduce((sum: number, e: any) => sum + Number(e.amount), 0),
     expenseCount: expenses.length,
     purchaseCount: purchases.length,
@@ -90,7 +121,9 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   const [viewingShiftSummary, setViewingShiftSummary] = useState(false);
 
   // Shift Tab Sub-Navigation
-  const [shiftSubTab, setShiftSubTab] = useState<'today' | 'business-day' | 'history'>(userRole === 'Accountant' ? 'business-day' : 'today');
+  const [shiftSubTab, setShiftSubTab] = useState<'today' | 'business-day' | 'history'>(
+    userRole === 'Accountant' ? 'business-day' : 'today',
+  );
   const [requestedBusinessDayDate, setRequestedBusinessDayDate] = useState<string | null>(null);
   const [viewHistoryShiftId, setViewHistoryShiftId] = useState<string | null>(null);
 
@@ -101,11 +134,21 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   const [preserveNextShiftDate, setPreserveNextShiftDate] = useState(false);
   const [staffAssignments, setStaffAssignments] = useState<{ userId: string; duId: string }[]>([]);
   // Terminal→DU assignment for the shift being opened. duId '' means shift-wide (any DU).
-  const [terminalAssignments, setTerminalAssignments] = useState<{ terminalId: string; duId: string }[]>([]);
-  const [initialReadings, setInitialReadings] = useState<{ nozzleId: string; openingReading: number }[]>([]);
+  const [terminalAssignments, setTerminalAssignments] = useState<
+    { terminalId: string; duId: string }[]
+  >([]);
+  const [initialReadings, setInitialReadings] = useState<
+    { nozzleId: string; openingReading: number }[]
+  >([]);
   const [isOpening, setIsOpening] = useState(false);
-  const stationSettings = (selectedStation?.settings ?? {}) as { timezone?: string; business_day_starts_at?: string };
-  const currentBusinessDate = useStationBusinessDate(stationSettings.timezone, stationSettings.business_day_starts_at);
+  const stationSettings = (selectedStation?.settings ?? {}) as {
+    timezone?: string;
+    business_day_starts_at?: string;
+  };
+  const currentBusinessDate = useStationBusinessDate(
+    stationSettings.timezone,
+    stationSettings.business_day_starts_at,
+  );
 
   // A Station change always starts from that Station's Current Business Date.
   useEffect(() => {
@@ -188,8 +231,14 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     // customers except legacy station-prepaid non-fleet wallets. Prepaid Fleet
     // customers ARE included — they're OMC fleet cards (settled to CMS).
     try {
-      const custList = await qc.fetchQuery({ queryKey: queryKeys.customers(true), queryFn: () => transactionService.getCustomers(true), staleTime: 0 });
-      setHandoverCreditCustomers((custList || []).filter((c: any) => c.customerType === 'Fleet' || !c.isPrepaid));
+      const custList = await qc.fetchQuery({
+        queryKey: queryKeys.customers(true),
+        queryFn: () => transactionService.getCustomers(true),
+        staleTime: 0,
+      });
+      setHandoverCreditCustomers(
+        (custList || []).filter((c: any) => c.customerType === 'Fleet' || !c.isPrepaid),
+      );
     } catch {
       setHandoverCreditCustomers([]);
     }
@@ -210,13 +259,28 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   const handovers = data?.activeShift?.handovers || [];
   const hasHandovers = handovers.length > 0;
 
-  const totalCashHandedOver = handovers.reduce((sum: number, h: any) => sum + Number(h.cashHandedOver || 0), 0);
-  const totalCardHandedOver = handovers.reduce((sum: number, h: any) => sum + Number(h.cardHandedOver || 0), 0);
-  const totalUpiHandedOver = handovers.reduce((sum: number, h: any) => sum + Number(h.upiHandedOver || 0), 0);
-  const totalCreditHandedOver = handovers.reduce((sum: number, h: any) => sum + Number(h.creditHandedOver || 0), 0);
+  const totalCashHandedOver = handovers.reduce(
+    (sum: number, h: any) => sum + Number(h.cashHandedOver || 0),
+    0,
+  );
+  const totalCardHandedOver = handovers.reduce(
+    (sum: number, h: any) => sum + Number(h.cardHandedOver || 0),
+    0,
+  );
+  const totalUpiHandedOver = handovers.reduce(
+    (sum: number, h: any) => sum + Number(h.upiHandedOver || 0),
+    0,
+  );
+  const totalCreditHandedOver = handovers.reduce(
+    (sum: number, h: any) => sum + Number(h.creditHandedOver || 0),
+    0,
+  );
   // Net attendant accountability variance (declared − meter-expected), summed
   // across handovers. Positive = surplus, negative = shortage.
-  const totalAttendantVariance = handovers.reduce((sum: number, h: any) => sum + Number(h.varianceAmount || 0), 0);
+  const totalAttendantVariance = handovers.reduce(
+    (sum: number, h: any) => sum + Number(h.varianceAmount || 0),
+    0,
+  );
 
   const activeCashCollections = hasHandovers ? totalCashHandedOver : shiftTotals.cashCollections;
   const activeCardCollections = hasHandovers ? totalCardHandedOver : shiftTotals.cardCollections;
@@ -228,7 +292,12 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   // non-attendant merchandise cash and reads the true station-level short/surplus.
   const recon = data?.activeShift?.reconciliation;
   const expectedCash = recon
-    ? openingCashNum + Number(recon.cashSales || 0) + Number(recon.cashCollections || 0) + Number(recon.cashIncome || 0) - Number(recon.drawerExpenses || 0) - Number(recon.drawerSupplierPayments || 0)
+    ? openingCashNum +
+      Number(recon.cashSales || 0) +
+      Number(recon.cashCollections || 0) +
+      Number(recon.cashIncome || 0) -
+      Number(recon.drawerExpenses || 0) -
+      Number(recon.drawerSupplierPayments || 0)
     : openingCashNum + activeCashCollections - shiftTotals.cashExpenses;
   const cashVariance = closingCash - expectedCash;
 
@@ -245,7 +314,9 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         drawerExpenses: Number(recon.drawerExpenses || 0),
         drawerSupplierPayments: Number(recon.drawerSupplierPayments || 0),
         expectedDrawer: expectedCash,
-        merchCashBreakdown: Array.isArray(recon.merchCashOutsideHandoverBreakdown) ? recon.merchCashOutsideHandoverBreakdown : [],
+        merchCashBreakdown: Array.isArray(recon.merchCashOutsideHandoverBreakdown)
+          ? recon.merchCashOutsideHandoverBreakdown
+          : [],
         attendantVariance: totalAttendantVariance,
         attendantVariances: handovers.map((h: any) => ({
           name: h.attendantName || h.userName || 'Attendant',
@@ -270,7 +341,9 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         zeroVolumeCount++;
       }
       if (volume > 5000) {
-        warnings.push(`High volume alert: Nozzle ${nr.nozzleName} sold ${volume.toFixed(2)} ${nr.unit || 'L'}.`);
+        warnings.push(
+          `High volume alert: Nozzle ${nr.nozzleName} sold ${volume.toFixed(2)} ${nr.unit || 'L'}.`,
+        );
       }
     }
 
@@ -283,21 +356,27 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     for (const sa of assignedStaff) {
       const hasRecorded = handovers.some((h: any) => h.userId === sa.userId && h.duId === sa.duId);
       if (!hasRecorded) {
-        warnings.push(`Handover not recorded for attendant ${sa.userName} on dispenser ${sa.duName || 'DU'}.`);
+        warnings.push(
+          `Handover not recorded for attendant ${sa.userName} on dispenser ${sa.duName || 'DU'}.`,
+        );
       }
     }
 
     // Mismatch check for credit chits vs customer bills
     const detailedCreditSum = shiftTotals.creditSales;
-    if (hasHandovers && Math.abs(detailedCreditSum - totalCreditHandedOver) > 1.00) {
-      warnings.push(`Credit Sales mismatch: Attendants declared ${inr(totalCreditHandedOver)} in chits, but only ${inr(detailedCreditSum)} of detailed customer billing has been logged in the transaction panel.`);
+    if (hasHandovers && Math.abs(detailedCreditSum - totalCreditHandedOver) > 1.0) {
+      warnings.push(
+        `Credit Sales mismatch: Attendants declared ${inr(totalCreditHandedOver)} in chits, but only ${inr(detailedCreditSum)} of detailed customer billing has been logged in the transaction panel.`,
+      );
     }
 
     if (closingCash === 0 && expectedCash > 0) {
       warnings.push('Closing cash is ₹0, indicating no collections entered.');
     }
     if (Math.abs(cashVariance) > 100) {
-      warnings.push(`Cash discrepancy detected! Variance is ${inr(cashVariance)} (Expected: ${inr(expectedCash)}, Entered: ${inr(closingCash)})`);
+      warnings.push(
+        `Cash discrepancy detected! Variance is ${inr(cashVariance)} (Expected: ${inr(expectedCash)}, Entered: ${inr(closingCash)})`,
+      );
     }
   }
 
@@ -316,7 +395,12 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   const quickEntryActions = [
     { key: 'expense', label: 'Add Expense', onClick: triggerExpenseDrawer, hotkey: 'E' },
     { key: 'collection', label: 'Log Collection', onClick: triggerCollectionDrawer, hotkey: 'C' },
-    { key: 'merchandise-sale', label: 'Merchandise Sale', onClick: triggerMerchandiseSaleDrawer, hotkey: 'M' },
+    {
+      key: 'merchandise-sale',
+      label: 'Merchandise Sale',
+      onClick: triggerMerchandiseSaleDrawer,
+      hotkey: 'M',
+    },
     { key: 'purchase', label: 'Add Purchase', onClick: triggerPurchaseDrawer, hotkey: 'P' },
   ];
 
@@ -332,17 +416,35 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
       const t = e.target as HTMLElement | null;
       if (t) {
         const tag = t.tagName;
-        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || t.isContentEditable) return;
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || t.isContentEditable)
+          return;
       }
       const k = e.key.toLowerCase();
-      if (k === 'e') { e.preventDefault(); triggerExpenseDrawer(); }
-      else if (k === 'c') { e.preventDefault(); triggerCollectionDrawer(); }
-      else if (k === 'm') { e.preventDefault(); triggerMerchandiseSaleDrawer(); }
-      else if (k === 'p') { e.preventDefault(); triggerPurchaseDrawer(); }
+      if (k === 'e') {
+        e.preventDefault();
+        triggerExpenseDrawer();
+      } else if (k === 'c') {
+        e.preventDefault();
+        triggerCollectionDrawer();
+      } else if (k === 'm') {
+        e.preventDefault();
+        triggerMerchandiseSaleDrawer();
+      } else if (k === 'p') {
+        e.preventDefault();
+        triggerPurchaseDrawer();
+      }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [data?.activeShift?.id, shiftSubTab, viewingShiftSummary, viewHistoryShiftId, closeWizardOpen, qe.open, handoverDrawerOpen]);
+  }, [
+    data?.activeShift?.id,
+    shiftSubTab,
+    viewingShiftSummary,
+    viewHistoryShiftId,
+    closeWizardOpen,
+    qe.open,
+    handoverDrawerOpen,
+  ]);
 
   // Initialise the open/close-form state whenever the cached shift status
   // changes (mount + after a mutation invalidates the cache).
@@ -360,7 +462,10 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     }
     if (statusData.dispensers) {
       setStaffAssignments(
-        statusData.dispensers.map((du: any) => ({ duId: du.id, userId: statusData.staff?.[0]?.id ?? '' })),
+        statusData.dispensers.map((du: any) => ({
+          duId: du.id,
+          userId: statusData.staff?.[0]?.id ?? '',
+        })),
       );
     }
     if (statusData.terminals) {
@@ -370,7 +475,10 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     }
     if (statusData.nozzles) {
       setInitialReadings(
-        statusData.nozzles.map((nz: any) => ({ nozzleId: nz.id, openingReading: Number(nz.currentReading) })),
+        statusData.nozzles.map((nz: any) => ({
+          nozzleId: nz.id,
+          openingReading: Number(nz.currentReading),
+        })),
       );
       if (statusData.activeShift && statusData.activeShift.nozzleReadings) {
         const readingsMap: Record<string, number> = {};
@@ -407,7 +515,10 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         businessDate: values.businessDate,
         openingCash: Number(values.openingCash),
         staffAssignments: staffAssignments.filter((a) => a.userId !== ''),
-        terminalLinks: terminalAssignments.map((t) => ({ terminalId: t.terminalId, duId: t.duId || null })),
+        terminalLinks: terminalAssignments.map((t) => ({
+          terminalId: t.terminalId,
+          duId: t.duId || null,
+        })),
       };
 
       // If no last shift exists, send the manual override initial readings
@@ -426,20 +537,18 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   };
 
   const handleStaffAssignmentChange = (duId: string, userId: string) => {
-    setStaffAssignments((prev) =>
-      prev.map((a) => (a.duId === duId ? { ...a, userId } : a))
-    );
+    setStaffAssignments((prev) => prev.map((a) => (a.duId === duId ? { ...a, userId } : a)));
   };
 
   const handleTerminalAssignmentChange = (terminalId: string, duId: string) => {
     setTerminalAssignments((prev) =>
-      prev.map((t) => (t.terminalId === terminalId ? { ...t, duId } : t))
+      prev.map((t) => (t.terminalId === terminalId ? { ...t, duId } : t)),
     );
   };
 
   const handleInitialReadingChange = (nozzleId: string, openingReading: number) => {
     setInitialReadings((prev) =>
-      prev.map((r) => (r.nozzleId === nozzleId ? { ...r, openingReading } : r))
+      prev.map((r) => (r.nozzleId === nozzleId ? { ...r, openingReading } : r)),
     );
   };
 
@@ -459,7 +568,9 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
       const closing = closingReadings[nr.nozzleId] ?? opening;
 
       if (closing < opening) {
-        toast.error(`Closing reading for nozzle ${nr.nozzleName} (${closing}) cannot be less than opening reading (${opening})`);
+        toast.error(
+          `Closing reading for nozzle ${nr.nozzleName} (${closing}) cannot be less than opening reading (${opening})`,
+        );
         return;
       }
     }
@@ -468,7 +579,6 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     setIsPreparingClose(true);
     setCloseWizardOpen(true);
   };
-
 
   const handleCloseShift = async () => {
     if (!data.activeShift) return;
@@ -480,7 +590,10 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
       }));
 
       const tankDips = Object.entries(dipReadings)
-        .filter(([_, actualQuantity]) => actualQuantity !== undefined && actualQuantity !== null && actualQuantity !== '')
+        .filter(
+          ([_, actualQuantity]) =>
+            actualQuantity !== undefined && actualQuantity !== null && actualQuantity !== '',
+        )
         .map(([tankId, actualQuantity]) => ({
           tankId,
           tankName: stationTanks.find((tank) => tank.id === tankId)?.name ?? 'Tank',
@@ -498,7 +611,9 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
 
       let nextTemplateId = '';
       if (data?.templates && data.templates.length > 0 && data?.activeShift) {
-        const currentIdx = data.templates.findIndex((t: any) => t.id === data.activeShift.shiftTemplateId);
+        const currentIdx = data.templates.findIndex(
+          (t: any) => t.id === data.activeShift.shiftTemplateId,
+        );
         if (currentIdx !== -1) {
           nextTemplateId = data.templates[(currentIdx + 1) % data.templates.length].id;
         } else {
@@ -533,7 +648,11 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
       setCloseWizardOpen(false);
       await loadShiftStatus();
 
-      const closedWorkflow: PendingTankDipWorkflow = { ...preparedWorkflow, closeStatus: 'closed', closedAt: closeResult.shift.closedAt };
+      const closedWorkflow: PendingTankDipWorkflow = {
+        ...preparedWorkflow,
+        closeStatus: 'closed',
+        closedAt: closeResult.shift.closedAt,
+      };
       savePendingTankDipWorkflow(stationId!, closedWorkflow);
       setClosedShiftSuccess(closedWorkflow);
     } catch (err: any) {
@@ -556,53 +675,84 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     if (!closedShiftSuccess || !stationId) return;
     for (const dip of closedShiftSuccess.tankDips) {
       if (dip.status === 'saved') continue;
-      setClosedShiftSuccess((current) => current ? {
-        ...current,
-        tankDips: current.tankDips.map((item) => item.tankId === dip.tankId ? { ...item, status: 'saving', error: undefined } : item),
-      } : current);
+      setClosedShiftSuccess((current) =>
+        current
+          ? {
+              ...current,
+              tankDips: current.tankDips.map((item) =>
+                item.tankId === dip.tankId ? { ...item, status: 'saving', error: undefined } : item,
+              ),
+            }
+          : current,
+      );
       try {
-        const accepted = await transactionService.recordStockCount({
-          stationId,
-          shiftId: closedShiftSuccess.lastClosedShiftId,
-          tankId: dip.tankId,
-          actualQuantity: dip.actualQuantity,
-          reason: dip.reason,
-        }, { idempotencyKey: dip.idempotencyKey });
-        setClosedShiftSuccess((current) => current ? {
-          ...current,
-          tankDips: current.tankDips.map((item) => item.tankId === dip.tankId ? {
-            ...item,
-            status: 'saved',
-            error: undefined,
-            expectedQuantity: Number(accepted.expectedQuantity),
-            varianceQuantity: Number(accepted.varianceQuantity),
-          } : item),
-        } : current);
+        const accepted = await transactionService.recordStockCount(
+          {
+            stationId,
+            shiftId: closedShiftSuccess.lastClosedShiftId,
+            tankId: dip.tankId,
+            actualQuantity: dip.actualQuantity,
+            reason: dip.reason,
+          },
+          { idempotencyKey: dip.idempotencyKey },
+        );
+        setClosedShiftSuccess((current) =>
+          current
+            ? {
+                ...current,
+                tankDips: current.tankDips.map((item) =>
+                  item.tankId === dip.tankId
+                    ? {
+                        ...item,
+                        status: 'saved',
+                        error: undefined,
+                        expectedQuantity: Number(accepted.expectedQuantity),
+                        varianceQuantity: Number(accepted.varianceQuantity),
+                      }
+                    : item,
+                ),
+              }
+            : current,
+        );
       } catch (err: any) {
         const retryWithSameKey = isAmbiguousMutationError(err);
-        setClosedShiftSuccess((current) => current ? {
-          ...current,
-          tankDips: current.tankDips.map((item) => item.tankId === dip.tankId ? {
-            ...item,
-            status: 'failed',
-            error: err.message || 'Failed to save Tank Dip',
-            idempotencyKey: retryWithSameKey ? item.idempotencyKey : createStockCountIdempotencyKey(),
-          } : item),
-        } : current);
+        setClosedShiftSuccess((current) =>
+          current
+            ? {
+                ...current,
+                tankDips: current.tankDips.map((item) =>
+                  item.tankId === dip.tankId
+                    ? {
+                        ...item,
+                        status: 'failed',
+                        error: err.message || 'Failed to save Tank Dip',
+                        idempotencyKey: retryWithSameKey
+                          ? item.idempotencyKey
+                          : createStockCountIdempotencyKey(),
+                      }
+                    : item,
+                ),
+              }
+            : current,
+        );
       }
     }
     await invalidateOperational(stationId);
   };
 
   const discardTankDips = async () => {
-    const unsavedCount = closedShiftSuccess?.tankDips.filter((dip) => dip.status !== 'saved').length ?? 0;
-    if (!(await confirm({
-      title: 'Discard unrecorded Tank Dips?',
-      message: `${unsavedCount} unrecorded Tank Dip ${unsavedCount === 1 ? 'value' : 'values'} will be discarded. Any Tank Dips already saved remain recorded for the Business Day.`,
-      confirmLabel: 'Discard Unrecorded',
-      danger: true,
-    }))) return;
-    setClosedShiftSuccess((current) => current ? discardUnrecordedTankDips(current) : current);
+    const unsavedCount =
+      closedShiftSuccess?.tankDips.filter((dip) => dip.status !== 'saved').length ?? 0;
+    if (
+      !(await confirm({
+        title: 'Discard unrecorded Tank Dips?',
+        message: `${unsavedCount} unrecorded Tank Dip ${unsavedCount === 1 ? 'value' : 'values'} will be discarded. Any Tank Dips already saved remain recorded for the Business Day.`,
+        confirmLabel: 'Discard Unrecorded',
+        danger: true,
+      }))
+    )
+      return;
+    setClosedShiftSuccess((current) => (current ? discardUnrecordedTankDips(current) : current));
   };
 
   if (!selectedStation) {
@@ -614,14 +764,19 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   }
 
   if (loading) {
-    return (
-      <LoadingSpinner text="Resolving shift workspace states..." />
-    );
+    return <LoadingSpinner text="Resolving shift workspace states..." />;
   }
 
   if (error) {
     return (
-      <div style={{ padding: '24px', backgroundColor: 'var(--state-danger-bg)', color: 'var(--state-danger-fg)', borderRadius: 'var(--radius-card)' }}>
+      <div
+        style={{
+          padding: '24px',
+          backgroundColor: 'var(--state-danger-bg)',
+          color: 'var(--state-danger-fg)',
+          borderRadius: 'var(--radius-card)',
+        }}
+      >
         <strong>Error:</strong> {error.message || 'Failed to load shifts configuration'}
       </div>
     );
@@ -631,47 +786,60 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     return <LoadingSpinner text="Resolving shift workspace states..." />;
   }
 
-  const { activeShift, lastShift, lastDssr: lastShiftSummary, canReopenLastShift, gracePeriodExpiresAt, templates, nozzles, staff, dispensers, terminals } = data;
+  const {
+    activeShift,
+    lastShift,
+    lastDssr: lastShiftSummary,
+    canReopenLastShift,
+    gracePeriodExpiresAt,
+    templates,
+    nozzles,
+    staff,
+    dispensers,
+    terminals,
+  } = data;
   const shiftScreenState: 'idle' | 'active' | 'closing' = activeShift
-    ? (isPreparingClose ? 'closing' : 'active')
+    ? isPreparingClose
+      ? 'closing'
+      : 'active'
     : 'idle';
 
   const renderShiftSubTabs = () => (
     // Lift the tab strip above the sticky control-bar backdrop (z-20) so its
     // underline baseline is never masked by the backdrop at rest.
     <div style={{ position: 'relative', zIndex: 25 }}>
-    <Tabs
-      variant="underline"
-      aria-label="Shift views"
-      className="no-print"
-      activeId={shiftSubTab}
-      onChange={(id) => setShiftSubTab(id as 'today' | 'business-day' | 'history')}
-      tabs={[
-        {
-          id: 'today',
-          label: 'Active Shift',
-          icon: <Clock3 size={13} />,
-          badge: activeShift ? (
-            <span
-              style={{
-                fontSize: '10px',
-                padding: '1px 6px',
-                borderRadius: '8px',
-                background: 'var(--state-success-bg)',
-                color: 'var(--state-success-fg)',
-                fontWeight: 600,
-                letterSpacing: '0.04em',
-                textTransform: 'uppercase',
-              }}
-            >
-              Open
-            </span>
-          ) : undefined,
-        },
-        { id: 'business-day', label: 'Business Day', icon: <CalendarRange size={13} /> },
-        { id: 'history', label: 'History', icon: <History size={13} /> },
-      ].filter((tab) => userRole !== 'Accountant' || tab.id !== 'today')}
-    />
+      <Tabs
+        variant="underline"
+        aria-label="Shift views"
+        className="no-print"
+        activeId={shiftSubTab}
+        onChange={(id) => setShiftSubTab(id as 'today' | 'business-day' | 'history')}
+        tabs={[
+          {
+            id: 'today',
+            label: 'Active Shift',
+            icon: <Clock3 size={13} />,
+            badge: activeShift ? (
+              <span
+                style={{
+                  fontSize: '10px',
+                  padding: '1px 6px',
+                  borderRadius: '8px',
+                  background: 'var(--state-success-bg)',
+                  color: 'var(--state-success-fg)',
+                  fontWeight: 600,
+                  letterSpacing: '0.04em',
+                  textTransform: 'uppercase',
+                }}
+              >
+                Open
+              </span>
+            ) : undefined,
+          },
+          { id: 'business-day', label: 'Business Day', icon: <CalendarRange size={13} /> },
+          { id: 'history', label: 'History', icon: <History size={13} /> },
+        ].filter((tab) => userRole !== 'Accountant' || tab.id !== 'today')}
+      />
     </div>
   );
 
@@ -680,7 +848,12 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     return (
       <div
         className="animate-fade-in"
-        style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontFamily: 'var(--font-sans)' }}
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '8px',
+          fontFamily: 'var(--font-sans)',
+        }}
       >
         {renderShiftSubTabs()}
         <BusinessDayTab
@@ -699,7 +872,12 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     return (
       <div
         className="animate-fade-in"
-        style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontFamily: 'var(--font-sans)' }}
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '8px',
+          fontFamily: 'var(--font-sans)',
+        }}
       >
         {renderShiftSubTabs()}
         <ShiftHistoryTab
@@ -711,7 +889,6 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
       </div>
     );
   }
-
 
   // Render Success Screen if set
   if (closedShiftSuccess) {
@@ -765,7 +942,15 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   // Render Active Shift Workspace
   if (shiftScreenState === 'active' || shiftScreenState === 'closing') {
     return (
-      <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '16px', fontFamily: 'var(--font-sans)' }}>
+      <div
+        className="animate-fade-in"
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '16px',
+          fontFamily: 'var(--font-sans)',
+        }}
+      >
         {renderShiftSubTabs()}
         <ShiftControlBar
           activeShift={activeShift}
@@ -783,10 +968,14 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
           isPreparingClose={shiftScreenState === 'closing'}
           currentBusinessDate={currentBusinessDate}
           timeZone={stationSettings.timezone}
-          onViewLastShiftSummary={lastShiftSummary ? () => {
-            setViewHistoryShiftId(lastShiftSummary.shiftId);
-            setShiftSubTab('history');
-          } : undefined}
+          onViewLastShiftSummary={
+            lastShiftSummary
+              ? () => {
+                  setViewHistoryShiftId(lastShiftSummary.shiftId);
+                  setShiftSubTab('history');
+                }
+              : undefined
+          }
         />
 
         {/* 1. Merchandise Handovers (walk-in bulk, per employee) */}
@@ -875,43 +1064,49 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
             duId={selectedHandoverAssignment.duId}
             duCode={selectedHandoverAssignment.duCode || selectedHandoverAssignment.duName}
             nozzles={activeShift.nozzleReadings.filter(
-              (nr: any) => nr.duId === selectedHandoverAssignment.duId
+              (nr: any) => nr.duId === selectedHandoverAssignment.duId,
             )}
             terminals={(activeShift.terminalLinks || []).filter(
-              (t: any) => t.duId === selectedHandoverAssignment.duId || t.duId == null
+              (t: any) => t.duId === selectedHandoverAssignment.duId || t.duId == null,
             )}
             stationHasConfiguredTerminals={(data?.terminals || []).length > 0}
             customers={handoverCreditCustomers}
-            merchandiseCash={
-              Number(
-                (activeShift.staffAssignments || []).find(
-                  (sa: any) => sa.userId === selectedHandoverAssignment.userId,
-                )?.attributed?.merchandiseCash ?? 0,
-              )
-            }
-            merchandiseNonCash={
-              (() => {
-                const a = (activeShift.staffAssignments || []).find(
-                  (sa: any) => sa.userId === selectedHandoverAssignment.userId,
-                )?.attributed;
-                return Number(a?.merchandiseCard ?? 0) + Number(a?.merchandiseUpi ?? 0);
-              })()
-            }
+            merchandiseCash={Number(
+              (activeShift.staffAssignments || []).find(
+                (sa: any) => sa.userId === selectedHandoverAssignment.userId,
+              )?.attributed?.merchandiseCash ?? 0,
+            )}
+            merchandiseNonCash={(() => {
+              const a = (activeShift.staffAssignments || []).find(
+                (sa: any) => sa.userId === selectedHandoverAssignment.userId,
+              )?.attributed;
+              return Number(a?.merchandiseCard ?? 0) + Number(a?.merchandiseUpi ?? 0);
+            })()}
             creditSales={
               (activeShift.staffAssignments || []).find(
-                (sa: any) => sa.userId === selectedHandoverAssignment.userId && sa.duId === selectedHandoverAssignment.duId,
-              )?.creditSales || selectedHandoverAssignment.creditSales || []
+                (sa: any) =>
+                  sa.userId === selectedHandoverAssignment.userId &&
+                  sa.duId === selectedHandoverAssignment.duId,
+              )?.creditSales ||
+              selectedHandoverAssignment.creditSales ||
+              []
             }
             omcSales={
               (activeShift.staffAssignments || []).find(
-                (sa: any) => sa.userId === selectedHandoverAssignment.userId && sa.duId === selectedHandoverAssignment.duId,
-              )?.omcSales || selectedHandoverAssignment.omcSales || []
+                (sa: any) =>
+                  sa.userId === selectedHandoverAssignment.userId &&
+                  sa.duId === selectedHandoverAssignment.duId,
+              )?.omcSales ||
+              selectedHandoverAssignment.omcSales ||
+              []
             }
             onCreditChanged={async () => {
               await loadShiftStatus();
             }}
             existingHandover={activeShift.handovers?.find(
-              (h: any) => h.userId === selectedHandoverAssignment.userId && h.duId === selectedHandoverAssignment.duId
+              (h: any) =>
+                h.userId === selectedHandoverAssignment.userId &&
+                h.duId === selectedHandoverAssignment.duId,
             )}
             onSaveSuccess={() => {}}
           />
@@ -922,7 +1117,15 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
 
   // Render Open Shift Form
   return (
-    <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '16px', fontFamily: 'var(--font-sans)' }}>
+    <div
+      className="animate-fade-in"
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '16px',
+        fontFamily: 'var(--font-sans)',
+      }}
+    >
       {renderShiftSubTabs()}
       <OpenShiftForm
         lastShiftSummary={lastShiftSummary}

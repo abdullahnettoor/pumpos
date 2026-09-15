@@ -3,16 +3,19 @@
 **Goal:** bring all screens to the depth/polish of Shifts, on the design system. No backend changes.
 
 ## What exists
+
 - Rich: Shifts. Functional/uneven: Expenses, Purchases, Customers, Inventory, Reports.
 - Primitives: `PageLayout`, `DataTable`, `KpiCard`, `Drawer`. ExpensesList already on DataTable.
 
 ## U1 — DataTable migration
+
 - Migrated to `DataTable` (in-cell action/ledger renderers, sortable, parity): PurchasesList ✅, CustomersList ✅,
   ProductsCatalog ✅ (tax column now VAT/GST/Exempt category-aware), PaymentTerminalsPanel ✅, UserRolesAssignment ✅.
   Remaining: FuelPricingPanel (specialized price-history / inline-edit table) — now relocated to a
   top-level **Fuel Pricing** nav view (out of Station Overview, since prices change often).
 
 ## U2 — Forms → RHF + Zod ✅
+
 - Entry forms (Expense/Purchase/Collection/Merchandise) are now **self-contained**: each owns its
   state via react-hook-form + a shared Zod schema in `@pump/shared`
   (`expenseEntryFormSchema`, `collectionEntryFormSchema`, `purchaseEntryFormSchema`,
@@ -24,6 +27,7 @@
   sources + per-form defaults + validated submit handlers. Build + shared tests green.
 
 ## U3 — Page shells & KPIs
+
 - **Tabs primitive ✅** — new accessible `Tabs` (`primitives/Tabs.tsx`, `role=tablist/tab`, ←/→/Home/End keys,
   icon + badge support). Migrated every bespoke `borderBottom` tab strip onto it: ReportsOverview, InventoryList,
   PurchasesList, CustomersList, StationOverview, ShiftsManagement subtabs (Today/Planning/History + "Open" badge),
@@ -50,6 +54,7 @@
   native `alert`/`confirm` left in the UI — U3 dialog/notification cleanup complete.
 
 ## U4 — Typed API client
+
 - Shared `request()` in `cloud.ts` hardened: unwraps `{success,data}`, throws typed `ApiError`
   (`code`/`details`/`status`), and now maps **network** + **non-JSON** failures to friendly messages (so the toast
   layer shows something meaningful instead of a cryptic error). Added opt-in **`Idempotency-Key`** plumbing
@@ -58,11 +63,13 @@
   with Phase O's offline queue. Service methods keep their typed signatures over the shared client.
 
 ## U5 — Performance ✅ (PDF lazy-load done)
+
 - Report config/labels/letterhead extracted to plain modules (`reportConfig.ts`, `letterhead.ts`); the react-pdf
   doc modules + `exportReactPdf` are now **dynamic-imported only on "Save PDF"**. Main bundle 2,360 kB → 1,041 kB;
   `@react-pdf/renderer` (1.3 MB) + html2pdf (668 kB) are deferred lazy chunks. Remaining: route-level code-split of heavy screens.
 
 ## U7 — Page-by-page design-system pass (in progress)
+
 Bring every screen to the same design-system bar. Checklist per page: `PageLayout` header;
 `Field`+primitives for inputs (`Combobox` for long selects, `Segmented` for choices); `DataTable`
 for lists; `KpiCard`/`Banner`/`StatusBadge`; `inr()`/`formatQty()`; consistent empty/loading/error
@@ -70,18 +77,18 @@ states; role-awareness; tokens only. **Loader convention:** always route loading
 single `LoadingSpinner` wrapper (never bespoke inline spinners) so a future branded/logo loader is a
 one-file swap.
 
-| Page | Status | Notes |
-|---|---|---|
-| Dashboard | ✅ | Role-aware widgets, tanks/prices, financial rollup, low-stock `Banner`s, network-aware SyncIndicator |
-| Organization | ✅ | New Owner tab: Stations/Team/Activity/Profile |
-| Reports | ✅ | Fixed UTC→business-date (`resolveBusinessDate` w/ station clock); `DateField`; already on `PageLayout`. Kept as extensible hub (L/F/X add tabs) |
-| Shifts (Today) | ✅ | Reviewed — already aligned (Tabs, LoadingSpinner, StatusBadge, .btn, inr, `<kbd>` hotkeys). Per-card lazy = Phase P5 |
-| Expenses | ✅ | Audited clean (PageLayout, DataTable, inr, primitives) |
-| Purchases | ✅ | PageLayout header + Tabs toolbar; Add Supplier → .btn; GST dates → .input; GST money → inr |
-| Customers | ✅ | PageLayout header + Tabs toolbar; Add Customer/Vehicle → .btn |
-| Inventory | ✅ | Audited clean (PageLayout, DataTable, .btn) |
-| Station Overview | ✅ | Selects inherit canonical .input (post-U6.5 CSS unify); inline-validation polish optional later |
-| Fuel Pricing | ✅ | money → inr; native inputs → NumberInput/Select; datetime → .input; submit → .btn; LoadingSpinner |
+| Page             | Status | Notes                                                                                                                                           |
+| ---------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Dashboard        | ✅     | Role-aware widgets, tanks/prices, financial rollup, low-stock `Banner`s, network-aware SyncIndicator                                            |
+| Organization     | ✅     | New Owner tab: Stations/Team/Activity/Profile                                                                                                   |
+| Reports          | ✅     | Fixed UTC→business-date (`resolveBusinessDate` w/ station clock); `DateField`; already on `PageLayout`. Kept as extensible hub (L/F/X add tabs) |
+| Shifts (Today)   | ✅     | Reviewed — already aligned (Tabs, LoadingSpinner, StatusBadge, .btn, inr, `<kbd>` hotkeys). Per-card lazy = Phase P5                            |
+| Expenses         | ✅     | Audited clean (PageLayout, DataTable, inr, primitives)                                                                                          |
+| Purchases        | ✅     | PageLayout header + Tabs toolbar; Add Supplier → .btn; GST dates → .input; GST money → inr                                                      |
+| Customers        | ✅     | PageLayout header + Tabs toolbar; Add Customer/Vehicle → .btn                                                                                   |
+| Inventory        | ✅     | Audited clean (PageLayout, DataTable, .btn)                                                                                                     |
+| Station Overview | ✅     | Selects inherit canonical .input (post-U6.5 CSS unify); inline-validation polish optional later                                                 |
+| Fuel Pricing     | ✅     | money → inr; native inputs → NumberInput/Select; datetime → .input; submit → .btn; LoadingSpinner                                               |
 
 **UI fold-ins from other phases (do while on the relevant page):** R letterhead + report-sections
 config (Station Overview / Reports); T DSSR tax-breakup (Reports); O sync-blocking on close + retry
@@ -89,4 +96,5 @@ toasts (Shifts). **New builds deferred to their phases:** L ledgers/expense regi
 X attendance/GST-exports/fleet/WhatsApp/hardware — these become Reports/new tabs later.
 
 ## Expansion
+
 - Theming/dark mode, command palette, saved views, density toggle, a11y pass, empty/skeleton states.

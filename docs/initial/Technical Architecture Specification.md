@@ -5,15 +5,14 @@ This document defines the technical architecture required to implement the busin
 It serves as the reference for:
 
 - Engineering decisions
-    
+
 - Infrastructure planning
-    
+
 - Security architecture
-    
+
 - Scalability planning
-    
+
 - Future system expansion
-    
 
 ---
 
@@ -56,116 +55,105 @@ The platform must scale to at least 100 stations without redesign.
 ## Frontend
 
 - React
-    
+
 - TypeScript
-    
+
 - Vite
-    
+
 - TanStack Query
-    
+
 - React Hook Form
-    
+
 - Zod
-    
 
 ---
 
 ## Desktop
 
 - Tauri
-    
+
 - SQLite
-    
 
 Responsibilities:
 
 - Offline storage
-    
+
 - Local cache
-    
+
 - Event queue
-    
+
 - Sync management
-    
 
 ---
 
 ## Backend
 
 - Cloudflare Workers
-    
+
 - Hono
-    
+
 - Drizzle ORM
-    
 
 Responsibilities:
 
 - Authentication validation
-    
+
 - Authorization
-    
+
 - API endpoints
-    
+
 - Event processing
-    
+
 - Business rule enforcement
-    
 
 ---
 
 ## Database
 
 - Supabase PostgreSQL
-    
 
 Responsibilities:
 
 - Persistent storage
-    
+
 - Multi-tenancy
-    
+
 - Reporting data
-    
+
 - Audit records
-    
 
 ---
 
 ## Authentication
 
 - Supabase Auth
-    
 
 ---
 
 ## Storage
 
 - Cloudflare R2
-    
 
 Used for:
 
 - Attachments
-    
+
 - Reports
-    
+
 - Backups
-    
 
 ---
 
 ## Monitoring
 
 - Sentry
-    
 
 Used for:
 
 - Frontend exceptions
-    
+
 - Backend exceptions
-    
+
 - Sync failures
 
 ## Metadata Strategy
@@ -189,24 +177,22 @@ Station Configuration
 Use dedicated columns when:
 
 - Frequently filtered
-    
+
 - Frequently sorted
-    
+
 - Frequently joined
-    
+
 - Used in calculations
-    
 
 Use JSONB when:
 
 - Optional
-    
+
 - Regulatory
-    
+
 - Configuration-based
-    
+
 - Integration-specific
-    
 
 This approach minimizes schema churn while preserving future flexibility.
 
@@ -246,9 +232,8 @@ station_id
 Tenant isolation is enforced through:
 
 - PostgreSQL Row-Level Security
-    
+
 - Application-level authorization
-    
 
 ---
 
@@ -277,17 +262,16 @@ The Worker extracts tenant context from the authenticated session.
 Stores:
 
 - Shifts
-    
+
 - Sales
-    
+
 - Expenses
-    
+
 - Stock records
-    
+
 - Customer records
-    
+
 - Pending sync events
-    
 
 ---
 
@@ -506,17 +490,16 @@ Custom migration tooling.
 Future integrations:
 
 - WhatsApp Providers
-    
+
 - SMS Providers
-    
+
 - Attendance Devices
-    
+
 - Fuel Dispenser Controllers
-    
+
 - POS Systems
-    
+
 - Weighbridge Systems
-    
 
 Integrations should be implemented through adapter interfaces.
 
@@ -543,21 +526,21 @@ without major architectural changes.
 # Final Technical Decisions
 
 1. Supabase PostgreSQL is the authoritative data source.
-    
+
 2. Tauri SQLite provides offline resilience.
-    
+
 3. Synchronization is event-based.
-    
+
 4. Supabase Auth handles authentication.
-    
+
 5. PostgreSQL RLS enforces tenant isolation.
-    
+
 6. Cloudflare Workers host the API layer.
-    
+
 7. Reporting is primarily generated client-side.
-    
+
 8. Closed financial periods are immutable.
-    
+
 9. Sync operations must be idempotent.
-    
+
 10. Architecture prioritizes reliability and auditability over complexity.

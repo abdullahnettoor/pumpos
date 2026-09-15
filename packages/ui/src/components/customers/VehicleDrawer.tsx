@@ -29,7 +29,15 @@ interface VehicleDrawerProps {
  * Add / edit a customer vehicle. Self-contained: owns its form state, resets on
  * open, and performs the save + `['vehicles']` cache invalidation + toast.
  */
-export const VehicleDrawer: React.FC<VehicleDrawerProps> = ({ isOpen, editingVehicle, defaultCustomerId, eligibleCustomers, fuelProducts, onClose, onCreated }) => {
+export const VehicleDrawer: React.FC<VehicleDrawerProps> = ({
+  isOpen,
+  editingVehicle,
+  defaultCustomerId,
+  eligibleCustomers,
+  fuelProducts,
+  onClose,
+  onCreated,
+}) => {
   const qc = useQueryClient();
   const toast = useToast();
   const [error, setError] = useState<string | null>(null);
@@ -54,7 +62,13 @@ export const VehicleDrawer: React.FC<VehicleDrawerProps> = ({ isOpen, editingVeh
         isActive: editingVehicle.isActive,
       });
     } else {
-      setForm({ customerId: defaultCustomerId, registrationNumber: '', vehicleType: '', defaultProductId: '', isActive: true });
+      setForm({
+        customerId: defaultCustomerId,
+        registrationNumber: '',
+        vehicleType: '',
+        defaultProductId: '',
+        isActive: true,
+      });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, editingVehicle, defaultCustomerId]);
@@ -101,10 +115,22 @@ export const VehicleDrawer: React.FC<VehicleDrawerProps> = ({ isOpen, editingVeh
   };
 
   return (
-    <Drawer isOpen={isOpen} onClose={onClose} title={editingVehicle ? 'Edit Vehicle' : 'Add Vehicle'}>
+    <Drawer
+      isOpen={isOpen}
+      onClose={onClose}
+      title={editingVehicle ? 'Edit Vehicle' : 'Add Vehicle'}
+    >
       <form onSubmit={onSave} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
         {error && (
-          <div style={{ backgroundColor: 'var(--state-danger-bg)', color: 'var(--state-danger-fg)', padding: '8px 12px', borderRadius: 'var(--radius-input)', fontSize: '12px' }}>
+          <div
+            style={{
+              backgroundColor: 'var(--state-danger-bg)',
+              color: 'var(--state-danger-fg)',
+              padding: '8px 12px',
+              borderRadius: 'var(--radius-input)',
+              fontSize: '12px',
+            }}
+          >
             {error}
           </div>
         )}
@@ -112,7 +138,10 @@ export const VehicleDrawer: React.FC<VehicleDrawerProps> = ({ isOpen, editingVeh
         {!editingVehicle && (
           <Field label="Customer" required>
             <Combobox
-              options={eligibleCustomers.map((c: any) => ({ value: c.id, label: `${c.name} (${c.customerType})` }))}
+              options={eligibleCustomers.map((c: any) => ({
+                value: c.id,
+                label: `${c.name} (${c.customerType})`,
+              }))}
               value={form.customerId}
               onChange={(value) => setForm((prev) => ({ ...prev, customerId: value }))}
               placeholder="Select customer…"
@@ -124,7 +153,9 @@ export const VehicleDrawer: React.FC<VehicleDrawerProps> = ({ isOpen, editingVeh
         <Field label="Registration Number" required>
           <TextInput
             value={form.registrationNumber}
-            onChange={(e) => setForm((prev) => ({ ...prev, registrationNumber: e.target.value.toUpperCase() }))}
+            onChange={(e) =>
+              setForm((prev) => ({ ...prev, registrationNumber: e.target.value.toUpperCase() }))
+            }
             disabled={submitting}
             placeholder="e.g. KL07AB1234"
           />
@@ -164,8 +195,18 @@ export const VehicleDrawer: React.FC<VehicleDrawerProps> = ({ isOpen, editingVeh
         </div>
 
         <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
-          <Button type="submit" variant="primary" fullWidth loading={submitting}>Save Vehicle</Button>
-          <Button type="button" variant="secondary" fullWidth disabled={submitting} onClick={onClose}>Cancel</Button>
+          <Button type="submit" variant="primary" fullWidth loading={submitting}>
+            Save Vehicle
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            fullWidth
+            disabled={submitting}
+            onClick={onClose}
+          >
+            Cancel
+          </Button>
         </div>
       </form>
     </Drawer>

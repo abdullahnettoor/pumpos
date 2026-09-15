@@ -1,8 +1,23 @@
 import { z } from 'zod';
 import { isValidBusinessDate, resolveBusinessDate } from '@pump/shared';
 export * from './get-business-day-status.js';
-import { BusinessEvents, conflictError, err, eventFromContext, invariantViolation, notFoundError, ok, validationError } from '../../../kernel/index.js';
-import type { EventPublisher, ExecutionContext, Repository, Result, UseCase } from '../../../kernel/index.js';
+import {
+  BusinessEvents,
+  conflictError,
+  err,
+  eventFromContext,
+  invariantViolation,
+  notFoundError,
+  ok,
+  validationError,
+} from '../../../kernel/index.js';
+import type {
+  EventPublisher,
+  ExecutionContext,
+  Repository,
+  Result,
+  UseCase,
+} from '../../../kernel/index.js';
 
 export type BusinessDayStatus = 'OPEN' | 'CLOSED';
 
@@ -22,14 +37,22 @@ export interface BusinessDay {
 
 export interface BusinessDayRepository extends Repository<BusinessDay> {
   findOpenByStation(organizationId: string, stationId: string): Promise<BusinessDay | null>;
-  findByStationAndDate(organizationId: string, stationId: string, businessDate: string): Promise<BusinessDay | null>;
+  findByStationAndDate(
+    organizationId: string,
+    stationId: string,
+    businessDate: string,
+  ): Promise<BusinessDay | null>;
 }
 
 /** Serializes workflows that can change or depend on a Business Day's lifecycle. */
 export interface BusinessDayLock {
   lockStation(organizationId: string, stationId: string): Promise<void>;
   lockById(organizationId: string, businessDayId: string): Promise<void>;
-  lockByStationAndDate(organizationId: string, stationId: string, businessDate: string): Promise<void>;
+  lockByStationAndDate(
+    organizationId: string,
+    stationId: string,
+    businessDate: string,
+  ): Promise<void>;
 }
 
 export type BusinessDayWriteRepository = BusinessDayRepository & BusinessDayLock;
@@ -82,31 +105,56 @@ export interface BusinessDayWriteEligibility {
 export async function resolveBusinessDayWrite(
   repo: BusinessDayWriteRepository,
   ctx: ExecutionContext,
-  input: { stationId: string; businessDate?: string; businessDayId?: string; kind: BusinessDayWriteKind },
+  input: {
+    stationId: string;
+    businessDate?: string;
+    businessDayId?: string;
+    kind: BusinessDayWriteKind;
+  },
 ): Promise<Result<BusinessDayWriteEligibility>> {
   let day: BusinessDay | null;
   if (input.businessDayId) {
     const candidate = await repo.findById(input.businessDayId);
-    if (!candidate || candidate.organizationId !== ctx.organizationId || candidate.stationId !== input.stationId) {
+    if (
+      !candidate ||
+      candidate.organizationId !== ctx.organizationId ||
+      candidate.stationId !== input.stationId
+    ) {
       return err(notFoundError('Business Day', input.businessDayId));
     }
     await repo.lockStation(ctx.organizationId, input.stationId);
     await repo.lockById(ctx.organizationId, input.businessDayId);
     day = await repo.findById(input.businessDayId);
   } else {
-    const currentBusinessDate = resolveBusinessDate({ now: ctx.clock.now(), timeZone: ctx.timeZone, dayStartsAt: ctx.businessDayStartsAt });
+    const currentBusinessDate = resolveBusinessDate({
+      now: ctx.clock.now(),
+      timeZone: ctx.timeZone,
+      dayStartsAt: ctx.businessDayStartsAt,
+    });
     const businessDate = input.businessDate ?? currentBusinessDate;
     if (input.businessDate && businessDate > currentBusinessDate) {
-      return err(validationError('businessDate cannot be after the Current Business Date', { businessDate, currentBusinessDate }));
+      return err(
+        validationError('businessDate cannot be after the Current Business Date', {
+          businessDate,
+          currentBusinessDate,
+        }),
+      );
     }
     day = await ensureBusinessDayForDate(repo, ctx, input.stationId, businessDate);
   }
 
   if (!day || day.organizationId !== ctx.organizationId || day.stationId !== input.stationId) {
-    return err(notFoundError('Business Day', input.businessDayId ?? input.businessDate ?? 'current'));
+    return err(
+      notFoundError('Business Day', input.businessDayId ?? input.businessDate ?? 'current'),
+    );
   }
   if (day.status === 'CLOSED' && input.kind === 'STOCK') {
-    return err(invariantViolation('Business day is closed; sales and stock records are sealed', { businessDayId: day.id, businessDate: day.businessDate }));
+    return err(
+      invariantViolation('Business day is closed; sales and stock records are sealed', {
+        businessDayId: day.id,
+        businessDate: day.businessDate,
+      }),
+    );
   }
   return ok({ businessDay: day, lateEntry: day.status === 'CLOSED' });
 }
@@ -122,7 +170,10 @@ export interface CloseBusinessDayCommand {
 
 const openSchema = z.object({
   stationId: z.string().min(1, 'stationId is required'),
-  businessDate: z.string().refine(isValidBusinessDate, 'businessDate must be a valid YYYY-MM-DD date').optional(),
+  businessDate: z
+    .string()
+    .refine(isValidBusinessDate, 'businessDate must be a valid YYYY-MM-DD date')
+    .optional(),
 });
 
 export interface BusinessDayDeps {
@@ -136,23 +187,49 @@ export interface BusinessDayDeps {
  */
 export class OpenBusinessDay implements UseCase<OpenBusinessDayCommand, BusinessDay> {
   constructor(private readonly deps: BusinessDayDeps) {}
-  async execute(input: OpenBusinessDayCommand, ctx: ExecutionContext): Promise<Result<BusinessDay>> {
+  async execute(
+    input: OpenBusinessDayCommand,
+    ctx: ExecutionContext,
+  ): Promise<Result<BusinessDay>> {
     const p = openSchema.safeParse(input);
-    if (!p.success) return err(validationError('Invalid OpenBusinessDay command', { issues: p.error.flatten() }));
+    if (!p.success)
+      return err(validationError('Invalid OpenBusinessDay command', { issues: p.error.flatten() }));
 
     const now = ctx.clock.now();
-    const currentBusinessDate = resolveBusinessDate({ now, timeZone: ctx.timeZone, dayStartsAt: ctx.businessDayStartsAt });
+    const currentBusinessDate = resolveBusinessDate({
+      now,
+      timeZone: ctx.timeZone,
+      dayStartsAt: ctx.businessDayStartsAt,
+    });
     const businessDate = p.data.businessDate ?? currentBusinessDate;
     if (p.data.businessDate && businessDate > currentBusinessDate) {
-      return err(validationError('businessDate cannot be after the Current Business Date', { businessDate, currentBusinessDate }));
+      return err(
+        validationError('businessDate cannot be after the Current Business Date', {
+          businessDate,
+          currentBusinessDate,
+        }),
+      );
     }
     // One business day per (station, date). Several dates may be open at once;
     // a past day stays open until explicitly closed (close day 1 on day 5).
     await this.deps.repository.lockStation(ctx.organizationId, p.data.stationId);
-    await this.deps.repository.lockByStationAndDate(ctx.organizationId, p.data.stationId, businessDate);
-    const existing = await this.deps.repository.findByStationAndDate(ctx.organizationId, p.data.stationId, businessDate);
+    await this.deps.repository.lockByStationAndDate(
+      ctx.organizationId,
+      p.data.stationId,
+      businessDate,
+    );
+    const existing = await this.deps.repository.findByStationAndDate(
+      ctx.organizationId,
+      p.data.stationId,
+      businessDate,
+    );
     if (existing) {
-      return err(conflictError('A business day already exists for this station and date', { businessDayId: existing.id, businessDate: existing.businessDate }));
+      return err(
+        conflictError('A business day already exists for this station and date', {
+          businessDayId: existing.id,
+          businessDate: existing.businessDate,
+        }),
+      );
     }
 
     const nowIso = now.toISOString();
@@ -187,12 +264,18 @@ export class OpenBusinessDay implements UseCase<OpenBusinessDayCommand, Business
 /** Close the operating/accounting day for a station. */
 export class CloseBusinessDay implements UseCase<CloseBusinessDayCommand, BusinessDay> {
   constructor(private readonly deps: BusinessDayDeps) {}
-  async execute(input: CloseBusinessDayCommand, ctx: ExecutionContext): Promise<Result<BusinessDay>> {
+  async execute(
+    input: CloseBusinessDayCommand,
+    ctx: ExecutionContext,
+  ): Promise<Result<BusinessDay>> {
     if (!input?.businessDayId) return err(validationError('businessDayId is required'));
     const existing = await this.deps.repository.findById(input.businessDayId);
-    if (!existing || existing.organizationId !== ctx.organizationId) return err(notFoundError('BusinessDay', input.businessDayId));
+    if (!existing || existing.organizationId !== ctx.organizationId)
+      return err(notFoundError('BusinessDay', input.businessDayId));
     if (existing.status === 'CLOSED') {
-      return err(invariantViolation('Business day is already closed', { businessDayId: existing.id }));
+      return err(
+        invariantViolation('Business day is already closed', { businessDayId: existing.id }),
+      );
     }
     const nowIso = ctx.clock.now().toISOString();
     const closed: BusinessDay = {

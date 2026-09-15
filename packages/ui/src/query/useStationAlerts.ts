@@ -56,17 +56,25 @@ export function useStationAlerts(
         category: 'stock',
         title: level === 'critical' ? `${t.name} critically low` : `${t.name} running low`,
         meta: `${t.productName} · ${pct.toFixed(0)}% · ${formatQty(vol, 0)} L`,
-        actionLabel: 'Stock', actionPath: '/inventory', actionTab: 'tanks', actionEntityId: t.id,
+        actionLabel: 'Stock',
+        actionPath: '/inventory',
+        actionTab: 'tanks',
+        actionEntityId: t.id,
       });
     });
 
     (items || []).forEach((i: any) => {
       if (Number(i.quantity) < 0) {
         list.push({
-          id: `item-${i.productId}`, severity: 'danger', category: 'oversold',
+          id: `item-${i.productId}`,
+          severity: 'danger',
+          category: 'oversold',
           title: `${i.name} oversold`,
           meta: `${formatQty(Number(i.quantity))} ${i.unit ?? ''}`.trim(),
-          actionLabel: 'Stock', actionPath: '/inventory', actionTab: 'items', actionEntityId: i.productId,
+          actionLabel: 'Stock',
+          actionPath: '/inventory',
+          actionTab: 'items',
+          actionEntityId: i.productId,
         });
       }
       // TODO (C — merchandise reorder points): once products carry an optional

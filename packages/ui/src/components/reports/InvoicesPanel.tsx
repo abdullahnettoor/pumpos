@@ -35,7 +35,11 @@ export const InvoicesPanel: React.FC<InvoicesPanelProps> = ({ selectedStation, u
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const canIssue = userRole !== 'Staff';
-  const { data: sales, isLoading, error } = useSales({ stationId: selectedStation?.id, from: range.from, to: range.to });
+  const {
+    data: sales,
+    isLoading,
+    error,
+  } = useSales({ stationId: selectedStation?.id, from: range.from, to: range.to });
 
   const rows = sales || [];
   const kpis = useMemo(() => {
@@ -59,7 +63,10 @@ export const InvoicesPanel: React.FC<InvoicesPanelProps> = ({ selectedStation, u
       letterhead: letterheadFromStation(selectedStation),
       paper: paperFromStation(selectedStation),
     });
-    await exportReactPdf(element, `Invoice_${String(invoice.invoiceNumber || 'draft').replace(/[^a-z0-9]+/gi, '-')}`);
+    await exportReactPdf(
+      element,
+      `Invoice_${String(invoice.invoiceNumber || 'draft').replace(/[^a-z0-9]+/gi, '-')}`,
+    );
   };
 
   const handleInvoice = async (saleId: string) => {
@@ -68,7 +75,9 @@ export const InvoicesPanel: React.FC<InvoicesPanelProps> = ({ selectedStation, u
       // Idempotent: issues a new invoice or returns the existing one.
       const invoice = await txService.issueInvoice(saleId);
       await exportInvoice(invoice);
-      qc.invalidateQueries({ queryKey: queryKeys.sales(selectedStation?.id ?? '', range.from, range.to) });
+      qc.invalidateQueries({
+        queryKey: queryKeys.sales(selectedStation?.id ?? '', range.from, range.to),
+      });
       qc.invalidateQueries({ queryKey: ['invoices'] });
     } catch (err: any) {
       toast.error(err.message || 'Failed to generate invoice.');
@@ -77,26 +86,79 @@ export const InvoicesPanel: React.FC<InvoicesPanelProps> = ({ selectedStation, u
     }
   };
 
-  const columns = useMemo<ColumnDef<any, any>[]>(() => [
-    { accessorKey: 'businessDate', header: 'Date', cell: ({ getValue }) => <DateText value={getValue() as string} tone="muted" /> },
-    { accessorKey: 'customerName', header: 'Customer', cell: ({ getValue }) => (getValue() ? <span style={{ color: 'var(--text-strong)' }}>{getValue() as string}</span> : <span style={{ color: 'var(--text-faint)' }}>Walk-in</span>) },
-    { id: 'sale', header: 'Sale', cell: ({ row }) => <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{row.original.documentNumber || row.original.saleType}</span> },
-    { accessorKey: 'totalAmount', header: 'Amount', cell: ({ getValue }) => <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-strong)' }}>{inr(getValue())}</span> },
-    { accessorKey: 'invoiceNumber', header: 'Invoice', cell: ({ getValue }) => <span style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: getValue() ? 'var(--state-success-fg)' : 'var(--text-faint)' }}>{(getValue() as string) || '—'}</span> },
-    {
-      id: 'action',
-      header: '',
-      cell: ({ row }) => {
-        const r = row.original;
-        return (
-          <Button variant="secondary" size="xs" leftIcon={r.invoiceNumber ? <Download /> : <FileText />} loading={busyId === r.id} disabled={busyId === r.id || (!canIssue && !r.invoiceNumber)} onClick={() => handleInvoice(r.id)}>
-            {r.invoiceNumber ? 'PDF' : 'Issue'}
-          </Button>
-        );
+  const columns = useMemo<ColumnDef<any, any>[]>(
+    () => [
+      {
+        accessorKey: 'businessDate',
+        header: 'Date',
+        cell: ({ getValue }) => <DateText value={getValue() as string} tone="muted" />,
       },
-    },
+      {
+        accessorKey: 'customerName',
+        header: 'Customer',
+        cell: ({ getValue }) =>
+          getValue() ? (
+            <span style={{ color: 'var(--text-strong)' }}>{getValue() as string}</span>
+          ) : (
+            <span style={{ color: 'var(--text-faint)' }}>Walk-in</span>
+          ),
+      },
+      {
+        id: 'sale',
+        header: 'Sale',
+        cell: ({ row }) => (
+          <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+            {row.original.documentNumber || row.original.saleType}
+          </span>
+        ),
+      },
+      {
+        accessorKey: 'totalAmount',
+        header: 'Amount',
+        cell: ({ getValue }) => (
+          <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-strong)' }}>
+            {inr(getValue())}
+          </span>
+        ),
+      },
+      {
+        accessorKey: 'invoiceNumber',
+        header: 'Invoice',
+        cell: ({ getValue }) => (
+          <span
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: '12px',
+              color: getValue() ? 'var(--state-success-fg)' : 'var(--text-faint)',
+            }}
+          >
+            {(getValue() as string) || '—'}
+          </span>
+        ),
+      },
+      {
+        id: 'action',
+        header: '',
+        cell: ({ row }) => {
+          const r = row.original;
+          return (
+            <Button
+              variant="secondary"
+              size="xs"
+              leftIcon={r.invoiceNumber ? <Download /> : <FileText />}
+              loading={busyId === r.id}
+              disabled={busyId === r.id || (!canIssue && !r.invoiceNumber)}
+              onClick={() => handleInvoice(r.id)}
+            >
+              {r.invoiceNumber ? 'PDF' : 'Issue'}
+            </Button>
+          );
+        },
+      },
+    ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  ], [busyId, canIssue, range.from, range.to]);
+    [busyId, canIssue, range.from, range.to],
+  );
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -110,14 +172,33 @@ export const InvoicesPanel: React.FC<InvoicesPanelProps> = ({ selectedStation, u
       <KpiStrip columns="auto">
         <KpiTile dot="brand" label="Merchandise Sales" value={inr(kpis.total)} />
         <KpiTile dot="success" valueTone="success" label="Invoiced" value={String(kpis.invoiced)} />
-        <KpiTile dot={kpis.pending > 0 ? 'warning' : 'success'} valueTone={kpis.pending > 0 ? 'warning' : undefined} label="Not Invoiced" value={String(kpis.pending)} />
+        <KpiTile
+          dot={kpis.pending > 0 ? 'warning' : 'success'}
+          valueTone={kpis.pending > 0 ? 'warning' : undefined}
+          label="Not Invoiced"
+          value={String(kpis.pending)}
+        />
       </KpiStrip>
 
       <Panel flush title="Merchandise invoices">
         {isLoading ? (
-          <div style={{ padding: '16px' }}><EmptyState compact icon={<FileText />} title="Loading…" description="Fetching merchandise sales." /></div>
+          <div style={{ padding: '16px' }}>
+            <EmptyState
+              compact
+              icon={<FileText />}
+              title="Loading…"
+              description="Fetching merchandise sales."
+            />
+          </div>
         ) : rows.length === 0 ? (
-          <div style={{ padding: '12px' }}><EmptyState compact icon={<FileText />} title="No merchandise sales" description="No merchandise sales in this date range." /></div>
+          <div style={{ padding: '12px' }}>
+            <EmptyState
+              compact
+              icon={<FileText />}
+              title="No merchandise sales"
+              description="No merchandise sales in this date range."
+            />
+          </div>
         ) : (
           <DataTable
             bare

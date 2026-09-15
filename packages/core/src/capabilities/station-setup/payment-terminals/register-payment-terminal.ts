@@ -1,16 +1,5 @@
-import {
-  BusinessEvents,
-  conflictError,
-  err,
-  eventFromContext,
-  ok,
-} from '../../../kernel/index.js';
-import type {
-  EventPublisher,
-  ExecutionContext,
-  Result,
-  UseCase,
-} from '../../../kernel/index.js';
+import { BusinessEvents, conflictError, err, eventFromContext, ok } from '../../../kernel/index.js';
+import type { EventPublisher, ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
 import type { RegisterPaymentTerminalCommand } from './command.js';
 import { validateRegisterPaymentTerminal } from './validator.js';
 import type { PaymentTerminal, PaymentTerminalRepository } from './ports.js';
@@ -21,9 +10,10 @@ export interface RegisterPaymentTerminalDeps {
 }
 
 /** Register a new payment terminal (POS machine) for a station. */
-export class RegisterPaymentTerminal
-  implements UseCase<RegisterPaymentTerminalCommand, PaymentTerminal>
-{
+export class RegisterPaymentTerminal implements UseCase<
+  RegisterPaymentTerminalCommand,
+  PaymentTerminal
+> {
   constructor(private readonly deps: RegisterPaymentTerminalDeps) {}
 
   async execute(
@@ -34,13 +24,7 @@ export class RegisterPaymentTerminal
     if (!validated.success) return validated;
     const cmd = validated.data;
 
-    if (
-      await this.deps.repository.existsByLabel(
-        ctx.organizationId,
-        cmd.stationId,
-        cmd.label,
-      )
-    ) {
+    if (await this.deps.repository.existsByLabel(ctx.organizationId, cmd.stationId, cmd.label)) {
       return err(
         conflictError(`A terminal labelled "${cmd.label}" already exists for this station`, {
           label: cmd.label,

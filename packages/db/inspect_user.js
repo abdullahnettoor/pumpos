@@ -14,7 +14,7 @@ async function inspect() {
       SELECT id, email, confirmed_at, last_sign_in_at, email_confirmed_at, banned_until 
       FROM auth.users;
     `;
-    
+
     console.log('\n--- Remote Users Found ---');
     console.table(users);
   } catch (err) {

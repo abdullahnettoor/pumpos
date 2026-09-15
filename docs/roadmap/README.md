@@ -4,22 +4,23 @@ Detailed implementation plans for the post-MVP phases. Each phase is independent
 shippable and extends existing domain entities (per `AGENTS.md`) rather than redesigning core.
 
 ## Phase index
-| Phase | Theme | Status | Depends on |
-|---|---|---|---|
-| [L](phase-L-ledger.md) | Ledger / money visibility | ✅ Done | R (PDF export reuse) |
-| [U](phase-U-ui-uplift.md) | UI uplift & consistency | ✅ Done | — |
-| [F](phase-F-financials.md) | Financials — money accounts + P&L/COGS + Other Income + CMS/OMC | 🟡 Mostly done (only FG1 GL deferred) | L |
-| [R](phase-R-reports-pdf.md) | Reports & PDF hardening | 🟡 Mostly done (R4 server PDF pending) | — |
-| [P](phase-P-performance.md) | Performance & caching | 🟡 Mostly done | — |
-| [T](phase-T-tax.md) | Product tax restructure & GST invoicing | ✅ Done (columns folded into `0000_baseline`) | R, L |
-| [U2](phase-U2-fuel-units.md) | Unit-aware fuels (kg / L, e.g. CNG) | 🟡 Mostly done (QA pass pending) | — |
-| [M](phase-M-multisite.md) | Multi-site topology (marketing + console + mobile) | 🟡 Code done; deploy/ops remain | — |
-| [MB](phase-MB-mobile-owner.md) | Mobile owner app (owner-first PWA) | 🟡 Partial (attendant handover done) | M, R (R4), F, L |
-| [D](phase-D-data-pagination.md) | Data access & pagination | ⬜ Planned (not started) | P (complementary) |
-| [A](phase-A-auth-users.md) | Auth, owner onboarding & team management (email/phone + owner-set password) | 🟡 Mostly done (A0–A4 shipped; config verification pending) | — |
-| [O](phase-O-offline-sync.md) | Resilience & sync (Level 2, desktop) | ⬜ Foundations only (idempotency + outbox) | — |
-| [HR](phase-HR-historical-replay.md) | Historical replay, selective apply & manual day close | ⬜ Proposed for review | Core lifecycle hardening |
-| [X](phase-X-expansion.md) | Expansion modules | ⬜ Future (X4 prepaid/OMC partly seeded) | core stable |
+
+| Phase                               | Theme                                                                       | Status                                                      | Depends on               |
+| ----------------------------------- | --------------------------------------------------------------------------- | ----------------------------------------------------------- | ------------------------ |
+| [L](phase-L-ledger.md)              | Ledger / money visibility                                                   | ✅ Done                                                     | R (PDF export reuse)     |
+| [U](phase-U-ui-uplift.md)           | UI uplift & consistency                                                     | ✅ Done                                                     | —                        |
+| [F](phase-F-financials.md)          | Financials — money accounts + P&L/COGS + Other Income + CMS/OMC             | 🟡 Mostly done (only FG1 GL deferred)                       | L                        |
+| [R](phase-R-reports-pdf.md)         | Reports & PDF hardening                                                     | 🟡 Mostly done (R4 server PDF pending)                      | —                        |
+| [P](phase-P-performance.md)         | Performance & caching                                                       | 🟡 Mostly done                                              | —                        |
+| [T](phase-T-tax.md)                 | Product tax restructure & GST invoicing                                     | ✅ Done (columns folded into `0000_baseline`)               | R, L                     |
+| [U2](phase-U2-fuel-units.md)        | Unit-aware fuels (kg / L, e.g. CNG)                                         | 🟡 Mostly done (QA pass pending)                            | —                        |
+| [M](phase-M-multisite.md)           | Multi-site topology (marketing + console + mobile)                          | 🟡 Code done; deploy/ops remain                             | —                        |
+| [MB](phase-MB-mobile-owner.md)      | Mobile owner app (owner-first PWA)                                          | 🟡 Partial (attendant handover done)                        | M, R (R4), F, L          |
+| [D](phase-D-data-pagination.md)     | Data access & pagination                                                    | ⬜ Planned (not started)                                    | P (complementary)        |
+| [A](phase-A-auth-users.md)          | Auth, owner onboarding & team management (email/phone + owner-set password) | 🟡 Mostly done (A0–A4 shipped; config verification pending) | —                        |
+| [O](phase-O-offline-sync.md)        | Resilience & sync (Level 2, desktop)                                        | ⬜ Foundations only (idempotency + outbox)                  | —                        |
+| [HR](phase-HR-historical-replay.md) | Historical replay, selective apply & manual day close                       | ⬜ Proposed for review                                      | Core lifecycle hardening |
+| [X](phase-X-expansion.md)           | Expansion modules                                                           | ⬜ Future (X4 prepaid/OMC partly seeded)                    | core stable              |
 
 Recently shipped (this line supersedes the old sequence): **Customer Sales** in the
 handover (Credit / Fleet / Regular receivables + inline customer/vehicle create),
@@ -29,6 +30,7 @@ posting money-in to CMS with per-line traceability, supplier pay-from-CMS), plus
 mobile handover parity and per-line idempotency keys. These span Phase F/L and seed X4.
 
 ## Suggested sequence
+
 **Done:** L, U, and the bulk of F (FA money accounts → FB P&L/COGS → FI Other Income →
 CMS/OMC), P, T, M, U2. **Remaining priority order:** F finish (Void UI for
 Expenses/Income, FI4 GST-on-income) → R4 (server-side PDF) → D (pagination) →
@@ -37,6 +39,7 @@ Phase M's remaining work is deployment/ops (Cloudflare domains, Supabase Auth UR
 icons), independent of the domain-model phases.
 
 ## Principles
+
 - `business_day_id` universal anchor; `shift_id` only when cash drawer involved.
 - Snapshots immutable; reports derive from snapshots/events/operational records.
 - Multi-tenant: every table has `organization_id`, RLS mandatory.

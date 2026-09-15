@@ -1,7 +1,9 @@
 import { z } from 'zod';
 import { isValidBusinessDate } from '../utils/business-date.js';
 
-const timeStringSchema = z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/, 'Time must be in HH:MM format');
+const timeStringSchema = z
+  .string()
+  .regex(/^([01]\d|2[0-3]):([0-5]\d)$/, 'Time must be in HH:MM format');
 
 const weekdaySchema = z.enum([
   'MONDAY',
@@ -13,22 +15,40 @@ const weekdaySchema = z.enum([
   'SUNDAY',
 ]);
 
-export type OpenShiftBusinessDayState = 'OPEN' | 'CLOSED' | 'NOT_CREATED' | 'UNKNOWN' | 'UNAVAILABLE';
+export type OpenShiftBusinessDayState =
+  'OPEN' | 'CLOSED' | 'NOT_CREATED' | 'UNKNOWN' | 'UNAVAILABLE';
 
-export function createOpenShiftFormSchema(currentBusinessDate: string, businessDayState: OpenShiftBusinessDayState) {
-  return z.object({
-    shiftTemplateId: z.string().min(1, 'Choose a Shift Template'),
-    businessDate: z.string().refine(isValidBusinessDate, 'Choose a valid Business Date'),
-    openingCash: z.coerce.number().nonnegative('Opening cash cannot be negative'),
-  }).superRefine((values, ctx) => {
-    if (values.businessDate > currentBusinessDate) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['businessDate'], message: 'Future Business Dates are unavailable' });
-    } else if (businessDayState === 'CLOSED') {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['businessDate'], message: 'This Business Day is closed' });
-    } else if (businessDayState === 'UNKNOWN' || businessDayState === 'UNAVAILABLE') {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['businessDate'], message: 'Business Day status is unavailable' });
-    }
-  });
+export function createOpenShiftFormSchema(
+  currentBusinessDate: string,
+  businessDayState: OpenShiftBusinessDayState,
+) {
+  return z
+    .object({
+      shiftTemplateId: z.string().min(1, 'Choose a Shift Template'),
+      businessDate: z.string().refine(isValidBusinessDate, 'Choose a valid Business Date'),
+      openingCash: z.coerce.number().nonnegative('Opening cash cannot be negative'),
+    })
+    .superRefine((values, ctx) => {
+      if (values.businessDate > currentBusinessDate) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['businessDate'],
+          message: 'Future Business Dates are unavailable',
+        });
+      } else if (businessDayState === 'CLOSED') {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['businessDate'],
+          message: 'This Business Day is closed',
+        });
+      } else if (businessDayState === 'UNKNOWN' || businessDayState === 'UNAVAILABLE') {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['businessDate'],
+          message: 'Business Day status is unavailable',
+        });
+      }
+    });
 }
 
 export type OpenShiftFormValues = z.input<ReturnType<typeof createOpenShiftFormSchema>>;
@@ -42,15 +62,18 @@ export const organizationSchema = z.object({
 /** Owner-editable organization profile (name + legal/branding metadata). */
 export const organizationUpdateSchema = z.object({
   name: z.string().min(2, 'Organization name must be at least 2 characters').max(255),
-  metadata: z.object({
-    legalName: z.string().max(255).optional().nullable(),
-    gstin: z.string().max(15).optional().nullable(),
-    pan: z.string().max(10).optional().nullable(),
-    stateCode: z.string().max(2).optional().nullable(),
-    address: z.string().max(500).optional().nullable(),
-    phone: z.string().max(50).optional().nullable(),
-    email: z.string().email('Invalid email address').or(z.literal('')).optional().nullable(),
-  }).optional().nullable(),
+  metadata: z
+    .object({
+      legalName: z.string().max(255).optional().nullable(),
+      gstin: z.string().max(15).optional().nullable(),
+      pan: z.string().max(10).optional().nullable(),
+      stateCode: z.string().max(2).optional().nullable(),
+      address: z.string().max(500).optional().nullable(),
+      phone: z.string().max(50).optional().nullable(),
+      email: z.string().email('Invalid email address').or(z.literal('')).optional().nullable(),
+    })
+    .optional()
+    .nullable(),
 });
 export type OrganizationUpdateValues = z.infer<typeof organizationUpdateSchema>;
 
@@ -59,50 +82,71 @@ export const stationSchema = z.object({
   code: z.string().min(2, 'Station code must be at least 2 characters').toUpperCase(),
   address: z.string().optional().nullable(),
   phone: z.string().optional().nullable(),
-  settings: z.object({
-    shift_grace_minutes: z.number().int().min(0).default(15),
-    shift_lock_grace_days: z.number().int().min(0).default(3),
-    offline_warning_days: z.number().int().min(1).default(3),
-    offline_critical_days: z.number().int().min(1).default(7),
-    business_day_starts_at: timeStringSchema.optional(),
-    timezone: z.string().min(1).optional(),
-    operating_schedule: z.object({
-      isTwentyFourSeven: z.boolean(),
-      days: z.array(z.object({
-        day: weekdaySchema,
-        isOpen: z.boolean(),
-        openTime: timeStringSchema,
-        closeTime: timeStringSchema,
-      })).optional(),
-    }).optional(),
-    pending_opening_stock_seed: z.array(z.object({
-      tankId: z.string().uuid('Invalid tank ID'),
-      productId: z.string().uuid('Invalid product ID'),
-      quantity: z.number().nonnegative('Opening quantity must be non-negative'),
-    })).optional().nullable(),
-    legal: z.object({
-      legalName: z.string().optional().nullable(),
-      gstin: z.string().max(15).optional().nullable(),
-      stateCode: z.string().max(2).optional().nullable(),
-      addressLine: z.string().optional().nullable(),
-      pincode: z.string().max(6).optional().nullable(),
-      roCode: z.string().optional().nullable(),
-      contact: z.string().optional().nullable(),
-    }).optional().nullable(),
-    fuel_brand: z.string().optional().nullable(),
-    logo_data_url: z.string().optional().nullable(),
-    report_config: z.object({
-      shiftSummary: z.array(z.string()).optional(),
-      dssr: z.array(z.string()).optional(),
-      paper: z.enum(['A4', 'LETTER']).optional(),
-    }).optional().nullable(),
-  }).default({
-    shift_grace_minutes: 15,
-    shift_lock_grace_days: 3,
-    offline_warning_days: 3,
-    offline_critical_days: 7,
-  }),
-  onboardingStatus: z.enum(['NOT_STARTED', 'IN_PROGRESS', 'READY_FOR_OPERATIONS']).default('NOT_STARTED'),
+  settings: z
+    .object({
+      shift_grace_minutes: z.number().int().min(0).default(15),
+      shift_lock_grace_days: z.number().int().min(0).default(3),
+      offline_warning_days: z.number().int().min(1).default(3),
+      offline_critical_days: z.number().int().min(1).default(7),
+      business_day_starts_at: timeStringSchema.optional(),
+      timezone: z.string().min(1).optional(),
+      operating_schedule: z
+        .object({
+          isTwentyFourSeven: z.boolean(),
+          days: z
+            .array(
+              z.object({
+                day: weekdaySchema,
+                isOpen: z.boolean(),
+                openTime: timeStringSchema,
+                closeTime: timeStringSchema,
+              }),
+            )
+            .optional(),
+        })
+        .optional(),
+      pending_opening_stock_seed: z
+        .array(
+          z.object({
+            tankId: z.string().uuid('Invalid tank ID'),
+            productId: z.string().uuid('Invalid product ID'),
+            quantity: z.number().nonnegative('Opening quantity must be non-negative'),
+          }),
+        )
+        .optional()
+        .nullable(),
+      legal: z
+        .object({
+          legalName: z.string().optional().nullable(),
+          gstin: z.string().max(15).optional().nullable(),
+          stateCode: z.string().max(2).optional().nullable(),
+          addressLine: z.string().optional().nullable(),
+          pincode: z.string().max(6).optional().nullable(),
+          roCode: z.string().optional().nullable(),
+          contact: z.string().optional().nullable(),
+        })
+        .optional()
+        .nullable(),
+      fuel_brand: z.string().optional().nullable(),
+      logo_data_url: z.string().optional().nullable(),
+      report_config: z
+        .object({
+          shiftSummary: z.array(z.string()).optional(),
+          dssr: z.array(z.string()).optional(),
+          paper: z.enum(['A4', 'LETTER']).optional(),
+        })
+        .optional()
+        .nullable(),
+    })
+    .default({
+      shift_grace_minutes: 15,
+      shift_lock_grace_days: 3,
+      offline_warning_days: 3,
+      offline_critical_days: 7,
+    }),
+  onboardingStatus: z
+    .enum(['NOT_STARTED', 'IN_PROGRESS', 'READY_FOR_OPERATIONS'])
+    .default('NOT_STARTED'),
   isActive: z.boolean().default(true),
 });
 
@@ -160,39 +204,46 @@ export const shiftOpenSchema = z.object({
   stationId: z.string().uuid('Invalid station ID'),
   shiftTemplateId: z.string().uuid('Invalid shift template ID'),
   openingCash: z.number().nonnegative('Opening cash must be non-negative'),
-  staffAssignments: z.array(
-    z.object({
-      userId: z.string().uuid('Invalid user ID'),
-      duId: z.string().uuid('Invalid dispenser unit ID'),
-    })
-  ).optional(),
-  initialReadings: z.array(
-    z.object({
-      nozzleId: z.string().uuid('Invalid nozzle ID'),
-      openingReading: z.number().nonnegative('Opening reading must be non-negative'),
-    })
-  ).optional(),
+  staffAssignments: z
+    .array(
+      z.object({
+        userId: z.string().uuid('Invalid user ID'),
+        duId: z.string().uuid('Invalid dispenser unit ID'),
+      }),
+    )
+    .optional(),
+  initialReadings: z
+    .array(
+      z.object({
+        nozzleId: z.string().uuid('Invalid nozzle ID'),
+        openingReading: z.number().nonnegative('Opening reading must be non-negative'),
+      }),
+    )
+    .optional(),
 });
 
-export const shiftCloseSchema = z.object({
-  closingCash: z.number().nonnegative('Closing cash must be non-negative'),
-  nozzleReadings: z.array(
-    z.object({
-      nozzleId: z.string().uuid('Invalid nozzle ID'),
-      closingReading: z.number().nonnegative('Closing reading must be non-negative'),
-    })
-  ),
-}).strict();
+export const shiftCloseSchema = z
+  .object({
+    closingCash: z.number().nonnegative('Closing cash must be non-negative'),
+    nozzleReadings: z.array(
+      z.object({
+        nozzleId: z.string().uuid('Invalid nozzle ID'),
+        closingReading: z.number().nonnegative('Closing reading must be non-negative'),
+      }),
+    ),
+  })
+  .strict();
 
-
-export const nozzleReadingSchema = z.object({
-  nozzleId: z.string().uuid('Invalid nozzle ID'),
-  openingReading: z.number().nonnegative('Opening reading must be non-negative'),
-  closingReading: z.number().nonnegative('Closing reading must be non-negative'),
-}).refine((data) => data.closingReading >= data.openingReading, {
-  message: 'Closing reading must be greater than or equal to opening reading',
-  path: ['closingReading'],
-});
+export const nozzleReadingSchema = z
+  .object({
+    nozzleId: z.string().uuid('Invalid nozzle ID'),
+    openingReading: z.number().nonnegative('Opening reading must be non-negative'),
+    closingReading: z.number().nonnegative('Closing reading must be non-negative'),
+  })
+  .refine((data) => data.closingReading >= data.openingReading, {
+    message: 'Closing reading must be greater than or equal to opening reading',
+    path: ['closingReading'],
+  });
 
 export const syncEventSchema = z.object({
   eventId: z.string().uuid(),
@@ -219,12 +270,15 @@ export const shiftPurchaseSchema = z.object({
   unitPrice: z.number().positive('Price must be positive'),
   invoiceNumber: z.string().max(100).optional().nullable(),
   notes: z.string().max(500).optional().nullable(),
-  tankAllocations: z.array(
-    z.object({
-      tankId: z.string().uuid('Invalid tank ID'),
-      quantity: z.number().nonnegative('Allocation quantity must be non-negative'),
-    })
-  ).optional().nullable(),
+  tankAllocations: z
+    .array(
+      z.object({
+        tankId: z.string().uuid('Invalid tank ID'),
+        quantity: z.number().nonnegative('Allocation quantity must be non-negative'),
+      }),
+    )
+    .optional()
+    .nullable(),
 });
 
 export const shiftCollectionSchema = z.object({
@@ -248,13 +302,16 @@ export const customerCreateSchema = z.object({
   isPrepaid: z.boolean().default(false),
   settlementCycle: z.enum(['OPEN', 'EOD']).default('OPEN'),
   isActive: z.boolean().default(true),
-  metadata: z.object({
-    gstin: z.string().max(15).optional().nullable(),
-    stateCode: z.string().max(2).optional().nullable(),
-    pan: z.string().max(10).optional().nullable(),
-    tradeName: z.string().max(255).optional().nullable(),
-    billingAddress: z.string().max(500).optional().nullable(),
-  }).optional().nullable(),
+  metadata: z
+    .object({
+      gstin: z.string().max(15).optional().nullable(),
+      stateCode: z.string().max(2).optional().nullable(),
+      pan: z.string().max(10).optional().nullable(),
+      tradeName: z.string().max(255).optional().nullable(),
+      billingAddress: z.string().max(500).optional().nullable(),
+    })
+    .optional()
+    .nullable(),
 });
 
 export const customerTopupSchema = z.object({
@@ -274,13 +331,16 @@ export const supplierCreateSchema = z.object({
   name: z.string().min(1, 'Name is required').max(255),
   phone: z.string().max(50).optional().nullable(),
   isActive: z.boolean().default(true),
-  metadata: z.object({
-    gstin: z.string().max(15).optional().nullable(),
-    stateCode: z.string().max(2).optional().nullable(),
-    pan: z.string().max(10).optional().nullable(),
-    tradeName: z.string().max(255).optional().nullable(),
-    billingAddress: z.string().max(500).optional().nullable(),
-  }).optional().nullable(),
+  metadata: z
+    .object({
+      gstin: z.string().max(15).optional().nullable(),
+      stateCode: z.string().max(2).optional().nullable(),
+      pan: z.string().max(10).optional().nullable(),
+      tradeName: z.string().max(255).optional().nullable(),
+      billingAddress: z.string().max(500).optional().nullable(),
+    })
+    .optional()
+    .nullable(),
 });
 
 export const fuelPriceSchema = z.object({
@@ -297,27 +357,31 @@ export const operatingDayScheduleSchema = z.object({
   closeTime: timeStringSchema,
 });
 
-export const weeklyOperatingScheduleSchema = z.object({
-  isTwentyFourSeven: z.boolean(),
-  days: z.array(operatingDayScheduleSchema).length(7, 'Operating schedule must include all 7 days'),
-}).superRefine((data, ctx) => {
-  const uniqueDays = new Set(data.days.map((day) => day.day));
-  if (uniqueDays.size !== data.days.length) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: 'Operating schedule contains duplicate weekdays',
-      path: ['days'],
-    });
-  }
+export const weeklyOperatingScheduleSchema = z
+  .object({
+    isTwentyFourSeven: z.boolean(),
+    days: z
+      .array(operatingDayScheduleSchema)
+      .length(7, 'Operating schedule must include all 7 days'),
+  })
+  .superRefine((data, ctx) => {
+    const uniqueDays = new Set(data.days.map((day) => day.day));
+    if (uniqueDays.size !== data.days.length) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Operating schedule contains duplicate weekdays',
+        path: ['days'],
+      });
+    }
 
-  if (!data.isTwentyFourSeven && !data.days.some((day) => day.isOpen)) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: 'At least one business day must be open',
-      path: ['days'],
-    });
-  }
-});
+    if (!data.isTwentyFourSeven && !data.days.some((day) => day.isOpen)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'At least one business day must be open',
+        path: ['days'],
+      });
+    }
+  });
 
 export const onboardingProductDraftSchema = z.object({
   draftId: z.string().min(1, 'Missing product draft ID'),
@@ -405,26 +469,36 @@ export const finalizeOnboardingSchema = z.object({
 
 const handoverAmountSchema = z.number().finite().nonnegative();
 
-export const attendantHandoverSchema = z.object({
-  shiftId: z.string().uuid('Invalid shift ID'),
-  userId: z.string().uuid('Invalid user ID').optional(),
-  duId: z.string().uuid('Invalid DU ID'),
-  cashHandedOver: handoverAmountSchema,
-  cardHandedOver: handoverAmountSchema.optional(),
-  upiHandedOver: handoverAmountSchema.optional(),
-  nozzleReadings: z.array(z.object({
-    nozzleId: z.string().uuid('Invalid nozzle ID'),
-    closingReading: handoverAmountSchema,
-    testingVolume: handoverAmountSchema.optional(),
-  })).min(1),
-  terminalEntries: z.array(z.object({
-    terminalId: z.string().uuid('Invalid Payment Terminal ID'),
-    duId: z.string().uuid('Invalid DU ID').nullish(),
-    cardAmount: handoverAmountSchema,
-    upiAmount: handoverAmountSchema,
-    batchRef: z.string().max(100).nullish(),
-  })).optional(),
-}).strict();
+export const attendantHandoverSchema = z
+  .object({
+    shiftId: z.string().uuid('Invalid shift ID'),
+    userId: z.string().uuid('Invalid user ID').optional(),
+    duId: z.string().uuid('Invalid DU ID'),
+    cashHandedOver: handoverAmountSchema,
+    cardHandedOver: handoverAmountSchema.optional(),
+    upiHandedOver: handoverAmountSchema.optional(),
+    nozzleReadings: z
+      .array(
+        z.object({
+          nozzleId: z.string().uuid('Invalid nozzle ID'),
+          closingReading: handoverAmountSchema,
+          testingVolume: handoverAmountSchema.optional(),
+        }),
+      )
+      .min(1),
+    terminalEntries: z
+      .array(
+        z.object({
+          terminalId: z.string().uuid('Invalid Payment Terminal ID'),
+          duId: z.string().uuid('Invalid DU ID').nullish(),
+          cardAmount: handoverAmountSchema,
+          upiAmount: handoverAmountSchema,
+          batchRef: z.string().max(100).nullish(),
+        }),
+      )
+      .optional(),
+  })
+  .strict();
 
 export type AttendantHandoverInput = z.infer<typeof attendantHandoverSchema>;
 
@@ -452,7 +526,9 @@ export const expenseEntryFormSchema = z.object({
   targetShiftId: z.string().optional().default(''),
   transactionDate: z.string().optional().default(''),
   categoryId: z.string().min(1, 'Category is required'),
-  amount: z.coerce.number({ invalid_type_error: 'Amount is required' }).positive('Amount must be positive'),
+  amount: z.coerce
+    .number({ invalid_type_error: 'Amount is required' })
+    .positive('Amount must be positive'),
   description: z.string().max(255).optional().default(''),
   /** Which money account it's paid from (empty = auto by context). */
   accountId: z.string().optional().default(''),
@@ -463,7 +539,9 @@ export const collectionEntryFormSchema = z.object({
   targetShiftId: z.string().optional().default(''),
   transactionDate: z.string().optional().default(''),
   customerId: z.string().optional().default(''),
-  amount: z.coerce.number({ invalid_type_error: 'Amount is required' }).positive('Amount must be positive'),
+  amount: z.coerce
+    .number({ invalid_type_error: 'Amount is required' })
+    .positive('Amount must be positive'),
   paymentMethod: z.enum(['Cash', 'Card', 'UPI', 'BankTransfer']).default('Cash'),
   notes: z.string().max(500).optional().default(''),
   /** Bank account a non-cash collection lands in (empty = auto/default). */
@@ -473,11 +551,17 @@ export type CollectionEntryFormValues = z.infer<typeof collectionEntryFormSchema
 
 export const purchaseLineFormSchema = z.object({
   productId: z.string().min(1, 'Product is required'),
-  quantity: z.coerce.number({ invalid_type_error: 'Quantity is required' }).positive('Quantity must be positive'),
-  unitPrice: z.coerce.number({ invalid_type_error: 'Rate is required' }).positive('Rate must be positive'),
+  quantity: z.coerce
+    .number({ invalid_type_error: 'Quantity is required' })
+    .positive('Quantity must be positive'),
+  unitPrice: z.coerce
+    .number({ invalid_type_error: 'Rate is required' })
+    .positive('Rate must be positive'),
   // Fuel lines may split the received quantity across destination tanks. The
   // form injects this on submit; it is not a user-typed RHF field.
-  tankAllocations: z.array(z.object({ tankId: z.string(), quantity: z.coerce.number().nonnegative() })).optional(),
+  tankAllocations: z
+    .array(z.object({ tankId: z.string(), quantity: z.coerce.number().nonnegative() }))
+    .optional(),
 });
 export type PurchaseLineFormValues = z.infer<typeof purchaseLineFormSchema>;
 
@@ -493,27 +577,33 @@ export type PurchaseEntryFormValues = z.infer<typeof purchaseEntryFormSchema>;
 
 export const merchandiseSaleLineFormSchema = z.object({
   productId: z.string().min(1, 'Product is required'),
-  quantity: z.coerce.number({ invalid_type_error: 'Quantity is required' }).positive('Quantity must be positive'),
-  unitPrice: z.coerce.number({ invalid_type_error: 'Unit price is required' }).nonnegative('Unit price must be non-negative'),
+  quantity: z.coerce
+    .number({ invalid_type_error: 'Quantity is required' })
+    .positive('Quantity must be positive'),
+  unitPrice: z.coerce
+    .number({ invalid_type_error: 'Unit price is required' })
+    .nonnegative('Unit price must be non-negative'),
 });
 export type MerchandiseSaleLineFormValues = z.infer<typeof merchandiseSaleLineFormSchema>;
 
-export const merchandiseSaleEntryFormSchema = z.object({
-  targetShiftId: z.string().optional().default(''),
-  paymentMethod: z.enum(['Cash', 'Card', 'UPI', 'Credit']).default('Cash'),
-  customerId: z.string().optional().default(''),
-  attendantId: z.string().optional().default(''),
-  notes: z.string().max(500).optional().default(''),
-  lines: z.array(merchandiseSaleLineFormSchema).min(1, 'Add at least one product'),
-  // Ad-hoc walk-in buyer bill-to (used only when no saved customer is selected).
-  buyerName: z.string().max(255).optional().default(''),
-  buyerPhone: z.string().max(50).optional().default(''),
-  buyerGstin: z.string().max(20).optional().default(''),
-  buyerStateCode: z.string().max(2).optional().default(''),
-  /** When true (and a buyer name is given), save/dedup the buyer into the registry. */
-  saveAsCustomer: z.boolean().optional().default(false),
-}).refine((data) => data.paymentMethod !== 'Credit' || !!data.customerId, {
-  message: 'A customer account is required for credit sales',
-  path: ['customerId'],
-});
+export const merchandiseSaleEntryFormSchema = z
+  .object({
+    targetShiftId: z.string().optional().default(''),
+    paymentMethod: z.enum(['Cash', 'Card', 'UPI', 'Credit']).default('Cash'),
+    customerId: z.string().optional().default(''),
+    attendantId: z.string().optional().default(''),
+    notes: z.string().max(500).optional().default(''),
+    lines: z.array(merchandiseSaleLineFormSchema).min(1, 'Add at least one product'),
+    // Ad-hoc walk-in buyer bill-to (used only when no saved customer is selected).
+    buyerName: z.string().max(255).optional().default(''),
+    buyerPhone: z.string().max(50).optional().default(''),
+    buyerGstin: z.string().max(20).optional().default(''),
+    buyerStateCode: z.string().max(2).optional().default(''),
+    /** When true (and a buyer name is given), save/dedup the buyer into the registry. */
+    saveAsCustomer: z.boolean().optional().default(false),
+  })
+  .refine((data) => data.paymentMethod !== 'Credit' || !!data.customerId, {
+    message: 'A customer account is required for credit sales',
+    path: ['customerId'],
+  });
 export type MerchandiseSaleEntryFormValues = z.infer<typeof merchandiseSaleEntryFormSchema>;

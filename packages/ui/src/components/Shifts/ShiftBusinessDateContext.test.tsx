@@ -22,34 +22,56 @@ describe('ShiftBusinessDateContext', () => {
     queryClient.setQueryData(queryKeys.businessDayStatus('station-1', '2026-09-10'), {
       requestedState: 'OPEN',
       openBusinessDays: [
-        { id: 'past', businessDate: '2026-09-10', status: 'OPEN', openedAt: '', closedAt: null, openShiftCount: 0, closedShiftCount: 1, lastActivityAt: '' },
-        { id: 'future', businessDate: '2026-09-13', status: 'OPEN', openedAt: '', closedAt: null, openShiftCount: 0, closedShiftCount: 0, lastActivityAt: '' },
+        {
+          id: 'past',
+          businessDate: '2026-09-10',
+          status: 'OPEN',
+          openedAt: '',
+          closedAt: null,
+          openShiftCount: 0,
+          closedShiftCount: 1,
+          lastActivityAt: '',
+        },
+        {
+          id: 'future',
+          businessDate: '2026-09-13',
+          status: 'OPEN',
+          openedAt: '',
+          closedAt: null,
+          openShiftCount: 0,
+          closedShiftCount: 0,
+          lastActivityAt: '',
+        },
       ],
     });
-    const html = renderToStaticMarkup(<QueryClientProvider client={queryClient}><OpenShiftForm
-      lastShiftSummary={null}
-      lastShift={{ id: 'previous' }}
-      stationId="station-1"
-      templates={[{ id: 'template-1', name: 'Morning', startTime: '06:00', endTime: '14:00' }]}
-      dispensers={[]}
-      staff={[]}
-      nozzles={[]}
-      terminals={[]}
-      terminalAssignments={[]}
-      onTerminalAssignmentChange={() => {}}
-      selectedTemplateId="template-1"
-      businessDate="2026-09-10"
-      currentBusinessDate="2026-09-12"
-      timeZone="Asia/Kolkata"
-      openingCash={0}
-      staffAssignments={[]}
-      onStaffAssignmentChange={() => {}}
-      initialReadings={[]}
-      onInitialReadingChange={() => {}}
-      isOpening={false}
-      onSubmit={() => {}}
-      onViewLastShiftSummary={() => {}}
-    /></QueryClientProvider>);
+    const html = renderToStaticMarkup(
+      <QueryClientProvider client={queryClient}>
+        <OpenShiftForm
+          lastShiftSummary={null}
+          lastShift={{ id: 'previous' }}
+          stationId="station-1"
+          templates={[{ id: 'template-1', name: 'Morning', startTime: '06:00', endTime: '14:00' }]}
+          dispensers={[]}
+          staff={[]}
+          nozzles={[]}
+          terminals={[]}
+          terminalAssignments={[]}
+          onTerminalAssignmentChange={() => {}}
+          selectedTemplateId="template-1"
+          businessDate="2026-09-10"
+          currentBusinessDate="2026-09-12"
+          timeZone="Asia/Kolkata"
+          openingCash={0}
+          staffAssignments={[]}
+          onStaffAssignmentChange={() => {}}
+          initialReadings={[]}
+          onInitialReadingChange={() => {}}
+          isOpening={false}
+          onSubmit={() => {}}
+          onViewLastShiftSummary={() => {}}
+        />
+      </QueryClientProvider>,
+    );
     expect(html).toContain('Shift Business Date · 10 Sept 2026');
     expect(html).toContain('Scheduled Shift Window · 06:00–14:00');
     expect(html).toContain('Working on 10 Sept 2026. Actions are being recorded on 12 Sept 2026.');
@@ -61,8 +83,22 @@ describe('ShiftBusinessDateContext', () => {
   it('shows the Station-local lifecycle time in the active state', () => {
     const html = renderToStaticMarkup(
       <ShiftControlBar
-        activeShift={{ ...historical, templateName: 'Morning', openedAt: '2026-09-12T01:30:00.000Z', openingCash: 1000 }}
-        shiftTotals={{ cashCollections: 0, cashExpenses: 0, cardCollections: 0, upiCollections: 0, creditSales: 0, expenseCount: 0, purchaseCount: 0, purchaseTotal: 0 }}
+        activeShift={{
+          ...historical,
+          templateName: 'Morning',
+          openedAt: '2026-09-12T01:30:00.000Z',
+          openingCash: 1000,
+        }}
+        shiftTotals={{
+          cashCollections: 0,
+          cashExpenses: 0,
+          cardCollections: 0,
+          upiCollections: 0,
+          creditSales: 0,
+          expenseCount: 0,
+          purchaseCount: 0,
+          purchaseTotal: 0,
+        }}
         handoversCompleted={0}
         handoversAssigned={0}
         quickActions={[]}

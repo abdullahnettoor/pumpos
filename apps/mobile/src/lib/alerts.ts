@@ -29,7 +29,10 @@ const VARIANCE_THRESHOLD = 200; // ₹ — flag a closed shift's cash variance b
 export function useMobileAlerts(station: Station | null): MobileAlert[] {
   const settings: any = (station as any)?.settings || {};
   const todayBiz = station
-    ? resolveBusinessDate({ timeZone: settings.timezone, dayStartsAt: settings.business_day_starts_at })
+    ? resolveBusinessDate({
+        timeZone: settings.timezone,
+        dayStartsAt: settings.business_day_starts_at,
+      })
     : '';
 
   const stock = useStationAlerts(station?.id, !!station);
@@ -43,12 +46,21 @@ export function useMobileAlerts(station: Station | null): MobileAlert[] {
 
     // Stock (tanks low/critical, oversold merchandise) — from the shared hook.
     for (const a of stock) {
-      list.push({ id: a.id, severity: a.severity, category: 'stock', title: a.title, meta: a.meta, tab: 'more' });
+      list.push({
+        id: a.id,
+        severity: a.severity,
+        category: 'stock',
+        title: a.title,
+        meta: a.meta,
+        tab: 'more',
+      });
     }
 
     // Credit-limit breaches.
     const overLimit = (customersQ.data || []).filter(
-      (c: any) => Number(c.creditLimit || 0) > 0 && Number(c.currentBalance || 0) > Number(c.creditLimit || 0),
+      (c: any) =>
+        Number(c.creditLimit || 0) > 0 &&
+        Number(c.currentBalance || 0) > Number(c.creditLimit || 0),
     );
     if (overLimit.length === 1) {
       const c = overLimit[0];

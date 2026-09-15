@@ -9,8 +9,17 @@ import { CashCountPopover, type CashBreakdown } from '../primitives/CashCountPop
 import { CustomerFormDrawer } from '../customers/CustomerFormDrawer.js';
 import { VehicleDrawer } from '../customers/VehicleDrawer.js';
 import { useAllVehicles } from '../../query/hooks.js';
-import { CloudTransactionService, type RecordHandoverPayload, type RecordHandoverResult } from '../../services/cloud.js';
-import { loadHandoverRequestIdentity, resolveHandoverRequestIdentity, saveHandoverRequestIdentity, useRecordHandoverMutation } from '../../query/handoverMutation.js';
+import {
+  CloudTransactionService,
+  type RecordHandoverPayload,
+  type RecordHandoverResult,
+} from '../../services/cloud.js';
+import {
+  loadHandoverRequestIdentity,
+  resolveHandoverRequestIdentity,
+  saveHandoverRequestIdentity,
+  useRecordHandoverMutation,
+} from '../../query/handoverMutation.js';
 import { inr } from '../../utils/format.js';
 
 const transactionService = new CloudTransactionService();
@@ -22,7 +31,7 @@ const NEW_VEHICLE = '__new_vehicle__';
 // A fresh idempotency key per customer-sale line, so a retry of the SAME line
 // (e.g. after a network blip) de-dupes server-side instead of double-posting.
 const genIdemKey = (): string =>
-  (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
+  typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
     ? crypto.randomUUID()
     : `idem-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
@@ -31,8 +40,14 @@ const handoverFormSchema = z.object({
   cashHandedOver: z.coerce.number().nonnegative('Cash must be non-negative'),
   cardHandedOver: z.coerce.number().nonnegative('Card Swipe total must be non-negative'),
   upiHandedOver: z.coerce.number().nonnegative('UPI QR total must be non-negative'),
-  nozzleReadings: z.record(z.string().uuid(), z.coerce.number().nonnegative('Reading must be non-negative')),
-  nozzleTesting: z.record(z.string().uuid(), z.coerce.number().nonnegative('Testing quantity must be non-negative')),
+  nozzleReadings: z.record(
+    z.string().uuid(),
+    z.coerce.number().nonnegative('Reading must be non-negative'),
+  ),
+  nozzleTesting: z.record(
+    z.string().uuid(),
+    z.coerce.number().nonnegative('Testing quantity must be non-negative'),
+  ),
   terminalCard: z.record(z.string(), z.coerce.number().nonnegative()).optional(),
   terminalUpi: z.record(z.string(), z.coerce.number().nonnegative()).optional(),
 });
@@ -139,7 +154,9 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
     setError(null);
     setAcceptedResult(null);
     setZeroTerminalsConfirmed(false);
-    handoverRequestRef.current = stationId ? loadHandoverRequestIdentity(stationId, shiftId, userId, duId) : null;
+    handoverRequestRef.current = stationId
+      ? loadHandoverRequestIdentity(stationId, shiftId, userId, duId)
+      : null;
     if (existingHandover) {
       setValue('cashHandedOver', (Number(existingHandover.cashHandedOver) || '') as any);
       setValue('cardHandedOver', (Number(existingHandover.cardHandedOver) || '') as any);
@@ -154,7 +171,10 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
     // helpful starting point; testing pre-fills from the previously-saved value so
     // re-saving the handover doesn't silently zero the calibration volume.
     nozzles.forEach((nz) => {
-      setValue(`nozzleReadings.${nz.nozzleId}`, Number(nz.closingReading ?? nz.openingReading ?? 0));
+      setValue(
+        `nozzleReadings.${nz.nozzleId}`,
+        Number(nz.closingReading ?? nz.openingReading ?? 0),
+      );
       setValue(`nozzleTesting.${nz.nozzleId}`, (Number(nz.testingVolume) || '') as any);
     });
 
@@ -189,11 +209,25 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
   const hasTerminals = duTerminals.length > 0;
   const formTerminalCard = formValues.terminalCard || {};
   const formTerminalUpi = formValues.terminalUpi || {};
-  const terminalCardTotal = duTerminals.reduce((sum: number, t: any) => sum + Number(formTerminalCard[t.terminalId] || 0), 0);
-  const terminalUpiTotal = duTerminals.reduce((sum: number, t: any) => sum + Number(formTerminalUpi[t.terminalId] || 0), 0);
+  const terminalCardTotal = duTerminals.reduce(
+    (sum: number, t: any) => sum + Number(formTerminalCard[t.terminalId] || 0),
+    0,
+  );
+  const terminalUpiTotal = duTerminals.reduce(
+    (sum: number, t: any) => sum + Number(formTerminalUpi[t.terminalId] || 0),
+    0,
+  );
   const aggregateAllowed = !stationHasConfiguredTerminals;
-  const effectiveCard = hasTerminals ? terminalCardTotal : aggregateAllowed ? Number(formValues.cardHandedOver || 0) : 0;
-  const effectiveUpi = hasTerminals ? terminalUpiTotal : aggregateAllowed ? Number(formValues.upiHandedOver || 0) : 0;
+  const effectiveCard = hasTerminals
+    ? terminalCardTotal
+    : aggregateAllowed
+      ? Number(formValues.cardHandedOver || 0)
+      : 0;
+  const effectiveUpi = hasTerminals
+    ? terminalUpiTotal
+    : aggregateAllowed
+      ? Number(formValues.upiHandedOver || 0)
+      : 0;
 
   // ---- Fuel-on-credit (credit chits) declared for this (attendant, DU) ----
   const [creditLines, setCreditLines] = useState<any[]>([]);
@@ -229,11 +263,27 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
     ccIdemKeyRef.current = null;
     setCcSelectValue('');
     setCcChannel('credit');
-    setCcCustomerId(''); setCcCustomerName(''); setCcCustomerType(null); setCcVehicleId(null); setCcVehicleLabel('');
-    setCcProductId(''); setCcQty(''); setCcPrice(''); setCcAmount(''); setCcNotes('');
+    setCcCustomerId('');
+    setCcCustomerName('');
+    setCcCustomerType(null);
+    setCcVehicleId(null);
+    setCcVehicleLabel('');
+    setCcProductId('');
+    setCcQty('');
+    setCcPrice('');
+    setCcAmount('');
+    setCcNotes('');
   };
   useEffect(() => {
-    if (isOpen) { setCreditLines(creditSales ?? []); setOmcLines(omcSales ?? []); setCcOpen(false); resetCcRow(); setExtraCustomers([]); setExtraVehicles([]); setCashBreakdown({}); }
+    if (isOpen) {
+      setCreditLines(creditSales ?? []);
+      setOmcLines(omcSales ?? []);
+      setCcOpen(false);
+      resetCcRow();
+      setExtraCustomers([]);
+      setExtraVehicles([]);
+      setCashBreakdown({});
+    }
   }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fuel products dispensed at this DU (from its nozzles).
@@ -241,7 +291,15 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
     new Map(
       nozzles
         .filter((n: any) => n.productId)
-        .map((n: any) => [n.productId, { id: n.productId, name: n.productName ?? 'Fuel', code: n.productCode ?? '', price: Number(n.unitPrice || 0) }]),
+        .map((n: any) => [
+          n.productId,
+          {
+            id: n.productId,
+            name: n.productName ?? 'Fuel',
+            code: n.productCode ?? '',
+            price: Number(n.unitPrice || 0),
+          },
+        ]),
     ).values(),
   );
 
@@ -249,8 +307,14 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
   // passed in (already Credit/Fleet, non-prepaid). Combined with the customers
   // into one client-side searchable option list — no server round-trips.
   // Records created inline (via the "＋ New …" options) are merged in optimistically.
-  const allCustomers = useMemo(() => [...customers, ...extraCustomers], [customers, extraCustomers]);
-  const allVehicles = useMemo(() => [...(allVehiclesData ?? []), ...extraVehicles], [allVehiclesData, extraVehicles]);
+  const allCustomers = useMemo(
+    () => [...customers, ...extraCustomers],
+    [customers, extraCustomers],
+  );
+  const allVehicles = useMemo(
+    () => [...(allVehiclesData ?? []), ...extraVehicles],
+    [allVehiclesData, extraVehicles],
+  );
   const creditOptions = useMemo(() => {
     const customerIds = new Set(allCustomers.map((c: any) => c.id));
     const opts: { value: string; label: string; sublabel?: string }[] = [];
@@ -259,18 +323,25 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
       const parts = [v.customerName ?? '', v.customerType, v.defaultProductName].filter(Boolean);
       opts.push({ value: `v:${v.id}`, label: v.registrationNumber, sublabel: parts.join(' · ') });
     }
-    for (const c of allCustomers) opts.push({ value: `c:${c.id}`, label: c.name, sublabel: c.customerType });
+    for (const c of allCustomers)
+      opts.push({ value: `c:${c.id}`, label: c.name, sublabel: c.customerType });
     return opts;
   }, [allVehicles, allCustomers]);
 
   // Default channel for a selected customer: a prepaid Fleet account is an OMC
   // fleet card (settled to CMS); everything else is a station receivable.
   const defaultChannelFor = (cust: any): 'credit' | 'omc' =>
-    (cust?.customerType === 'Fleet' && cust?.isPrepaid) ? 'omc' : 'credit';
+    cust?.customerType === 'Fleet' && cust?.isPrepaid ? 'omc' : 'credit';
 
   const handleCreditSelect = (value: string) => {
-    if (value === NEW_CUSTOMER) { setNewCustomerOpen(true); return; }
-    if (value === NEW_VEHICLE) { setNewVehicleOpen(true); return; }
+    if (value === NEW_CUSTOMER) {
+      setNewCustomerOpen(true);
+      return;
+    }
+    if (value === NEW_VEHICLE) {
+      setNewVehicleOpen(true);
+      return;
+    }
     ccIdemKeyRef.current = null;
     setCcSelectValue(value);
     if (value.startsWith('v:')) {
@@ -280,11 +351,16 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
       setCcCustomerId(v.customerId);
       setCcCustomerName(v.customerName ?? 'Customer');
       setCcCustomerType(v.customerType ?? cust?.customerType ?? null);
-      setCcChannel(defaultChannelFor(cust ?? { customerType: v.customerType, isPrepaid: v.isPrepaid }));
+      setCcChannel(
+        defaultChannelFor(cust ?? { customerType: v.customerType, isPrepaid: v.isPrepaid }),
+      );
       setCcVehicleId(v.id);
       setCcVehicleLabel(v.registrationNumber);
       const match = duProducts.find((p) => p.id === v.defaultProductId);
-      if (match) { setCcProductId(match.id); if (match.price > 0) setCcPrice(match.price.toFixed(2)); }
+      if (match) {
+        setCcProductId(match.id);
+        if (match.price > 0) setCcPrice(match.price.toFixed(2));
+      }
     } else if (value.startsWith('c:')) {
       const id = value.slice(2);
       const c = allCustomers.find((x: any) => x.id === id);
@@ -299,7 +375,10 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
 
   // Auto-select a record created inline via the "＋ New …" options.
   const handleCustomerCreated = (c: any) => {
-    if (!c?.id) { setNewCustomerOpen(false); return; }
+    if (!c?.id) {
+      setNewCustomerOpen(false);
+      return;
+    }
     setExtraCustomers((prev) => (prev.some((x) => x.id === c.id) ? prev : [...prev, c]));
     setNewCustomerOpen(false);
     setCcSelectValue(`c:${c.id}`);
@@ -311,7 +390,10 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
     setCcVehicleLabel('');
   };
   const handleVehicleCreated = (v: any) => {
-    if (!v?.id) { setNewVehicleOpen(false); return; }
+    if (!v?.id) {
+      setNewVehicleOpen(false);
+      return;
+    }
     setExtraVehicles((prev) => (prev.some((x) => x.id === v.id) ? prev : [...prev, v]));
     setNewVehicleOpen(false);
     setCcSelectValue(`v:${v.id}`);
@@ -322,7 +404,10 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
     setCcVehicleId(v.id);
     setCcVehicleLabel(v.registrationNumber ?? '');
     const match = duProducts.find((p) => p.id === v.defaultProductId);
-    if (match) { setCcProductId(match.id); if (match.price > 0) setCcPrice(match.price.toFixed(2)); }
+    if (match) {
+      setCcProductId(match.id);
+      if (match.price > 0) setCcPrice(match.price.toFixed(2));
+    }
   };
 
   const ccSelectedCustomer = allCustomers.find((c: any) => c.id === ccCustomerId);
@@ -344,13 +429,15 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
   const handleCcQtyChange = (v: string) => {
     ccIdemKeyRef.current = null;
     setCcQty(v);
-    const q = Number(v); const pr = Number(ccPrice);
+    const q = Number(v);
+    const pr = Number(ccPrice);
     if (q > 0 && pr > 0) setCcAmount((q * pr).toFixed(2));
   };
   const handleCcAmountChange = (v: string) => {
     ccIdemKeyRef.current = null;
     setCcAmount(v);
-    const a = Number(v); const pr = Number(ccPrice);
+    const a = Number(v);
+    const pr = Number(ccPrice);
     if (a > 0 && pr > 0) setCcQty((a / pr).toFixed(3));
   };
 
@@ -358,29 +445,40 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
     setError(null);
     const amt = Number(ccAmount);
     const isOmc = ccChannel === 'omc';
-    if (!isOmc && !ccCustomerId) { setError('Search and select a customer or vehicle for the credit sale.'); return; }
-    if (!(amt > 0)) { setError('Enter a valid amount.'); return; }
+    if (!isOmc && !ccCustomerId) {
+      setError('Search and select a customer or vehicle for the credit sale.');
+      return;
+    }
+    if (!(amt > 0)) {
+      setError('Enter a valid amount.');
+      return;
+    }
     try {
       setCcBusy(true);
       const idempotencyKey = ccIdemKeyRef.current ?? (ccIdemKeyRef.current = genIdemKey());
-      const entry = await transactionService.recordCollection({
-        shiftId,
-        customerId: ccCustomerId || undefined,
-        vehicleId: ccVehicleId,
-        productId: ccProductId || null,
-        quantity: Number(ccQty) > 0 ? Number(ccQty) : null,
-        unitPrice: ccPrice && Number(ccPrice) >= 0 ? Number(ccPrice) : null,
-        amount: amt,
-        paymentMethod: isOmc ? 'OMC' : 'Credit',
-        attendantId: userId,
-        duId,
-        notes: ccNotes || undefined,
-      }, { idempotencyKey });
+      const entry = await transactionService.recordCollection(
+        {
+          shiftId,
+          customerId: ccCustomerId || undefined,
+          vehicleId: ccVehicleId,
+          productId: ccProductId || null,
+          quantity: Number(ccQty) > 0 ? Number(ccQty) : null,
+          unitPrice: ccPrice && Number(ccPrice) >= 0 ? Number(ccPrice) : null,
+          amount: amt,
+          paymentMethod: isOmc ? 'OMC' : 'Credit',
+          attendantId: userId,
+          duId,
+          notes: ccNotes || undefined,
+        },
+        { idempotencyKey },
+      );
       const prod = duProducts.find((p) => p.id === ccProductId);
       const line = {
         id: entry?.id,
         customerId: ccCustomerId || null,
-        customerName: ccCustomerId ? (ccCustomerName || ccSelectedCustomer?.name || 'Customer') : null,
+        customerName: ccCustomerId
+          ? ccCustomerName || ccSelectedCustomer?.name || 'Customer'
+          : null,
         customerType: ccCustomerType ?? ccSelectedCustomer?.customerType ?? null,
         vehicleId: ccVehicleId,
         vehicleLabel: ccVehicleLabel || null,
@@ -485,7 +583,12 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
   // this list (they draw down a balance instead of accruing a receivable).
   const creditGroups = useMemo(() => {
     const ORDER = ['Credit', 'Fleet', 'Regular'];
-    const LABELS: Record<string, string> = { Credit: 'Credit', Fleet: 'Fleet', Regular: 'Regular', Other: 'Other' };
+    const LABELS: Record<string, string> = {
+      Credit: 'Credit',
+      Fleet: 'Fleet',
+      Regular: 'Regular',
+      Other: 'Other',
+    };
     const map = new Map<string, any[]>();
     for (const l of creditLines) {
       const t = ORDER.includes(l.customerType) ? l.customerType : 'Other';
@@ -493,9 +596,15 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
     }
     return [...ORDER, 'Other']
       .filter((t) => map.has(t))
-      .map((t) => ({ type: t, label: LABELS[t] ?? t, lines: map.get(t)!, subtotal: map.get(t)!.reduce((s, l) => s + Number(l.amount || 0), 0) }));
+      .map((t) => ({
+        type: t,
+        label: LABELS[t] ?? t,
+        lines: map.get(t)!,
+        subtotal: map.get(t)!.reduce((s, l) => s + Number(l.amount || 0), 0),
+      }));
   }, [creditLines]);
-  const totalDeclared = Number(formCash) + Number(effectiveCard) + Number(effectiveUpi) + creditTotal + omcTotal;
+  const totalDeclared =
+    Number(formCash) + Number(effectiveCard) + Number(effectiveUpi) + creditTotal + omcTotal;
   // Walk-in merchandise cash this attendant collected (net of any card/UPI
   // portion) is part of what they hand over, so it's added to the expected side.
   const merchandiseCashNum = Number(merchandiseCash) || 0;
@@ -509,16 +618,30 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
   const meteredByProduct = new Map<string, number>();
   for (const n of calculatedNozzles) {
     if (!n.productId) continue;
-    meteredByProduct.set(n.productId, (meteredByProduct.get(n.productId) ?? 0) + Math.max(0, n.volume - n.testing));
+    meteredByProduct.set(
+      n.productId,
+      (meteredByProduct.get(n.productId) ?? 0) + Math.max(0, n.volume - n.testing),
+    );
   }
   const unitByProduct = new Map<string, string>();
-  for (const n of calculatedNozzles) { if (n.productId) unitByProduct.set(n.productId, n.unit || 'L'); }
+  for (const n of calculatedNozzles) {
+    if (n.productId) unitByProduct.set(n.productId, n.unit || 'L');
+  }
   const creditLitresByProduct = new Map<string, number>();
   for (const l of [...creditLines, ...omcLines]) {
-    if (l.productId && l.quantity) creditLitresByProduct.set(l.productId, (creditLitresByProduct.get(l.productId) ?? 0) + Number(l.quantity));
+    if (l.productId && l.quantity)
+      creditLitresByProduct.set(
+        l.productId,
+        (creditLitresByProduct.get(l.productId) ?? 0) + Number(l.quantity),
+      );
   }
   const volumeOverages = Array.from(creditLitresByProduct.entries())
-    .map(([pid, lit]) => ({ name: duProducts.find((p) => p.id === pid)?.name ?? 'Fuel', unit: unitByProduct.get(pid) ?? 'L', lit, metered: meteredByProduct.get(pid) ?? 0 }))
+    .map(([pid, lit]) => ({
+      name: duProducts.find((p) => p.id === pid)?.name ?? 'Fuel',
+      unit: unitByProduct.get(pid) ?? 'L',
+      lit,
+      metered: meteredByProduct.get(pid) ?? 0,
+    }))
     .filter((o) => o.lit > o.metered + 0.001);
 
   const onSubmit = async (values: HandoverFormValues) => {
@@ -530,12 +653,16 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
     if (hasTerminals && !zeroTerminalsConfirmed) {
       const terminalTotal = duTerminals.reduce(
         (sum: number, t: any) =>
-          sum + Number(values.terminalCard?.[t.terminalId] ?? 0) + Number(values.terminalUpi?.[t.terminalId] ?? 0),
+          sum +
+          Number(values.terminalCard?.[t.terminalId] ?? 0) +
+          Number(values.terminalUpi?.[t.terminalId] ?? 0),
         0,
       );
       if (terminalTotal === 0) {
         setZeroTerminalsConfirmed(true);
-        setError('No card/UPI takings entered for the assigned terminal(s). If that is correct, submit again to confirm; otherwise enter the terminal amounts.');
+        setError(
+          'No card/UPI takings entered for the assigned terminal(s). If that is correct, submit again to confirm; otherwise enter the terminal amounts.',
+        );
         return;
       }
     }
@@ -543,28 +670,34 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
     // Validate reading constraints: closing cannot be less than opening
     for (const nz of calculatedNozzles) {
       if (nz.closing < nz.opening) {
-        setError(`Closing reading for nozzle ${nz.nozzleName} (${nz.closing}) cannot be less than opening reading (${nz.opening}).`);
+        setError(
+          `Closing reading for nozzle ${nz.nozzleName} (${nz.closing}) cannot be less than opening reading (${nz.opening}).`,
+        );
         return;
       }
     }
 
     try {
       setSubmitting(true);
-      const nozzleReadingsPayload = Object.entries(values.nozzleReadings).map(([nozzleId, closingVal]) => ({
-        nozzleId,
-        closingReading: Number(closingVal),
-        testingVolume: Number(values.nozzleTesting?.[nozzleId] ?? 0),
-      }));
+      const nozzleReadingsPayload = Object.entries(values.nozzleReadings).map(
+        ([nozzleId, closingVal]) => ({
+          nozzleId,
+          closingReading: Number(closingVal),
+          testingVolume: Number(values.nozzleTesting?.[nozzleId] ?? 0),
+        }),
+      );
 
       const payload: RecordHandoverPayload = {
         shiftId,
         userId,
         duId,
         cashHandedOver: Number(values.cashHandedOver),
-        ...(aggregateAllowed ? {
-          cardHandedOver: Number(values.cardHandedOver || 0),
-          upiHandedOver: Number(values.upiHandedOver || 0),
-        } : {}),
+        ...(aggregateAllowed
+          ? {
+              cardHandedOver: Number(values.cardHandedOver || 0),
+              upiHandedOver: Number(values.upiHandedOver || 0),
+            }
+          : {}),
         nozzleReadings: nozzleReadingsPayload,
         terminalEntries: hasTerminals
           ? duTerminals.map((t: any) => ({
@@ -575,23 +708,35 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
             }))
           : undefined,
       };
-      handoverRequestRef.current = resolveHandoverRequestIdentity(handoverRequestRef.current, payload);
-      if (stationId) saveHandoverRequestIdentity(stationId, shiftId, userId, duId, handoverRequestRef.current);
+      handoverRequestRef.current = resolveHandoverRequestIdentity(
+        handoverRequestRef.current,
+        payload,
+      );
+      if (stationId)
+        saveHandoverRequestIdentity(stationId, shiftId, userId, duId, handoverRequestRef.current);
       const result = await recordHandover.mutateAsync({
         stationId: stationId ?? '',
         payload,
         idempotencyKey: handoverRequestRef.current.idempotencyKey,
       });
       for (const reading of result.nozzleReadings) {
-        setValue(`nozzleReadings.${reading.nozzleId}`, reading.closingReading, { shouldDirty: false });
-        setValue(`nozzleTesting.${reading.nozzleId}`, reading.testingVolume, { shouldDirty: false });
+        setValue(`nozzleReadings.${reading.nozzleId}`, reading.closingReading, {
+          shouldDirty: false,
+        });
+        setValue(`nozzleTesting.${reading.nozzleId}`, reading.testingVolume, {
+          shouldDirty: false,
+        });
       }
       setValue('cashHandedOver', Number(result.handover.cashHandedOver), { shouldDirty: false });
       setValue('cardHandedOver', Number(result.handover.cardHandedOver), { shouldDirty: false });
       setValue('upiHandedOver', Number(result.handover.upiHandedOver), { shouldDirty: false });
       for (const entry of result.terminalEntries) {
-        setValue(`terminalCard.${entry.terminalId}`, Number(entry.cardAmount), { shouldDirty: false });
-        setValue(`terminalUpi.${entry.terminalId}`, Number(entry.upiAmount), { shouldDirty: false });
+        setValue(`terminalCard.${entry.terminalId}`, Number(entry.cardAmount), {
+          shouldDirty: false,
+        });
+        setValue(`terminalUpi.${entry.terminalId}`, Number(entry.upiAmount), {
+          shouldDirty: false,
+        });
       }
       acceptedFormFingerprintRef.current = JSON.stringify(getValues());
       setAcceptedResult(result);
@@ -607,97 +752,348 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
 
   return (
     <>
-    <Drawer
-      isOpen={isOpen}
-      onClose={onClose}
-      title={`Attendant Handover: ${userName} (${duCode})`}
-    >
-      <form onSubmit={handleSubmit(onSubmit)} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-        {error && (
-          <div style={{
-            backgroundColor: 'var(--state-danger-bg)',
-            border: '1px solid var(--border-soft)',
-            color: 'var(--state-danger-fg)',
-            padding: '10px 12px',
-            borderRadius: 'var(--radius-input)',
-            fontSize: '12px',
-            fontWeight: 500,
-          }}>
-            ⚠️ {error}
-          </div>
-        )}
+      <Drawer
+        isOpen={isOpen}
+        onClose={onClose}
+        title={`Attendant Handover: ${userName} (${duCode})`}
+      >
+        <form
+          onSubmit={handleSubmit(onSubmit)}
+          style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}
+        >
+          {error && (
+            <div
+              style={{
+                backgroundColor: 'var(--state-danger-bg)',
+                border: '1px solid var(--border-soft)',
+                color: 'var(--state-danger-fg)',
+                padding: '10px 12px',
+                borderRadius: 'var(--radius-input)',
+                fontSize: '12px',
+                fontWeight: 500,
+              }}
+            >
+              ⚠️ {error}
+            </div>
+          )}
 
-        {/* 1. Nozzle Readings Section */}
-        <div>
-          <h3 style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '10px' }}>
-            1. Nozzle Readings & Calibration Testing
-          </h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {calculatedNozzles.map((nz) => (
-              <div
-                key={nz.nozzleId}
-                style={{
-                  backgroundColor: 'var(--bg-surface-alt)',
-                  border: '1px solid var(--border-soft)',
-                  borderRadius: 'var(--radius-input)',
-                  padding: '10px 12px',
-                  display: 'grid',
-                  gridTemplateColumns: '1fr 90px 110px 90px',
-                  alignItems: 'center',
-                  gap: '10px',
-                }}
-              >
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: '13px', color: 'var(--text-strong)' }}>{nz.nozzleName}</div>
-                  <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                    {nz.productCode} • <strong>₹{nz.price.toFixed(2)}/{nz.unit || 'L'}</strong>
+          {/* 1. Nozzle Readings Section */}
+          <div>
+            <h3
+              style={{
+                fontSize: '12px',
+                fontWeight: 600,
+                color: 'var(--text-muted)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+                marginBottom: '10px',
+              }}
+            >
+              1. Nozzle Readings & Calibration Testing
+            </h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {calculatedNozzles.map((nz) => (
+                <div
+                  key={nz.nozzleId}
+                  style={{
+                    backgroundColor: 'var(--bg-surface-alt)',
+                    border: '1px solid var(--border-soft)',
+                    borderRadius: 'var(--radius-input)',
+                    padding: '10px 12px',
+                    display: 'grid',
+                    gridTemplateColumns: '1fr 90px 110px 90px',
+                    alignItems: 'center',
+                    gap: '10px',
+                  }}
+                >
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: '13px', color: 'var(--text-strong)' }}>
+                      {nz.nozzleName}
+                    </div>
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                      {nz.productCode} •{' '}
+                      <strong>
+                        ₹{nz.price.toFixed(2)}/{nz.unit || 'L'}
+                      </strong>
+                    </div>
+                  </div>
+                  <div>
+                    <label
+                      style={{
+                        fontSize: '10px',
+                        color: 'var(--text-muted)',
+                        display: 'block',
+                        marginBottom: '2px',
+                      }}
+                    >
+                      Opening
+                    </label>
+                    <span
+                      style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: '12px',
+                        color: 'var(--text-faint)',
+                      }}
+                    >
+                      {nz.opening.toFixed(3)}
+                    </span>
+                  </div>
+                  <div>
+                    <label
+                      style={{
+                        fontSize: '10px',
+                        color: 'var(--text-muted)',
+                        display: 'block',
+                        marginBottom: '2px',
+                      }}
+                    >
+                      Closing Rd
+                    </label>
+                    <input
+                      type="number"
+                      step="0.001"
+                      min={nz.opening}
+                      required
+                      {...register(`nozzleReadings.${nz.nozzleId}`)}
+                      style={{
+                        width: '100%',
+                        height: '28px',
+                        padding: '0 6px',
+                        border: `1px solid ${nz.closing < nz.opening ? 'var(--brand-danger)' : 'var(--border-strong)'}`,
+                        borderRadius: 'var(--radius-input)',
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: '12px',
+                        textAlign: 'right',
+                      }}
+                    />
+                    {nz.closing < nz.opening ? (
+                      <span
+                        style={{
+                          color: 'var(--brand-danger)',
+                          fontSize: '10px',
+                          display: 'block',
+                          marginTop: '2px',
+                        }}
+                      >
+                        Must be ≥ {nz.opening.toFixed(3)}
+                      </span>
+                    ) : errors.nozzleReadings?.[nz.nozzleId] ? (
+                      <span
+                        style={{
+                          color: 'var(--brand-danger)',
+                          fontSize: '10px',
+                          display: 'block',
+                          marginTop: '2px',
+                        }}
+                      >
+                        {errors.nozzleReadings[nz.nozzleId]?.message || 'Invalid'}
+                      </span>
+                    ) : null}
+                  </div>
+                  <div>
+                    <label
+                      style={{
+                        fontSize: '10px',
+                        color: 'var(--text-muted)',
+                        display: 'block',
+                        marginBottom: '2px',
+                      }}
+                    >
+                      Testing ({nz.unit || 'L'})
+                    </label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      placeholder="0"
+                      {...register(`nozzleTesting.${nz.nozzleId}`)}
+                      style={{
+                        width: '100%',
+                        height: '28px',
+                        padding: '0 6px',
+                        border: '1px solid var(--border-strong)',
+                        borderRadius: 'var(--radius-input)',
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: '12px',
+                        textAlign: 'right',
+                      }}
+                    />
+                    {errors.nozzleTesting?.[nz.nozzleId] && (
+                      <span
+                        style={{
+                          color: 'var(--brand-danger)',
+                          fontSize: '10px',
+                          display: 'block',
+                          marginTop: '2px',
+                        }}
+                      >
+                        {errors.nozzleTesting[nz.nozzleId]?.message || 'Invalid'}
+                      </span>
+                    )}
                   </div>
                 </div>
-                <div>
-                  <label style={{ fontSize: '10px', color: 'var(--text-muted)', display: 'block', marginBottom: '2px' }}>Opening</label>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--text-faint)' }}>{nz.opening.toFixed(3)}</span>
+              ))}
+            </div>
+          </div>
+
+          {/* 2. Card / UPI collections — only the POS terminals assigned to THIS
+             DU are shown (an attendant isn't aware of machines that weren't
+             handed to them; shift-wide / other-DU machines are reconciled at
+             shift close). */}
+          {hasTerminals ? (
+            <div>
+              <h3
+                style={{
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  color: 'var(--text-muted)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                  marginBottom: '10px',
+                }}
+              >
+                2. Card / UPI Collections
+              </h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <label
+                  style={{
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    color: 'var(--text-muted)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                  }}
+                >
+                  POS Terminal Batches (Card / UPI per machine)
+                </label>
+                {duTerminals.map((t: any) => {
+                  const both = t.supportsCard && t.supportsUpi;
+                  return (
+                    <div
+                      key={t.terminalId}
+                      style={{
+                        backgroundColor: 'var(--bg-surface-alt)',
+                        border: '1px solid var(--border-soft)',
+                        borderRadius: 'var(--radius-input)',
+                        padding: '10px 12px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '8px',
+                      }}
+                    >
+                      <div
+                        style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-strong)' }}
+                      >
+                        {t.label}
+                        {t.provider && (
+                          <span style={{ color: 'var(--text-faint)', fontWeight: 500 }}>
+                            {' '}
+                            · {t.provider}
+                          </span>
+                        )}
+                      </div>
+                      <div
+                        style={{
+                          display: 'grid',
+                          gridTemplateColumns: both ? '1fr 1fr' : '1fr',
+                          gap: '8px',
+                        }}
+                      >
+                        {t.supportsCard && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                            <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
+                              Card (₹)
+                            </label>
+                            <input
+                              type="number"
+                              step="any"
+                              min="0"
+                              placeholder="0"
+                              {...register(`terminalCard.${t.terminalId}`)}
+                              style={{
+                                height: '30px',
+                                padding: '0 8px',
+                                border: '1px solid var(--border-strong)',
+                                borderRadius: 'var(--radius-input)',
+                                fontFamily: 'var(--font-mono)',
+                                fontSize: '12px',
+                                textAlign: 'right',
+                              }}
+                            />
+                          </div>
+                        )}
+                        {t.supportsUpi && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                            <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
+                              UPI (₹)
+                            </label>
+                            <input
+                              type="number"
+                              step="any"
+                              min="0"
+                              placeholder="0"
+                              {...register(`terminalUpi.${t.terminalId}`)}
+                              style={{
+                                height: '30px',
+                                padding: '0 8px',
+                                border: '1px solid var(--border-strong)',
+                                borderRadius: 'var(--radius-input)',
+                                fontFamily: 'var(--font-mono)',
+                                fontSize: '12px',
+                                textAlign: 'right',
+                              }}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    fontSize: '12px',
+                    color: 'var(--text-muted)',
+                    paddingTop: '2px',
+                  }}
+                >
+                  <span>POS totals (derived)</span>
+                  <strong style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-default)' }}>
+                    Card ₹{terminalCardTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}{' '}
+                    · UPI ₹{terminalUpiTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  </strong>
                 </div>
-                <div>
-                  <label style={{ fontSize: '10px', color: 'var(--text-muted)', display: 'block', marginBottom: '2px' }}>Closing Rd</label>
+              </div>
+            </div>
+          ) : aggregateAllowed ? (
+            <div>
+              <h3
+                style={{
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  color: 'var(--text-muted)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                  marginBottom: '10px',
+                }}
+              >
+                2. Card / UPI Collections
+              </h3>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                  <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
+                    Card total (₹)
+                  </label>
                   <input
                     type="number"
-                    step="0.001"
-                    min={nz.opening}
-                    required
-                    {...register(`nozzleReadings.${nz.nozzleId}`)}
-                    style={{
-                      width: '100%',
-                      height: '28px',
-                      padding: '0 6px',
-                      border: `1px solid ${nz.closing < nz.opening ? 'var(--brand-danger)' : 'var(--border-strong)'}`,
-                      borderRadius: 'var(--radius-input)',
-                      fontFamily: 'var(--font-mono)',
-                      fontSize: '12px',
-                      textAlign: 'right',
-                    }}
-                  />
-                  {nz.closing < nz.opening ? (
-                    <span style={{ color: 'var(--brand-danger)', fontSize: '10px', display: 'block', marginTop: '2px' }}>
-                      Must be ≥ {nz.opening.toFixed(3)}
-                    </span>
-                  ) : errors.nozzleReadings?.[nz.nozzleId] ? (
-                    <span style={{ color: 'var(--brand-danger)', fontSize: '10px', display: 'block', marginTop: '2px' }}>
-                      {errors.nozzleReadings[nz.nozzleId]?.message || 'Invalid'}
-                    </span>
-                  ) : null}
-                </div>
-                <div>
-                  <label style={{ fontSize: '10px', color: 'var(--text-muted)', display: 'block', marginBottom: '2px' }}>Testing ({nz.unit || 'L'})</label>
-                  <input
-                    type="number"
-                    step="0.1"
+                    step="any"
                     min="0"
                     placeholder="0"
-                    {...register(`nozzleTesting.${nz.nozzleId}`)}
+                    {...register('cardHandedOver')}
                     style={{
-                      width: '100%',
-                      height: '28px',
-                      padding: '0 6px',
+                      height: '30px',
+                      padding: '0 8px',
                       border: '1px solid var(--border-strong)',
                       borderRadius: 'var(--radius-input)',
                       fontFamily: 'var(--font-mono)',
@@ -705,451 +1101,872 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
                       textAlign: 'right',
                     }}
                   />
-                  {errors.nozzleTesting?.[nz.nozzleId] && (
-                    <span style={{ color: 'var(--brand-danger)', fontSize: '10px', display: 'block', marginTop: '2px' }}>
-                      {errors.nozzleTesting[nz.nozzleId]?.message || 'Invalid'}
-                    </span>
-                  )}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                  <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
+                    UPI total (₹)
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    min="0"
+                    placeholder="0"
+                    {...register('upiHandedOver')}
+                    style={{
+                      height: '30px',
+                      padding: '0 8px',
+                      border: '1px solid var(--border-strong)',
+                      borderRadius: 'var(--radius-input)',
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: '12px',
+                      textAlign: 'right',
+                    }}
+                  />
                 </div>
               </div>
-            ))}
-          </div>
-        </div>
+              <span
+                style={{
+                  display: 'block',
+                  marginTop: '4px',
+                  fontSize: '10px',
+                  color: 'var(--text-faint)',
+                }}
+              >
+                Aggregate declaration used because no Payment Terminal is configured.
+              </span>
+            </div>
+          ) : (
+            <div
+              style={{
+                padding: '10px 12px',
+                border: '1px solid var(--border-soft)',
+                borderRadius: 'var(--radius-input)',
+                backgroundColor: 'var(--bg-surface-alt)',
+                color: 'var(--text-muted)',
+                fontSize: '11px',
+              }}
+            >
+              No Payment Terminal is assigned to this Dispenser. Card and UPI declarations must be
+              recorded against an assigned terminal.
+            </div>
+          )}
 
-        {/* 2. Card / UPI collections — only the POS terminals assigned to THIS
-             DU are shown (an attendant isn't aware of machines that weren't
-             handed to them; shift-wide / other-DU machines are reconciled at
-             shift close). */}
-        {hasTerminals ? (
+          {/* 3. Customer sales (on-account fuel) for this DU */}
           <div>
-            <h3 style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '10px' }}>
-              2. Card / UPI Collections
+            <h3
+              style={{
+                fontSize: '12px',
+                fontWeight: 600,
+                color: 'var(--text-muted)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+                marginBottom: '4px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'baseline',
+              }}
+            >
+              <span>3. Customer Sales</span>
+              {creditTotal + omcTotal > 0 && (
+                <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-strong)' }}>
+                  ₹{(creditTotal + omcTotal).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                </span>
+              )}
             </h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                POS Terminal Batches (Card / UPI per machine)
-              </label>
-              {duTerminals.map((t: any) => {
-                const both = t.supportsCard && t.supportsUpi;
-                return (
+            <p style={{ fontSize: '11px', color: 'var(--text-faint)', marginBottom: '10px' }}>
+              Fuel billed to a customer's account (Credit / Fleet / Regular receivable) or paid by
+              an OMC fleet card (settled to the CMS account — not a receivable). Each line is
+              recorded immediately; the fuel is already metered, so it sits on the declared side.
+            </p>
+
+            {volumeOverages.length > 0 && (
+              <div
+                style={{
+                  backgroundColor: 'var(--state-warning-bg)',
+                  color: 'var(--state-warning-fg)',
+                  border: '1px solid var(--border-soft)',
+                  borderRadius: 'var(--radius-input)',
+                  padding: '8px 10px',
+                  fontSize: '11px',
+                  marginBottom: '10px',
+                }}
+              >
+                Credit quantity exceeds metered volume for{' '}
+                {volumeOverages
+                  .map(
+                    (o) =>
+                      `${o.name} (${o.lit.toLocaleString('en-IN')} ${o.unit} billed vs ${o.metered.toLocaleString('en-IN')} ${o.unit} metered)`,
+                  )
+                  .join(', ')}
+                . Check the readings or the credit quantities.
+              </div>
+            )}
+
+            {creditGroups.length > 0 && (
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '10px',
+                  marginBottom: '10px',
+                }}
+              >
+                {creditGroups.map((g) => (
                   <div
-                    key={t.terminalId}
+                    key={g.type}
+                    style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}
+                  >
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'baseline',
+                        fontSize: '10px',
+                        fontWeight: 600,
+                        color: 'var(--text-muted)',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.04em',
+                      }}
+                    >
+                      <span>{g.label}</span>
+                      <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-strong)' }}>
+                        ₹{g.subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                    {g.lines.map((l, idx) => (
+                      <div
+                        key={l.id ?? idx}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: '8px',
+                          backgroundColor: 'var(--bg-surface-alt)',
+                          border: '1px solid var(--border-soft)',
+                          borderRadius: 'var(--radius-input)',
+                          padding: '8px 10px',
+                        }}
+                      >
+                        <div style={{ minWidth: 0 }}>
+                          <div
+                            style={{
+                              fontSize: '12px',
+                              fontWeight: 600,
+                              color: 'var(--text-strong)',
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                            }}
+                          >
+                            {l.customerName}
+                            {l.vehicleLabel ? ` · ${l.vehicleLabel}` : ''}
+                          </div>
+                          <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                            {l.productName ?? 'Fuel'}
+                            {l.quantity ? ` · ${Number(l.quantity).toLocaleString('en-IN')} L` : ''}
+                            {l.notes ? ` · ${l.notes}` : ''}
+                          </div>
+                        </div>
+                        <div
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '10px',
+                            flexShrink: 0,
+                          }}
+                        >
+                          <strong style={{ fontFamily: 'var(--font-mono)', fontSize: '13px' }}>
+                            ₹
+                            {Number(l.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                          </strong>
+                          <button
+                            type="button"
+                            onClick={() => removeCreditLine(l.id)}
+                            disabled={ccBusy}
+                            title="Void this credit sale"
+                            style={{
+                              background: 'transparent',
+                              border: 'none',
+                              color: 'var(--brand-danger)',
+                              cursor: 'pointer',
+                              fontSize: '12px',
+                              padding: '2px 4px',
+                            }}
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {omcLines.length > 0 && (
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '6px',
+                  marginBottom: '10px',
+                }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'baseline',
+                    fontSize: '10px',
+                    fontWeight: 600,
+                    color: 'var(--text-muted)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.04em',
+                  }}
+                >
+                  <span>OMC card · CMS</span>
+                  <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-strong)' }}>
+                    ₹{omcTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+                {omcLines.map((l, idx) => (
+                  <div
+                    key={l.id ?? idx}
                     style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '8px',
                       backgroundColor: 'var(--bg-surface-alt)',
                       border: '1px solid var(--border-soft)',
                       borderRadius: 'var(--radius-input)',
-                      padding: '10px 12px',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '8px',
+                      padding: '8px 10px',
                     }}
                   >
-                    <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-strong)' }}>
-                      {t.label}
-                      {t.provider && <span style={{ color: 'var(--text-faint)', fontWeight: 500 }}> · {t.provider}</span>}
-                    </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: both ? '1fr 1fr' : '1fr', gap: '8px' }}>
-                      {t.supportsCard && (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                          <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Card (₹)</label>
-                          <input
-                            type="number"
-                            step="any"
-                            min="0"
-                            placeholder="0"
-                            {...register(`terminalCard.${t.terminalId}`)}
-                            style={{ height: '30px', padding: '0 8px', border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-input)', fontFamily: 'var(--font-mono)', fontSize: '12px', textAlign: 'right' }}
-                          />
-                        </div>
-                      )}
-                      {t.supportsUpi && (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                          <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>UPI (₹)</label>
-                          <input
-                            type="number"
-                            step="any"
-                            min="0"
-                            placeholder="0"
-                            {...register(`terminalUpi.${t.terminalId}`)}
-                            style={{ height: '30px', padding: '0 8px', border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-input)', fontFamily: 'var(--font-mono)', fontSize: '12px', textAlign: 'right' }}
-                          />
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-muted)', paddingTop: '2px' }}>
-                <span>POS totals (derived)</span>
-                <strong style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-default)' }}>
-                  Card ₹{terminalCardTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })} · UPI ₹{terminalUpiTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                </strong>
-              </div>
-            </div>
-          </div>
-        ) : aggregateAllowed ? (
-          <div>
-            <h3 style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '10px' }}>
-              2. Card / UPI Collections
-            </h3>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Card total (₹)</label>
-                <input type="number" step="any" min="0" placeholder="0" {...register('cardHandedOver')} style={{ height: '30px', padding: '0 8px', border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-input)', fontFamily: 'var(--font-mono)', fontSize: '12px', textAlign: 'right' }} />
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>UPI total (₹)</label>
-                <input type="number" step="any" min="0" placeholder="0" {...register('upiHandedOver')} style={{ height: '30px', padding: '0 8px', border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-input)', fontFamily: 'var(--font-mono)', fontSize: '12px', textAlign: 'right' }} />
-              </div>
-            </div>
-            <span style={{ display: 'block', marginTop: '4px', fontSize: '10px', color: 'var(--text-faint)' }}>Aggregate declaration used because no Payment Terminal is configured.</span>
-          </div>
-        ) : (
-          <div style={{ padding: '10px 12px', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', backgroundColor: 'var(--bg-surface-alt)', color: 'var(--text-muted)', fontSize: '11px' }}>
-            No Payment Terminal is assigned to this Dispenser. Card and UPI declarations must be recorded against an assigned terminal.
-          </div>
-        )}
-
-        {/* 3. Customer sales (on-account fuel) for this DU */}
-        <div>
-          <h3 style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px', display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-            <span>3. Customer Sales</span>
-            {creditTotal + omcTotal > 0 && <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-strong)' }}>₹{(creditTotal + omcTotal).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>}
-          </h3>
-          <p style={{ fontSize: '11px', color: 'var(--text-faint)', marginBottom: '10px' }}>
-            Fuel billed to a customer's account (Credit / Fleet / Regular receivable) or paid by an OMC fleet card (settled to the CMS account — not a receivable). Each line is recorded immediately; the fuel is already metered, so it sits on the declared side.
-          </p>
-
-          {volumeOverages.length > 0 && (
-            <div style={{ backgroundColor: 'var(--state-warning-bg)', color: 'var(--state-warning-fg)', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', padding: '8px 10px', fontSize: '11px', marginBottom: '10px' }}>
-              Credit quantity exceeds metered volume for {volumeOverages.map((o) => `${o.name} (${o.lit.toLocaleString('en-IN')} ${o.unit} billed vs ${o.metered.toLocaleString('en-IN')} ${o.unit} metered)`).join(', ')}. Check the readings or the credit quantities.
-            </div>
-          )}
-
-          {creditGroups.length > 0 && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '10px' }}>
-              {creditGroups.map((g) => (
-                <div key={g.type} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: '10px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                    <span>{g.label}</span>
-                    <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-strong)' }}>₹{g.subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                  </div>
-                  {g.lines.map((l, idx) => (
-                    <div key={l.id ?? idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', backgroundColor: 'var(--bg-surface-alt)', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', padding: '8px 10px' }}>
-                      <div style={{ minWidth: 0 }}>
-                        <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-strong)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {l.customerName}{l.vehicleLabel ? ` · ${l.vehicleLabel}` : ''}
-                        </div>
-                        <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                          {l.productName ?? 'Fuel'}{l.quantity ? ` · ${Number(l.quantity).toLocaleString('en-IN')} L` : ''}{l.notes ? ` · ${l.notes}` : ''}
-                        </div>
+                    <div style={{ minWidth: 0 }}>
+                      <div
+                        style={{
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          color: 'var(--text-strong)',
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                        }}
+                      >
+                        {l.customerName || 'OMC card (no customer)'}
+                        {l.vehicleLabel ? ` · ${l.vehicleLabel}` : ''}
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
-                        <strong style={{ fontFamily: 'var(--font-mono)', fontSize: '13px' }}>₹{Number(l.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
-                        <button type="button" onClick={() => removeCreditLine(l.id)} disabled={ccBusy} title="Void this credit sale" style={{ background: 'transparent', border: 'none', color: 'var(--brand-danger)', cursor: 'pointer', fontSize: '12px', padding: '2px 4px' }}>✕</button>
+                      <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                        {l.productName ?? 'Fuel'}
+                        {l.quantity ? ` · ${Number(l.quantity).toLocaleString('en-IN')} L` : ''}
+                        {l.notes ? ` · ${l.notes}` : ''}
                       </div>
                     </div>
-                  ))}
-                </div>
-              ))}
-            </div>
-          )}
-
-          {omcLines.length > 0 && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '10px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: '10px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                <span>OMC card · CMS</span>
-                <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-strong)' }}>₹{omcTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-              </div>
-              {omcLines.map((l, idx) => (
-                <div key={l.id ?? idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', backgroundColor: 'var(--bg-surface-alt)', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', padding: '8px 10px' }}>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-strong)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {l.customerName || 'OMC card (no customer)'}{l.vehicleLabel ? ` · ${l.vehicleLabel}` : ''}
-                    </div>
-                    <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                      {l.productName ?? 'Fuel'}{l.quantity ? ` · ${Number(l.quantity).toLocaleString('en-IN')} L` : ''}{l.notes ? ` · ${l.notes}` : ''}
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
-                    <strong style={{ fontFamily: 'var(--font-mono)', fontSize: '13px' }}>₹{Number(l.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
-                    <button type="button" onClick={() => removeOmcLine(l.id)} disabled={ccBusy} title="Void this OMC card sale" style={{ background: 'transparent', border: 'none', color: 'var(--brand-danger)', cursor: 'pointer', fontSize: '12px', padding: '2px 4px' }}>✕</button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {!ccOpen ? (
-            <Button type="button" variant="secondary" size="sm" onClick={() => setCcOpen(true)} style={{ alignSelf: 'flex-start' }}>
-              + Add customer sale
-            </Button>
-          ) : (
-            <div style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', padding: '10px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {/* Channel: station receivable (Credit) vs OMC fleet card (→ CMS) */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Payment channel</label>
-                <div style={{ display: 'flex', gap: '6px' }}>
-                  {(['credit', 'omc'] as const).map((ch) => (
-                    <button
-                      key={ch}
-                      type="button"
-                      onClick={() => setCcChannel(ch)}
-                      disabled={ccBusy}
-                      style={{
-                        flex: 1,
-                        height: '30px',
-                        borderRadius: 'var(--radius-input)',
-                        fontSize: '11px',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                        border: `1px solid ${ccChannel === ch ? 'var(--brand-primary)' : 'var(--border-strong)'}`,
-                        background: ccChannel === ch ? 'var(--bg-surface-alt)' : 'var(--bg-surface)',
-                        color: ccChannel === ch ? 'var(--brand-primary)' : 'var(--text-muted)',
-                      }}
+                    <div
+                      style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}
                     >
-                      {ch === 'credit' ? 'Credit (receivable)' : 'OMC card → CMS'}
-                    </button>
-                  ))}
-                </div>
-                {ccChannel === 'omc' && (
-                  <span style={{ fontSize: '10px', color: 'var(--text-faint)' }}>Settled to CMS by the Oil Company — not a receivable. Customer is optional.</span>
-                )}
-              </div>
-
-              {/* Combined picker: customer name OR vehicle number (cached, client-side) */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Customer or vehicle{ccChannel === 'omc' ? ' (optional)' : ''}</label>
-                <Combobox
-                  options={creditOptions}
-                  value={ccSelectValue}
-                  onChange={handleCreditSelect}
-                  placeholder="Select customer or vehicle…"
-                  searchPlaceholder="Search name or vehicle no.…"
-                  emptyMessage="No credit customer or vehicle found."
-                  createActions={[
-                    { label: '＋ New customer', sublabel: 'Create and bill in one step', onSelect: () => setNewCustomerOpen(true) },
-                    { label: '＋ New vehicle', sublabel: 'Add a vehicle to a customer', onSelect: () => setNewVehicleOpen(true) },
-                  ]}
-                />
-                {ccChannel === 'credit' && ccCustomerId && ccAvailable != null && (
-                  <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Available credit {inr(ccAvailable)}</span>
-                )}
-              </div>
-
-              {(ccCustomerId || ccChannel === 'omc') && (
-                <>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr', gap: '8px' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
-                      <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Fuel</label>
-                      <select value={ccProductId} onChange={(e) => handleCcProductChange(e.target.value)} disabled={ccBusy} style={{ height: '30px', padding: '0 6px', width: '100%', minWidth: 0, border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-input)', fontSize: '12px' }}>
-                        <option value="">-- Fuel --</option>
-                        {duProducts.map((p) => <option key={p.id} value={p.id}>{p.name}{p.code ? ` (${p.code})` : ''}</option>)}
-                      </select>
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
-                      <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Qty (L){ccPrice ? ` · ₹${ccPrice}/L` : ''}</label>
-                      <input type="number" step="0.001" min="0" value={ccQty} onChange={(e) => handleCcQtyChange(e.target.value)} disabled={ccBusy} style={{ height: '30px', padding: '0 6px', width: '100%', minWidth: 0, border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-input)', fontFamily: 'var(--font-mono)', fontSize: '12px', textAlign: 'right' }} />
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
-                      <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Amount (₹)</label>
-                      <input type="number" step="0.01" min="0" value={ccAmount} onChange={(e) => handleCcAmountChange(e.target.value)} disabled={ccBusy} style={{ height: '30px', padding: '0 6px', width: '100%', minWidth: 0, border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-input)', fontFamily: 'var(--font-mono)', fontSize: '12px', textAlign: 'right', fontWeight: 600 }} />
+                      <strong style={{ fontFamily: 'var(--font-mono)', fontSize: '13px' }}>
+                        ₹{Number(l.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      </strong>
+                      <button
+                        type="button"
+                        onClick={() => removeOmcLine(l.id)}
+                        disabled={ccBusy}
+                        title="Void this OMC card sale"
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          color: 'var(--brand-danger)',
+                          cursor: 'pointer',
+                          fontSize: '12px',
+                          padding: '2px 4px',
+                        }}
+                      >
+                        ✕
+                      </button>
                     </div>
                   </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
-                    <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Remarks (driver, slip no., notes)</label>
-                    <input type="text" value={ccNotes} onChange={(e) => setCcNotes(e.target.value)} disabled={ccBusy} placeholder="e.g. driver name / phone / slip ref" style={{ height: '30px', padding: '0 8px', width: '100%', minWidth: 0, border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-input)', fontSize: '12px' }} />
-                  </div>
-                  {ccChannel === 'credit' && ccExceeds && (
-                    <div style={{ fontSize: '11px', color: 'var(--state-warning-fg)' }}>
-                      Exceeds available credit{ccAvailable != null ? ` (${inr(ccAvailable)})` : ''} — you can still record it.
-                    </div>
-                  )}
-                </>
-              )}
-
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <Button type="button" variant="primary" size="sm" onClick={addCreditLine} disabled={(ccChannel === 'credit' && !ccCustomerId) || !(Number(ccAmount) > 0)} loading={ccBusy}>
-                  {ccChannel === 'omc' ? '+ Add OMC card sale' : '+ Add credit sale'}
-                </Button>
-                <Button type="button" variant="secondary" size="sm" onClick={() => { resetCcRow(); setCcOpen(false); }} disabled={ccBusy}>Done</Button>
+                ))}
               </div>
-            </div>
-          )}
-        </div>
+            )}
 
-        {/* 4. Cash & credit chits total */}
-        <div>
-          <h3 style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '10px' }}>
-            4. Cash Deposit
-          </h3>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 }}>
-              <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-default)' }}>Cash Handed Over (₹)</label>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <input
-                  type="number"
-                  step="any"
-                  min="0"
-                  placeholder="0"
-                  {...register('cashHandedOver')}
-                  style={{ height: '32px', padding: '0 8px', flex: 1, minWidth: 0, border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-input)', fontFamily: 'var(--font-mono)', fontSize: '13px', textAlign: 'right' }}
-                />
-                <CashCountPopover
-                  breakdown={cashBreakdown}
-                  onBreakdownChange={setCashBreakdown}
-                  onApply={(t) => setValue('cashHandedOver', t as any, { shouldValidate: true, shouldDirty: true })}
-                  currentValue={Number(formCash) || 0}
-                  title="Count handover cash by denomination"
-                />
-              </div>
-              {errors.cashHandedOver && (
-                <span style={{ color: 'var(--brand-danger)', fontSize: '10px' }}>{errors.cashHandedOver.message}</span>
-              )}
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 }}>
-              <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-default)' }}>Credit Chits Total (₹)</label>
-              <div
-                style={{ height: '32px', padding: '0 8px', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', border: '1px dashed var(--border-strong)', borderRadius: 'var(--radius-input)', fontFamily: 'var(--font-mono)', fontSize: '13px', backgroundColor: 'var(--bg-surface-alt)', color: 'var(--text-default)' }}
-                title="Auto-derived from the fuel-on-credit sales above"
+            {!ccOpen ? (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => setCcOpen(true)}
+                style={{ alignSelf: 'flex-start' }}
               >
-                ₹{creditTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-              </div>
-              <span style={{ fontSize: '10px', color: 'var(--text-faint)' }}>Auto from credit sales above</span>
-            </div>
-          </div>
-        </div>
+                + Add customer sale
+              </Button>
+            ) : (
+              <div
+                style={{
+                  backgroundColor: 'var(--bg-surface)',
+                  border: '1px solid var(--border-soft)',
+                  borderRadius: 'var(--radius-input)',
+                  padding: '10px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '8px',
+                }}
+              >
+                {/* Channel: station receivable (Credit) vs OMC fleet card (→ CMS) */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                  <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
+                    Payment channel
+                  </label>
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    {(['credit', 'omc'] as const).map((ch) => (
+                      <button
+                        key={ch}
+                        type="button"
+                        onClick={() => setCcChannel(ch)}
+                        disabled={ccBusy}
+                        style={{
+                          flex: 1,
+                          height: '30px',
+                          borderRadius: 'var(--radius-input)',
+                          fontSize: '11px',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          border: `1px solid ${ccChannel === ch ? 'var(--brand-primary)' : 'var(--border-strong)'}`,
+                          background:
+                            ccChannel === ch ? 'var(--bg-surface-alt)' : 'var(--bg-surface)',
+                          color: ccChannel === ch ? 'var(--brand-primary)' : 'var(--text-muted)',
+                        }}
+                      >
+                        {ch === 'credit' ? 'Credit (receivable)' : 'OMC card → CMS'}
+                      </button>
+                    ))}
+                  </div>
+                  {ccChannel === 'omc' && (
+                    <span style={{ fontSize: '10px', color: 'var(--text-faint)' }}>
+                      Settled to CMS by the Oil Company — not a receivable. Customer is optional.
+                    </span>
+                  )}
+                </div>
 
-        {/* 5. Live Reconciliation Summary Card */}
-        <div
-          style={{
-            backgroundColor: 'var(--bg-surface-alt)',
-            border: '1px solid var(--border-strong)',
-            borderRadius: 'var(--radius-input)',
-            padding: '14px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '8px',
-            marginTop: '8px',
-          }}
-        >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', fontSize: '11px', fontWeight: 600, color: acceptedResult ? 'var(--state-success-fg)' : 'var(--text-faint)' }}>
-            <span>{acceptedResult ? 'Accepted by server' : 'Live preview'}</span>
-            {acceptedResult && <span>Saved</span>}
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
-            <span>Derived Fuel Volume:</span>
-            <strong style={{ fontFamily: 'var(--font-mono)' }}>{(acceptedResult ? acceptedResult.nozzleReadings.reduce((sum, reading) => sum + reading.grossVolume, 0) : totalVolumeSold).toFixed(3)} {handoverUnitLabel}</strong>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
-            <span>Testing/Calibration Volume:</span>
-            <strong style={{ fontFamily: 'var(--font-mono)' }}>{(acceptedResult ? acceptedResult.nozzleReadings.reduce((sum, reading) => sum + reading.testingVolume, 0) : totalTestingVolume).toFixed(1)} {handoverUnitLabel}</strong>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
-            <span>Expected Fuel Sales Value:</span>
-            <strong style={{ fontFamily: 'var(--font-mono)' }}>₹{(acceptedResult?.expectedSales ?? expectedSales).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
-          </div>
-          {(merchandiseCashNum > 0 || merchandiseNonCashNum > 0) && (
-            <>
-              {merchandiseCashNum > 0 && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: 'var(--text-muted)' }}>
-                  <span>+ Merchandise sold (cash):</span>
-                  <strong style={{ fontFamily: 'var(--font-mono)' }}>₹{merchandiseCashNum.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
+                {/* Combined picker: customer name OR vehicle number (cached, client-side) */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                  <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
+                    Customer or vehicle{ccChannel === 'omc' ? ' (optional)' : ''}
+                  </label>
+                  <Combobox
+                    options={creditOptions}
+                    value={ccSelectValue}
+                    onChange={handleCreditSelect}
+                    placeholder="Select customer or vehicle…"
+                    searchPlaceholder="Search name or vehicle no.…"
+                    emptyMessage="No credit customer or vehicle found."
+                    createActions={[
+                      {
+                        label: '＋ New customer',
+                        sublabel: 'Create and bill in one step',
+                        onSelect: () => setNewCustomerOpen(true),
+                      },
+                      {
+                        label: '＋ New vehicle',
+                        sublabel: 'Add a vehicle to a customer',
+                        onSelect: () => setNewVehicleOpen(true),
+                      },
+                    ]}
+                  />
+                  {ccChannel === 'credit' && ccCustomerId && ccAvailable != null && (
+                    <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
+                      Available credit {inr(ccAvailable)}
+                    </span>
+                  )}
                 </div>
-              )}
-              {merchandiseNonCashNum > 0 && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-faint)' }}>
-                  <span>Merchandise (card/UPI, on terminal):</span>
-                  <span style={{ fontFamily: 'var(--font-mono)' }}>₹{merchandiseNonCashNum.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+
+                {(ccCustomerId || ccChannel === 'omc') && (
+                  <>
+                    <div
+                      style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr', gap: '8px' }}
+                    >
+                      <div
+                        style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '2px',
+                          minWidth: 0,
+                        }}
+                      >
+                        <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Fuel</label>
+                        <select
+                          value={ccProductId}
+                          onChange={(e) => handleCcProductChange(e.target.value)}
+                          disabled={ccBusy}
+                          style={{
+                            height: '30px',
+                            padding: '0 6px',
+                            width: '100%',
+                            minWidth: 0,
+                            border: '1px solid var(--border-strong)',
+                            borderRadius: 'var(--radius-input)',
+                            fontSize: '12px',
+                          }}
+                        >
+                          <option value="">-- Fuel --</option>
+                          {duProducts.map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.name}
+                              {p.code ? ` (${p.code})` : ''}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div
+                        style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '2px',
+                          minWidth: 0,
+                        }}
+                      >
+                        <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
+                          Qty (L){ccPrice ? ` · ₹${ccPrice}/L` : ''}
+                        </label>
+                        <input
+                          type="number"
+                          step="0.001"
+                          min="0"
+                          value={ccQty}
+                          onChange={(e) => handleCcQtyChange(e.target.value)}
+                          disabled={ccBusy}
+                          style={{
+                            height: '30px',
+                            padding: '0 6px',
+                            width: '100%',
+                            minWidth: 0,
+                            border: '1px solid var(--border-strong)',
+                            borderRadius: 'var(--radius-input)',
+                            fontFamily: 'var(--font-mono)',
+                            fontSize: '12px',
+                            textAlign: 'right',
+                          }}
+                        />
+                      </div>
+                      <div
+                        style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '2px',
+                          minWidth: 0,
+                        }}
+                      >
+                        <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
+                          Amount (₹)
+                        </label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={ccAmount}
+                          onChange={(e) => handleCcAmountChange(e.target.value)}
+                          disabled={ccBusy}
+                          style={{
+                            height: '30px',
+                            padding: '0 6px',
+                            width: '100%',
+                            minWidth: 0,
+                            border: '1px solid var(--border-strong)',
+                            borderRadius: 'var(--radius-input)',
+                            fontFamily: 'var(--font-mono)',
+                            fontSize: '12px',
+                            textAlign: 'right',
+                            fontWeight: 600,
+                          }}
+                        />
+                      </div>
+                    </div>
+                    <div
+                      style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}
+                    >
+                      <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>
+                        Remarks (driver, slip no., notes)
+                      </label>
+                      <input
+                        type="text"
+                        value={ccNotes}
+                        onChange={(e) => setCcNotes(e.target.value)}
+                        disabled={ccBusy}
+                        placeholder="e.g. driver name / phone / slip ref"
+                        style={{
+                          height: '30px',
+                          padding: '0 8px',
+                          width: '100%',
+                          minWidth: 0,
+                          border: '1px solid var(--border-strong)',
+                          borderRadius: 'var(--radius-input)',
+                          fontSize: '12px',
+                        }}
+                      />
+                    </div>
+                    {ccChannel === 'credit' && ccExceeds && (
+                      <div style={{ fontSize: '11px', color: 'var(--state-warning-fg)' }}>
+                        Exceeds available credit
+                        {ccAvailable != null ? ` (${inr(ccAvailable)})` : ''} — you can still record
+                        it.
+                      </div>
+                    )}
+                  </>
+                )}
+
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <Button
+                    type="button"
+                    variant="primary"
+                    size="sm"
+                    onClick={addCreditLine}
+                    disabled={(ccChannel === 'credit' && !ccCustomerId) || !(Number(ccAmount) > 0)}
+                    loading={ccBusy}
+                  >
+                    {ccChannel === 'omc' ? '+ Add OMC card sale' : '+ Add credit sale'}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => {
+                      resetCcRow();
+                      setCcOpen(false);
+                    }}
+                    disabled={ccBusy}
+                  >
+                    Done
+                  </Button>
                 </div>
-              )}
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', fontWeight: 600 }}>
-                <span>Total Expected:</span>
-                 <strong style={{ fontFamily: 'var(--font-mono)' }}>₹{(acceptedResult?.expectedTotal ?? expectedTotal).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
               </div>
-            </>
-          )}
-          {creditTotal > 0 && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: 'var(--text-muted)' }}>
-              <span>of which on credit (chits):</span>
-              <strong style={{ fontFamily: 'var(--font-mono)' }}>₹{creditTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
-            </div>
-          )}
-          {omcTotal > 0 && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: 'var(--text-muted)' }}>
-              <span>of which OMC card (→ CMS):</span>
-              <strong style={{ fontFamily: 'var(--font-mono)' }}>₹{omcTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
-            </div>
-          )}
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
-            <span>Declared Deposit Sum:</span>
-            <strong style={{ fontFamily: 'var(--font-mono)' }}>₹{(acceptedResult?.declaredTotal ?? totalDeclared).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
+            )}
           </div>
+
+          {/* 4. Cash & credit chits total */}
+          <div>
+            <h3
+              style={{
+                fontSize: '12px',
+                fontWeight: 600,
+                color: 'var(--text-muted)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+                marginBottom: '10px',
+              }}
+            >
+              4. Cash Deposit
+            </h3>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 }}>
+                <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-default)' }}>
+                  Cash Handed Over (₹)
+                </label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <input
+                    type="number"
+                    step="any"
+                    min="0"
+                    placeholder="0"
+                    {...register('cashHandedOver')}
+                    style={{
+                      height: '32px',
+                      padding: '0 8px',
+                      flex: 1,
+                      minWidth: 0,
+                      border: '1px solid var(--border-strong)',
+                      borderRadius: 'var(--radius-input)',
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: '13px',
+                      textAlign: 'right',
+                    }}
+                  />
+                  <CashCountPopover
+                    breakdown={cashBreakdown}
+                    onBreakdownChange={setCashBreakdown}
+                    onApply={(t) =>
+                      setValue('cashHandedOver', t as any, {
+                        shouldValidate: true,
+                        shouldDirty: true,
+                      })
+                    }
+                    currentValue={Number(formCash) || 0}
+                    title="Count handover cash by denomination"
+                  />
+                </div>
+                {errors.cashHandedOver && (
+                  <span style={{ color: 'var(--brand-danger)', fontSize: '10px' }}>
+                    {errors.cashHandedOver.message}
+                  </span>
+                )}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 }}>
+                <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-default)' }}>
+                  Credit Chits Total (₹)
+                </label>
+                <div
+                  style={{
+                    height: '32px',
+                    padding: '0 8px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'flex-end',
+                    border: '1px dashed var(--border-strong)',
+                    borderRadius: 'var(--radius-input)',
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '13px',
+                    backgroundColor: 'var(--bg-surface-alt)',
+                    color: 'var(--text-default)',
+                  }}
+                  title="Auto-derived from the fuel-on-credit sales above"
+                >
+                  ₹{creditTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                </div>
+                <span style={{ fontSize: '10px', color: 'var(--text-faint)' }}>
+                  Auto from credit sales above
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* 5. Live Reconciliation Summary Card */}
           <div
             style={{
+              backgroundColor: 'var(--bg-surface-alt)',
+              border: '1px solid var(--border-strong)',
+              borderRadius: 'var(--radius-input)',
+              padding: '14px',
               display: 'flex',
-              justifyContent: 'space-between',
-              fontSize: '13px',
-              fontWeight: 700,
-              borderTop: '1px solid var(--border-soft)',
-              paddingTop: '8px',
-              marginTop: '4px',
-              color: (acceptedResult?.varianceAmount ?? variance) === 0 ? 'var(--state-success-fg)' : (acceptedResult?.varianceAmount ?? variance) > 0 ? 'var(--brand-warning)' : 'var(--brand-danger)',
+              flexDirection: 'column',
+              gap: '8px',
+              marginTop: '8px',
             }}
           >
-            <span>Handover Variance:</span>
-            <span style={{ fontFamily: 'var(--font-mono)' }}>
-              {(acceptedResult?.varianceAmount ?? variance) > 0 ? '+' : ''}₹{(acceptedResult?.varianceAmount ?? variance).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-              {(acceptedResult?.varianceAmount ?? variance) === 0 ? ' (Balanced)' : (acceptedResult?.varianceAmount ?? variance) > 0 ? ' (Surplus)' : ' (Shortage)'}
-            </span>
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                gap: '8px',
+                fontSize: '11px',
+                fontWeight: 600,
+                color: acceptedResult ? 'var(--state-success-fg)' : 'var(--text-faint)',
+              }}
+            >
+              <span>{acceptedResult ? 'Accepted by server' : 'Live preview'}</span>
+              {acceptedResult && <span>Saved</span>}
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+              <span>Derived Fuel Volume:</span>
+              <strong style={{ fontFamily: 'var(--font-mono)' }}>
+                {(acceptedResult
+                  ? acceptedResult.nozzleReadings.reduce(
+                      (sum, reading) => sum + reading.grossVolume,
+                      0,
+                    )
+                  : totalVolumeSold
+                ).toFixed(3)}{' '}
+                {handoverUnitLabel}
+              </strong>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+              <span>Testing/Calibration Volume:</span>
+              <strong style={{ fontFamily: 'var(--font-mono)' }}>
+                {(acceptedResult
+                  ? acceptedResult.nozzleReadings.reduce(
+                      (sum, reading) => sum + reading.testingVolume,
+                      0,
+                    )
+                  : totalTestingVolume
+                ).toFixed(1)}{' '}
+                {handoverUnitLabel}
+              </strong>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+              <span>Expected Fuel Sales Value:</span>
+              <strong style={{ fontFamily: 'var(--font-mono)' }}>
+                ₹
+                {(acceptedResult?.expectedSales ?? expectedSales).toLocaleString('en-IN', {
+                  minimumFractionDigits: 2,
+                })}
+              </strong>
+            </div>
+            {(merchandiseCashNum > 0 || merchandiseNonCashNum > 0) && (
+              <>
+                {merchandiseCashNum > 0 && (
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      fontSize: '13px',
+                      color: 'var(--text-muted)',
+                    }}
+                  >
+                    <span>+ Merchandise sold (cash):</span>
+                    <strong style={{ fontFamily: 'var(--font-mono)' }}>
+                      ₹{merchandiseCashNum.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    </strong>
+                  </div>
+                )}
+                {merchandiseNonCashNum > 0 && (
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      fontSize: '12px',
+                      color: 'var(--text-faint)',
+                    }}
+                  >
+                    <span>Merchandise (card/UPI, on terminal):</span>
+                    <span style={{ fontFamily: 'var(--font-mono)' }}>
+                      ₹{merchandiseNonCashNum.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                )}
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                  }}
+                >
+                  <span>Total Expected:</span>
+                  <strong style={{ fontFamily: 'var(--font-mono)' }}>
+                    ₹
+                    {(acceptedResult?.expectedTotal ?? expectedTotal).toLocaleString('en-IN', {
+                      minimumFractionDigits: 2,
+                    })}
+                  </strong>
+                </div>
+              </>
+            )}
+            {creditTotal > 0 && (
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  fontSize: '13px',
+                  color: 'var(--text-muted)',
+                }}
+              >
+                <span>of which on credit (chits):</span>
+                <strong style={{ fontFamily: 'var(--font-mono)' }}>
+                  ₹{creditTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                </strong>
+              </div>
+            )}
+            {omcTotal > 0 && (
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  fontSize: '13px',
+                  color: 'var(--text-muted)',
+                }}
+              >
+                <span>of which OMC card (→ CMS):</span>
+                <strong style={{ fontFamily: 'var(--font-mono)' }}>
+                  ₹{omcTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                </strong>
+              </div>
+            )}
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+              <span>Declared Deposit Sum:</span>
+              <strong style={{ fontFamily: 'var(--font-mono)' }}>
+                ₹
+                {(acceptedResult?.declaredTotal ?? totalDeclared).toLocaleString('en-IN', {
+                  minimumFractionDigits: 2,
+                })}
+              </strong>
+            </div>
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                fontSize: '13px',
+                fontWeight: 700,
+                borderTop: '1px solid var(--border-soft)',
+                paddingTop: '8px',
+                marginTop: '4px',
+                color:
+                  (acceptedResult?.varianceAmount ?? variance) === 0
+                    ? 'var(--state-success-fg)'
+                    : (acceptedResult?.varianceAmount ?? variance) > 0
+                      ? 'var(--brand-warning)'
+                      : 'var(--brand-danger)',
+              }}
+            >
+              <span>Handover Variance:</span>
+              <span style={{ fontFamily: 'var(--font-mono)' }}>
+                {(acceptedResult?.varianceAmount ?? variance) > 0 ? '+' : ''}₹
+                {(acceptedResult?.varianceAmount ?? variance).toLocaleString('en-IN', {
+                  minimumFractionDigits: 2,
+                })}
+                {(acceptedResult?.varianceAmount ?? variance) === 0
+                  ? ' (Balanced)'
+                  : (acceptedResult?.varianceAmount ?? variance) > 0
+                    ? ' (Surplus)'
+                    : ' (Shortage)'}
+              </span>
+            </div>
           </div>
-        </div>
 
-        {/* Action Buttons */}
-        {calculatedNozzles.some((n) => n.closing < n.opening) && (
-          <div style={{ backgroundColor: 'var(--state-danger-bg)', color: 'var(--state-danger-fg)', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', padding: '8px 10px', fontSize: '11px' }}>
-            One or more closing readings are below their opening reading. Fix the highlighted fields before saving.
+          {/* Action Buttons */}
+          {calculatedNozzles.some((n) => n.closing < n.opening) && (
+            <div
+              style={{
+                backgroundColor: 'var(--state-danger-bg)',
+                color: 'var(--state-danger-fg)',
+                border: '1px solid var(--border-soft)',
+                borderRadius: 'var(--radius-input)',
+                padding: '8px 10px',
+                fontSize: '11px',
+              }}
+            >
+              One or more closing readings are below their opening reading. Fix the highlighted
+              fields before saving.
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
+            <Button
+              type="submit"
+              variant="primary"
+              disabled={calculatedNozzles.some((n) => n.closing < n.opening)}
+              loading={submitting}
+              style={{ flex: 1, height: '36px' }}
+            >
+              {acceptedResult ? 'Save Changes' : 'Save Handover & Readings'}
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={onClose}
+              style={{ flex: 1, height: '36px' }}
+            >
+              {acceptedResult ? 'Done' : 'Cancel'}
+            </Button>
           </div>
-        )}
-        <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
-          <Button
-            type="submit"
-            variant="primary"
-            disabled={calculatedNozzles.some((n) => n.closing < n.opening)}
-            loading={submitting}
-            style={{ flex: 1, height: '36px' }}
-          >
-            {acceptedResult ? 'Save Changes' : 'Save Handover & Readings'}
-          </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={onClose}
-            style={{ flex: 1, height: '36px' }}
-          >
-            {acceptedResult ? 'Done' : 'Cancel'}
-          </Button>
-        </div>
-      </form>
-    </Drawer>
+        </form>
+      </Drawer>
 
-    {/* Inline create: reuse the standard customer / vehicle drawers, auto-select on save. */}
-    <CustomerFormDrawer
-      isOpen={newCustomerOpen}
-      editingCustomer={null}
-      stationId={stationId}
-      onClose={() => setNewCustomerOpen(false)}
-      onCreated={handleCustomerCreated}
-    />
-    <VehicleDrawer
-      isOpen={newVehicleOpen}
-      editingVehicle={null}
-      defaultCustomerId={ccCustomerId || ''}
-      eligibleCustomers={allCustomers}
-      fuelProducts={duProducts.map((p) => ({ id: p.id, name: p.name, code: p.code }))}
-      onClose={() => setNewVehicleOpen(false)}
-      onCreated={handleVehicleCreated}
-    />
+      {/* Inline create: reuse the standard customer / vehicle drawers, auto-select on save. */}
+      <CustomerFormDrawer
+        isOpen={newCustomerOpen}
+        editingCustomer={null}
+        stationId={stationId}
+        onClose={() => setNewCustomerOpen(false)}
+        onCreated={handleCustomerCreated}
+      />
+      <VehicleDrawer
+        isOpen={newVehicleOpen}
+        editingVehicle={null}
+        defaultCustomerId={ccCustomerId || ''}
+        eligibleCustomers={allCustomers}
+        fuelProducts={duProducts.map((p) => ({ id: p.id, name: p.name, code: p.code }))}
+        onClose={() => setNewVehicleOpen(false)}
+        onCreated={handleVehicleCreated}
+      />
     </>
   );
 };

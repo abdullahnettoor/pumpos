@@ -1,6 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { RecordHandoverPayload, RecordHandoverResult } from '../services/cloud.js';
-import { handoverInvalidationKeys, handoverPayloadFingerprint, loadHandoverRequestIdentity, resolveHandoverRequestIdentity, saveHandoverRequestIdentity, selectHandoverSummary } from './handoverMutation.js';
+import {
+  handoverInvalidationKeys,
+  handoverPayloadFingerprint,
+  loadHandoverRequestIdentity,
+  resolveHandoverRequestIdentity,
+  saveHandoverRequestIdentity,
+  selectHandoverSummary,
+} from './handoverMutation.js';
 
 const payload: RecordHandoverPayload = {
   shiftId: 'shift-1',
@@ -31,7 +38,11 @@ describe('Handover mutation state', () => {
     let created = 0;
     const createKey = () => `key-${++created}`;
     const first = resolveHandoverRequestIdentity(null, payload, createKey);
-    const edited = resolveHandoverRequestIdentity(first, { ...payload, cashHandedOver: 101 }, createKey);
+    const edited = resolveHandoverRequestIdentity(
+      first,
+      { ...payload, cashHandedOver: 101 },
+      createKey,
+    );
 
     expect(edited.idempotencyKey).toBe('key-2');
     expect(edited.fingerprint).not.toBe(handoverPayloadFingerprint(payload));
@@ -54,11 +65,24 @@ describe('Handover mutation state', () => {
   });
 
   it('shows the live preview until an accepted server result replaces it', () => {
-    expect(selectHandoverSummary({ expectedTotal: 800, declaredTotal: 810, varianceAmount: 10 })).toEqual({
-      source: 'preview', expectedTotal: 800, declaredTotal: 810, varianceAmount: 10,
+    expect(
+      selectHandoverSummary({ expectedTotal: 800, declaredTotal: 810, varianceAmount: 10 }),
+    ).toEqual({
+      source: 'preview',
+      expectedTotal: 800,
+      declaredTotal: 810,
+      varianceAmount: 10,
     });
-    expect(selectHandoverSummary({ expectedTotal: 800, declaredTotal: 810, varianceAmount: 10 }, accepted)).toEqual({
-      source: 'accepted', expectedTotal: 900, declaredTotal: 910, varianceAmount: 10,
+    expect(
+      selectHandoverSummary(
+        { expectedTotal: 800, declaredTotal: 810, varianceAmount: 10 },
+        accepted,
+      ),
+    ).toEqual({
+      source: 'accepted',
+      expectedTotal: 900,
+      declaredTotal: 910,
+      varianceAmount: 10,
     });
   });
 
@@ -78,22 +102,34 @@ import { clearPendingWorkflowKeys, PENDING_WORKFLOW_KEY_PREFIX } from './queryCl
 function installLocalStorageStub() {
   const store = new Map<string, string>();
   const stub = {
-    get length() { return store.size; },
+    get length() {
+      return store.size;
+    },
     key: (i: number) => [...store.keys()][i] ?? null,
     getItem: (k: string) => store.get(k) ?? null,
-    setItem: (k: string, v: string) => { store.set(k, v); },
-    removeItem: (k: string) => { store.delete(k); },
+    setItem: (k: string, v: string) => {
+      store.set(k, v);
+    },
+    removeItem: (k: string) => {
+      store.delete(k);
+    },
     clear: () => store.clear(),
   } as unknown as Storage;
   (globalThis as any).localStorage = stub;
   (globalThis as any).window = { localStorage: stub };
-  return () => { delete (globalThis as any).localStorage; delete (globalThis as any).window; };
+  return () => {
+    delete (globalThis as any).localStorage;
+    delete (globalThis as any).window;
+  };
 }
 
 describe('clearPendingWorkflowKeys', () => {
   it('removes every pending workflow draft but nothing else', () => {
     const restore = installLocalStorageStub();
-    localStorage.setItem('pumpos:pending-handover:s1:sh1:a1:d1', '{"fingerprint":"f","idempotencyKey":"k"}');
+    localStorage.setItem(
+      'pumpos:pending-handover:s1:sh1:a1:d1',
+      '{"fingerprint":"f","idempotencyKey":"k"}',
+    );
     localStorage.setItem('pumpos:pending-stock-count', '{}');
     localStorage.setItem('pumpos:pending-tank-dips:s1', '{}');
     localStorage.setItem('pumpos-rq-cache', '{"keep":"me"}');

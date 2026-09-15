@@ -82,21 +82,27 @@ export const ShiftHistoryTab: React.FC<ShiftHistoryTabProps> = ({
         id: 'closedBy',
         header: 'Reconciled By',
         cell: ({ row }) => (
-          <span style={{ color: 'var(--text-default)' }}>{row.original.snapshotData?.closedByName || 'Unknown'}</span>
+          <span style={{ color: 'var(--text-default)' }}>
+            {row.original.snapshotData?.closedByName || 'Unknown'}
+          </span>
         ),
       },
       {
         id: 'expected',
         header: 'Expected',
         cell: ({ row }) => (
-          <span style={{ fontFamily: 'var(--font-mono)' }}>{inr(row.original.snapshotData?.expectedCash || 0)}</span>
+          <span style={{ fontFamily: 'var(--font-mono)' }}>
+            {inr(row.original.snapshotData?.expectedCash || 0)}
+          </span>
         ),
       },
       {
         id: 'actual',
         header: 'Actual',
         cell: ({ row }) => (
-          <span style={{ fontFamily: 'var(--font-mono)' }}>{inr(row.original.snapshotData?.closingCash || 0)}</span>
+          <span style={{ fontFamily: 'var(--font-mono)' }}>
+            {inr(row.original.snapshotData?.closingCash || 0)}
+          </span>
         ),
       },
       {
@@ -104,7 +110,12 @@ export const ShiftHistoryTab: React.FC<ShiftHistoryTabProps> = ({
         header: 'Variance',
         cell: ({ row }) => {
           const v = Number(row.original.snapshotData?.cashVariance || 0);
-          const color = v < 0 ? 'var(--brand-danger)' : v > 0 ? 'var(--brand-warning)' : 'var(--state-success-fg)';
+          const color =
+            v < 0
+              ? 'var(--brand-danger)'
+              : v > 0
+                ? 'var(--brand-warning)'
+                : 'var(--state-success-fg)';
           return (
             <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, color }}>
               {v > 0 ? '+' : ''}
@@ -117,7 +128,12 @@ export const ShiftHistoryTab: React.FC<ShiftHistoryTabProps> = ({
         id: 'actions',
         header: '',
         cell: ({ row }) => (
-          <Button variant="secondary" size="xs" leftIcon={<Eye size={12} />} onClick={() => setActiveSummary(row.original)}>
+          <Button
+            variant="secondary"
+            size="xs"
+            leftIcon={<Eye size={12} />}
+            onClick={() => setActiveSummary(row.original)}
+          >
             View
           </Button>
         ),
@@ -157,7 +173,10 @@ export const ShiftHistoryTab: React.FC<ShiftHistoryTabProps> = ({
   }
 
   return (
-    <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+    <div
+      className="animate-fade-in"
+      style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}
+    >
       <Panel flush title="Closed & locked shifts">
         <DataTable
           columns={columns}

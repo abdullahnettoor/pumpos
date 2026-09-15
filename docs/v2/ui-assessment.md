@@ -17,6 +17,7 @@ shared data layer + primitives + utility classes.
 ## Refactor status
 
 **Done**
+
 - TanStack Query data layer: `QueryProvider` (web + desktop), `queryKeys`, ~16 hooks,
   `useInvalidateOperational`. Removed the `getShiftStatus` N+1 and per-screen fetch loops.
 - Primitives: `PageLayout`, `KpiCard`, `DataTable` (TanStack Table, with loading/empty/error).
@@ -30,6 +31,7 @@ shared data layer + primitives + utility classes.
 - Started splitting `ShiftsManagement`: extracted `ShiftCloseSuccess`.
 
 **In progress / backlog**
+
 1. **`ShiftsManagement` structural split** (≈1,200 LOC). Remaining inline blocks: idle
    open-shift form, active workspace (Attendant Handovers Dashboard table + KPI strip),
    quick-entry drawer, handover drawer. **Extract incrementally with the dev server
@@ -45,19 +47,20 @@ shared data layer + primitives + utility classes.
 
 ## Known smells (tracked)
 
-| Smell | Where | Plan |
-|---|---|---|
-| Monolithic component | `ShiftsManagement.tsx` | incremental extraction (see #1) |
-| Heavy inline styles | most screens | migrate to tokens/classes opportunistically |
-| Mixed form patterns | entry forms vs `CustomersList` | standardize on RHF+Zod (#2) |
-| Hand-rolled tables | Purchases/Customers | `DataTable` (#3) |
-| Prop drilling | global state via props | client-state seam (#6) |
-| Backend-shape coupling | screens read `/shifts/status` shape as `any` | a typed client later |
-| No code-splitting | single ~1 MB chunk | `manualChunks` (#5) |
+| Smell                  | Where                                        | Plan                                        |
+| ---------------------- | -------------------------------------------- | ------------------------------------------- |
+| Monolithic component   | `ShiftsManagement.tsx`                       | incremental extraction (see #1)             |
+| Heavy inline styles    | most screens                                 | migrate to tokens/classes opportunistically |
+| Mixed form patterns    | entry forms vs `CustomersList`               | standardize on RHF+Zod (#2)                 |
+| Hand-rolled tables     | Purchases/Customers                          | `DataTable` (#3)                            |
+| Prop drilling          | global state via props                       | client-state seam (#6)                      |
+| Backend-shape coupling | screens read `/shifts/status` shape as `any` | a typed client later                        |
+| No code-splitting      | single ~1 MB chunk                           | `manualChunks` (#5)                         |
 
 ## Do we need a redesign?
 
 **No full redesign.** Surgical redesigns worth doing:
+
 - The **operational/shift screen** → a single "operating today" workspace (header KPIs +
   transaction ledger + quick-entry drawer) instead of the monolith + scattered lists.
 - **List screens → one dense `DataTable`** (export/print-friendly per the spec).

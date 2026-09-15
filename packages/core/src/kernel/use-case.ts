@@ -2,7 +2,11 @@ import type { Result } from '@pump/shared';
 import type { Clock, IdGenerator } from './clock.js';
 import { createEvent } from './event.js';
 import type { DomainEvent } from './event.js';
-import type { EventActorSnapshot, EventGroupingRole, EventPresentationInput } from './event-activity.js';
+import type {
+  EventActorSnapshot,
+  EventGroupingRole,
+  EventPresentationInput,
+} from './event-activity.js';
 
 /**
  * Ambient context for a single use-case execution: who is acting and in which
@@ -61,9 +65,12 @@ export function eventFromContext<TType extends string, TPayload>(
   ctx: ExecutionContext,
   input: ContextEventInput<TType, TPayload>,
 ): DomainEvent<TType, TPayload> {
-  const groupingRole = input.groupingRole
-    ?? (ctx.groupingRole === 'primary' && (ctx.emittedEventCount ?? 0) > 0 ? 'related' : ctx.groupingRole)
-    ?? 'primary';
+  const groupingRole =
+    input.groupingRole ??
+    (ctx.groupingRole === 'primary' && (ctx.emittedEventCount ?? 0) > 0
+      ? 'related'
+      : ctx.groupingRole) ??
+    'primary';
   const metadata = {
     ...input.metadata,
     grouping: { role: groupingRole },

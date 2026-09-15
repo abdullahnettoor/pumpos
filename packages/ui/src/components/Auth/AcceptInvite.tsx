@@ -48,7 +48,9 @@ function isMobileDevice(): boolean {
   if (typeof navigator === 'undefined') return false;
   const uaData = (navigator as any).userAgentData;
   if (uaData && typeof uaData.mobile === 'boolean') return uaData.mobile;
-  return /Android|webOS|iPhone|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|Silk/i.test(navigator.userAgent || '');
+  return /Android|webOS|iPhone|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|Silk/i.test(
+    navigator.userAgent || '',
+  );
 }
 
 export const AcceptInvite: React.FC<AcceptInviteProps> = ({ onDone }) => {
@@ -62,7 +64,8 @@ export const AcceptInvite: React.FC<AcceptInviteProps> = ({ onDone }) => {
   const [done, setDone] = useState(false);
   const [copied, setCopied] = useState(false);
   const onMobile = isMobileDevice();
-  const desktopUrl = typeof window !== 'undefined' ? window.location.origin : 'https://console.pumpos.app';
+  const desktopUrl =
+    typeof window !== 'undefined' ? window.location.origin : 'https://console.pumpos.app';
 
   useEffect(() => {
     let cancelled = false;
@@ -149,14 +152,30 @@ export const AcceptInvite: React.FC<AcceptInviteProps> = ({ onDone }) => {
         className="animate-fade-in"
       >
         <div style={{ textAlign: 'center' }}>
-          <span style={{ fontSize: '18px', fontWeight: 700, color: 'var(--brand-primary)', letterSpacing: '-0.01em' }}>
+          <span
+            style={{
+              fontSize: '18px',
+              fontWeight: 700,
+              color: 'var(--brand-primary)',
+              letterSpacing: '-0.01em',
+            }}
+          >
             PumpOS
           </span>
-          <h1 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)', marginTop: '8px' }}>
+          <h1
+            style={{
+              fontSize: '14px',
+              fontWeight: 600,
+              color: 'var(--text-strong)',
+              marginTop: '8px',
+            }}
+          >
             {done ? 'Password set' : 'Set your password'}
           </h1>
           {email && !done && (
-            <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>{email}</p>
+            <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
+              {email}
+            </p>
           )}
         </div>
 
@@ -177,14 +196,16 @@ export const AcceptInvite: React.FC<AcceptInviteProps> = ({ onDone }) => {
         )}
 
         {!ready ? (
-          <p style={{ fontSize: '13px', color: 'var(--text-muted)', textAlign: 'center' }}>Verifying your invite…</p>
+          <p style={{ fontSize: '13px', color: 'var(--text-muted)', textAlign: 'center' }}>
+            Verifying your invite…
+          </p>
         ) : done ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
             {onMobile ? (
               <>
                 <p style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-                  Your password is set. To finish setting up your station, open PumpOS on a
-                  desktop or laptop — station onboarding isn't available on mobile.
+                  Your password is set. To finish setting up your station, open PumpOS on a desktop
+                  or laptop — station onboarding isn't available on mobile.
                 </p>
                 <div
                   style={{
@@ -251,8 +272,8 @@ export const AcceptInvite: React.FC<AcceptInviteProps> = ({ onDone }) => {
             ) : (
               <>
                 <p style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-                  Your password is set. Continue to PumpOS — if setup for your station isn't finished yet, you'll be
-                  guided to complete it on the desktop app.
+                  Your password is set. Continue to PumpOS — if setup for your station isn't
+                  finished yet, you'll be guided to complete it on the desktop app.
                 </p>
                 <button
                   type="button"
@@ -277,8 +298,8 @@ export const AcceptInvite: React.FC<AcceptInviteProps> = ({ onDone }) => {
         ) : !hasSession ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
             <p style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-              This invite link is invalid or has expired. Ask your administrator to send a new invite, or sign in if
-              you already set a password.
+              This invite link is invalid or has expired. Ask your administrator to send a new
+              invite, or sign in if you already set a password.
             </p>
             <button
               type="button"
@@ -299,7 +320,10 @@ export const AcceptInvite: React.FC<AcceptInviteProps> = ({ onDone }) => {
             </button>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          <form
+            onSubmit={handleSubmit}
+            style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}
+          >
             <div className="form-group">
               <label className="form-label" style={labelStyle}>
                 New password

@@ -3,9 +3,5 @@
   "identifier": "default",
   "description": "Default permissions for PumpOS desktop client",
   "windows": ["main"],
-  "permissions": [
-    "core:default",
-    "dialog:default",
-    "fs:allow-write-file"
-  ]
+  "permissions": ["core:default", "dialog:default", "fs:allow-write-file"]
 }

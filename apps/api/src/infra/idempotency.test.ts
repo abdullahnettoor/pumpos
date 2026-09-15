@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { Hono } from 'hono';
-import { createIdempotencyMiddleware, type IdempotencyRecord, type IdempotencyStore } from './idempotency.js';
+import {
+  createIdempotencyMiddleware,
+  type IdempotencyRecord,
+  type IdempotencyStore,
+} from './idempotency.js';
 
 class MemoryStore implements IdempotencyStore {
   private nextId = 1;
@@ -10,11 +14,24 @@ class MemoryStore implements IdempotencyStore {
     return `${organizationId}:${key}`;
   }
 
-  async reserve(organizationId: string, key: string, requestPath: string, actorId: string | null, requestHash: string | null) {
+  async reserve(
+    organizationId: string,
+    key: string,
+    requestPath: string,
+    actorId: string | null,
+    requestHash: string | null,
+  ) {
     const scopedKey = this.key(organizationId, key);
     if (this.rows.has(scopedKey)) return null;
     const id = String(this.nextId++);
-    this.rows.set(scopedKey, { id, requestPath, actorId, requestHash, responseStatus: null, responseBody: null });
+    this.rows.set(scopedKey, {
+      id,
+      requestPath,
+      actorId,
+      requestHash,
+      responseStatus: null,
+      responseBody: null,
+    });
     return id;
   }
 
@@ -27,7 +44,8 @@ class MemoryStore implements IdempotencyStore {
   }
 
   async complete(id: string, status: number, body: unknown) {
-    for (const [key, row] of this.rows) if (row.id === id) this.rows.set(key, { ...row, responseStatus: status, responseBody: body });
+    for (const [key, row] of this.rows)
+      if (row.id === id) this.rows.set(key, { ...row, responseStatus: status, responseBody: body });
   }
 }
 
@@ -38,7 +56,10 @@ function appFor(store: MemoryStore, organizationId = 'org-1', userId = 'user-1')
     c.set('db' as never, {} as never);
     await next();
   });
-  app.use('*', createIdempotencyMiddleware(() => store));
+  app.use(
+    '*',
+    createIdempotencyMiddleware(() => store),
+  );
   return app;
 }
 
@@ -49,8 +70,14 @@ describe('idempotency middleware', () => {
     let executions = 0;
     app.post('/command', (c) => c.json({ success: true, data: { execution: ++executions } }, 201));
 
-    const first = await app.request('/command', { method: 'POST', headers: { 'Idempotency-Key': 'key-1' } });
-    const replay = await app.request('/command', { method: 'POST', headers: { 'Idempotency-Key': 'key-1' } });
+    const first = await app.request('/command', {
+      method: 'POST',
+      headers: { 'Idempotency-Key': 'key-1' },
+    });
+    const replay = await app.request('/command', {
+      method: 'POST',
+      headers: { 'Idempotency-Key': 'key-1' },
+    });
 
     expect(first.status).toBe(201);
     expect(replay.status).toBe(201);
@@ -66,9 +93,18 @@ describe('idempotency middleware', () => {
     firstOrg.post('/second', (c) => c.json({ success: true, data: 'second' }));
     secondOrg.post('/first', (c) => c.json({ success: true, data: 'other-org' }));
 
-    await firstOrg.request('/first', { method: 'POST', headers: { 'Idempotency-Key': 'same-key' } });
-    const otherOrg = await secondOrg.request('/first', { method: 'POST', headers: { 'Idempotency-Key': 'same-key' } });
-    const otherPath = await firstOrg.request('/second', { method: 'POST', headers: { 'Idempotency-Key': 'same-key' } });
+    await firstOrg.request('/first', {
+      method: 'POST',
+      headers: { 'Idempotency-Key': 'same-key' },
+    });
+    const otherOrg = await secondOrg.request('/first', {
+      method: 'POST',
+      headers: { 'Idempotency-Key': 'same-key' },
+    });
+    const otherPath = await firstOrg.request('/second', {
+      method: 'POST',
+      headers: { 'Idempotency-Key': 'same-key' },
+    });
 
     expect(await otherOrg.json()).toEqual({ success: true, data: 'other-org' });
     expect(otherPath.status).toBe(409);
@@ -78,15 +114,23 @@ describe('idempotency middleware', () => {
     const store = new MemoryStore();
     const app = appFor(store);
     let executions = 0;
-    app.onError((error, c) => c.json({ success: false, error: { code: 'INTERNAL', message: error.message } }, 500));
+    app.onError((error, c) =>
+      c.json({ success: false, error: { code: 'INTERNAL', message: error.message } }, 500),
+    );
     app.post('/command', (c) => {
       executions++;
       if (executions === 1) throw new Error('transient');
       return c.json({ success: true });
     });
 
-    const first = await app.request('/command', { method: 'POST', headers: { 'Idempotency-Key': 'key-1' } });
-    const retry = await app.request('/command', { method: 'POST', headers: { 'Idempotency-Key': 'key-1' } });
+    const first = await app.request('/command', {
+      method: 'POST',
+      headers: { 'Idempotency-Key': 'key-1' },
+    });
+    const retry = await app.request('/command', {
+      method: 'POST',
+      headers: { 'Idempotency-Key': 'key-1' },
+    });
 
     expect(first.status).toBe(500);
     expect(retry.status).toBe(200);
@@ -101,7 +145,10 @@ describe('idempotency middleware', () => {
     bob.post('/command', (c) => c.json({ success: true, data: 'bob' }));
 
     await alice.request('/command', { method: 'POST', headers: { 'Idempotency-Key': 'shared' } });
-    const replay = await bob.request('/command', { method: 'POST', headers: { 'Idempotency-Key': 'shared' } });
+    const replay = await bob.request('/command', {
+      method: 'POST',
+      headers: { 'Idempotency-Key': 'shared' },
+    });
 
     expect(replay.status).toBe(409);
   });
@@ -113,13 +160,19 @@ describe('idempotency middleware', () => {
     app.post('/command', (c) => c.json({ success: true, data: ++executions }));
 
     const first = await app.request('/command', {
-      method: 'POST', headers: { 'Idempotency-Key': 'key-1' }, body: JSON.stringify({ amount: 100 }),
+      method: 'POST',
+      headers: { 'Idempotency-Key': 'key-1' },
+      body: JSON.stringify({ amount: 100 }),
     });
     const changed = await app.request('/command', {
-      method: 'POST', headers: { 'Idempotency-Key': 'key-1' }, body: JSON.stringify({ amount: 999 }),
+      method: 'POST',
+      headers: { 'Idempotency-Key': 'key-1' },
+      body: JSON.stringify({ amount: 999 }),
     });
     const trueRetry = await app.request('/command', {
-      method: 'POST', headers: { 'Idempotency-Key': 'key-1' }, body: JSON.stringify({ amount: 100 }),
+      method: 'POST',
+      headers: { 'Idempotency-Key': 'key-1' },
+      body: JSON.stringify({ amount: 100 }),
     });
 
     expect(first.status).toBe(200);

@@ -1,11 +1,7 @@
 import { Hono } from 'hono';
 import type { DbClient } from '@pump/db';
 import { normalizeProvider } from '@pump/shared';
-import {
-  RegisterPaymentTerminal,
-  UpdatePaymentTerminal,
-  type Result,
-} from '@pump/core';
+import { RegisterPaymentTerminal, UpdatePaymentTerminal, type Result } from '@pump/core';
 import { buildContext } from '../infra/context.js';
 import type { AuthenticatedPrincipal } from '../infra/authenticated-principal.js';
 import { createDispatcher } from '../infra/events.js';
@@ -46,7 +42,10 @@ function canWrite(c: any, stationId?: string | null): boolean {
 paymentTerminalsRouter.get('/payment-terminals', async (c) => {
   const stationId = c.req.query('stationId');
   if (!stationId) {
-    return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'stationId is required' } }, 400);
+    return c.json(
+      { success: false, error: { code: 'VALIDATION_ERROR', message: 'stationId is required' } },
+      400,
+    );
   }
   const repo = new DrizzlePaymentTerminalRepository(c.var.db);
   const data = await repo.listByStation(c.var.user.organizationId, stationId);
@@ -57,7 +56,13 @@ paymentTerminalsRouter.get('/payment-terminals', async (c) => {
 paymentTerminalsRouter.post('/payment-terminals', async (c) => {
   const body = await c.req.json().catch(() => ({}));
   if (!canWrite(c, body?.stationId)) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Not permitted to manage terminals for this station' } }, 403);
+    return c.json(
+      {
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'Not permitted to manage terminals for this station' },
+      },
+      403,
+    );
   }
   body.provider = normalizeProvider(body?.provider);
   const db = c.var.db;
@@ -65,13 +70,22 @@ paymentTerminalsRouter.post('/payment-terminals', async (c) => {
     repository: new DrizzlePaymentTerminalRepository(db),
     events: createDispatcher(db),
   });
-  const result = await useCase.execute(body, buildContext(c.var.user, { stationId: body?.stationId }));
+  const result = await useCase.execute(
+    body,
+    buildContext(c.var.user, { stationId: body?.stationId }),
+  );
   // Ensure the station's default money accounts exist and this terminal is linked
   // to a Card/UPI clearing account: an explicitly chosen one, else auto by provider.
   if (result.success) {
     const prov = new AccountProvisioningService(db);
     await prov.ensureStationDefaults(c.var.user.organizationId, result.data.stationId);
-    const clearingId = body?.clearingAccountId || (await prov.ensureClearingForProvider(c.var.user.organizationId, result.data.stationId, result.data.provider));
+    const clearingId =
+      body?.clearingAccountId ||
+      (await prov.ensureClearingForProvider(
+        c.var.user.organizationId,
+        result.data.stationId,
+        result.data.provider,
+      ));
     await prov.linkTerminal(result.data.id, clearingId);
   }
   return sendResult(c, result);
@@ -85,18 +99,36 @@ paymentTerminalsRouter.put('/payment-terminals/:id', async (c) => {
   const repo = new DrizzlePaymentTerminalRepository(db);
   const existing = await repo.findById(id);
   if (!existing || existing.organizationId !== c.var.user.organizationId) {
-    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Terminal not found' } }, 404);
+    return c.json(
+      { success: false, error: { code: 'NOT_FOUND', message: 'Terminal not found' } },
+      404,
+    );
   }
   if (!canWrite(c, existing.stationId)) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Not permitted to manage terminals for this station' } }, 403);
+    return c.json(
+      {
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'Not permitted to manage terminals for this station' },
+      },
+      403,
+    );
   }
   if (body?.provider !== undefined) body.provider = normalizeProvider(body.provider);
   const useCase = new UpdatePaymentTerminal({ repository: repo, events: createDispatcher(db) });
-  const result = await useCase.execute({ ...body, id }, buildContext(c.var.user, { stationId: existing.stationId }));
+  const result = await useCase.execute(
+    { ...body, id },
+    buildContext(c.var.user, { stationId: existing.stationId }),
+  );
   // Re-point the terminal's clearing account when provided ('' = auto by provider).
   if (result.success && body?.clearingAccountId !== undefined) {
     const prov = new AccountProvisioningService(db);
-    const clearingId = body.clearingAccountId || (await prov.ensureClearingForProvider(c.var.user.organizationId, existing.stationId, body?.provider ?? existing.provider));
+    const clearingId =
+      body.clearingAccountId ||
+      (await prov.ensureClearingForProvider(
+        c.var.user.organizationId,
+        existing.stationId,
+        body?.provider ?? existing.provider,
+      ));
     await prov.linkTerminal(id, clearingId);
   }
   return sendResult(c, result);
@@ -109,12 +141,24 @@ paymentTerminalsRouter.delete('/payment-terminals/:id', async (c) => {
   const repo = new DrizzlePaymentTerminalRepository(db);
   const existing = await repo.findById(id);
   if (!existing || existing.organizationId !== c.var.user.organizationId) {
-    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Terminal not found' } }, 404);
+    return c.json(
+      { success: false, error: { code: 'NOT_FOUND', message: 'Terminal not found' } },
+      404,
+    );
   }
   if (!canWrite(c, existing.stationId)) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Not permitted to manage terminals for this station' } }, 403);
+    return c.json(
+      {
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'Not permitted to manage terminals for this station' },
+      },
+      403,
+    );
   }
   const useCase = new UpdatePaymentTerminal({ repository: repo, events: createDispatcher(db) });
-  const result = await useCase.execute({ id, isActive: false }, buildContext(c.var.user, { stationId: existing.stationId }));
+  const result = await useCase.execute(
+    { id, isActive: false },
+    buildContext(c.var.user, { stationId: existing.stationId }),
+  );
   return sendResult(c, result);
 });

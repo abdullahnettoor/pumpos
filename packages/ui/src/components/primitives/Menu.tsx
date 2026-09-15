@@ -46,7 +46,12 @@ export interface PopoverProps {
  * A floating panel anchored to a trigger button. Closes on outside click or Esc.
  * Use for filter panels, column pickers, and anything richer than a menu list.
  */
-export const Popover: React.FC<PopoverProps> = ({ trigger, children, align = 'left', buttonClassName }) => {
+export const Popover: React.FC<PopoverProps> = ({
+  trigger,
+  children,
+  align = 'left',
+  buttonClassName,
+}) => {
   const [open, setOpen] = useState(false);
   const ref = useDismiss(open, () => setOpen(false));
   return (
@@ -60,7 +65,11 @@ export const Popover: React.FC<PopoverProps> = ({ trigger, children, align = 'le
       >
         {trigger}
       </button>
-      {open && <div role="dialog" style={panelStyle(align)}>{children}</div>}
+      {open && (
+        <div role="dialog" style={panelStyle(align)}>
+          {children}
+        </div>
+      )}
     </div>
   );
 };
@@ -120,16 +129,26 @@ export const Menu: React.FC<MenuProps> = ({ trigger, items, align = 'left', butt
                 padding: '7px 10px',
                 fontSize: '13px',
                 fontFamily: 'var(--font-sans)',
-                color: item.disabled ? 'var(--text-faint)' : item.danger ? 'var(--state-danger-fg)' : 'var(--text-default)',
+                color: item.disabled
+                  ? 'var(--text-faint)'
+                  : item.danger
+                    ? 'var(--state-danger-fg)'
+                    : 'var(--text-default)',
                 background: 'transparent',
                 border: 'none',
                 borderRadius: 'var(--radius-input)',
                 cursor: item.disabled ? 'not-allowed' : 'pointer',
               }}
-              onMouseEnter={(e) => { if (!item.disabled) e.currentTarget.style.backgroundColor = 'var(--bg-surface-alt)'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+              onMouseEnter={(e) => {
+                if (!item.disabled) e.currentTarget.style.backgroundColor = 'var(--bg-surface-alt)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'transparent';
+              }}
             >
-              {item.icon && <span style={{ display: 'inline-flex', flexShrink: 0 }}>{item.icon}</span>}
+              {item.icon && (
+                <span style={{ display: 'inline-flex', flexShrink: 0 }}>{item.icon}</span>
+              )}
               {item.label}
             </button>
           ))}

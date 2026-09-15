@@ -37,7 +37,9 @@ export const AccountMenu: React.FC<Props> = ({ userName, role, stationName, onSi
             style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-soft)' }}
           >
             <div className="px-3 py-2">
-              <p className="truncate text-sm font-semibold" style={{ color: 'var(--text-strong)' }}>{userName}</p>
+              <p className="truncate text-sm font-semibold" style={{ color: 'var(--text-strong)' }}>
+                {userName}
+              </p>
               <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
                 {role}
                 {stationName ? ` · ${stationName}` : ''}
@@ -46,7 +48,10 @@ export const AccountMenu: React.FC<Props> = ({ userName, role, stationName, onSi
             <div className="border-t pt-1" style={{ borderColor: 'var(--border-soft)' }}>
               <button
                 type="button"
-                onClick={() => { setOpen(false); onSignOut(); }}
+                onClick={() => {
+                  setOpen(false);
+                  onSignOut();
+                }}
                 className="w-full rounded-lg px-3 py-2 text-left text-sm font-medium"
                 style={{ color: 'var(--state-danger-fg)' }}
               >

@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
-  AppShell, 
-  Login, 
+  AppShell,
+  Login,
   WebOnboardingNotice,
-  StationOverview, 
+  StationOverview,
   DashboardOverview,
   OrganizationOverview,
   ShiftsManagement,
@@ -18,13 +18,13 @@ import {
   AccountsPanel,
   DesignSystem,
   QuickEntryHost,
-  CloudStationService, 
+  CloudStationService,
   queryKeys,
   setApiBaseUrl,
-  setAuthToken, 
+  setAuthToken,
   clearClientSessionData,
   clearStoredOnboardingDraft,
-  supabase 
+  supabase,
 } from '@pump/ui';
 import { Station } from '@pump/shared';
 
@@ -33,7 +33,8 @@ setApiBaseUrl(import.meta.env.VITE_API_URL);
 // Onboarding is done on the web console only; the desktop app links users there
 // and unlocks automatically once the station is READY_FOR_OPERATIONS. Override
 // the target with VITE_WEB_URL for dev/preview builds.
-const webConsoleUrl = (import.meta.env.VITE_WEB_URL as string | undefined) || 'https://console.pumpos.app';
+const webConsoleUrl =
+  (import.meta.env.VITE_WEB_URL as string | undefined) || 'https://console.pumpos.app';
 
 const stationService = new CloudStationService();
 
@@ -42,7 +43,7 @@ const environmentTag = (() => {
   if (explicitEnv === 'preview') return 'Preview';
   if (explicitEnv === 'dev' || explicitEnv === 'development') return 'Dev';
   if (import.meta.env.DEV) return 'Dev';
-  
+
   if (typeof window !== 'undefined') {
     const hostname = window.location.hostname;
     // Dev domain or localhost
@@ -72,9 +73,9 @@ const App: React.FC = () => {
     setCurrentPath(path);
     setNavIntent(intent ?? null);
   }, []);
-  const [syncStatus, setSyncStatus] = useState<'online' | 'offline' | 'synced' | 'pending' | 'failed'>(
-    typeof navigator !== 'undefined' && navigator.onLine === false ? 'offline' : 'online',
-  );
+  const [syncStatus, setSyncStatus] = useState<
+    'online' | 'offline' | 'synced' | 'pending' | 'failed'
+  >(typeof navigator !== 'undefined' && navigator.onLine === false ? 'offline' : 'online');
 
   // Reflect real browser network status in the top-bar indicator.
   useEffect(() => {
@@ -95,7 +96,9 @@ const App: React.FC = () => {
 
   // Supabase Auth and Backend user context states
   const [session, setSession] = useState<any>(null);
-  const [userRole, setUserRole] = useState<'Owner' | 'Manager' | 'Accountant' | 'Staff' | null>(null);
+  const [userRole, setUserRole] = useState<'Owner' | 'Manager' | 'Accountant' | 'Staff' | null>(
+    null,
+  );
   const [userName, setUserName] = useState<string>('');
   const [profileError, setProfileError] = useState<string | null>(null);
   const lastUserIdRef = useRef<string | null>(null);
@@ -117,7 +120,9 @@ const App: React.FC = () => {
       });
 
     // 2. Subscribe to auth changes (sign in, sign out, token refresh)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
       void handleSession(session);
     });
 
@@ -149,7 +154,7 @@ const App: React.FC = () => {
       lastUserIdRef.current = currentSession.user.id;
       setSelectedStation(null);
       setStations([]);
-      
+
       try {
         setLoading(true);
         // Fetch session context from our backend (verifies JWT, gets user role & name)
@@ -167,13 +172,16 @@ const App: React.FC = () => {
         });
         setStations(list);
         if (list.length > 0) {
-          const active = list.find((station) => station.onboardingStatus === 'READY_FOR_OPERATIONS') || list[0];
+          const active =
+            list.find((station) => station.onboardingStatus === 'READY_FOR_OPERATIONS') || list[0];
           setSelectedStation(active);
           if (active.onboardingStatus !== 'READY_FOR_OPERATIONS') {
             setCurrentPath('/onboarding');
           } else {
             // Only direct to dashboard if currently on onboarding or login
-            setCurrentPath((prev) => (prev === '/onboarding' || prev === '/login') ? '/dashboard' : prev);
+            setCurrentPath((prev) =>
+              prev === '/onboarding' || prev === '/login' ? '/dashboard' : prev,
+            );
           }
         } else {
           // No stations configured yet
@@ -230,7 +238,8 @@ const App: React.FC = () => {
     await supabase.auth.signOut();
   };
 
-  const isStationReady = selectedStation && selectedStation.onboardingStatus === 'READY_FOR_OPERATIONS';
+  const isStationReady =
+    selectedStation && selectedStation.onboardingStatus === 'READY_FOR_OPERATIONS';
 
   // Dynamic Navigation items based on onboarding status
   const navItems = isStationReady
@@ -248,9 +257,7 @@ const App: React.FC = () => {
         { label: 'Reports', path: '/reports', roles: ['Owner', 'Manager', 'Accountant'] },
         { label: 'Organization', path: '/organization', roles: ['Owner'] },
       ]
-    : [
-        { label: 'Onboarding Setup', path: '/onboarding', roles: ['Owner', 'Manager'] }
-      ];
+    : [{ label: 'Onboarding Setup', path: '/onboarding', roles: ['Owner', 'Manager'] }];
 
   const navItemsWithDev = isLocalDev
     ? [...navItems, { label: 'Design System', path: '/design-system' }]
@@ -271,63 +278,75 @@ const App: React.FC = () => {
         profileError.toLowerCase().includes('connection refused');
 
       return (
-        <div style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          minHeight: '80vh',
-          backgroundColor: 'var(--bg-canvas)',
-          padding: '20px',
-          fontFamily: 'var(--font-sans)'
-        }}>
-          <div style={{
-            width: '100%',
-            maxWidth: '460px',
-            backgroundColor: 'var(--bg-surface)',
-            border: '1px solid var(--border-soft)',
-            borderRadius: 'var(--radius-card)',
-            padding: '32px 24px',
+        <div
+          style={{
             display: 'flex',
             flexDirection: 'column',
-            gap: '16px',
-            boxShadow: 'var(--shadow-1)',
-            textAlign: 'center'
-          }}>
+            alignItems: 'center',
+            justifyContent: 'center',
+            minHeight: '80vh',
+            backgroundColor: 'var(--bg-canvas)',
+            padding: '20px',
+            fontFamily: 'var(--font-sans)',
+          }}
+        >
+          <div
+            style={{
+              width: '100%',
+              maxWidth: '460px',
+              backgroundColor: 'var(--bg-surface)',
+              border: '1px solid var(--border-soft)',
+              borderRadius: 'var(--radius-card)',
+              padding: '32px 24px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '16px',
+              boxShadow: 'var(--shadow-1)',
+              textAlign: 'center',
+            }}
+          >
             <h2 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-strong)' }}>
               {isNetworkError ? 'API Server Connection Failed' : 'User Profile Connection Error'}
             </h2>
-            <div style={{ 
-              backgroundColor: 'var(--state-danger-bg)', 
-              color: 'var(--state-danger-fg)', 
-              padding: '12px', 
-              borderRadius: 'var(--radius-input)', 
-              fontSize: '12px',
-              textAlign: 'left',
-              lineHeight: '1.4',
-              fontFamily: 'var(--font-mono)'
-            }}>
+            <div
+              style={{
+                backgroundColor: 'var(--state-danger-bg)',
+                color: 'var(--state-danger-fg)',
+                padding: '12px',
+                borderRadius: 'var(--radius-input)',
+                fontSize: '12px',
+                textAlign: 'left',
+                lineHeight: '1.4',
+                fontFamily: 'var(--font-mono)',
+              }}
+            >
               {profileError}
             </div>
             {isNetworkError ? (
               <p style={{ color: 'var(--text-muted)', fontSize: '13px', lineHeight: '1.5' }}>
-                The frontend app is unable to connect to the backend server at <strong>http://localhost:8787</strong>. Please verify that your API server is running (try running <code>npm run dev:api</code>).
+                The frontend app is unable to connect to the backend server at{' '}
+                <strong>http://localhost:8787</strong>. Please verify that your API server is
+                running (try running <code>npm run dev:api</code>).
               </p>
             ) : (
               <>
                 <p style={{ color: 'var(--text-muted)', fontSize: '13px', lineHeight: '1.5' }}>
-                  Your Supabase Auth account is active, but your profile has not been linked to the public schema database yet. Please provide your administrator with the UID below to map your roles:
+                  Your Supabase Auth account is active, but your profile has not been linked to the
+                  public schema database yet. Please provide your administrator with the UID below
+                  to map your roles:
                 </p>
-                <div style={{
-                  padding: '10px',
-                  backgroundColor: 'var(--bg-surface-alt)',
-                  border: '1px solid var(--border-strong)',
-                  borderRadius: 'var(--radius-input)',
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: '12px',
-                  color: 'var(--text-strong)',
-                  wordBreak: 'break-all'
-                }}>
+                <div
+                  style={{
+                    padding: '10px',
+                    backgroundColor: 'var(--bg-surface-alt)',
+                    border: '1px solid var(--border-strong)',
+                    borderRadius: 'var(--radius-input)',
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '12px',
+                    color: 'var(--text-strong)',
+                    wordBreak: 'break-all',
+                  }}
+                >
                   {session?.user?.id}
                 </div>
               </>
@@ -342,7 +361,7 @@ const App: React.FC = () => {
                 fontWeight: 600,
                 fontSize: '13px',
                 cursor: 'pointer',
-                color: 'var(--text-default)'
+                color: 'var(--text-default)',
               }}
             >
               Sign Out & Try Again
@@ -355,14 +374,16 @@ const App: React.FC = () => {
     // 3. Loading user context / roles
     if (loading || !userRole) {
       return (
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          minHeight: '60vh',
-          color: 'var(--text-muted)',
-          fontFamily: 'var(--font-mono)'
-        }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            minHeight: '60vh',
+            color: 'var(--text-muted)',
+            fontFamily: 'var(--font-mono)',
+          }}
+        >
           Resolving operational permissions...
         </div>
       );
@@ -394,7 +415,7 @@ const App: React.FC = () => {
             onNavigate={navigate}
           />
         );
-      
+
       case '/setup/station':
         return (
           <StationOverview
@@ -488,15 +509,17 @@ const App: React.FC = () => {
   // Outer loading spinner before session checks resolve
   if (loading && !session) {
     return (
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        minHeight: '100vh',
-        backgroundColor: 'var(--bg-canvas)',
-        color: 'var(--text-muted)',
-        fontFamily: 'var(--font-mono)'
-      }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          minHeight: '100vh',
+          backgroundColor: 'var(--bg-canvas)',
+          color: 'var(--text-muted)',
+          fontFamily: 'var(--font-mono)',
+        }}
+      >
         Initializing connection to Supabase Auth...
       </div>
     );

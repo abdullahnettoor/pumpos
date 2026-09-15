@@ -92,12 +92,9 @@ export const Tabs: React.FC<TabsProps> = ({
     if (target) focusAndSelect(target.id);
   };
 
-  const rootClass = [
-    'pump-tabs',
-    `pump-tabs--${variant}`,
-    `pump-tabs--${size}`,
-    className,
-  ].filter(Boolean).join(' ');
+  const rootClass = ['pump-tabs', `pump-tabs--${variant}`, `pump-tabs--${size}`, className]
+    .filter(Boolean)
+    .join(' ');
 
   return (
     <div
@@ -113,7 +110,9 @@ export const Tabs: React.FC<TabsProps> = ({
         return (
           <button
             key={tab.id}
-            ref={(el) => { refs.current[tab.id] = el; }}
+            ref={(el) => {
+              refs.current[tab.id] = el;
+            }}
             role="tab"
             type="button"
             aria-selected={active}
@@ -122,7 +121,11 @@ export const Tabs: React.FC<TabsProps> = ({
             onClick={() => !tab.disabled && onChange(tab.id)}
             className={`pump-tab${active ? ' pump-tab--active' : ''}`}
           >
-            {tab.icon && <span className="pump-tab__icon" aria-hidden="true">{tab.icon}</span>}
+            {tab.icon && (
+              <span className="pump-tab__icon" aria-hidden="true">
+                {tab.icon}
+              </span>
+            )}
             <span className="pump-tab__label">{tab.label}</span>
             {tab.tag && (
               <span
@@ -147,5 +150,3 @@ export const Tabs: React.FC<TabsProps> = ({
     </div>
   );
 };
-
-

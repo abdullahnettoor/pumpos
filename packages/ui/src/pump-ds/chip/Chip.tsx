@@ -48,32 +48,37 @@ const chipVariants = cva(
         solid: 'text-white',
       },
       tone: {
-        brand: '', info: '', success: '', warning: '', danger: '', neutral: '',
+        brand: '',
+        info: '',
+        success: '',
+        warning: '',
+        danger: '',
+        neutral: '',
       },
     },
     compoundVariants: [
       // --- soft (default): tinted background + tone-fg text ------------
-      { variant: 'soft', tone: 'brand',   className: 'bg-brand/10 text-brand' },
-      { variant: 'soft', tone: 'info',    className: 'bg-info-bg text-info-fg' },
+      { variant: 'soft', tone: 'brand', className: 'bg-brand/10 text-brand' },
+      { variant: 'soft', tone: 'info', className: 'bg-info-bg text-info-fg' },
       { variant: 'soft', tone: 'success', className: 'bg-success-bg text-success-fg' },
       { variant: 'soft', tone: 'warning', className: 'bg-warning-bg text-warning-fg' },
-      { variant: 'soft', tone: 'danger',  className: 'bg-danger-bg text-danger-fg' },
+      { variant: 'soft', tone: 'danger', className: 'bg-danger-bg text-danger-fg' },
       { variant: 'soft', tone: 'neutral', className: 'bg-surface-alt text-ink-muted' },
 
       // --- outline: transparent + tone-colored border + tone-fg text ----
-      { variant: 'outline', tone: 'brand',   className: 'border-brand text-brand' },
-      { variant: 'outline', tone: 'info',    className: 'border-info-fg text-info-fg' },
+      { variant: 'outline', tone: 'brand', className: 'border-brand text-brand' },
+      { variant: 'outline', tone: 'info', className: 'border-info-fg text-info-fg' },
       { variant: 'outline', tone: 'success', className: 'border-success-fg text-success-fg' },
       { variant: 'outline', tone: 'warning', className: 'border-warning-fg text-warning-fg' },
-      { variant: 'outline', tone: 'danger',  className: 'border-danger-fg text-danger-fg' },
+      { variant: 'outline', tone: 'danger', className: 'border-danger-fg text-danger-fg' },
       { variant: 'outline', tone: 'neutral', className: 'border-border-strong text-ink-default' },
 
       // --- solid: full-saturation background + white text ---------------
-      { variant: 'solid', tone: 'brand',   className: 'bg-brand' },
-      { variant: 'solid', tone: 'info',    className: 'bg-info-fg' },
+      { variant: 'solid', tone: 'brand', className: 'bg-brand' },
+      { variant: 'solid', tone: 'info', className: 'bg-info-fg' },
       { variant: 'solid', tone: 'success', className: 'bg-success-fg' },
       { variant: 'solid', tone: 'warning', className: 'bg-warning-fg' },
-      { variant: 'solid', tone: 'danger',  className: 'bg-danger-fg' },
+      { variant: 'solid', tone: 'danger', className: 'bg-danger-fg' },
       { variant: 'solid', tone: 'neutral', className: 'bg-ink-strong' },
     ],
     defaultVariants: {
@@ -81,7 +86,7 @@ const chipVariants = cva(
       variant: 'soft',
       tone: 'neutral',
     },
-  }
+  },
 );
 
 const dotVariants = cva('inline-block shrink-0 rounded-full', {
@@ -92,11 +97,11 @@ const dotVariants = cva('inline-block shrink-0 rounded-full', {
       md: 'size-2',
     },
     tone: {
-      brand:   'bg-brand',
-      info:    'bg-info-fg',
+      brand: 'bg-brand',
+      info: 'bg-info-fg',
       success: 'bg-success-fg',
       warning: 'bg-warning-fg',
-      danger:  'bg-danger-fg',
+      danger: 'bg-danger-fg',
       neutral: 'bg-ink-faint',
     },
   },
@@ -104,8 +109,7 @@ const dotVariants = cva('inline-block shrink-0 rounded-full', {
 });
 
 export interface ChipProps
-  extends Omit<HTMLAttributes<HTMLSpanElement>, 'children'>,
-    VariantProps<typeof chipVariants> {
+  extends Omit<HTMLAttributes<HTMLSpanElement>, 'children'>, VariantProps<typeof chipVariants> {
   /** Leading icon (usually a lucide element). Ignored when `dot` is true. */
   icon?: ReactNode;
   /** Show a leading tone dot instead of an icon. */
@@ -120,8 +124,20 @@ export interface ChipProps
 }
 
 export const Chip = forwardRef<HTMLSpanElement, ChipProps>(function Chip(
-  { className, tone, variant, size, icon, dot, pulse, onRemove, removeLabel = 'Remove', children, ...rest },
-  ref
+  {
+    className,
+    tone,
+    variant,
+    size,
+    icon,
+    dot,
+    pulse,
+    onRemove,
+    removeLabel = 'Remove',
+    children,
+    ...rest
+  },
+  ref,
 ) {
   return (
     <span ref={ref} className={cn(chipVariants({ tone, variant, size }), className)} {...rest}>
@@ -131,13 +147,18 @@ export const Chip = forwardRef<HTMLSpanElement, ChipProps>(function Chip(
           aria-hidden="true"
         />
       ) : icon ? (
-        <span className="inline-flex" aria-hidden="true">{icon}</span>
+        <span className="inline-flex" aria-hidden="true">
+          {icon}
+        </span>
       ) : null}
       <span className="truncate">{children}</span>
       {onRemove && (
         <button
           type="button"
-          onClick={(e) => { e.stopPropagation(); onRemove(); }}
+          onClick={(e) => {
+            e.stopPropagation();
+            onRemove();
+          }}
           aria-label={removeLabel}
           className={cn(
             'ml-0.5 inline-flex items-center justify-center rounded-full opacity-70',

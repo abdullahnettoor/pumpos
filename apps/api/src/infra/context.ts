@@ -37,7 +37,10 @@ export interface ActivityExecutionContext extends ExecutionContext {
  * used in unit tests instead). Pass the station's timezone + day-start (see
  * loadStationClock) so business-date resolution is station-correct.
  */
-export function buildContext(user: AuthedUser, opts: ContextOptions = {}): ActivityExecutionContext {
+export function buildContext(
+  user: AuthedUser,
+  opts: ContextOptions = {},
+): ActivityExecutionContext {
   const ids = new UuidGenerator();
   return {
     organizationId: user.organizationId,

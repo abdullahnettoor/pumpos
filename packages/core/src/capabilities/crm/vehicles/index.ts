@@ -1,6 +1,20 @@
 import { z } from 'zod';
-import { BusinessEvents, err, eventFromContext, forbiddenError, notFoundError, ok, validationError } from '../../../kernel/index.js';
-import type { EventPublisher, ExecutionContext, Repository, Result, UseCase } from '../../../kernel/index.js';
+import {
+  BusinessEvents,
+  err,
+  eventFromContext,
+  forbiddenError,
+  notFoundError,
+  ok,
+  validationError,
+} from '../../../kernel/index.js';
+import type {
+  EventPublisher,
+  ExecutionContext,
+  Repository,
+  Result,
+  UseCase,
+} from '../../../kernel/index.js';
 import type { CustomerRepository } from '../customers/index.js';
 
 export interface Vehicle {
@@ -17,7 +31,11 @@ export interface Vehicle {
 
 export interface VehicleRepository extends Repository<Vehicle> {
   listByCustomer(customerId: string, activeOnly: boolean): Promise<Vehicle[]>;
-  existsByRegistration(organizationId: string, registrationNumber: string, excludeId?: string): Promise<boolean>;
+  existsByRegistration(
+    organizationId: string,
+    registrationNumber: string,
+    excludeId?: string,
+  ): Promise<boolean>;
 }
 
 export interface AddVehicleCommand {
@@ -63,12 +81,16 @@ export class AddVehicle implements UseCase<AddVehicleCommand, Vehicle> {
   constructor(private readonly deps: VehicleDeps) {}
   async execute(input: AddVehicleCommand, ctx: ExecutionContext): Promise<Result<Vehicle>> {
     const p = addSchema.safeParse(input);
-    if (!p.success) return err(validationError('Invalid AddVehicle command', { issues: p.error.flatten() }));
+    if (!p.success)
+      return err(validationError('Invalid AddVehicle command', { issues: p.error.flatten() }));
     const customer = await this.deps.customers.findById(p.data.customerId);
-    if (!customer || customer.organizationId !== ctx.organizationId) return err(notFoundError('Customer', p.data.customerId));
+    if (!customer || customer.organizationId !== ctx.organizationId)
+      return err(notFoundError('Customer', p.data.customerId));
     const registrationNumber = normalizeReg(p.data.registrationNumber);
     if (await this.deps.repository.existsByRegistration(ctx.organizationId, registrationNumber)) {
-      return err(validationError(`A vehicle ${registrationNumber} already exists`, { registrationNumber }));
+      return err(
+        validationError(`A vehicle ${registrationNumber} already exists`, { registrationNumber }),
+      );
     }
     const now = ctx.clock.now().toISOString();
     const vehicle: Vehicle = {
@@ -99,19 +121,34 @@ export class UpdateVehicle implements UseCase<UpdateVehicleCommand, Vehicle> {
   constructor(private readonly deps: VehicleDeps) {}
   async execute(input: UpdateVehicleCommand, ctx: ExecutionContext): Promise<Result<Vehicle>> {
     const p = updateSchema.safeParse(input);
-    if (!p.success) return err(validationError('Invalid UpdateVehicle command', { issues: p.error.flatten() }));
+    if (!p.success)
+      return err(validationError('Invalid UpdateVehicle command', { issues: p.error.flatten() }));
     const existing = await this.deps.repository.findById(p.data.id);
     if (!existing) return err(notFoundError('Vehicle', p.data.id));
-    if (existing.organizationId !== ctx.organizationId) return err(forbiddenError('Vehicle belongs to another organization'));
-    const registrationNumber = p.data.registrationNumber !== undefined ? normalizeReg(p.data.registrationNumber) : existing.registrationNumber;
-    if (registrationNumber !== existing.registrationNumber && (await this.deps.repository.existsByRegistration(ctx.organizationId, registrationNumber, existing.id))) {
-      return err(validationError(`A vehicle ${registrationNumber} already exists`, { registrationNumber }));
+    if (existing.organizationId !== ctx.organizationId)
+      return err(forbiddenError('Vehicle belongs to another organization'));
+    const registrationNumber =
+      p.data.registrationNumber !== undefined
+        ? normalizeReg(p.data.registrationNumber)
+        : existing.registrationNumber;
+    if (
+      registrationNumber !== existing.registrationNumber &&
+      (await this.deps.repository.existsByRegistration(
+        ctx.organizationId,
+        registrationNumber,
+        existing.id,
+      ))
+    ) {
+      return err(
+        validationError(`A vehicle ${registrationNumber} already exists`, { registrationNumber }),
+      );
     }
     const updated: Vehicle = {
       ...existing,
       registrationNumber,
       vehicleType: p.data.vehicleType ?? existing.vehicleType,
-      defaultProductId: p.data.defaultProductId !== undefined ? p.data.defaultProductId : existing.defaultProductId,
+      defaultProductId:
+        p.data.defaultProductId !== undefined ? p.data.defaultProductId : existing.defaultProductId,
       isActive: p.data.isActive ?? existing.isActive,
       updatedAt: ctx.clock.now().toISOString(),
     };

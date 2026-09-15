@@ -23,17 +23,52 @@ import { Play, Zap, Receipt, Wallet, BookOpen, FileText, TrendingUp, Percent } f
 const shiftService = new CloudShiftService();
 
 const dssrColumns: ColumnDef<any, any>[] = [
-  { accessorKey: 'businessDate', header: 'Business Date', cell: ({ getValue }) => <DateText value={getValue() as string} /> },
-  { id: 'shifts', header: 'Shifts', cell: ({ row }) => <span style={{ color: 'var(--text-default)' }}>{Number(row.original.snapshotData?.shiftsIncluded || 0)}</span> },
-  { id: 'volume', header: 'Net Volume Sold', cell: ({ row }) => {
-    const snap = row.original.snapshotData || {};
-    const bp = (snap.fuel?.byProduct || []) as any[];
-    const units = Array.from(new Set(bp.map((p: any) => p.unit || 'L')));
-    const vol = Number(snap.fuel?.totalNetVolume ?? snap.totalVolumeSold ?? 0);
-    const label = units.length === 1 ? units[0] : units.length > 1 ? '' : 'L';
-    return <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-default)' }}>{vol.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{label ? ` ${label}` : ''}</span>;
-  } },
-  { id: 'collections', header: 'Cash Collected', cell: ({ row }) => <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--state-success-fg)' }}>{inr(row.original.snapshotData?.totalCashCollections || 0)}</span> },
+  {
+    accessorKey: 'businessDate',
+    header: 'Business Date',
+    cell: ({ getValue }) => <DateText value={getValue() as string} />,
+  },
+  {
+    id: 'shifts',
+    header: 'Shifts',
+    cell: ({ row }) => (
+      <span style={{ color: 'var(--text-default)' }}>
+        {Number(row.original.snapshotData?.shiftsIncluded || 0)}
+      </span>
+    ),
+  },
+  {
+    id: 'volume',
+    header: 'Net Volume Sold',
+    cell: ({ row }) => {
+      const snap = row.original.snapshotData || {};
+      const bp = (snap.fuel?.byProduct || []) as any[];
+      const units = Array.from(new Set(bp.map((p: any) => p.unit || 'L')));
+      const vol = Number(snap.fuel?.totalNetVolume ?? snap.totalVolumeSold ?? 0);
+      const label = units.length === 1 ? units[0] : units.length > 1 ? '' : 'L';
+      return (
+        <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-default)' }}>
+          {vol.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          {label ? ` ${label}` : ''}
+        </span>
+      );
+    },
+  },
+  {
+    id: 'collections',
+    header: 'Cash Collected',
+    cell: ({ row }) => (
+      <span
+        style={{
+          fontFamily: 'var(--font-mono)',
+          fontWeight: 600,
+          color: 'var(--state-success-fg)',
+        }}
+      >
+        {inr(row.original.snapshotData?.totalCashCollections || 0)}
+      </span>
+    ),
+  },
 ];
 
 interface ReportsOverviewProps {
@@ -43,7 +78,8 @@ interface ReportsOverviewProps {
   onIntentConsumed?: () => void;
 }
 
-type ReportsTab = 'daily-dssr' | 'pnl' | 'ledger' | 'invoices' | 'tax-register' | 'expense-register' | 'cash-bank';
+type ReportsTab =
+  'daily-dssr' | 'pnl' | 'ledger' | 'invoices' | 'tax-register' | 'expense-register' | 'cash-bank';
 
 export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
   selectedStation,
@@ -72,7 +108,9 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
     return { from: d.toISOString().split('T')[0], to: toD };
   }, [clock.timeZone, clock.dayStartsAt]);
 
-  const dssrQ = useDailyDssrRange(stationId, from, to, { enabled: !!stationId && activeTab === 'daily-dssr' } as any);
+  const dssrQ = useDailyDssrRange(stationId, from, to, {
+    enabled: !!stationId && activeTab === 'daily-dssr',
+  } as any);
   const dssrList = dssrQ.data ?? [];
 
   const kpis = useMemo(() => {
@@ -106,7 +144,9 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
         onIntentConsumed?.();
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [intent?.openDssrDate, stationId, onIntentConsumed]);
 
   const handleGenerateDailyDssr = async () => {
@@ -157,7 +197,9 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
           onChange={(id) => setActiveTab(id as ReportsTab)}
           tabs={[
             { id: 'daily-dssr', label: 'Daily DSSR', icon: <Zap size={13} /> },
-            ...(userRole === 'Owner' ? [{ id: 'pnl', label: 'Profit & Loss', icon: <TrendingUp size={13} /> }] : []),
+            ...(userRole === 'Owner'
+              ? [{ id: 'pnl', label: 'Profit & Loss', icon: <TrendingUp size={13} /> }]
+              : []),
             { id: 'ledger', label: 'Ledger', icon: <BookOpen size={13} /> },
             { id: 'invoices', label: 'Invoices', icon: <FileText size={13} /> },
             { id: 'tax-register', label: 'Tax Register', icon: <Percent size={13} /> },
@@ -167,13 +209,22 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
         />
       }
     >
-
       {/* Daily DSSR Tab */}
       {activeTab === 'daily-dssr' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <KpiStrip columns="auto">
-            <KpiTile dot="brand" label="Generated DSSRs" value={String(kpis.count)} hint="last 30 days" />
-            <KpiTile dot="info" label="Net Volume Sold" value={`${kpis.volume.toLocaleString('en-IN', { maximumFractionDigits: 0 })} L`} hint="period" />
+            <KpiTile
+              dot="brand"
+              label="Generated DSSRs"
+              value={String(kpis.count)}
+              hint="last 30 days"
+            />
+            <KpiTile
+              dot="info"
+              label="Net Volume Sold"
+              value={`${kpis.volume.toLocaleString('en-IN', { maximumFractionDigits: 0 })} L`}
+              hint="period"
+            />
             <KpiTile dot="success" label="Cash Collected" value={inr(kpis.cash)} hint="period" />
           </KpiStrip>
 
@@ -183,21 +234,52 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
                 <label className="field-label">Business Date</label>
                 <DateField value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} />
               </div>
-              <Button variant="primary" size="sm" leftIcon={<Play style={{ fill: 'currentColor' }} />} loading={generatingDailyDssr} disabled={!selectedDate} onClick={handleGenerateDailyDssr}>
+              <Button
+                variant="primary"
+                size="sm"
+                leftIcon={<Play style={{ fill: 'currentColor' }} />}
+                loading={generatingDailyDssr}
+                disabled={!selectedDate}
+                onClick={handleGenerateDailyDssr}
+              >
                 Generate DSSR
               </Button>
             </div>
             {generateError && (
-              <div style={{ marginTop: '10px', padding: '8px 12px', backgroundColor: 'var(--state-danger-bg)', color: 'var(--state-danger-fg)', borderRadius: 'var(--radius-input)', fontSize: '12px' }}>{generateError}</div>
+              <div
+                style={{
+                  marginTop: '10px',
+                  padding: '8px 12px',
+                  backgroundColor: 'var(--state-danger-bg)',
+                  color: 'var(--state-danger-fg)',
+                  borderRadius: 'var(--radius-input)',
+                  fontSize: '12px',
+                }}
+              >
+                {generateError}
+              </div>
             )}
           </Panel>
 
-
           <Panel flush title="Recent DSSRs">
             {dssrQ.isLoading ? (
-              <div style={{ padding: '16px' }}><EmptyState compact icon={<Zap />} title="Loading…" description="Fetching recent daily snapshots." /></div>
+              <div style={{ padding: '16px' }}>
+                <EmptyState
+                  compact
+                  icon={<Zap />}
+                  title="Loading…"
+                  description="Fetching recent daily snapshots."
+                />
+              </div>
             ) : dssrList.length === 0 ? (
-              <div style={{ padding: '12px' }}><EmptyState compact icon={<Zap />} title="No daily DSSR reports" description="Generate a daily snapshot above to get started." /></div>
+              <div style={{ padding: '12px' }}>
+                <EmptyState
+                  compact
+                  icon={<Zap />}
+                  title="No daily DSSR reports"
+                  description="Generate a daily snapshot above to get started."
+                />
+              </div>
             ) : (
               <DataTable
                 bare
@@ -216,9 +298,13 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
 
       {activeTab === 'ledger' && <UnifiedLedger selectedStation={selectedStation} />}
 
-      {activeTab === 'pnl' && userRole === 'Owner' && <ProfitLossView selectedStation={selectedStation} />}
+      {activeTab === 'pnl' && userRole === 'Owner' && (
+        <ProfitLossView selectedStation={selectedStation} />
+      )}
 
-      {activeTab === 'invoices' && <InvoicesPanel selectedStation={selectedStation} userRole={userRole} />}
+      {activeTab === 'invoices' && (
+        <InvoicesPanel selectedStation={selectedStation} userRole={userRole} />
+      )}
       {activeTab === 'tax-register' && <TaxRegisterPanel selectedStation={selectedStation} />}
 
       {activeTab === 'expense-register' && <ExpenseRegister selectedStation={selectedStation} />}

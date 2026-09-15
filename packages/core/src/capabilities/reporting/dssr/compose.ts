@@ -87,7 +87,16 @@ export function composeDssr(source: DssrSourceData): Record<string, unknown> {
       nozzleAgg[nKey].netVolume += net;
       nozzleAgg[nKey].salesValue += salesValue;
       if (!productAgg[pKey]) {
-        productAgg[pKey] = { productId: r.productId ?? null, productName, productCode, unit: productUnit, grossVolume: 0, testingVolume: 0, netVolume: 0, salesValue: 0 };
+        productAgg[pKey] = {
+          productId: r.productId ?? null,
+          productName,
+          productCode,
+          unit: productUnit,
+          grossVolume: 0,
+          testingVolume: 0,
+          netVolume: 0,
+          salesValue: 0,
+        };
       }
       productAgg[pKey].grossVolume += gross;
       productAgg[pKey].testingVolume += testing;
@@ -98,7 +107,8 @@ export function composeDssr(source: DssrSourceData): Record<string, unknown> {
 
   // --- Merchandise sales (POS) by payment method ---
   const salesByMethod = { Cash: 0, Card: 0, UPI: 0, Credit: 0 } as Record<string, number>;
-  for (const sale of source.sales) salesByMethod[sale.paymentMethod] = (salesByMethod[sale.paymentMethod] ?? 0) + sale.totalAmount;
+  for (const sale of source.sales)
+    salesByMethod[sale.paymentMethod] = (salesByMethod[sale.paymentMethod] ?? 0) + sale.totalAmount;
   const merchandiseSalesValue = sum(source.sales.map((s) => s.totalAmount));
 
   // --- T5: output tax on sales, from the split frozen on each line ---
@@ -116,14 +126,22 @@ export function composeDssr(source: DssrSourceData): Record<string, unknown> {
     vat: round2(sum(vatLines.map((i) => i.vat ?? 0))),
   };
   const salesTax = {
-    gst: { ...salesGst, total: round2(salesGst.cgst + salesGst.sgst + salesGst.igst + salesGst.cess) },
+    gst: {
+      ...salesGst,
+      total: round2(salesGst.cgst + salesGst.sgst + salesGst.igst + salesGst.cess),
+    },
     // VAT is outside GST (no input credit for the buyer) — reported separately.
     vat: salesVat,
   };
 
   // --- Collections by method ---
-  const collectionsByMethod = { Cash: 0, Card: 0, UPI: 0, BankTransfer: 0 } as Record<string, number>;
-  for (const col of source.collections) collectionsByMethod[col.paymentMethod] = (collectionsByMethod[col.paymentMethod] ?? 0) + col.amount;
+  const collectionsByMethod = { Cash: 0, Card: 0, UPI: 0, BankTransfer: 0 } as Record<
+    string,
+    number
+  >;
+  for (const col of source.collections)
+    collectionsByMethod[col.paymentMethod] =
+      (collectionsByMethod[col.paymentMethod] ?? 0) + col.amount;
 
   // --- Credit receivables created today, split normal vs fleet ---
   let normalCredit = 0;
@@ -147,7 +165,10 @@ export function composeDssr(source: DssrSourceData): Record<string, unknown> {
     const key = i.categoryName || 'Other Income';
     incomeByCategoryMap[key] = (incomeByCategoryMap[key] ?? 0) + i.amount;
   }
-  const incomeByCategory = Object.entries(incomeByCategoryMap).map(([name, amount]) => ({ name, amount: round2(amount) }));
+  const incomeByCategory = Object.entries(incomeByCategoryMap).map(([name, amount]) => ({
+    name,
+    amount: round2(amount),
+  }));
 
   // --- FI4: output GST on other income (from the split frozen at capture) ---
   const gstIncome = liveIncome.filter((i) => i.taxCategory === 'GST');
@@ -163,8 +184,12 @@ export function composeDssr(source: DssrSourceData): Record<string, unknown> {
 
   // --- Purchases & supplier payments ---
   const purchasesTotal = sum(source.purchases.map((p) => p.amount));
-  const drawerSupplierPayments = sum(source.supplierPayments.filter((p) => p.affectsDrawer).map((p) => p.amount));
-  const bankSupplierPayments = sum(source.supplierPayments.filter((p) => !p.affectsDrawer).map((p) => p.amount));
+  const drawerSupplierPayments = sum(
+    source.supplierPayments.filter((p) => p.affectsDrawer).map((p) => p.amount),
+  );
+  const bankSupplierPayments = sum(
+    source.supplierPayments.filter((p) => !p.affectsDrawer).map((p) => p.amount),
+  );
 
   // --- Tank dip / stock variance, split by unit basis (fuel = volume in L,
   // merchandise = item count) so the two never share a confusing unit column. ---
@@ -172,15 +197,22 @@ export function composeDssr(source: DssrSourceData): Record<string, unknown> {
     ...v,
     status: v.varianceQuantity < 0 ? 'Loss' : v.varianceQuantity > 0 ? 'Gain' : 'OK',
   });
-  const fuelStockVariance = source.stockVariances.filter((v) => v.inventoryType === 'BULK').map(withStatus);
-  const merchandiseStockVariance = source.stockVariances.filter((v) => v.inventoryType !== 'BULK').map(withStatus);
+  const fuelStockVariance = source.stockVariances
+    .filter((v) => v.inventoryType === 'BULK')
+    .map(withStatus);
+  const merchandiseStockVariance = source.stockVariances
+    .filter((v) => v.inventoryType !== 'BULK')
+    .map(withStatus);
 
   // --- P&L / COGS (FB2). COGS is captured against the cost basis effective now
   // (frozen into this snapshot at day close). Fuel COGS = Σ net volume × cost per
   // product; merchandise COGS = Σ line qty × cost per product. Fuel VAT is output
   // tax (not in cost); GST cost basis is pre-tax (input tax creditable). ---
-  const costOf = (pid: string | null | undefined) => (pid && source.products[pid] ? Number(source.products[pid].costBasis || 0) : 0);
-  const cogsFuel = round2(sum(Object.values(productAgg).map((pa) => pa.netVolume * costOf(pa.productId))));
+  const costOf = (pid: string | null | undefined) =>
+    pid && source.products[pid] ? Number(source.products[pid].costBasis || 0) : 0;
+  const cogsFuel = round2(
+    sum(Object.values(productAgg).map((pa) => pa.netVolume * costOf(pa.productId))),
+  );
   const cogsMerch = round2(sum(source.saleItems.map((si) => si.quantity * costOf(si.productId))));
   const revenueFuel = round2(fuelSalesValue);
   const revenueMerch = round2(merchandiseSalesValue);
@@ -193,13 +225,33 @@ export function composeDssr(source: DssrSourceData): Record<string, unknown> {
 
   // Per-product margin (FB3): fuel from the nozzle roll-up, merchandise from the
   // sale line items — each { revenue, cogs, margin }. Powers the P&L breakdown.
-  type ProductMargin = { productId: string; name: string; code: string; kind: 'fuel' | 'merchandise'; quantity: number; revenue: number; cogs: number; margin: number; marginPct: number };
+  type ProductMargin = {
+    productId: string;
+    name: string;
+    code: string;
+    kind: 'fuel' | 'merchandise';
+    quantity: number;
+    revenue: number;
+    cogs: number;
+    margin: number;
+    marginPct: number;
+  };
   const byProduct: ProductMargin[] = [];
   for (const pa of Object.values(productAgg)) {
     if (!pa.productId) continue;
     const rev = round2(pa.salesValue);
     const c = round2(pa.netVolume * costOf(pa.productId));
-    byProduct.push({ productId: pa.productId, name: pa.productName, code: pa.productCode, kind: 'fuel', quantity: round2(pa.netVolume), revenue: rev, cogs: c, margin: round2(rev - c), marginPct: rev > 0 ? round2(((rev - c) / rev) * 100) : 0 });
+    byProduct.push({
+      productId: pa.productId,
+      name: pa.productName,
+      code: pa.productCode,
+      kind: 'fuel',
+      quantity: round2(pa.netVolume),
+      revenue: rev,
+      cogs: c,
+      margin: round2(rev - c),
+      marginPct: rev > 0 ? round2(((rev - c) / rev) * 100) : 0,
+    });
   }
   const merchAgg: Record<string, { qty: number; revenue: number }> = {};
   for (const si of source.saleItems) {
@@ -212,7 +264,17 @@ export function composeDssr(source: DssrSourceData): Record<string, unknown> {
     const prod = source.products[pid];
     const rev = round2(m.revenue);
     const c = round2(m.qty * costOf(pid));
-    byProduct.push({ productId: pid, name: prod?.name ?? 'Unknown', code: prod?.code ?? '', kind: 'merchandise', quantity: round2(m.qty), revenue: rev, cogs: c, margin: round2(rev - c), marginPct: rev > 0 ? round2(((rev - c) / rev) * 100) : 0 });
+    byProduct.push({
+      productId: pid,
+      name: prod?.name ?? 'Unknown',
+      code: prod?.code ?? '',
+      kind: 'merchandise',
+      quantity: round2(m.qty),
+      revenue: rev,
+      cogs: c,
+      margin: round2(rev - c),
+      marginPct: rev > 0 ? round2(((rev - c) / rev) * 100) : 0,
+    });
   }
   byProduct.sort((a, b) => b.margin - a.margin);
 
@@ -242,7 +304,11 @@ export function composeDssr(source: DssrSourceData): Record<string, unknown> {
       fleetCredit,
       total: normalCredit + fleetCredit,
     },
-    expenses: { drawer: drawerExpenses, business: businessExpenses, total: drawerExpenses + businessExpenses },
+    expenses: {
+      drawer: drawerExpenses,
+      business: businessExpenses,
+      total: drawerExpenses + businessExpenses,
+    },
     income: {
       drawer: round2(drawerIncome),
       business: round2(businessIncome),
@@ -251,7 +317,11 @@ export function composeDssr(source: DssrSourceData): Record<string, unknown> {
       tax: { ...incomeTax, total: incomeTaxTotal },
     },
     purchases: { total: purchasesTotal },
-    supplierPayments: { drawer: drawerSupplierPayments, bank: bankSupplierPayments, total: drawerSupplierPayments + bankSupplierPayments },
+    supplierPayments: {
+      drawer: drawerSupplierPayments,
+      bank: bankSupplierPayments,
+      total: drawerSupplierPayments + bankSupplierPayments,
+    },
     pnl: {
       revenueFuel,
       revenueMerch,

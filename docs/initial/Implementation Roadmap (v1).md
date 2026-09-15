@@ -5,13 +5,12 @@ This document defines the implementation sequence for the Fuel Pump ERP platform
 Goals:
 
 - Reduce risk
-    
+
 - Validate assumptions early
-    
+
 - Deliver usable milestones
-    
+
 - Avoid architectural rework
-    
 
 ---
 

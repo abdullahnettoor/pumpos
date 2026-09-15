@@ -1,5 +1,12 @@
 import { schema, type DbClient } from '@pump/db';
-import type { Purchase, PurchaseItem, PurchaseItemRepository, PurchaseRepository, SupplierTransaction, SupplierTransactionRepository } from '@pump/core';
+import type {
+  Purchase,
+  PurchaseItem,
+  PurchaseItemRepository,
+  PurchaseRepository,
+  SupplierTransaction,
+  SupplierTransactionRepository,
+} from '@pump/core';
 
 export class DrizzlePurchaseRepository implements PurchaseRepository {
   constructor(private readonly db: DbClient) {}

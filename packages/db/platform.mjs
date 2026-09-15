@@ -38,7 +38,8 @@ const flags = parseArgs(rest);
 
 const API_URL = (process.env.PUMP_API_URL || 'http://localhost:8787').replace(/\/$/, '');
 const SUPABASE_URL = (process.env.SUPABASE_URL || '').replace(/\/$/, '');
-const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_PUBLISHABLE_KEY || '';
+const SUPABASE_ANON_KEY =
+  process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_PUBLISHABLE_KEY || '';
 const ADMIN_EMAIL = (process.env.PLATFORM_ADMIN_EMAIL || flags.email || '').trim();
 const ADMIN_PASSWORD = process.env.PLATFORM_ADMIN_PASSWORD || '';
 
@@ -89,7 +90,9 @@ async function signIn() {
   });
   const body = await res.json().catch(() => null);
   if (!res.ok || !body?.access_token) {
-    fail(`Platform-admin sign-in failed: ${body?.error_description || body?.msg || `HTTP ${res.status}`}`);
+    fail(
+      `Platform-admin sign-in failed: ${body?.error_description || body?.msg || `HTTP ${res.status}`}`,
+    );
   }
   return body.access_token;
 }
@@ -105,7 +108,9 @@ async function api(method, path, body) {
   });
   const json = await res.json().catch(() => null);
   if (!res.ok || !json?.success) {
-    fail(`${method} ${path} → ${json?.error?.code || res.status}: ${json?.error?.message || 'request failed'}`);
+    fail(
+      `${method} ${path} → ${json?.error?.code || res.status}: ${json?.error?.message || 'request failed'}`,
+    );
   }
   return json.data;
 }
@@ -145,7 +150,8 @@ async function ownersInvite() {
   const payload = { email, fullName, organizationName };
   if (noEmail) {
     payload.mode = 'password';
-    if (typeof flags.password === 'string' && flags.password !== 'true') payload.password = flags.password;
+    if (typeof flags.password === 'string' && flags.password !== 'true')
+      payload.password = flags.password;
   }
   const data = await api('POST', '/platform/owners/invite', payload);
   if (data.password) {

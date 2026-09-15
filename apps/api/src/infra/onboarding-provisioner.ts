@@ -8,7 +8,10 @@ import { AccountProvisioningService } from './account-provisioning.js';
 
 /** Signals a provisioning failure to roll back the transaction with a typed reason. */
 class ProvisionFailure extends Error {
-  constructor(public readonly kind: 'conflict' | 'invariant', message: string) {
+  constructor(
+    public readonly kind: 'conflict' | 'invariant',
+    message: string,
+  ) {
     super(message);
   }
 }
@@ -34,10 +37,18 @@ export class DrizzleOnboardingProvisioner implements OnboardingProvisioner {
         const existingStation = await tx
           .select()
           .from(schema.stations)
-          .where(and(eq(schema.stations.organizationId, organizationId), eq(schema.stations.code, draft.station.code.toUpperCase())))
+          .where(
+            and(
+              eq(schema.stations.organizationId, organizationId),
+              eq(schema.stations.code, draft.station.code.toUpperCase()),
+            ),
+          )
           .limit(1);
         if (existingStation.length > 0) {
-          throw new ProvisionFailure('conflict', `Station code "${draft.station.code}" already exists`);
+          throw new ProvisionFailure(
+            'conflict',
+            `Station code "${draft.station.code}" already exists`,
+          );
         }
 
         const [newStation] = await tx
@@ -71,7 +82,9 @@ export class DrizzleOnboardingProvisioner implements OnboardingProvisioner {
         // station they cannot access. The station was just created in this
         // transaction, so no prior assignment can exist.
         if (actorId) {
-          await tx.insert(schema.userStationAssignments).values({ userId: actorId, stationId: newStation.id });
+          await tx
+            .insert(schema.userStationAssignments)
+            .values({ userId: actorId, stationId: newStation.id });
         }
 
         const productIdMap = new Map<string, string>();
@@ -90,7 +103,8 @@ export class DrizzleOnboardingProvisioner implements OnboardingProvisioner {
         }
         for (const product of draft.products) {
           const openCost = openingCostByProductDraft.get(product.draftId);
-          const costBasis = openCost && openCost.qty > 0 ? String(round4(openCost.value / openCost.qty)) : '0';
+          const costBasis =
+            openCost && openCost.qty > 0 ? String(round4(openCost.value / openCost.qty)) : '0';
           const [createdProduct] = await tx
             .insert(schema.products)
             .values({
@@ -99,7 +113,11 @@ export class DrizzleOnboardingProvisioner implements OnboardingProvisioner {
               code: product.code.toUpperCase(),
               productType: product.productType,
               inventoryType:
-                product.productType === 'FUEL' ? 'BULK' : (product.productType as string) === 'SERVICE' ? 'NONE' : 'ITEM',
+                product.productType === 'FUEL'
+                  ? 'BULK'
+                  : (product.productType as string) === 'SERVICE'
+                    ? 'NONE'
+                    : 'ITEM',
               stockTracked: product.stockTracked,
               isTaxable: product.isTaxable,
               unit: product.unit,
@@ -114,10 +132,18 @@ export class DrizzleOnboardingProvisioner implements OnboardingProvisioner {
         }
 
         const tankIdMap = new Map<string, string>();
-        const pendingOpeningStockSeed: Array<{ tankId: string; productId: string; quantity: number }> = [];
+        const pendingOpeningStockSeed: Array<{
+          tankId: string;
+          productId: string;
+          quantity: number;
+        }> = [];
         for (const tank of draft.tanks) {
           const mappedProductId = productIdMap.get(tank.productDraftId);
-          if (!mappedProductId) throw new ProvisionFailure('invariant', `Tank "${tank.name}" references an unknown fuel product`);
+          if (!mappedProductId)
+            throw new ProvisionFailure(
+              'invariant',
+              `Tank "${tank.name}" references an unknown fuel product`,
+            );
           const [createdTank] = await tx
             .insert(schema.tanks)
             .values({
@@ -132,7 +158,11 @@ export class DrizzleOnboardingProvisioner implements OnboardingProvisioner {
             .returning();
           tankIdMap.set(tank.draftId, createdTank.id);
           if (tank.openingQuantity > 0) {
-            pendingOpeningStockSeed.push({ tankId: createdTank.id, productId: mappedProductId, quantity: tank.openingQuantity });
+            pendingOpeningStockSeed.push({
+              tankId: createdTank.id,
+              productId: mappedProductId,
+              quantity: tank.openingQuantity,
+            });
           }
         }
 
@@ -157,9 +187,21 @@ export class DrizzleOnboardingProvisioner implements OnboardingProvisioner {
           const mappedDispenserId = dispenserIdMap.get(nozzle.dispenserDraftId);
           const mappedTankId = tankIdMap.get(nozzle.tankDraftId);
           const mappedProductId = productIdMap.get(nozzle.productDraftId);
-          if (!mappedDispenserId) throw new ProvisionFailure('invariant', `Nozzle "${nozzle.name}" references an unknown dispenser`);
-          if (!mappedTankId) throw new ProvisionFailure('invariant', `Nozzle "${nozzle.name}" references an unknown tank`);
-          if (!mappedProductId) throw new ProvisionFailure('invariant', `Nozzle "${nozzle.name}" references an unknown fuel product`);
+          if (!mappedDispenserId)
+            throw new ProvisionFailure(
+              'invariant',
+              `Nozzle "${nozzle.name}" references an unknown dispenser`,
+            );
+          if (!mappedTankId)
+            throw new ProvisionFailure(
+              'invariant',
+              `Nozzle "${nozzle.name}" references an unknown tank`,
+            );
+          if (!mappedProductId)
+            throw new ProvisionFailure(
+              'invariant',
+              `Nozzle "${nozzle.name}" references an unknown fuel product`,
+            );
           await tx.insert(schema.nozzles).values({
             organizationId,
             stationId: newStation.id,
@@ -293,7 +335,9 @@ export class DrizzleOnboardingProvisioner implements OnboardingProvisioner {
       return ok(result);
     } catch (e) {
       if (e instanceof ProvisionFailure) {
-        return e.kind === 'conflict' ? err(conflictError(e.message)) : err(invariantViolation(e.message));
+        return e.kind === 'conflict'
+          ? err(conflictError(e.message))
+          : err(invariantViolation(e.message));
       }
       throw e;
     }

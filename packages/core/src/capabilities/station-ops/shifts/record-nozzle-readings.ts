@@ -1,5 +1,12 @@
 import { z } from 'zod';
-import { BusinessEvents, err, eventFromContext, invariantViolation, ok, validationError } from '../../../kernel/index.js';
+import {
+  BusinessEvents,
+  err,
+  eventFromContext,
+  invariantViolation,
+  ok,
+  validationError,
+} from '../../../kernel/index.js';
 import type { EventPublisher, ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
 import type { BusinessDayWriteRepository } from '../business-days/index.js';
 import type { NozzleReadingRepository, ShiftRepository } from './ports.js';
@@ -12,7 +19,9 @@ export interface RecordNozzleReadingsCommand {
 
 const schema = z.object({
   shiftId: z.string().min(1, 'shiftId is required'),
-  readings: z.array(z.object({ nozzleId: z.string().min(1), closingReading: z.coerce.number().min(0) })).min(1, 'at least one reading is required'),
+  readings: z
+    .array(z.object({ nozzleId: z.string().min(1), closingReading: z.coerce.number().min(0) }))
+    .min(1, 'at least one reading is required'),
 });
 
 export interface RecordNozzleReadingsDeps {
@@ -29,17 +38,35 @@ export interface RecordNozzleReadingsResult {
 }
 
 /** Record/refresh closing readings for an open shift; volume = closing - opening. */
-export class RecordNozzleReadings implements UseCase<RecordNozzleReadingsCommand, RecordNozzleReadingsResult> {
+export class RecordNozzleReadings implements UseCase<
+  RecordNozzleReadingsCommand,
+  RecordNozzleReadingsResult
+> {
   constructor(private readonly deps: RecordNozzleReadingsDeps) {}
 
-  async execute(input: RecordNozzleReadingsCommand, ctx: ExecutionContext): Promise<Result<RecordNozzleReadingsResult>> {
+  async execute(
+    input: RecordNozzleReadingsCommand,
+    ctx: ExecutionContext,
+  ): Promise<Result<RecordNozzleReadingsResult>> {
     const p = schema.safeParse(input);
-    if (!p.success) return err(validationError('Invalid RecordNozzleReadings command', { issues: p.error.flatten() }));
+    if (!p.success)
+      return err(
+        validationError('Invalid RecordNozzleReadings command', { issues: p.error.flatten() }),
+      );
 
-    const eligibility = await resolveShiftBusinessDayWrite(this.deps.shifts, this.deps.businessDays, ctx, p.data.shiftId, 'STOCK');
+    const eligibility = await resolveShiftBusinessDayWrite(
+      this.deps.shifts,
+      this.deps.businessDays,
+      ctx,
+      p.data.shiftId,
+      'STOCK',
+    );
     if (!eligibility.success) return eligibility;
     const shift = eligibility.data.shift;
-    if (shift.status !== 'OPEN') return err(invariantViolation('Shift is not open', { shiftId: shift.id, status: shift.status }));
+    if (shift.status !== 'OPEN')
+      return err(
+        invariantViolation('Shift is not open', { shiftId: shift.id, status: shift.status }),
+      );
 
     const dbReadings = await this.deps.nozzleReadings.listByShift(shift.id);
     const byNozzle = new Map(dbReadings.map((r) => [r.nozzleId, r]));
@@ -51,10 +78,19 @@ export class RecordNozzleReadings implements UseCase<RecordNozzleReadingsCommand
       if (!existing) continue;
       const opening = Number(existing.openingReading);
       if (rd.closingReading < opening) {
-        return err(validationError(`Closing reading (${rd.closingReading}) is below opening (${opening}) for a nozzle`, { nozzleId: rd.nozzleId }));
+        return err(
+          validationError(
+            `Closing reading (${rd.closingReading}) is below opening (${opening}) for a nozzle`,
+            { nozzleId: rd.nozzleId },
+          ),
+        );
       }
       const volume = rd.closingReading - opening;
-      await this.deps.nozzleReadings.updateClosing(existing.id, String(rd.closingReading), String(volume));
+      await this.deps.nozzleReadings.updateClosing(
+        existing.id,
+        String(rd.closingReading),
+        String(volume),
+      );
       updated += 1;
       totalVolume += volume;
     }

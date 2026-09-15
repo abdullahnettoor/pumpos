@@ -24,25 +24,58 @@ class ShiftRepo implements ShiftRepository {
   readonly rows: Shift[] = [];
   readonly staff: { shiftId: string; a: StaffAssignmentInput }[] = [];
   readonly terminals: { shiftId: string; l: TerminalLinkInput }[] = [];
-  async findById(id: string) { return this.rows.find((r) => r.id === id) ?? null; }
-  async findByIdWithoutLock(id: string) { return this.findById(id); }
-  async save(s: Shift) { const i = this.rows.findIndex((r) => r.id === s.id); if (i >= 0) this.rows[i] = s; else this.rows.push(s); }
-  async findOpenByStation(orgId: string, stationId: string) {
-    return this.rows.find((r) => r.organizationId === orgId && r.stationId === stationId && r.status === 'OPEN') ?? null;
+  async findById(id: string) {
+    return this.rows.find((r) => r.id === id) ?? null;
   }
-  async addStaffAssignments(shiftId: string, a: StaffAssignmentInput[]) { a.forEach((x) => this.staff.push({ shiftId, a: x })); }
-  async addTerminalLinks(shiftId: string, l: TerminalLinkInput[]) { l.forEach((x) => this.terminals.push({ shiftId, l: x })); }
+  async findByIdWithoutLock(id: string) {
+    return this.findById(id);
+  }
+  async save(s: Shift) {
+    const i = this.rows.findIndex((r) => r.id === s.id);
+    if (i >= 0) this.rows[i] = s;
+    else this.rows.push(s);
+  }
+  async findOpenByStation(orgId: string, stationId: string) {
+    return (
+      this.rows.find(
+        (r) => r.organizationId === orgId && r.stationId === stationId && r.status === 'OPEN',
+      ) ?? null
+    );
+  }
+  async addStaffAssignments(shiftId: string, a: StaffAssignmentInput[]) {
+    a.forEach((x) => this.staff.push({ shiftId, a: x }));
+  }
+  async addTerminalLinks(shiftId: string, l: TerminalLinkInput[]) {
+    l.forEach((x) => this.terminals.push({ shiftId, l: x }));
+  }
 }
 
 class BdRepo implements BusinessDayWriteRepository {
   readonly rows: BusinessDay[] = [];
-  async findById(id: string) { return this.rows.find((r) => r.id === id) ?? null; }
-  async save(d: BusinessDay) { const i = this.rows.findIndex((r) => r.id === d.id); if (i >= 0) this.rows[i] = d; else this.rows.push(d); }
+  async findById(id: string) {
+    return this.rows.find((r) => r.id === id) ?? null;
+  }
+  async save(d: BusinessDay) {
+    const i = this.rows.findIndex((r) => r.id === d.id);
+    if (i >= 0) this.rows[i] = d;
+    else this.rows.push(d);
+  }
   async findOpenByStation(orgId: string, stationId: string) {
-    return this.rows.find((r) => r.organizationId === orgId && r.stationId === stationId && r.status === 'OPEN') ?? null;
+    return (
+      this.rows.find(
+        (r) => r.organizationId === orgId && r.stationId === stationId && r.status === 'OPEN',
+      ) ?? null
+    );
   }
   async findByStationAndDate(orgId: string, stationId: string, businessDate: string) {
-    return this.rows.find((r) => r.organizationId === orgId && r.stationId === stationId && r.businessDate === businessDate) ?? null;
+    return (
+      this.rows.find(
+        (r) =>
+          r.organizationId === orgId &&
+          r.stationId === stationId &&
+          r.businessDate === businessDate,
+      ) ?? null
+    );
   }
   async lockStation() {}
   async lockById() {}
@@ -51,9 +84,13 @@ class BdRepo implements BusinessDayWriteRepository {
 
 class NozzleRepo implements NozzleRepository {
   constructor(readonly rows: Nozzle[]) {}
-  async findById(id: string) { return this.rows.find((r) => r.id === id) ?? null; }
+  async findById(id: string) {
+    return this.rows.find((r) => r.id === id) ?? null;
+  }
   async save() {}
-  async deleteById() { return true; }
+  async deleteById() {
+    return true;
+  }
   async listByStation(orgId: string, stationId: string) {
     return this.rows.filter((r) => r.organizationId === orgId && r.stationId === stationId);
   }
@@ -67,29 +104,59 @@ class ReadingRepo implements NozzleReadingRepository {
     for (const id of ids) if (this.lastClosing[id] !== undefined) m.set(id, this.lastClosing[id]);
     return m;
   }
-  async saveMany(r: NozzleReading[]) { this.saved.push(...r); }
-  async listByShift(shiftId: string) { return this.saved.filter((r) => r.shiftId === shiftId); }
+  async saveMany(r: NozzleReading[]) {
+    this.saved.push(...r);
+  }
+  async listByShift(shiftId: string) {
+    return this.saved.filter((r) => r.shiftId === shiftId);
+  }
   async updateClosing() {}
 }
 
 class PriceRepo implements FuelPriceRepository {
   constructor(readonly rows: FuelPrice[]) {}
   async save() {}
-  async listByStation() { return this.rows; }
+  async listByStation() {
+    return this.rows;
+  }
 }
 
 function makeContext(): ExecutionContext {
   return {
-    organizationId: 'org-1', stationId: 'st-1', businessDayId: null, actorId: 'user-1', correlationId: null,
-    clock: new FixedClock(new Date('2026-03-15T03:00:00.000Z')), ids: new SequentialIdGenerator('x'),
+    organizationId: 'org-1',
+    stationId: 'st-1',
+    businessDayId: null,
+    actorId: 'user-1',
+    correlationId: null,
+    clock: new FixedClock(new Date('2026-03-15T03:00:00.000Z')),
+    ids: new SequentialIdGenerator('x'),
   };
 }
 
 function nozzle(id: string, productId: string, currentReading: string): Nozzle {
-  return { id, organizationId: 'org-1', stationId: 'st-1', duId: 'du-1', tankId: 'tk-1', productId, name: id, currentReading, createdAt: '', updatedAt: '' };
+  return {
+    id,
+    organizationId: 'org-1',
+    stationId: 'st-1',
+    duId: 'du-1',
+    tankId: 'tk-1',
+    productId,
+    name: id,
+    currentReading,
+    createdAt: '',
+    updatedAt: '',
+  };
 }
 function price(productId: string, p: string): FuelPrice {
-  return { id: 'p-' + productId, organizationId: 'org-1', stationId: 'st-1', productId, price: p, effectiveFrom: '2026-03-01', createdAt: '2026-03-01' };
+  return {
+    id: 'p-' + productId,
+    organizationId: 'org-1',
+    stationId: 'st-1',
+    productId,
+    price: p,
+    effectiveFrom: '2026-03-01',
+    createdAt: '2026-03-01',
+  };
 }
 
 describe('OpenShift', () => {
@@ -102,8 +169,20 @@ describe('OpenShift', () => {
     const store = new InMemoryEventStore();
     const events = new InProcessEventDispatcher({ store });
 
-    const result = await new OpenShift({ shifts, businessDays, nozzles, nozzleReadings, fuelPrices, events }).execute(
-      { stationId: 'st-1', shiftTemplateId: 'tpl-1', openingCash: 5000, terminalLinks: [{ terminalId: 't1', duId: 'du-1' }] },
+    const result = await new OpenShift({
+      shifts,
+      businessDays,
+      nozzles,
+      nozzleReadings,
+      fuelPrices,
+      events,
+    }).execute(
+      {
+        stationId: 'st-1',
+        shiftTemplateId: 'tpl-1',
+        openingCash: 5000,
+        terminalLinks: [{ terminalId: 't1', duId: 'du-1' }],
+      },
       makeContext(),
     );
 
@@ -130,10 +209,25 @@ describe('OpenShift', () => {
     const shifts = new ShiftRepo();
     const businessDays = new BdRepo();
     const ctx = makeContext();
-    businessDays.rows.push({ id: 'bd-existing', organizationId: 'org-1', stationId: 'st-1', businessDate: '2026-03-15', status: 'OPEN', openedBy: 'u', openedAt: '', closedBy: null, closedAt: null, createdAt: '', updatedAt: '' });
+    businessDays.rows.push({
+      id: 'bd-existing',
+      organizationId: 'org-1',
+      stationId: 'st-1',
+      businessDate: '2026-03-15',
+      status: 'OPEN',
+      openedBy: 'u',
+      openedAt: '',
+      closedBy: null,
+      closedAt: null,
+      createdAt: '',
+      updatedAt: '',
+    });
     const result = await new OpenShift({
-      shifts, businessDays,
-      nozzles: new NozzleRepo([]), nozzleReadings: new ReadingRepo(), fuelPrices: new PriceRepo([]),
+      shifts,
+      businessDays,
+      nozzles: new NozzleRepo([]),
+      nozzleReadings: new ReadingRepo(),
+      fuelPrices: new PriceRepo([]),
       events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
     }).execute({ stationId: 'st-1', shiftTemplateId: 'tpl-1', openingCash: 0 }, ctx);
     expect(result.success).toBe(true);
@@ -150,18 +244,37 @@ describe('OpenShift', () => {
       return originalFindOpen(...args);
     };
     const businessDays = new BdRepo();
-    businessDays.rows.push({ id: 'bd-existing', organizationId: 'org-1', stationId: 'st-1', businessDate: '2026-03-15', status: 'OPEN', openedBy: 'u', openedAt: '', closedBy: null, closedAt: null, createdAt: '', updatedAt: '' });
+    businessDays.rows.push({
+      id: 'bd-existing',
+      organizationId: 'org-1',
+      stationId: 'st-1',
+      businessDate: '2026-03-15',
+      status: 'OPEN',
+      openedBy: 'u',
+      openedAt: '',
+      closedBy: null,
+      closedAt: null,
+      createdAt: '',
+      updatedAt: '',
+    });
     const originalFind = businessDays.findByStationAndDate.bind(businessDays);
     businessDays.findByStationAndDate = async (...args) => {
       calls.push('find');
       return originalFind(...args);
     };
-    businessDays.lockStation = async () => { calls.push('station-lock'); };
-    businessDays.lockByStationAndDate = async () => { calls.push('day-lock'); };
+    businessDays.lockStation = async () => {
+      calls.push('station-lock');
+    };
+    businessDays.lockByStationAndDate = async () => {
+      calls.push('day-lock');
+    };
 
     const result = await new OpenShift({
-      shifts, businessDays,
-      nozzles: new NozzleRepo([]), nozzleReadings: new ReadingRepo(), fuelPrices: new PriceRepo([]),
+      shifts,
+      businessDays,
+      nozzles: new NozzleRepo([]),
+      nozzleReadings: new ReadingRepo(),
+      fuelPrices: new PriceRepo([]),
       events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
     }).execute({ stationId: 'st-1', shiftTemplateId: 'tpl-1', openingCash: 0 }, makeContext());
 
@@ -172,13 +285,31 @@ describe('OpenShift', () => {
   it('opens a shift for a past open Business Day', async () => {
     const shifts = new ShiftRepo();
     const businessDays = new BdRepo();
-    businessDays.rows.push({ id: 'bd-past', organizationId: 'org-1', stationId: 'st-1', businessDate: '2026-03-14', status: 'OPEN', openedBy: 'u', openedAt: '', closedBy: null, closedAt: null, createdAt: '', updatedAt: '' });
+    businessDays.rows.push({
+      id: 'bd-past',
+      organizationId: 'org-1',
+      stationId: 'st-1',
+      businessDate: '2026-03-14',
+      status: 'OPEN',
+      openedBy: 'u',
+      openedAt: '',
+      closedBy: null,
+      closedAt: null,
+      createdAt: '',
+      updatedAt: '',
+    });
 
     const result = await new OpenShift({
-      shifts, businessDays,
-      nozzles: new NozzleRepo([]), nozzleReadings: new ReadingRepo(), fuelPrices: new PriceRepo([]),
+      shifts,
+      businessDays,
+      nozzles: new NozzleRepo([]),
+      nozzleReadings: new ReadingRepo(),
+      fuelPrices: new PriceRepo([]),
       events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
-    }).execute({ stationId: 'st-1', shiftTemplateId: 'tpl-1', openingCash: 0, businessDate: '2026-03-14' }, makeContext());
+    }).execute(
+      { stationId: 'st-1', shiftTemplateId: 'tpl-1', openingCash: 0, businessDate: '2026-03-14' },
+      makeContext(),
+    );
 
     expect(result.success).toBe(true);
     if (result.success) expect(result.data.shift.businessDayId).toBe('bd-past');
@@ -189,10 +320,16 @@ describe('OpenShift', () => {
     const businessDays = new BdRepo();
 
     const result = await new OpenShift({
-      shifts, businessDays,
-      nozzles: new NozzleRepo([]), nozzleReadings: new ReadingRepo(), fuelPrices: new PriceRepo([]),
+      shifts,
+      businessDays,
+      nozzles: new NozzleRepo([]),
+      nozzleReadings: new ReadingRepo(),
+      fuelPrices: new PriceRepo([]),
       events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
-    }).execute({ stationId: 'st-1', shiftTemplateId: 'tpl-1', openingCash: 0, businessDate: '2026-03-14' }, makeContext());
+    }).execute(
+      { stationId: 'st-1', shiftTemplateId: 'tpl-1', openingCash: 0, businessDate: '2026-03-14' },
+      makeContext(),
+    );
 
     expect(result.success).toBe(true);
     expect(businessDays.rows[0]?.businessDate).toBe('2026-03-14');
@@ -202,29 +339,57 @@ describe('OpenShift', () => {
   it('rejects opening a shift for a closed Business Day', async () => {
     const shifts = new ShiftRepo();
     const businessDays = new BdRepo();
-    businessDays.rows.push({ id: 'bd-closed', organizationId: 'org-1', stationId: 'st-1', businessDate: '2026-03-14', status: 'CLOSED', openedBy: 'u', openedAt: '', closedBy: 'u', closedAt: '', createdAt: '', updatedAt: '' });
+    businessDays.rows.push({
+      id: 'bd-closed',
+      organizationId: 'org-1',
+      stationId: 'st-1',
+      businessDate: '2026-03-14',
+      status: 'CLOSED',
+      openedBy: 'u',
+      openedAt: '',
+      closedBy: 'u',
+      closedAt: '',
+      createdAt: '',
+      updatedAt: '',
+    });
 
     const result = await new OpenShift({
-      shifts, businessDays,
-      nozzles: new NozzleRepo([]), nozzleReadings: new ReadingRepo(), fuelPrices: new PriceRepo([]),
+      shifts,
+      businessDays,
+      nozzles: new NozzleRepo([]),
+      nozzleReadings: new ReadingRepo(),
+      fuelPrices: new PriceRepo([]),
       events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
-    }).execute({ stationId: 'st-1', shiftTemplateId: 'tpl-1', openingCash: 0, businessDate: '2026-03-14' }, makeContext());
+    }).execute(
+      { stationId: 'st-1', shiftTemplateId: 'tpl-1', openingCash: 0, businessDate: '2026-03-14' },
+      makeContext(),
+    );
 
     expect(result.success).toBe(false);
     if (!result.success) {
       expect(result.error.code).toBe('INVARIANT_VIOLATION');
       expect(result.error.message).toContain('2026-03-14');
-      expect(result.error.details).toMatchObject({ businessDayId: 'bd-closed', businessDate: '2026-03-14', status: 'CLOSED' });
+      expect(result.error.details).toMatchObject({
+        businessDayId: 'bd-closed',
+        businessDate: '2026-03-14',
+        status: 'CLOSED',
+      });
     }
     expect(shifts.rows).toHaveLength(0);
   });
 
   it('rejects a future Shift Business Date', async () => {
     const result = await new OpenShift({
-      shifts: new ShiftRepo(), businessDays: new BdRepo(),
-      nozzles: new NozzleRepo([]), nozzleReadings: new ReadingRepo(), fuelPrices: new PriceRepo([]),
+      shifts: new ShiftRepo(),
+      businessDays: new BdRepo(),
+      nozzles: new NozzleRepo([]),
+      nozzleReadings: new ReadingRepo(),
+      fuelPrices: new PriceRepo([]),
       events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
-    }).execute({ stationId: 'st-1', shiftTemplateId: 'tpl-1', openingCash: 0, businessDate: '2026-03-16' }, makeContext());
+    }).execute(
+      { stationId: 'st-1', shiftTemplateId: 'tpl-1', openingCash: 0, businessDate: '2026-03-16' },
+      makeContext(),
+    );
 
     expect(result.success).toBe(false);
     if (!result.success) expect(result.error.code).toBe('VALIDATION_ERROR');
@@ -232,10 +397,16 @@ describe('OpenShift', () => {
 
   it('rejects an invalid calendar date', async () => {
     const result = await new OpenShift({
-      shifts: new ShiftRepo(), businessDays: new BdRepo(),
-      nozzles: new NozzleRepo([]), nozzleReadings: new ReadingRepo(), fuelPrices: new PriceRepo([]),
+      shifts: new ShiftRepo(),
+      businessDays: new BdRepo(),
+      nozzles: new NozzleRepo([]),
+      nozzleReadings: new ReadingRepo(),
+      fuelPrices: new PriceRepo([]),
       events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
-    }).execute({ stationId: 'st-1', shiftTemplateId: 'tpl-1', openingCash: 0, businessDate: '2026-02-31' }, makeContext());
+    }).execute(
+      { stationId: 'st-1', shiftTemplateId: 'tpl-1', openingCash: 0, businessDate: '2026-02-31' },
+      makeContext(),
+    );
 
     expect(result.success).toBe(false);
     if (!result.success) expect(result.error.code).toBe('VALIDATION_ERROR');
@@ -243,10 +414,29 @@ describe('OpenShift', () => {
 
   it('rejects opening a second shift', async () => {
     const shifts = new ShiftRepo();
-    shifts.rows.push({ id: 's0', organizationId: 'org-1', stationId: 'st-1', businessDayId: 'bd', shiftTemplateId: 't', status: 'OPEN', openedBy: 'u', openedAt: '', closedBy: null, closedAt: null, lockedAt: null, openingCash: '0', closingCash: null, createdAt: '', updatedAt: '' });
+    shifts.rows.push({
+      id: 's0',
+      organizationId: 'org-1',
+      stationId: 'st-1',
+      businessDayId: 'bd',
+      shiftTemplateId: 't',
+      status: 'OPEN',
+      openedBy: 'u',
+      openedAt: '',
+      closedBy: null,
+      closedAt: null,
+      lockedAt: null,
+      openingCash: '0',
+      closingCash: null,
+      createdAt: '',
+      updatedAt: '',
+    });
     const result = await new OpenShift({
-      shifts, businessDays: new BdRepo(),
-      nozzles: new NozzleRepo([]), nozzleReadings: new ReadingRepo(), fuelPrices: new PriceRepo([]),
+      shifts,
+      businessDays: new BdRepo(),
+      nozzles: new NozzleRepo([]),
+      nozzleReadings: new ReadingRepo(),
+      fuelPrices: new PriceRepo([]),
       events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
     }).execute({ stationId: 'st-1', shiftTemplateId: 'tpl-1', openingCash: 0 }, makeContext());
     expect(result.success).toBe(false);

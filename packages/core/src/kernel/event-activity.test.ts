@@ -35,7 +35,11 @@ describe('event activity', () => {
       metadata: {
         presentation: {
           templateId: 'credit-sale.product.v1',
-          values: { customerName: 'Bharat Transport', itemSummary: '250 L of Diesel', amount: 82500 },
+          values: {
+            customerName: 'Bharat Transport',
+            itemSummary: '250 L of Diesel',
+            amount: 82500,
+          },
         },
       },
     });
@@ -66,15 +70,28 @@ describe('event activity', () => {
   });
 
   it('falls back safely for missing or unregistered presentation data', () => {
-    expect(renderEventActivity({
-      eventType: BusinessEvents.CREDIT_SALE_CREATED,
-      metadata: { presentation: { templateId: 'credit-sale.product.v1', values: { customerName: 'Bharat' } } },
-    })).toMatchObject({ description: 'Credit sale recorded', renderStatus: 'fallback' });
+    expect(
+      renderEventActivity({
+        eventType: BusinessEvents.CREDIT_SALE_CREATED,
+        metadata: {
+          presentation: {
+            templateId: 'credit-sale.product.v1',
+            values: { customerName: 'Bharat' },
+          },
+        },
+      }),
+    ).toMatchObject({ description: 'Credit sale recorded', renderStatus: 'fallback' });
 
-    expect(renderEventActivity({
-      eventType: 'FUTURE_EVENT',
-      metadata: {},
-    })).toMatchObject({ title: 'Future Event', renderStatus: 'fallback', diagnostic: 'unknown-event-type' });
+    expect(
+      renderEventActivity({
+        eventType: 'FUTURE_EVENT',
+        metadata: {},
+      }),
+    ).toMatchObject({
+      title: 'Future Event',
+      renderStatus: 'fallback',
+      diagnostic: 'unknown-event-type',
+    });
   });
 
   it('adds actor snapshots and primary/related roles without creating causation', () => {

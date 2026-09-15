@@ -81,7 +81,10 @@ export const App: React.FC = () => {
   // business date; the pill lets the user page back to any prior day.
   const stationSettings: any = (selectedStation as any)?.settings || {};
   const todayBiz = selectedStation
-    ? resolveBusinessDate({ timeZone: stationSettings.timezone, dayStartsAt: stationSettings.business_day_starts_at })
+    ? resolveBusinessDate({
+        timeZone: stationSettings.timezone,
+        dayStartsAt: stationSettings.business_day_starts_at,
+      })
     : undefined;
   const [bizDate, setBizDate] = useState<string | null>(null);
   useEffect(() => {
@@ -97,7 +100,9 @@ export const App: React.FC = () => {
   if (status === 'loading') {
     return (
       <Centered>
-        <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Connecting…</p>
+        <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+          Connecting…
+        </p>
       </Centered>
     );
   }
@@ -111,7 +116,9 @@ export const App: React.FC = () => {
       <Centered>
         <p className="text-4xl">⚠️</p>
         <p className="font-semibold">Couldn't load your account</p>
-        <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{error?.message}</p>
+        <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+          {error?.message}
+        </p>
         <SignOutButton />
       </Centered>
     );
@@ -154,7 +161,10 @@ export const App: React.FC = () => {
         </p>
       );
     }
-    if (tab === 'home') return <HomeScreen station={selectedStation} businessDate={businessDate} onNavigate={setTab} />;
+    if (tab === 'home')
+      return (
+        <HomeScreen station={selectedStation} businessDate={businessDate} onNavigate={setTab} />
+      );
     if (tab === 'shifts') return <ShiftsScreen station={selectedStation} />;
     if (tab === 'dssr') return <DssrScreen station={selectedStation} businessDate={businessDate} />;
     if (tab === 'more') return <MoreScreen station={selectedStation} onNavigate={setTab} />;

@@ -48,7 +48,10 @@ export const HomeScreen: React.FC<Props> = ({ station, businessDate, onNavigate 
   // Compact 7-day fuel-sales trend (closed-day snapshots ending at the selected day).
   const trendQ = useDailyDssrRange(station.id, addDays(date, -6), date);
   const trend = (trendQ.data || [])
-    .map((s: any) => ({ date: s.businessDate, sales: Number(s.snapshotData?.fuel?.totalSalesValue || 0) }))
+    .map((s: any) => ({
+      date: s.businessDate,
+      sales: Number(s.snapshotData?.fuel?.totalSalesValue || 0),
+    }))
     .sort((a: any, b: any) => (a.date < b.date ? -1 : 1));
   const maxTrend = Math.max(1, ...trend.map((t) => t.sales));
 
@@ -84,7 +87,11 @@ export const HomeScreen: React.FC<Props> = ({ station, businessDate, onNavigate 
   const hasActiveShift = isToday && !!statusQ.data?.activeShift;
 
   if (previewQ.isLoading) {
-    return <p className="py-10 text-center text-sm" style={{ color: 'var(--text-muted)' }}>Loading…</p>;
+    return (
+      <p className="py-10 text-center text-sm" style={{ color: 'var(--text-muted)' }}>
+        Loading…
+      </p>
+    );
   }
 
   return (
@@ -109,7 +116,11 @@ export const HomeScreen: React.FC<Props> = ({ station, businessDate, onNavigate 
             color: hasActiveShift ? 'var(--state-success-fg)' : 'var(--text-muted)',
           }}
         >
-          {isToday ? (hasActiveShift ? 'Shift open' : 'No open shift') : `${shiftsIncluded} shift${shiftsIncluded === 1 ? '' : 's'}`}
+          {isToday
+            ? hasActiveShift
+              ? 'Shift open'
+              : 'No open shift'
+            : `${shiftsIncluded} shift${shiftsIncluded === 1 ? '' : 's'}`}
         </span>
       </div>
 
@@ -120,28 +131,55 @@ export const HomeScreen: React.FC<Props> = ({ station, businessDate, onNavigate 
           onClick={() => onNavigate?.('more')}
           className="flex items-center justify-between rounded-lg px-3 py-2"
           style={{
-            backgroundColor: alerts.some((a) => a.severity === 'danger') ? 'var(--state-danger-bg)' : 'var(--state-warning-bg)',
+            backgroundColor: alerts.some((a) => a.severity === 'danger')
+              ? 'var(--state-danger-bg)'
+              : 'var(--state-warning-bg)',
           }}
         >
           <span
             className="flex items-center gap-2 text-xs font-medium"
-            style={{ color: alerts.some((a) => a.severity === 'danger') ? 'var(--state-danger-fg)' : 'var(--state-warning-fg)' }}
+            style={{
+              color: alerts.some((a) => a.severity === 'danger')
+                ? 'var(--state-danger-fg)'
+                : 'var(--state-warning-fg)',
+            }}
           >
             <span
               className="h-1.5 w-1.5 rounded-full"
-              style={{ backgroundColor: alerts.some((a) => a.severity === 'danger') ? 'var(--state-danger-fg)' : 'var(--state-warning-fg)' }}
+              style={{
+                backgroundColor: alerts.some((a) => a.severity === 'danger')
+                  ? 'var(--state-danger-fg)'
+                  : 'var(--state-warning-fg)',
+              }}
             />
             {alerts.length} {alerts.length === 1 ? 'item needs' : 'items need'} attention
           </span>
-          <span style={{ color: alerts.some((a) => a.severity === 'danger') ? 'var(--state-danger-fg)' : 'var(--state-warning-fg)' }}>›</span>
+          <span
+            style={{
+              color: alerts.some((a) => a.severity === 'danger')
+                ? 'var(--state-danger-fg)'
+                : 'var(--state-warning-fg)',
+            }}
+          >
+            ›
+          </span>
         </button>
       )}
 
       {/* KPIs */}
       <div className="grid grid-cols-2 gap-3">
-        <Kpi label={isToday ? 'Fuel sales today' : 'Fuel sales'} value={inr(fuelSales)} sub={`${numberFmt(volume, 2)} L net`} tone="positive" />
+        <Kpi
+          label={isToday ? 'Fuel sales today' : 'Fuel sales'}
+          value={inr(fuelSales)}
+          sub={`${numberFmt(volume, 2)} L net`}
+          tone="positive"
+        />
         <Kpi label="Collections" value={inr(collectionsTotal)} />
-        <Kpi label="Expenses" value={inr(expensesTotal)} tone={expensesTotal > 0 ? 'warning' : 'default'} />
+        <Kpi
+          label="Expenses"
+          value={inr(expensesTotal)}
+          tone={expensesTotal > 0 ? 'warning' : 'default'}
+        />
         <Kpi label="Purchases" value={inr(purchasesTotal)} />
         <Kpi label="Credit sales" value={inr(creditTotal)} sub="Receivable" />
         <Kpi
@@ -150,11 +188,25 @@ export const HomeScreen: React.FC<Props> = ({ station, businessDate, onNavigate 
           sub={`${shiftsIncluded} shift${shiftsIncluded === 1 ? '' : 's'}`}
           tone={Math.abs(cashVariance) > 100 ? 'negative' : 'default'}
         />
-        <Kpi label="Receivables" value={inr(receivables)} sub="Customer dues · current" tone={receivables > 0 ? 'warning' : 'default'} />
-        <Kpi label="Payables" value={inr(payables)} sub="Supplier dues · current" tone={payables > 0 ? 'warning' : 'default'} />
+        <Kpi
+          label="Receivables"
+          value={inr(receivables)}
+          sub="Customer dues · current"
+          tone={receivables > 0 ? 'warning' : 'default'}
+        />
+        <Kpi
+          label="Payables"
+          value={inr(payables)}
+          sub="Supplier dues · current"
+          tone={payables > 0 ? 'warning' : 'default'}
+        />
         <Kpi
           label={hasCostBasis ? 'Net profit' : 'Net (proxy)'}
-          value={inr(hasCostBasis ? netProfit : fuelSales + collectionsTotal - expensesTotal - purchasesTotal)}
+          value={inr(
+            hasCostBasis
+              ? netProfit
+              : fuelSales + collectionsTotal - expensesTotal - purchasesTotal,
+          )}
           sub={hasCostBasis ? 'After COGS' : 'Set product costs for true P&L'}
           tone={(hasCostBasis ? netProfit : 0) < 0 ? 'negative' : 'default'}
         />
@@ -162,12 +214,23 @@ export const HomeScreen: React.FC<Props> = ({ station, businessDate, onNavigate 
 
       {/* 7-day trend (glance) — full analytics live in More */}
       {trend.length > 1 && (
-        <section className="rounded-xl border p-4" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-soft)' }}>
+        <section
+          className="rounded-xl border p-4"
+          style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-soft)' }}
+        >
           <div className="mb-2 flex items-center justify-between">
-            <h3 className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
+            <h3
+              className="text-xs font-semibold uppercase tracking-wide"
+              style={{ color: 'var(--text-muted)' }}
+            >
               7-day fuel sales
             </h3>
-            <button type="button" onClick={() => onNavigate?.('more')} className="text-[11px] font-medium" style={{ color: 'var(--brand-primary)' }}>
+            <button
+              type="button"
+              onClick={() => onNavigate?.('more')}
+              className="text-[11px] font-medium"
+              style={{ color: 'var(--brand-primary)' }}
+            >
               Details ›
             </button>
           </div>
@@ -176,7 +239,11 @@ export const HomeScreen: React.FC<Props> = ({ station, businessDate, onNavigate 
               <div key={t.date} className="flex-1" title={`${t.date} · ${inr(t.sales)}`}>
                 <div
                   className="w-full rounded-t"
-                  style={{ height: `${Math.max(2, (t.sales / maxTrend) * 100)}%`, backgroundColor: 'var(--brand-primary)', opacity: 0.85 }}
+                  style={{
+                    height: `${Math.max(2, (t.sales / maxTrend) * 100)}%`,
+                    backgroundColor: 'var(--brand-primary)',
+                    opacity: 0.85,
+                  }}
                 />
               </div>
             ))}

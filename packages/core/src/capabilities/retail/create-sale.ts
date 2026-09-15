@@ -1,6 +1,21 @@
 import { z } from 'zod';
-import { BusinessEvents, err, eventFromContext, invariantViolation, notFoundError, ok, validationError } from '../../kernel/index.js';
-import type { DomainEvent, EventPublisher, ExecutionContext, DocumentNumberGenerator, Result, UseCase } from '../../kernel/index.js';
+import {
+  BusinessEvents,
+  err,
+  eventFromContext,
+  invariantViolation,
+  notFoundError,
+  ok,
+  validationError,
+} from '../../kernel/index.js';
+import type {
+  DomainEvent,
+  EventPublisher,
+  ExecutionContext,
+  DocumentNumberGenerator,
+  Result,
+  UseCase,
+} from '../../kernel/index.js';
 import { resolveShiftBusinessDayWrite, type ShiftRepository } from '../station-ops/shifts/index.js';
 import type { BusinessDayWriteRepository } from '../station-ops/business-days/index.js';
 import type { StockMovement, StockMovementRepository } from '../inventory/index.js';
@@ -9,7 +24,14 @@ import type { CustomerRepository } from '../crm/customers/index.js';
 import type { ProductRepository } from '../station-setup/products/index.js';
 import { splitSaleLineTax } from './sale-tax.js';
 import { isInterState } from '../finance/tax/index.js';
-import type { Sale, SaleBuyerDetails, SaleLine, SalePaymentMethod, SaleRepository, SaleType } from './ports.js';
+import type {
+  Sale,
+  SaleBuyerDetails,
+  SaleLine,
+  SalePaymentMethod,
+  SaleRepository,
+  SaleType,
+} from './ports.js';
 
 export interface SaleLineInput {
   productId: string;
@@ -91,25 +113,41 @@ export interface CreateSaleResult {
 export class CreateSale implements UseCase<CreateSaleCommand, CreateSaleResult> {
   constructor(private readonly deps: CreateSaleDeps) {}
 
-  async execute(input: CreateSaleCommand, ctx: ExecutionContext): Promise<Result<CreateSaleResult>> {
+  async execute(
+    input: CreateSaleCommand,
+    ctx: ExecutionContext,
+  ): Promise<Result<CreateSaleResult>> {
     const p = schema.safeParse(input);
-    if (!p.success) return err(validationError('Invalid CreateSale command', { issues: p.error.flatten() }));
+    if (!p.success)
+      return err(validationError('Invalid CreateSale command', { issues: p.error.flatten() }));
     const cmd = p.data;
 
     if (cmd.paymentMethod === 'Credit' && !cmd.customerId) {
       return err(validationError('A credit sale requires a customerId'));
     }
 
-    const eligibility = await resolveShiftBusinessDayWrite(this.deps.shifts, this.deps.businessDays, ctx, cmd.shiftId, 'STOCK');
+    const eligibility = await resolveShiftBusinessDayWrite(
+      this.deps.shifts,
+      this.deps.businessDays,
+      ctx,
+      cmd.shiftId,
+      'STOCK',
+    );
     if (!eligibility.success) return eligibility as unknown as Result<CreateSaleResult>;
     const shift = eligibility.data.shift;
-    if (shift.status !== 'OPEN') return err(invariantViolation('Shift is not open', { shiftId: shift.id, status: shift.status }));
+    if (shift.status !== 'OPEN')
+      return err(
+        invariantViolation('Shift is not open', { shiftId: shift.id, status: shift.status }),
+      );
 
     let buyerStateCode: string | null = cmd.buyerDetails?.stateCode ?? null;
     if (cmd.customerId) {
       const customer = await this.deps.customers.findById(cmd.customerId);
-      if (!customer || customer.organizationId !== ctx.organizationId) return err(notFoundError('Customer', cmd.customerId));
-      buyerStateCode = ((customer.metadata as Record<string, any> | null)?.stateCode as string | undefined) ?? null;
+      if (!customer || customer.organizationId !== ctx.organizationId)
+        return err(notFoundError('Customer', cmd.customerId));
+      buyerStateCode =
+        ((customer.metadata as Record<string, any> | null)?.stateCode as string | undefined) ??
+        null;
     }
 
     const now = ctx.clock.now().toISOString();
@@ -125,7 +163,10 @@ export class CreateSale implements UseCase<CreateSaleCommand, CreateSaleResult> 
 
     // T5 — place of supply. A saved customer's state makes the sale inter-state;
     // a walk-in has none, so it stays intra-state (CGST+SGST).
-    const interState = isInterState({ supplierStateCode: cmd.supplierStateCode, buyerStateCode: buyerStateCode });
+    const interState = isInterState({
+      supplierStateCode: cmd.supplierStateCode,
+      buyerStateCode: buyerStateCode,
+    });
 
     for (const line of cmd.lines) {
       const qty = line.quantity;
@@ -140,7 +181,11 @@ export class CreateSale implements UseCase<CreateSaleCommand, CreateSaleResult> 
       // The gross is what the customer pays for this line; the split is
       // extracted from it, so the line total is never altered by taxing.
       const product = this.deps.products ? await this.deps.products.findById(line.productId) : null;
-      const split = splitSaleLineTax(lineTotal, product && product.organizationId === ctx.organizationId ? product : null, interState);
+      const split = splitSaleLineTax(
+        lineTotal,
+        product && product.organizationId === ctx.organizationId ? product : null,
+        interState,
+      );
 
       lines.push({
         id: ctx.ids.newId(),
@@ -227,7 +272,13 @@ export class CreateSale implements UseCase<CreateSaleCommand, CreateSaleResult> 
         aggregateId: saleId,
         stationId: shift.stationId,
         businessDayId: shift.businessDayId,
-        payload: { saleId, saleType, paymentMethod: cmd.paymentMethod, totalAmount: sale.totalAmount, customerId: sale.customerId },
+        payload: {
+          saleId,
+          saleType,
+          paymentMethod: cmd.paymentMethod,
+          totalAmount: sale.totalAmount,
+          customerId: sale.customerId,
+        },
         presentation: {
           templateId: 'retail-sale.amount.v1',
           values: { amount: Number(sale.totalAmount), paymentMethod: cmd.paymentMethod },

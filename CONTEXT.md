@@ -84,7 +84,6 @@ be reopened by an Owner or Manager provided no other Shift is open at the
 station.
 _Avoid_: archived shift, frozen shift
 
-
 **Backdated Business-Date Assignment**:
 Recording an operation now while assigning it to an earlier Business Date. It
 does not alter audit or lifecycle timestamps.

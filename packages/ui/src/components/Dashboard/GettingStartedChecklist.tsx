@@ -103,7 +103,9 @@ export const GettingStartedChecklist: React.FC<GettingStartedChecklistProps> = (
               {step.done ? <Check size={14} /> : step.locked ? <Lock size={12} /> : i + 1}
             </span>
 
-            <span style={{ minWidth: 0, flex: 1, display: 'flex', flexDirection: 'column', gap: '2px' }}>
+            <span
+              style={{ minWidth: 0, flex: 1, display: 'flex', flexDirection: 'column', gap: '2px' }}
+            >
               <span
                 style={{
                   fontSize: '13px',
@@ -115,16 +117,27 @@ export const GettingStartedChecklist: React.FC<GettingStartedChecklistProps> = (
                 {step.label}
               </span>
               <span style={{ fontSize: '11.5px', color: 'var(--text-muted)', lineHeight: 1.4 }}>
-                {step.locked && !step.done ? step.lockedHint ?? step.description : step.description}
+                {step.locked && !step.done
+                  ? (step.lockedHint ?? step.description)
+                  : step.description}
               </span>
             </span>
 
             {step.done ? (
-              <Chip tone="success" size="xs">Done</Chip>
+              <Chip tone="success" size="xs">
+                Done
+              </Chip>
             ) : step.locked ? (
-              <Chip tone="neutral" size="xs">Locked</Chip>
+              <Chip tone="neutral" size="xs">
+                Locked
+              </Chip>
             ) : (
-              <Button variant="secondary" size="sm" style={{ flexShrink: 0 }} onClick={step.onAction}>
+              <Button
+                variant="secondary"
+                size="sm"
+                style={{ flexShrink: 0 }}
+                onClick={step.onAction}
+              >
                 {step.actionLabel}
               </Button>
             )}

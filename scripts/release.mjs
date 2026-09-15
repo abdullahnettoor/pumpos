@@ -71,27 +71,36 @@ for (const file of pkgFiles) {
   if (!existsSync(file)) continue;
   const pkg = JSON.parse(readFileSync(file, 'utf8'));
   if (pkg.version === undefined) continue;
-  edits.push({ file, apply: () => {
-    pkg.version = version;
-    writeFileSync(file, JSON.stringify(pkg, null, 2) + '\n');
-  }});
+  edits.push({
+    file,
+    apply: () => {
+      pkg.version = version;
+      writeFileSync(file, JSON.stringify(pkg, null, 2) + '\n');
+    },
+  });
 }
 
 // Tauri config (JSON "version") + Rust crate (Cargo.toml "version").
 const tauriConf = join(root, 'apps/desktop/src-tauri/tauri.conf.json');
 if (existsSync(tauriConf)) {
-  edits.push({ file: tauriConf, apply: () => {
-    const conf = JSON.parse(readFileSync(tauriConf, 'utf8'));
-    conf.version = version;
-    writeFileSync(tauriConf, JSON.stringify(conf, null, 2) + '\n');
-  }});
+  edits.push({
+    file: tauriConf,
+    apply: () => {
+      const conf = JSON.parse(readFileSync(tauriConf, 'utf8'));
+      conf.version = version;
+      writeFileSync(tauriConf, JSON.stringify(conf, null, 2) + '\n');
+    },
+  });
 }
 const cargo = join(root, 'apps/desktop/src-tauri/Cargo.toml');
 if (existsSync(cargo)) {
-  edits.push({ file: cargo, apply: () => {
-    const txt = readFileSync(cargo, 'utf8').replace(/^version = ".*"/m, `version = "${version}"`);
-    writeFileSync(cargo, txt);
-  }});
+  edits.push({
+    file: cargo,
+    apply: () => {
+      const txt = readFileSync(cargo, 'utf8').replace(/^version = ".*"/m, `version = "${version}"`);
+      writeFileSync(cargo, txt);
+    },
+  });
 }
 
 for (const e of edits) {

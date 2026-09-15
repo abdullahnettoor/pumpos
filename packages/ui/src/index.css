@@ -1,47 +1,79 @@
 /* Self-hosted Plus Jakarta Sans + Geist Mono (vendored via scripts/download-fonts.mjs → /fonts). */
-@font-face { font-family: 'Plus Jakarta Sans'; font-weight: 400; font-display: swap; src: url('/fonts/PlusJakartaSans-Regular.ttf') format('truetype'); }
-@font-face { font-family: 'Plus Jakarta Sans'; font-weight: 500; font-display: swap; src: url('/fonts/PlusJakartaSans-Medium.ttf') format('truetype'); }
-@font-face { font-family: 'Plus Jakarta Sans'; font-weight: 600; font-display: swap; src: url('/fonts/PlusJakartaSans-SemiBold.ttf') format('truetype'); }
-@font-face { font-family: 'Plus Jakarta Sans'; font-weight: 700; font-display: swap; src: url('/fonts/PlusJakartaSans-Bold.ttf') format('truetype'); }
-@font-face { font-family: 'Geist Mono'; font-weight: 400; font-display: swap; src: url('/fonts/GeistMono-Regular.ttf') format('truetype'); }
-@font-face { font-family: 'Geist Mono'; font-weight: 500; font-display: swap; src: url('/fonts/GeistMono-Medium.ttf') format('truetype'); }
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/PlusJakartaSans-Regular.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/PlusJakartaSans-Medium.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/PlusJakartaSans-SemiBold.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/PlusJakartaSans-Bold.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Geist Mono';
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/GeistMono-Regular.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Geist Mono';
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/GeistMono-Medium.ttf') format('truetype');
+}
 
 :root {
   /* Font Families */
-  --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-sans:
+    'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial,
+    sans-serif;
   --font-mono: 'Geist Mono', ui-monospace, monospace;
 
   /* Colors (Calm Industrial Light Theme) */
-  --bg-canvas: #F6F7F4;
-  --bg-surface: #FFFFFF;
-  --bg-surface-alt: #F1F3EF;
-  
-  --border-soft: #D9DED6;
-  --border-strong: #B9C1B7;
-  
-  --text-strong: #18201A;
-  --text-default: #2B342D;
-  --text-muted: #5E6A61;
-  --text-faint: #7A857C;
-  
+  --bg-canvas: #f6f7f4;
+  --bg-surface: #ffffff;
+  --bg-surface-alt: #f1f3ef;
+
+  --border-soft: #d9ded6;
+  --border-strong: #b9c1b7;
+
+  --text-strong: #18201a;
+  --text-default: #2b342d;
+  --text-muted: #5e6a61;
+  --text-faint: #7a857c;
+
   /* Brand/Accents */
-  --brand-primary: #1F6A53;       /* Petrol Green */
-  --brand-secondary: #2E5E88;     /* Diesel Blue */
-  --brand-warning: #B7811E;       /* Signal Amber */
-  --brand-danger: #B44A3F;        /* Alert Red */
-  
+  --brand-primary: #1f6a53; /* Petrol Green */
+  --brand-secondary: #2e5e88; /* Diesel Blue */
+  --brand-warning: #b7811e; /* Signal Amber */
+  --brand-danger: #b44a3f; /* Alert Red */
+
   /* States */
-  --state-success-bg: #E8F4EE;
-  --state-success-fg: #1E6A4E;
-  
-  --state-warning-bg: #F9F0DA;
-  --state-warning-fg: #8A6116;
-  
-  --state-danger-bg: #F8E3E0;
-  --state-danger-fg: #9F3F36;
-  
-  --state-info-bg: #E8F0F7;
-  --state-info-fg: #2E5E88;
+  --state-success-bg: #e8f4ee;
+  --state-success-fg: #1e6a4e;
+
+  --state-warning-bg: #f9f0da;
+  --state-warning-fg: #8a6116;
+
+  --state-danger-bg: #f8e3e0;
+  --state-danger-fg: #9f3f36;
+
+  --state-info-bg: #e8f0f7;
+  --state-info-fg: #2e5e88;
 
   /* Border Radiuses */
   --radius-card: 10px;
@@ -62,7 +94,9 @@
 }
 
 /* Base Resets */
-*, *::before, *::after {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
@@ -82,7 +116,11 @@
  * stands. Class-level borders (.btn-*, .input, pump-ds `border-*`) all have
  * higher specificity and still win.
  */
-button, input, optgroup, select, textarea {
+button,
+input,
+optgroup,
+select,
+textarea {
   border: 0 solid;
   /* Form controls don't inherit font-family by default — force it so buttons
    * (sidebar nav, etc.), inputs and selects use --font-sans, not system Arial. */
@@ -146,7 +184,10 @@ a:focus-visible {
   font-weight: 600;
   border-radius: var(--radius-button);
   cursor: pointer;
-  transition: background-color 0.1s, color 0.1s, border-color 0.1s;
+  transition:
+    background-color 0.1s,
+    color 0.1s,
+    border-color 0.1s;
   white-space: nowrap;
 }
 
@@ -294,7 +335,9 @@ select {
   font-family: var(--font-sans);
   font-size: 13px;
   outline: none;
-  transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+  transition:
+    border-color 0.15s ease-in-out,
+    box-shadow 0.15s ease-in-out;
 }
 
 .input:focus,
@@ -484,7 +527,10 @@ select:disabled {
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-input);
   cursor: pointer;
-  transition: background-color 0.1s, color 0.1s, border-color 0.1s;
+  transition:
+    background-color 0.1s,
+    color 0.1s,
+    border-color 0.1s;
 }
 .segmented--sm .segmented-item {
   height: 32px;
@@ -555,7 +601,7 @@ select:disabled {
    sticky bar (covers the content-area top padding + side gutters) instead of
    peeking around its edges. */
 .shift-control-bar::before {
-  content: "";
+  content: '';
   position: absolute;
   top: calc(-1 * var(--space-6));
   left: calc(-1 * var(--space-6));
@@ -666,7 +712,9 @@ select:disabled {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  transition: color 0.15s ease, border-color 0.15s ease;
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease;
 }
 
 .shift-subtab:hover {
@@ -786,8 +834,12 @@ select:disabled {
 
 /* ==================== Loading Spinner ==================== */
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .loading-container {
@@ -828,8 +880,14 @@ select:disabled {
 
 /* ==================== Animations ==================== */
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .animate-fade-in {
@@ -841,7 +899,7 @@ select:disabled {
   .animate-fade-in {
     animation: none;
   }
-  
+
   .loading-spinner {
     animation-duration: 1.5s;
   }
@@ -883,11 +941,15 @@ select:disabled {
 }
 
 @keyframes drawerFadeIn {
-  to { opacity: 1; }
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes drawerSlideIn {
-  to { transform: translateX(0); }
+  to {
+    transform: translateX(0);
+  }
 }
 
 .drawer-header {
@@ -974,13 +1036,13 @@ select:disabled {
   color: var(--text-muted);
 }
 
-.close-wizard-step-pill[data-state="active"] {
+.close-wizard-step-pill[data-state='active'] {
   background-color: var(--brand-primary);
   color: white;
   font-weight: 600;
 }
 
-.close-wizard-step-pill[data-state="done"] {
+.close-wizard-step-pill[data-state='done'] {
   background-color: var(--state-success-bg);
   color: var(--state-success-fg);
   font-weight: 600;
@@ -998,7 +1060,7 @@ select:disabled {
   font-weight: 700;
 }
 
-.close-wizard-step-pill[data-state="pending"] .close-wizard-step-num {
+.close-wizard-step-pill[data-state='pending'] .close-wizard-step-num {
   background: var(--bg-surface);
   border: 1px solid var(--border-soft);
 }
@@ -1090,13 +1152,13 @@ select:disabled {
   border: 1px solid var(--border-soft);
 }
 
-.close-wizard-variance[data-state="match"] {
+.close-wizard-variance[data-state='match'] {
   color: var(--state-success-fg);
   background-color: var(--state-success-bg);
 }
 
-.close-wizard-variance[data-state="surplus"],
-.close-wizard-variance[data-state="shortage"] {
+.close-wizard-variance[data-state='surplus'],
+.close-wizard-variance[data-state='shortage'] {
   color: var(--brand-danger);
   background-color: var(--state-danger-bg);
 }
@@ -1160,7 +1222,7 @@ select:disabled {
   padding: 6px 0;
 }
 
-.close-wizard-toggle input[type="checkbox"] {
+.close-wizard-toggle input[type='checkbox'] {
   width: 16px;
   height: 16px;
   cursor: pointer;
@@ -1269,7 +1331,7 @@ select:disabled {
 }
 
 .switch-slider::before {
-  content: "";
+  content: '';
   position: absolute;
   height: 14px;
   width: 14px;
@@ -1290,34 +1352,73 @@ select:disabled {
 }
 
 /* ==================== Utility Classes ==================== */
-.text-muted { color: var(--text-muted); }
-.text-strong { color: var(--text-strong); }
-.text-success { color: var(--state-success-fg); }
-.text-warning { color: var(--state-warning-fg); }
-.text-danger { color: var(--state-danger-fg); }
-.text-info { color: var(--state-info-fg); }
+.text-muted {
+  color: var(--text-muted);
+}
+.text-strong {
+  color: var(--text-strong);
+}
+.text-success {
+  color: var(--state-success-fg);
+}
+.text-warning {
+  color: var(--state-warning-fg);
+}
+.text-danger {
+  color: var(--state-danger-fg);
+}
+.text-info {
+  color: var(--state-info-fg);
+}
 
-.font-mono { font-family: var(--font-mono); }
-.font-sans { font-family: var(--font-sans); }
+.font-mono {
+  font-family: var(--font-mono);
+}
+.font-sans {
+  font-family: var(--font-sans);
+}
 
-.flex { display: flex; }
-.flex-col { flex-direction: column; }
+.flex {
+  display: flex;
+}
+.flex-col {
+  flex-direction: column;
+}
 
 /* Shimmer skeletons for partial/lazy loading (Phase P). */
 .pump-skeleton {
-  background: linear-gradient(90deg, var(--bg-surface-alt) 25%, var(--border-soft) 37%, var(--bg-surface-alt) 63%);
+  background: linear-gradient(
+    90deg,
+    var(--bg-surface-alt) 25%,
+    var(--border-soft) 37%,
+    var(--bg-surface-alt) 63%
+  );
   background-size: 400% 100%;
   animation: pump-shimmer 1.2s ease-in-out infinite;
 }
 @keyframes pump-shimmer {
-  0% { background-position: 100% 50%; }
-  100% { background-position: 0 50%; }
+  0% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0 50%;
+  }
 }
-.items-center { align-items: center; }
-.justify-between { justify-content: space-between; }
-.gap-2 { gap: var(--space-2); }
-.gap-3 { gap: var(--space-3); }
-.gap-4 { gap: var(--space-4); }
+.items-center {
+  align-items: center;
+}
+.justify-between {
+  justify-content: space-between;
+}
+.gap-2 {
+  gap: var(--space-2);
+}
+.gap-3 {
+  gap: var(--space-3);
+}
+.gap-4 {
+  gap: var(--space-4);
+}
 
 /* ==================== Print (Save as PDF) ====================
    Scopes printing to the element marked `.print-area` (e.g. a Shift Summary
@@ -1364,7 +1465,6 @@ select:disabled {
   }
 }
 
-
 /* =========================================================================
  * Tabs primitive (canonical) — see packages/ui/src/components/primitives/Tabs.tsx.
  * Three visual variants (`pill`, `underline`, `card`) share the same
@@ -1399,7 +1499,10 @@ select:disabled {
   font-weight: 500;
   white-space: nowrap;
   cursor: pointer;
-  transition: color 120ms ease, border-color 120ms ease, background-color 120ms ease;
+  transition:
+    color 120ms ease,
+    border-color 120ms ease,
+    background-color 120ms ease;
 }
 
 .pump-tab:hover:not(:disabled):not(.pump-tab--active) {
@@ -1431,8 +1534,14 @@ select:disabled {
 }
 
 /* Size — applies to all variants. */
-.pump-tabs--md .pump-tab { padding: 10px 16px; font-size: 13px; }
-.pump-tabs--sm .pump-tab { padding: 7px 12px;  font-size: 12px; }
+.pump-tabs--md .pump-tab {
+  padding: 10px 16px;
+  font-size: 13px;
+}
+.pump-tabs--sm .pump-tab {
+  padding: 7px 12px;
+  font-size: 12px;
+}
 
 /* ---- Variant: pill (default, historical PumpOS look) ------------------- */
 .pump-tabs--pill .pump-tab--active {
@@ -1457,8 +1566,14 @@ select:disabled {
   padding-bottom: calc(var(--_pt-pb, 10px) - 1px);
 }
 
-.pump-tabs--underline.pump-tabs--md .pump-tab { padding: 12px 14px 11px; --_pt-pb: 12px; }
-.pump-tabs--underline.pump-tabs--sm .pump-tab { padding: 9px 10px 8px;   --_pt-pb: 9px; }
+.pump-tabs--underline.pump-tabs--md .pump-tab {
+  padding: 12px 14px 11px;
+  --_pt-pb: 12px;
+}
+.pump-tabs--underline.pump-tabs--sm .pump-tab {
+  padding: 9px 10px 8px;
+  --_pt-pb: 9px;
+}
 
 .pump-tabs--underline .pump-tab:hover:not(:disabled):not(.pump-tab--active) {
   color: var(--text-strong);
@@ -1491,8 +1606,14 @@ select:disabled {
   padding-bottom: calc(var(--_ct-pb, 10px) + 1px);
 }
 
-.pump-tabs--card.pump-tabs--md .pump-tab { padding: 10px 16px 11px; --_ct-pb: 10px; }
-.pump-tabs--card.pump-tabs--sm .pump-tab { padding: 7px 12px 8px;   --_ct-pb: 7px; }
+.pump-tabs--card.pump-tabs--md .pump-tab {
+  padding: 10px 16px 11px;
+  --_ct-pb: 10px;
+}
+.pump-tabs--card.pump-tabs--sm .pump-tab {
+  padding: 7px 12px 8px;
+  --_ct-pb: 7px;
+}
 
 .pump-tabs--card .pump-tab:hover:not(:disabled):not(.pump-tab--active) {
   color: var(--text-strong);
@@ -1521,16 +1642,36 @@ select:disabled {
   font-size: 10px;
   font-weight: 700;
   line-height: 1;
-  transition: background-color 120ms ease, color 120ms ease;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease;
 }
 
 /* Active count pill inherits the tab's tone. */
-.pump-tab__count--active.pump-tab__count--brand    { background: var(--brand-primary);    color: #fff; }
-.pump-tab__count--active.pump-tab__count--info     { background: var(--state-info-fg);    color: #fff; }
-.pump-tab__count--active.pump-tab__count--success  { background: var(--state-success-fg); color: #fff; }
-.pump-tab__count--active.pump-tab__count--warning  { background: var(--state-warning-fg); color: #fff; }
-.pump-tab__count--active.pump-tab__count--danger   { background: var(--state-danger-fg);  color: #fff; }
-.pump-tab__count--active.pump-tab__count--neutral  { background: var(--text-strong);      color: #fff; }
+.pump-tab__count--active.pump-tab__count--brand {
+  background: var(--brand-primary);
+  color: #fff;
+}
+.pump-tab__count--active.pump-tab__count--info {
+  background: var(--state-info-fg);
+  color: #fff;
+}
+.pump-tab__count--active.pump-tab__count--success {
+  background: var(--state-success-fg);
+  color: #fff;
+}
+.pump-tab__count--active.pump-tab__count--warning {
+  background: var(--state-warning-fg);
+  color: #fff;
+}
+.pump-tab__count--active.pump-tab__count--danger {
+  background: var(--state-danger-fg);
+  color: #fff;
+}
+.pump-tab__count--active.pump-tab__count--neutral {
+  background: var(--text-strong);
+  color: #fff;
+}
 
 /* ---- Text tag ("NEW" / "BETA" / "PRO", tone-aware) --------------------- */
 .pump-tab__tag {
@@ -1548,9 +1689,27 @@ select:disabled {
   line-height: 1;
 }
 
-.pump-tab__tag--brand    { background: color-mix(in oklab, var(--brand-primary) 12%, transparent); color: var(--brand-primary); }
-.pump-tab__tag--info     { background: var(--state-info-bg);    color: var(--state-info-fg); }
-.pump-tab__tag--success  { background: var(--state-success-bg); color: var(--state-success-fg); }
-.pump-tab__tag--warning  { background: var(--state-warning-bg); color: var(--state-warning-fg); }
-.pump-tab__tag--danger   { background: var(--state-danger-bg);  color: var(--state-danger-fg); }
-.pump-tab__tag--neutral  { background: var(--bg-surface-alt);   color: var(--text-muted); }
+.pump-tab__tag--brand {
+  background: color-mix(in oklab, var(--brand-primary) 12%, transparent);
+  color: var(--brand-primary);
+}
+.pump-tab__tag--info {
+  background: var(--state-info-bg);
+  color: var(--state-info-fg);
+}
+.pump-tab__tag--success {
+  background: var(--state-success-bg);
+  color: var(--state-success-fg);
+}
+.pump-tab__tag--warning {
+  background: var(--state-warning-bg);
+  color: var(--state-warning-fg);
+}
+.pump-tab__tag--danger {
+  background: var(--state-danger-bg);
+  color: var(--state-danger-fg);
+}
+.pump-tab__tag--neutral {
+  background: var(--bg-surface-alt);
+  color: var(--text-muted);
+}

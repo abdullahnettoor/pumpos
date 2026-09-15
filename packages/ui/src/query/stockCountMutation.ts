@@ -34,11 +34,16 @@ export interface PendingTankDipWorkflow {
   closeStatus?: 'submitting' | 'closed';
 }
 
-export function shouldResetTankDipDraft(previousShiftId: string | null, activeShiftId: string | null): boolean {
+export function shouldResetTankDipDraft(
+  previousShiftId: string | null,
+  activeShiftId: string | null,
+): boolean {
   return activeShiftId !== null && activeShiftId !== previousShiftId;
 }
 
-export function discardUnrecordedTankDips(workflow: PendingTankDipWorkflow): PendingTankDipWorkflow {
+export function discardUnrecordedTankDips(
+  workflow: PendingTankDipWorkflow,
+): PendingTankDipWorkflow {
   return { ...workflow, tankDips: workflow.tankDips.filter((dip) => dip.status === 'saved') };
 }
 
@@ -52,7 +57,9 @@ export interface PendingStockCountRequest extends StockCountRequestIdentity {
 export function loadPendingStockCountRequest(): PendingStockCountRequest | null {
   if (typeof localStorage === 'undefined') return null;
   try {
-    return JSON.parse(localStorage.getItem(pendingStockCountKey) ?? 'null') as PendingStockCountRequest | null;
+    return JSON.parse(
+      localStorage.getItem(pendingStockCountKey) ?? 'null',
+    ) as PendingStockCountRequest | null;
   } catch {
     return null;
   }
@@ -67,22 +74,32 @@ export function savePendingStockCountRequest(request: PendingStockCountRequest |
 export function loadPendingTankDipWorkflow(stationId: string): PendingTankDipWorkflow | null {
   if (typeof localStorage === 'undefined') return null;
   try {
-    return JSON.parse(localStorage.getItem(pendingTankDipKey(stationId)) ?? 'null') as PendingTankDipWorkflow | null;
+    return JSON.parse(
+      localStorage.getItem(pendingTankDipKey(stationId)) ?? 'null',
+    ) as PendingTankDipWorkflow | null;
   } catch {
     return null;
   }
 }
 
-export function savePendingTankDipWorkflow(stationId: string, workflow: PendingTankDipWorkflow | null): void {
+export function savePendingTankDipWorkflow(
+  stationId: string,
+  workflow: PendingTankDipWorkflow | null,
+): void {
   if (typeof localStorage === 'undefined') return;
   if (!workflow || workflow.tankDips.every((dip) => dip.status === 'saved')) {
     localStorage.removeItem(pendingTankDipKey(stationId));
     return;
   }
-  localStorage.setItem(pendingTankDipKey(stationId), JSON.stringify({
-    ...workflow,
-    tankDips: workflow.tankDips.map((dip) => dip.status === 'saving' ? { ...dip, status: 'pending' } : dip),
-  }));
+  localStorage.setItem(
+    pendingTankDipKey(stationId),
+    JSON.stringify({
+      ...workflow,
+      tankDips: workflow.tankDips.map((dip) =>
+        dip.status === 'saving' ? { ...dip, status: 'pending' } : dip,
+      ),
+    }),
+  );
 }
 
 export function isAmbiguousMutationError(error: { code?: string } | null | undefined): boolean {
@@ -101,5 +118,7 @@ export function resolveStockCountRequestIdentity(
   createKey = createStockCountIdempotencyKey,
 ): StockCountRequestIdentity {
   const fingerprint = JSON.stringify(payload);
-  return current?.fingerprint === fingerprint ? current : { fingerprint, idempotencyKey: createKey() };
+  return current?.fingerprint === fingerprint
+    ? current
+    : { fingerprint, idempotencyKey: createKey() };
 }

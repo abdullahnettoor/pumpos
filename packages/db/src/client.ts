@@ -14,7 +14,7 @@ export function createDb(connectionString: string) {
 
 export function createDbWithOptions(
   connectionString: string,
-  options?: { prepare?: boolean; max?: number }
+  options?: { prepare?: boolean; max?: number },
 ) {
   const queryClient = postgres(connectionString, {
     prepare: options?.prepare,

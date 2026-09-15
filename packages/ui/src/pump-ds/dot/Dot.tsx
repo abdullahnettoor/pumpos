@@ -15,39 +15,35 @@ import { cn } from '../lib/cn.js';
 export type DotTone = 'brand' | 'info' | 'success' | 'warning' | 'danger' | 'neutral';
 export type DotSize = 'xs' | 'sm' | 'md' | 'lg';
 
-const dotVariants = cva(
-  'inline-block shrink-0 rounded-full',
-  {
-    variants: {
-      size: {
-        xs: 'size-1',      // 4px  — inline with 10-11px text
-        sm: 'size-1.5',    // 6px  — default; matches chip prefix + row leaders
-        md: 'size-2',      // 8px  — KPI labels, tabs, prominent hints
-        lg: 'size-2.5',    // 10px — page-level status pin
-      },
-      tone: {
-        brand:   'bg-brand',
-        info:    'bg-info-fg',
-        success: 'bg-success-fg',
-        warning: 'bg-warning-fg',
-        danger:  'bg-danger-fg',
-        neutral: 'bg-ink-faint',
-      },
+const dotVariants = cva('inline-block shrink-0 rounded-full', {
+  variants: {
+    size: {
+      xs: 'size-1', // 4px  — inline with 10-11px text
+      sm: 'size-1.5', // 6px  — default; matches chip prefix + row leaders
+      md: 'size-2', // 8px  — KPI labels, tabs, prominent hints
+      lg: 'size-2.5', // 10px — page-level status pin
     },
-    defaultVariants: { size: 'sm', tone: 'neutral' },
-  }
-);
+    tone: {
+      brand: 'bg-brand',
+      info: 'bg-info-fg',
+      success: 'bg-success-fg',
+      warning: 'bg-warning-fg',
+      danger: 'bg-danger-fg',
+      neutral: 'bg-ink-faint',
+    },
+  },
+  defaultVariants: { size: 'sm', tone: 'neutral' },
+});
 
 export interface DotProps
-  extends HTMLAttributes<HTMLSpanElement>,
-    VariantProps<typeof dotVariants> {
+  extends HTMLAttributes<HTMLSpanElement>, VariantProps<typeof dotVariants> {
   /** Animate a soft opacity pulse to signal live / ongoing state. */
   pulse?: boolean;
 }
 
 export const Dot = forwardRef<HTMLSpanElement, DotProps>(function Dot(
   { className, tone, size, pulse, ...rest },
-  ref
+  ref,
 ) {
   return (
     <span

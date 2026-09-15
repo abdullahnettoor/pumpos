@@ -14,7 +14,10 @@ import { STATUS_MAP, type PumpStatus } from './status-map.js';
  * "Overdue"); toggle `showIcon` to hide the leading icon when density
  * requires text-only.
  */
-export interface StatusChipProps extends Omit<ChipProps, 'children' | 'tone' | 'icon' | 'dot' | 'pulse'> {
+export interface StatusChipProps extends Omit<
+  ChipProps,
+  'children' | 'tone' | 'icon' | 'dot' | 'pulse'
+> {
   status: PumpStatus;
   size?: ChipSize;
   variant?: ChipVariant;
@@ -28,7 +31,7 @@ export interface StatusChipProps extends Omit<ChipProps, 'children' | 'tone' | '
 
 export const StatusChip = forwardRef<HTMLSpanElement, StatusChipProps>(function StatusChip(
   { status, label, showIcon = true, pulse, ...rest },
-  ref
+  ref,
 ) {
   const meta = STATUS_MAP[status];
   const Icon = meta.icon;

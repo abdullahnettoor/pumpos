@@ -31,8 +31,16 @@ export const useToast = (): ToastApi => {
 };
 
 const VARIANT_STYLE: Record<ToastVariant, { border: string; bg: string; fg: string }> = {
-  error: { border: 'var(--brand-danger)', bg: 'var(--state-danger-bg)', fg: 'var(--state-danger-fg)' },
-  success: { border: 'var(--brand-success)', bg: 'var(--state-success-bg)', fg: 'var(--state-success-fg)' },
+  error: {
+    border: 'var(--brand-danger)',
+    bg: 'var(--state-danger-bg)',
+    fg: 'var(--state-danger-fg)',
+  },
+  success: {
+    border: 'var(--brand-success)',
+    bg: 'var(--state-success-bg)',
+    fg: 'var(--state-success-fg)',
+  },
   info: { border: 'var(--brand-primary)', bg: 'var(--state-info-bg)', fg: 'var(--state-info-fg)' },
 };
 
@@ -44,12 +52,15 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
-  const show = useCallback((message: string, variant: ToastVariant = 'info', opts?: ToastOptions) => {
-    const id = ++idRef.current;
-    const duration = opts?.duration ?? (variant === 'error' ? 6000 : 4500);
-    setToasts((prev) => [...prev, { id, message, variant, ...opts }]);
-    if (duration > 0) window.setTimeout(() => remove(id), duration);
-  }, [remove]);
+  const show = useCallback(
+    (message: string, variant: ToastVariant = 'info', opts?: ToastOptions) => {
+      const id = ++idRef.current;
+      const duration = opts?.duration ?? (variant === 'error' ? 6000 : 4500);
+      setToasts((prev) => [...prev, { id, message, variant, ...opts }]);
+      if (duration > 0) window.setTimeout(() => remove(id), duration);
+    },
+    [remove],
+  );
 
   const api: ToastApi = {
     show,

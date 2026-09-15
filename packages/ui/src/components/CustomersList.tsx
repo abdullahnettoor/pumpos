@@ -1,7 +1,15 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { CloudTransactionService } from '../services/cloud.js';
-import { useCustomers, useShiftStatus, useProducts, useInvalidateOperational, useCollections, useCreditSales, useAllVehicles } from '../query/hooks.js';
+import {
+  useCustomers,
+  useShiftStatus,
+  useProducts,
+  useInvalidateOperational,
+  useCollections,
+  useCreditSales,
+  useAllVehicles,
+} from '../query/hooks.js';
 import { Users, CreditCard, Plus, Truck, Search, Wallet, HelpCircle } from 'lucide-react';
 import { LoadingSpinner } from './LoadingSpinner.js';
 import { Drawer } from './Drawer.js';
@@ -15,7 +23,12 @@ import { useToast } from './primitives/ToastProvider.js';
 import { Panel, Button, Chip, KpiStrip, KpiTile, EmptyState } from '../pump-ds/index.js';
 import type { NavIntent } from './AppShell.js';
 import { resolveBusinessDate, type CollectionEntryFormValues } from '@pump/shared';
-import { buildCustomerColumns, buildCollectionColumns, buildCreditSaleColumns, buildVehicleColumns } from './customers/columns.js';
+import {
+  buildCustomerColumns,
+  buildCollectionColumns,
+  buildCreditSaleColumns,
+  buildVehicleColumns,
+} from './customers/columns.js';
 import { CustomerFormDrawer } from './customers/CustomerFormDrawer.js';
 import { VehicleDrawer } from './customers/VehicleDrawer.js';
 import { StatementDrawer } from './customers/StatementDrawer.js';
@@ -33,7 +46,12 @@ interface CustomersListProps {
 
 type TabType = 'transactions' | 'sales' | 'registry' | 'vehicles';
 
-export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, defaultShiftId, intent, onIntentConsumed }) => {
+export const CustomersList: React.FC<CustomersListProps> = ({
+  selectedStation,
+  defaultShiftId,
+  intent,
+  onIntentConsumed,
+}) => {
   const [activeTab, setActiveTab] = useState<TabType>('transactions');
 
   const stationId = selectedStation?.id ?? null;
@@ -55,11 +73,16 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
   const anyPrepaid = allCustomers.some((c: any) => c.isPrepaid);
   const activeShift = statusQ.data?.activeShift ?? null;
   const recentClosedShifts: any[] = statusQ.data?.recentClosedShifts ?? [];
-  const fuelProducts = (productsQ.data ?? []).filter((p: any) => p.productType === 'FUEL' && p.isActive);
+  const fuelProducts = (productsQ.data ?? []).filter(
+    (p: any) => p.productType === 'FUEL' && p.isActive,
+  );
 
   // Business date (station-timezone aware) used to bucket "today" collections.
   const stationSettings: any = (selectedStation as any)?.settings || {};
-  const todayIso = resolveBusinessDate({ timeZone: stationSettings.timezone, dayStartsAt: stationSettings.business_day_starts_at });
+  const todayIso = resolveBusinessDate({
+    timeZone: stationSettings.timezone,
+    dayStartsAt: stationSettings.business_day_starts_at,
+  });
   const monthPrefix = todayIso.slice(0, 7);
 
   // Collections ledger filters
@@ -67,12 +90,18 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
   const [collectionMethod, setCollectionMethod] = useState<string>('all');
 
   const collectionKpis = useMemo(() => {
-    let today = 0, month = 0, todayCount = 0;
+    let today = 0,
+      month = 0,
+      todayCount = 0;
     const todayCustomers = new Set<string>();
     for (const c of allCollections) {
       const amt = Number(c.amount || 0);
       const bd: string = c.businessDate || '';
-      if (bd === todayIso) { today += amt; todayCount += 1; if (c.customerId) todayCustomers.add(c.customerId); }
+      if (bd === todayIso) {
+        today += amt;
+        todayCount += 1;
+        if (c.customerId) todayCustomers.add(c.customerId);
+      }
       if (bd.startsWith(monthPrefix)) month += amt;
     }
     return { today, month, todayCount, todayCustomers: todayCustomers.size };
@@ -82,7 +111,14 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
     const q = collectionSearch.trim().toLowerCase();
     return allCollections.filter((c: any) => {
       if (collectionMethod !== 'all' && c.paymentMethod !== collectionMethod) return false;
-      if (q && !((c.customerName || '').toLowerCase().includes(q) || (c.notes || '').toLowerCase().includes(q))) return false;
+      if (
+        q &&
+        !(
+          (c.customerName || '').toLowerCase().includes(q) ||
+          (c.notes || '').toLowerCase().includes(q)
+        )
+      )
+        return false;
       return true;
     });
   }, [allCollections, collectionSearch, collectionMethod]);
@@ -91,12 +127,17 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
   const allCreditSales = creditSalesQ.data ?? [];
   const [salesSearch, setSalesSearch] = useState('');
   const salesKpis = useMemo(() => {
-    let today = 0, month = 0, todayCount = 0;
+    let today = 0,
+      month = 0,
+      todayCount = 0;
     const custs = new Set<string>();
     for (const s of allCreditSales) {
       const amt = Number(s.amount || 0);
       const bd: string = s.businessDate || '';
-      if (bd === todayIso) { today += amt; todayCount += 1; }
+      if (bd === todayIso) {
+        today += amt;
+        todayCount += 1;
+      }
       if (bd.startsWith(monthPrefix)) month += amt;
       if (s.customerId) custs.add(s.customerId);
     }
@@ -105,26 +146,38 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
   const filteredCreditSales = useMemo(() => {
     const q = salesSearch.trim().toLowerCase();
     if (!q) return allCreditSales;
-    return allCreditSales.filter((s: any) =>
-      (s.customerName || '').toLowerCase().includes(q) ||
-      (s.vehicleReg || '').toLowerCase().includes(q) ||
-      (s.productName || '').toLowerCase().includes(q) ||
-      (s.notes || '').toLowerCase().includes(q));
+    return allCreditSales.filter(
+      (s: any) =>
+        (s.customerName || '').toLowerCase().includes(q) ||
+        (s.vehicleReg || '').toLowerCase().includes(q) ||
+        (s.productName || '').toLowerCase().includes(q) ||
+        (s.notes || '').toLowerCase().includes(q),
+    );
   }, [allCreditSales, salesSearch]);
 
   const loading = customersActiveQ.isLoading || statusQ.isLoading;
   const error = (customersActiveQ.error || statusQ.error) as Error | null;
 
-  const eligibleCustomers = allCustomers.filter((c: any) => c.customerType === 'Credit' || c.customerType === 'Fleet');
+  const eligibleCustomers = allCustomers.filter(
+    (c: any) => c.customerType === 'Credit' || c.customerType === 'Fleet',
+  );
 
   // --- Registry (list + EOD-due filter) ---
   const [registryEodOnly, setRegistryEodOnly] = useState(false);
   const eodDueCount = useMemo(
-    () => allCustomers.filter((c: any) => c.settlementCycle === 'EOD' && Number(c.currentBalance || 0) > 0).length,
+    () =>
+      allCustomers.filter(
+        (c: any) => c.settlementCycle === 'EOD' && Number(c.currentBalance || 0) > 0,
+      ).length,
     [allCustomers],
   );
   const registryCustomers = useMemo(
-    () => (registryEodOnly ? allCustomers.filter((c: any) => c.settlementCycle === 'EOD' && Number(c.currentBalance || 0) > 0) : allCustomers),
+    () =>
+      registryEodOnly
+        ? allCustomers.filter(
+            (c: any) => c.settlementCycle === 'EOD' && Number(c.currentBalance || 0) > 0,
+          )
+        : allCustomers,
     [allCustomers, registryEodOnly],
   );
 
@@ -135,17 +188,25 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
   const filteredVehicles = useMemo(() => {
     const q = vehicleSearch.trim().toLowerCase();
     if (!q) return allVehicles;
-    return allVehicles.filter((v: any) =>
-      (v.registrationNumber || '').toLowerCase().includes(q) ||
-      (v.customerName || '').toLowerCase().includes(q) ||
-      (v.vehicleType || '').toLowerCase().includes(q));
+    return allVehicles.filter(
+      (v: any) =>
+        (v.registrationNumber || '').toLowerCase().includes(q) ||
+        (v.customerName || '').toLowerCase().includes(q) ||
+        (v.vehicleType || '').toLowerCase().includes(q),
+    );
   }, [allVehicles, vehicleSearch]);
 
   // --- Customer form drawer ---
   const [isCustomerDrawerOpen, setIsCustomerDrawerOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<any | null>(null);
-  const openCreateCustomer = () => { setEditingCustomer(null); setIsCustomerDrawerOpen(true); };
-  const openEditCustomer = (cust: any) => { setEditingCustomer(cust); setIsCustomerDrawerOpen(true); };
+  const openCreateCustomer = () => {
+    setEditingCustomer(null);
+    setIsCustomerDrawerOpen(true);
+  };
+  const openEditCustomer = (cust: any) => {
+    setEditingCustomer(cust);
+    setIsCustomerDrawerOpen(true);
+  };
 
   // --- Statement drawer ---
   const [statementCustomer, setStatementCustomer] = useState<any | null>(null);
@@ -154,10 +215,24 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
   const [isVehicleDrawerOpen, setIsVehicleDrawerOpen] = useState(false);
   const [editingVehicle, setEditingVehicle] = useState<any | null>(null);
   const [vehicleCustomerId, setVehicleCustomerId] = useState('');
-  const openCreateVehicle = () => { setEditingVehicle(null); setIsVehicleDrawerOpen(true); };
-  const openEditVehicle = (v: any) => { setEditingVehicle(v); setIsVehicleDrawerOpen(true); };
+  const openCreateVehicle = () => {
+    setEditingVehicle(null);
+    setIsVehicleDrawerOpen(true);
+  };
+  const openEditVehicle = (v: any) => {
+    setEditingVehicle(v);
+    setIsVehicleDrawerOpen(true);
+  };
   const onDeleteVehicle = async (vehicle: any) => {
-    if (!(await confirm({ title: 'Delete vehicle?', message: `This will remove vehicle ${vehicle.registrationNumber}.`, confirmLabel: 'Delete', danger: true }))) return;
+    if (
+      !(await confirm({
+        title: 'Delete vehicle?',
+        message: `This will remove vehicle ${vehicle.registrationNumber}.`,
+        confirmLabel: 'Delete',
+        danger: true,
+      }))
+    )
+      return;
     try {
       await transactionService.deleteCustomerVehicle(vehicle.id);
       qc.invalidateQueries({ queryKey: ['vehicles'] });
@@ -175,7 +250,9 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
 
   // --- Collection drawer ---
   const [isCollectionDrawerOpen, setIsCollectionDrawerOpen] = useState(false);
-  const [collectionDefaults, setCollectionDefaults] = useState<Partial<CollectionEntryFormValues>>({});
+  const [collectionDefaults, setCollectionDefaults] = useState<Partial<CollectionEntryFormValues>>(
+    {},
+  );
   const [collectionSubmitting, setCollectionSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -204,12 +281,21 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
     setFormError(null);
   };
 
-  const openCollectionDrawer = (customerId?: string) => { resetCollectionForm(customerId); setIsCollectionDrawerOpen(true); };
-  const closeCollectionDrawer = () => { setIsCollectionDrawerOpen(false); resetCollectionForm(); };
+  const openCollectionDrawer = (customerId?: string) => {
+    resetCollectionForm(customerId);
+    setIsCollectionDrawerOpen(true);
+  };
+  const closeCollectionDrawer = () => {
+    setIsCollectionDrawerOpen(false);
+    resetCollectionForm();
+  };
 
   const onAddCollection = async (values: CollectionEntryFormValues) => {
     setFormError(null);
-    if (!values.targetShiftId) { setFormError('A shift is required to record this entry.'); return; }
+    if (!values.targetShiftId) {
+      setFormError('A shift is required to record this entry.');
+      return;
+    }
     try {
       setCollectionSubmitting(true);
       await transactionService.recordCollection({
@@ -241,7 +327,10 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
     else if (intent.open === 'new-collection') openCollectionDrawer();
     if (intent.focusCustomerId) {
       const cust = allCustomers.find((c: any) => c.id === intent.focusCustomerId);
-      if (cust) { setActiveTab('registry'); setStatementCustomer(cust); }
+      if (cust) {
+        setActiveTab('registry');
+        setStatementCustomer(cust);
+      }
     }
     onIntentConsumed?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -261,7 +350,15 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
 
   if (error) {
     return (
-      <div style={{ padding: '24px', backgroundColor: 'var(--state-danger-bg)', color: 'var(--state-danger-fg)', borderRadius: 'var(--radius-card)', fontFamily: 'var(--font-sans)' }}>
+      <div
+        style={{
+          padding: '24px',
+          backgroundColor: 'var(--state-danger-bg)',
+          color: 'var(--state-danger-fg)',
+          borderRadius: 'var(--radius-card)',
+          fontFamily: 'var(--font-sans)',
+        }}
+      >
         <strong>Error:</strong> {error.message || 'Failed to load customers data'}
       </div>
     );
@@ -274,13 +371,30 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
       actions={
         <>
           {activeTab === 'transactions' && (
-            <Button variant="primary" size="sm" leftIcon={<Plus />} onClick={() => openCollectionDrawer()}>Add Collection</Button>
+            <Button
+              variant="primary"
+              size="sm"
+              leftIcon={<Plus />}
+              onClick={() => openCollectionDrawer()}
+            >
+              Add Collection
+            </Button>
           )}
           {activeTab === 'registry' && (
-            <Button variant="primary" size="sm" leftIcon={<Plus />} onClick={openCreateCustomer}>Add Customer</Button>
+            <Button variant="primary" size="sm" leftIcon={<Plus />} onClick={openCreateCustomer}>
+              Add Customer
+            </Button>
           )}
           {activeTab === 'vehicles' && (
-            <Button variant="primary" size="sm" leftIcon={<Plus />} disabled={eligibleCustomers.length === 0} onClick={openCreateVehicle}>Add Vehicle</Button>
+            <Button
+              variant="primary"
+              size="sm"
+              leftIcon={<Plus />}
+              disabled={eligibleCustomers.length === 0}
+              onClick={openCreateVehicle}
+            >
+              Add Vehicle
+            </Button>
           )}
         </>
       }
@@ -305,10 +419,32 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             {/* KPI strip — today & month collections at a glance */}
             <KpiStrip columns={4}>
-              <KpiTile dot="brand" label="Collected Today" value={inr(collectionKpis.today)} hint={`${collectionKpis.todayCount} ${collectionKpis.todayCount === 1 ? 'entry' : 'entries'}`} />
-              <KpiTile dot="success" valueTone="success" label="Collected This Month" value={inr(collectionKpis.month)} />
-              <KpiTile dot="info" label="Customers Paid Today" value={String(collectionKpis.todayCustomers)} />
-              <KpiTile dot="warning" valueTone="warning" label="Total Receivables" value={inr(customers.reduce((s: number, c: any) => s + Number(c.currentBalance || 0), 0))} hint="Outstanding dues" />
+              <KpiTile
+                dot="brand"
+                label="Collected Today"
+                value={inr(collectionKpis.today)}
+                hint={`${collectionKpis.todayCount} ${collectionKpis.todayCount === 1 ? 'entry' : 'entries'}`}
+              />
+              <KpiTile
+                dot="success"
+                valueTone="success"
+                label="Collected This Month"
+                value={inr(collectionKpis.month)}
+              />
+              <KpiTile
+                dot="info"
+                label="Customers Paid Today"
+                value={String(collectionKpis.todayCustomers)}
+              />
+              <KpiTile
+                dot="warning"
+                valueTone="warning"
+                label="Total Receivables"
+                value={inr(
+                  customers.reduce((s: number, c: any) => s + Number(c.currentBalance || 0), 0),
+                )}
+                hint="Outstanding dues"
+              />
             </KpiStrip>
 
             {/* Collections ledger */}
@@ -318,18 +454,42 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
               action={
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <div style={{ position: 'relative' }}>
-                    <Search size={13} style={{ position: 'absolute', left: '8px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                    <Search
+                      size={13}
+                      style={{
+                        position: 'absolute',
+                        left: '8px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        color: 'var(--text-muted)',
+                      }}
+                    />
                     <input
                       value={collectionSearch}
                       onChange={(e) => setCollectionSearch(e.target.value)}
                       placeholder="Search customer / note…"
-                      style={{ height: '28px', padding: '0 8px 0 26px', width: '200px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', fontSize: '12px', background: 'var(--bg-surface)' }}
+                      style={{
+                        height: '28px',
+                        padding: '0 8px 0 26px',
+                        width: '200px',
+                        borderRadius: 'var(--radius-input)',
+                        border: '1px solid var(--border-strong)',
+                        fontSize: '12px',
+                        background: 'var(--bg-surface)',
+                      }}
                     />
                   </div>
                   <select
                     value={collectionMethod}
                     onChange={(e) => setCollectionMethod(e.target.value)}
-                    style={{ height: '28px', padding: '0 6px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', fontSize: '12px', background: 'var(--bg-surface)' }}
+                    style={{
+                      height: '28px',
+                      padding: '0 6px',
+                      borderRadius: 'var(--radius-input)',
+                      border: '1px solid var(--border-strong)',
+                      fontSize: '12px',
+                      background: 'var(--bg-surface)',
+                    }}
                   >
                     <option value="all">All methods</option>
                     <option value="Cash">Cash</option>
@@ -343,13 +503,29 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
                     title={
                       activeShift || recentClosedShifts.length > 0
                         ? `New collections post to ${
-                            resolvePreferredShiftId(activeShift, recentClosedShifts) === activeShift?.id
+                            resolvePreferredShiftId(activeShift, recentClosedShifts) ===
+                            activeShift?.id
                               ? `${activeShift?.templateName} (active shift)`
-                              : recentClosedShifts.find((s) => s.id === resolvePreferredShiftId(activeShift, recentClosedShifts))?.templateName ?? 'the selected shift'
+                              : (recentClosedShifts.find(
+                                  (s) =>
+                                    s.id ===
+                                    resolvePreferredShiftId(activeShift, recentClosedShifts),
+                                )?.templateName ?? 'the selected shift')
                           }. Cash collections touch the drawer; card / UPI / bank do not.`
                         : 'Open a shift to record collections — cash collections are reconciled against the drawer.'
                     }
-                    style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', height: '28px', width: '22px', marginLeft: '2px', border: 'none', background: 'transparent', color: 'var(--text-faint)', cursor: 'help' }}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      height: '28px',
+                      width: '22px',
+                      marginLeft: '2px',
+                      border: 'none',
+                      background: 'transparent',
+                      color: 'var(--text-faint)',
+                      cursor: 'help',
+                    }}
                   >
                     <HelpCircle size={15} />
                   </button>
@@ -357,14 +533,22 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
               }
             >
               {collectionsQ.isLoading ? (
-                <div style={{ padding: '16px' }}><LoadingSpinner text="Loading collections…" /></div>
+                <div style={{ padding: '16px' }}>
+                  <LoadingSpinner text="Loading collections…" />
+                </div>
               ) : filteredCollections.length === 0 ? (
                 <div style={{ padding: '12px' }}>
                   <EmptyState
                     compact
                     icon={<Wallet />}
-                    title={allCollections.length === 0 ? 'No collections yet' : 'No matching collections'}
-                    description={allCollections.length === 0 ? 'Record a collection to see it here.' : 'Try clearing the search or method filter.'}
+                    title={
+                      allCollections.length === 0 ? 'No collections yet' : 'No matching collections'
+                    }
+                    description={
+                      allCollections.length === 0
+                        ? 'Record a collection to see it here.'
+                        : 'Try clearing the search or method filter.'
+                    }
                   />
                 </div>
               ) : (
@@ -383,10 +567,24 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
         {activeTab === 'sales' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <KpiStrip columns={4}>
-              <KpiTile dot="warning" valueTone="warning" label="Credit Issued Today" value={inr(salesKpis.today)} hint={`${salesKpis.todayCount} ${salesKpis.todayCount === 1 ? 'sale' : 'sales'}`} />
+              <KpiTile
+                dot="warning"
+                valueTone="warning"
+                label="Credit Issued Today"
+                value={inr(salesKpis.today)}
+                hint={`${salesKpis.todayCount} ${salesKpis.todayCount === 1 ? 'sale' : 'sales'}`}
+              />
               <KpiTile dot="brand" label="Credit This Month" value={inr(salesKpis.month)} />
               <KpiTile dot="info" label="Customers on Credit" value={String(salesKpis.customers)} />
-              <KpiTile dot="warning" valueTone="warning" label="Total Receivables" value={inr(customers.reduce((s: number, c: any) => s + Number(c.currentBalance || 0), 0))} hint="Outstanding dues" />
+              <KpiTile
+                dot="warning"
+                valueTone="warning"
+                label="Total Receivables"
+                value={inr(
+                  customers.reduce((s: number, c: any) => s + Number(c.currentBalance || 0), 0),
+                )}
+                hint="Outstanding dues"
+              />
             </KpiStrip>
 
             <Panel
@@ -395,29 +593,72 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
               action={
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <div style={{ position: 'relative' }}>
-                    <Search size={13} style={{ position: 'absolute', left: '8px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                    <Search
+                      size={13}
+                      style={{
+                        position: 'absolute',
+                        left: '8px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        color: 'var(--text-muted)',
+                      }}
+                    />
                     <input
                       value={salesSearch}
                       onChange={(e) => setSalesSearch(e.target.value)}
                       placeholder="Search customer / vehicle / product…"
-                      style={{ height: '28px', padding: '0 8px 0 26px', width: '260px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', fontSize: '12px', background: 'var(--bg-surface)' }}
+                      style={{
+                        height: '28px',
+                        padding: '0 8px 0 26px',
+                        width: '260px',
+                        borderRadius: 'var(--radius-input)',
+                        border: '1px solid var(--border-strong)',
+                        fontSize: '12px',
+                        background: 'var(--bg-surface)',
+                      }}
                     />
                   </div>
-                  <button type="button" aria-label="About credit sales" title="Credit sales are receivables — fuel-on-credit and merchandise on credit. They never touch the drawer; record them from the shift handover." style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', height: '28px', width: '22px', marginLeft: '2px', border: 'none', background: 'transparent', color: 'var(--text-faint)', cursor: 'help' }}>
+                  <button
+                    type="button"
+                    aria-label="About credit sales"
+                    title="Credit sales are receivables — fuel-on-credit and merchandise on credit. They never touch the drawer; record them from the shift handover."
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      height: '28px',
+                      width: '22px',
+                      marginLeft: '2px',
+                      border: 'none',
+                      background: 'transparent',
+                      color: 'var(--text-faint)',
+                      cursor: 'help',
+                    }}
+                  >
                     <HelpCircle size={15} />
                   </button>
                 </div>
               }
             >
               {creditSalesQ.isLoading ? (
-                <div style={{ padding: '16px' }}><LoadingSpinner text="Loading credit sales…" /></div>
+                <div style={{ padding: '16px' }}>
+                  <LoadingSpinner text="Loading credit sales…" />
+                </div>
               ) : filteredCreditSales.length === 0 ? (
                 <div style={{ padding: '12px' }}>
                   <EmptyState
                     compact
                     icon={<CreditCard />}
-                    title={allCreditSales.length === 0 ? 'No credit sales yet' : 'No matching credit sales'}
-                    description={allCreditSales.length === 0 ? 'Fuel-on-credit and merchandise-on-credit sales appear here.' : 'Try a different search term.'}
+                    title={
+                      allCreditSales.length === 0
+                        ? 'No credit sales yet'
+                        : 'No matching credit sales'
+                    }
+                    description={
+                      allCreditSales.length === 0
+                        ? 'Fuel-on-credit and merchandise-on-credit sales appear here.'
+                        : 'Try a different search term.'
+                    }
                   />
                 </div>
               ) : (
@@ -443,10 +684,16 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
                   type="button"
                   onClick={() => setRegistryEodOnly((v) => !v)}
                   title="Show only end-of-day customers with an outstanding balance"
-                  style={{ border: 'none', background: 'transparent', padding: 0, cursor: 'pointer' }}
+                  style={{
+                    border: 'none',
+                    background: 'transparent',
+                    padding: 0,
+                    cursor: 'pointer',
+                  }}
                 >
                   <Chip tone={registryEodOnly ? 'danger' : 'neutral'} size="xs">
-                    EOD due · {eodDueCount}{registryEodOnly ? ' ✕' : ''}
+                    EOD due · {eodDueCount}
+                    {registryEodOnly ? ' ✕' : ''}
                   </Chip>
                 </button>
               ) : undefined
@@ -456,7 +703,11 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
               bare
               columns={buildCustomerColumns(setStatementCustomer, openEditCustomer, anyPrepaid)}
               data={registryCustomers}
-              emptyMessage={registryEodOnly ? 'No EOD customers with outstanding dues.' : 'No customers registered.'}
+              emptyMessage={
+                registryEodOnly
+                  ? 'No EOD customers with outstanding dues.'
+                  : 'No customers registered.'
+              }
               getRowId={(r: any) => r.id}
             />
           </Panel>
@@ -473,15 +724,34 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
                 action={
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <div style={{ position: 'relative' }}>
-                      <Search size={13} style={{ position: 'absolute', left: '8px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                      <Search
+                        size={13}
+                        style={{
+                          position: 'absolute',
+                          left: '8px',
+                          top: '50%',
+                          transform: 'translateY(-50%)',
+                          color: 'var(--text-muted)',
+                        }}
+                      />
                       <input
                         value={vehicleSearch}
                         onChange={(e) => setVehicleSearch(e.target.value)}
                         placeholder="Search registration / customer…"
-                        style={{ height: '28px', padding: '0 8px 0 26px', width: '240px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', fontSize: '12px', background: 'var(--bg-surface)' }}
+                        style={{
+                          height: '28px',
+                          padding: '0 8px 0 26px',
+                          width: '240px',
+                          borderRadius: 'var(--radius-input)',
+                          border: '1px solid var(--border-strong)',
+                          fontSize: '12px',
+                          background: 'var(--bg-surface)',
+                        }}
                       />
                     </div>
-                    <Chip tone="neutral" size="xs">{filteredVehicles.length}</Chip>
+                    <Chip tone="neutral" size="xs">
+                      {filteredVehicles.length}
+                    </Chip>
                   </div>
                 }
               >
@@ -491,7 +761,11 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
                       compact
                       icon={<Truck />}
                       title={allVehicles.length === 0 ? 'No vehicles' : 'No matching vehicles'}
-                      description={allVehicles.length === 0 ? 'Register a vehicle against a Credit or Fleet customer to see it here.' : 'Try a different search term.'}
+                      description={
+                        allVehicles.length === 0
+                          ? 'Register a vehicle against a Credit or Fleet customer to see it here.'
+                          : 'Try a different search term.'
+                      }
                     />
                   </div>
                 ) : (
@@ -523,36 +797,42 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
         title="Log Customer Collection"
       >
         <CollectionEntryForm
-            shiftOptions={[]}
-            showShiftHintWhenSingle={false}
-            showDateField
-            dateLabel="Collection Date"
-            stationId={selectedStation?.id}
-            defaultValues={collectionDefaults}
-            customers={customers}
-            submitting={collectionSubmitting}
-            error={formError}
-            onCancel={closeCollectionDrawer}
-            onSubmit={onAddCollection}
-            submitLabel={'Log Collection'}
-            submittingLabel="Recording..."
-            amountLabel="Amount (₹)"
-            amountPlaceholder="0.00"
-            notesLabel="Notes / Fleet Slip ID"
-            notesPlaceholder="Slip code, transaction ref..."
-            paymentMethodLabel="Entry Type / Payment Method"
-            usePaymentMethodButtons={true}
-            walkInOptionLabel="-- Walk-in / Cash Customer --"
-            customerOptionLabel={(cust) => `${cust.name} (${cust.customerType})`}
-          />
+          shiftOptions={[]}
+          showShiftHintWhenSingle={false}
+          showDateField
+          dateLabel="Collection Date"
+          stationId={selectedStation?.id}
+          defaultValues={collectionDefaults}
+          customers={customers}
+          submitting={collectionSubmitting}
+          error={formError}
+          onCancel={closeCollectionDrawer}
+          onSubmit={onAddCollection}
+          submitLabel={'Log Collection'}
+          submittingLabel="Recording..."
+          amountLabel="Amount (₹)"
+          amountPlaceholder="0.00"
+          notesLabel="Notes / Fleet Slip ID"
+          notesPlaceholder="Slip code, transaction ref..."
+          paymentMethodLabel="Entry Type / Payment Method"
+          usePaymentMethodButtons={true}
+          walkInOptionLabel="-- Walk-in / Cash Customer --"
+          customerOptionLabel={(cust) => `${cust.name} (${cust.customerType})`}
+        />
       </Drawer>
 
       <StatementDrawer
         customer={statementCustomer}
         stationId={stationId}
         onClose={() => setStatementCustomer(null)}
-        onEdit={(c) => { setStatementCustomer(null); openEditCustomer(c); }}
-        onRecordCollection={(c) => { setStatementCustomer(null); openCollectionDrawer(c.id); }}
+        onEdit={(c) => {
+          setStatementCustomer(null);
+          openEditCustomer(c);
+        }}
+        onRecordCollection={(c) => {
+          setStatementCustomer(null);
+          openCollectionDrawer(c.id);
+        }}
       />
 
       <VehicleDrawer
@@ -566,4 +846,3 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
     </PageLayout>
   );
 };
-

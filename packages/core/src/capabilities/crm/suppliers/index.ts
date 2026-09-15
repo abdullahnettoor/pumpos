@@ -1,6 +1,21 @@
 import { z } from 'zod';
-import { BusinessEvents, conflictError, err, eventFromContext, forbiddenError, notFoundError, ok, validationError } from '../../../kernel/index.js';
-import type { EventPublisher, ExecutionContext, Repository, Result, UseCase } from '../../../kernel/index.js';
+import {
+  BusinessEvents,
+  conflictError,
+  err,
+  eventFromContext,
+  forbiddenError,
+  notFoundError,
+  ok,
+  validationError,
+} from '../../../kernel/index.js';
+import type {
+  EventPublisher,
+  ExecutionContext,
+  Repository,
+  Result,
+  UseCase,
+} from '../../../kernel/index.js';
 
 export interface Supplier {
   id: string;
@@ -57,9 +72,12 @@ export class CreateSupplier implements UseCase<CreateSupplierCommand, Supplier> 
   constructor(private readonly deps: SupplierDeps) {}
   async execute(input: CreateSupplierCommand, ctx: ExecutionContext): Promise<Result<Supplier>> {
     const p = createSchema.safeParse(input);
-    if (!p.success) return err(validationError('Invalid CreateSupplier command', { issues: p.error.flatten() }));
+    if (!p.success)
+      return err(validationError('Invalid CreateSupplier command', { issues: p.error.flatten() }));
     if (await this.deps.repository.existsByName(ctx.organizationId, p.data.name)) {
-      return err(conflictError(`A supplier named "${p.data.name}" already exists`, { name: p.data.name }));
+      return err(
+        conflictError(`A supplier named "${p.data.name}" already exists`, { name: p.data.name }),
+      );
     }
     const now = ctx.clock.now().toISOString();
     const supplier: Supplier = {
@@ -90,12 +108,20 @@ export class UpdateSupplier implements UseCase<UpdateSupplierCommand, Supplier> 
   constructor(private readonly deps: SupplierDeps) {}
   async execute(input: UpdateSupplierCommand, ctx: ExecutionContext): Promise<Result<Supplier>> {
     const p = updateSchema.safeParse(input);
-    if (!p.success) return err(validationError('Invalid UpdateSupplier command', { issues: p.error.flatten() }));
+    if (!p.success)
+      return err(validationError('Invalid UpdateSupplier command', { issues: p.error.flatten() }));
     const existing = await this.deps.repository.findById(p.data.id);
     if (!existing) return err(notFoundError('Supplier', p.data.id));
-    if (existing.organizationId !== ctx.organizationId) return err(forbiddenError('Supplier belongs to another organization'));
-    if (p.data.name !== undefined && p.data.name !== existing.name && (await this.deps.repository.existsByName(ctx.organizationId, p.data.name, existing.id))) {
-      return err(conflictError(`A supplier named "${p.data.name}" already exists`, { name: p.data.name }));
+    if (existing.organizationId !== ctx.organizationId)
+      return err(forbiddenError('Supplier belongs to another organization'));
+    if (
+      p.data.name !== undefined &&
+      p.data.name !== existing.name &&
+      (await this.deps.repository.existsByName(ctx.organizationId, p.data.name, existing.id))
+    ) {
+      return err(
+        conflictError(`A supplier named "${p.data.name}" already exists`, { name: p.data.name }),
+      );
     }
     const updated: Supplier = {
       ...existing,

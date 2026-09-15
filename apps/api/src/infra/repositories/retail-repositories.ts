@@ -77,7 +77,12 @@ export class DrizzleMerchandiseHandoverRepository implements MerchandiseHandover
     // Remove the sale's stock movements and line items before the sale itself.
     await this.db
       .delete(schema.stockMovements)
-      .where(and(eq(schema.stockMovements.referenceType, 'SALE'), eq(schema.stockMovements.referenceId, saleId)));
+      .where(
+        and(
+          eq(schema.stockMovements.referenceType, 'SALE'),
+          eq(schema.stockMovements.referenceId, saleId),
+        ),
+      );
     await this.db.delete(schema.saleItems).where(eq(schema.saleItems.saleId, saleId));
     await this.db.delete(schema.sales).where(eq(schema.sales.id, saleId));
   }

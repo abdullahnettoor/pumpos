@@ -5,7 +5,13 @@ import type { SaleLineTax } from './ports.js';
 /** The product attributes needed to split a sale line's tax. */
 export interface SaleTaxProduct {
   taxCategory: TaxCategory;
-  taxConfig?: { gst_rate?: number | null; vat_rate?: number | null; cess?: number | null; hsn_code?: string | null; price_inclusive?: boolean | null } | null;
+  taxConfig?: {
+    gst_rate?: number | null;
+    vat_rate?: number | null;
+    cess?: number | null;
+    hsn_code?: string | null;
+    price_inclusive?: boolean | null;
+  } | null;
 }
 
 const ZERO: SaleLineTax = {
@@ -51,12 +57,24 @@ export function splitSaleLineTax(
 
   const hasRate = (gstRate ?? 0) > 0 || (vatRate ?? 0) > 0 || (cessRate ?? 0) > 0;
   if (!hasRate) {
-    return { ...ZERO, taxCategory: product.taxCategory, hsnCode, taxableAmount: String(round2(gross)) };
+    return {
+      ...ZERO,
+      taxCategory: product.taxCategory,
+      hsnCode,
+      taxableAmount: String(round2(gross)),
+    };
   }
 
   const inclusive = cfg.price_inclusive !== false;
   const r = computeLineTax(
-    { taxCategory: product.taxCategory, taxableAmount: gross, gstRatePct: gstRate, vatRatePct: vatRate, cessPct: cessRate, inclusive },
+    {
+      taxCategory: product.taxCategory,
+      taxableAmount: gross,
+      gstRatePct: gstRate,
+      vatRatePct: vatRate,
+      cessPct: cessRate,
+      inclusive,
+    },
     interState,
   );
 

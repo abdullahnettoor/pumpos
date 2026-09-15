@@ -8,15 +8,15 @@ docs win. The root [`AGENTS.md`](../../AGENTS.md) is the short, authoritative ru
 
 ## Read order
 
-| Doc | What it covers |
-|---|---|
-| [architecture.md](architecture.md) | System overview, layers, anchoring model, request lifecycle, event/outbox flow |
-| [backend-core-patterns.md](backend-core-patterns.md) | `packages/core` — capabilities, use-cases, ports, kernel, events, testing |
-| [backend-api-patterns.md](backend-api-patterns.md) | `apps/api` — Hono routes, adapters, transactional outbox, guards, idempotency |
-| [frontend-patterns.md](frontend-patterns.md) | `apps/web` + `packages/ui` — query layer, primitives, design system, navigation |
-| [desktop-patterns.md](desktop-patterns.md) | `apps/desktop` — Tauri shell, web-first strategy, platform seams |
-| [ui-assessment.md](ui-assessment.md) | Current UI gaps, design-quality review, refactor roadmap |
-| [open-questions.md](open-questions.md) | Decisions still pending (prepaid top-up CMS, Level 2 resilience/sync, double-entry) |
+| Doc                                                  | What it covers                                                                      |
+| ---------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| [architecture.md](architecture.md)                   | System overview, layers, anchoring model, request lifecycle, event/outbox flow      |
+| [backend-core-patterns.md](backend-core-patterns.md) | `packages/core` — capabilities, use-cases, ports, kernel, events, testing           |
+| [backend-api-patterns.md](backend-api-patterns.md)   | `apps/api` — Hono routes, adapters, transactional outbox, guards, idempotency       |
+| [frontend-patterns.md](frontend-patterns.md)         | `apps/web` + `packages/ui` — query layer, primitives, design system, navigation     |
+| [desktop-patterns.md](desktop-patterns.md)           | `apps/desktop` — Tauri shell, web-first strategy, platform seams                    |
+| [ui-assessment.md](ui-assessment.md)                 | Current UI gaps, design-quality review, refactor roadmap                            |
+| [open-questions.md](open-questions.md)               | Decisions still pending (prepaid top-up CMS, Level 2 resilience/sync, double-entry) |
 
 ## The one rule that matters most
 

@@ -1,6 +1,19 @@
 import { z } from 'zod';
-import { BusinessEvents, err, eventFromContext, notFoundError, ok, validationError } from '../../../kernel/index.js';
-import type { EventPublisher, ExecutionContext, Repository, Result, UseCase } from '../../../kernel/index.js';
+import {
+  BusinessEvents,
+  err,
+  eventFromContext,
+  notFoundError,
+  ok,
+  validationError,
+} from '../../../kernel/index.js';
+import type {
+  EventPublisher,
+  ExecutionContext,
+  Repository,
+  Result,
+  UseCase,
+} from '../../../kernel/index.js';
 
 export interface Tank {
   id: string;
@@ -58,7 +71,8 @@ export class CreateTank implements UseCase<CreateTankCommand, Tank> {
   constructor(private readonly deps: TankDeps) {}
   async execute(input: CreateTankCommand, ctx: ExecutionContext): Promise<Result<Tank>> {
     const p = createSchema.safeParse(input);
-    if (!p.success) return err(validationError('Invalid CreateTank command', { issues: p.error.flatten() }));
+    if (!p.success)
+      return err(validationError('Invalid CreateTank command', { issues: p.error.flatten() }));
     const now = ctx.clock.now().toISOString();
     const tank: Tank = {
       id: ctx.ids.newId(),
@@ -89,9 +103,11 @@ export class UpdateTank implements UseCase<UpdateTankCommand, Tank> {
   constructor(private readonly deps: TankDeps) {}
   async execute(input: UpdateTankCommand, ctx: ExecutionContext): Promise<Result<Tank>> {
     const p = updateSchema.safeParse(input);
-    if (!p.success) return err(validationError('Invalid UpdateTank command', { issues: p.error.flatten() }));
+    if (!p.success)
+      return err(validationError('Invalid UpdateTank command', { issues: p.error.flatten() }));
     const existing = await this.deps.repository.findById(p.data.id);
-    if (!existing || existing.organizationId !== ctx.organizationId) return err(notFoundError('Tank', p.data.id));
+    if (!existing || existing.organizationId !== ctx.organizationId)
+      return err(notFoundError('Tank', p.data.id));
     const updated: Tank = {
       ...existing,
       name: p.data.name ?? existing.name,
@@ -117,9 +133,14 @@ export class DeleteTank implements UseCase<{ id: string }, Tank> {
   constructor(private readonly deps: TankDeps) {}
   async execute(input: { id: string }, ctx: ExecutionContext): Promise<Result<Tank>> {
     const existing = await this.deps.repository.findByIdForUpdate(input.id);
-    if (!existing || existing.organizationId !== ctx.organizationId) return err(notFoundError('Tank', input.id));
+    if (!existing || existing.organizationId !== ctx.organizationId)
+      return err(notFoundError('Tank', input.id));
     if (await this.deps.repository.hasNozzles(existing.id)) {
-      return err(validationError('Tank cannot be deactivated while Nozzles are assigned to it', { tankId: existing.id }));
+      return err(
+        validationError('Tank cannot be deactivated while Nozzles are assigned to it', {
+          tankId: existing.id,
+        }),
+      );
     }
     await this.deps.repository.deactivateById(existing.id);
     await this.deps.events.publish([

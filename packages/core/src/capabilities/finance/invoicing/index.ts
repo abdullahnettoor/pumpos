@@ -1,5 +1,11 @@
 import { z } from 'zod';
-import { BusinessEvents, err, eventFromContext, ok, validationError } from '../../../kernel/index.js';
+import {
+  BusinessEvents,
+  err,
+  eventFromContext,
+  ok,
+  validationError,
+} from '../../../kernel/index.js';
 import type { EventPublisher, ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
 import type { TaxCategory } from '@pump/shared';
 import { computeLineTax, isInterState } from '../tax/index.js';
@@ -66,7 +72,12 @@ export interface InvoiceRepository {
 
 export interface DocumentSequenceRepository {
   /** Atomically return the next gapless number for (org, docType, scope, FY). */
-  nextNumber(organizationId: string, docType: string, scope: string, financialYear: string): Promise<number>;
+  nextNumber(
+    organizationId: string,
+    docType: string,
+    scope: string,
+    financialYear: string,
+  ): Promise<number>;
 }
 
 /** Indian financial year (Apr–Mar) label for a YYYY-MM-DD date, e.g. '2026-27'. */
@@ -156,13 +167,17 @@ export class GenerateInvoice implements UseCase<GenerateInvoiceCommand, Invoice>
 
   async execute(input: GenerateInvoiceCommand, ctx: ExecutionContext): Promise<Result<Invoice>> {
     const p = schema.safeParse(input);
-    if (!p.success) return err(validationError('Invalid GenerateInvoice command', { issues: p.error.flatten() }));
+    if (!p.success)
+      return err(validationError('Invalid GenerateInvoice command', { issues: p.error.flatten() }));
     const cmd = p.data;
 
     const existing = await this.deps.invoices.findBySaleId(cmd.saleId);
     if (existing) return ok(existing);
 
-    const interState = isInterState({ supplierStateCode: cmd.supplierStateCode, buyerStateCode: cmd.buyerStateCode });
+    const interState = isInterState({
+      supplierStateCode: cmd.supplierStateCode,
+      buyerStateCode: cmd.buyerStateCode,
+    });
 
     const snapshotLines: InvoiceLineSnapshot[] = [];
     const totals = { taxable: 0, cgst: 0, sgst: 0, igst: 0, vat: 0, cess: 0, grand: 0 };
@@ -173,7 +188,14 @@ export class GenerateInvoice implements UseCase<GenerateInvoiceCommand, Invoice>
       const discount = Number(line.discount ?? 0);
       const lineAmount = round2(qty * unitPrice - discount);
       const tax = computeLineTax(
-        { taxCategory: line.taxCategory, taxableAmount: lineAmount, gstRatePct: line.gstRate, vatRatePct: line.vatRate, cessPct: line.cessRate, inclusive: line.inclusive },
+        {
+          taxCategory: line.taxCategory,
+          taxableAmount: lineAmount,
+          gstRatePct: line.gstRate,
+          vatRatePct: line.vatRate,
+          cessPct: line.cessRate,
+          inclusive: line.inclusive,
+        },
         interState,
       );
       // Show the pre-tax unit rate on the invoice so Rate × Qty = Taxable (for
@@ -213,7 +235,12 @@ export class GenerateInvoice implements UseCase<GenerateInvoiceCommand, Invoice>
 
     const fy = financialYear(cmd.issuedDate);
     const supplierGstin = cmd.supplierGstin ?? '';
-    const seq = await this.deps.sequences.nextNumber(ctx.organizationId, 'INVOICE', supplierGstin, fy);
+    const seq = await this.deps.sequences.nextNumber(
+      ctx.organizationId,
+      'INVOICE',
+      supplierGstin,
+      fy,
+    );
     const invoiceNumber = `INV/${fy}/${String(seq).padStart(5, '0')}`;
 
     const now = ctx.clock.now().toISOString();
@@ -256,7 +283,13 @@ export class GenerateInvoice implements UseCase<GenerateInvoiceCommand, Invoice>
         aggregateId: invoice.id,
         stationId: invoice.stationId,
         businessDayId: cmd.businessDayId,
-        payload: { invoiceId: invoice.id, invoiceNumber, saleId: cmd.saleId, total: totalRounded, interState },
+        payload: {
+          invoiceId: invoice.id,
+          invoiceNumber,
+          saleId: cmd.saleId,
+          total: totalRounded,
+          interState,
+        },
       }),
     ]);
 

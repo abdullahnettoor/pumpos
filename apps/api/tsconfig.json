@@ -21,7 +21,5 @@
     { "path": "../../packages/core" }
   ],
   "include": ["src/**/*", "worker-configuration.d.ts"],
-  "exclude": [
-    "dist"
-  ]
+  "exclude": ["dist"]
 }

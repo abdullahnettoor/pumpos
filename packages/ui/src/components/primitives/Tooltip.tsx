@@ -20,9 +20,8 @@ export const Tooltip: React.FC<TooltipProps> = ({ content, placement = 'top', ch
   const show = () => setOpen(true);
   const hide = () => setOpen(false);
 
-  const vertical = placement === 'top'
-    ? { bottom: 'calc(100% + 6px)' }
-    : { top: 'calc(100% + 6px)' };
+  const vertical =
+    placement === 'top' ? { bottom: 'calc(100% + 6px)' } : { top: 'calc(100% + 6px)' };
 
   return (
     <span

@@ -146,11 +146,21 @@ export const DateRangeField: React.FC<DateRangeFieldProps> = ({
         <>
           <div>
             <label className="field-label">From</label>
-            <Input type="date" inputSize={size} value={value.from} onChange={(e) => onChange({ ...value, from: e.target.value })} />
+            <Input
+              type="date"
+              inputSize={size}
+              value={value.from}
+              onChange={(e) => onChange({ ...value, from: e.target.value })}
+            />
           </div>
           <div>
             <label className="field-label">To</label>
-            <Input type="date" inputSize={size} value={value.to} onChange={(e) => onChange({ ...value, to: e.target.value })} />
+            <Input
+              type="date"
+              inputSize={size}
+              value={value.to}
+              onChange={(e) => onChange({ ...value, to: e.target.value })}
+            />
           </div>
         </>
       )}

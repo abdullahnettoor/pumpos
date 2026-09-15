@@ -62,12 +62,28 @@ import {
   DrizzlePurchaseItemRepository,
   DrizzleSupplierTransactionRepository,
 } from '../infra/repositories/purchasing-repositories.js';
-import { DrizzleExpenseRepository, DrizzleIncomeRepository, DrizzleIncomeCategoryRepository } from '../infra/repositories/finance-repositories.js';
-import { DrizzleStockMovementRepository, DrizzleStockVarianceRepository } from '../infra/repositories/inventory-repositories.js';
-import { DrizzleSaleRepository, DrizzleMerchandiseHandoverRepository } from '../infra/repositories/retail-repositories.js';
-import { DrizzleInvoiceRepository, DrizzleDocumentSequenceRepository } from '../infra/repositories/invoicing-repositories.js';
+import {
+  DrizzleExpenseRepository,
+  DrizzleIncomeRepository,
+  DrizzleIncomeCategoryRepository,
+} from '../infra/repositories/finance-repositories.js';
+import {
+  DrizzleStockMovementRepository,
+  DrizzleStockVarianceRepository,
+} from '../infra/repositories/inventory-repositories.js';
+import {
+  DrizzleSaleRepository,
+  DrizzleMerchandiseHandoverRepository,
+} from '../infra/repositories/retail-repositories.js';
+import {
+  DrizzleInvoiceRepository,
+  DrizzleDocumentSequenceRepository,
+} from '../infra/repositories/invoicing-repositories.js';
 import { DrizzleProductRepository } from '../infra/repositories/product.repo.js';
-import { DrizzleStationRepository, DrizzleTankRepository } from '../infra/repositories/setup-repositories.js';
+import {
+  DrizzleStationRepository,
+  DrizzleTankRepository,
+} from '../infra/repositories/setup-repositories.js';
 import { LedgerPostingService } from '../infra/ledger-posting.js';
 import {
   DrizzleShiftRepository,
@@ -107,19 +123,38 @@ const docNumbers = new TimestampDocumentNumberGenerator();
  * The station's own GST state (supplier side of place-of-supply). Resolves from
  * an explicit stationId, else via the shift the entry is anchored to.
  */
-async function loadStationStateCode(db: DbClient, stationId?: string | null, shiftId?: string | null): Promise<string | null> {
+async function loadStationStateCode(
+  db: DbClient,
+  stationId?: string | null,
+  shiftId?: string | null,
+): Promise<string | null> {
   let sid = stationId ?? null;
   if (!sid && shiftId) {
-    const [sh] = await db.select({ stationId: schema.shifts.stationId }).from(schema.shifts).where(eq(schema.shifts.id, shiftId)).limit(1);
+    const [sh] = await db
+      .select({ stationId: schema.shifts.stationId })
+      .from(schema.shifts)
+      .where(eq(schema.shifts.id, shiftId))
+      .limit(1);
     sid = sh?.stationId ?? null;
   }
   if (!sid) return null;
-  const [row] = await db.select({ settings: schema.stations.settings }).from(schema.stations).where(eq(schema.stations.id, sid)).limit(1);
-  const legal = ((row?.settings as any)?.legal) || {};
-  return typeof legal.stateCode === 'string' && legal.stateCode.trim() ? legal.stateCode.trim() : null;
+  const [row] = await db
+    .select({ settings: schema.stations.settings })
+    .from(schema.stations)
+    .where(eq(schema.stations.id, sid))
+    .limit(1);
+  const legal = (row?.settings as any)?.legal || {};
+  return typeof legal.stateCode === 'string' && legal.stateCode.trim()
+    ? legal.stateCode.trim()
+    : null;
 }
 
-async function belongsToOrg(db: DbClient, table: any, id: string, organizationId: string): Promise<boolean> {
+async function belongsToOrg(
+  db: DbClient,
+  table: any,
+  id: string,
+  organizationId: string,
+): Promise<boolean> {
   const [row] = await db
     .select({ id: table.id })
     .from(table)
@@ -165,40 +200,60 @@ transactionsRouter.get('/suppliers', async (c) => {
         balance: sql<string>`COALESCE(SUM(CASE WHEN ${schema.supplierTransactions.transactionType} = 'Payment' THEN -${schema.supplierTransactions.amount} ELSE ${schema.supplierTransactions.amount} END), 0)`,
       })
       .from(schema.supplierTransactions)
-      .innerJoin(schema.businessDays, eq(schema.supplierTransactions.businessDayId, schema.businessDays.id))
+      .innerJoin(
+        schema.businessDays,
+        eq(schema.supplierTransactions.businessDayId, schema.businessDays.id),
+      )
       .where(eq(schema.businessDays.organizationId, user.organizationId))
       .groupBy(schema.supplierTransactions.supplierId),
   ]);
 
   const balances: Record<string, number> = {};
   for (const r of balanceRows) balances[r.supplierId] = Number(r.balance);
-  return c.json({ success: true, data: list.map((s) => ({ ...s, currentBalance: balances[s.id] ?? 0 })) });
+  return c.json({
+    success: true,
+    data: list.map((s) => ({ ...s, currentBalance: balances[s.id] ?? 0 })),
+  });
 });
 
 transactionsRouter.post('/suppliers', async (c) => {
   const user = c.var.user;
   if (!canManageSuppliers(user.role)) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } }, 403);
+    return c.json(
+      { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } },
+      403,
+    );
   }
   const body = await c.req.json().catch(() => ({}));
   const openingDue = Number(body?.openingDue ?? 0);
-  const openingStationId: string | undefined = body?.openingStationId ?? body?.stationId ?? undefined;
-  const clock = openingDue > 0 && openingStationId ? await loadStationClock(c.var.db, openingStationId) : {};
+  const openingStationId: string | undefined =
+    body?.openingStationId ?? body?.stationId ?? undefined;
+  const clock =
+    openingDue > 0 && openingStationId ? await loadStationClock(c.var.db, openingStationId) : {};
   const result = await runInTransaction(c.var.db, async (tx, events) => {
     const trace = createCommandTrace();
-    const created = await new CreateSupplier({ repository: new DrizzleSupplierRepository(tx), events }).execute(
+    const created = await new CreateSupplier({
+      repository: new DrizzleSupplierRepository(tx),
+      events,
+    }).execute(
       body,
       buildContext(user, { correlationId: trace.correlationId, groupingRole: 'primary' }),
     );
     if (!created.success || !(openingDue > 0)) return created;
-    if (!openingStationId) return err(validationError('A station is required to record an opening balance.'));
+    if (!openingStationId)
+      return err(validationError('A station is required to record an opening balance.'));
     const ob = await new SetSupplierOpeningBalance({
       supplierTxns: new DrizzleSupplierTransactionRepository(tx),
       suppliers: new DrizzleSupplierRepository(tx),
       businessDays: new DrizzleBusinessDayRepository(tx),
       events,
     }).execute(
-      { supplierId: created.data.id, amount: openingDue, stationId: openingStationId, asOfDate: body?.openingAsOf },
+      {
+        supplierId: created.data.id,
+        amount: openingDue,
+        stationId: openingStationId,
+        asOfDate: body?.openingAsOf,
+      },
       buildContext(user, {
         stationId: openingStationId,
         correlationId: trace.correlationId,
@@ -214,11 +269,17 @@ transactionsRouter.post('/suppliers', async (c) => {
 transactionsRouter.put('/suppliers/:id', async (c) => {
   const user = c.var.user;
   if (!canManageSuppliers(user.role)) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } }, 403);
+    return c.json(
+      { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } },
+      403,
+    );
   }
   const body = await c.req.json().catch(() => ({}));
   const result = await runInTransaction(c.var.db, (tx, events) =>
-    new UpdateSupplier({ repository: new DrizzleSupplierRepository(tx), events }).execute({ ...body, id: c.req.param('id') }, buildContext(user)),
+    new UpdateSupplier({ repository: new DrizzleSupplierRepository(tx), events }).execute(
+      { ...body, id: c.req.param('id') },
+      buildContext(user),
+    ),
   );
   return sendResult(c, result);
 });
@@ -226,10 +287,16 @@ transactionsRouter.put('/suppliers/:id', async (c) => {
 transactionsRouter.delete('/suppliers/:id', async (c) => {
   const user = c.var.user;
   if (!canArchiveParty(user.role)) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } }, 403);
+    return c.json(
+      { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } },
+      403,
+    );
   }
   const result = await runInTransaction(c.var.db, (tx, events) =>
-    new UpdateSupplier({ repository: new DrizzleSupplierRepository(tx), events }).execute({ id: c.req.param('id'), isActive: false }, buildContext(user)),
+    new UpdateSupplier({ repository: new DrizzleSupplierRepository(tx), events }).execute(
+      { id: c.req.param('id'), isActive: false },
+      buildContext(user),
+    ),
   );
   return sendResult(c, result);
 });
@@ -240,7 +307,10 @@ transactionsRouter.get('/suppliers/:id/ledger', async (c) => {
   const supplierId = c.req.param('id');
   const supplier = await new DrizzleSupplierRepository(db).findById(supplierId);
   if (!supplier || supplier.organizationId !== user.organizationId) {
-    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Supplier not found' } }, 404);
+    return c.json(
+      { success: false, error: { code: 'NOT_FOUND', message: 'Supplier not found' } },
+      404,
+    );
   }
   // TODO (ledger scaling): this returns the supplier's ALL-TIME transactions and
   // the client computes the period opening + in-range rows. Bounded per single
@@ -260,7 +330,10 @@ transactionsRouter.get('/suppliers/:id/ledger', async (c) => {
       businessDate: schema.businessDays.businessDate,
     })
     .from(schema.supplierTransactions)
-    .innerJoin(schema.businessDays, eq(schema.supplierTransactions.businessDayId, schema.businessDays.id))
+    .innerJoin(
+      schema.businessDays,
+      eq(schema.supplierTransactions.businessDayId, schema.businessDays.id),
+    )
     .where(eq(schema.supplierTransactions.supplierId, supplierId))
     .orderBy(schema.supplierTransactions.createdAt);
   return c.json({ success: true, data: list });
@@ -287,40 +360,60 @@ transactionsRouter.get('/customers', async (c) => {
         balance: sql<string>`COALESCE(SUM(CASE WHEN ${schema.customerTransactions.transactionType} = 'Collection' THEN -${schema.customerTransactions.amount} WHEN ${schema.customerTransactions.transactionType} = 'OMC Sale' THEN 0 ELSE ${schema.customerTransactions.amount} END), 0)`,
       })
       .from(schema.customerTransactions)
-      .innerJoin(schema.businessDays, eq(schema.customerTransactions.businessDayId, schema.businessDays.id))
+      .innerJoin(
+        schema.businessDays,
+        eq(schema.customerTransactions.businessDayId, schema.businessDays.id),
+      )
       .where(eq(schema.businessDays.organizationId, user.organizationId))
       .groupBy(schema.customerTransactions.customerId),
   ]);
 
   const balances: Record<string, number> = {};
   for (const r of balanceRows) if (r.customerId) balances[r.customerId] = Number(r.balance);
-  return c.json({ success: true, data: list.map((cust) => ({ ...cust, currentBalance: balances[cust.id] ?? 0 })) });
+  return c.json({
+    success: true,
+    data: list.map((cust) => ({ ...cust, currentBalance: balances[cust.id] ?? 0 })),
+  });
 });
 
 transactionsRouter.post('/customers', async (c) => {
   const user = c.var.user;
   if (!canManageCustomers(user.role)) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } }, 403);
+    return c.json(
+      { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } },
+      403,
+    );
   }
   const body = await c.req.json().catch(() => ({}));
   const openingDue = Number(body?.openingDue ?? 0);
-  const openingStationId: string | undefined = body?.openingStationId ?? body?.stationId ?? undefined;
-  const clock = openingDue > 0 && openingStationId ? await loadStationClock(c.var.db, openingStationId) : {};
+  const openingStationId: string | undefined =
+    body?.openingStationId ?? body?.stationId ?? undefined;
+  const clock =
+    openingDue > 0 && openingStationId ? await loadStationClock(c.var.db, openingStationId) : {};
   const result = await runInTransaction(c.var.db, async (tx, events) => {
     const trace = createCommandTrace();
-    const created = await new CreateCustomer({ repository: new DrizzleCustomerRepository(tx), events }).execute(
+    const created = await new CreateCustomer({
+      repository: new DrizzleCustomerRepository(tx),
+      events,
+    }).execute(
       body,
       buildContext(user, { correlationId: trace.correlationId, groupingRole: 'primary' }),
     );
     if (!created.success || !(openingDue > 0)) return created;
-    if (!openingStationId) return err(validationError('A station is required to record an opening balance.'));
+    if (!openingStationId)
+      return err(validationError('A station is required to record an opening balance.'));
     const ob = await new SetCustomerOpeningBalance({
       ledger: new DrizzleCustomerLedgerRepository(tx),
       customers: new DrizzleCustomerRepository(tx),
       businessDays: new DrizzleBusinessDayRepository(tx),
       events,
     }).execute(
-      { customerId: created.data.id, amount: openingDue, stationId: openingStationId, asOfDate: body?.openingAsOf },
+      {
+        customerId: created.data.id,
+        amount: openingDue,
+        stationId: openingStationId,
+        asOfDate: body?.openingAsOf,
+      },
       buildContext(user, {
         stationId: openingStationId,
         correlationId: trace.correlationId,
@@ -336,11 +429,17 @@ transactionsRouter.post('/customers', async (c) => {
 transactionsRouter.put('/customers/:id', async (c) => {
   const user = c.var.user;
   if (!canManageCustomers(user.role)) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } }, 403);
+    return c.json(
+      { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } },
+      403,
+    );
   }
   const body = await c.req.json().catch(() => ({}));
   const result = await runInTransaction(c.var.db, (tx, events) =>
-    new UpdateCustomer({ repository: new DrizzleCustomerRepository(tx), events }).execute({ ...body, id: c.req.param('id') }, buildContext(user)),
+    new UpdateCustomer({ repository: new DrizzleCustomerRepository(tx), events }).execute(
+      { ...body, id: c.req.param('id') },
+      buildContext(user),
+    ),
   );
   return sendResult(c, result);
 });
@@ -348,10 +447,16 @@ transactionsRouter.put('/customers/:id', async (c) => {
 transactionsRouter.delete('/customers/:id', async (c) => {
   const user = c.var.user;
   if (!canArchiveParty(user.role)) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } }, 403);
+    return c.json(
+      { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } },
+      403,
+    );
   }
   const result = await runInTransaction(c.var.db, (tx, events) =>
-    new UpdateCustomer({ repository: new DrizzleCustomerRepository(tx), events }).execute({ id: c.req.param('id'), isActive: false }, buildContext(user)),
+    new UpdateCustomer({ repository: new DrizzleCustomerRepository(tx), events }).execute(
+      { id: c.req.param('id'), isActive: false },
+      buildContext(user),
+    ),
   );
   return sendResult(c, result);
 });
@@ -362,7 +467,10 @@ transactionsRouter.get('/customers/:id/ledger', async (c) => {
   const customerId = c.req.param('id');
   const customer = await new DrizzleCustomerRepository(db).findById(customerId);
   if (!customer || customer.organizationId !== user.organizationId) {
-    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Customer not found' } }, 404);
+    return c.json(
+      { success: false, error: { code: 'NOT_FOUND', message: 'Customer not found' } },
+      404,
+    );
   }
   // TODO (ledger scaling): this returns the customer's ALL-TIME transactions and
   // the client computes the period opening + in-range rows. Bounded per single
@@ -381,8 +489,16 @@ transactionsRouter.get('/customers/:id/ledger', async (c) => {
       businessDate: schema.businessDays.businessDate,
     })
     .from(schema.customerTransactions)
-    .innerJoin(schema.businessDays, eq(schema.customerTransactions.businessDayId, schema.businessDays.id))
-    .where(and(eq(schema.customerTransactions.customerId, customerId), ne(schema.customerTransactions.transactionType, 'OMC Sale')))
+    .innerJoin(
+      schema.businessDays,
+      eq(schema.customerTransactions.businessDayId, schema.businessDays.id),
+    )
+    .where(
+      and(
+        eq(schema.customerTransactions.customerId, customerId),
+        ne(schema.customerTransactions.transactionType, 'OMC Sale'),
+      ),
+    )
     .orderBy(schema.customerTransactions.createdAt);
   return c.json({ success: true, data: list });
 });
@@ -398,7 +514,10 @@ transactionsRouter.get('/customers/:id/vehicles', async (c) => {
   const activeOnly = c.req.query('activeOnly') !== 'false';
   const customer = await new DrizzleCustomerRepository(db).findById(customerId);
   if (!customer || customer.organizationId !== user.organizationId) {
-    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Customer not found' } }, 404);
+    return c.json(
+      { success: false, error: { code: 'NOT_FOUND', message: 'Customer not found' } },
+      404,
+    );
   }
   const rows = await db
     .select({
@@ -466,7 +585,10 @@ transactionsRouter.get('/vehicles', async (c) => {
 transactionsRouter.post('/customers/:id/vehicles', async (c) => {
   const user = c.var.user;
   if (!canManageCustomers(user.role)) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } }, 403);
+    return c.json(
+      { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } },
+      403,
+    );
   }
   const body = await c.req.json().catch(() => ({}));
   const result = await runInTransaction(c.var.db, (tx, events) =>
@@ -482,7 +604,10 @@ transactionsRouter.post('/customers/:id/vehicles', async (c) => {
 transactionsRouter.put('/vehicles/:id', async (c) => {
   const user = c.var.user;
   if (!canManageCustomers(user.role)) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } }, 403);
+    return c.json(
+      { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } },
+      403,
+    );
   }
   const body = await c.req.json().catch(() => ({}));
   const result = await runInTransaction(c.var.db, (tx, events) =>
@@ -498,7 +623,10 @@ transactionsRouter.put('/vehicles/:id', async (c) => {
 transactionsRouter.delete('/vehicles/:id', async (c) => {
   const user = c.var.user;
   if (!canArchiveParty(user.role)) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } }, 403);
+    return c.json(
+      { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } },
+      403,
+    );
   }
   const result = await runInTransaction(c.var.db, (tx, events) =>
     new UpdateVehicle({
@@ -557,13 +685,25 @@ transactionsRouter.get('/vehicles/search', async (c) => {
 transactionsRouter.get('/expense-categories', async (c) => {
   const db = c.var.db;
   const user = c.var.user;
-  let list = await db.select().from(schema.expenseCategories).where(eq(schema.expenseCategories.organizationId, user.organizationId));
+  let list = await db
+    .select()
+    .from(schema.expenseCategories)
+    .where(eq(schema.expenseCategories.organizationId, user.organizationId));
   if (list.length === 0) {
     await db
       .insert(schema.expenseCategories)
-      .values(DEFAULT_EXPENSE_CATEGORIES.map((name) => ({ organizationId: user.organizationId, name, isSystem: true })))
+      .values(
+        DEFAULT_EXPENSE_CATEGORIES.map((name) => ({
+          organizationId: user.organizationId,
+          name,
+          isSystem: true,
+        })),
+      )
       .onConflictDoNothing();
-    list = await db.select().from(schema.expenseCategories).where(eq(schema.expenseCategories.organizationId, user.organizationId));
+    list = await db
+      .select()
+      .from(schema.expenseCategories)
+      .where(eq(schema.expenseCategories.organizationId, user.organizationId));
   }
   return c.json({ success: true, data: list });
 });
@@ -573,23 +713,46 @@ transactionsRouter.post('/expense-categories', async (c) => {
   const db = c.var.db;
   const user = c.var.user;
   if (!canManageExpenseCategory(user.role)) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } }, 403);
+    return c.json(
+      { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } },
+      403,
+    );
   }
   const body = await c.req.json().catch(() => ({}));
   const name = String(body?.name ?? '').trim();
   if (!name) {
-    return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Category name is required' } }, 400);
+    return c.json(
+      { success: false, error: { code: 'VALIDATION_ERROR', message: 'Category name is required' } },
+      400,
+    );
   }
   if (name.length > 100) {
-    return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Category name is too long (max 100)' } }, 400);
+    return c.json(
+      {
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: 'Category name is too long (max 100)' },
+      },
+      400,
+    );
   }
   const [dupe] = await db
     .select({ id: schema.expenseCategories.id })
     .from(schema.expenseCategories)
-    .where(and(eq(schema.expenseCategories.organizationId, user.organizationId), ilike(schema.expenseCategories.name, name)))
+    .where(
+      and(
+        eq(schema.expenseCategories.organizationId, user.organizationId),
+        ilike(schema.expenseCategories.name, name),
+      ),
+    )
     .limit(1);
   if (dupe) {
-    return c.json({ success: false, error: { code: 'CONFLICT', message: 'A category with this name already exists' } }, 409);
+    return c.json(
+      {
+        success: false,
+        error: { code: 'CONFLICT', message: 'A category with this name already exists' },
+      },
+      409,
+    );
   }
   const [created] = await db
     .insert(schema.expenseCategories)
@@ -605,37 +768,74 @@ transactionsRouter.put('/expense-categories/:id', async (c) => {
   const db = c.var.db;
   const user = c.var.user;
   if (!canManageExpenseCategory(user.role)) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } }, 403);
+    return c.json(
+      { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } },
+      403,
+    );
   }
   const id = c.req.param('id');
   const body = await c.req.json().catch(() => ({}));
   const name = String(body?.name ?? '').trim();
   if (!name) {
-    return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Category name is required' } }, 400);
+    return c.json(
+      { success: false, error: { code: 'VALIDATION_ERROR', message: 'Category name is required' } },
+      400,
+    );
   }
   if (name.length > 100) {
-    return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Category name is too long (max 100)' } }, 400);
+    return c.json(
+      {
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: 'Category name is too long (max 100)' },
+      },
+      400,
+    );
   }
   const [existing] = await db
     .select()
     .from(schema.expenseCategories)
-    .where(and(eq(schema.expenseCategories.id, id), eq(schema.expenseCategories.organizationId, user.organizationId)))
+    .where(
+      and(
+        eq(schema.expenseCategories.id, id),
+        eq(schema.expenseCategories.organizationId, user.organizationId),
+      ),
+    )
     .limit(1);
   if (!existing) {
-    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Category not found' } }, 404);
+    return c.json(
+      { success: false, error: { code: 'NOT_FOUND', message: 'Category not found' } },
+      404,
+    );
   }
   const [dupe] = await db
     .select({ id: schema.expenseCategories.id })
     .from(schema.expenseCategories)
-    .where(and(eq(schema.expenseCategories.organizationId, user.organizationId), ilike(schema.expenseCategories.name, name), ne(schema.expenseCategories.id, id)))
+    .where(
+      and(
+        eq(schema.expenseCategories.organizationId, user.organizationId),
+        ilike(schema.expenseCategories.name, name),
+        ne(schema.expenseCategories.id, id),
+      ),
+    )
     .limit(1);
   if (dupe) {
-    return c.json({ success: false, error: { code: 'CONFLICT', message: 'A category with this name already exists' } }, 409);
+    return c.json(
+      {
+        success: false,
+        error: { code: 'CONFLICT', message: 'A category with this name already exists' },
+      },
+      409,
+    );
   }
   const [updated] = await db
     .update(schema.expenseCategories)
     .set({ name })
-    .where(and(eq(schema.expenseCategories.id, id), eq(schema.expenseCategories.organizationId, user.organizationId)))
+    .where(
+      and(
+        eq(schema.expenseCategories.id, id),
+        eq(schema.expenseCategories.organizationId, user.organizationId),
+      ),
+    )
     .returning();
   return c.json({ success: true, data: updated });
 });
@@ -648,13 +848,25 @@ transactionsRouter.put('/expense-categories/:id', async (c) => {
 transactionsRouter.get('/income-categories', async (c) => {
   const db = c.var.db;
   const user = c.var.user;
-  let list = await db.select().from(schema.incomeCategories).where(eq(schema.incomeCategories.organizationId, user.organizationId));
+  let list = await db
+    .select()
+    .from(schema.incomeCategories)
+    .where(eq(schema.incomeCategories.organizationId, user.organizationId));
   if (list.length === 0) {
     await db
       .insert(schema.incomeCategories)
-      .values(DEFAULT_INCOME_CATEGORIES.map((name) => ({ organizationId: user.organizationId, name, isSystem: true })))
+      .values(
+        DEFAULT_INCOME_CATEGORIES.map((name) => ({
+          organizationId: user.organizationId,
+          name,
+          isSystem: true,
+        })),
+      )
       .onConflictDoNothing();
-    list = await db.select().from(schema.incomeCategories).where(eq(schema.incomeCategories.organizationId, user.organizationId));
+    list = await db
+      .select()
+      .from(schema.incomeCategories)
+      .where(eq(schema.incomeCategories.organizationId, user.organizationId));
   }
   return c.json({ success: true, data: list });
 });
@@ -663,22 +875,48 @@ transactionsRouter.post('/income-categories', async (c) => {
   const db = c.var.db;
   const user = c.var.user;
   if (!canManageExpenseCategory(user.role)) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } }, 403);
+    return c.json(
+      { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } },
+      403,
+    );
   }
   const body = await c.req.json().catch(() => ({}));
   const name = String(body?.name ?? '').trim();
   if (!name || name.length > 100) {
-    return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Category name is required (max 100)' } }, 400);
+    return c.json(
+      {
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: 'Category name is required (max 100)' },
+      },
+      400,
+    );
   }
   const [dupe] = await db
     .select({ id: schema.incomeCategories.id })
     .from(schema.incomeCategories)
-    .where(and(eq(schema.incomeCategories.organizationId, user.organizationId), ilike(schema.incomeCategories.name, name)))
+    .where(
+      and(
+        eq(schema.incomeCategories.organizationId, user.organizationId),
+        ilike(schema.incomeCategories.name, name),
+      ),
+    )
     .limit(1);
-  if (dupe) return c.json({ success: false, error: { code: 'CONFLICT', message: 'A category with this name already exists' } }, 409);
+  if (dupe)
+    return c.json(
+      {
+        success: false,
+        error: { code: 'CONFLICT', message: 'A category with this name already exists' },
+      },
+      409,
+    );
   const [created] = await db
     .insert(schema.incomeCategories)
-    .values({ organizationId: user.organizationId, name, taxConfig: body?.taxConfig ?? null, isSystem: false })
+    .values({
+      organizationId: user.organizationId,
+      name,
+      taxConfig: body?.taxConfig ?? null,
+      isSystem: false,
+    })
     .returning();
   return c.json({ success: true, data: created });
 });
@@ -687,25 +925,45 @@ transactionsRouter.put('/income-categories/:id', async (c) => {
   const db = c.var.db;
   const user = c.var.user;
   if (!canManageExpenseCategory(user.role)) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } }, 403);
+    return c.json(
+      { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } },
+      403,
+    );
   }
   const id = c.req.param('id');
   const body = await c.req.json().catch(() => ({}));
   const set: Record<string, unknown> = {};
   if (body?.name != null) {
     const name = String(body.name).trim();
-    if (!name || name.length > 100) return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Invalid name' } }, 400);
+    if (!name || name.length > 100)
+      return c.json(
+        { success: false, error: { code: 'VALIDATION_ERROR', message: 'Invalid name' } },
+        400,
+      );
     set.name = name;
   }
   if (body?.taxConfig !== undefined) set.taxConfig = body.taxConfig;
   if (body?.isActive !== undefined) set.isActive = !!body.isActive;
-  if (Object.keys(set).length === 0) return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Nothing to update' } }, 400);
+  if (Object.keys(set).length === 0)
+    return c.json(
+      { success: false, error: { code: 'VALIDATION_ERROR', message: 'Nothing to update' } },
+      400,
+    );
   const [updated] = await db
     .update(schema.incomeCategories)
     .set(set)
-    .where(and(eq(schema.incomeCategories.id, id), eq(schema.incomeCategories.organizationId, user.organizationId)))
+    .where(
+      and(
+        eq(schema.incomeCategories.id, id),
+        eq(schema.incomeCategories.organizationId, user.organizationId),
+      ),
+    )
     .returning();
-  if (!updated) return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Category not found' } }, 404);
+  if (!updated)
+    return c.json(
+      { success: false, error: { code: 'NOT_FOUND', message: 'Category not found' } },
+      404,
+    );
   return c.json({ success: true, data: updated });
 });
 
@@ -713,11 +971,26 @@ transactionsRouter.put('/income-categories/:id', async (c) => {
 transactionsRouter.post('/income', async (c) => {
   const user = c.var.user;
   if (!canRecordIncome(user.role)) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions to record income' } }, 403);
+    return c.json(
+      {
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'Insufficient permissions to record income' },
+      },
+      403,
+    );
   }
   const body = await c.req.json().catch(() => ({}));
-  if (body?.stationId && !isAuthorizedForStation(user, { organizationId: user.organizationId, stationId: body.stationId })) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+  if (
+    body?.stationId &&
+    !isAuthorizedForStation(user, {
+      organizationId: user.organizationId,
+      stationId: body.stationId,
+    })
+  ) {
+    return c.json(
+      { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
+      403,
+    );
   }
   const clock = await loadStationClock(c.var.db, body?.stationId);
   // FI4 — place of supply: station state is the supplier side; the payer state
@@ -730,13 +1003,26 @@ transactionsRouter.post('/income', async (c) => {
       const [acc] = await tx
         .select({ t: schema.financialAccounts.accountType })
         .from(schema.financialAccounts)
-        .where(and(eq(schema.financialAccounts.id, body.accountId), eq(schema.financialAccounts.organizationId, user.organizationId)))
+        .where(
+          and(
+            eq(schema.financialAccounts.id, body.accountId),
+            eq(schema.financialAccounts.organizationId, user.organizationId),
+          ),
+        )
         .limit(1);
       const t = acc?.t;
-      if (t === 'BANK') { body.receivedInto = 'BANK'; body.affectsDrawer = false; }
-      else if (t === 'OWNER') { body.receivedInto = 'OWNER'; body.affectsDrawer = false; }
-      else if (t === 'PETTY_CASH') { body.receivedInto = 'SHIFT_CASH'; body.affectsDrawer = false; }
-      else if (t === 'CASH_IN_HAND') { body.receivedInto = 'SHIFT_CASH'; }
+      if (t === 'BANK') {
+        body.receivedInto = 'BANK';
+        body.affectsDrawer = false;
+      } else if (t === 'OWNER') {
+        body.receivedInto = 'OWNER';
+        body.affectsDrawer = false;
+      } else if (t === 'PETTY_CASH') {
+        body.receivedInto = 'SHIFT_CASH';
+        body.affectsDrawer = false;
+      } else if (t === 'CASH_IN_HAND') {
+        body.receivedInto = 'SHIFT_CASH';
+      }
     }
     const r = await new RecordIncome({
       income: new DrizzleIncomeRepository(tx),
@@ -744,8 +1030,12 @@ transactionsRouter.post('/income', async (c) => {
       businessDays: new DrizzleBusinessDayRepository(tx),
       incomeCategories: new DrizzleIncomeCategoryRepository(tx),
       events,
-    }).execute({ ...body, supplierStateCode: supplierStateCode ?? undefined }, buildContext(user, { stationId: body?.stationId, ...clock }));
-    if (r.success) await new LedgerPostingService(tx).postIncome(user.organizationId, r.data, body?.accountId);
+    }).execute(
+      { ...body, supplierStateCode: supplierStateCode ?? undefined },
+      buildContext(user, { stationId: body?.stationId, ...clock }),
+    );
+    if (r.success)
+      await new LedgerPostingService(tx).postIncome(user.organizationId, r.data, body?.accountId);
     return r;
   });
   return sendResult(c, result);
@@ -754,15 +1044,28 @@ transactionsRouter.post('/income', async (c) => {
 transactionsRouter.post('/income/:id/void', async (c) => {
   const user = c.var.user;
   if (!canVoidExpense(user.role)) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions to void income' } }, 403);
+    return c.json(
+      {
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'Insufficient permissions to void income' },
+      },
+      403,
+    );
   }
   const id = c.req.param('id');
   const body = await c.req.json().catch(() => ({}));
   if (!(await belongsToOrg(c.var.db, schema.otherIncome, id, user.organizationId))) {
-    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Income entry not found' } }, 404);
+    return c.json(
+      { success: false, error: { code: 'NOT_FOUND', message: 'Income entry not found' } },
+      404,
+    );
   }
   const result = await runInTransaction(c.var.db, async (tx, events) => {
-    const r = await new VoidIncome({ income: new DrizzleIncomeRepository(tx), shifts: new DrizzleShiftRepository(tx), events }).execute({ id, reason: body?.reason }, buildContext(user));
+    const r = await new VoidIncome({
+      income: new DrizzleIncomeRepository(tx),
+      shifts: new DrizzleShiftRepository(tx),
+      events,
+    }).execute({ id, reason: body?.reason }, buildContext(user));
     if (r.success) await new LedgerPostingService(tx).reverseIncome(id);
     return r;
   });
@@ -804,12 +1107,14 @@ transactionsRouter.get('/income', async (c) => {
     })
     .from(schema.otherIncome)
     .innerJoin(schema.businessDays, eq(schema.otherIncome.businessDayId, schema.businessDays.id))
-    .leftJoin(schema.incomeCategories, eq(schema.incomeCategories.id, schema.otherIncome.categoryId))
+    .leftJoin(
+      schema.incomeCategories,
+      eq(schema.incomeCategories.id, schema.otherIncome.categoryId),
+    )
     .where(and(...conds))
     .orderBy(desc(schema.otherIncome.createdAt));
   return c.json({ success: true, data: rows });
 });
-
 
 /**
  * FI4 — GST-on-income register: every GST-bearing income entry in the window
@@ -849,7 +1154,10 @@ transactionsRouter.get('/income/gst-register', async (c) => {
     })
     .from(schema.otherIncome)
     .innerJoin(schema.businessDays, eq(schema.otherIncome.businessDayId, schema.businessDays.id))
-    .leftJoin(schema.incomeCategories, eq(schema.incomeCategories.id, schema.otherIncome.categoryId))
+    .leftJoin(
+      schema.incomeCategories,
+      eq(schema.incomeCategories.id, schema.otherIncome.categoryId),
+    )
     .where(and(...conds))
     .orderBy(desc(schema.businessDays.businessDate));
   const data = rows.map((r) => ({
@@ -864,11 +1172,26 @@ transactionsRouter.get('/income/gst-register', async (c) => {
 transactionsRouter.post('/expenses', async (c) => {
   const user = c.var.user;
   if (!canCreateExpense(user.role)) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions to record expenses' } }, 403);
+    return c.json(
+      {
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'Insufficient permissions to record expenses' },
+      },
+      403,
+    );
   }
   const body = await c.req.json().catch(() => ({}));
-  if (body?.stationId && !isAuthorizedForStation(user, { organizationId: user.organizationId, stationId: body.stationId })) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+  if (
+    body?.stationId &&
+    !isAuthorizedForStation(user, {
+      organizationId: user.organizationId,
+      stationId: body.stationId,
+    })
+  ) {
+    return c.json(
+      { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
+      403,
+    );
   }
   const clock = await loadStationClock(c.var.db, body?.stationId);
   const result = await runInTransaction(c.var.db, async (tx, events) => {
@@ -879,13 +1202,26 @@ transactionsRouter.post('/expenses', async (c) => {
       const [acc] = await tx
         .select({ t: schema.financialAccounts.accountType })
         .from(schema.financialAccounts)
-        .where(and(eq(schema.financialAccounts.id, body.accountId), eq(schema.financialAccounts.organizationId, user.organizationId)))
+        .where(
+          and(
+            eq(schema.financialAccounts.id, body.accountId),
+            eq(schema.financialAccounts.organizationId, user.organizationId),
+          ),
+        )
         .limit(1);
       const t = acc?.t;
-      if (t === 'BANK') { body.paidFrom = 'BANK'; body.affectsDrawer = false; }
-      else if (t === 'OWNER') { body.paidFrom = 'OWNER'; body.affectsDrawer = false; }
-      else if (t === 'PETTY_CASH') { body.paidFrom = 'SHIFT_CASH'; body.affectsDrawer = false; }
-      else if (t === 'CASH_IN_HAND') { body.paidFrom = 'SHIFT_CASH'; }
+      if (t === 'BANK') {
+        body.paidFrom = 'BANK';
+        body.affectsDrawer = false;
+      } else if (t === 'OWNER') {
+        body.paidFrom = 'OWNER';
+        body.affectsDrawer = false;
+      } else if (t === 'PETTY_CASH') {
+        body.paidFrom = 'SHIFT_CASH';
+        body.affectsDrawer = false;
+      } else if (t === 'CASH_IN_HAND') {
+        body.paidFrom = 'SHIFT_CASH';
+      }
     }
     const r = await new RecordExpense({
       expenses: new DrizzleExpenseRepository(tx),
@@ -893,7 +1229,8 @@ transactionsRouter.post('/expenses', async (c) => {
       businessDays: new DrizzleBusinessDayRepository(tx),
       events,
     }).execute(body, buildContext(user, { stationId: body?.stationId, ...clock }));
-    if (r.success) await new LedgerPostingService(tx).postExpense(user.organizationId, r.data, body?.accountId);
+    if (r.success)
+      await new LedgerPostingService(tx).postExpense(user.organizationId, r.data, body?.accountId);
     return r;
   });
   return sendResult(c, result);
@@ -902,15 +1239,28 @@ transactionsRouter.post('/expenses', async (c) => {
 transactionsRouter.post('/expenses/:id/void', async (c) => {
   const user = c.var.user;
   if (!canVoidExpense(user.role)) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions to void expenses' } }, 403);
+    return c.json(
+      {
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'Insufficient permissions to void expenses' },
+      },
+      403,
+    );
   }
   const id = c.req.param('id');
   const body = await c.req.json().catch(() => ({}));
   if (!(await belongsToOrg(c.var.db, schema.expenses, id, user.organizationId))) {
-    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Expense not found' } }, 404);
+    return c.json(
+      { success: false, error: { code: 'NOT_FOUND', message: 'Expense not found' } },
+      404,
+    );
   }
   const result = await runInTransaction(c.var.db, async (tx, events) => {
-    const r = await new VoidExpense({ expenses: new DrizzleExpenseRepository(tx), shifts: new DrizzleShiftRepository(tx), events }).execute({ id, reason: body?.reason }, buildContext(user));
+    const r = await new VoidExpense({
+      expenses: new DrizzleExpenseRepository(tx),
+      shifts: new DrizzleShiftRepository(tx),
+      events,
+    }).execute({ id, reason: body?.reason }, buildContext(user));
     if (r.success) await new LedgerPostingService(tx).reverseExpense(id);
     return r;
   });
@@ -925,10 +1275,25 @@ transactionsRouter.post('/collections', async (c) => {
   // desk operations and exclude the mobile-only Attendant.
   const isHandoverCreditSale = body?.paymentMethod === 'Credit' || body?.paymentMethod === 'OMC';
   if (isHandoverCreditSale ? !canRecordHandover(user.role) : !canRecordCollection(user.role)) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions to record collections' } }, 403);
+    return c.json(
+      {
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'Insufficient permissions to record collections' },
+      },
+      403,
+    );
   }
-  if (body?.stationId && !isAuthorizedForStation(user, { organizationId: user.organizationId, stationId: body.stationId })) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+  if (
+    body?.stationId &&
+    !isAuthorizedForStation(user, {
+      organizationId: user.organizationId,
+      stationId: body.stationId,
+    })
+  ) {
+    return c.json(
+      { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
+      403,
+    );
   }
   const clock = await loadStationClock(c.var.db, body?.stationId);
   // A "Credit" collection is a credit SALE (a receivable), not a payment. It is
@@ -956,7 +1321,8 @@ transactionsRouter.post('/collections', async (c) => {
         businessDays: new DrizzleBusinessDayRepository(tx),
         events,
       }).execute(body, buildContext(user, { stationId: body?.stationId, ...clock }));
-      if (r.success) await new LedgerPostingService(tx).postOmcCardSale(user.organizationId, r.data);
+      if (r.success)
+        await new LedgerPostingService(tx).postOmcCardSale(user.organizationId, r.data);
       return r;
     });
     return sendResult(c, result);
@@ -971,7 +1337,12 @@ transactionsRouter.post('/collections', async (c) => {
       docNumbers,
       events,
     }).execute(body, buildContext(user, { stationId: body?.stationId, ...clock }));
-    if (r.success) await new LedgerPostingService(tx).postCollection(user.organizationId, r.data, body?.accountId);
+    if (r.success)
+      await new LedgerPostingService(tx).postCollection(
+        user.organizationId,
+        r.data,
+        body?.accountId,
+      );
     return r;
   });
   return sendResult(c, result);
@@ -983,21 +1354,48 @@ transactionsRouter.post('/collections', async (c) => {
  * through its owning business day — to a station the caller may act on within
  * their organization. Returns an error Response, or null when authorized.
  */
-async function authorizeLedgerVoid(db: DbClient, user: { organizationId: string; role: Role; assignedStationIds: string[] }, id: string) {
+async function authorizeLedgerVoid(
+  db: DbClient,
+  user: { organizationId: string; role: Role; assignedStationIds: string[] },
+  id: string,
+) {
   if (!canRecordHandover(user.role as Role)) {
-    return Response.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions to void this entry' } }, { status: 403 });
+    return Response.json(
+      {
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'Insufficient permissions to void this entry' },
+      },
+      { status: 403 },
+    );
   }
   const [row] = await db
-    .select({ organizationId: schema.businessDays.organizationId, stationId: schema.businessDays.stationId })
+    .select({
+      organizationId: schema.businessDays.organizationId,
+      stationId: schema.businessDays.stationId,
+    })
     .from(schema.customerTransactions)
-    .innerJoin(schema.businessDays, eq(schema.businessDays.id, schema.customerTransactions.businessDayId))
+    .innerJoin(
+      schema.businessDays,
+      eq(schema.businessDays.id, schema.customerTransactions.businessDayId),
+    )
     .where(eq(schema.customerTransactions.id, id))
     .limit(1);
   if (!row || row.organizationId !== user.organizationId) {
-    return Response.json({ success: false, error: { code: 'NOT_FOUND', message: 'Entry not found' } }, { status: 404 });
+    return Response.json(
+      { success: false, error: { code: 'NOT_FOUND', message: 'Entry not found' } },
+      { status: 404 },
+    );
   }
-  if (!isAuthorizedForStation(user as any, { organizationId: user.organizationId, stationId: row.stationId })) {
-    return Response.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, { status: 403 });
+  if (
+    !isAuthorizedForStation(user as any, {
+      organizationId: user.organizationId,
+      stationId: row.stationId,
+    })
+  ) {
+    return Response.json(
+      { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
+      { status: 403 },
+    );
   }
   return null;
 }
@@ -1041,7 +1439,13 @@ transactionsRouter.delete('/omc-card-sales/:id', async (c) => {
 transactionsRouter.post('/purchases', async (c) => {
   const user = c.var.user;
   if (!canRecordPurchase(user.role)) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions to record purchases' } }, 403);
+    return c.json(
+      {
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'Insufficient permissions to record purchases' },
+      },
+      403,
+    );
   }
   const body = await c.req.json().catch(() => ({}));
   const clock = await loadStationClock(c.var.db, body?.stationId);
@@ -1084,13 +1488,26 @@ transactionsRouter.post('/purchases', async (c) => {
         const [acc] = await tx
           .select({ t: schema.financialAccounts.accountType })
           .from(schema.financialAccounts)
-          .where(and(eq(schema.financialAccounts.id, accountId), eq(schema.financialAccounts.organizationId, user.organizationId)))
+          .where(
+            and(
+              eq(schema.financialAccounts.id, accountId),
+              eq(schema.financialAccounts.organizationId, user.organizationId),
+            ),
+          )
           .limit(1);
         const t = acc?.t;
-        if (t === 'BANK') { paymentBody.paidFrom = 'BANK'; paymentBody.affectsDrawer = false; }
-        else if (t === 'OWNER') { paymentBody.paidFrom = 'OWNER'; paymentBody.affectsDrawer = false; }
-        else if (t === 'PETTY_CASH') { paymentBody.paidFrom = 'SHIFT_CASH'; paymentBody.affectsDrawer = false; }
-        else if (t === 'CASH_IN_HAND') { paymentBody.paidFrom = 'SHIFT_CASH'; }
+        if (t === 'BANK') {
+          paymentBody.paidFrom = 'BANK';
+          paymentBody.affectsDrawer = false;
+        } else if (t === 'OWNER') {
+          paymentBody.paidFrom = 'OWNER';
+          paymentBody.affectsDrawer = false;
+        } else if (t === 'PETTY_CASH') {
+          paymentBody.paidFrom = 'SHIFT_CASH';
+          paymentBody.affectsDrawer = false;
+        } else if (t === 'CASH_IN_HAND') {
+          paymentBody.paidFrom = 'SHIFT_CASH';
+        }
       }
       const pr = await new RecordSupplierPayment({
         supplierTxns: new DrizzleSupplierTransactionRepository(tx),
@@ -1098,14 +1515,21 @@ transactionsRouter.post('/purchases', async (c) => {
         shifts: new DrizzleShiftRepository(tx),
         businessDays: new DrizzleBusinessDayRepository(tx),
         events,
-      }).execute(paymentBody, buildContext(user, {
-        stationId: body?.stationId,
-        correlationId: trace.correlationId,
-        groupingRole: 'related',
-        ...clock,
-      }));
+      }).execute(
+        paymentBody,
+        buildContext(user, {
+          stationId: body?.stationId,
+          correlationId: trace.correlationId,
+          groupingRole: 'related',
+          ...clock,
+        }),
+      );
       if (!pr.success) return pr; // roll the whole purchase back
-      await new LedgerPostingService(tx).postSupplierPayment(user.organizationId, pr.data, accountId);
+      await new LedgerPostingService(tx).postSupplierPayment(
+        user.organizationId,
+        pr.data,
+        accountId,
+      );
     }
 
     return r;
@@ -1116,7 +1540,16 @@ transactionsRouter.post('/purchases', async (c) => {
 transactionsRouter.post('/supplier-payments', async (c) => {
   const user = c.var.user;
   if (!canRecordPurchase(user.role)) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions to record supplier payments' } }, 403);
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: 'FORBIDDEN',
+          message: 'Insufficient permissions to record supplier payments',
+        },
+      },
+      403,
+    );
   }
   const body = await c.req.json().catch(() => ({}));
   const clock = await loadStationClock(c.var.db, body?.stationId);
@@ -1127,13 +1560,26 @@ transactionsRouter.post('/supplier-payments', async (c) => {
       const [acc] = await tx
         .select({ t: schema.financialAccounts.accountType })
         .from(schema.financialAccounts)
-        .where(and(eq(schema.financialAccounts.id, body.accountId), eq(schema.financialAccounts.organizationId, user.organizationId)))
+        .where(
+          and(
+            eq(schema.financialAccounts.id, body.accountId),
+            eq(schema.financialAccounts.organizationId, user.organizationId),
+          ),
+        )
         .limit(1);
       const t = acc?.t;
-      if (t === 'BANK') { body.paidFrom = 'BANK'; body.affectsDrawer = false; }
-      else if (t === 'OWNER') { body.paidFrom = 'OWNER'; body.affectsDrawer = false; }
-      else if (t === 'PETTY_CASH') { body.paidFrom = 'SHIFT_CASH'; body.affectsDrawer = false; }
-      else if (t === 'CASH_IN_HAND') { body.paidFrom = 'SHIFT_CASH'; }
+      if (t === 'BANK') {
+        body.paidFrom = 'BANK';
+        body.affectsDrawer = false;
+      } else if (t === 'OWNER') {
+        body.paidFrom = 'OWNER';
+        body.affectsDrawer = false;
+      } else if (t === 'PETTY_CASH') {
+        body.paidFrom = 'SHIFT_CASH';
+        body.affectsDrawer = false;
+      } else if (t === 'CASH_IN_HAND') {
+        body.paidFrom = 'SHIFT_CASH';
+      }
     }
     const r = await new RecordSupplierPayment({
       supplierTxns: new DrizzleSupplierTransactionRepository(tx),
@@ -1142,7 +1588,12 @@ transactionsRouter.post('/supplier-payments', async (c) => {
       businessDays: new DrizzleBusinessDayRepository(tx),
       events,
     }).execute(body, buildContext(user, { stationId: body?.stationId, ...clock }));
-    if (r.success) await new LedgerPostingService(tx).postSupplierPayment(user.organizationId, r.data, body?.accountId);
+    if (r.success)
+      await new LedgerPostingService(tx).postSupplierPayment(
+        user.organizationId,
+        r.data,
+        body?.accountId,
+      );
     return r;
   });
   return sendResult(c, result);
@@ -1158,7 +1609,12 @@ transactionsRouter.post('/sales', async (c) => {
   const result = await runInTransaction(c.var.db, async (tx, events) => {
     const trace = createCommandTrace();
     let customerId: string | null = body.customerId ?? null;
-    let buyerDetails: { name: string; phone: string | null; gstin: string | null; stateCode: string | null } | null = null;
+    let buyerDetails: {
+      name: string;
+      phone: string | null;
+      gstin: string | null;
+      stateCode: string | null;
+    } | null = null;
 
     // Ad-hoc walk-in buyer (no saved customer selected). Either save/dedup them
     // into the customer registry (link customerId) or stash bill-to on the sale.
@@ -1166,21 +1622,30 @@ transactionsRouter.post('/sales', async (c) => {
       const name = rawBuyer.name.trim();
       const phone = (typeof rawBuyer.phone === 'string' && rawBuyer.phone.trim()) || null;
       const gstin = (typeof rawBuyer.gstin === 'string' && rawBuyer.gstin.trim()) || null;
-      const stateCode = (typeof rawBuyer.stateCode === 'string' && rawBuyer.stateCode.trim()) || null;
+      const stateCode =
+        (typeof rawBuyer.stateCode === 'string' && rawBuyer.stateCode.trim()) || null;
       if (saveAsCustomer) {
         const custRepo = new DrizzleCustomerRepository(tx);
         const digits = (v: string | null) => (v ? v.replace(/\D/g, '') : '');
-        const existing = (await custRepo.listByOrganization(user.organizationId, false)).find((x) => {
-          const md = (x.metadata as Record<string, any>) || {};
-          if (gstin && md.gstin && String(md.gstin).toLowerCase() === gstin.toLowerCase()) return true;
-          if (phone && x.phone && digits(x.phone) === digits(phone)) return true;
-          return x.name.trim().toLowerCase() === name.toLowerCase();
-        });
+        const existing = (await custRepo.listByOrganization(user.organizationId, false)).find(
+          (x) => {
+            const md = (x.metadata as Record<string, any>) || {};
+            if (gstin && md.gstin && String(md.gstin).toLowerCase() === gstin.toLowerCase())
+              return true;
+            if (phone && x.phone && digits(x.phone) === digits(phone)) return true;
+            return x.name.trim().toLowerCase() === name.toLowerCase();
+          },
+        );
         if (existing) {
           customerId = existing.id;
         } else {
           const created = await new CreateCustomer({ repository: custRepo, events }).execute(
-            { name, customerType: 'Regular', phone, metadata: { ...(gstin ? { gstin } : {}), ...(stateCode ? { stateCode } : {}) } },
+            {
+              name,
+              customerType: 'Regular',
+              phone,
+              metadata: { ...(gstin ? { gstin } : {}), ...(stateCode ? { stateCode } : {}) },
+            },
             buildContext(user, { correlationId: trace.correlationId, groupingRole: 'related' }),
           );
           if (!created.success) return created;
@@ -1227,7 +1692,14 @@ transactionsRouter.get('/expenses', async (c) => {
     .leftJoin(schema.expenseCategories, eq(schema.expenses.categoryId, schema.expenseCategories.id))
     .where(eq(schema.businessDays.organizationId, user.organizationId))
     .orderBy(desc(schema.expenses.createdAt));
-  return c.json({ success: true, data: rows.map((r) => ({ ...r.expense, businessDate: r.businessDate, categoryName: r.categoryName ?? 'General' })) });
+  return c.json({
+    success: true,
+    data: rows.map((r) => ({
+      ...r.expense,
+      businessDate: r.businessDate,
+      categoryName: r.categoryName ?? 'General',
+    })),
+  });
 });
 
 transactionsRouter.get('/purchases', async (c) => {
@@ -1255,7 +1727,16 @@ transactionsRouter.get('/purchases', async (c) => {
     .leftJoin(schema.suppliers, eq(schema.purchases.supplierId, schema.suppliers.id))
     .where(eq(schema.businessDays.organizationId, user.organizationId))
     .orderBy(desc(schema.purchases.createdAt));
-  return c.json({ success: true, data: rows.map((r) => ({ ...r.purchase, businessDate: r.businessDate, supplierName: r.supplierName ?? 'Unknown Supplier', itemsSummary: r.itemsSummary, itemCount: Number(r.itemCount || 0) })) });
+  return c.json({
+    success: true,
+    data: rows.map((r) => ({
+      ...r.purchase,
+      businessDate: r.businessDate,
+      supplierName: r.supplierName ?? 'Unknown Supplier',
+      itemsSummary: r.itemsSummary,
+      itemCount: Number(r.itemCount || 0),
+    })),
+  });
 });
 
 transactionsRouter.get('/purchases/:id/items', async (c) => {
@@ -1273,9 +1754,22 @@ transactionsRouter.get('/purchases/:id/items', async (c) => {
     .innerJoin(schema.purchases, eq(schema.purchaseItems.purchaseId, schema.purchases.id))
     .innerJoin(schema.businessDays, eq(schema.purchases.businessDayId, schema.businessDays.id))
     .leftJoin(schema.products, eq(schema.purchaseItems.productId, schema.products.id))
-    .where(and(eq(schema.purchaseItems.purchaseId, purchaseId), eq(schema.businessDays.organizationId, user.organizationId)))
+    .where(
+      and(
+        eq(schema.purchaseItems.purchaseId, purchaseId),
+        eq(schema.businessDays.organizationId, user.organizationId),
+      ),
+    )
     .orderBy(schema.purchaseItems.createdAt);
-  return c.json({ success: true, data: rows.map((r) => ({ ...r.item, productName: r.productName ?? 'Product', productCode: r.productCode ?? null, unit: r.unit ?? null })) });
+  return c.json({
+    success: true,
+    data: rows.map((r) => ({
+      ...r.item,
+      productName: r.productName ?? 'Product',
+      productCode: r.productCode ?? null,
+      unit: r.unit ?? null,
+    })),
+  });
 });
 
 // GST input-tax-credit (ITC) register: GST purchase lines over a date range.
@@ -1295,7 +1789,9 @@ transactionsRouter.get('/sales/tax-register', async (c) => {
   const category = c.req.query('taxCategory');
   const conds = [
     eq(schema.businessDays.organizationId, user.organizationId),
-    category ? eq(schema.saleItems.taxCategory, category) : ne(schema.saleItems.taxCategory, 'NON_TAXABLE'),
+    category
+      ? eq(schema.saleItems.taxCategory, category)
+      : ne(schema.saleItems.taxCategory, 'NON_TAXABLE'),
   ];
   if (stationId) conds.push(eq(schema.businessDays.stationId, stationId));
   if (from) conds.push(gte(schema.businessDays.businessDate, from));
@@ -1345,7 +1841,10 @@ transactionsRouter.get('/purchases/gst-register', async (c) => {
   const user = c.var.user;
   const from = c.req.query('from');
   const to = c.req.query('to');
-  const conds = [eq(schema.businessDays.organizationId, user.organizationId), eq(schema.purchaseItems.taxCategory, 'GST')];
+  const conds = [
+    eq(schema.businessDays.organizationId, user.organizationId),
+    eq(schema.purchaseItems.taxCategory, 'GST'),
+  ];
   if (from) conds.push(gte(schema.businessDays.businessDate, from));
   if (to) conds.push(lte(schema.businessDays.businessDate, to));
   const rows = await db
@@ -1393,7 +1892,14 @@ transactionsRouter.get('/collections', async (c) => {
     .leftJoin(schema.customers, eq(schema.collections.customerId, schema.customers.id))
     .where(eq(schema.businessDays.organizationId, user.organizationId))
     .orderBy(desc(schema.collections.createdAt));
-  return c.json({ success: true, data: rows.map((r) => ({ ...r.collection, businessDate: r.businessDate, customerName: r.customerName ?? 'Walk-in Customer' })) });
+  return c.json({
+    success: true,
+    data: rows.map((r) => ({
+      ...r.collection,
+      businessDate: r.businessDate,
+      customerName: r.customerName ?? 'Walk-in Customer',
+    })),
+  });
 });
 
 // GET /transactions/credit-sales — org-wide credit-sale ledger debits (fuel-on-
@@ -1420,10 +1926,16 @@ transactionsRouter.get('/credit-sales', async (c) => {
       vehicleReg: schema.customerVehicles.registrationNumber,
     })
     .from(schema.customerTransactions)
-    .innerJoin(schema.businessDays, eq(schema.customerTransactions.businessDayId, schema.businessDays.id))
+    .innerJoin(
+      schema.businessDays,
+      eq(schema.customerTransactions.businessDayId, schema.businessDays.id),
+    )
     .leftJoin(schema.customers, eq(schema.customerTransactions.customerId, schema.customers.id))
     .leftJoin(schema.products, eq(schema.customerTransactions.productId, schema.products.id))
-    .leftJoin(schema.customerVehicles, eq(schema.customerTransactions.vehicleId, schema.customerVehicles.id))
+    .leftJoin(
+      schema.customerVehicles,
+      eq(schema.customerTransactions.vehicleId, schema.customerVehicles.id),
+    )
     .where(
       and(
         eq(schema.businessDays.organizationId, user.organizationId),
@@ -1431,7 +1943,10 @@ transactionsRouter.get('/credit-sales', async (c) => {
       ),
     )
     .orderBy(desc(schema.customerTransactions.createdAt));
-  return c.json({ success: true, data: rows.map((r) => ({ ...r, customerName: r.customerName ?? 'Unknown Customer' })) });
+  return c.json({
+    success: true,
+    data: rows.map((r) => ({ ...r, customerName: r.customerName ?? 'Unknown Customer' })),
+  });
 });
 
 // GET /transactions/money-movements?stationId=&from=&to=
@@ -1447,9 +1962,16 @@ transactionsRouter.get('/money-movements', async (c) => {
   const stationId = c.req.query('stationId');
   const from = c.req.query('from');
   const to = c.req.query('to');
-  if (!stationId) return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Missing stationId' } }, 400);
+  if (!stationId)
+    return c.json(
+      { success: false, error: { code: 'VALIDATION_ERROR', message: 'Missing stationId' } },
+      400,
+    );
   if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId })) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+    return c.json(
+      { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
+      403,
+    );
   }
   const dateConds = [
     eq(schema.businessDays.stationId, stationId),
@@ -1460,21 +1982,50 @@ transactionsRouter.get('/money-movements', async (c) => {
 
   const [collectionRows, expenseRows, paymentRows] = await Promise.all([
     db
-      .select({ id: schema.collections.id, amount: schema.collections.amount, paymentMethod: schema.collections.paymentMethod, createdAt: schema.collections.createdAt, businessDate: schema.businessDays.businessDate, customerName: schema.customers.name })
+      .select({
+        id: schema.collections.id,
+        amount: schema.collections.amount,
+        paymentMethod: schema.collections.paymentMethod,
+        createdAt: schema.collections.createdAt,
+        businessDate: schema.businessDays.businessDate,
+        customerName: schema.customers.name,
+      })
       .from(schema.collections)
       .innerJoin(schema.businessDays, eq(schema.collections.businessDayId, schema.businessDays.id))
       .leftJoin(schema.customers, eq(schema.customers.id, schema.collections.customerId))
       .where(and(...dateConds)),
     db
-      .select({ id: schema.expenses.id, amount: schema.expenses.amount, paidFrom: schema.expenses.paidFrom, description: schema.expenses.description, createdAt: schema.expenses.createdAt, businessDate: schema.businessDays.businessDate, categoryName: schema.expenseCategories.name })
+      .select({
+        id: schema.expenses.id,
+        amount: schema.expenses.amount,
+        paidFrom: schema.expenses.paidFrom,
+        description: schema.expenses.description,
+        createdAt: schema.expenses.createdAt,
+        businessDate: schema.businessDays.businessDate,
+        categoryName: schema.expenseCategories.name,
+      })
       .from(schema.expenses)
       .innerJoin(schema.businessDays, eq(schema.expenses.businessDayId, schema.businessDays.id))
-      .leftJoin(schema.expenseCategories, eq(schema.expenseCategories.id, schema.expenses.categoryId))
+      .leftJoin(
+        schema.expenseCategories,
+        eq(schema.expenseCategories.id, schema.expenses.categoryId),
+      )
       .where(and(ne(schema.expenses.status, 'VOIDED'), ...dateConds)),
     db
-      .select({ id: schema.supplierTransactions.id, amount: schema.supplierTransactions.amount, paidFrom: schema.supplierTransactions.paidFrom, notes: schema.supplierTransactions.notes, createdAt: schema.supplierTransactions.createdAt, businessDate: schema.businessDays.businessDate, supplierName: schema.suppliers.name })
+      .select({
+        id: schema.supplierTransactions.id,
+        amount: schema.supplierTransactions.amount,
+        paidFrom: schema.supplierTransactions.paidFrom,
+        notes: schema.supplierTransactions.notes,
+        createdAt: schema.supplierTransactions.createdAt,
+        businessDate: schema.businessDays.businessDate,
+        supplierName: schema.suppliers.name,
+      })
       .from(schema.supplierTransactions)
-      .innerJoin(schema.businessDays, eq(schema.supplierTransactions.businessDayId, schema.businessDays.id))
+      .innerJoin(
+        schema.businessDays,
+        eq(schema.supplierTransactions.businessDayId, schema.businessDays.id),
+      )
       .leftJoin(schema.suppliers, eq(schema.suppliers.id, schema.supplierTransactions.supplierId))
       .where(and(eq(schema.supplierTransactions.transactionType, 'Payment'), ...dateConds)),
   ]);
@@ -1482,7 +2033,16 @@ transactionsRouter.get('/money-movements', async (c) => {
   const accountForPaidFrom = (pf: string): 'Cash' | 'Bank' | 'Owner' =>
     pf === 'SHIFT_CASH' ? 'Cash' : pf === 'OWNER' ? 'Owner' : 'Bank';
 
-  type Movement = { id: string; date: string; createdAt: any; account: 'Cash' | 'Bank' | 'Owner'; direction: 'in' | 'out'; label: string; source: string; amount: number };
+  type Movement = {
+    id: string;
+    date: string;
+    createdAt: any;
+    account: 'Cash' | 'Bank' | 'Owner';
+    direction: 'in' | 'out';
+    label: string;
+    source: string;
+    amount: number;
+  };
   const movements: Movement[] = [];
 
   for (const r of collectionRows) {
@@ -1499,14 +2059,36 @@ transactionsRouter.get('/money-movements', async (c) => {
   }
   for (const r of expenseRows) {
     const account = accountForPaidFrom(r.paidFrom);
-    movements.push({ id: r.id, date: r.businessDate, createdAt: r.createdAt, account, direction: 'out', label: r.categoryName || r.description || 'Expense', source: 'Expense', amount: Number(r.amount) });
+    movements.push({
+      id: r.id,
+      date: r.businessDate,
+      createdAt: r.createdAt,
+      account,
+      direction: 'out',
+      label: r.categoryName || r.description || 'Expense',
+      source: 'Expense',
+      amount: Number(r.amount),
+    });
   }
   for (const r of paymentRows) {
     const account = accountForPaidFrom(r.paidFrom);
-    movements.push({ id: r.id, date: r.businessDate, createdAt: r.createdAt, account, direction: 'out', label: r.supplierName ? `Payment · ${r.supplierName}` : 'Supplier payment', source: 'Supplier Payment', amount: Number(r.amount) });
+    movements.push({
+      id: r.id,
+      date: r.businessDate,
+      createdAt: r.createdAt,
+      account,
+      direction: 'out',
+      label: r.supplierName ? `Payment · ${r.supplierName}` : 'Supplier payment',
+      source: 'Supplier Payment',
+      amount: Number(r.amount),
+    });
   }
 
-  movements.sort((a, b) => (b.date || '').localeCompare(a.date || '') || String(b.createdAt).localeCompare(String(a.createdAt)));
+  movements.sort(
+    (a, b) =>
+      (b.date || '').localeCompare(a.date || '') ||
+      String(b.createdAt).localeCompare(String(a.createdAt)),
+  );
 
   // Per-account opening balance = signed net (collections in − expenses/payments
   // out) for business days strictly before `from`, so the ledger's running
@@ -1521,30 +2103,48 @@ transactionsRouter.get('/money-movements', async (c) => {
     ];
     const [priorCollections, priorExpenses, priorPayments] = await Promise.all([
       db
-        .select({ paymentMethod: schema.collections.paymentMethod, total: sql<string>`COALESCE(SUM(${schema.collections.amount}), 0)` })
+        .select({
+          paymentMethod: schema.collections.paymentMethod,
+          total: sql<string>`COALESCE(SUM(${schema.collections.amount}), 0)`,
+        })
         .from(schema.collections)
-        .innerJoin(schema.businessDays, eq(schema.collections.businessDayId, schema.businessDays.id))
+        .innerJoin(
+          schema.businessDays,
+          eq(schema.collections.businessDayId, schema.businessDays.id),
+        )
         .where(and(...priorConds))
         .groupBy(schema.collections.paymentMethod),
       db
-        .select({ paidFrom: schema.expenses.paidFrom, total: sql<string>`COALESCE(SUM(${schema.expenses.amount}), 0)` })
+        .select({
+          paidFrom: schema.expenses.paidFrom,
+          total: sql<string>`COALESCE(SUM(${schema.expenses.amount}), 0)`,
+        })
         .from(schema.expenses)
         .innerJoin(schema.businessDays, eq(schema.expenses.businessDayId, schema.businessDays.id))
         .where(and(ne(schema.expenses.status, 'VOIDED'), ...priorConds))
         .groupBy(schema.expenses.paidFrom),
       db
-        .select({ paidFrom: schema.supplierTransactions.paidFrom, total: sql<string>`COALESCE(SUM(${schema.supplierTransactions.amount}), 0)` })
+        .select({
+          paidFrom: schema.supplierTransactions.paidFrom,
+          total: sql<string>`COALESCE(SUM(${schema.supplierTransactions.amount}), 0)`,
+        })
         .from(schema.supplierTransactions)
-        .innerJoin(schema.businessDays, eq(schema.supplierTransactions.businessDayId, schema.businessDays.id))
+        .innerJoin(
+          schema.businessDays,
+          eq(schema.supplierTransactions.businessDayId, schema.businessDays.id),
+        )
         .where(and(eq(schema.supplierTransactions.transactionType, 'Payment'), ...priorConds))
         .groupBy(schema.supplierTransactions.paidFrom),
     ]);
 
     const openMap: Record<'Cash' | 'Bank' | 'Owner', number> = { Cash: 0, Bank: 0, Owner: 0 };
-    for (const r of priorCollections) openMap[r.paymentMethod === 'Cash' ? 'Cash' : 'Bank'] += Number(r.total);
+    for (const r of priorCollections)
+      openMap[r.paymentMethod === 'Cash' ? 'Cash' : 'Bank'] += Number(r.total);
     for (const r of priorExpenses) openMap[accountForPaidFrom(r.paidFrom)] -= Number(r.total);
     for (const r of priorPayments) openMap[accountForPaidFrom(r.paidFrom)] -= Number(r.total);
-    (['Cash', 'Bank', 'Owner'] as const).forEach((account) => openings.push({ account, opening: openMap[account] }));
+    (['Cash', 'Bank', 'Owner'] as const).forEach((account) =>
+      openings.push({ account, opening: openMap[account] }),
+    );
   }
 
   return c.json({ success: true, data: { movements, openings } });
@@ -1562,7 +2162,10 @@ transactionsRouter.post('/sales/:id/invoice', async (c) => {
   const db = c.var.db;
   const user = c.var.user;
   if (!INVOICE_ROLES.has(user.role)) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } }, 403);
+    return c.json(
+      { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } },
+      403,
+    );
   }
   const saleId = c.req.param('id');
 
@@ -1584,8 +2187,16 @@ transactionsRouter.post('/sales/:id/invoice', async (c) => {
   if (!sale || sale.organizationId !== user.organizationId) {
     return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Sale not found' } }, 404);
   }
-  if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId: sale.stationId })) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+  if (
+    !isAuthorizedForStation(user, {
+      organizationId: user.organizationId,
+      stationId: sale.stationId,
+    })
+  ) {
+    return c.json(
+      { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
+      403,
+    );
   }
 
   const items = await db
@@ -1602,23 +2213,47 @@ transactionsRouter.post('/sales/:id/invoice', async (c) => {
     .innerJoin(schema.products, eq(schema.products.id, schema.saleItems.productId))
     .where(eq(schema.saleItems.saleId, saleId));
   if (items.length === 0) {
-    return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Sale has no line items to invoice' } }, 400);
+    return c.json(
+      {
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: 'Sale has no line items to invoice' },
+      },
+      400,
+    );
   }
 
-  let buyer: { customerId: string | null; name: string | null; gstin: string | null; stateCode: string | null } = {
-    customerId: null, name: null, gstin: null, stateCode: null,
+  let buyer: {
+    customerId: string | null;
+    name: string | null;
+    gstin: string | null;
+    stateCode: string | null;
+  } = {
+    customerId: null,
+    name: null,
+    gstin: null,
+    stateCode: null,
   };
   if (sale.customerId) {
     const cust = await new DrizzleCustomerRepository(db).findById(sale.customerId);
-    const md = ((cust?.metadata as Record<string, any>) || {});
-    buyer = { customerId: sale.customerId, name: cust?.name ?? null, gstin: md.gstin ?? null, stateCode: md.stateCode ?? null };
+    const md = (cust?.metadata as Record<string, any>) || {};
+    buyer = {
+      customerId: sale.customerId,
+      name: cust?.name ?? null,
+      gstin: md.gstin ?? null,
+      stateCode: md.stateCode ?? null,
+    };
   } else if (sale.buyerDetails) {
     // Ad-hoc walk-in buyer captured on the sale (not saved to the registry).
     const bd = (sale.buyerDetails as Record<string, any>) || {};
-    buyer = { customerId: null, name: bd.name ?? null, gstin: bd.gstin ?? null, stateCode: bd.stateCode ?? null };
+    buyer = {
+      customerId: null,
+      name: bd.name ?? null,
+      gstin: bd.gstin ?? null,
+      stateCode: bd.stateCode ?? null,
+    };
   }
   const station = await new DrizzleStationRepository(db).findById(sale.stationId);
-  const legal = ((station?.settings as any)?.legal) || {};
+  const legal = (station?.settings as any)?.legal || {};
 
   const lines = items.map((it) => {
     const tc = (it.taxConfig as Record<string, any>) || {};
@@ -1702,10 +2337,17 @@ transactionsRouter.get('/invoices', async (c) => {
 transactionsRouter.get('/invoices/:id', async (c) => {
   const db = c.var.db;
   const user = c.var.user;
-  const rows = await db.select().from(schema.invoices).where(eq(schema.invoices.id, c.req.param('id'))).limit(1);
+  const rows = await db
+    .select()
+    .from(schema.invoices)
+    .where(eq(schema.invoices.id, c.req.param('id')))
+    .limit(1);
   const invoice = rows[0];
   if (!invoice || invoice.organizationId !== user.organizationId) {
-    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Invoice not found' } }, 404);
+    return c.json(
+      { success: false, error: { code: 'NOT_FOUND', message: 'Invoice not found' } },
+      404,
+    );
   }
   return c.json({ success: true, data: invoice });
 });
@@ -1714,10 +2356,17 @@ transactionsRouter.get('/invoices/:id', async (c) => {
 transactionsRouter.get('/sales/:id/invoice', async (c) => {
   const db = c.var.db;
   const user = c.var.user;
-  const rows = await db.select().from(schema.invoices).where(eq(schema.invoices.saleId, c.req.param('id'))).limit(1);
+  const rows = await db
+    .select()
+    .from(schema.invoices)
+    .where(eq(schema.invoices.saleId, c.req.param('id')))
+    .limit(1);
   const invoice = rows[0];
   if (!invoice || invoice.organizationId !== user.organizationId) {
-    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'No invoice for this sale' } }, 404);
+    return c.json(
+      { success: false, error: { code: 'NOT_FOUND', message: 'No invoice for this sale' } },
+      404,
+    );
   }
   return c.json({ success: true, data: invoice });
 });
@@ -1731,9 +2380,16 @@ transactionsRouter.get('/sales', async (c) => {
   const stationId = c.req.query('stationId');
   const from = c.req.query('from');
   const to = c.req.query('to');
-  if (!stationId) return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Missing stationId' } }, 400);
+  if (!stationId)
+    return c.json(
+      { success: false, error: { code: 'VALIDATION_ERROR', message: 'Missing stationId' } },
+      400,
+    );
   if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId })) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+    return c.json(
+      { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
+      403,
+    );
   }
   const rows = await db
     .select({
@@ -1783,11 +2439,25 @@ transactionsRouter.post('/shifts/:id/merchandise-handover', async (c) => {
   const shiftRows = await db
     .select({ stationId: schema.shifts.stationId })
     .from(schema.shifts)
-    .where(and(eq(schema.shifts.id, shiftId), eq(schema.shifts.organizationId, user.organizationId)))
+    .where(
+      and(eq(schema.shifts.id, shiftId), eq(schema.shifts.organizationId, user.organizationId)),
+    )
     .limit(1);
-  if (!shiftRows[0]) return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Shift not found' } }, 404);
-  if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId: shiftRows[0].stationId })) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+  if (!shiftRows[0])
+    return c.json(
+      { success: false, error: { code: 'NOT_FOUND', message: 'Shift not found' } },
+      404,
+    );
+  if (
+    !isAuthorizedForStation(user, {
+      organizationId: user.organizationId,
+      stationId: shiftRows[0].stationId,
+    })
+  ) {
+    return c.json(
+      { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
+      403,
+    );
   }
 
   // Attendants may only record their OWN merchandise handover.
@@ -1803,7 +2473,10 @@ transactionsRouter.post('/shifts/:id/merchandise-handover', async (c) => {
       businessDays: new DrizzleBusinessDayRepository(tx),
       docNumbers: new TimestampDocumentNumberGenerator(),
       events,
-    }).execute({ shiftId, attendantId, lines: body.lines ?? [], nonCashAmount: body.nonCashAmount }, buildContext(user)),
+    }).execute(
+      { shiftId, attendantId, lines: body.lines ?? [], nonCashAmount: body.nonCashAmount },
+      buildContext(user),
+    ),
   );
   return sendResult(c, result);
 });
@@ -1858,7 +2531,10 @@ transactionsRouter.get('/shifts/:id/merchandise-handovers', async (c) => {
     }, {});
   }
 
-  return c.json({ success: true, data: handovers.map((h) => ({ ...h, items: itemsBySale[h.id] ?? [] })) });
+  return c.json({
+    success: true,
+    data: handovers.map((h) => ({ ...h, items: itemsBySale[h.id] ?? [] })),
+  });
 });
 
 // GET /transactions/shifts/:id/merchandise-sales — the individual (quick-entry)
@@ -1916,7 +2592,14 @@ transactionsRouter.get('/shifts/:id/merchandise-sales', async (c) => {
     }, {});
   }
 
-  return c.json({ success: true, data: rows.map((r) => ({ ...r, customerName: r.customerName ?? ((r.buyerDetails as any)?.name ?? null), items: itemsBySale[r.id] ?? [] })) });
+  return c.json({
+    success: true,
+    data: rows.map((r) => ({
+      ...r,
+      customerName: r.customerName ?? (r.buyerDetails as any)?.name ?? null,
+      items: itemsBySale[r.id] ?? [],
+    })),
+  });
 });
 
 // DELETE /transactions/merchandise-handovers/:saleId — remove a handover (shift must be OPEN).
@@ -1926,7 +2609,11 @@ transactionsRouter.delete('/merchandise-handovers/:saleId', async (c) => {
   const saleId = c.req.param('saleId');
 
   const rows = await db
-    .select({ shiftStatus: schema.shifts.status, orgId: schema.businessDays.organizationId, capture: schema.sales.captureMechanism })
+    .select({
+      shiftStatus: schema.shifts.status,
+      orgId: schema.businessDays.organizationId,
+      capture: schema.sales.captureMechanism,
+    })
     .from(schema.sales)
     .innerJoin(schema.shifts, eq(schema.shifts.id, schema.sales.shiftId))
     .innerJoin(schema.businessDays, eq(schema.sales.businessDayId, schema.businessDays.id))
@@ -1934,10 +2621,19 @@ transactionsRouter.delete('/merchandise-handovers/:saleId', async (c) => {
     .limit(1);
   const row = rows[0];
   if (!row || row.orgId !== user.organizationId || row.capture !== 'MERCH_HANDOVER') {
-    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Merchandise handover not found' } }, 404);
+    return c.json(
+      { success: false, error: { code: 'NOT_FOUND', message: 'Merchandise handover not found' } },
+      404,
+    );
   }
   if (row.shiftStatus !== 'OPEN') {
-    return c.json({ success: false, error: { code: 'INVARIANT_VIOLATION', message: 'Cannot edit after the shift is closed' } }, 409);
+    return c.json(
+      {
+        success: false,
+        error: { code: 'INVARIANT_VIOLATION', message: 'Cannot edit after the shift is closed' },
+      },
+      409,
+    );
   }
   await new DrizzleMerchandiseHandoverRepository(db).deleteHandoverSale(saleId);
   return c.json({ success: true, data: { id: saleId } });
@@ -1950,14 +2646,28 @@ transactionsRouter.get('/shifts/:id/transactions', async (c) => {
   // Resolve the shift within the caller's organization and authorize its
   // stored station before exposing any child records (tenant isolation).
   const shift = await db.query.shifts.findFirst({
-    where: and(eq(schema.shifts.id, shiftId), eq(schema.shifts.organizationId, user.organizationId)),
+    where: and(
+      eq(schema.shifts.id, shiftId),
+      eq(schema.shifts.organizationId, user.organizationId),
+    ),
     columns: { id: true, stationId: true },
   });
   if (!shift) {
-    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Shift not found' } }, 404);
+    return c.json(
+      { success: false, error: { code: 'NOT_FOUND', message: 'Shift not found' } },
+      404,
+    );
   }
-  if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId: shift.stationId })) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+  if (
+    !isAuthorizedForStation(user, {
+      organizationId: user.organizationId,
+      stationId: shift.stationId,
+    })
+  ) {
+    return c.json(
+      { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
+      403,
+    );
   }
   const [expenses, purchases, collections, sales, creditSales] = await Promise.all([
     db.select().from(schema.expenses).where(eq(schema.expenses.shiftId, shiftId)),
@@ -1989,7 +2699,10 @@ transactionsRouter.get('/shifts/:id/transactions', async (c) => {
       .from(schema.customerTransactions)
       .leftJoin(schema.customers, eq(schema.customers.id, schema.customerTransactions.customerId))
       .leftJoin(schema.products, eq(schema.products.id, schema.customerTransactions.productId))
-      .leftJoin(schema.customerVehicles, eq(schema.customerVehicles.id, schema.customerTransactions.vehicleId))
+      .leftJoin(
+        schema.customerVehicles,
+        eq(schema.customerVehicles.id, schema.customerTransactions.vehicleId),
+      )
       .where(
         and(
           eq(schema.customerTransactions.shiftId, shiftId),
@@ -2009,9 +2722,16 @@ transactionsRouter.get('/inventory/status', async (c) => {
   const db = c.var.db;
   const user = c.var.user;
   const stationId = c.req.query('stationId');
-  if (!stationId) return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Missing stationId' } }, 400);
+  if (!stationId)
+    return c.json(
+      { success: false, error: { code: 'VALIDATION_ERROR', message: 'Missing stationId' } },
+      400,
+    );
   if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId })) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+    return c.json(
+      { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
+      403,
+    );
   }
   // Single query: per-tank current volume (Σ stock movements) + product info.
   // Replaces the previous 1 + 2N round-trips (per-tank product + aggregate).
@@ -2029,7 +2749,13 @@ transactionsRouter.get('/inventory/status', async (c) => {
     .from(schema.tanks)
     .leftJoin(schema.products, eq(schema.products.id, schema.tanks.productId))
     .leftJoin(schema.stockMovements, eq(schema.stockMovements.tankId, schema.tanks.id))
-    .where(and(eq(schema.tanks.stationId, stationId), eq(schema.tanks.organizationId, user.organizationId), eq(schema.tanks.status, 'ACTIVE')))
+    .where(
+      and(
+        eq(schema.tanks.stationId, stationId),
+        eq(schema.tanks.organizationId, user.organizationId),
+        eq(schema.tanks.status, 'ACTIVE'),
+      ),
+    )
     .groupBy(schema.tanks.id, schema.products.name, schema.products.code, schema.products.unit);
 
   const enriched = rows.map((r) => ({
@@ -2049,9 +2775,16 @@ transactionsRouter.get('/inventory/items', async (c) => {
   const db = c.var.db;
   const user = c.var.user;
   const stationId = c.req.query('stationId');
-  if (!stationId) return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Missing stationId' } }, 400);
+  if (!stationId)
+    return c.json(
+      { success: false, error: { code: 'VALIDATION_ERROR', message: 'Missing stationId' } },
+      400,
+    );
   if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId })) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+    return c.json(
+      { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
+      403,
+    );
   }
   // Merchandise (non-fuel) stock-on-hand. Item products are org-scoped (no tank);
   // quantity = sum of all stock movements for the product (tankId is null for items).
@@ -2083,11 +2816,25 @@ transactionsRouter.get('/inventory/items', async (c) => {
 transactionsRouter.post('/inventory/count', async (c) => {
   const user = c.var.user;
   if (!canRecordStockCount(user.role)) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions to record a stock count' } }, 403);
+    return c.json(
+      {
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'Insufficient permissions to record a stock count' },
+      },
+      403,
+    );
   }
   const body = await c.req.json().catch(() => ({}));
-  if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId: body?.stationId })) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+  if (
+    !isAuthorizedForStation(user, {
+      organizationId: user.organizationId,
+      stationId: body?.stationId,
+    })
+  ) {
+    return c.json(
+      { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
+      403,
+    );
   }
   const stockClock = await loadStationClock(c.var.db, body?.stationId);
   const result = await runInTransaction(c.var.db, async (tx, events) => {
@@ -2108,9 +2855,16 @@ transactionsRouter.get('/inventory/movements', async (c) => {
   const db = c.var.db;
   const user = c.var.user;
   const stationId = c.req.query('stationId');
-  if (!stationId) return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Missing stationId' } }, 400);
+  if (!stationId)
+    return c.json(
+      { success: false, error: { code: 'VALIDATION_ERROR', message: 'Missing stationId' } },
+      400,
+    );
   if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId })) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+    return c.json(
+      { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
+      403,
+    );
   }
   const rows = await db
     .select({
@@ -2125,7 +2879,12 @@ transactionsRouter.get('/inventory/movements', async (c) => {
     .innerJoin(schema.businessDays, eq(schema.stockMovements.businessDayId, schema.businessDays.id))
     .leftJoin(schema.tanks, eq(schema.stockMovements.tankId, schema.tanks.id))
     .leftJoin(schema.products, eq(schema.stockMovements.productId, schema.products.id))
-    .where(and(eq(schema.businessDays.stationId, stationId), eq(schema.businessDays.organizationId, user.organizationId)))
+    .where(
+      and(
+        eq(schema.businessDays.stationId, stationId),
+        eq(schema.businessDays.organizationId, user.organizationId),
+      ),
+    )
     .orderBy(desc(schema.stockMovements.createdAt));
   return c.json({
     success: true,
@@ -2145,9 +2904,16 @@ transactionsRouter.get('/inventory/variances', async (c) => {
   const db = c.var.db;
   const user = c.var.user;
   const stationId = c.req.query('stationId');
-  if (!stationId) return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Missing stationId' } }, 400);
+  if (!stationId)
+    return c.json(
+      { success: false, error: { code: 'VALIDATION_ERROR', message: 'Missing stationId' } },
+      400,
+    );
   if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId })) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+    return c.json(
+      { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
+      403,
+    );
   }
   const rows = await db
     .select({
@@ -2162,7 +2928,12 @@ transactionsRouter.get('/inventory/variances', async (c) => {
     .innerJoin(schema.businessDays, eq(schema.stockVariances.businessDayId, schema.businessDays.id))
     .leftJoin(schema.tanks, eq(schema.stockVariances.tankId, schema.tanks.id))
     .leftJoin(schema.products, eq(schema.stockVariances.productId, schema.products.id))
-    .where(and(eq(schema.businessDays.stationId, stationId), eq(schema.businessDays.organizationId, user.organizationId)))
+    .where(
+      and(
+        eq(schema.businessDays.stationId, stationId),
+        eq(schema.businessDays.organizationId, user.organizationId),
+      ),
+    )
     .orderBy(desc(schema.stockVariances.createdAt));
   return c.json({
     success: true,

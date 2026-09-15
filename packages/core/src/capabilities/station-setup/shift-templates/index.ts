@@ -1,6 +1,19 @@
 import { z } from 'zod';
-import { BusinessEvents, err, eventFromContext, notFoundError, ok, validationError } from '../../../kernel/index.js';
-import type { EventPublisher, ExecutionContext, Repository, Result, UseCase } from '../../../kernel/index.js';
+import {
+  BusinessEvents,
+  err,
+  eventFromContext,
+  notFoundError,
+  ok,
+  validationError,
+} from '../../../kernel/index.js';
+import type {
+  EventPublisher,
+  ExecutionContext,
+  Repository,
+  Result,
+  UseCase,
+} from '../../../kernel/index.js';
 
 export interface ShiftTemplate {
   id: string;
@@ -53,9 +66,15 @@ export interface ShiftTemplateDeps {
 
 export class CreateShiftTemplate implements UseCase<CreateShiftTemplateCommand, ShiftTemplate> {
   constructor(private readonly deps: ShiftTemplateDeps) {}
-  async execute(input: CreateShiftTemplateCommand, ctx: ExecutionContext): Promise<Result<ShiftTemplate>> {
+  async execute(
+    input: CreateShiftTemplateCommand,
+    ctx: ExecutionContext,
+  ): Promise<Result<ShiftTemplate>> {
     const p = createSchema.safeParse(input);
-    if (!p.success) return err(validationError('Invalid CreateShiftTemplate command', { issues: p.error.flatten() }));
+    if (!p.success)
+      return err(
+        validationError('Invalid CreateShiftTemplate command', { issues: p.error.flatten() }),
+      );
     const tpl: ShiftTemplate = {
       id: ctx.ids.newId(),
       organizationId: ctx.organizationId,
@@ -79,11 +98,18 @@ export class CreateShiftTemplate implements UseCase<CreateShiftTemplateCommand, 
 
 export class UpdateShiftTemplate implements UseCase<UpdateShiftTemplateCommand, ShiftTemplate> {
   constructor(private readonly deps: ShiftTemplateDeps) {}
-  async execute(input: UpdateShiftTemplateCommand, ctx: ExecutionContext): Promise<Result<ShiftTemplate>> {
+  async execute(
+    input: UpdateShiftTemplateCommand,
+    ctx: ExecutionContext,
+  ): Promise<Result<ShiftTemplate>> {
     const p = updateSchema.safeParse(input);
-    if (!p.success) return err(validationError('Invalid UpdateShiftTemplate command', { issues: p.error.flatten() }));
+    if (!p.success)
+      return err(
+        validationError('Invalid UpdateShiftTemplate command', { issues: p.error.flatten() }),
+      );
     const existing = await this.deps.repository.findById(p.data.id);
-    if (!existing || existing.organizationId !== ctx.organizationId) return err(notFoundError('ShiftTemplate', p.data.id));
+    if (!existing || existing.organizationId !== ctx.organizationId)
+      return err(notFoundError('ShiftTemplate', p.data.id));
     const updated: ShiftTemplate = {
       ...existing,
       name: p.data.name ?? existing.name,
@@ -108,7 +134,8 @@ export class DeleteShiftTemplate implements UseCase<{ id: string }, ShiftTemplat
   constructor(private readonly deps: ShiftTemplateDeps) {}
   async execute(input: { id: string }, ctx: ExecutionContext): Promise<Result<ShiftTemplate>> {
     const existing = await this.deps.repository.findById(input.id);
-    if (!existing || existing.organizationId !== ctx.organizationId) return err(notFoundError('ShiftTemplate', input.id));
+    if (!existing || existing.organizationId !== ctx.organizationId)
+      return err(notFoundError('ShiftTemplate', input.id));
     await this.deps.repository.deleteById(existing.id);
     await this.deps.events.publish([
       eventFromContext(ctx, {

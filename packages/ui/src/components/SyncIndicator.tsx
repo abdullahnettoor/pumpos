@@ -5,10 +5,7 @@ export interface SyncIndicatorProps {
   pendingCount?: number;
 }
 
-export const SyncIndicator: React.FC<SyncIndicatorProps> = ({
-  status,
-  pendingCount = 0,
-}) => {
+export const SyncIndicator: React.FC<SyncIndicatorProps> = ({ status, pendingCount = 0 }) => {
   const getIndicatorProps = () => {
     switch (status) {
       case 'synced':

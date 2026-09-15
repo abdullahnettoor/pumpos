@@ -1,19 +1,38 @@
 import React, { useMemo } from 'react';
 import {
-  Receipt, Wallet, ShoppingCart, ShoppingBag, CreditCard, Users, Truck, Package, FileText, Banknote,
-  ArrowUpRight, LogOut, TriangleAlert, Clock, LayoutDashboard, Fuel,
+  Receipt,
+  Wallet,
+  ShoppingCart,
+  ShoppingBag,
+  CreditCard,
+  Users,
+  Truck,
+  Package,
+  FileText,
+  Banknote,
+  ArrowUpRight,
+  LogOut,
+  TriangleAlert,
+  Clock,
+  LayoutDashboard,
+  Fuel,
 } from 'lucide-react';
 import { type Station } from '@pump/shared';
 import type { NavIntent } from './AppShell.js';
 import { openQuickEntry } from '../quick-entry/store.js';
 import {
-  TopBar, CommandPalette, useCommandPalette,
-  type CommandGroup, type CommandItem, type NotificationItem,
-  type QuickCreateAction, type UserMenuAction, type SyncStatus, type BusinessDayOption,
+  TopBar,
+  CommandPalette,
+  useCommandPalette,
+  type CommandGroup,
+  type CommandItem,
+  type NotificationItem,
+  type QuickCreateAction,
+  type UserMenuAction,
+  type SyncStatus,
+  type BusinessDayOption,
 } from '../pump-ds/index.js';
-import {
-  useBusinessDayStatus, useCustomers, useSuppliers, useProducts,
-} from '../query/hooks.js';
+import { useBusinessDayStatus, useCustomers, useSuppliers, useProducts } from '../query/hooks.js';
 import { useStationAlerts } from '../query/useStationAlerts.js';
 import { inr } from '../utils/format.js';
 import { useStationBusinessDate } from '../hooks/useStationBusinessDate.js';
@@ -58,7 +77,12 @@ function formatDayLabel(iso: string): string {
   const [y, m, d] = iso.split('-').map(Number);
   if (!y || !m || !d) return iso;
   const dt = new Date(Date.UTC(y, m - 1, d));
-  return dt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' });
+  return dt.toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
 }
 
 export const AppTopBar: React.FC<AppTopBarProps> = ({
@@ -86,17 +110,19 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
   const settings: any = (selectedStation as any)?.settings || {};
   const businessIso = useStationBusinessDate(settings.timezone, settings.business_day_starts_at);
   const businessDate = formatDayLabel(businessIso);
-  const dayStatusQ = useBusinessDayStatus(stationId, businessIso, { enabled: !!stationId && stationReady } as any);
+  const dayStatusQ = useBusinessDayStatus(stationId, businessIso, {
+    enabled: !!stationId && stationReady,
+  } as any);
   const dayStatus = dayStatusQ.data;
   const businessDayStatus = dayStatusQ.isError
     ? 'unavailable'
     : dayStatusQ.isPending
       ? 'unknown'
-    : dayStatus?.requestedState === 'OPEN'
-    ? 'open'
-    : dayStatus?.requestedState === 'CLOSED'
-      ? 'closed'
-      : 'not-created';
+      : dayStatus?.requestedState === 'OPEN'
+        ? 'open'
+        : dayStatus?.requestedState === 'CLOSED'
+          ? 'closed'
+          : 'not-created';
 
   const businessDays: BusinessDayOption[] = useMemo(() => {
     return (dayStatus?.pastOpenBusinessDays ?? []).map((day: any) => ({
@@ -115,21 +141,79 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
     // station operational and inviting the team.
     if (!stationReady) {
       return [
-        { id: 'onboard-station', label: 'Onboard station', icon: <Fuel />, onSelect: () => onNavigate('/onboarding') },
-        { id: 'team-member', label: 'Team member', icon: <Users />, onSelect: () => onNavigate('/organization') },
+        {
+          id: 'onboard-station',
+          label: 'Onboard station',
+          icon: <Fuel />,
+          onSelect: () => onNavigate('/onboarding'),
+        },
+        {
+          id: 'team-member',
+          label: 'Team member',
+          icon: <Users />,
+          onSelect: () => onNavigate('/organization'),
+        },
       ];
     }
     const items: QuickCreateAction[] = [
-      { id: 'expense', label: 'Expense', icon: <Receipt />, onSelect: () => openQuickEntry('expense') },
-      { id: 'income', label: 'Income', icon: <Banknote />, onSelect: () => openQuickEntry('income') },
-      { id: 'collection', label: 'Collection', icon: <Wallet />, onSelect: () => openQuickEntry('collection') },
-      { id: 'merchandise-sale', label: 'Merchandise sale', icon: <ShoppingBag />, onSelect: () => openQuickEntry('merchandise-sale') },
-      { id: 'purchase', label: 'Purchase', icon: <ShoppingCart />, onSelect: () => openQuickEntry('purchase') },
-      { id: 'supplier-payment', label: 'Supplier payment', icon: <Wallet />, onSelect: () => onNavigate('/purchases', { open: 'supplier-payment' }) },
-      { id: 'credit', label: 'Credit sale', icon: <CreditCard />, onSelect: () => onNavigate('/shifts') },
-      { id: 'customer', label: 'Customer', icon: <Users />, onSelect: () => onNavigate('/customers', { open: 'new-customer' }) },
+      {
+        id: 'expense',
+        label: 'Expense',
+        icon: <Receipt />,
+        onSelect: () => openQuickEntry('expense'),
+      },
+      {
+        id: 'income',
+        label: 'Income',
+        icon: <Banknote />,
+        onSelect: () => openQuickEntry('income'),
+      },
+      {
+        id: 'collection',
+        label: 'Collection',
+        icon: <Wallet />,
+        onSelect: () => openQuickEntry('collection'),
+      },
+      {
+        id: 'merchandise-sale',
+        label: 'Merchandise sale',
+        icon: <ShoppingBag />,
+        onSelect: () => openQuickEntry('merchandise-sale'),
+      },
+      {
+        id: 'purchase',
+        label: 'Purchase',
+        icon: <ShoppingCart />,
+        onSelect: () => openQuickEntry('purchase'),
+      },
+      {
+        id: 'supplier-payment',
+        label: 'Supplier payment',
+        icon: <Wallet />,
+        onSelect: () => onNavigate('/purchases', { open: 'supplier-payment' }),
+      },
+      {
+        id: 'credit',
+        label: 'Credit sale',
+        icon: <CreditCard />,
+        onSelect: () => onNavigate('/shifts'),
+      },
+      {
+        id: 'customer',
+        label: 'Customer',
+        icon: <Users />,
+        onSelect: () => onNavigate('/customers', { open: 'new-customer' }),
+      },
     ];
-    return userRole === 'Staff' ? items.filter((i) => i.id === 'expense' || i.id === 'collection' || i.id === 'merchandise-sale' || i.id === 'credit') : items;
+    return userRole === 'Staff'
+      ? items.filter(
+          (i) =>
+            i.id === 'expense' ||
+            i.id === 'collection' ||
+            i.id === 'merchandise-sale' ||
+            i.id === 'credit',
+        )
+      : items;
   }, [onNavigate, userRole, stationReady]);
 
   // --- user menu ---
@@ -149,14 +233,35 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
           meta: a.meta,
           actionLabel: a.actionLabel,
           onAction: a.actionPath
-            ? () => onNavigate(a.actionPath!, a.actionTab ? { focusInventoryTab: a.actionTab, focusInventoryId: a.actionEntityId } : undefined)
+            ? () =>
+                onNavigate(
+                  a.actionPath!,
+                  a.actionTab
+                    ? { focusInventoryTab: a.actionTab, focusInventoryId: a.actionEntityId }
+                    : undefined,
+                )
             : undefined,
         }))
       : [];
     if (syncStatus === 'failed') {
-      list.push({ id: 'sync', tone: 'danger', icon: <TriangleAlert />, title: 'Sync failed', meta: pendingSyncCount > 0 ? `${pendingSyncCount} events not synced` : 'Retry to reconcile', actionLabel: 'Retry', onAction: () => {} });
+      list.push({
+        id: 'sync',
+        tone: 'danger',
+        icon: <TriangleAlert />,
+        title: 'Sync failed',
+        meta: pendingSyncCount > 0 ? `${pendingSyncCount} events not synced` : 'Retry to reconcile',
+        actionLabel: 'Retry',
+        onAction: () => {},
+      });
     } else if (syncStatus === 'pending' && pendingSyncCount > 0) {
-      list.push({ id: 'sync', tone: 'info', icon: <Clock />, title: `${pendingSyncCount} events pending sync`, meta: 'Retrying automatically', onAction: () => {} });
+      list.push({
+        id: 'sync',
+        tone: 'info',
+        icon: <Clock />,
+        title: `${pendingSyncCount} events pending sync`,
+        meta: 'Retrying automatically',
+        onAction: () => {},
+      });
     }
     return list;
   }, [stationAlerts, syncStatus, pendingSyncCount, onNavigate, stationReady]);
@@ -169,7 +274,11 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
     groups.push({
       heading: 'Actions',
       items: quickCreate.map<CommandItem>((a) => ({
-        id: `act-${a.id}`, label: `New ${a.label.toLowerCase()}`, icon: a.icon, keywords: ['create', 'add', a.label], onSelect: a.onSelect,
+        id: `act-${a.id}`,
+        label: `New ${a.label.toLowerCase()}`,
+        icon: a.icon,
+        keywords: ['create', 'add', a.label],
+        onSelect: a.onSelect,
       })),
     });
 
@@ -189,8 +298,11 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
             label: c.name,
             icon: <Users />,
             meta,
-            keywords: [c.phone, c.fleetCode, c.metadata?.gstin, c.metadata?.tradeName].filter(Boolean),
-            onSelect: () => onNavigate('/customers', { focusCustomerId: c.id, open: 'customer-statement' }),
+            keywords: [c.phone, c.fleetCode, c.metadata?.gstin, c.metadata?.tradeName].filter(
+              Boolean,
+            ),
+            onSelect: () =>
+              onNavigate('/customers', { focusCustomerId: c.id, open: 'customer-statement' }),
           };
         }),
       });
@@ -212,7 +324,8 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
             icon: <Truck />,
             meta: bal > 0 ? `${inr(bal)} due` : '',
             keywords: [s.phone, s.metadata?.gstin, s.metadata?.tradeName].filter(Boolean),
-            onSelect: () => onNavigate('/purchases', { focusSupplierId: s.id, open: 'supplier-statement' }),
+            onSelect: () =>
+              onNavigate('/purchases', { focusSupplierId: s.id, open: 'supplier-statement' }),
           };
         }),
       });
@@ -224,7 +337,12 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
       groups.push({
         heading: 'Products',
         items: rows.map<CommandItem>((p) => ({
-          id: `prod-${p.id}`, label: p.name, icon: <Package />, meta: p.productType ?? '', keywords: [p.hsnCode, p.productType].filter(Boolean), onSelect: () => onNavigate('/pricing'),
+          id: `prod-${p.id}`,
+          label: p.name,
+          icon: <Package />,
+          meta: p.productType ?? '',
+          keywords: [p.hsnCode, p.productType].filter(Boolean),
+          onSelect: () => onNavigate('/pricing'),
         })),
       });
     }
@@ -235,12 +353,25 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
       items: navItems
         .filter((n) => !n.roles || n.roles.includes(userRole))
         .map<CommandItem>((n) => ({
-          id: `nav-${n.path}`, label: n.label, icon: n.label === 'Dashboard' ? <LayoutDashboard /> : <ArrowUpRight />, keywords: ['open', 'go'], onSelect: () => onNavigate(n.path),
+          id: `nav-${n.path}`,
+          label: n.label,
+          icon: n.label === 'Dashboard' ? <LayoutDashboard /> : <ArrowUpRight />,
+          keywords: ['open', 'go'],
+          onSelect: () => onNavigate(n.path),
         })),
     });
 
     return groups;
-  }, [quickCreate, customers, suppliers, products, navItems, userRole, canSeeFinancials, onNavigate]);
+  }, [
+    quickCreate,
+    customers,
+    suppliers,
+    products,
+    navItems,
+    userRole,
+    canSeeFinancials,
+    onNavigate,
+  ]);
 
   return (
     <>
@@ -252,7 +383,9 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
         showBusinessDay={stationReady}
         onBusinessDay={() => onNavigate('/shifts', { openBusinessDayDate: businessIso })}
         businessDays={dayStatusQ.isError || dayStatusQ.isPending ? [] : businessDays}
-        businessDaysState={dayStatusQ.isError ? 'unavailable' : dayStatusQ.isPending ? 'loading' : 'ready'}
+        businessDaysState={
+          dayStatusQ.isError ? 'unavailable' : dayStatusQ.isPending ? 'loading' : 'ready'
+        }
         onSelectBusinessDay={(date) => onNavigate('/shifts', { openBusinessDayDate: date })}
         stationLabel={selectedStation?.name}
         onOpenSearch={() => setOpen(true)}

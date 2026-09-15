@@ -1,8 +1,17 @@
 import React from 'react';
 import { Document, Page, View, Text } from '@react-pdf/renderer';
 import {
-  C, s, TableView, Kpi, LetterheadBand, inr, inr0, fmtDateTime,
-  type Col, type Cell, type Letterhead,
+  C,
+  s,
+  TableView,
+  Kpi,
+  LetterheadBand,
+  inr,
+  inr0,
+  fmtDateTime,
+  type Col,
+  type Cell,
+  type Letterhead,
 } from './shiftSummaryDoc.js';
 
 export interface LedgerDocRow {
@@ -85,12 +94,18 @@ export const LedgerDoc: React.FC<LedgerDocProps> = ({
         <View style={s.kpiRow}>
           <Kpi l={debitLabel} v={inr0(totals.debit)} />
           <Kpi l={creditLabel} v={inr0(totals.credit)} c={C.success} />
-          <Kpi l={balanceLabel} v={inr0(totals.balance)} c={totals.balance < 0 ? C.danger : C.ink} />
+          <Kpi
+            l={balanceLabel}
+            v={inr0(totals.balance)}
+            c={totals.balance < 0 ? C.danger : C.ink}
+          />
         </View>
 
         <Text style={s.h2}>STATEMENT OF ACCOUNT</Text>
         {rows.length === 0 ? (
-          <Text style={{ fontSize: 9, color: C.muted, marginTop: 4 }}>No transactions in this period.</Text>
+          <Text style={{ fontSize: 9, color: C.muted, marginTop: 4 }}>
+            No transactions in this period.
+          </Text>
         ) : (
           <TableView columns={cols} rows={cellRows} total={totalRow} />
         )}

@@ -24,8 +24,12 @@ export const OrgProfile: React.FC = () => {
   const { data: org, isLoading } = useOrganization();
   const qc = useQueryClient();
   const toast = useToast();
-  const { register, handleSubmit, reset, formState: { errors, isSubmitting } } =
-    useZodForm<OrganizationUpdateValues>(organizationUpdateSchema, { defaultValues: EMPTY });
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors, isSubmitting },
+  } = useZodForm<OrganizationUpdateValues>(organizationUpdateSchema, { defaultValues: EMPTY });
 
   useEffect(() => {
     if (!org) return;
@@ -55,25 +59,43 @@ export const OrgProfile: React.FC = () => {
   };
 
   if (isLoading) {
-    return <div style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Loading organization…</div>;
+    return (
+      <div style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Loading organization…</div>
+    );
   }
 
   const metaErrors = (errors.metadata as any) || {};
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} style={{ maxWidth: 520, display: 'flex', flexDirection: 'column' }}>
+    <form
+      onSubmit={handleSubmit(onSubmit)}
+      style={{ maxWidth: 520, display: 'flex', flexDirection: 'column' }}
+    >
       <Field label="Organization name" required error={errors.name?.message}>
-        <TextInput {...register('name')} invalid={!!errors.name} placeholder="e.g. Sri Lakshmi Fuels" />
+        <TextInput
+          {...register('name')}
+          invalid={!!errors.name}
+          placeholder="e.g. Sri Lakshmi Fuels"
+        />
       </Field>
       <Field label="Legal / trade name" hint="As printed on the GST certificate.">
         <TextInput {...register('metadata.legalName')} />
       </Field>
       <Field label="GSTIN">
-        <TextInput {...register('metadata.gstin')} maxLength={15} placeholder="29ABCDE1234F1Z5" style={{ fontFamily: 'var(--font-mono)' }} />
+        <TextInput
+          {...register('metadata.gstin')}
+          maxLength={15}
+          placeholder="29ABCDE1234F1Z5"
+          style={{ fontFamily: 'var(--font-mono)' }}
+        />
       </Field>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
         <Field label="PAN">
-          <TextInput {...register('metadata.pan')} maxLength={10} style={{ fontFamily: 'var(--font-mono)' }} />
+          <TextInput
+            {...register('metadata.pan')}
+            maxLength={10}
+            style={{ fontFamily: 'var(--font-mono)' }}
+          />
         </Field>
         <Field label="State code">
           <TextInput {...register('metadata.stateCode')} maxLength={2} placeholder="29" />

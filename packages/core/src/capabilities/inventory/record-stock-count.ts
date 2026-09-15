@@ -1,11 +1,33 @@
 import { z } from 'zod';
 import { resolveBusinessDate } from '@pump/shared';
-import { BusinessEvents, err, eventFromContext, notFoundError, ok, relatedEventFromContext, validationError } from '../../kernel/index.js';
-import type { DomainEvent, EventPublisher, ExecutionContext, Result, UseCase } from '../../kernel/index.js';
-import { resolveBusinessDayWrite, type BusinessDayWriteRepository } from '../station-ops/business-days/index.js';
+import {
+  BusinessEvents,
+  err,
+  eventFromContext,
+  notFoundError,
+  ok,
+  relatedEventFromContext,
+  validationError,
+} from '../../kernel/index.js';
+import type {
+  DomainEvent,
+  EventPublisher,
+  ExecutionContext,
+  Result,
+  UseCase,
+} from '../../kernel/index.js';
+import {
+  resolveBusinessDayWrite,
+  type BusinessDayWriteRepository,
+} from '../station-ops/business-days/index.js';
 import { resolveShiftBusinessDayWrite, type ShiftRepository } from '../station-ops/shifts/index.js';
 import type { TankRepository } from '../station-setup/tanks/index.js';
-import type { StockMovement, StockMovementRepository, StockVariance, StockVarianceRepository } from './ports.js';
+import type {
+  StockMovement,
+  StockMovementRepository,
+  StockVariance,
+  StockVarianceRepository,
+} from './ports.js';
 
 export interface RecordStockCountCommand {
   stationId: string;
@@ -17,21 +39,30 @@ export interface RecordStockCountCommand {
   reason?: string;
 }
 
-const schema = z.object({
-  stationId: z.string().min(1, 'stationId is required'),
-  productId: z.string().min(1).optional(),
-  actualQuantity: z.coerce.number().min(0, 'actualQuantity must be >= 0'),
-  tankId: z.string().nullish(),
-  shiftId: z.string().nullish(),
-  reason: z.string().max(255).optional(),
-}).superRefine((value, refinement) => {
-  if (!value.tankId && !value.productId) {
-    refinement.addIssue({ code: z.ZodIssueCode.custom, message: 'tankId or productId is required' });
-  }
-  if (value.tankId && value.productId) {
-    refinement.addIssue({ code: z.ZodIssueCode.custom, message: 'productId must not be supplied for a Tank Dip', path: ['productId'] });
-  }
-});
+const schema = z
+  .object({
+    stationId: z.string().min(1, 'stationId is required'),
+    productId: z.string().min(1).optional(),
+    actualQuantity: z.coerce.number().min(0, 'actualQuantity must be >= 0'),
+    tankId: z.string().nullish(),
+    shiftId: z.string().nullish(),
+    reason: z.string().max(255).optional(),
+  })
+  .superRefine((value, refinement) => {
+    if (!value.tankId && !value.productId) {
+      refinement.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'tankId or productId is required',
+      });
+    }
+    if (value.tankId && value.productId) {
+      refinement.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'productId must not be supplied for a Tank Dip',
+        path: ['productId'],
+      });
+    }
+  });
 
 export interface RecordStockCountDeps {
   movements: StockMovementRepository;
@@ -61,14 +92,27 @@ export interface RecordStockCountResult {
 export class RecordStockCount implements UseCase<RecordStockCountCommand, RecordStockCountResult> {
   constructor(private readonly deps: RecordStockCountDeps) {}
 
-  async execute(input: RecordStockCountCommand, ctx: ExecutionContext): Promise<Result<RecordStockCountResult>> {
+  async execute(
+    input: RecordStockCountCommand,
+    ctx: ExecutionContext,
+  ): Promise<Result<RecordStockCountResult>> {
     const p = schema.safeParse(input);
-    if (!p.success) return err(validationError('Invalid RecordStockCount command', { issues: p.error.flatten() }));
+    if (!p.success)
+      return err(
+        validationError('Invalid RecordStockCount command', { issues: p.error.flatten() }),
+      );
     const cmd = p.data;
-    if (ctx.stationId && ctx.stationId !== cmd.stationId) return err(notFoundError('Station', cmd.stationId));
+    if (ctx.stationId && ctx.stationId !== cmd.stationId)
+      return err(notFoundError('Station', cmd.stationId));
 
     const tank = cmd.tankId ? await this.deps.tanks.findByIdForUpdate(cmd.tankId) : null;
-    if (cmd.tankId && (!tank || tank.organizationId !== ctx.organizationId || tank.stationId !== cmd.stationId || tank.status !== 'ACTIVE')) {
+    if (
+      cmd.tankId &&
+      (!tank ||
+        tank.organizationId !== ctx.organizationId ||
+        tank.stationId !== cmd.stationId ||
+        tank.status !== 'ACTIVE')
+    ) {
       return err(notFoundError('Tank', cmd.tankId));
     }
     const productId = tank?.productId ?? cmd.productId!;
@@ -76,13 +120,23 @@ export class RecordStockCount implements UseCase<RecordStockCountCommand, Record
     let attributedShift = null;
     let attributedDay = null;
     if (cmd.shiftId) {
-      const eligibility = await resolveShiftBusinessDayWrite(this.deps.shifts, this.deps.businessDays, ctx, cmd.shiftId, 'STOCK');
+      const eligibility = await resolveShiftBusinessDayWrite(
+        this.deps.shifts,
+        this.deps.businessDays,
+        ctx,
+        cmd.shiftId,
+        'STOCK',
+      );
       if (!eligibility.success) return eligibility as unknown as Result<RecordStockCountResult>;
       attributedShift = eligibility.data.shift;
       attributedDay = eligibility.data.businessDay;
       // Attribution to any tenant/station-valid shift is allowed, open or
       // closed — a dip may be measured while the shift it belongs to runs.
-      if (!attributedShift || attributedShift.organizationId !== ctx.organizationId || attributedShift.stationId !== cmd.stationId) {
+      if (
+        !attributedShift ||
+        attributedShift.organizationId !== ctx.organizationId ||
+        attributedShift.stationId !== cmd.stationId
+      ) {
         return err(notFoundError('Shift', cmd.shiftId));
       }
     }
@@ -91,15 +145,22 @@ export class RecordStockCount implements UseCase<RecordStockCountCommand, Record
     // the measurement + variance are recorded but book stock is NOT reconciled
     // — reconciling to a mid-shift reading would double-count once the shift's
     // sales post. The record and events carry the flag so consumers can warn.
-    const openShiftAtRecording = !!cmd.tankId
-      && !!(await this.deps.shifts.findOpenByStation(ctx.organizationId, cmd.stationId));
+    const openShiftAtRecording =
+      !!cmd.tankId &&
+      !!(await this.deps.shifts.findOpenByStation(ctx.organizationId, cmd.stationId));
 
-    const date = resolveBusinessDate({ now: ctx.clock.now(), timeZone: ctx.timeZone, dayStartsAt: ctx.businessDayStartsAt });
-    const eligibility = attributedDay ? ok({ businessDay: attributedDay, lateEntry: false }) : await resolveBusinessDayWrite(this.deps.businessDays, ctx, {
-      stationId: cmd.stationId,
-      businessDate: date,
-      kind: 'STOCK',
+    const date = resolveBusinessDate({
+      now: ctx.clock.now(),
+      timeZone: ctx.timeZone,
+      dayStartsAt: ctx.businessDayStartsAt,
     });
+    const eligibility = attributedDay
+      ? ok({ businessDay: attributedDay, lateEntry: false })
+      : await resolveBusinessDayWrite(this.deps.businessDays, ctx, {
+          stationId: cmd.stationId,
+          businessDate: date,
+          kind: 'STOCK',
+        });
     if (!eligibility.success) return eligibility as unknown as Result<RecordStockCountResult>;
     const bd = eligibility.data.businessDay;
 
@@ -146,12 +207,22 @@ export class RecordStockCount implements UseCase<RecordStockCountCommand, Record
 
     const events: DomainEvent[] = [
       eventFromContext(ctx, {
-        eventType: isBulk ? BusinessEvents.TANK_DIP_RECORDED : BusinessEvents.PHYSICAL_COUNT_COMPLETED,
+        eventType: isBulk
+          ? BusinessEvents.TANK_DIP_RECORDED
+          : BusinessEvents.PHYSICAL_COUNT_COMPLETED,
         aggregateType: isBulk ? 'Tank' : 'Product',
         aggregateId: cmd.tankId ?? productId,
         stationId: cmd.stationId,
         businessDayId: bd.id,
-        payload: { productId, tankId: cmd.tankId ?? null, shiftId: cmd.shiftId ?? null, expected, actual, variance: varianceQuantity, openShiftAtRecording },
+        payload: {
+          productId,
+          tankId: cmd.tankId ?? null,
+          shiftId: cmd.shiftId ?? null,
+          expected,
+          actual,
+          variance: varianceQuantity,
+          openShiftAtRecording,
+        },
       }),
     ];
     if (varianceQuantity !== 0) {
@@ -162,12 +233,25 @@ export class RecordStockCount implements UseCase<RecordStockCountCommand, Record
           aggregateId: variance.id,
           stationId: cmd.stationId,
           businessDayId: bd.id,
-          payload: { varianceId: variance.id, productId, tankId: cmd.tankId ?? null, shiftId: cmd.shiftId ?? null, varianceQuantity, openShiftAtRecording },
+          payload: {
+            varianceId: variance.id,
+            productId,
+            tankId: cmd.tankId ?? null,
+            shiftId: cmd.shiftId ?? null,
+            varianceQuantity,
+            openShiftAtRecording,
+          },
         }),
       );
     }
     await this.deps.events.publish(events);
 
-    return ok({ variance, expectedQuantity: expected, actualQuantity: actual, varianceQuantity, openShiftAtRecording });
+    return ok({
+      variance,
+      expectedQuantity: expected,
+      actualQuantity: actual,
+      varianceQuantity,
+      openShiftAtRecording,
+    });
   }
 }

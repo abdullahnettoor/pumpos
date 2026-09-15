@@ -8,9 +8,7 @@ const schema = z.object({
 });
 
 /** Parse + normalize untrusted input into a valid command. */
-export function validateRegisterDemoEntity(
-  input: unknown,
-): Result<RegisterDemoEntityCommand> {
+export function validateRegisterDemoEntity(input: unknown): Result<RegisterDemoEntityCommand> {
   const parsed = schema.safeParse(input);
   if (!parsed.success) {
     return err(

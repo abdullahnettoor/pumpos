@@ -38,7 +38,11 @@ export class DrizzleCustomerRepository implements CustomerRepository {
     };
   }
   async findById(id: string): Promise<Customer | null> {
-    const [r] = await this.db.select().from(schema.customers).where(eq(schema.customers.id, id)).limit(1);
+    const [r] = await this.db
+      .select()
+      .from(schema.customers)
+      .where(eq(schema.customers.id, id))
+      .limit(1);
     return r ? this.toEntity(r) : null;
   }
   async save(c: Customer): Promise<void> {
@@ -98,7 +102,10 @@ export class DrizzleCustomerRepository implements CustomerRepository {
       .from(schema.customers)
       .where(
         activeOnly
-          ? and(eq(schema.customers.organizationId, organizationId), eq(schema.customers.isActive, true))
+          ? and(
+              eq(schema.customers.organizationId, organizationId),
+              eq(schema.customers.isActive, true),
+            )
           : eq(schema.customers.organizationId, organizationId),
       );
     return rows.map((r) => this.toEntity(r));
@@ -135,11 +142,16 @@ export class DrizzleCustomerLedgerRepository implements CustomerLedgerRepository
     const [row] = await this.db
       .select({ tx: schema.customerTransactions })
       .from(schema.customerTransactions)
-      .innerJoin(schema.businessDays, eq(schema.businessDays.id, schema.customerTransactions.businessDayId))
-      .where(and(
-        eq(schema.customerTransactions.id, id),
-        eq(schema.businessDays.organizationId, organizationId),
-      ))
+      .innerJoin(
+        schema.businessDays,
+        eq(schema.businessDays.id, schema.customerTransactions.businessDayId),
+      )
+      .where(
+        and(
+          eq(schema.customerTransactions.id, id),
+          eq(schema.businessDays.organizationId, organizationId),
+        ),
+      )
       .limit(1);
     const r = row?.tx;
     if (!r) return null;
@@ -166,10 +178,14 @@ export class DrizzleCustomerLedgerRepository implements CustomerLedgerRepository
   async delete(id: string, organizationId: string): Promise<void> {
     // Tenancy-scoped delete: the row must belong to a business day of the
     // caller's organization (shiftless entries included).
-    await this.db.delete(schema.customerTransactions).where(and(
-      eq(schema.customerTransactions.id, id),
-      sql`EXISTS (SELECT 1 FROM ${schema.businessDays} WHERE ${schema.businessDays.id} = ${schema.customerTransactions.businessDayId} AND ${schema.businessDays.organizationId} = ${organizationId})`,
-    ));
+    await this.db
+      .delete(schema.customerTransactions)
+      .where(
+        and(
+          eq(schema.customerTransactions.id, id),
+          sql`EXISTS (SELECT 1 FROM ${schema.businessDays} WHERE ${schema.businessDays.id} = ${schema.customerTransactions.businessDayId} AND ${schema.businessDays.organizationId} = ${organizationId})`,
+        ),
+      );
   }
 }
 
@@ -210,7 +226,11 @@ export class DrizzleSupplierRepository implements SupplierRepository {
     };
   }
   async findById(id: string): Promise<Supplier | null> {
-    const [r] = await this.db.select().from(schema.suppliers).where(eq(schema.suppliers.id, id)).limit(1);
+    const [r] = await this.db
+      .select()
+      .from(schema.suppliers)
+      .where(eq(schema.suppliers.id, id))
+      .limit(1);
     return r ? this.toEntity(r) : null;
   }
   async save(s: Supplier): Promise<void> {
@@ -229,7 +249,13 @@ export class DrizzleSupplierRepository implements SupplierRepository {
       })
       .onConflictDoUpdate({
         target: schema.suppliers.id,
-        set: { name: s.name, phone: s.phone, metadata: s.metadata, isActive: s.isActive, updatedAt: new Date(s.updatedAt) },
+        set: {
+          name: s.name,
+          phone: s.phone,
+          metadata: s.metadata,
+          isActive: s.isActive,
+          updatedAt: new Date(s.updatedAt),
+        },
       });
   }
   async existsByName(organizationId: string, name: string, excludeId?: string): Promise<boolean> {
@@ -252,7 +278,10 @@ export class DrizzleSupplierRepository implements SupplierRepository {
       .from(schema.suppliers)
       .where(
         activeOnly
-          ? and(eq(schema.suppliers.organizationId, organizationId), eq(schema.suppliers.isActive, true))
+          ? and(
+              eq(schema.suppliers.organizationId, organizationId),
+              eq(schema.suppliers.isActive, true),
+            )
           : eq(schema.suppliers.organizationId, organizationId),
       );
     return rows.map((r) => this.toEntity(r));
@@ -276,7 +305,11 @@ export class DrizzleVehicleRepository implements VehicleRepository {
     };
   }
   async findById(id: string): Promise<Vehicle | null> {
-    const [r] = await this.db.select().from(schema.customerVehicles).where(eq(schema.customerVehicles.id, id)).limit(1);
+    const [r] = await this.db
+      .select()
+      .from(schema.customerVehicles)
+      .where(eq(schema.customerVehicles.id, id))
+      .limit(1);
     return r ? this.toEntity(r) : null;
   }
   async save(v: Vehicle): Promise<void> {
@@ -310,12 +343,19 @@ export class DrizzleVehicleRepository implements VehicleRepository {
       .from(schema.customerVehicles)
       .where(
         activeOnly
-          ? and(eq(schema.customerVehicles.customerId, customerId), eq(schema.customerVehicles.isActive, true))
+          ? and(
+              eq(schema.customerVehicles.customerId, customerId),
+              eq(schema.customerVehicles.isActive, true),
+            )
           : eq(schema.customerVehicles.customerId, customerId),
       );
     return rows.map((r) => this.toEntity(r));
   }
-  async existsByRegistration(organizationId: string, registrationNumber: string, excludeId?: string): Promise<boolean> {
+  async existsByRegistration(
+    organizationId: string,
+    registrationNumber: string,
+    excludeId?: string,
+  ): Promise<boolean> {
     const rows = await this.db
       .select({ id: schema.customerVehicles.id })
       .from(schema.customerVehicles)

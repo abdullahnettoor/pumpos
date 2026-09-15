@@ -75,7 +75,7 @@ const num = (v: string | number | null | undefined) => {
 // A fresh idempotency key per customer-sale line, so a retry of the SAME line
 // (e.g. after a flaky-network blip) de-dupes server-side instead of double-posting.
 const genIdemKey = (): string =>
-  (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
+  typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
     ? crypto.randomUUID()
     : `idem-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
@@ -86,7 +86,17 @@ const fieldStyle = {
 } as const;
 
 const TrashIcon: React.FC<{ size?: number }> = ({ size = 15 }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
     <polyline points="3 6 5 6 21 6" />
     <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
     <path d="M10 11v6M14 11v6" />
@@ -95,11 +105,25 @@ const TrashIcon: React.FC<{ size?: number }> = ({ size = 15 }) => (
 );
 
 const CalculatorIcon: React.FC<{ size?: number }> = ({ size = 18 }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
     <rect x="4" y="2" width="16" height="20" rx="2" />
     <line x1="8" y1="6" x2="16" y2="6" />
-    <line x1="8" y1="10" x2="8" y2="10" /><line x1="12" y1="10" x2="12" y2="10" /><line x1="16" y1="10" x2="16" y2="10" />
-    <line x1="8" y1="14" x2="8" y2="14" /><line x1="12" y1="14" x2="12" y2="14" /><line x1="16" y1="14" x2="16" y2="18" />
+    <line x1="8" y1="10" x2="8" y2="10" />
+    <line x1="12" y1="10" x2="12" y2="10" />
+    <line x1="16" y1="10" x2="16" y2="10" />
+    <line x1="8" y1="14" x2="8" y2="14" />
+    <line x1="12" y1="14" x2="12" y2="14" />
+    <line x1="16" y1="14" x2="16" y2="18" />
     <line x1="8" y1="18" x2="12" y2="18" />
   </svg>
 );
@@ -127,14 +151,21 @@ const NumberField: React.FC<{
         placeholder={placeholder ?? '0'}
         onChange={(e) => onChange(e.target.value)}
         className="min-w-0 flex-1 rounded-lg border px-3 py-2 text-sm font-mono tabular-nums"
-        style={{ ...fieldStyle, borderColor: error ? 'var(--state-danger-fg)' : fieldStyle.borderColor }}
+        style={{
+          ...fieldStyle,
+          borderColor: error ? 'var(--state-danger-fg)' : fieldStyle.borderColor,
+        }}
       />
       {trailing}
     </div>
     {error ? (
-      <span className="text-[11px]" style={{ color: 'var(--state-danger-fg)' }}>{error}</span>
+      <span className="text-[11px]" style={{ color: 'var(--state-danger-fg)' }}>
+        {error}
+      </span>
     ) : sub ? (
-      <span className="text-[11px]" style={{ color: 'var(--text-faint)' }}>{sub}</span>
+      <span className="text-[11px]" style={{ color: 'var(--text-faint)' }}>
+        {sub}
+      </span>
     ) : null}
   </label>
 );
@@ -150,7 +181,11 @@ const CustomerSaleForm: React.FC<{
   credit: CreditLine[];
   omc: CreditLine[];
   busy: boolean;
-  onAdd: (channel: 'credit' | 'omc', line: Omit<CreditLine, 'id'>, idempotencyKey: string) => Promise<void>;
+  onAdd: (
+    channel: 'credit' | 'omc',
+    line: Omit<CreditLine, 'id'>,
+    idempotencyKey: string,
+  ) => Promise<void>;
   onRemove: (channel: 'credit' | 'omc', id: string) => Promise<void>;
 }> = ({ duProducts, customers, allVehicles, credit, omc, busy, onAdd, onRemove }) => {
   const [open, setOpen] = useState(false);
@@ -173,9 +208,18 @@ const CustomerSaleForm: React.FC<{
 
   const reset = () => {
     idemKeyRef.current = null;
-    setSelectValue(''); setChannel('credit');
-    setCustomerId(''); setCustomerName(''); setCustomerType(null); setVehicleId(null); setVehicleLabel('');
-    setProductId(''); setQty(''); setPrice(''); setAmount(''); setNotes('');
+    setSelectValue('');
+    setChannel('credit');
+    setCustomerId('');
+    setCustomerName('');
+    setCustomerType(null);
+    setVehicleId(null);
+    setVehicleLabel('');
+    setProductId('');
+    setQty('');
+    setPrice('');
+    setAmount('');
+    setNotes('');
   };
 
   // Combined, cached option list: vehicles (scoped to the passed customers) + customers.
@@ -187,12 +231,13 @@ const CustomerSaleForm: React.FC<{
       const parts = [v.customerName, v.customerType, v.defaultProductName].filter(Boolean);
       opts.push({ value: `v:${v.id}`, label: v.registrationNumber, sublabel: parts.join(' · ') });
     }
-    for (const c of customers) opts.push({ value: `c:${c.id}`, label: c.name, sublabel: c.customerType });
+    for (const c of customers)
+      opts.push({ value: `c:${c.id}`, label: c.name, sublabel: c.customerType });
     return opts;
   }, [allVehicles, customers]);
 
   const defaultChannelFor = (cust: any): 'credit' | 'omc' =>
-    (cust?.customerType === 'Fleet' && cust?.isPrepaid) ? 'omc' : 'credit';
+    cust?.customerType === 'Fleet' && cust?.isPrepaid ? 'omc' : 'credit';
 
   const onSelect = (value: string) => {
     idemKeyRef.current = null;
@@ -204,11 +249,16 @@ const CustomerSaleForm: React.FC<{
       setCustomerId(v.customerId);
       setCustomerName(v.customerName ?? 'Customer');
       setCustomerType(v.customerType ?? cust?.customerType ?? null);
-      setChannel(defaultChannelFor(cust ?? { customerType: v.customerType, isPrepaid: v.isPrepaid }));
+      setChannel(
+        defaultChannelFor(cust ?? { customerType: v.customerType, isPrepaid: v.isPrepaid }),
+      );
       setVehicleId(v.id);
       setVehicleLabel(v.registrationNumber);
       const match = duProducts.find((p) => p.id === v.defaultProductId);
-      if (match) { setProductId(match.id); if (match.price > 0) setPrice(match.price.toFixed(2)); }
+      if (match) {
+        setProductId(match.id);
+        if (match.price > 0) setPrice(match.price.toFixed(2));
+      }
     } else if (value.startsWith('c:')) {
       const id = value.slice(2);
       const c = customers.find((x: any) => x.id === id);
@@ -233,13 +283,15 @@ const CustomerSaleForm: React.FC<{
   const onQty = (v: string) => {
     idemKeyRef.current = null;
     setQty(v);
-    const q = Number(v); const pr = Number(price);
+    const q = Number(v);
+    const pr = Number(price);
     if (q > 0 && pr > 0) setAmount((q * pr).toFixed(2));
   };
   const onAmount = (v: string) => {
     idemKeyRef.current = null;
     setAmount(v);
-    const a = Number(v); const pr = Number(price);
+    const a = Number(v);
+    const pr = Number(price);
     if (a > 0 && pr > 0) setQty((a / pr).toFixed(3));
   };
 
@@ -250,19 +302,23 @@ const CustomerSaleForm: React.FC<{
     setAdding(true);
     try {
       const idempotencyKey = idemKeyRef.current ?? (idemKeyRef.current = genIdemKey());
-      await onAdd(channel, {
-        customerId: customerId || null,
-        customerName: customerId ? customerName : null,
-        customerType,
-        vehicleId,
-        vehicleLabel: vehicleLabel || null,
-        productId: productId || null,
-        productName: duProducts.find((p) => p.id === productId)?.name ?? null,
-        quantity: Number(qty) > 0 ? Number(qty) : null,
-        unitPrice: price && Number(price) >= 0 ? Number(price) : null,
-        amount: amt,
-        notes: notes || null,
-      }, idempotencyKey);
+      await onAdd(
+        channel,
+        {
+          customerId: customerId || null,
+          customerName: customerId ? customerName : null,
+          customerType,
+          vehicleId,
+          vehicleLabel: vehicleLabel || null,
+          productId: productId || null,
+          productName: duProducts.find((p) => p.id === productId)?.name ?? null,
+          quantity: Number(qty) > 0 ? Number(qty) : null,
+          unitPrice: price && Number(price) >= 0 ? Number(price) : null,
+          amount: amt,
+          notes: notes || null,
+        },
+        idempotencyKey,
+      );
       reset();
       setOpen(false);
     } finally {
@@ -273,23 +329,40 @@ const CustomerSaleForm: React.FC<{
   const renderList = (label: string, lines: CreditLine[], ch: 'credit' | 'omc') =>
     lines.length > 0 ? (
       <div className="mb-2">
-        <div className="mb-1 flex items-center justify-between text-[11px] font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
+        <div
+          className="mb-1 flex items-center justify-between text-[11px] font-semibold uppercase tracking-wide"
+          style={{ color: 'var(--text-muted)' }}
+        >
           <span>{label}</span>
-          <span className="font-mono tabular-nums" style={{ color: 'var(--text-strong)' }}>{inr(lines.reduce((s, l) => s + Number(l.amount || 0), 0))}</span>
+          <span className="font-mono tabular-nums" style={{ color: 'var(--text-strong)' }}>
+            {inr(lines.reduce((s, l) => s + Number(l.amount || 0), 0))}
+          </span>
         </div>
         <ul className="flex flex-col gap-1">
           {lines.map((l, i) => (
-            <li key={l.id ?? i} className="flex items-center justify-between rounded-lg border px-3 py-2" style={{ borderColor: 'var(--border-soft)' }}>
+            <li
+              key={l.id ?? i}
+              className="flex items-center justify-between rounded-lg border px-3 py-2"
+              style={{ borderColor: 'var(--border-soft)' }}
+            >
               <div className="min-w-0">
                 <p className="truncate text-sm" style={{ color: 'var(--text-default)' }}>
-                  {l.customerName || 'OMC card (no customer)'}{l.vehicleLabel ? ` · ${l.vehicleLabel}` : ''}
+                  {l.customerName || 'OMC card (no customer)'}
+                  {l.vehicleLabel ? ` · ${l.vehicleLabel}` : ''}
                 </p>
                 <p className="text-[11px]" style={{ color: 'var(--text-faint)' }}>
-                  {l.productName ?? 'Fuel'}{l.quantity ? ` · ${l.quantity}` : ''}{l.notes ? ` · ${l.notes}` : ''}
+                  {l.productName ?? 'Fuel'}
+                  {l.quantity ? ` · ${l.quantity}` : ''}
+                  {l.notes ? ` · ${l.notes}` : ''}
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                <span className="font-mono text-sm tabular-nums" style={{ color: 'var(--text-strong)' }}>{inr(l.amount)}</span>
+                <span
+                  className="font-mono text-sm tabular-nums"
+                  style={{ color: 'var(--text-strong)' }}
+                >
+                  {inr(l.amount)}
+                </span>
                 {l.id && (
                   <button
                     type="button"
@@ -311,7 +384,10 @@ const CustomerSaleForm: React.FC<{
 
   return (
     <div>
-      <p className="mb-2 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
+      <p
+        className="mb-2 text-xs font-semibold uppercase tracking-wide"
+        style={{ color: 'var(--text-muted)' }}
+      >
         Customer sales
       </p>
 
@@ -328,7 +404,10 @@ const CustomerSaleForm: React.FC<{
           + Add customer sale
         </button>
       ) : (
-        <div className="flex flex-col gap-2 rounded-lg border p-3" style={{ borderColor: 'var(--border-soft)' }}>
+        <div
+          className="flex flex-col gap-2 rounded-lg border p-3"
+          style={{ borderColor: 'var(--border-soft)' }}
+        >
           {/* Channel toggle */}
           <div className="flex gap-2">
             {(['credit', 'omc'] as const).map((ch) => (
@@ -348,11 +427,15 @@ const CustomerSaleForm: React.FC<{
             ))}
           </div>
           {isOmc && (
-            <p className="text-[11px]" style={{ color: 'var(--text-faint)' }}>Settled to CMS by the Oil Company — not a receivable. Customer optional.</p>
+            <p className="text-[11px]" style={{ color: 'var(--text-faint)' }}>
+              Settled to CMS by the Oil Company — not a receivable. Customer optional.
+            </p>
           )}
 
           <label className="flex flex-col gap-1">
-            <span className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Customer or vehicle{isOmc ? ' (optional)' : ''}</span>
+            <span className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
+              Customer or vehicle{isOmc ? ' (optional)' : ''}
+            </span>
             <Combobox
               options={options}
               value={selectValue}
@@ -364,7 +447,9 @@ const CustomerSaleForm: React.FC<{
           </label>
 
           <label className="flex flex-col gap-1">
-            <span className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Fuel</span>
+            <span className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
+              Fuel
+            </span>
             <select
               value={productId}
               onChange={(e) => onProduct(e.target.value)}
@@ -373,18 +458,26 @@ const CustomerSaleForm: React.FC<{
             >
               <option value="">Select fuel…</option>
               {duProducts.map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
               ))}
             </select>
           </label>
 
           <div className="grid grid-cols-2 gap-2">
-            <NumberField label={`Quantity${price ? ` @ ${price}` : ''}`} value={qty} onChange={onQty} />
+            <NumberField
+              label={`Quantity${price ? ` @ ${price}` : ''}`}
+              value={qty}
+              onChange={onQty}
+            />
             <NumberField label="Amount (₹)" value={amount} onChange={onAmount} />
           </div>
 
           <label className="flex flex-col gap-1">
-            <span className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Remarks (driver, slip no.)</span>
+            <span className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
+              Remarks (driver, slip no.)
+            </span>
             <input
               type="text"
               value={notes}
@@ -398,7 +491,10 @@ const CustomerSaleForm: React.FC<{
           <div className="flex gap-2">
             <button
               type="button"
-              onClick={() => { reset(); setOpen(false); }}
+              onClick={() => {
+                reset();
+                setOpen(false);
+              }}
               className="flex-1 rounded-lg border py-2 text-sm font-medium"
               style={{ borderColor: 'var(--border-soft)', color: 'var(--text-muted)' }}
             >
@@ -440,7 +536,9 @@ export const HandoverPanel: React.FC = () => {
   const [forms, setForms] = useState<Record<string, DuFormState>>({});
   const [creditByDu, setCreditByDu] = useState<Record<string, CreditLine[]>>({});
   const [omcByDu, setOmcByDu] = useState<Record<string, CreditLine[]>>({});
-  const [merchRows, setMerchRows] = useState<{ productId: string; quantity: string }[]>([{ productId: '', quantity: '' }]);
+  const [merchRows, setMerchRows] = useState<{ productId: string; quantity: string }[]>([
+    { productId: '', quantity: '' },
+  ]);
   const [merchNonCash, setMerchNonCash] = useState('');
   const [merchSeeded, setMerchSeeded] = useState(false);
   const [ccBusy, setCcBusy] = useState(false);
@@ -455,9 +553,13 @@ export const HandoverPanel: React.FC = () => {
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [acceptedByDu, setAcceptedByDu] = useState<Record<string, RecordHandoverResult>>({});
-  const handoverRequestByDuRef = useRef<Record<string, { fingerprint: string; idempotencyKey: string }>>({});
+  const handoverRequestByDuRef = useRef<
+    Record<string, { fingerprint: string; idempotencyKey: string }>
+  >({});
   const acceptedFingerprintByDuRef = useRef<Record<string, string>>({});
-  const merchandiseRequestRef = useRef<{ fingerprint: string; idempotencyKey: string } | null>(null);
+  const merchandiseRequestRef = useRef<{ fingerprint: string; idempotencyKey: string } | null>(
+    null,
+  );
   const resetMerchandiseAcceptance = () => {
     setAcceptedByDu({});
     merchandiseRequestRef.current = null;
@@ -474,7 +576,10 @@ export const HandoverPanel: React.FC = () => {
         const testing: Record<string, string> = {};
         for (const nz of du.nozzles) {
           readings[nz.nozzleId] = String(nz.closingReading ?? nz.openingReading ?? 0);
-          testing[nz.nozzleId] = nz.testingVolume != null && Number(nz.testingVolume) > 0 ? String(Number(nz.testingVolume)) : '';
+          testing[nz.nozzleId] =
+            nz.testingVolume != null && Number(nz.testingVolume) > 0
+              ? String(Number(nz.testingVolume))
+              : '';
         }
         const terminals: TerminalState = {};
         for (const t of du.terminals) {
@@ -489,9 +594,16 @@ export const HandoverPanel: React.FC = () => {
           readings,
           testing,
           terminals,
-          aggregateCard: du.terminals.length === 0 && du.handover?.cardHandedOver != null ? String(Number(du.handover.cardHandedOver)) : '',
-          aggregateUpi: du.terminals.length === 0 && du.handover?.upiHandedOver != null ? String(Number(du.handover.upiHandedOver)) : '',
-          cash: du.handover?.cashHandedOver != null ? String(Number(du.handover.cashHandedOver)) : '',
+          aggregateCard:
+            du.terminals.length === 0 && du.handover?.cardHandedOver != null
+              ? String(Number(du.handover.cardHandedOver))
+              : '',
+          aggregateUpi:
+            du.terminals.length === 0 && du.handover?.upiHandedOver != null
+              ? String(Number(du.handover.upiHandedOver))
+              : '',
+          cash:
+            du.handover?.cashHandedOver != null ? String(Number(du.handover.cashHandedOver)) : '',
         };
       }
       return next;
@@ -512,7 +624,10 @@ export const HandoverPanel: React.FC = () => {
 
   // Merchandise products (non-fuel), for the add-line picker.
   const merchProducts = useMemo(
-    () => (productsQ.data || []).filter((p: any) => p.productType && p.productType !== 'FUEL' && p.isActive !== false),
+    () =>
+      (productsQ.data || []).filter(
+        (p: any) => p.productType && p.productType !== 'FUEL' && p.isActive !== false,
+      ),
     [productsQ.data],
   );
   const merchById = useMemo(() => {
@@ -524,7 +639,9 @@ export const HandoverPanel: React.FC = () => {
   // On-hand stock per merchandise product (shown in the picker, like desktop).
   const stock = useMemo(() => {
     const m: Record<string, number> = {};
-    (inventoryQ.data || []).forEach((i: any) => { m[i.productId] = Number(i.quantity); });
+    (inventoryQ.data || []).forEach((i: any) => {
+      m[i.productId] = Number(i.quantity);
+    });
     return m;
   }, [inventoryQ.data]);
 
@@ -532,7 +649,8 @@ export const HandoverPanel: React.FC = () => {
     () =>
       merchProducts.map((pr: any) => {
         const onHand = stock[pr.id];
-        const priceLabel = pr.sellingPrice != null ? `MRP ${inr(Number(pr.sellingPrice))}` : 'No price set';
+        const priceLabel =
+          pr.sellingPrice != null ? `MRP ${inr(Number(pr.sellingPrice))}` : 'No price set';
         const stockLabel = onHand != null ? `${onHand} ${pr.unit || 'unit'} on hand` : null;
         return {
           value: pr.id,
@@ -549,8 +667,14 @@ export const HandoverPanel: React.FC = () => {
     if (merchSeeded || !attendantId || !merchHandoversQ.data) return;
     const mine = (merchHandoversQ.data as any[]).find((h) => h.attendantId === attendantId);
     if (mine && (mine.items?.length ?? 0) > 0) {
-      setMerchRows(mine.items.map((it: any) => ({ productId: it.productId, quantity: String(Number(it.quantity)) })));
-      if (mine.nonCashAmount != null && Number(mine.nonCashAmount) > 0) setMerchNonCash(String(Number(mine.nonCashAmount)));
+      setMerchRows(
+        mine.items.map((it: any) => ({
+          productId: it.productId,
+          quantity: String(Number(it.quantity)),
+        })),
+      );
+      if (mine.nonCashAmount != null && Number(mine.nonCashAmount) > 0)
+        setMerchNonCash(String(Number(mine.nonCashAmount)));
     }
     setMerchSeeded(true);
   }, [merchHandoversQ.data, attendantId, merchSeeded]);
@@ -569,16 +693,25 @@ export const HandoverPanel: React.FC = () => {
       new Map(
         (du.nozzles || [])
           .filter((n: any) => n.productId)
-          .map((n: any) => [n.productId, { id: n.productId, name: n.productName ?? 'Fuel', unit: n.unit ?? 'L', price: Number(n.unitPrice || 0) }]),
+          .map((n: any) => [
+            n.productId,
+            {
+              id: n.productId,
+              name: n.productName ?? 'Fuel',
+              unit: n.unit ?? 'L',
+              price: Number(n.unitPrice || 0),
+            },
+          ]),
       ).values(),
     ) as DuProduct[];
 
-  const clearAccepted = (duId: string) => setAcceptedByDu((current) => {
-    if (!current[duId]) return current;
-    const next = { ...current };
-    delete next[duId];
-    return next;
-  });
+  const clearAccepted = (duId: string) =>
+    setAcceptedByDu((current) => {
+      if (!current[duId]) return current;
+      const next = { ...current };
+      delete next[duId];
+      return next;
+    });
   const resetAcceptedHandover = (duId: string) => {
     clearAccepted(duId);
     delete handoverRequestByDuRef.current[duId];
@@ -586,11 +719,17 @@ export const HandoverPanel: React.FC = () => {
   };
   const setReading = (duId: string, nozzleId: string, v: string) => {
     resetAcceptedHandover(duId);
-    setForms((f) => ({ ...f, [duId]: { ...f[duId], readings: { ...f[duId].readings, [nozzleId]: v } } }));
+    setForms((f) => ({
+      ...f,
+      [duId]: { ...f[duId], readings: { ...f[duId].readings, [nozzleId]: v } },
+    }));
   };
   const setTesting = (duId: string, nozzleId: string, v: string) => {
     resetAcceptedHandover(duId);
-    setForms((f) => ({ ...f, [duId]: { ...f[duId], testing: { ...f[duId].testing, [nozzleId]: v } } }));
+    setForms((f) => ({
+      ...f,
+      [duId]: { ...f[duId], testing: { ...f[duId].testing, [nozzleId]: v } },
+    }));
   };
   const setCash = (duId: string, v: string) => {
     resetAcceptedHandover(duId);
@@ -600,30 +739,51 @@ export const HandoverPanel: React.FC = () => {
     resetAcceptedHandover(duId);
     setForms((f) => ({ ...f, [duId]: { ...f[duId], [field]: v } }));
   };
-  const setTerminal = (duId: string, terminalId: string, field: 'card' | 'upi' | 'batch', v: string) =>
-    { resetAcceptedHandover(duId); setForms((f) => ({
-        ...f,
-        [duId]: { ...f[duId], terminals: { ...f[duId].terminals, [terminalId]: { ...f[duId].terminals[terminalId], [field]: v } } },
-      })); };
+  const setTerminal = (
+    duId: string,
+    terminalId: string,
+    field: 'card' | 'upi' | 'batch',
+    v: string,
+  ) => {
+    resetAcceptedHandover(duId);
+    setForms((f) => ({
+      ...f,
+      [duId]: {
+        ...f[duId],
+        terminals: {
+          ...f[duId].terminals,
+          [terminalId]: { ...f[duId].terminals[terminalId], [field]: v },
+        },
+      },
+    }));
+  };
 
-  const addCredit = async (duId: string, channel: 'credit' | 'omc', line: Omit<CreditLine, 'id'>, idempotencyKey?: string) => {
+  const addCredit = async (
+    duId: string,
+    channel: 'credit' | 'omc',
+    line: Omit<CreditLine, 'id'>,
+    idempotencyKey?: string,
+  ) => {
     if (!shiftId) return;
     setError(null);
     setCcBusy(true);
     try {
-      const entry = await txService.recordCollection({
-        shiftId,
-        customerId: line.customerId || undefined,
-        vehicleId: line.vehicleId,
-        productId: line.productId,
-        quantity: line.quantity,
-        unitPrice: line.unitPrice,
-        amount: line.amount,
-        paymentMethod: channel === 'omc' ? 'OMC' : 'Credit',
-        attendantId: attendantId ?? null,
-        duId,
-        notes: line.notes ?? undefined,
-      }, { idempotencyKey });
+      const entry = await txService.recordCollection(
+        {
+          shiftId,
+          customerId: line.customerId || undefined,
+          vehicleId: line.vehicleId,
+          productId: line.productId,
+          quantity: line.quantity,
+          unitPrice: line.unitPrice,
+          amount: line.amount,
+          paymentMethod: channel === 'omc' ? 'OMC' : 'Credit',
+          attendantId: attendantId ?? null,
+          duId,
+          notes: line.notes ?? undefined,
+        },
+        { idempotencyKey },
+      );
       const stamped = { ...line, id: entry?.id };
       resetAcceptedHandover(duId);
       if (channel === 'omc') setOmcByDu((c) => ({ ...c, [duId]: [...(c[duId] || []), stamped] }));
@@ -666,7 +826,8 @@ export const HandoverPanel: React.FC = () => {
         const hasReading = raw !== '' && raw != null;
         const closing = num(raw);
         if (!hasReading) errs.push(`${nz.nozzleName}: closing reading required`);
-        if (hasReading && closing < nz.openingReading) errs.push(`${nz.nozzleName}: closing below opening`);
+        if (hasReading && closing < nz.openingReading)
+          errs.push(`${nz.nozzleName}: closing below opening`);
         if (closing < 0) errs.push(`${nz.nozzleName}: negative reading`);
         const vol = Math.max(0, closing - nz.openingReading);
         const testingVal = num(form.testing[nz.nozzleId]);
@@ -674,10 +835,15 @@ export const HandoverPanel: React.FC = () => {
         else if (testingVal > vol) errs.push(`${nz.nozzleName}: testing exceeds sold volume`);
       }
       for (const t of du.terminals) {
-        if (num(form.terminals[t.terminalId]?.card) < 0 || num(form.terminals[t.terminalId]?.upi) < 0) errs.push(`${du.duName}: negative POS amount`);
+        if (
+          num(form.terminals[t.terminalId]?.card) < 0 ||
+          num(form.terminals[t.terminalId]?.upi) < 0
+        )
+          errs.push(`${du.duName}: negative POS amount`);
       }
       if (num(form.cash) < 0) errs.push(`${du.duName}: negative cash`);
-      if (aggregateNonCashAllowed && (num(form.aggregateCard) < 0 || num(form.aggregateUpi) < 0)) errs.push(`${du.duName}: negative non-cash amount`);
+      if (aggregateNonCashAllowed && (num(form.aggregateCard) < 0 || num(form.aggregateUpi) < 0))
+        errs.push(`${du.duName}: negative non-cash amount`);
     }
     if (num(merchNonCash) < 0) errs.push('Merchandise non-cash negative');
     for (const r of merchRows) if (num(r.quantity) < 0) errs.push('Merchandise qty negative');
@@ -694,12 +860,17 @@ export const HandoverPanel: React.FC = () => {
       const zeroDus = (data?.dus ?? []).filter((du: any) => {
         const form = forms[du.duId];
         if (!form || du.terminals.length === 0) return false;
-        return du.terminals.every((t: any) =>
-          num(form.terminals[t.terminalId]?.card) === 0 && num(form.terminals[t.terminalId]?.upi) === 0);
+        return du.terminals.every(
+          (t: any) =>
+            num(form.terminals[t.terminalId]?.card) === 0 &&
+            num(form.terminals[t.terminalId]?.upi) === 0,
+        );
       });
       if (zeroDus.length > 0) {
         setZeroTerminalsConfirmed(true);
-        setError('No card/UPI takings entered for the assigned terminal(s). If that is correct, save again to confirm; otherwise enter the terminal amounts.');
+        setError(
+          'No card/UPI takings entered for the assigned terminal(s). If that is correct, save again to confirm; otherwise enter the terminal amounts.',
+        );
         return;
       }
     }
@@ -712,16 +883,24 @@ export const HandoverPanel: React.FC = () => {
         .map((r) => ({ productId: r.productId, quantity: num(r.quantity) }))
         .filter((l) => l.productId && l.quantity > 0);
       if (merchLines.length) {
-        const merchandisePayload = { attendantId, lines: merchLines, nonCashAmount: num(merchNonCash) };
+        const merchandisePayload = {
+          attendantId,
+          lines: merchLines,
+          nonCashAmount: num(merchNonCash),
+        };
         const fingerprint = JSON.stringify(merchandisePayload);
         if (merchandiseRequestRef.current?.fingerprint !== fingerprint) {
           merchandiseRequestRef.current = { fingerprint, idempotencyKey: createIdempotencyKey() };
         }
-        await txService.recordMerchandiseHandover(shiftId, merchandisePayload, { idempotencyKey: merchandiseRequestRef.current.idempotencyKey });
+        await txService.recordMerchandiseHandover(shiftId, merchandisePayload, {
+          idempotencyKey: merchandiseRequestRef.current.idempotencyKey,
+        });
         await Promise.all([
           qc.invalidateQueries({ queryKey: queryKeys.merchandiseHandovers(shiftId) }),
           qc.invalidateQueries({ queryKey: queryKeys.merchandiseSales(shiftId) }),
-          stationId ? qc.invalidateQueries({ queryKey: queryKeys.inventoryItems(stationId) }) : Promise.resolve(),
+          stationId
+            ? qc.invalidateQueries({ queryKey: queryKeys.inventoryItems(stationId) })
+            : Promise.resolve(),
         ]);
       }
 
@@ -729,10 +908,10 @@ export const HandoverPanel: React.FC = () => {
         const form = forms[du.duId];
         if (!form) continue;
         const nozzleReadings = du.nozzles.map((nz: any) => ({
-            nozzleId: nz.nozzleId,
-            closingReading: num(form.readings[nz.nozzleId]),
-            testingVolume: num(form.testing[nz.nozzleId]),
-          }));
+          nozzleId: nz.nozzleId,
+          closingReading: num(form.readings[nz.nozzleId]),
+          testingVolume: num(form.testing[nz.nozzleId]),
+        }));
         const terminalEntries = du.terminals
           .map((t: any) => ({
             terminalId: t.terminalId,
@@ -746,13 +925,19 @@ export const HandoverPanel: React.FC = () => {
           userId: attendantId!,
           duId: du.duId,
           cashHandedOver: num(form.cash),
-          ...(du.terminals.length === 0 && aggregateNonCashAllowed ? { cardHandedOver: num(form.aggregateCard), upiHandedOver: num(form.aggregateUpi) } : {}),
+          ...(du.terminals.length === 0 && aggregateNonCashAllowed
+            ? { cardHandedOver: num(form.aggregateCard), upiHandedOver: num(form.aggregateUpi) }
+            : {}),
           terminalEntries: du.terminals.length > 0 ? terminalEntries : undefined,
           nozzleReadings,
         };
         const fingerprint = handoverPayloadFingerprint(payload);
-        if (acceptedFingerprintByDuRef.current[du.duId] === fingerprint && acceptedByDu[du.duId]) continue;
-        handoverRequestByDuRef.current[du.duId] = resolveHandoverRequestIdentity(handoverRequestByDuRef.current[du.duId], payload);
+        if (acceptedFingerprintByDuRef.current[du.duId] === fingerprint && acceptedByDu[du.duId])
+          continue;
+        handoverRequestByDuRef.current[du.duId] = resolveHandoverRequestIdentity(
+          handoverRequestByDuRef.current[du.duId],
+          payload,
+        );
         const result = await recordHandover.mutateAsync({
           stationId: stationId ?? '',
           payload,
@@ -768,16 +953,33 @@ export const HandoverPanel: React.FC = () => {
             cash: String(Number(result.handover.cashHandedOver)),
             aggregateCard: String(Number(result.handover.cardHandedOver)),
             aggregateUpi: String(Number(result.handover.upiHandedOver)),
-            readings: Object.fromEntries(result.nozzleReadings.map((reading) => [reading.nozzleId, String(reading.closingReading)])),
-            testing: Object.fromEntries(result.nozzleReadings.map((reading) => [reading.nozzleId, String(reading.testingVolume)])),
-            terminals: Object.fromEntries(du.terminals.map((terminal: any) => {
-              const entry = result.terminalEntries.find((item) => item.terminalId === terminal.terminalId);
-              return [terminal.terminalId, {
-                card: entry ? String(Number(entry.cardAmount)) : '',
-                upi: entry ? String(Number(entry.upiAmount)) : '',
-                batch: entry?.batchRef ?? '',
-              }];
-            })),
+            readings: Object.fromEntries(
+              result.nozzleReadings.map((reading) => [
+                reading.nozzleId,
+                String(reading.closingReading),
+              ]),
+            ),
+            testing: Object.fromEntries(
+              result.nozzleReadings.map((reading) => [
+                reading.nozzleId,
+                String(reading.testingVolume),
+              ]),
+            ),
+            terminals: Object.fromEntries(
+              du.terminals.map((terminal: any) => {
+                const entry = result.terminalEntries.find(
+                  (item) => item.terminalId === terminal.terminalId,
+                );
+                return [
+                  terminal.terminalId,
+                  {
+                    card: entry ? String(Number(entry.cardAmount)) : '',
+                    upi: entry ? String(Number(entry.upiAmount)) : '',
+                    batch: entry?.batchRef ?? '',
+                  },
+                ];
+              }),
+            ),
           },
         }));
       }
@@ -800,7 +1002,10 @@ export const HandoverPanel: React.FC = () => {
 
   if (!data) {
     return (
-      <div className="mt-6 rounded-xl border border-dashed p-8 text-center" style={{ borderColor: 'var(--border-soft)' }}>
+      <div
+        className="mt-6 rounded-xl border border-dashed p-8 text-center"
+        style={{ borderColor: 'var(--border-soft)' }}
+      >
         <p className="text-4xl">⛽</p>
         <p className="mt-2 font-semibold" style={{ color: 'var(--text-strong)' }}>
           No open shift assigned to you
@@ -823,34 +1028,58 @@ export const HandoverPanel: React.FC = () => {
       const net = Math.max(0, vol - num(form.testing[nz.nozzleId]));
       fuelExpected += net * Number(nz.unitPrice || 0);
     }
-    const cardTotal = du.terminals.length > 0
-      ? du.terminals.reduce((s: number, t: any) => s + num(form.terminals[t.terminalId]?.card), 0)
-      : aggregateNonCashAllowed ? num(form.aggregateCard) : 0;
-    const upiTotal = du.terminals.length > 0
-      ? du.terminals.reduce((s: number, t: any) => s + num(form.terminals[t.terminalId]?.upi), 0)
-      : aggregateNonCashAllowed ? num(form.aggregateUpi) : 0;
+    const cardTotal =
+      du.terminals.length > 0
+        ? du.terminals.reduce((s: number, t: any) => s + num(form.terminals[t.terminalId]?.card), 0)
+        : aggregateNonCashAllowed
+          ? num(form.aggregateCard)
+          : 0;
+    const upiTotal =
+      du.terminals.length > 0
+        ? du.terminals.reduce((s: number, t: any) => s + num(form.terminals[t.terminalId]?.upi), 0)
+        : aggregateNonCashAllowed
+          ? num(form.aggregateUpi)
+          : 0;
     const creditTotal = (creditByDu[du.duId] || []).reduce((s, l) => s + Number(l.amount || 0), 0);
     const omcTotal = (omcByDu[du.duId] || []).reduce((s, l) => s + Number(l.amount || 0), 0);
     declaredTotal += num(form.cash) + cardTotal + upiTotal + creditTotal + omcTotal;
   }
-  const merchTotal = merchRows.reduce((s, r) => s + num(r.quantity) * Number(merchById[r.productId]?.sellingPrice || 0), 0);
+  const merchTotal = merchRows.reduce(
+    (s, r) => s + num(r.quantity) * Number(merchById[r.productId]?.sellingPrice || 0),
+    0,
+  );
   const merchCash = Math.max(0, merchTotal - num(merchNonCash));
   const expectedTotal = fuelExpected + merchCash;
   const varianceTotal = Math.round((declaredTotal - expectedTotal) * 100) / 100;
   const allAccepted = dus.length > 0 && dus.every((du) => acceptedByDu[du.duId]);
-  const acceptedSummary = allAccepted ? {
-    ...acceptedByDu[dus[0].duId],
-    expectedTotal: dus.reduce((sum, du) => sum + acceptedByDu[du.duId].expectedFuelSales, 0) + acceptedByDu[dus[0].duId].merchandiseCash,
-    declaredTotal: dus.reduce((sum, du) => sum + acceptedByDu[du.duId].declaredTotal, 0),
-    varianceAmount: Math.round((dus.reduce((sum, du) => sum + acceptedByDu[du.duId].declaredTotal, 0)
-      - (dus.reduce((sum, du) => sum + acceptedByDu[du.duId].expectedFuelSales, 0) + acceptedByDu[dus[0].duId].merchandiseCash)) * 100) / 100,
-  } : null;
-  const shownSummary = selectHandoverSummary({ expectedTotal, declaredTotal, varianceAmount: varianceTotal }, acceptedSummary);
+  const acceptedSummary = allAccepted
+    ? {
+        ...acceptedByDu[dus[0].duId],
+        expectedTotal:
+          dus.reduce((sum, du) => sum + acceptedByDu[du.duId].expectedFuelSales, 0) +
+          acceptedByDu[dus[0].duId].merchandiseCash,
+        declaredTotal: dus.reduce((sum, du) => sum + acceptedByDu[du.duId].declaredTotal, 0),
+        varianceAmount:
+          Math.round(
+            (dus.reduce((sum, du) => sum + acceptedByDu[du.duId].declaredTotal, 0) -
+              (dus.reduce((sum, du) => sum + acceptedByDu[du.duId].expectedFuelSales, 0) +
+                acceptedByDu[dus[0].duId].merchandiseCash)) *
+              100,
+          ) / 100,
+      }
+    : null;
+  const shownSummary = selectHandoverSummary(
+    { expectedTotal, declaredTotal, varianceAmount: varianceTotal },
+    acceptedSummary,
+  );
   const formInvalid = collectErrors().length > 0;
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="rounded-xl border px-4 py-3" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-soft)' }}>
+      <div
+        className="rounded-xl border px-4 py-3"
+        style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-soft)' }}
+      >
         <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
           {data.station?.name ?? 'Station'} · {data.shift?.templateName ?? 'Shift'}
         </p>
@@ -874,12 +1103,17 @@ export const HandoverPanel: React.FC = () => {
           >
             <h2 className="text-sm font-semibold" style={{ color: 'var(--text-strong)' }}>
               {du.duName}
-              {du.duCode ? <span style={{ color: 'var(--text-faint)' }}> · {du.duCode}</span> : null}
+              {du.duCode ? (
+                <span style={{ color: 'var(--text-faint)' }}> · {du.duCode}</span>
+              ) : null}
             </h2>
 
             {/* Closing readings + per-nozzle testing */}
             <div>
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
+              <p
+                className="mb-2 text-xs font-semibold uppercase tracking-wide"
+                style={{ color: 'var(--text-muted)' }}
+              >
                 Closing readings
               </p>
               <div className="flex flex-col gap-3">
@@ -888,9 +1122,17 @@ export const HandoverPanel: React.FC = () => {
                   const hasReading = rawReading !== '' && rawReading != null;
                   const closing = num(rawReading);
                   const vol = Math.max(0, closing - nz.openingReading);
-                  const readingError = hasReading && closing < nz.openingReading ? `Cannot be below opening (${nz.openingReading})` : undefined;
+                  const readingError =
+                    hasReading && closing < nz.openingReading
+                      ? `Cannot be below opening (${nz.openingReading})`
+                      : undefined;
                   const testingVal = num(form.testing[nz.nozzleId]);
-                  const testingError = testingVal < 0 ? 'Cannot be negative' : testingVal > vol ? `Cannot exceed ${vol.toFixed(2)} ${nz.unit}` : undefined;
+                  const testingError =
+                    testingVal < 0
+                      ? 'Cannot be negative'
+                      : testingVal > vol
+                        ? `Cannot exceed ${vol.toFixed(2)} ${nz.unit}`
+                        : undefined;
                   return (
                     <div key={nz.nozzleId} className="grid grid-cols-2 gap-3">
                       <NumberField
@@ -915,27 +1157,64 @@ export const HandoverPanel: React.FC = () => {
             {/* Card / UPI per assigned terminal */}
             {du.terminals.length > 0 ? (
               <div>
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
+                <p
+                  className="mb-2 text-xs font-semibold uppercase tracking-wide"
+                  style={{ color: 'var(--text-muted)' }}
+                >
                   Card / UPI by terminal
                 </p>
                 <div className="flex flex-col gap-3">
                   {du.terminals.map((t: any) => (
-                    <div key={t.terminalId} className="rounded-lg border p-3" style={{ borderColor: 'var(--border-soft)' }}>
-                      <p className="mb-2 text-sm font-medium" style={{ color: 'var(--text-default)' }}>{t.label}</p>
+                    <div
+                      key={t.terminalId}
+                      className="rounded-lg border p-3"
+                      style={{ borderColor: 'var(--border-soft)' }}
+                    >
+                      <p
+                        className="mb-2 text-sm font-medium"
+                        style={{ color: 'var(--text-default)' }}
+                      >
+                        {t.label}
+                      </p>
                       <div className="grid grid-cols-2 gap-3">
                         {t.supportsCard !== false && (
-                          <NumberField label="Card" value={form.terminals[t.terminalId]?.card ?? ''} onChange={(v) => setTerminal(du.duId, t.terminalId, 'card', v)} error={num(form.terminals[t.terminalId]?.card) < 0 ? 'No negatives' : undefined} />
+                          <NumberField
+                            label="Card"
+                            value={form.terminals[t.terminalId]?.card ?? ''}
+                            onChange={(v) => setTerminal(du.duId, t.terminalId, 'card', v)}
+                            error={
+                              num(form.terminals[t.terminalId]?.card) < 0
+                                ? 'No negatives'
+                                : undefined
+                            }
+                          />
                         )}
                         {t.supportsUpi !== false && (
-                          <NumberField label="UPI" value={form.terminals[t.terminalId]?.upi ?? ''} onChange={(v) => setTerminal(du.duId, t.terminalId, 'upi', v)} error={num(form.terminals[t.terminalId]?.upi) < 0 ? 'No negatives' : undefined} />
+                          <NumberField
+                            label="UPI"
+                            value={form.terminals[t.terminalId]?.upi ?? ''}
+                            onChange={(v) => setTerminal(du.duId, t.terminalId, 'upi', v)}
+                            error={
+                              num(form.terminals[t.terminalId]?.upi) < 0
+                                ? 'No negatives'
+                                : undefined
+                            }
+                          />
                         )}
                       </div>
                       <label className="mt-2 flex flex-col gap-1">
-                        <span className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Batch ref (optional)</span>
+                        <span
+                          className="text-xs font-medium"
+                          style={{ color: 'var(--text-muted)' }}
+                        >
+                          Batch ref (optional)
+                        </span>
                         <input
                           type="text"
                           value={form.terminals[t.terminalId]?.batch ?? ''}
-                          onChange={(e) => setTerminal(du.duId, t.terminalId, 'batch', e.target.value)}
+                          onChange={(e) =>
+                            setTerminal(du.duId, t.terminalId, 'batch', e.target.value)
+                          }
                           className="rounded-lg border px-3 py-2 text-sm"
                           style={fieldStyle}
                         />
@@ -946,18 +1225,35 @@ export const HandoverPanel: React.FC = () => {
               </div>
             ) : aggregateNonCashAllowed ? (
               <div>
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
+                <p
+                  className="mb-2 text-xs font-semibold uppercase tracking-wide"
+                  style={{ color: 'var(--text-muted)' }}
+                >
                   Card / UPI totals
                 </p>
                 <div className="grid grid-cols-2 gap-3">
-                  <NumberField label="Card" value={form.aggregateCard} onChange={(v) => setAggregate(du.duId, 'aggregateCard', v)} />
-                  <NumberField label="UPI" value={form.aggregateUpi} onChange={(v) => setAggregate(du.duId, 'aggregateUpi', v)} />
+                  <NumberField
+                    label="Card"
+                    value={form.aggregateCard}
+                    onChange={(v) => setAggregate(du.duId, 'aggregateCard', v)}
+                  />
+                  <NumberField
+                    label="UPI"
+                    value={form.aggregateUpi}
+                    onChange={(v) => setAggregate(du.duId, 'aggregateUpi', v)}
+                  />
                 </div>
-                <p className="mt-1 text-[11px]" style={{ color: 'var(--text-faint)' }}>Aggregate declaration used because no Payment Terminal is configured.</p>
+                <p className="mt-1 text-[11px]" style={{ color: 'var(--text-faint)' }}>
+                  Aggregate declaration used because no Payment Terminal is configured.
+                </p>
               </div>
             ) : (
-              <p className="rounded-lg border p-3 text-xs" style={{ borderColor: 'var(--border-soft)', color: 'var(--text-muted)' }}>
-                No Payment Terminal is assigned to this Dispenser. Card and UPI declarations require an assigned terminal.
+              <p
+                className="rounded-lg border p-3 text-xs"
+                style={{ borderColor: 'var(--border-soft)', color: 'var(--text-muted)' }}
+              >
+                No Payment Terminal is assigned to this Dispenser. Card and UPI declarations require
+                an assigned terminal.
               </p>
             )}
 
@@ -977,9 +1273,16 @@ export const HandoverPanel: React.FC = () => {
       })}
 
       {/* Merchandise closing — searchable picker (mirrors desktop) */}
-      <section className="flex flex-col gap-3 rounded-xl border p-4" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-soft)' }}>
-        <h2 className="text-sm font-semibold" style={{ color: 'var(--text-strong)' }}>Merchandise closing</h2>
-        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Lubes / accessories you sold this shift.</p>
+      <section
+        className="flex flex-col gap-3 rounded-xl border p-4"
+        style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-soft)' }}
+      >
+        <h2 className="text-sm font-semibold" style={{ color: 'var(--text-strong)' }}>
+          Merchandise closing
+        </h2>
+        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+          Lubes / accessories you sold this shift.
+        </p>
 
         <div className="flex flex-col gap-2">
           {merchRows.map((row, idx) => {
@@ -987,34 +1290,60 @@ export const HandoverPanel: React.FC = () => {
             const mrp = p?.sellingPrice != null ? Number(p.sellingPrice) : null;
             const lineTotal = mrp != null ? mrp * num(row.quantity) : null;
             return (
-              <div key={idx} className="flex flex-col gap-2 rounded-lg border p-2" style={{ borderColor: 'var(--border-soft)' }}>
+              <div
+                key={idx}
+                className="flex flex-col gap-2 rounded-lg border p-2"
+                style={{ borderColor: 'var(--border-soft)' }}
+              >
                 <Combobox
                   options={merchOptions}
                   value={row.productId}
-                  onChange={(v) => { resetMerchandiseAcceptance(); setMerchRows((rs) => rs.map((r, i) => (i === idx ? { ...r, productId: v } : r))); }}
+                  onChange={(v) => {
+                    resetMerchandiseAcceptance();
+                    setMerchRows((rs) =>
+                      rs.map((r, i) => (i === idx ? { ...r, productId: v } : r)),
+                    );
+                  }}
                   placeholder="Select product…"
                   searchPlaceholder="Search product…"
                 />
                 <div className="flex items-end gap-2">
                   <label className="flex w-24 flex-col gap-1">
-                    <span className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Qty{p?.unit ? ` (${p.unit})` : ''}</span>
+                    <span className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
+                      Qty{p?.unit ? ` (${p.unit})` : ''}
+                    </span>
                     <input
                       type="number"
                       inputMode="decimal"
                       min="0"
                       value={row.quantity}
                       placeholder="0"
-                      onChange={(e) => { resetMerchandiseAcceptance(); setMerchRows((rs) => rs.map((r, i) => (i === idx ? { ...r, quantity: e.target.value } : r))); }}
+                      onChange={(e) => {
+                        resetMerchandiseAcceptance();
+                        setMerchRows((rs) =>
+                          rs.map((r, i) => (i === idx ? { ...r, quantity: e.target.value } : r)),
+                        );
+                      }}
                       className="rounded-lg border px-3 py-2 text-right text-sm font-mono tabular-nums"
                       style={fieldStyle}
                     />
                   </label>
-                  <div className="flex-1 pb-2 text-right text-xs" style={{ color: 'var(--text-muted)' }}>
+                  <div
+                    className="flex-1 pb-2 text-right text-xs"
+                    style={{ color: 'var(--text-muted)' }}
+                  >
                     {mrp != null ? `MRP ${inr(mrp)}${lineTotal ? ` · ${inr(lineTotal)}` : ''}` : ''}
                   </div>
                   <button
                     type="button"
-                    onClick={() => { resetMerchandiseAcceptance(); setMerchRows((rs) => (rs.length > 1 ? rs.filter((_, i) => i !== idx) : [{ productId: '', quantity: '' }])); }}
+                    onClick={() => {
+                      resetMerchandiseAcceptance();
+                      setMerchRows((rs) =>
+                        rs.length > 1
+                          ? rs.filter((_, i) => i !== idx)
+                          : [{ productId: '', quantity: '' }],
+                      );
+                    }}
                     className="grid h-9 w-9 place-items-center rounded-lg border"
                     style={{ borderColor: 'var(--border-soft)', color: 'var(--state-danger-fg)' }}
                     aria-label="Remove item"
@@ -1029,7 +1358,10 @@ export const HandoverPanel: React.FC = () => {
 
         <button
           type="button"
-          onClick={() => { resetMerchandiseAcceptance(); setMerchRows((rs) => [...rs, { productId: '', quantity: '' }]); }}
+          onClick={() => {
+            resetMerchandiseAcceptance();
+            setMerchRows((rs) => [...rs, { productId: '', quantity: '' }]);
+          }}
           className="w-full rounded-lg border border-dashed py-2 text-sm font-medium"
           style={{ borderColor: 'var(--border-soft)', color: 'var(--text-muted)' }}
         >
@@ -1039,14 +1371,22 @@ export const HandoverPanel: React.FC = () => {
         <NumberField
           label="Paid by card / UPI (₹, optional)"
           value={merchNonCash}
-          onChange={(value) => { resetMerchandiseAcceptance(); setMerchNonCash(value); }}
+          onChange={(value) => {
+            resetMerchandiseAcceptance();
+            setMerchNonCash(value);
+          }}
           sub="Portion of merchandise not collected as cash"
         />
       </section>
 
       {/* Cash handed over — recorded last */}
-      <section className="flex flex-col gap-3 rounded-xl border p-4" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-soft)' }}>
-        <h2 className="text-sm font-semibold" style={{ color: 'var(--text-strong)' }}>Cash handed over</h2>
+      <section
+        className="flex flex-col gap-3 rounded-xl border p-4"
+        style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-soft)' }}
+      >
+        <h2 className="text-sm font-semibold" style={{ color: 'var(--text-strong)' }}>
+          Cash handed over
+        </h2>
         {dus.map((du) => (
           <NumberField
             key={du.duId}
@@ -1067,7 +1407,9 @@ export const HandoverPanel: React.FC = () => {
             }
           />
         ))}
-        <p className="text-[11px]" style={{ color: 'var(--text-faint)' }}>Confirm physical cash at close.</p>
+        <p className="text-[11px]" style={{ color: 'var(--text-faint)' }}>
+          Confirm physical cash at close.
+        </p>
       </section>
 
       {/* Sticky summary + save */}
@@ -1076,30 +1418,51 @@ export const HandoverPanel: React.FC = () => {
         style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-soft)' }}
       >
         {error && (
-          <p className="text-center text-xs" style={{ color: 'var(--state-danger-fg)' }}>{error}</p>
+          <p className="text-center text-xs" style={{ color: 'var(--state-danger-fg)' }}>
+            {error}
+          </p>
         )}
         {formInvalid && !error && (
-          <p className="text-center text-[11px]" style={{ color: 'var(--state-danger-fg)' }}>Fix the highlighted fields to save.</p>
+          <p className="text-center text-[11px]" style={{ color: 'var(--state-danger-fg)' }}>
+            Fix the highlighted fields to save.
+          </p>
         )}
-        <p className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: allAccepted ? 'var(--state-success-fg)' : 'var(--text-faint)' }}>
+        <p
+          className="text-[10px] font-semibold uppercase tracking-wide"
+          style={{ color: allAccepted ? 'var(--state-success-fg)' : 'var(--text-faint)' }}
+        >
           {shownSummary.source === 'accepted' ? 'Accepted by server' : 'Live preview'}
         </p>
         <div className="flex items-center justify-between text-xs">
           <span style={{ color: 'var(--text-muted)' }}>
             Expected{' '}
-            <span className="font-mono tabular-nums" style={{ color: 'var(--text-strong)' }}>{inr(shownSummary.expectedTotal)}</span>
+            <span className="font-mono tabular-nums" style={{ color: 'var(--text-strong)' }}>
+              {inr(shownSummary.expectedTotal)}
+            </span>
             {' · '}Declared{' '}
-            <span className="font-mono tabular-nums" style={{ color: 'var(--text-strong)' }}>{inr(shownSummary.declaredTotal)}</span>
+            <span className="font-mono tabular-nums" style={{ color: 'var(--text-strong)' }}>
+              {inr(shownSummary.declaredTotal)}
+            </span>
           </span>
           <span
             className="font-mono text-sm font-semibold tabular-nums"
-            style={{ color: Math.abs(shownSummary.varianceAmount) < 1 ? 'var(--text-faint)' : shownSummary.varianceAmount < 0 ? 'var(--state-danger-fg)' : 'var(--state-warning-fg)' }}
+            style={{
+              color:
+                Math.abs(shownSummary.varianceAmount) < 1
+                  ? 'var(--text-faint)'
+                  : shownSummary.varianceAmount < 0
+                    ? 'var(--state-danger-fg)'
+                    : 'var(--state-warning-fg)',
+            }}
           >
-            {shownSummary.varianceAmount >= 0 ? '+' : ''}{inr(shownSummary.varianceAmount)}
+            {shownSummary.varianceAmount >= 0 ? '+' : ''}
+            {inr(shownSummary.varianceAmount)}
           </span>
         </div>
         {savedAt && !saving && (
-          <p className="text-center text-[11px]" style={{ color: 'var(--state-success-fg)' }}>Saved at {savedAt}</p>
+          <p className="text-center text-[11px]" style={{ color: 'var(--state-success-fg)' }}>
+            Saved at {savedAt}
+          </p>
         )}
         <button
           type="button"
@@ -1115,9 +1478,13 @@ export const HandoverPanel: React.FC = () => {
       <CashCountSheet
         open={sheetDuId != null}
         onClose={() => setSheetDuId(null)}
-        breakdown={sheetDuId ? (cashBreakdownByDu[sheetDuId] || {}) : {}}
-        onBreakdownChange={(b) => { if (sheetDuId) setCashBreakdownByDu((prev) => ({ ...prev, [sheetDuId]: b })); }}
-        onApply={(t) => { if (sheetDuId) setCash(sheetDuId, String(t)); }}
+        breakdown={sheetDuId ? cashBreakdownByDu[sheetDuId] || {} : {}}
+        onBreakdownChange={(b) => {
+          if (sheetDuId) setCashBreakdownByDu((prev) => ({ ...prev, [sheetDuId]: b }));
+        }}
+        onApply={(t) => {
+          if (sheetDuId) setCash(sheetDuId, String(t));
+        }}
         currentValue={sheetDuId ? num(forms[sheetDuId]?.cash) : 0}
       />
     </div>

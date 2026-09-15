@@ -13,62 +13,160 @@ import type { StockMovement, StockMovementRepository } from '../inventory/index.
 import type { CustomerLedgerEntry, CustomerLedgerRepository } from '../crm/collections/index.js';
 import type { Customer, CustomerRepository } from '../crm/customers/index.js';
 import type { Shift, ShiftRepository } from '../station-ops/shifts/index.js';
-import type { BusinessDay, BusinessDayWriteRepository } from '../station-ops/business-days/index.js';
+import type {
+  BusinessDay,
+  BusinessDayWriteRepository,
+} from '../station-ops/business-days/index.js';
 
 class SaleRepo implements SaleRepository {
   saved: { sale: Sale; lines: SaleLine[] } | null = null;
-  async save(sale: Sale, lines: SaleLine[]) { this.saved = { sale, lines }; }
+  async save(sale: Sale, lines: SaleLine[]) {
+    this.saved = { sale, lines };
+  }
 }
 class StockRepo implements StockMovementRepository {
   readonly movements: StockMovement[] = [];
-  async save(m: StockMovement) { this.movements.push(m); }
-  async saveMany(m: StockMovement[]) { this.movements.push(...m); }
-  async currentQuantityForTank() { return 0; }
-  async currentQuantityForProduct() { return 0; }
+  async save(m: StockMovement) {
+    this.movements.push(m);
+  }
+  async saveMany(m: StockMovement[]) {
+    this.movements.push(...m);
+  }
+  async currentQuantityForTank() {
+    return 0;
+  }
+  async currentQuantityForProduct() {
+    return 0;
+  }
 }
 class LedgerRepo implements CustomerLedgerRepository {
   readonly rows: CustomerLedgerEntry[] = [];
-  async save(e: CustomerLedgerEntry) { this.rows.push(e); }
+  async save(e: CustomerLedgerEntry) {
+    this.rows.push(e);
+  }
 }
 class CustomerRepo implements CustomerRepository {
   constructor(readonly rows: Customer[]) {}
-  async findById(id: string) { return this.rows.find((r) => r.id === id) ?? null; }
+  async findById(id: string) {
+    return this.rows.find((r) => r.id === id) ?? null;
+  }
   async save() {}
-  async existsByName() { return false; }
-  async listByOrganization() { return this.rows; }
+  async existsByName() {
+    return false;
+  }
+  async listByOrganization() {
+    return this.rows;
+  }
 }
 class ShiftRepo implements ShiftRepository {
   constructor(readonly rows: Shift[]) {}
-  async findById(id: string) { return this.rows.find((r) => r.id === id) ?? null; }
-  async findByIdWithoutLock(id: string) { return this.findById(id); }
+  async findById(id: string) {
+    return this.rows.find((r) => r.id === id) ?? null;
+  }
+  async findByIdWithoutLock(id: string) {
+    return this.findById(id);
+  }
   async save() {}
-  async findOpenByStation() { return null; }
+  async findOpenByStation() {
+    return null;
+  }
   async addStaffAssignments() {}
   async addTerminalLinks() {}
 }
 class BusinessDayRepo implements BusinessDayWriteRepository {
-  readonly row: BusinessDay = { id: 'bd-1', organizationId: 'org-1', stationId: 'st-1', businessDate: '2026-03-15', status: 'OPEN', openedBy: 'u', openedAt: '', closedBy: null, closedAt: null, createdAt: '', updatedAt: '' };
-  async findById(id: string) { return id === this.row.id ? this.row : null; }
+  readonly row: BusinessDay = {
+    id: 'bd-1',
+    organizationId: 'org-1',
+    stationId: 'st-1',
+    businessDate: '2026-03-15',
+    status: 'OPEN',
+    openedBy: 'u',
+    openedAt: '',
+    closedBy: null,
+    closedAt: null,
+    createdAt: '',
+    updatedAt: '',
+  };
+  async findById(id: string) {
+    return id === this.row.id ? this.row : null;
+  }
   async save() {}
-  async findOpenByStation() { return this.row; }
-  async findByStationAndDate() { return this.row; }
+  async findOpenByStation() {
+    return this.row;
+  }
+  async findByStationAndDate() {
+    return this.row;
+  }
   async lockStation() {}
   async lockById() {}
   async lockByStationAndDate() {}
 }
-const docNumbers: DocumentNumberGenerator = { async next() { return 'SALE-000001'; } };
+const docNumbers: DocumentNumberGenerator = {
+  async next() {
+    return 'SALE-000001';
+  },
+};
 
 function ctx(): ExecutionContext {
-  return { organizationId: 'org-1', stationId: 'st-1', businessDayId: 'bd-1', actorId: 'u', correlationId: null, clock: new FixedClock(new Date('2026-03-15T10:00:00Z')), ids: new SequentialIdGenerator('s') };
+  return {
+    organizationId: 'org-1',
+    stationId: 'st-1',
+    businessDayId: 'bd-1',
+    actorId: 'u',
+    correlationId: null,
+    clock: new FixedClock(new Date('2026-03-15T10:00:00Z')),
+    ids: new SequentialIdGenerator('s'),
+  };
 }
 function shift(): Shift {
-  return { id: 'sh-1', organizationId: 'org-1', stationId: 'st-1', businessDayId: 'bd-1', shiftTemplateId: 't', status: 'OPEN', openedBy: 'u', openedAt: '', closedBy: null, closedAt: null, lockedAt: null, openingCash: '0', closingCash: null, createdAt: '', updatedAt: '' };
+  return {
+    id: 'sh-1',
+    organizationId: 'org-1',
+    stationId: 'st-1',
+    businessDayId: 'bd-1',
+    shiftTemplateId: 't',
+    status: 'OPEN',
+    openedBy: 'u',
+    openedAt: '',
+    closedBy: null,
+    closedAt: null,
+    lockedAt: null,
+    openingCash: '0',
+    closingCash: null,
+    createdAt: '',
+    updatedAt: '',
+  };
 }
 function customer(): Customer {
-  return { id: 'cust-1', organizationId: 'org-1', stationId: null, customerType: 'Credit', name: 'Ravi', phone: null, creditLimit: '100000', fleetCode: null, isPrepaid: false, prepaidBalance: '0', settlementCycle: 'OPEN', metadata: null, isActive: true, createdAt: '', updatedAt: '' };
+  return {
+    id: 'cust-1',
+    organizationId: 'org-1',
+    stationId: null,
+    customerType: 'Credit',
+    name: 'Ravi',
+    phone: null,
+    creditLimit: '100000',
+    fleetCode: null,
+    isPrepaid: false,
+    prepaidBalance: '0',
+    settlementCycle: 'OPEN',
+    metadata: null,
+    isActive: true,
+    createdAt: '',
+    updatedAt: '',
+  };
 }
 
-function deps(over: Partial<{ sales: SaleRepo; stock: StockRepo; ledger: LedgerRepo; customers: CustomerRepo; shifts: ShiftRepo; store: InMemoryEventStore }> = {}) {
+function deps(
+  over: Partial<{
+    sales: SaleRepo;
+    stock: StockRepo;
+    ledger: LedgerRepo;
+    customers: CustomerRepo;
+    shifts: ShiftRepo;
+    store: InMemoryEventStore;
+  }> = {},
+) {
   const store = over.store ?? new InMemoryEventStore();
   return {
     sales: over.sales ?? new SaleRepo(),
@@ -87,7 +185,11 @@ describe('CreateSale', () => {
   it('a cash merchandise sale decrements item stock and emits RETAIL_SALE_CREATED', async () => {
     const d = deps();
     const result = await new CreateSale(d).execute(
-      { shiftId: 'sh-1', paymentMethod: 'Cash', lines: [{ productId: 'oil-1', quantity: 2, unitPrice: 250 }] },
+      {
+        shiftId: 'sh-1',
+        paymentMethod: 'Cash',
+        lines: [{ productId: 'oil-1', quantity: 2, unitPrice: 250 }],
+      },
       ctx(),
     );
     expect(result.success).toBe(true);
@@ -107,7 +209,12 @@ describe('CreateSale', () => {
   it('a credit sale debits the customer ledger and emits CREDIT_SALE_CREATED', async () => {
     const d = deps();
     const result = await new CreateSale(d).execute(
-      { shiftId: 'sh-1', paymentMethod: 'Credit', customerId: 'cust-1', lines: [{ productId: 'oil-1', quantity: 1, unitPrice: 1000, taxAmount: 180 }] },
+      {
+        shiftId: 'sh-1',
+        paymentMethod: 'Credit',
+        customerId: 'cust-1',
+        lines: [{ productId: 'oil-1', quantity: 1, unitPrice: 1000, taxAmount: 180 }],
+      },
       ctx(),
     );
     expect(result.success).toBe(true);
@@ -123,7 +230,11 @@ describe('CreateSale', () => {
 
   it('rejects a credit sale without a customer', async () => {
     const result = await new CreateSale(deps()).execute(
-      { shiftId: 'sh-1', paymentMethod: 'Credit', lines: [{ productId: 'oil-1', quantity: 1, unitPrice: 100 }] },
+      {
+        shiftId: 'sh-1',
+        paymentMethod: 'Credit',
+        lines: [{ productId: 'oil-1', quantity: 1, unitPrice: 100 }],
+      },
       ctx(),
     );
     expect(result.success).toBe(false);
@@ -132,7 +243,12 @@ describe('CreateSale', () => {
   it('attributes a sale to an explicit attendant when provided', async () => {
     const d = deps();
     const result = await new CreateSale(d).execute(
-      { shiftId: 'sh-1', paymentMethod: 'Cash', attendantId: 'att-9', lines: [{ productId: 'oil-1', quantity: 1, unitPrice: 100 }] },
+      {
+        shiftId: 'sh-1',
+        paymentMethod: 'Cash',
+        attendantId: 'att-9',
+        lines: [{ productId: 'oil-1', quantity: 1, unitPrice: 100 }],
+      },
       ctx(),
     );
     expect(result.success).toBe(true);
@@ -142,7 +258,11 @@ describe('CreateSale', () => {
   it('a fuel line yields saleType Fuel and emits FUEL_SALE_RECORDED', async () => {
     const d = deps();
     const result = await new CreateSale(d).execute(
-      { shiftId: 'sh-1', paymentMethod: 'Cash', lines: [{ productId: 'petrol-1', quantity: 10, unitPrice: 100, tankId: 'tank-1' }] },
+      {
+        shiftId: 'sh-1',
+        paymentMethod: 'Cash',
+        lines: [{ productId: 'petrol-1', quantity: 10, unitPrice: 100, tankId: 'tank-1' }],
+      },
       ctx(),
     );
     expect(result.success).toBe(true);

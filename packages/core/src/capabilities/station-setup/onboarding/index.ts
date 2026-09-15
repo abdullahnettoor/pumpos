@@ -1,5 +1,11 @@
 import type { FinalizeOnboardingResult, OnboardingDraft } from '@pump/shared';
-import { BusinessEvents, err, eventFromContext, ok, validationError } from '../../../kernel/index.js';
+import {
+  BusinessEvents,
+  err,
+  eventFromContext,
+  ok,
+  validationError,
+} from '../../../kernel/index.js';
 import type { EventPublisher, ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
 
 /**
@@ -53,14 +59,19 @@ export function validateOnboardingDraftForProvisioning(draft: OnboardingDraft): 
   for (const dispenser of dispensers) {
     const code = dispenser.code.trim().toUpperCase();
     const name = dispenser.name.trim().toLowerCase();
-    if (dispenserCodes.has(code)) return `Duplicate dispenser code "${dispenser.code}" found in draft`;
-    if (dispenserNames.has(name)) return `Duplicate dispenser name "${dispenser.name}" found in draft`;
+    if (dispenserCodes.has(code))
+      return `Duplicate dispenser code "${dispenser.code}" found in draft`;
+    if (dispenserNames.has(name))
+      return `Duplicate dispenser name "${dispenser.name}" found in draft`;
     dispenserCodes.add(code);
     dispenserNames.add(name);
   }
 
   for (const day of businessRules.operatingSchedule.days) {
-    if (day.isOpen && !(day.openTime < day.closeTime || businessRules.operatingSchedule.isTwentyFourSeven)) {
+    if (
+      day.isOpen &&
+      !(day.openTime < day.closeTime || businessRules.operatingSchedule.isTwentyFourSeven)
+    ) {
       return `Operating hours for ${day.day} must have opening time before closing time`;
     }
   }
@@ -70,24 +81,32 @@ export function validateOnboardingDraftForProvisioning(draft: OnboardingDraft): 
   const dispenserMap = new Map(dispensers.map((d) => [d.draftId, d]));
 
   for (const tank of tanks) {
-    if (!productMap.has(tank.productDraftId)) return `Tank "${tank.name}" is linked to a missing fuel product`;
-    if (tank.openingQuantity > tank.capacity) return `Opening stock for tank "${tank.name}" cannot exceed its capacity`;
+    if (!productMap.has(tank.productDraftId))
+      return `Tank "${tank.name}" is linked to a missing fuel product`;
+    if (tank.openingQuantity > tank.capacity)
+      return `Opening stock for tank "${tank.name}" cannot exceed its capacity`;
   }
 
   for (const nozzle of nozzles) {
-    if (!dispenserMap.has(nozzle.dispenserDraftId)) return `Nozzle "${nozzle.name}" is linked to a missing dispenser`;
-    if (!tankMap.has(nozzle.tankDraftId)) return `Nozzle "${nozzle.name}" is linked to a missing tank`;
-    if (!productMap.has(nozzle.productDraftId)) return `Nozzle "${nozzle.name}" is linked to a missing fuel product`;
+    if (!dispenserMap.has(nozzle.dispenserDraftId))
+      return `Nozzle "${nozzle.name}" is linked to a missing dispenser`;
+    if (!tankMap.has(nozzle.tankDraftId))
+      return `Nozzle "${nozzle.name}" is linked to a missing tank`;
+    if (!productMap.has(nozzle.productDraftId))
+      return `Nozzle "${nozzle.name}" is linked to a missing fuel product`;
     const tank = tankMap.get(nozzle.tankDraftId)!;
-    if (tank.productDraftId !== nozzle.productDraftId) return `Nozzle "${nozzle.name}" fuel must match the selected tank fuel`;
+    if (tank.productDraftId !== nozzle.productDraftId)
+      return `Nozzle "${nozzle.name}" fuel must match the selected tank fuel`;
   }
 
   const terminalLabels = new Set<string>();
   for (const terminal of paymentTerminals ?? []) {
     if (terminal.label.trim().length < 1) return 'Every payment terminal needs a label';
     const label = terminal.label.trim().toLowerCase();
-    if (terminalLabels.has(label)) return `Duplicate payment terminal label "${terminal.label}" found in draft`;
-    if (!terminal.supportsCard && !terminal.supportsUpi) return `Terminal "${terminal.label}" must support card and/or UPI`;
+    if (terminalLabels.has(label))
+      return `Duplicate payment terminal label "${terminal.label}" found in draft`;
+    if (!terminal.supportsCard && !terminal.supportsUpi)
+      return `Terminal "${terminal.label}" must support card and/or UPI`;
     terminalLabels.add(label);
   }
 
@@ -99,10 +118,16 @@ export function validateOnboardingDraftForProvisioning(draft: OnboardingDraft): 
  * operation, then emit ONBOARDING_COMPLETED. Domain validation lives here; the
  * transactional multi-table write is delegated to the OnboardingProvisioner port.
  */
-export class FinalizeStationOnboarding implements UseCase<OnboardingDraft, FinalizeOnboardingResult> {
+export class FinalizeStationOnboarding implements UseCase<
+  OnboardingDraft,
+  FinalizeOnboardingResult
+> {
   constructor(private readonly deps: FinalizeStationOnboardingDeps) {}
 
-  async execute(draft: OnboardingDraft, ctx: ExecutionContext): Promise<Result<FinalizeOnboardingResult>> {
+  async execute(
+    draft: OnboardingDraft,
+    ctx: ExecutionContext,
+  ): Promise<Result<FinalizeOnboardingResult>> {
     const validationMessage = validateOnboardingDraftForProvisioning(draft);
     if (validationMessage) return err(validationError(validationMessage));
 

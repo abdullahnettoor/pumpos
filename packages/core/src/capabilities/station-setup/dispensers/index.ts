@@ -1,6 +1,19 @@
 import { z } from 'zod';
-import { BusinessEvents, err, eventFromContext, notFoundError, ok, validationError } from '../../../kernel/index.js';
-import type { EventPublisher, ExecutionContext, Repository, Result, UseCase } from '../../../kernel/index.js';
+import {
+  BusinessEvents,
+  err,
+  eventFromContext,
+  notFoundError,
+  ok,
+  validationError,
+} from '../../../kernel/index.js';
+import type {
+  EventPublisher,
+  ExecutionContext,
+  Repository,
+  Result,
+  UseCase,
+} from '../../../kernel/index.js';
 
 export type DispenserStatus = 'ACTIVE' | 'MAINTENANCE' | 'INACTIVE';
 
@@ -55,9 +68,13 @@ export interface DispenserDeps {
 
 export class CreateDispenser implements UseCase<CreateDispenserCommand, DispenserUnit> {
   constructor(private readonly deps: DispenserDeps) {}
-  async execute(input: CreateDispenserCommand, ctx: ExecutionContext): Promise<Result<DispenserUnit>> {
+  async execute(
+    input: CreateDispenserCommand,
+    ctx: ExecutionContext,
+  ): Promise<Result<DispenserUnit>> {
     const p = createSchema.safeParse(input);
-    if (!p.success) return err(validationError('Invalid CreateDispenser command', { issues: p.error.flatten() }));
+    if (!p.success)
+      return err(validationError('Invalid CreateDispenser command', { issues: p.error.flatten() }));
     const now = ctx.clock.now().toISOString();
     const du: DispenserUnit = {
       id: ctx.ids.newId(),
@@ -85,11 +102,16 @@ export class CreateDispenser implements UseCase<CreateDispenserCommand, Dispense
 
 export class UpdateDispenser implements UseCase<UpdateDispenserCommand, DispenserUnit> {
   constructor(private readonly deps: DispenserDeps) {}
-  async execute(input: UpdateDispenserCommand, ctx: ExecutionContext): Promise<Result<DispenserUnit>> {
+  async execute(
+    input: UpdateDispenserCommand,
+    ctx: ExecutionContext,
+  ): Promise<Result<DispenserUnit>> {
     const p = updateSchema.safeParse(input);
-    if (!p.success) return err(validationError('Invalid UpdateDispenser command', { issues: p.error.flatten() }));
+    if (!p.success)
+      return err(validationError('Invalid UpdateDispenser command', { issues: p.error.flatten() }));
     const existing = await this.deps.repository.findById(p.data.id);
-    if (!existing || existing.organizationId !== ctx.organizationId) return err(notFoundError('DispenserUnit', p.data.id));
+    if (!existing || existing.organizationId !== ctx.organizationId)
+      return err(notFoundError('DispenserUnit', p.data.id));
     const updated: DispenserUnit = {
       ...existing,
       name: p.data.name ?? existing.name,
@@ -115,7 +137,8 @@ export class DeleteDispenser implements UseCase<{ id: string }, DispenserUnit> {
   constructor(private readonly deps: DispenserDeps) {}
   async execute(input: { id: string }, ctx: ExecutionContext): Promise<Result<DispenserUnit>> {
     const existing = await this.deps.repository.findById(input.id);
-    if (!existing || existing.organizationId !== ctx.organizationId) return err(notFoundError('DispenserUnit', input.id));
+    if (!existing || existing.organizationId !== ctx.organizationId)
+      return err(notFoundError('DispenserUnit', input.id));
     await this.deps.repository.deleteById(existing.id);
     await this.deps.events.publish([
       eventFromContext(ctx, {

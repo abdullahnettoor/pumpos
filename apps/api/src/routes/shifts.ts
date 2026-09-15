@@ -1,7 +1,17 @@
 import { Hono } from 'hono';
 import { and, desc, eq, inArray, ne, sql } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
-import { attendantHandoverSchema, canOpenShift, canCloseShift, canReopenShift, canRecordHandover, isAuthorizedForStation, isAttendant, resolveBusinessDate, type Role } from '@pump/shared';
+import {
+  attendantHandoverSchema,
+  canOpenShift,
+  canCloseShift,
+  canReopenShift,
+  canRecordHandover,
+  isAuthorizedForStation,
+  isAttendant,
+  resolveBusinessDate,
+  type Role,
+} from '@pump/shared';
 import {
   OpenShift,
   RecordNozzleReadings,
@@ -34,7 +44,10 @@ import {
   DrizzleHandoverContextReader,
   DrizzleHandoverRepository,
 } from '../infra/repositories/station-ops-repositories.js';
-import { DrizzleDssrDataReader, DrizzleDssrSnapshotRepository } from '../infra/repositories/reporting-repositories.js';
+import {
+  DrizzleDssrDataReader,
+  DrizzleDssrSnapshotRepository,
+} from '../infra/repositories/reporting-repositories.js';
 import { LedgerPostingService } from '../infra/ledger-posting.js';
 import { DrizzleStockVarianceRepository } from '../infra/repositories/inventory-repositories.js';
 
@@ -72,10 +85,16 @@ shiftsRouter.get('/business-days/status', async (c) => {
   const user = c.var.user;
   const stationId = c.req.query('stationId');
   if (!stationId) {
-    return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'stationId is required' } }, 400);
+    return c.json(
+      { success: false, error: { code: 'VALIDATION_ERROR', message: 'stationId is required' } },
+      400,
+    );
   }
   if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId })) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+    return c.json(
+      { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
+      403,
+    );
   }
 
   const clock = await loadStationClock(c.var.db, stationId);
@@ -84,7 +103,9 @@ shiftsRouter.get('/business-days/status', async (c) => {
     dayStartsAt: clock.businessDayStartsAt,
   });
   const requestedBusinessDate = c.req.query('date') ?? currentBusinessDate;
-  const result = await new GetBusinessDayStatus(new DrizzleBusinessDayStatusReader(c.var.db)).execute(
+  const result = await new GetBusinessDayStatus(
+    new DrizzleBusinessDayStatusReader(c.var.db),
+  ).execute(
     { stationId, requestedBusinessDate, currentBusinessDate },
     buildContext(user, { stationId, ...clock }),
   );
@@ -119,7 +140,11 @@ async function projectShiftSummary(
     collections,
     creditSaleRows,
   ] = await Promise.all([
-    db.select().from(schema.shiftTemplates).where(eq(schema.shiftTemplates.id, shift.shiftTemplateId)).limit(1),
+    db
+      .select()
+      .from(schema.shiftTemplates)
+      .where(eq(schema.shiftTemplates.id, shift.shiftTemplateId))
+      .limit(1),
     shift.closedBy
       ? db.select().from(schema.users).where(eq(schema.users.id, shift.closedBy)).limit(1)
       : Promise.resolve([] as any[]),
@@ -133,22 +158,38 @@ async function projectShiftSummary(
       .leftJoin(schema.products, eq(schema.products.id, schema.nozzles.productId))
       .where(eq(schema.nozzleReadings.shiftId, shift.id)),
     db
-      .select({ h: schema.attendantHandovers, userName: schema.users.fullName, duName: schema.dispenserUnits.name, duCode: schema.dispenserUnits.code })
+      .select({
+        h: schema.attendantHandovers,
+        userName: schema.users.fullName,
+        duName: schema.dispenserUnits.name,
+        duCode: schema.dispenserUnits.code,
+      })
       .from(schema.attendantHandovers)
       .leftJoin(schema.users, eq(schema.users.id, schema.attendantHandovers.userId))
       .leftJoin(schema.dispenserUnits, eq(schema.dispenserUnits.id, schema.attendantHandovers.duId))
       .where(eq(schema.attendantHandovers.shiftId, shift.id)),
     db
-      .select({ e: schema.handoverTerminalEntries, label: schema.paymentTerminals.label, provider: schema.paymentTerminals.provider })
+      .select({
+        e: schema.handoverTerminalEntries,
+        label: schema.paymentTerminals.label,
+        provider: schema.paymentTerminals.provider,
+      })
       .from(schema.handoverTerminalEntries)
-      .leftJoin(schema.paymentTerminals, eq(schema.paymentTerminals.id, schema.handoverTerminalEntries.terminalId))
+      .leftJoin(
+        schema.paymentTerminals,
+        eq(schema.paymentTerminals.id, schema.handoverTerminalEntries.terminalId),
+      )
       .where(eq(schema.handoverTerminalEntries.shiftId, shift.id)),
     db
       .select({ e: schema.expenses, categoryName: schema.expenseCategories.name })
       .from(schema.expenses)
-      .leftJoin(schema.expenseCategories, eq(schema.expenseCategories.id, schema.expenses.categoryId))
+      .leftJoin(
+        schema.expenseCategories,
+        eq(schema.expenseCategories.id, schema.expenses.categoryId),
+      )
       .where(eq(schema.expenses.shiftId, shift.id)),
-    db.select({ p: schema.purchases, supplierName: schema.suppliers.name })
+    db
+      .select({ p: schema.purchases, supplierName: schema.suppliers.name })
       .from(schema.purchases)
       .leftJoin(schema.suppliers, eq(schema.suppliers.id, schema.purchases.supplierId))
       .where(eq(schema.purchases.shiftId, shift.id)),
@@ -174,7 +215,10 @@ async function projectShiftSummary(
       .from(schema.customerTransactions)
       .leftJoin(schema.customers, eq(schema.customers.id, schema.customerTransactions.customerId))
       .leftJoin(schema.products, eq(schema.products.id, schema.customerTransactions.productId))
-      .leftJoin(schema.customerVehicles, eq(schema.customerVehicles.id, schema.customerTransactions.vehicleId))
+      .leftJoin(
+        schema.customerVehicles,
+        eq(schema.customerVehicles.id, schema.customerTransactions.vehicleId),
+      )
       .where(
         and(
           eq(schema.customerTransactions.shiftId, shift.id),
@@ -187,8 +231,14 @@ async function projectShiftSummary(
   const template = templateRows[0];
   const closedByName = closedUserRows[0]?.fullName ?? 'System';
   const openedByName = openedUserRows[0]?.fullName ?? 'System';
-  const expensesEnriched = (expenses ?? []).map((r: any) => ({ ...r.e, categoryName: r.categoryName ?? 'General' }));
-  const purchasesEnriched = (purchases ?? []).map((r: any) => ({ ...r.p, supplierName: r.supplierName ?? 'Unknown Supplier' }));
+  const expensesEnriched = (expenses ?? []).map((r: any) => ({
+    ...r.e,
+    categoryName: r.categoryName ?? 'General',
+  }));
+  const purchasesEnriched = (purchases ?? []).map((r: any) => ({
+    ...r.p,
+    supplierName: r.supplierName ?? 'Unknown Supplier',
+  }));
   const nozzleReadings = nrRows.map(({ nr, nz, prod }) => {
     const gross = Number(nr.volumeSold ?? 0);
     const testing = Math.min(Math.max(Number(nr.testingVolume ?? 0), 0), gross);
@@ -207,17 +257,40 @@ async function projectShiftSummary(
     };
   });
   // Natural nozzle order (N1, N2, ... N10) for the summary tables.
-  nozzleReadings.sort((a, b) => String(a.nozzleName).localeCompare(String(b.nozzleName), undefined, { numeric: true }));
+  nozzleReadings.sort((a, b) =>
+    String(a.nozzleName).localeCompare(String(b.nozzleName), undefined, { numeric: true }),
+  );
   const totalTestingVolume = nozzleReadings.reduce((a, r) => a + r.testingVolume, 0);
-  const totalNetVolumeSold = nozzleReadings.reduce((a, r) => a + r.netVolume, 0) || Number(snap.totalNetVolume ?? 0);
-  const totalVolumeSold = nozzleReadings.reduce((a, r) => a + r.volumeSold, 0) || Number(snap.totalVolume ?? 0);
+  const totalNetVolumeSold =
+    nozzleReadings.reduce((a, r) => a + r.netVolume, 0) || Number(snap.totalNetVolume ?? 0);
+  const totalVolumeSold =
+    nozzleReadings.reduce((a, r) => a + r.volumeSold, 0) || Number(snap.totalVolume ?? 0);
 
   // Product-wise fuel sales (aggregate nozzles by product) for the summary.
-  const fuelByProductMap = new Map<string, { productName: string; productCode: string; unit: string; grossVolume: number; testingVolume: number; netVolume: number; salesValue: number }>();
+  const fuelByProductMap = new Map<
+    string,
+    {
+      productName: string;
+      productCode: string;
+      unit: string;
+      grossVolume: number;
+      testingVolume: number;
+      netVolume: number;
+      salesValue: number;
+    }
+  >();
   for (const r of nozzleReadings) {
     const key = r.productCode || r.productName;
     if (!fuelByProductMap.has(key)) {
-      fuelByProductMap.set(key, { productName: r.productName, productCode: r.productCode, unit: r.unit, grossVolume: 0, testingVolume: 0, netVolume: 0, salesValue: 0 });
+      fuelByProductMap.set(key, {
+        productName: r.productName,
+        productCode: r.productCode,
+        unit: r.unit,
+        grossVolume: 0,
+        testingVolume: 0,
+        netVolume: 0,
+        salesValue: 0,
+      });
     }
     const agg = fuelByProductMap.get(key)!;
     agg.grossVolume += r.volumeSold;
@@ -233,7 +306,11 @@ async function projectShiftSummary(
     duCode: duCode ?? duName ?? '',
     terminalEntries: teRows
       .filter(({ e }) => e.handoverId === h.id)
-      .map(({ e, label, provider }) => ({ ...e, terminalLabel: label ?? 'Unknown', provider: provider ?? null })),
+      .map(({ e, label, provider }) => ({
+        ...e,
+        terminalLabel: label ?? 'Unknown',
+        provider: provider ?? null,
+      })),
   }));
 
   // Per-terminal rollup across the shift — aggregates card/UPI per machine AND
@@ -273,7 +350,10 @@ async function projectShiftSummary(
   // (collections are Cash | Card | UPI | BankTransfer), which is why the old
   // "creditCollections" figure was always zero.
   const collSum = (method: string) =>
-    (collections ?? []).reduce((s: number, c: any) => s + (c.paymentMethod === method ? Number(c.amount || 0) : 0), 0);
+    (collections ?? []).reduce(
+      (s: number, c: any) => s + (c.paymentMethod === method ? Number(c.amount || 0) : 0),
+      0,
+    );
 
   return {
     ...snap,
@@ -315,7 +395,10 @@ async function projectShiftSummary(
       unit: r.unit ?? 'L',
       vehicleNumber: r.vehicleNumber ?? null,
     })),
-    creditSalesTotal: (creditSaleRows ?? []).reduce((sum: number, r: any) => sum + Number(r.amount), 0),
+    creditSalesTotal: (creditSaleRows ?? []).reduce(
+      (sum: number, r: any) => sum + Number(r.amount),
+      0,
+    ),
     expectedCash: Number(snap.expectedDrawerCash ?? openingCash),
     cashVariance: Number(snap.cashVariance ?? 0),
     cashSalesSum: Number(recon.cashSales ?? 0),
@@ -333,10 +416,16 @@ shiftsRouter.get('/status', async (c) => {
   const stationId = c.req.query('stationId');
   const lite = c.req.query('lite') === 'true';
   if (!stationId) {
-    return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'stationId is required' } }, 400);
+    return c.json(
+      { success: false, error: { code: 'VALIDATION_ERROR', message: 'stationId is required' } },
+      400,
+    );
   }
   if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId })) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+    return c.json(
+      { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
+      403,
+    );
   }
   const db = c.var.db;
   const orgId = user.organizationId;
@@ -347,7 +436,10 @@ shiftsRouter.get('/status', async (c) => {
     .where(and(eq(schema.stations.id, stationId), eq(schema.stations.organizationId, orgId)))
     .limit(1);
   if (!station) {
-    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Station not found' } }, 404);
+    return c.json(
+      { success: false, error: { code: 'NOT_FOUND', message: 'Station not found' } },
+      404,
+    );
   }
   const settings = (station.settings as any) ?? {};
   const graceMinutes = settings.shift_grace_minutes ?? 15;
@@ -359,7 +451,9 @@ shiftsRouter.get('/status', async (c) => {
     db
       .select()
       .from(schema.businessDays)
-      .where(and(eq(schema.businessDays.stationId, stationId), eq(schema.businessDays.status, 'OPEN')))
+      .where(
+        and(eq(schema.businessDays.stationId, stationId), eq(schema.businessDays.status, 'OPEN')),
+      )
       .orderBy(desc(schema.businessDays.businessDate))
       .limit(1),
     db
@@ -373,23 +467,40 @@ shiftsRouter.get('/status', async (c) => {
 
   let activeShift: any = null;
   if (dbActiveShift) {
-    const [templateRows2, openedByRows2, activeBusinessDayRows, nozzleReadingRows] = await Promise.all([
-      db.select().from(schema.shiftTemplates).where(eq(schema.shiftTemplates.id, dbActiveShift.shiftTemplateId)).limit(1),
-      db.select().from(schema.users).where(eq(schema.users.id, dbActiveShift.openedBy)).limit(1),
-      db.select({ businessDate: schema.businessDays.businessDate }).from(schema.businessDays).where(and(
-        eq(schema.businessDays.id, dbActiveShift.businessDayId),
-        eq(schema.businessDays.organizationId, orgId),
-        eq(schema.businessDays.stationId, stationId),
-      )).limit(1),
-      db
-        .select({ nr: schema.nozzleReadings, nz: schema.nozzles, prod: schema.products, tnk: schema.tanks, du: schema.dispenserUnits })
-        .from(schema.nozzleReadings)
-        .leftJoin(schema.nozzles, eq(schema.nozzles.id, schema.nozzleReadings.nozzleId))
-        .leftJoin(schema.products, eq(schema.products.id, schema.nozzles.productId))
-        .leftJoin(schema.tanks, eq(schema.tanks.id, schema.nozzles.tankId))
-        .leftJoin(schema.dispenserUnits, eq(schema.dispenserUnits.id, schema.nozzles.duId))
-        .where(eq(schema.nozzleReadings.shiftId, dbActiveShift.id)),
-    ]);
+    const [templateRows2, openedByRows2, activeBusinessDayRows, nozzleReadingRows] =
+      await Promise.all([
+        db
+          .select()
+          .from(schema.shiftTemplates)
+          .where(eq(schema.shiftTemplates.id, dbActiveShift.shiftTemplateId))
+          .limit(1),
+        db.select().from(schema.users).where(eq(schema.users.id, dbActiveShift.openedBy)).limit(1),
+        db
+          .select({ businessDate: schema.businessDays.businessDate })
+          .from(schema.businessDays)
+          .where(
+            and(
+              eq(schema.businessDays.id, dbActiveShift.businessDayId),
+              eq(schema.businessDays.organizationId, orgId),
+              eq(schema.businessDays.stationId, stationId),
+            ),
+          )
+          .limit(1),
+        db
+          .select({
+            nr: schema.nozzleReadings,
+            nz: schema.nozzles,
+            prod: schema.products,
+            tnk: schema.tanks,
+            du: schema.dispenserUnits,
+          })
+          .from(schema.nozzleReadings)
+          .leftJoin(schema.nozzles, eq(schema.nozzles.id, schema.nozzleReadings.nozzleId))
+          .leftJoin(schema.products, eq(schema.products.id, schema.nozzles.productId))
+          .leftJoin(schema.tanks, eq(schema.tanks.id, schema.nozzles.tankId))
+          .leftJoin(schema.dispenserUnits, eq(schema.dispenserUnits.id, schema.nozzles.duId))
+          .where(eq(schema.nozzleReadings.shiftId, dbActiveShift.id)),
+      ]);
     const template = templateRows2[0];
     const openedByUser = openedByRows2[0];
     const activeBusinessDay = activeBusinessDayRows[0];
@@ -469,21 +580,41 @@ shiftsRouter.get('/status', async (c) => {
           ),
         ),
       db
-        .select({ sa: schema.shiftStaffAssignments, staffUser: schema.users, du: schema.dispenserUnits })
+        .select({
+          sa: schema.shiftStaffAssignments,
+          staffUser: schema.users,
+          du: schema.dispenserUnits,
+        })
         .from(schema.shiftStaffAssignments)
         .leftJoin(schema.users, eq(schema.users.id, schema.shiftStaffAssignments.userId))
-        .leftJoin(schema.dispenserUnits, eq(schema.dispenserUnits.id, schema.shiftStaffAssignments.duId))
+        .leftJoin(
+          schema.dispenserUnits,
+          eq(schema.dispenserUnits.id, schema.shiftStaffAssignments.duId),
+        )
         .where(eq(schema.shiftStaffAssignments.shiftId, dbActiveShift.id)),
-      db.select().from(schema.attendantHandovers).where(eq(schema.attendantHandovers.shiftId, dbActiveShift.id)),
+      db
+        .select()
+        .from(schema.attendantHandovers)
+        .where(eq(schema.attendantHandovers.shiftId, dbActiveShift.id)),
       db
         .select()
         .from(schema.handoverTerminalEntries)
         .where(eq(schema.handoverTerminalEntries.shiftId, dbActiveShift.id)),
       db
-        .select({ link: schema.shiftTerminalLinks, term: schema.paymentTerminals, du: schema.dispenserUnits })
+        .select({
+          link: schema.shiftTerminalLinks,
+          term: schema.paymentTerminals,
+          du: schema.dispenserUnits,
+        })
         .from(schema.shiftTerminalLinks)
-        .leftJoin(schema.paymentTerminals, eq(schema.paymentTerminals.id, schema.shiftTerminalLinks.terminalId))
-        .leftJoin(schema.dispenserUnits, eq(schema.dispenserUnits.id, schema.shiftTerminalLinks.duId))
+        .leftJoin(
+          schema.paymentTerminals,
+          eq(schema.paymentTerminals.id, schema.shiftTerminalLinks.terminalId),
+        )
+        .leftJoin(
+          schema.dispenserUnits,
+          eq(schema.dispenserUnits.id, schema.shiftTerminalLinks.duId),
+        )
         .where(eq(schema.shiftTerminalLinks.shiftId, dbActiveShift.id)),
     ]);
 
@@ -544,12 +675,29 @@ shiftsRouter.get('/status', async (c) => {
     // Merchandise (standalone) attribution per attendant. Merchandise reconciles
     // at shift close (drawer), NOT in the DU handover, so expectedExtra carries
     // merchandise only — fuel credit is handled via the credit lines above.
-    const attributedMap = new Map<string, { merchandiseCash: number; merchandiseCard: number; merchandiseUpi: number; merchandiseCredit: number; merchandiseTotal: number; expectedExtra: number }>();
+    const attributedMap = new Map<
+      string,
+      {
+        merchandiseCash: number;
+        merchandiseCard: number;
+        merchandiseUpi: number;
+        merchandiseCredit: number;
+        merchandiseTotal: number;
+        expectedExtra: number;
+      }
+    >();
     const ensureAttr = (id: string | null) => {
       if (!id) return null;
       let a = attributedMap.get(id);
       if (!a) {
-        a = { merchandiseCash: 0, merchandiseCard: 0, merchandiseUpi: 0, merchandiseCredit: 0, merchandiseTotal: 0, expectedExtra: 0 };
+        a = {
+          merchandiseCash: 0,
+          merchandiseCard: 0,
+          merchandiseUpi: 0,
+          merchandiseCredit: 0,
+          merchandiseTotal: 0,
+          expectedExtra: 0,
+        };
         attributedMap.set(id, a);
       }
       return a;
@@ -571,8 +719,16 @@ shiftsRouter.get('/status', async (c) => {
     }
     // Only the cash the attendant actually holds folds into their handover expected.
     for (const a of attributedMap.values()) a.expectedExtra = a.merchandiseCash;
-    const emptyAttr = { merchandiseCash: 0, merchandiseCard: 0, merchandiseUpi: 0, merchandiseCredit: 0, merchandiseTotal: 0, expectedExtra: 0 };
-    const attributedFor = (userId: string | null | undefined) => (userId && attributedMap.get(userId)) || emptyAttr;
+    const emptyAttr = {
+      merchandiseCash: 0,
+      merchandiseCard: 0,
+      merchandiseUpi: 0,
+      merchandiseCredit: 0,
+      merchandiseTotal: 0,
+      expectedExtra: 0,
+    };
+    const attributedFor = (userId: string | null | undefined) =>
+      (userId && attributedMap.get(userId)) || emptyAttr;
 
     const staffAssignments = assignmentRows.map(({ sa, staffUser, du }) => {
       const creditSales = creditSalesFor(sa.userId, sa.duId);
@@ -592,14 +748,21 @@ shiftsRouter.get('/status', async (c) => {
 
     const handovers = handoverRows.map((h) => ({
       ...h,
-      attendantName: assignmentRows.find((a) => a.sa.userId === h.userId)?.staffUser?.fullName ?? 'Attendant',
+      attendantName:
+        assignmentRows.find((a) => a.sa.userId === h.userId)?.staffUser?.fullName ?? 'Attendant',
       duName: assignmentRows.find((a) => a.du?.id === h.duId)?.du?.name ?? null,
       terminalEntries: handoverEntryRows.filter((e) => e.handoverId === h.id),
       attributed: attributedFor(h.userId),
       creditSales: creditSalesFor(h.userId, h.duId),
-      creditTotal: creditSalesFor(h.userId, h.duId).reduce((s: number, l: any) => s + Number(l.amount), 0),
+      creditTotal: creditSalesFor(h.userId, h.duId).reduce(
+        (s: number, l: any) => s + Number(l.amount),
+        0,
+      ),
       omcSales: omcSalesFor(h.userId, h.duId),
-      omcTotal: omcSalesFor(h.userId, h.duId).reduce((s: number, l: any) => s + Number(l.amount), 0),
+      omcTotal: omcSalesFor(h.userId, h.duId).reduce(
+        (s: number, l: any) => s + Number(l.amount),
+        0,
+      ),
     }));
 
     const terminalLinks = terminalLinkRows.map(({ link, term, du }) => ({
@@ -634,7 +797,12 @@ shiftsRouter.get('/status', async (c) => {
             })
             .from(schema.sales)
             .leftJoin(schema.users, eq(schema.users.id, schema.sales.attendantId))
-            .where(and(eq(schema.sales.shiftId, dbActiveShift.id), eq(schema.sales.captureMechanism, 'MERCH_HANDOVER')))
+            .where(
+              and(
+                eq(schema.sales.shiftId, dbActiveShift.id),
+                eq(schema.sales.captureMechanism, 'MERCH_HANDOVER'),
+              ),
+            )
             .orderBy(desc(schema.sales.createdAt)),
           db
             .select({
@@ -652,19 +820,38 @@ shiftsRouter.get('/status', async (c) => {
             .from(schema.sales)
             .leftJoin(schema.users, eq(schema.users.id, schema.sales.attendantId))
             .leftJoin(schema.customers, eq(schema.customers.id, schema.sales.customerId))
-            .where(and(eq(schema.sales.shiftId, dbActiveShift.id), ne(schema.sales.saleType, 'Fuel'), ne(schema.sales.captureMechanism, 'MERCH_HANDOVER')))
+            .where(
+              and(
+                eq(schema.sales.shiftId, dbActiveShift.id),
+                ne(schema.sales.saleType, 'Fuel'),
+                ne(schema.sales.captureMechanism, 'MERCH_HANDOVER'),
+              ),
+            )
             .orderBy(desc(schema.sales.createdAt)),
         ]);
     const merchSaleIds = merchHandoverRows.map((h) => h.id);
     const merchItemRows = merchSaleIds.length
       ? await db
-          .select({ saleId: schema.saleItems.saleId, productId: schema.saleItems.productId, productName: schema.products.name, quantity: schema.saleItems.quantity, unitPrice: schema.saleItems.unitPrice, lineTotal: schema.saleItems.lineTotal })
+          .select({
+            saleId: schema.saleItems.saleId,
+            productId: schema.saleItems.productId,
+            productName: schema.products.name,
+            quantity: schema.saleItems.quantity,
+            unitPrice: schema.saleItems.unitPrice,
+            lineTotal: schema.saleItems.lineTotal,
+          })
           .from(schema.saleItems)
           .leftJoin(schema.products, eq(schema.products.id, schema.saleItems.productId))
           .where(inArray(schema.saleItems.saleId, merchSaleIds))
       : [];
-    const merchItemsBySale = merchItemRows.reduce((acc: Record<string, any[]>, it) => { (acc[it.saleId] ||= []).push(it); return acc; }, {});
-    const merchandiseHandovers = merchHandoverRows.map((h) => ({ ...h, items: merchItemsBySale[h.id] ?? [] }));
+    const merchItemsBySale = merchItemRows.reduce((acc: Record<string, any[]>, it) => {
+      (acc[it.saleId] ||= []).push(it);
+      return acc;
+    }, {});
+    const merchandiseHandovers = merchHandoverRows.map((h) => ({
+      ...h,
+      items: merchItemsBySale[h.id] ?? [],
+    }));
 
     activeShift = {
       ...dbActiveShift,
@@ -682,7 +869,9 @@ shiftsRouter.get('/status', async (c) => {
       // Authoritative cash reconciliation (same figures CloseShift will use), so
       // the closing wizard's expected drawer includes non-attendant merch cash
       // and reads the true station-level short/surplus. Skipped in lite mode.
-      reconciliation: lite ? undefined : await new DrizzleShiftReconciliationReader(db).totalsForShift(dbActiveShift.id),
+      reconciliation: lite
+        ? undefined
+        : await new DrizzleShiftReconciliationReader(db).totalsForShift(dbActiveShift.id),
     };
   }
 
@@ -708,23 +897,54 @@ shiftsRouter.get('/status', async (c) => {
       if (now <= reopenExpiryTime) gracePeriodExpiresAt = new Date(reopenExpiryTime).toISOString();
     }
     const [lastTemplateRows, lastClosedByRows, lastSummaryRows, parentDayRows] = await Promise.all([
-      db.select().from(schema.shiftTemplates).where(eq(schema.shiftTemplates.id, dbLastShift.shiftTemplateId)).limit(1),
+      db
+        .select()
+        .from(schema.shiftTemplates)
+        .where(eq(schema.shiftTemplates.id, dbLastShift.shiftTemplateId))
+        .limit(1),
       dbLastShift.closedBy
         ? db.select().from(schema.users).where(eq(schema.users.id, dbLastShift.closedBy)).limit(1)
         : Promise.resolve([] as any[]),
-      db.select().from(schema.shiftSummaries).where(eq(schema.shiftSummaries.shiftId, dbLastShift.id)).limit(1),
-      db.select({ status: schema.businessDays.status }).from(schema.businessDays).where(and(
-        eq(schema.businessDays.id, dbLastShift.businessDayId),
-        eq(schema.businessDays.organizationId, orgId),
-        eq(schema.businessDays.stationId, stationId),
-      )).limit(1),
+      db
+        .select()
+        .from(schema.shiftSummaries)
+        .where(eq(schema.shiftSummaries.shiftId, dbLastShift.id))
+        .limit(1),
+      db
+        .select({ status: schema.businessDays.status })
+        .from(schema.businessDays)
+        .where(
+          and(
+            eq(schema.businessDays.id, dbLastShift.businessDayId),
+            eq(schema.businessDays.organizationId, orgId),
+            eq(schema.businessDays.stationId, stationId),
+          ),
+        )
+        .limit(1),
     ]);
     const template = lastTemplateRows[0];
     const closedByName = lastClosedByRows[0]?.fullName ?? 'System';
     const summary = lastSummaryRows[0];
-    if (currentStatus === 'CLOSED' && parentDayRows[0]?.status === 'OPEN' && canReopenShift(user.role) && !dbActiveShift) canReopenLastShift = true;
-    lastShift = { ...dbLastShift, status: currentStatus, lockedAt, templateName: template?.name ?? 'Custom', closedByName };
-    lastDssr = summary ? { ...summary, snapshotData: await projectShiftSummary(db, dbLastShift, summary.snapshotData) } : null;
+    if (
+      currentStatus === 'CLOSED' &&
+      parentDayRows[0]?.status === 'OPEN' &&
+      canReopenShift(user.role) &&
+      !dbActiveShift
+    )
+      canReopenLastShift = true;
+    lastShift = {
+      ...dbLastShift,
+      status: currentStatus,
+      lockedAt,
+      templateName: template?.name ?? 'Custom',
+      closedByName,
+    };
+    lastDssr = summary
+      ? {
+          ...summary,
+          snapshotData: await projectShiftSummary(db, dbLastShift, summary.snapshotData),
+        }
+      : null;
   }
 
   // --- Recent closed (not attribution-grace-expired) shifts ---
@@ -738,8 +958,10 @@ shiftsRouter.get('/status', async (c) => {
   for (const item of dbClosedShifts) {
     const s = item.shift;
     if (s.closedAt) {
-      const attributionExpiryTime = new Date(s.closedAt).getTime() + lockGraceDays * 24 * 60 * 60 * 1000;
-      if (now <= attributionExpiryTime) recentClosedShifts.push({ ...s, templateName: item.templateName ?? 'Custom' });
+      const attributionExpiryTime =
+        new Date(s.closedAt).getTime() + lockGraceDays * 24 * 60 * 60 * 1000;
+      if (now <= attributionExpiryTime)
+        recentClosedShifts.push({ ...s, templateName: item.templateName ?? 'Custom' });
     }
   }
 
@@ -763,14 +985,25 @@ shiftsRouter.get('/status', async (c) => {
   const templates = await db
     .select()
     .from(schema.shiftTemplates)
-    .where(and(eq(schema.shiftTemplates.organizationId, orgId), eq(schema.shiftTemplates.isActive, true)));
+    .where(
+      and(
+        eq(schema.shiftTemplates.organizationId, orgId),
+        eq(schema.shiftTemplates.isActive, true),
+      ),
+    );
   const nozzleRows = await db
     .select({ nz: schema.nozzles, prod: schema.products, tnk: schema.tanks })
     .from(schema.nozzles)
     .leftJoin(schema.products, eq(schema.products.id, schema.nozzles.productId))
     .leftJoin(schema.tanks, eq(schema.tanks.id, schema.nozzles.tankId))
     .where(and(eq(schema.nozzles.stationId, stationId), eq(schema.nozzles.organizationId, orgId)));
-  const nozzles = nozzleRows.map(({ nz, prod, tnk }) => ({ ...nz, productName: prod?.name ?? 'Unknown', productCode: prod?.code ?? 'Unknown', unit: prod?.unit ?? 'L', tankName: tnk?.name ?? 'Unknown' }));
+  const nozzles = nozzleRows.map(({ nz, prod, tnk }) => ({
+    ...nz,
+    productName: prod?.name ?? 'Unknown',
+    productCode: prod?.code ?? 'Unknown',
+    unit: prod?.unit ?? 'L',
+    tankName: tnk?.name ?? 'Unknown',
+  }));
   const staff = await db
     .select()
     .from(schema.users)
@@ -778,14 +1011,27 @@ shiftsRouter.get('/status', async (c) => {
   const dispensers = await db
     .select()
     .from(schema.dispenserUnits)
-    .where(and(eq(schema.dispenserUnits.stationId, stationId), eq(schema.dispenserUnits.status, 'ACTIVE')));
+    .where(
+      and(
+        eq(schema.dispenserUnits.stationId, stationId),
+        eq(schema.dispenserUnits.status, 'ACTIVE'),
+      ),
+    );
 
   const terminals = await db
     .select()
     .from(schema.paymentTerminals)
-    .where(and(eq(schema.paymentTerminals.stationId, stationId), eq(schema.paymentTerminals.isActive, true)));
+    .where(
+      and(
+        eq(schema.paymentTerminals.stationId, stationId),
+        eq(schema.paymentTerminals.isActive, true),
+      ),
+    );
 
-  return c.json({ success: true, data: { ...base, templates, nozzles, staff, dispensers, terminals } });
+  return c.json({
+    success: true,
+    data: { ...base, templates, nozzles, staff, dispensers, terminals },
+  });
 });
 
 // GET /api/shifts/my-assignment — the caller's own active shift assignment(s):
@@ -801,7 +1047,10 @@ shiftsRouter.get('/my-assignment', async (c) => {
     .select({ sa: schema.shiftStaffAssignments, shift: schema.shifts, du: schema.dispenserUnits })
     .from(schema.shiftStaffAssignments)
     .innerJoin(schema.shifts, eq(schema.shifts.id, schema.shiftStaffAssignments.shiftId))
-    .leftJoin(schema.dispenserUnits, eq(schema.dispenserUnits.id, schema.shiftStaffAssignments.duId))
+    .leftJoin(
+      schema.dispenserUnits,
+      eq(schema.dispenserUnits.id, schema.shiftStaffAssignments.duId),
+    )
     .where(
       and(
         eq(schema.shiftStaffAssignments.userId, user.id),
@@ -819,30 +1068,65 @@ shiftsRouter.get('/my-assignment', async (c) => {
   const myRows = assignmentRows.filter((r) => r.sa.shiftId === shift.id && r.sa.duId);
   const duIds = [...new Set(myRows.map((r) => r.sa.duId as string))];
 
-  const [templateRows, stationRows, nozzleRows, terminalRows, myHandovers, myEntries, creditSaleRows, omcSaleRows] = await Promise.all([
-    db.select().from(schema.shiftTemplates).where(eq(schema.shiftTemplates.id, shift.shiftTemplateId)).limit(1),
+  const [
+    templateRows,
+    stationRows,
+    nozzleRows,
+    terminalRows,
+    myHandovers,
+    myEntries,
+    creditSaleRows,
+    omcSaleRows,
+  ] = await Promise.all([
+    db
+      .select()
+      .from(schema.shiftTemplates)
+      .where(eq(schema.shiftTemplates.id, shift.shiftTemplateId))
+      .limit(1),
     db.select().from(schema.stations).where(eq(schema.stations.id, shift.stationId)).limit(1),
     duIds.length
       ? db
-          .select({ nr: schema.nozzleReadings, nz: schema.nozzles, prod: schema.products, tnk: schema.tanks })
+          .select({
+            nr: schema.nozzleReadings,
+            nz: schema.nozzles,
+            prod: schema.products,
+            tnk: schema.tanks,
+          })
           .from(schema.nozzleReadings)
           .innerJoin(schema.nozzles, eq(schema.nozzles.id, schema.nozzleReadings.nozzleId))
           .leftJoin(schema.products, eq(schema.products.id, schema.nozzles.productId))
           .leftJoin(schema.tanks, eq(schema.tanks.id, schema.nozzles.tankId))
-          .where(and(eq(schema.nozzleReadings.shiftId, shift.id), inArray(schema.nozzles.duId, duIds)))
+          .where(
+            and(eq(schema.nozzleReadings.shiftId, shift.id), inArray(schema.nozzles.duId, duIds)),
+          )
       : Promise.resolve([] as any[]),
     db
       .select({ link: schema.shiftTerminalLinks, term: schema.paymentTerminals })
       .from(schema.shiftTerminalLinks)
-      .leftJoin(schema.paymentTerminals, eq(schema.paymentTerminals.id, schema.shiftTerminalLinks.terminalId))
+      .leftJoin(
+        schema.paymentTerminals,
+        eq(schema.paymentTerminals.id, schema.shiftTerminalLinks.terminalId),
+      )
       .where(eq(schema.shiftTerminalLinks.shiftId, shift.id)),
     db
       .select()
       .from(schema.attendantHandovers)
-      .where(and(eq(schema.attendantHandovers.shiftId, shift.id), eq(schema.attendantHandovers.userId, user.id))),
-    db.select().from(schema.handoverTerminalEntries).where(eq(schema.handoverTerminalEntries.shiftId, shift.id)),
+      .where(
+        and(
+          eq(schema.attendantHandovers.shiftId, shift.id),
+          eq(schema.attendantHandovers.userId, user.id),
+        ),
+      ),
     db
-      .select({ ct: schema.customerTransactions, customerName: schema.customers.name, productName: schema.products.name })
+      .select()
+      .from(schema.handoverTerminalEntries)
+      .where(eq(schema.handoverTerminalEntries.shiftId, shift.id)),
+    db
+      .select({
+        ct: schema.customerTransactions,
+        customerName: schema.customers.name,
+        productName: schema.products.name,
+      })
       .from(schema.customerTransactions)
       .leftJoin(schema.customers, eq(schema.customers.id, schema.customerTransactions.customerId))
       .leftJoin(schema.products, eq(schema.products.id, schema.customerTransactions.productId))
@@ -855,7 +1139,11 @@ shiftsRouter.get('/my-assignment', async (c) => {
         ),
       ),
     db
-      .select({ ct: schema.customerTransactions, customerName: schema.customers.name, productName: schema.products.name })
+      .select({
+        ct: schema.customerTransactions,
+        customerName: schema.customers.name,
+        productName: schema.products.name,
+      })
       .from(schema.customerTransactions)
       .leftJoin(schema.customers, eq(schema.customers.id, schema.customerTransactions.customerId))
       .leftJoin(schema.products, eq(schema.products.id, schema.customerTransactions.productId))
@@ -926,14 +1214,30 @@ shiftsRouter.get('/my-assignment', async (c) => {
         amount: Number(ct.amount),
         notes: ct.notes ?? null,
       }));
-    return { duId, duName: du?.name ?? 'Unknown', duCode: du?.code ?? null, nozzles, terminals, handover, terminalEntries, creditSales, omcSales };
+    return {
+      duId,
+      duName: du?.name ?? 'Unknown',
+      duCode: du?.code ?? null,
+      nozzles,
+      terminals,
+      handover,
+      terminalEntries,
+      creditSales,
+      omcSales,
+    };
   });
 
-  const [configuredTerminal] = await db.select({ id: schema.paymentTerminals.id }).from(schema.paymentTerminals).where(and(
-    eq(schema.paymentTerminals.organizationId, user.organizationId),
-    eq(schema.paymentTerminals.stationId, shift.stationId),
-    eq(schema.paymentTerminals.isActive, true),
-  )).limit(1);
+  const [configuredTerminal] = await db
+    .select({ id: schema.paymentTerminals.id })
+    .from(schema.paymentTerminals)
+    .where(
+      and(
+        eq(schema.paymentTerminals.organizationId, user.organizationId),
+        eq(schema.paymentTerminals.stationId, shift.stationId),
+        eq(schema.paymentTerminals.isActive, true),
+      ),
+    )
+    .limit(1);
 
   return c.json({
     success: true,
@@ -946,7 +1250,9 @@ shiftsRouter.get('/my-assignment', async (c) => {
         stationId: shift.stationId,
         templateName: templateRows[0]?.name ?? null,
       },
-      station: stationRows[0] ? { id: stationRows[0].id, name: stationRows[0].name, code: stationRows[0].code } : null,
+      station: stationRows[0]
+        ? { id: stationRows[0].id, name: stationRows[0].name, code: stationRows[0].code }
+        : null,
       stationHasConfiguredTerminals: Boolean(configuredTerminal),
       dispenserUnits,
     },
@@ -959,38 +1265,71 @@ shiftsRouter.get('/handovers', async (c) => {
   const user = c.var.user;
   const shiftId = c.req.query('shiftId');
   if (!shiftId) {
-    return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'shiftId is required' } }, 400);
+    return c.json(
+      { success: false, error: { code: 'VALIDATION_ERROR', message: 'shiftId is required' } },
+      400,
+    );
   }
-  const [shift] = await db.select({ stationId: schema.shifts.stationId }).from(schema.shifts).where(and(
-    eq(schema.shifts.id, shiftId),
-    eq(schema.shifts.organizationId, user.organizationId),
-  )).limit(1);
+  const [shift] = await db
+    .select({ stationId: schema.shifts.stationId })
+    .from(schema.shifts)
+    .where(
+      and(eq(schema.shifts.id, shiftId), eq(schema.shifts.organizationId, user.organizationId)),
+    )
+    .limit(1);
   if (!shift) {
-    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Shift not found' } }, 404);
+    return c.json(
+      { success: false, error: { code: 'NOT_FOUND', message: 'Shift not found' } },
+      404,
+    );
   }
-  if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId: shift.stationId })) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+  if (
+    !isAuthorizedForStation(user, {
+      organizationId: user.organizationId,
+      stationId: shift.stationId,
+    })
+  ) {
+    return c.json(
+      { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
+      403,
+    );
   }
   const rows = await db
-    .select({ h: schema.attendantHandovers, userName: schema.users.fullName, duName: schema.dispenserUnits.name })
+    .select({
+      h: schema.attendantHandovers,
+      userName: schema.users.fullName,
+      duName: schema.dispenserUnits.name,
+    })
     .from(schema.attendantHandovers)
     .leftJoin(schema.users, eq(schema.users.id, schema.attendantHandovers.userId))
     .leftJoin(schema.dispenserUnits, eq(schema.dispenserUnits.id, schema.attendantHandovers.duId))
-    .where(and(
-      eq(schema.attendantHandovers.organizationId, user.organizationId),
-      eq(schema.attendantHandovers.stationId, shift.stationId),
-      eq(schema.attendantHandovers.shiftId, shiftId),
-      ...(isAttendant(user.role) ? [eq(schema.attendantHandovers.userId, user.id)] : []),
-    ));
+    .where(
+      and(
+        eq(schema.attendantHandovers.organizationId, user.organizationId),
+        eq(schema.attendantHandovers.stationId, shift.stationId),
+        eq(schema.attendantHandovers.shiftId, shiftId),
+        ...(isAttendant(user.role) ? [eq(schema.attendantHandovers.userId, user.id)] : []),
+      ),
+    );
   const entryRows = await db
     .select()
     .from(schema.handoverTerminalEntries)
-    .where(and(
-      eq(schema.handoverTerminalEntries.organizationId, user.organizationId),
-      eq(schema.handoverTerminalEntries.stationId, shift.stationId),
-      eq(schema.handoverTerminalEntries.shiftId, shiftId),
-    ));
-  return c.json({ success: true, data: rows.map(({ h, userName, duName }) => ({ ...h, userName: userName ?? 'Unknown', duName: duName ?? 'Unknown', terminalEntries: entryRows.filter((e) => e.handoverId === h.id) })) });
+    .where(
+      and(
+        eq(schema.handoverTerminalEntries.organizationId, user.organizationId),
+        eq(schema.handoverTerminalEntries.stationId, shift.stationId),
+        eq(schema.handoverTerminalEntries.shiftId, shiftId),
+      ),
+    );
+  return c.json({
+    success: true,
+    data: rows.map(({ h, userName, duName }) => ({
+      ...h,
+      userName: userName ?? 'Unknown',
+      duName: duName ?? 'Unknown',
+      terminalEntries: entryRows.filter((e) => e.handoverId === h.id),
+    })),
+  });
 });
 
 // POST /api/shifts/handovers
@@ -998,26 +1337,67 @@ shiftsRouter.post('/handovers', async (c) => {
   const db = c.var.db;
   const user = c.var.user;
   if (!canRecordHandover(user.role)) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions to record a handover' } }, 403);
+    return c.json(
+      {
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'Insufficient permissions to record a handover' },
+      },
+      403,
+    );
   }
   const body = await c.req.json().catch(() => ({}));
   const parsed = attendantHandoverSchema.safeParse(body);
   if (!parsed.success) {
-    return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Invalid Handover request' } }, 400);
+    return c.json(
+      { success: false, error: { code: 'VALIDATION_ERROR', message: 'Invalid Handover request' } },
+      400,
+    );
   }
-  const { shiftId, userId, duId, cashHandedOver, cardHandedOver, upiHandedOver, nozzleReadings, terminalEntries } = parsed.data;
+  const {
+    shiftId,
+    userId,
+    duId,
+    cashHandedOver,
+    cardHandedOver,
+    upiHandedOver,
+    nozzleReadings,
+    terminalEntries,
+  } = parsed.data;
   const attendantId = isAttendant(user.role) ? user.id : userId;
   // Attendants derive userId from their own session, so only shiftId + duId are
   // required from them; operational roles must name the attendant (userId).
   if (!attendantId) {
-    return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'shiftId, userId and duId are required' } }, 400);
+    return c.json(
+      {
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: 'shiftId, userId and duId are required' },
+      },
+      400,
+    );
   }
-  const [shift] = await db.select().from(schema.shifts).where(and(eq(schema.shifts.id, shiftId), eq(schema.shifts.organizationId, user.organizationId))).limit(1);
+  const [shift] = await db
+    .select()
+    .from(schema.shifts)
+    .where(
+      and(eq(schema.shifts.id, shiftId), eq(schema.shifts.organizationId, user.organizationId)),
+    )
+    .limit(1);
   if (!shift) {
-    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Shift not found' } }, 404);
+    return c.json(
+      { success: false, error: { code: 'NOT_FOUND', message: 'Shift not found' } },
+      404,
+    );
   }
-  if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId: shift.stationId })) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+  if (
+    !isAuthorizedForStation(user, {
+      organizationId: user.organizationId,
+      stationId: shift.stationId,
+    })
+  ) {
+    return c.json(
+      { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
+      403,
+    );
   }
   const result = await runInTransaction(db, async (tx, events) => {
     await lockStationInventory(tx, user.organizationId, shift.stationId);
@@ -1027,16 +1407,19 @@ shiftsRouter.post('/handovers', async (c) => {
       context: new DrizzleHandoverContextReader(tx),
       handovers: new DrizzleHandoverRepository(tx),
       events,
-    }).execute({
-      shiftId,
-      attendantId,
-      duId,
-      cashHandedOver,
-      cardHandedOver,
-      upiHandedOver,
-      nozzleReadings,
-      terminalEntries,
-    }, buildContext(user, { stationId: shift.stationId, businessDayId: shift.businessDayId }));
+    }).execute(
+      {
+        shiftId,
+        attendantId,
+        duId,
+        cashHandedOver,
+        cardHandedOver,
+        upiHandedOver,
+        nozzleReadings,
+        terminalEntries,
+      },
+      buildContext(user, { stationId: shift.stationId, businessDayId: shift.businessDayId }),
+    );
   });
   return sendResult(c, result);
 });
@@ -1045,11 +1428,25 @@ shiftsRouter.post('/handovers', async (c) => {
 shiftsRouter.post('/open', async (c) => {
   const user = c.var.user;
   if (!canOpenShift(user.role)) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions to open a shift' } }, 403);
+    return c.json(
+      {
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'Insufficient permissions to open a shift' },
+      },
+      403,
+    );
   }
   const body = await c.req.json().catch(() => ({}));
-  if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId: body?.stationId })) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+  if (
+    !isAuthorizedForStation(user, {
+      organizationId: user.organizationId,
+      stationId: body?.stationId,
+    })
+  ) {
+    return c.json(
+      { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
+      403,
+    );
   }
   const db = c.var.db;
   const clock = await loadStationClock(db, body?.stationId);
@@ -1073,17 +1470,40 @@ shiftsRouter.put('/readings', async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const db = c.var.db;
   if (typeof body?.shiftId !== 'string' || body.shiftId.length === 0) {
-    return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Invalid RecordNozzleReadings command' } }, 400);
+    return c.json(
+      {
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: 'Invalid RecordNozzleReadings command' },
+      },
+      400,
+    );
   }
-  const [shift] = await db.select({ stationId: schema.shifts.stationId, businessDayId: schema.shifts.businessDayId }).from(schema.shifts).where(and(
-    eq(schema.shifts.id, body.shiftId),
-    eq(schema.shifts.organizationId, user.organizationId),
-  )).limit(1);
+  const [shift] = await db
+    .select({ stationId: schema.shifts.stationId, businessDayId: schema.shifts.businessDayId })
+    .from(schema.shifts)
+    .where(
+      and(
+        eq(schema.shifts.id, body.shiftId),
+        eq(schema.shifts.organizationId, user.organizationId),
+      ),
+    )
+    .limit(1);
   if (!shift) {
-    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Shift not found' } }, 404);
+    return c.json(
+      { success: false, error: { code: 'NOT_FOUND', message: 'Shift not found' } },
+      404,
+    );
   }
-  if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId: shift.stationId })) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+  if (
+    !isAuthorizedForStation(user, {
+      organizationId: user.organizationId,
+      stationId: shift.stationId,
+    })
+  ) {
+    return c.json(
+      { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
+      403,
+    );
   }
   const result = await runInTransaction(db, async (tx, events) => {
     await lockStationInventory(tx, user.organizationId, shift.stationId);
@@ -1092,7 +1512,10 @@ shiftsRouter.put('/readings', async (c) => {
       businessDays: new DrizzleBusinessDayRepository(tx),
       nozzleReadings: new DrizzleNozzleReadingRepository(tx),
       events,
-    }).execute(body, buildContext(user, { stationId: shift.stationId, businessDayId: shift.businessDayId }));
+    }).execute(
+      body,
+      buildContext(user, { stationId: shift.stationId, businessDayId: shift.businessDayId }),
+    );
   });
   return sendResult(c, result);
 });
@@ -1101,7 +1524,13 @@ shiftsRouter.put('/readings', async (c) => {
 shiftsRouter.post('/close', async (c) => {
   const user = c.var.user;
   if (!canCloseShift(user.role)) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions to close a shift' } }, 403);
+    return c.json(
+      {
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'Insufficient permissions to close a shift' },
+      },
+      403,
+    );
   }
   const body = await c.req.json().catch(() => ({}));
   const command = { ...(body?.payload ?? {}), shiftId: body?.shiftId };
@@ -1111,16 +1540,41 @@ shiftsRouter.post('/close', async (c) => {
   const [target] = await db
     .select({ stationId: schema.shifts.stationId })
     .from(schema.shifts)
-    .where(and(eq(schema.shifts.id, body?.shiftId), eq(schema.shifts.organizationId, user.organizationId)))
+    .where(
+      and(
+        eq(schema.shifts.id, body?.shiftId),
+        eq(schema.shifts.organizationId, user.organizationId),
+      ),
+    )
     .limit(1);
   if (!target) {
-    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Shift not found' } }, 404);
+    return c.json(
+      { success: false, error: { code: 'NOT_FOUND', message: 'Shift not found' } },
+      404,
+    );
   }
-  if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId: target.stationId })) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+  if (
+    !isAuthorizedForStation(user, {
+      organizationId: user.organizationId,
+      stationId: target.stationId,
+    })
+  ) {
+    return c.json(
+      { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
+      403,
+    );
   }
   const result = await runInTransaction(db, async (tx, events) => {
-    const [shift] = await tx.select({ stationId: schema.shifts.stationId }).from(schema.shifts).where(and(eq(schema.shifts.id, body?.shiftId), eq(schema.shifts.organizationId, user.organizationId))).limit(1);
+    const [shift] = await tx
+      .select({ stationId: schema.shifts.stationId })
+      .from(schema.shifts)
+      .where(
+        and(
+          eq(schema.shifts.id, body?.shiftId),
+          eq(schema.shifts.organizationId, user.organizationId),
+        ),
+      )
+      .limit(1);
     if (shift) await lockStationInventory(tx, user.organizationId, shift.stationId);
     const r = await new CloseShift({
       shifts: new DrizzleShiftRepository(tx),
@@ -1136,7 +1590,11 @@ shiftsRouter.post('/close', async (c) => {
       const snap = r.data.snapshot as any;
       await new LedgerPostingService(tx).postShiftClose(
         user.organizationId,
-        { id: r.data.shift.id, stationId: r.data.shift.stationId, businessDayId: r.data.shift.businessDayId },
+        {
+          id: r.data.shift.id,
+          stationId: r.data.shift.stationId,
+          businessDayId: r.data.shift.businessDayId,
+        },
         { cashSales: Number(snap?.reconciliation?.cashSales ?? 0) },
       );
     }
@@ -1149,16 +1607,37 @@ shiftsRouter.post('/close', async (c) => {
 shiftsRouter.post('/reopen', async (c) => {
   const user = c.var.user;
   if (!canReopenShift(user.role)) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Only Owners/Managers can reopen a shift' } }, 403);
+    return c.json(
+      {
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'Only Owners/Managers can reopen a shift' },
+      },
+      403,
+    );
   }
   const body = await c.req.json().catch(() => ({}));
   const db = c.var.db;
-  const [shift] = await db.select({ stationId: schema.shifts.stationId, businessDayId: schema.shifts.businessDayId }).from(schema.shifts).where(and(
-    eq(schema.shifts.id, body?.shiftId),
-    eq(schema.shifts.organizationId, user.organizationId),
-  )).limit(1);
-  if (shift && !isAuthorizedForStation(user, { organizationId: user.organizationId, stationId: shift.stationId })) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+  const [shift] = await db
+    .select({ stationId: schema.shifts.stationId, businessDayId: schema.shifts.businessDayId })
+    .from(schema.shifts)
+    .where(
+      and(
+        eq(schema.shifts.id, body?.shiftId),
+        eq(schema.shifts.organizationId, user.organizationId),
+      ),
+    )
+    .limit(1);
+  if (
+    shift &&
+    !isAuthorizedForStation(user, {
+      organizationId: user.organizationId,
+      stationId: shift.stationId,
+    })
+  ) {
+    return c.json(
+      { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
+      403,
+    );
   }
   const result = await runInTransaction(db, async (tx, events) => {
     if (shift) await lockStationInventory(tx, user.organizationId, shift.stationId);
@@ -1169,9 +1648,16 @@ shiftsRouter.post('/reopen', async (c) => {
       summaries: new DrizzleShiftSummaryWriter(tx),
       stockVariances: new DrizzleStockVarianceRepository(tx),
       events,
-    }).execute(body, buildContext(user, shift ? { stationId: shift.stationId, businessDayId: shift.businessDayId } : undefined));
+    }).execute(
+      body,
+      buildContext(
+        user,
+        shift ? { stationId: shift.stationId, businessDayId: shift.businessDayId } : undefined,
+      ),
+    );
     // Roll back the shift-close money postings; they will be re-posted on re-close.
-    if (r.success && body?.shiftId) await new LedgerPostingService(tx).reverseShiftClose(body.shiftId);
+    if (r.success && body?.shiftId)
+      await new LedgerPostingService(tx).reverseShiftClose(body.shiftId);
     return r;
   });
   return sendResult(c, result);
@@ -1181,25 +1667,55 @@ shiftsRouter.post('/reopen', async (c) => {
 shiftsRouter.post('/lock', async (c) => {
   const user = c.var.user;
   if (!canManageDay(user.role)) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Only Owners/Managers can lock a shift' } }, 403);
+    return c.json(
+      {
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'Only Owners/Managers can lock a shift' },
+      },
+      403,
+    );
   }
   const body = await c.req.json().catch(() => ({}));
   if (!body?.shiftId) {
-    return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'shiftId is required' } }, 400);
+    return c.json(
+      { success: false, error: { code: 'VALIDATION_ERROR', message: 'shiftId is required' } },
+      400,
+    );
   }
   const db = c.var.db;
-  const [shift] = await db.select({ stationId: schema.shifts.stationId, businessDayId: schema.shifts.businessDayId }).from(schema.shifts).where(and(
-    eq(schema.shifts.id, body?.shiftId),
-    eq(schema.shifts.organizationId, user.organizationId),
-  )).limit(1);
+  const [shift] = await db
+    .select({ stationId: schema.shifts.stationId, businessDayId: schema.shifts.businessDayId })
+    .from(schema.shifts)
+    .where(
+      and(
+        eq(schema.shifts.id, body?.shiftId),
+        eq(schema.shifts.organizationId, user.organizationId),
+      ),
+    )
+    .limit(1);
   if (!shift) {
-    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Shift not found' } }, 404);
+    return c.json(
+      { success: false, error: { code: 'NOT_FOUND', message: 'Shift not found' } },
+      404,
+    );
   }
-  if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId: shift.stationId })) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+  if (
+    !isAuthorizedForStation(user, {
+      organizationId: user.organizationId,
+      stationId: shift.stationId,
+    })
+  ) {
+    return c.json(
+      { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
+      403,
+    );
   }
   const result = await runInTransaction(db, (tx, events) =>
-    new LockShift({ shifts: new DrizzleShiftRepository(tx), businessDays: new DrizzleBusinessDayRepository(tx), events }).execute(body, buildContext(user, shift)),
+    new LockShift({
+      shifts: new DrizzleShiftRepository(tx),
+      businessDays: new DrizzleBusinessDayRepository(tx),
+      events,
+    }).execute(body, buildContext(user, shift)),
   );
   return sendResult(c, result);
 });
@@ -1208,16 +1724,34 @@ shiftsRouter.post('/lock', async (c) => {
 shiftsRouter.post('/business-day/open', async (c) => {
   const user = c.var.user;
   if (!canManageDay(user.role)) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Only Owners/Managers can open a business day' } }, 403);
+    return c.json(
+      {
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'Only Owners/Managers can open a business day' },
+      },
+      403,
+    );
   }
   const body = await c.req.json().catch(() => ({}));
   const db = c.var.db;
-  if (!body?.stationId || !isAuthorizedForStation(user, { organizationId: user.organizationId, stationId: body.stationId })) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this Station' } }, 403);
+  if (
+    !body?.stationId ||
+    !isAuthorizedForStation(user, {
+      organizationId: user.organizationId,
+      stationId: body.stationId,
+    })
+  ) {
+    return c.json(
+      { success: false, error: { code: 'FORBIDDEN', message: 'No access to this Station' } },
+      403,
+    );
   }
   const clock = await loadStationClock(db, body?.stationId);
   const result = await runInTransaction(db, (tx, events) =>
-    new OpenBusinessDay({ repository: new DrizzleBusinessDayRepository(tx), events }).execute(body, buildContext(user, { stationId: body?.stationId, ...clock })),
+    new OpenBusinessDay({ repository: new DrizzleBusinessDayRepository(tx), events }).execute(
+      body,
+      buildContext(user, { stationId: body?.stationId, ...clock }),
+    ),
   );
   return sendResult(c, result);
 });
@@ -1226,12 +1760,27 @@ shiftsRouter.post('/business-day/open', async (c) => {
 shiftsRouter.post('/business-day/close', async (c) => {
   const user = c.var.user;
   if (!canManageDay(user.role)) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Only Owners/Managers can close a business day' } }, 403);
+    return c.json(
+      {
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'Only Owners/Managers can close a business day' },
+      },
+      403,
+    );
   }
   const body = await c.req.json().catch(() => ({}));
   const db = c.var.db;
-  if (!body?.stationId || !isAuthorizedForStation(user, { organizationId: user.organizationId, stationId: body.stationId })) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this Station' } }, 403);
+  if (
+    !body?.stationId ||
+    !isAuthorizedForStation(user, {
+      organizationId: user.organizationId,
+      stationId: body.stationId,
+    })
+  ) {
+    return c.json(
+      { success: false, error: { code: 'FORBIDDEN', message: 'No access to this Station' } },
+      403,
+    );
   }
   const result = await runInTransaction(db, async (tx, events) => {
     const businessDays = new DrizzleBusinessDayRepository(tx);
@@ -1241,7 +1790,10 @@ shiftsRouter.post('/business-day/close', async (c) => {
       snapshots: new DrizzleDssrSnapshotRepository(tx),
       dssrData: new DrizzleDssrDataReader(tx),
       events,
-    }).execute(body, buildContext(user, { stationId: body.stationId, businessDayId: body.businessDayId }));
+    }).execute(
+      body,
+      buildContext(user, { stationId: body.stationId, businessDayId: body.businessDayId }),
+    );
   });
   return sendResult(c, result);
 });
@@ -1251,10 +1803,16 @@ shiftsRouter.get('/shift-summaries', async (c) => {
   const user = c.var.user;
   const stationId = c.req.query('stationId');
   if (!stationId) {
-    return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'stationId is required' } }, 400);
+    return c.json(
+      { success: false, error: { code: 'VALIDATION_ERROR', message: 'stationId is required' } },
+      400,
+    );
   }
   if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId })) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+    return c.json(
+      { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
+      403,
+    );
   }
   const db = c.var.db;
   const rows = await db
@@ -1269,7 +1827,12 @@ shiftsRouter.get('/shift-summaries', async (c) => {
     .innerJoin(schema.shifts, eq(schema.shifts.id, schema.shiftSummaries.shiftId))
     .leftJoin(schema.businessDays, eq(schema.businessDays.id, schema.shifts.businessDayId))
     .leftJoin(schema.shiftTemplates, eq(schema.shiftTemplates.id, schema.shifts.shiftTemplateId))
-    .where(and(eq(schema.shifts.stationId, stationId), eq(schema.shifts.organizationId, user.organizationId)))
+    .where(
+      and(
+        eq(schema.shifts.stationId, stationId),
+        eq(schema.shifts.organizationId, user.organizationId),
+      ),
+    )
     .orderBy(desc(schema.shiftSummaries.generatedAt));
 
   const data = await Promise.all(

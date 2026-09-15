@@ -64,9 +64,12 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
             textAlign: 'center',
           }}
         >
-          <h1 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text-strong)' }}>Something went wrong</h1>
+          <h1 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text-strong)' }}>
+            Something went wrong
+          </h1>
           <p style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-            An unexpected error interrupted this screen. Your data is safe — reloading usually clears it.
+            An unexpected error interrupted this screen. Your data is safe — reloading usually
+            clears it.
           </p>
           <pre
             style={{

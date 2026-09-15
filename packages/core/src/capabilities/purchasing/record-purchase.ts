@@ -1,6 +1,21 @@
 import { z } from 'zod';
-import { BusinessEvents, err, eventFromContext, invariantViolation, notFoundError, ok, validationError } from '../../kernel/index.js';
-import type { DocumentNumberGenerator, DomainEvent, EventPublisher, ExecutionContext, Result, UseCase } from '../../kernel/index.js';
+import {
+  BusinessEvents,
+  err,
+  eventFromContext,
+  invariantViolation,
+  notFoundError,
+  ok,
+  validationError,
+} from '../../kernel/index.js';
+import type {
+  DocumentNumberGenerator,
+  DomainEvent,
+  EventPublisher,
+  ExecutionContext,
+  Result,
+  UseCase,
+} from '../../kernel/index.js';
 import type { StockMovement, StockMovementRepository } from '../inventory/index.js';
 import { resolveFinancialAnchor, type ShiftRepository } from '../station-ops/shifts/index.js';
 import type { BusinessDayWriteRepository } from '../station-ops/business-days/index.js';
@@ -8,7 +23,14 @@ import type { SupplierRepository } from '../crm/suppliers/index.js';
 import type { ProductRepository } from '../station-setup/products/index.js';
 import type { StationRepository } from '../station-setup/stations/index.js';
 import { computeLineTax, isInterState } from '../finance/tax/index.js';
-import type { Purchase, PurchaseItem, PurchaseItemRepository, PurchaseRepository, SupplierTransaction, SupplierTransactionRepository } from './ports.js';
+import type {
+  Purchase,
+  PurchaseItem,
+  PurchaseItemRepository,
+  PurchaseRepository,
+  SupplierTransaction,
+  SupplierTransactionRepository,
+} from './ports.js';
 
 export interface TankAllocationInput {
   tankId: string;
@@ -38,7 +60,10 @@ export interface RecordPurchaseCommand {
   tankAllocations?: TankAllocationInput[] | null;
 }
 
-const tankAllocationSchema = z.object({ tankId: z.string().min(1), quantity: z.coerce.number().nonnegative() });
+const tankAllocationSchema = z.object({
+  tankId: z.string().min(1),
+  quantity: z.coerce.number().nonnegative(),
+});
 const lineSchema = z.object({
   productId: z.string().min(1, 'productId is required'),
   quantity: z.coerce.number().positive('quantity must be positive'),
@@ -54,17 +79,24 @@ const schema = z
     lines: z.array(lineSchema).min(1).optional(),
     shiftId: z.string().min(1).optional(),
     stationId: z.string().min(1).optional(),
-    transactionDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'transactionDate must be YYYY-MM-DD').optional(),
+    transactionDate: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, 'transactionDate must be YYYY-MM-DD')
+      .optional(),
     // Legacy single-line fields
     productId: z.string().min(1).optional(),
     quantity: z.coerce.number().positive().optional(),
     unitPrice: z.coerce.number().positive().optional(),
     tankAllocations: z.array(tankAllocationSchema).nullish(),
   })
-  .refine((c) => (c.lines && c.lines.length > 0) || (c.productId && c.quantity != null && c.unitPrice != null), {
-    message: 'Provide at least one line item (lines[] or legacy productId/quantity/unitPrice)',
-    path: ['lines'],
-  });
+  .refine(
+    (c) =>
+      (c.lines && c.lines.length > 0) || (c.productId && c.quantity != null && c.unitPrice != null),
+    {
+      message: 'Provide at least one line item (lines[] or legacy productId/quantity/unitPrice)',
+      path: ['lines'],
+    },
+  );
 
 export interface RecordPurchaseDeps {
   purchases: PurchaseRepository;
@@ -101,19 +133,31 @@ const numOrNull = (n: number | null | undefined): string | null => (n == null ? 
 export class RecordPurchase implements UseCase<RecordPurchaseCommand, RecordPurchaseResult> {
   constructor(private readonly deps: RecordPurchaseDeps) {}
 
-  async execute(input: RecordPurchaseCommand, ctx: ExecutionContext): Promise<Result<RecordPurchaseResult>> {
+  async execute(
+    input: RecordPurchaseCommand,
+    ctx: ExecutionContext,
+  ): Promise<Result<RecordPurchaseResult>> {
     const p = schema.safeParse(input);
-    if (!p.success) return err(validationError('Invalid RecordPurchase command', { issues: p.error.flatten() }));
+    if (!p.success)
+      return err(validationError('Invalid RecordPurchase command', { issues: p.error.flatten() }));
     const cmd = p.data;
 
     const supplier = await this.deps.suppliers.findById(cmd.supplierId);
-    if (!supplier || supplier.organizationId !== ctx.organizationId) return err(notFoundError('Supplier', cmd.supplierId));
+    if (!supplier || supplier.organizationId !== ctx.organizationId)
+      return err(notFoundError('Supplier', cmd.supplierId));
 
     // Normalise to a list of lines (legacy single-line shape → one line).
     const rawLines: PurchaseLineInput[] =
       cmd.lines && cmd.lines.length > 0
         ? cmd.lines
-        : [{ productId: cmd.productId!, quantity: cmd.quantity!, unitPrice: cmd.unitPrice!, tankAllocations: cmd.tankAllocations }];
+        : [
+            {
+              productId: cmd.productId!,
+              quantity: cmd.quantity!,
+              unitPrice: cmd.unitPrice!,
+              tankAllocations: cmd.tankAllocations,
+            },
+          ];
 
     let businessDayId: string;
     let stationId = cmd.stationId ?? ctx.stationId ?? null;
@@ -122,15 +166,22 @@ export class RecordPurchase implements UseCase<RecordPurchaseCommand, RecordPurc
     // drawer (so this is pure attribution, not a reconciliation input), but storing
     // it keeps shift-level provenance available for future reporting.
     let shiftIdToStore: string | null = null;
-    if (!cmd.shiftId && !stationId) return err(validationError('Either shiftId or stationId is required'));
-    const anchor = await resolveFinancialAnchor(this.deps, ctx, { shiftId: cmd.shiftId, stationId, transactionDate: cmd.transactionDate }, { kind: 'STOCK' });
+    if (!cmd.shiftId && !stationId)
+      return err(validationError('Either shiftId or stationId is required'));
+    const anchor = await resolveFinancialAnchor(
+      this.deps,
+      ctx,
+      { shiftId: cmd.shiftId, stationId, transactionDate: cmd.transactionDate },
+      { kind: 'STOCK' },
+    );
     if (!anchor.success) return anchor;
     businessDayId = anchor.data.businessDayId;
     stationId = anchor.data.stationId;
     shiftIdToStore = anchor.data.shiftId;
 
     // Resolve inter-state status from supplier state vs buyer (station) state.
-    const supplierStateCode = (supplier.metadata as Record<string, unknown> | null)?.stateCode as string | undefined;
+    const supplierStateCode = (supplier.metadata as Record<string, unknown> | null)?.stateCode as
+      string | undefined;
     let buyerStateCode: string | undefined;
     if (stationId) {
       const station = await this.deps.stations.findById(stationId);
@@ -153,7 +204,8 @@ export class RecordPurchase implements UseCase<RecordPurchaseCommand, RecordPurc
 
     for (const line of rawLines) {
       const product = await this.deps.products.findById(line.productId);
-      if (!product || product.organizationId !== ctx.organizationId) return err(notFoundError('Product', line.productId));
+      if (!product || product.organizationId !== ctx.organizationId)
+        return err(notFoundError('Product', line.productId));
       productNames.set(product.id, product.name);
 
       const quantity = Number(line.quantity);
@@ -163,7 +215,11 @@ export class RecordPurchase implements UseCase<RecordPurchaseCommand, RecordPurc
       // Accumulate cost-basis inputs. unitPrice is the per-unit landed cost:
       // pre-tax for GST items (input tax is creditable), tax-inclusive for fuel
       // (VAT is baked into the entered price). Both are the correct cost basis.
-      const agg = costAgg.get(line.productId) ?? { oldCost: Number(product.costBasis ?? 0), qty: 0, value: 0 };
+      const agg = costAgg.get(line.productId) ?? {
+        oldCost: Number(product.costBasis ?? 0),
+        qty: 0,
+        value: 0,
+      };
       agg.qty += quantity;
       agg.value += quantity * unitPrice;
       costAgg.set(line.productId, agg);
@@ -177,14 +233,34 @@ export class RecordPurchase implements UseCase<RecordPurchaseCommand, RecordPurc
       // amount IS the cost). EXEMPT / NON_TAXABLE likewise carry no tax.
       const tax =
         product.taxCategory === 'GST'
-          ? computeLineTax({ taxCategory: 'GST', taxableAmount, gstRatePct: gstRate, cessPct: cessRate }, interState)
-          : { taxableAmount, cgst: 0, sgst: 0, igst: 0, vat: 0, cess: 0, taxTotal: 0, total: taxableAmount };
+          ? computeLineTax(
+              { taxCategory: 'GST', taxableAmount, gstRatePct: gstRate, cessPct: cessRate },
+              interState,
+            )
+          : {
+              taxableAmount,
+              cgst: 0,
+              sgst: 0,
+              igst: 0,
+              vat: 0,
+              cess: 0,
+              taxTotal: 0,
+              total: taxableAmount,
+            };
 
       // Fuel lines: validate tank allocations sum to the line quantity.
-      const allocations = (line.tankAllocations ?? []).map((a) => ({ tankId: a.tankId, quantity: Number(a.quantity) })).filter((a) => a.quantity > 0);
+      const allocations = (line.tankAllocations ?? [])
+        .map((a) => ({ tankId: a.tankId, quantity: Number(a.quantity) }))
+        .filter((a) => a.quantity > 0);
       const allocatedTotal = allocations.reduce((acc, a) => acc + a.quantity, 0);
       if (allocations.length > 0 && Math.abs(allocatedTotal - quantity) > 0.001) {
-        return err(invariantViolation('Tank allocations must sum to the line quantity', { productId: line.productId, quantity, allocatedTotal }));
+        return err(
+          invariantViolation('Tank allocations must sum to the line quantity', {
+            productId: line.productId,
+            quantity,
+            allocatedTotal,
+          }),
+        );
       }
 
       items.push({
@@ -309,10 +385,19 @@ export class RecordPurchase implements UseCase<RecordPurchaseCommand, RecordPurc
         aggregateId: purchase.id,
         stationId,
         businessDayId,
-        payload: { purchaseId: purchase.id, supplierId: supplier.id, amount: purchase.amount, lineCount: items.length },
+        payload: {
+          purchaseId: purchase.id,
+          supplierId: supplier.id,
+          amount: purchase.amount,
+          lineCount: items.length,
+        },
         presentation: {
           templateId: 'purchase.v1',
-          values: { supplierName: supplier.name, lineCount: items.length, amount: Number(purchase.amount) },
+          values: {
+            supplierName: supplier.name,
+            lineCount: items.length,
+            amount: Number(purchase.amount),
+          },
         },
       }),
       ...items.map((it) =>
@@ -322,7 +407,11 @@ export class RecordPurchase implements UseCase<RecordPurchaseCommand, RecordPurc
           aggregateId: purchase.id,
           stationId,
           businessDayId,
-          payload: { purchaseId: purchase.id, productId: it.productId, quantity: Number(it.quantity) },
+          payload: {
+            purchaseId: purchase.id,
+            productId: it.productId,
+            quantity: Number(it.quantity),
+          },
           presentation: {
             templateId: 'goods-received.v1',
             values: {

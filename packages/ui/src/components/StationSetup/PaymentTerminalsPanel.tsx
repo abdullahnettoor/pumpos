@@ -32,24 +32,66 @@ const inputStyle: React.CSSProperties = {
   color: 'var(--text-strong)',
 };
 
-const buildTerminalColumns = (openEdit: (t: any) => void, toggleActive: (t: any) => void, clearingName: (id: string | null | undefined) => string): ColumnDef<any, any>[] => [
-  { accessorKey: 'label', header: 'Label', cell: ({ getValue }) => <span style={{ color: 'var(--text-strong)', fontWeight: 500 }}>{getValue() as string}</span> },
-  { accessorKey: 'provider', header: 'Provider', cell: ({ getValue }) => <span style={{ color: 'var(--text-default)' }}>{(getValue() as string) || '—'}</span> },
-  { accessorKey: 'terminalCode', header: 'Terminal ID', cell: ({ getValue }) => <span style={{ color: 'var(--text-default)', fontFamily: 'var(--font-mono)' }}>{(getValue() as string) || '—'}</span> },
+const buildTerminalColumns = (
+  openEdit: (t: any) => void,
+  toggleActive: (t: any) => void,
+  clearingName: (id: string | null | undefined) => string,
+): ColumnDef<any, any>[] => [
+  {
+    accessorKey: 'label',
+    header: 'Label',
+    cell: ({ getValue }) => (
+      <span style={{ color: 'var(--text-strong)', fontWeight: 500 }}>{getValue() as string}</span>
+    ),
+  },
+  {
+    accessorKey: 'provider',
+    header: 'Provider',
+    cell: ({ getValue }) => (
+      <span style={{ color: 'var(--text-default)' }}>{(getValue() as string) || '—'}</span>
+    ),
+  },
+  {
+    accessorKey: 'terminalCode',
+    header: 'Terminal ID',
+    cell: ({ getValue }) => (
+      <span style={{ color: 'var(--text-default)', fontFamily: 'var(--font-mono)' }}>
+        {(getValue() as string) || '—'}
+      </span>
+    ),
+  },
   {
     id: 'accepts',
     header: 'Accepts',
     cell: ({ row }) => {
       const t = row.original;
-      return <span style={{ color: 'var(--text-default)' }}>{[t.supportsCard ? 'Card' : null, t.supportsUpi ? 'UPI' : null].filter(Boolean).join(' + ') || '—'}</span>;
+      return (
+        <span style={{ color: 'var(--text-default)' }}>
+          {[t.supportsCard ? 'Card' : null, t.supportsUpi ? 'UPI' : null]
+            .filter(Boolean)
+            .join(' + ') || '—'}
+        </span>
+      );
     },
   },
   {
     id: 'clearing',
     header: 'Settles into',
-    cell: ({ row }) => <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>{clearingName(row.original.clearingAccountId)}</span>,
+    cell: ({ row }) => (
+      <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
+        {clearingName(row.original.clearingAccountId)}
+      </span>
+    ),
   },
-  { accessorKey: 'isActive', header: 'Status', cell: ({ getValue }) => <Chip tone={getValue() ? 'success' : 'neutral'} size="sm">{getValue() ? 'Active' : 'Inactive'}</Chip> },
+  {
+    accessorKey: 'isActive',
+    header: 'Status',
+    cell: ({ getValue }) => (
+      <Chip tone={getValue() ? 'success' : 'neutral'} size="sm">
+        {getValue() ? 'Active' : 'Inactive'}
+      </Chip>
+    ),
+  },
   {
     id: 'actions',
     header: '',
@@ -57,8 +99,36 @@ const buildTerminalColumns = (openEdit: (t: any) => void, toggleActive: (t: any)
       const t = row.original;
       return (
         <div style={{ display: 'flex', gap: '8px', whiteSpace: 'nowrap' }}>
-          <button onClick={() => openEdit(t)} style={{ padding: '4px 8px', backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-strong)', color: 'var(--text-default)', borderRadius: 'var(--radius-button)', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}>Edit</button>
-          <button onClick={() => toggleActive(t)} style={{ padding: '4px 8px', backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-strong)', color: 'var(--text-default)', borderRadius: 'var(--radius-button)', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}>{t.isActive ? 'Deactivate' : 'Reactivate'}</button>
+          <button
+            onClick={() => openEdit(t)}
+            style={{
+              padding: '4px 8px',
+              backgroundColor: 'var(--bg-surface)',
+              border: '1px solid var(--border-strong)',
+              color: 'var(--text-default)',
+              borderRadius: 'var(--radius-button)',
+              fontSize: '12px',
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            Edit
+          </button>
+          <button
+            onClick={() => toggleActive(t)}
+            style={{
+              padding: '4px 8px',
+              backgroundColor: 'var(--bg-surface)',
+              border: '1px solid var(--border-strong)',
+              color: 'var(--text-default)',
+              borderRadius: 'var(--radius-button)',
+              fontSize: '12px',
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            {t.isActive ? 'Deactivate' : 'Reactivate'}
+          </button>
         </div>
       );
     },
@@ -94,7 +164,9 @@ export const PaymentTerminalsPanel: React.FC<PaymentTerminalsPanelProps> = ({ st
         financeSvc.listAccounts(stationId).catch(() => []),
       ]);
       setTerminals(list);
-      setClearingAccounts((accounts || []).filter((a: any) => a.accountType === 'MERCHANT_CLEARING'));
+      setClearingAccounts(
+        (accounts || []).filter((a: any) => a.accountType === 'MERCHANT_CLEARING'),
+      );
     } catch (err) {
       console.error('Failed to load payment terminals:', err);
     } finally {
@@ -174,16 +246,26 @@ export const PaymentTerminalsPanel: React.FC<PaymentTerminalsPanelProps> = ({ st
   };
 
   if (loading) {
-    return <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>Loading payment terminals...</div>;
+    return (
+      <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+        Loading payment terminals...
+      </div>
+    );
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }} className="animate-fade-in">
+    <div
+      style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
+      className="animate-fade-in"
+    >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h2 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-strong)' }}>Payment Terminals (PoS)</h2>
+          <h2 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-strong)' }}>
+            Payment Terminals (PoS)
+          </h2>
           <p style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
-            Card / UPI machines for this station. Add as many as needed; link them to dispensers when opening a shift.
+            Card / UPI machines for this station. Add as many as needed; link them to dispensers
+            when opening a shift.
           </p>
         </div>
         {!isFormOpen && (
@@ -221,7 +303,10 @@ export const PaymentTerminalsPanel: React.FC<PaymentTerminalsPanelProps> = ({ st
         }}
         title={editingId ? 'Edit Payment Terminal' : 'Add Payment Terminal'}
       >
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <form
+          onSubmit={handleSubmit}
+          style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
+        >
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <label style={labelStyle}>Label *</label>
             <input
@@ -236,7 +321,12 @@ export const PaymentTerminalsPanel: React.FC<PaymentTerminalsPanelProps> = ({ st
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <label style={labelStyle}>Provider / Acquirer</label>
-            <ProviderField key={editingId ?? 'new'} value={provider} onChange={setProvider} style={inputStyle} />
+            <ProviderField
+              key={editingId ?? 'new'}
+              value={provider}
+              onChange={setProvider}
+              style={inputStyle}
+            />
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -251,35 +341,82 @@ export const PaymentTerminalsPanel: React.FC<PaymentTerminalsPanelProps> = ({ st
           </div>
 
           <div style={{ display: 'flex', gap: '20px' }}>
-            <Checkbox label="Accepts Card" checked={supportsCard} onChange={(e) => setSupportsCard(e.target.checked)} />
-            <Checkbox label="Accepts UPI" checked={supportsUpi} onChange={(e) => setSupportsUpi(e.target.checked)} />
+            <Checkbox
+              label="Accepts Card"
+              checked={supportsCard}
+              onChange={(e) => setSupportsCard(e.target.checked)}
+            />
+            <Checkbox
+              label="Accepts UPI"
+              checked={supportsUpi}
+              onChange={(e) => setSupportsUpi(e.target.checked)}
+            />
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <label style={labelStyle}>Settles into (Card/UPI clearing account)</label>
-            <select style={inputStyle} value={clearingAccountId} onChange={(e) => setClearingAccountId(e.target.value)}>
+            <select
+              style={inputStyle}
+              value={clearingAccountId}
+              onChange={(e) => setClearingAccountId(e.target.value)}
+            >
               <option value="">Auto — group by provider</option>
               {clearingAccounts.map((a) => (
-                <option key={a.id} value={a.id}>{a.name}</option>
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
               ))}
             </select>
             <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-              Card/UPI from this machine settles into this account. Machines of the same acquirer (e.g. 4 Paytm) can share one — leave on Auto to group by provider.
+              Card/UPI from this machine settles into this account. Machines of the same acquirer
+              (e.g. 4 Paytm) can share one — leave on Auto to group by provider.
             </span>
           </div>
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', borderTop: '1px solid var(--border-soft)', paddingTop: '16px' }}>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'flex-end',
+              gap: '8px',
+              borderTop: '1px solid var(--border-soft)',
+              paddingTop: '16px',
+            }}
+          >
             <button
               type="button"
-              onClick={() => { resetForm(); setIsFormOpen(false); }}
-              style={{ height: '34px', padding: '0 14px', backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-strong)', color: 'var(--text-default)', borderRadius: 'var(--radius-button)', fontWeight: 600, fontSize: '13px', cursor: 'pointer' }}
+              onClick={() => {
+                resetForm();
+                setIsFormOpen(false);
+              }}
+              style={{
+                height: '34px',
+                padding: '0 14px',
+                backgroundColor: 'var(--bg-surface)',
+                border: '1px solid var(--border-strong)',
+                color: 'var(--text-default)',
+                borderRadius: 'var(--radius-button)',
+                fontWeight: 600,
+                fontSize: '13px',
+                cursor: 'pointer',
+              }}
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={submitting}
-              style={{ height: '34px', padding: '0 14px', backgroundColor: 'var(--brand-primary)', color: '#ffffff', border: 'none', borderRadius: 'var(--radius-button)', fontWeight: 600, fontSize: '13px', cursor: submitting ? 'not-allowed' : 'pointer', opacity: submitting ? 0.6 : 1 }}
+              style={{
+                height: '34px',
+                padding: '0 14px',
+                backgroundColor: 'var(--brand-primary)',
+                color: '#ffffff',
+                border: 'none',
+                borderRadius: 'var(--radius-button)',
+                fontWeight: 600,
+                fontSize: '13px',
+                cursor: submitting ? 'not-allowed' : 'pointer',
+                opacity: submitting ? 0.6 : 1,
+              }}
             >
               {submitting ? 'Saving...' : editingId ? 'Save Changes' : 'Add Terminal'}
             </button>

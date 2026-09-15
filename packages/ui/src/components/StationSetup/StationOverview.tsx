@@ -33,7 +33,16 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
   const toast = useToast();
   const [editing, setEditing] = useState(false);
   const [editingBusiness, setEditingBusiness] = useState(false);
-  const [activeTab, setActiveTab] = useState<'general' | 'business' | 'reports' | 'products' | 'tanks' | 'dispensers' | 'terminals' | 'shifts'>('general');
+  const [activeTab, setActiveTab] = useState<
+    | 'general'
+    | 'business'
+    | 'reports'
+    | 'products'
+    | 'tanks'
+    | 'dispensers'
+    | 'terminals'
+    | 'shifts'
+  >('general');
 
   // General tab form states
   const [name, setName] = useState('');
@@ -121,7 +130,7 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
           offline_warning_days: selectedStation.settings?.offline_warning_days || 3,
           offline_critical_days: selectedStation.settings?.offline_critical_days || 7,
         },
-        onboardingStatus
+        onboardingStatus,
       });
       onStationSelected(updated);
       setEditing(false);
@@ -161,15 +170,15 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
     }
   };
 
-
-
   if (loading) {
     return <LoadingSpinner text="Loading station overview..." />;
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }} className="animate-fade-in">
-
+    <div
+      style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}
+      className="animate-fade-in"
+    >
       <PageHeader
         title="Station Setup & Administration"
         subtitle="Review and modify station components, products, tanks, nozzles, and settings."
@@ -177,7 +186,6 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
 
       {selectedStation ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          
           {/* Tabs bar */}
           <Tabs
             variant="underline"
@@ -201,13 +209,29 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
             {activeTab === 'general' && (
               <div>
                 {editing ? (
-                  <form onSubmit={handleSaveGeneral} style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxWidth: '600px' }}>
+                  <form
+                    onSubmit={handleSaveGeneral}
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '12px',
+                      maxWidth: '600px',
+                    }}
+                  >
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                       <Field label="Station Name" required>
-                        <TextInput value={name} onChange={(e) => setName(e.target.value)} required />
+                        <TextInput
+                          value={name}
+                          onChange={(e) => setName(e.target.value)}
+                          required
+                        />
                       </Field>
                       <Field label="Station Code" required>
-                        <TextInput value={code} onChange={(e) => setCode(e.target.value)} required />
+                        <TextInput
+                          value={code}
+                          onChange={(e) => setCode(e.target.value)}
+                          required
+                        />
                       </Field>
                     </div>
 
@@ -220,12 +244,21 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
                         <TextInput value={phone} onChange={(e) => setPhone(e.target.value)} />
                       </Field>
                       <Field label="Shift Grace Period (Minutes)">
-                        <TextInput type="number" min="0" className="mono-num" value={graceMinutes} onChange={(e) => setGraceMinutes(parseInt(e.target.value))} />
+                        <TextInput
+                          type="number"
+                          min="0"
+                          className="mono-num"
+                          value={graceMinutes}
+                          onChange={(e) => setGraceMinutes(parseInt(e.target.value))}
+                        />
                       </Field>
                     </div>
 
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                      <Field label="Timezone" hint="Used to decide which calendar day operations belong to.">
+                      <Field
+                        label="Timezone"
+                        hint="Used to decide which calendar day operations belong to."
+                      >
                         <Select value={timezone} onChange={(e) => setTimezone(e.target.value)}>
                           <option value="Asia/Kolkata">Asia/Kolkata (IST)</option>
                           <option value="Asia/Dubai">Asia/Dubai (GST)</option>
@@ -235,32 +268,85 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
                           <option value="UTC">UTC</option>
                         </Select>
                       </Field>
-                      <Field label="Business Day Starts At" hint="A fuel day commonly runs 06:00 → 06:00. Activity before this rolls to the previous day.">
-                        <TextInput type="time" className="mono-num" value={businessDayStartsAt} onChange={(e) => setBusinessDayStartsAt(e.target.value)} />
+                      <Field
+                        label="Business Day Starts At"
+                        hint="A fuel day commonly runs 06:00 → 06:00. Activity before this rolls to the previous day."
+                      >
+                        <TextInput
+                          type="time"
+                          className="mono-num"
+                          value={businessDayStartsAt}
+                          onChange={(e) => setBusinessDayStartsAt(e.target.value)}
+                        />
                       </Field>
                     </div>
 
                     <Field label="Onboarding Readiness Status" style={{ maxWidth: '300px' }}>
-                      <Select value={onboardingStatus} onChange={(e) => setOnboardingStatus(e.target.value)}>
+                      <Select
+                        value={onboardingStatus}
+                        onChange={(e) => setOnboardingStatus(e.target.value)}
+                      >
                         <option value="NOT_STARTED">NOT STARTED</option>
                         <option value="IN_PROGRESS">IN PROGRESS</option>
                         <option value="READY_FOR_OPERATIONS">READY FOR OPERATIONS</option>
                       </Select>
                     </Field>
 
-                    <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '12px', borderTop: '1px solid var(--border-soft)', paddingTop: '12px' }}>
-                      <Button type="button" variant="secondary" size="sm" onClick={() => setEditing(false)}>Cancel</Button>
-                      <Button type="submit" variant="primary" size="sm">Save Configuration</Button>
+                    <div
+                      style={{
+                        display: 'flex',
+                        gap: '8px',
+                        justifyContent: 'flex-end',
+                        marginTop: '12px',
+                        borderTop: '1px solid var(--border-soft)',
+                        paddingTop: '12px',
+                      }}
+                    >
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => setEditing(false)}
+                      >
+                        Cancel
+                      </Button>
+                      <Button type="submit" variant="primary" size="sm">
+                        Save Configuration
+                      </Button>
                     </div>
                   </form>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                      }}
+                    >
                       <div>
-                        <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-strong)' }}>{selectedStation.name}</h3>
-                        <p style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
+                        <h3
+                          style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-strong)' }}
+                        >
+                          {selectedStation.name}
+                        </h3>
+                        <p
+                          style={{
+                            fontSize: '12px',
+                            color: 'var(--text-muted)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            marginTop: '4px',
+                          }}
+                        >
                           Status:
-                          <Chip tone={onboardingStatus === 'READY_FOR_OPERATIONS' ? 'success' : 'warning'} size="sm">
+                          <Chip
+                            tone={
+                              onboardingStatus === 'READY_FOR_OPERATIONS' ? 'success' : 'warning'
+                            }
+                            size="sm"
+                          >
                             {onboardingStatus.replace(/_/g, ' ')}
                           </Chip>
                         </p>
@@ -270,24 +356,108 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
                       </Button>
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', borderTop: '1px solid var(--border-soft)', paddingTop: '16px' }}>
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                        gap: '16px',
+                        borderTop: '1px solid var(--border-soft)',
+                        paddingTop: '16px',
+                      }}
+                    >
                       <div>
-                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Location Code</span>
-                        <p style={{ fontSize: '14px', fontWeight: 600, marginTop: '4px', color: 'var(--text-strong)', fontFamily: 'var(--font-mono)' }}>{selectedStation.code}</p>
+                        <span
+                          style={{
+                            fontSize: '11px',
+                            color: 'var(--text-muted)',
+                            fontWeight: 600,
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.05em',
+                          }}
+                        >
+                          Location Code
+                        </span>
+                        <p
+                          style={{
+                            fontSize: '14px',
+                            fontWeight: 600,
+                            marginTop: '4px',
+                            color: 'var(--text-strong)',
+                            fontFamily: 'var(--font-mono)',
+                          }}
+                        >
+                          {selectedStation.code}
+                        </p>
                       </div>
                       <div>
-                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Contact</span>
-                        <p style={{ fontSize: '13px', fontWeight: 500, marginTop: '4px', color: 'var(--text-default)' }}>{selectedStation.phone || '—'}</p>
+                        <span
+                          style={{
+                            fontSize: '11px',
+                            color: 'var(--text-muted)',
+                            fontWeight: 600,
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.05em',
+                          }}
+                        >
+                          Contact
+                        </span>
+                        <p
+                          style={{
+                            fontSize: '13px',
+                            fontWeight: 500,
+                            marginTop: '4px',
+                            color: 'var(--text-default)',
+                          }}
+                        >
+                          {selectedStation.phone || '—'}
+                        </p>
                       </div>
                       <div>
-                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Grace Period</span>
-                        <p style={{ fontSize: '13px', fontWeight: 500, marginTop: '4px', color: 'var(--text-default)', fontFamily: 'var(--font-mono)' }}>
+                        <span
+                          style={{
+                            fontSize: '11px',
+                            color: 'var(--text-muted)',
+                            fontWeight: 600,
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.05em',
+                          }}
+                        >
+                          Grace Period
+                        </span>
+                        <p
+                          style={{
+                            fontSize: '13px',
+                            fontWeight: 500,
+                            marginTop: '4px',
+                            color: 'var(--text-default)',
+                            fontFamily: 'var(--font-mono)',
+                          }}
+                        >
                           {selectedStation.settings?.shift_grace_minutes || 15} min
                         </p>
                       </div>
                       <div style={{ gridColumn: 'span 2' }}>
-                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Address</span>
-                        <p style={{ fontSize: '13px', fontWeight: 500, marginTop: '4px', color: 'var(--text-default)' }}>{selectedStation.address || '—'}</p>
+                        <span
+                          style={{
+                            fontSize: '11px',
+                            color: 'var(--text-muted)',
+                            fontWeight: 600,
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.05em',
+                          }}
+                        >
+                          Address
+                        </span>
+                        <p
+                          style={{
+                            fontSize: '13px',
+                            fontWeight: 500,
+                            marginTop: '4px',
+                            color: 'var(--text-default)',
+                          }}
+                        >
+                          {selectedStation.address || '—'}
+                        </p>
                       </div>
                     </div>
                   </div>
@@ -298,35 +468,87 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
             {activeTab === 'business' && (
               <div>
                 {editingBusiness ? (
-                  <form onSubmit={handleSaveBusiness} style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxWidth: '600px' }}>
+                  <form
+                    onSubmit={handleSaveBusiness}
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '12px',
+                      maxWidth: '600px',
+                    }}
+                  >
                     <div>
-                      <h3 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-strong)', marginBottom: '10px' }}>
+                      <h3
+                        style={{
+                          fontSize: '13px',
+                          fontWeight: 600,
+                          color: 'var(--text-strong)',
+                          marginBottom: '10px',
+                        }}
+                      >
                         Legal &amp; Tax (Report Letterhead)
                       </h3>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                         <Field label="Legal / Trade Name">
-                          <TextInput value={legalName} onChange={(e) => setLegalName(e.target.value)} placeholder="e.g. Sri Lakshmi Fuels" />
+                          <TextInput
+                            value={legalName}
+                            onChange={(e) => setLegalName(e.target.value)}
+                            placeholder="e.g. Sri Lakshmi Fuels"
+                          />
                         </Field>
                         <Field label="GSTIN">
-                          <TextInput className="mono-num" value={gstin} onChange={(e) => setGstin(e.target.value.toUpperCase())} placeholder="29ABCDE1234F1Z5" maxLength={15} />
+                          <TextInput
+                            className="mono-num"
+                            value={gstin}
+                            onChange={(e) => setGstin(e.target.value.toUpperCase())}
+                            placeholder="29ABCDE1234F1Z5"
+                            maxLength={15}
+                          />
                         </Field>
                         <Field label="State Code (place of supply)">
-                          <TextInput className="mono-num" value={stateCode} onChange={(e) => setStateCode(e.target.value)} placeholder="e.g. 29 (Karnataka)" maxLength={2} />
+                          <TextInput
+                            className="mono-num"
+                            value={stateCode}
+                            onChange={(e) => setStateCode(e.target.value)}
+                            placeholder="e.g. 29 (Karnataka)"
+                            maxLength={2}
+                          />
                         </Field>
                         <Field label="Retail Outlet / Dealer Code">
-                          <TextInput value={roCode} onChange={(e) => setRoCode(e.target.value)} placeholder="RO / dealership code" />
+                          <TextInput
+                            value={roCode}
+                            onChange={(e) => setRoCode(e.target.value)}
+                            placeholder="RO / dealership code"
+                          />
                         </Field>
                         <Field label="Address Line">
-                          <TextInput value={legalAddress} onChange={(e) => setLegalAddress(e.target.value)} placeholder="Street, area, city" />
+                          <TextInput
+                            value={legalAddress}
+                            onChange={(e) => setLegalAddress(e.target.value)}
+                            placeholder="Street, area, city"
+                          />
                         </Field>
                         <Field label="Pincode">
-                          <TextInput className="mono-num" value={pincode} onChange={(e) => setPincode(e.target.value)} placeholder="560001" maxLength={6} />
+                          <TextInput
+                            className="mono-num"
+                            value={pincode}
+                            onChange={(e) => setPincode(e.target.value)}
+                            placeholder="560001"
+                            maxLength={6}
+                          />
                         </Field>
                       </div>
                     </div>
 
                     <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: '12px' }}>
-                      <h3 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-strong)', marginBottom: '10px' }}>
+                      <h3
+                        style={{
+                          fontSize: '13px',
+                          fontWeight: 600,
+                          color: 'var(--text-strong)',
+                          marginBottom: '10px',
+                        }}
+                      >
                         Branding
                       </h3>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
@@ -342,9 +564,24 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
                             <option value="Other">Other</option>
                           </Select>
                         </Field>
-                        <Field label="Logo (optional, your own)" hint="Upload your outlet's own logo. Used on report letterheads.">
+                        <Field
+                          label="Logo (optional, your own)"
+                          hint="Upload your outlet's own logo. Used on report letterheads."
+                        >
                           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                            {logoDataUrl && <img src={logoDataUrl} alt="logo" style={{ width: 36, height: 36, objectFit: 'contain', border: '1px solid var(--border-soft)', borderRadius: 4 }} />}
+                            {logoDataUrl && (
+                              <img
+                                src={logoDataUrl}
+                                alt="logo"
+                                style={{
+                                  width: 36,
+                                  height: 36,
+                                  objectFit: 'contain',
+                                  border: '1px solid var(--border-soft)',
+                                  borderRadius: 4,
+                                }}
+                              />
+                            )}
                             <input
                               type="file"
                               accept="image/png,image/jpeg"
@@ -352,13 +589,23 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
                                 const file = e.target.files?.[0];
                                 if (!file) return;
                                 const reader = new FileReader();
-                                reader.onload = () => setLogoDataUrl(typeof reader.result === 'string' ? reader.result : null);
+                                reader.onload = () =>
+                                  setLogoDataUrl(
+                                    typeof reader.result === 'string' ? reader.result : null,
+                                  );
                                 reader.readAsDataURL(file);
                               }}
                               style={{ fontSize: '12px' }}
                             />
                             {logoDataUrl && (
-                              <Button type="button" variant="secondary" size="xs" onClick={() => setLogoDataUrl(null)}>Remove</Button>
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                size="xs"
+                                onClick={() => setLogoDataUrl(null)}
+                              >
+                                Remove
+                              </Button>
                             )}
                           </div>
                         </Field>
@@ -367,45 +614,187 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
 
                     <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: '12px' }}>
                       <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                        Report paper size and which sections appear on each PDF are configured in the <strong>Reports</strong> tab.
+                        Report paper size and which sections appear on each PDF are configured in
+                        the <strong>Reports</strong> tab.
                       </span>
                     </div>
 
-                    <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '12px', borderTop: '1px solid var(--border-soft)', paddingTop: '12px' }}>
-                      <Button type="button" variant="secondary" size="sm" onClick={() => setEditingBusiness(false)}>Cancel</Button>
-                      <Button type="submit" variant="primary" size="sm">Save Configuration</Button>
+                    <div
+                      style={{
+                        display: 'flex',
+                        gap: '8px',
+                        justifyContent: 'flex-end',
+                        marginTop: '12px',
+                        borderTop: '1px solid var(--border-soft)',
+                        paddingTop: '12px',
+                      }}
+                    >
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => setEditingBusiness(false)}
+                      >
+                        Cancel
+                      </Button>
+                      <Button type="submit" variant="primary" size="sm">
+                        Save Configuration
+                      </Button>
                     </div>
                   </form>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                      }}
+                    >
                       <div>
-                        <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-strong)' }}>Business, Tax &amp; Branding</h3>
-                        <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Legal identity and letterhead used across reports and invoices.</p>
+                        <h3
+                          style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-strong)' }}
+                        >
+                          Business, Tax &amp; Branding
+                        </h3>
+                        <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                          Legal identity and letterhead used across reports and invoices.
+                        </p>
                       </div>
-                      <Button variant="secondary" size="sm" onClick={() => setEditingBusiness(true)}>Edit Business Details</Button>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => setEditingBusiness(true)}
+                      >
+                        Edit Business Details
+                      </Button>
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', borderTop: '1px solid var(--border-soft)', paddingTop: '16px' }}>
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                        gap: '16px',
+                        borderTop: '1px solid var(--border-soft)',
+                        paddingTop: '16px',
+                      }}
+                    >
                       <div>
-                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Legal Name</span>
-                        <p style={{ fontSize: '13px', fontWeight: 500, marginTop: '4px', color: 'var(--text-default)' }}>{legalName || '—'}</p>
+                        <span
+                          style={{
+                            fontSize: '11px',
+                            color: 'var(--text-muted)',
+                            fontWeight: 600,
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.05em',
+                          }}
+                        >
+                          Legal Name
+                        </span>
+                        <p
+                          style={{
+                            fontSize: '13px',
+                            fontWeight: 500,
+                            marginTop: '4px',
+                            color: 'var(--text-default)',
+                          }}
+                        >
+                          {legalName || '—'}
+                        </p>
                       </div>
                       <div>
-                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>GSTIN</span>
-                        <p style={{ fontSize: '13px', fontWeight: 500, marginTop: '4px', color: 'var(--text-default)', fontFamily: 'var(--font-mono)' }}>{gstin || '—'}</p>
+                        <span
+                          style={{
+                            fontSize: '11px',
+                            color: 'var(--text-muted)',
+                            fontWeight: 600,
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.05em',
+                          }}
+                        >
+                          GSTIN
+                        </span>
+                        <p
+                          style={{
+                            fontSize: '13px',
+                            fontWeight: 500,
+                            marginTop: '4px',
+                            color: 'var(--text-default)',
+                            fontFamily: 'var(--font-mono)',
+                          }}
+                        >
+                          {gstin || '—'}
+                        </p>
                       </div>
                       <div>
-                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>State Code</span>
-                        <p style={{ fontSize: '13px', fontWeight: 500, marginTop: '4px', color: 'var(--text-default)', fontFamily: 'var(--font-mono)' }}>{stateCode || '—'}</p>
+                        <span
+                          style={{
+                            fontSize: '11px',
+                            color: 'var(--text-muted)',
+                            fontWeight: 600,
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.05em',
+                          }}
+                        >
+                          State Code
+                        </span>
+                        <p
+                          style={{
+                            fontSize: '13px',
+                            fontWeight: 500,
+                            marginTop: '4px',
+                            color: 'var(--text-default)',
+                            fontFamily: 'var(--font-mono)',
+                          }}
+                        >
+                          {stateCode || '—'}
+                        </p>
                       </div>
                       <div>
-                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Fuel Brand</span>
-                        <p style={{ fontSize: '13px', fontWeight: 500, marginTop: '4px', color: 'var(--text-default)' }}>{fuelBrand || '—'}</p>
+                        <span
+                          style={{
+                            fontSize: '11px',
+                            color: 'var(--text-muted)',
+                            fontWeight: 600,
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.05em',
+                          }}
+                        >
+                          Fuel Brand
+                        </span>
+                        <p
+                          style={{
+                            fontSize: '13px',
+                            fontWeight: 500,
+                            marginTop: '4px',
+                            color: 'var(--text-default)',
+                          }}
+                        >
+                          {fuelBrand || '—'}
+                        </p>
                       </div>
                       <div>
-                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Logo</span>
-                        <p style={{ fontSize: '13px', fontWeight: 500, marginTop: '4px', color: 'var(--text-default)' }}>{logoDataUrl ? 'Uploaded' : '—'}</p>
+                        <span
+                          style={{
+                            fontSize: '11px',
+                            color: 'var(--text-muted)',
+                            fontWeight: 600,
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.05em',
+                          }}
+                        >
+                          Logo
+                        </span>
+                        <p
+                          style={{
+                            fontSize: '13px',
+                            fontWeight: 500,
+                            marginTop: '4px',
+                            color: 'var(--text-default)',
+                          }}
+                        >
+                          {logoDataUrl ? 'Uploaded' : '—'}
+                        </p>
                       </div>
                     </div>
                   </div>
@@ -416,7 +805,10 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
             {activeTab === 'reports' && (
               <ReportConfigPanel
                 selectedStation={selectedStation}
-                onSaved={(updated) => { onStationSelected(updated); loadStations(true); }}
+                onSaved={(updated) => {
+                  onStationSelected(updated);
+                  loadStations(true);
+                }}
               />
             )}
 

@@ -6,7 +6,11 @@ import { Select, NumberInput } from '../primitives/Field.js';
 import { Panel, Button } from '../../pump-ds/index.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import { useConfirm } from '../primitives/ConfirmDialog.js';
-import { CloudTransactionService, CloudProductService, CloudUserAssignmentService } from '../../services/cloud.js';
+import {
+  CloudTransactionService,
+  CloudProductService,
+  CloudUserAssignmentService,
+} from '../../services/cloud.js';
 import { useMerchandiseHandovers, useMerchandiseSales, queryKeys } from '../../query/hooks.js';
 import { inr, formatQty } from '../../utils/format.js';
 import { Plus, Trash2, Pencil } from 'lucide-react';
@@ -36,7 +40,12 @@ function lineTax(product: any, qty: number) {
   const price = product?.sellingPrice != null ? Number(product.sellingPrice) : 0;
   const gross = qty * price;
   const cat = product?.taxCategory || 'GST';
-  const rate = cat === 'GST' ? Number(product?.taxConfig?.gst_rate ?? 0) : cat === 'FUEL_VAT' ? Number(product?.taxConfig?.vat_rate ?? 0) : 0;
+  const rate =
+    cat === 'GST'
+      ? Number(product?.taxConfig?.gst_rate ?? 0)
+      : cat === 'FUEL_VAT'
+        ? Number(product?.taxConfig?.vat_rate ?? 0)
+        : 0;
   const inclusive = product?.taxConfig?.price_inclusive !== false;
   if (rate > 0 && (cat === 'GST' || cat === 'FUEL_VAT')) {
     if (inclusive) {
@@ -55,12 +64,24 @@ function lineTax(product: any, qty: number) {
  * seamless. Each handover is a cash sale attributed to the employee, so it flows
  * into their cash-handover reconciliation. Editable while the shift is open.
  */
-export const MerchandiseHandoversPanel: React.FC<MerchandiseHandoversPanelProps> = ({ shiftId, stationId, onChanged, initialHandovers, initialSales }) => {
+export const MerchandiseHandoversPanel: React.FC<MerchandiseHandoversPanelProps> = ({
+  shiftId,
+  stationId,
+  onChanged,
+  initialHandovers,
+  initialSales,
+}) => {
   const toast = useToast();
   const confirm = useConfirm();
   const qc = useQueryClient();
-  const handoversQ = useMerchandiseHandovers(shiftId, initialHandovers ? ({ initialData: initialHandovers } as any) : undefined);
-  const billedQ = useMerchandiseSales(shiftId, initialSales ? ({ initialData: initialSales } as any) : undefined);
+  const handoversQ = useMerchandiseHandovers(
+    shiftId,
+    initialHandovers ? ({ initialData: initialHandovers } as any) : undefined,
+  );
+  const billedQ = useMerchandiseSales(
+    shiftId,
+    initialSales ? ({ initialData: initialSales } as any) : undefined,
+  );
   const handovers = handoversQ.data ?? [];
   const billed = billedQ.data ?? [];
   const loading = handoversQ.isLoading || billedQ.isLoading;
@@ -98,7 +119,9 @@ export const MerchandiseHandoversPanel: React.FC<MerchandiseHandoversPanelProps>
     if (stationId) {
       const items = await txService.getInventoryItems(stationId).catch(() => []);
       const map: Record<string, number> = {};
-      (items || []).forEach((i: any) => { map[i.productId] = Number(i.quantity); });
+      (items || []).forEach((i: any) => {
+        map[i.productId] = Number(i.quantity);
+      });
       setStock(map);
     }
   };
@@ -126,7 +149,12 @@ export const MerchandiseHandoversPanel: React.FC<MerchandiseHandoversPanelProps>
     const existing = handovers.find((h) => h.attendantId === userId);
     if (existing) {
       setEditingId(existing.id);
-      setRows((existing.items || []).map((it: any) => ({ productId: it.productId, quantity: String(Number(it.quantity)) })));
+      setRows(
+        (existing.items || []).map((it: any) => ({
+          productId: it.productId,
+          quantity: String(Number(it.quantity)),
+        })),
+      );
       setNonCash(Number(existing.nonCashAmount) ? String(Number(existing.nonCashAmount)) : '');
     } else {
       setEditingId(null);
@@ -171,7 +199,11 @@ export const MerchandiseHandoversPanel: React.FC<MerchandiseHandoversPanelProps>
     setSubmitting(true);
     setError(null);
     try {
-      await txService.recordMerchandiseHandover(shiftId, { attendantId, lines, nonCashAmount: nonCashNum });
+      await txService.recordMerchandiseHandover(shiftId, {
+        attendantId,
+        lines,
+        nonCashAmount: nonCashNum,
+      });
       setDrawerOpen(false);
       reload();
       onChanged?.();
@@ -184,7 +216,15 @@ export const MerchandiseHandoversPanel: React.FC<MerchandiseHandoversPanelProps>
   };
 
   const remove = async (h: any) => {
-    if (!(await confirm({ title: 'Remove merchandise handover?', message: `Delete ${h.attendantName || 'this employee'}'s merchandise closing and restore stock?`, danger: true, confirmLabel: 'Remove' }))) return;
+    if (
+      !(await confirm({
+        title: 'Remove merchandise handover?',
+        message: `Delete ${h.attendantName || 'this employee'}'s merchandise closing and restore stock?`,
+        danger: true,
+        confirmLabel: 'Remove',
+      }))
+    )
+      return;
     try {
       await txService.deleteMerchandiseHandover(h.id);
       reload();
@@ -210,16 +250,44 @@ export const MerchandiseHandoversPanel: React.FC<MerchandiseHandoversPanelProps>
   // Credit → receivable. Both the bulk handover and billed quick-entry sales fold
   // in by their actual method (a Cash handover may carry a non-cash portion).
   const employeeRows = useMemo(() => {
-    const map = new Map<string, { attendantId: string | null; name: string; handover: any | null; hasBilled: boolean; cash: number; nonCash: number; credit: number }>();
+    const map = new Map<
+      string,
+      {
+        attendantId: string | null;
+        name: string;
+        handover: any | null;
+        hasBilled: boolean;
+        cash: number;
+        nonCash: number;
+        credit: number;
+      }
+    >();
     const get = (id: string | null, name: string) => {
       const key = id || '__none__';
-      if (!map.has(key)) map.set(key, { attendantId: id, name, handover: null, hasBilled: false, cash: 0, nonCash: 0, credit: 0 });
+      if (!map.has(key))
+        map.set(key, {
+          attendantId: id,
+          name,
+          handover: null,
+          hasBilled: false,
+          cash: 0,
+          nonCash: 0,
+          credit: 0,
+        });
       return map.get(key)!;
     };
-    const bucket = (e: { cash: number; nonCash: number; credit: number }, method: string | null | undefined, total: number, nonCash: number) => {
+    const bucket = (
+      e: { cash: number; nonCash: number; credit: number },
+      method: string | null | undefined,
+      total: number,
+      nonCash: number,
+    ) => {
       if (method === 'Card' || method === 'UPI') e.nonCash += total;
       else if (method === 'Credit') e.credit += total;
-      else { e.cash += total - nonCash; e.nonCash += nonCash; } // Cash (or default): split off any non-cash portion
+      else {
+        e.cash += total - nonCash;
+        e.nonCash += nonCash;
+      } // Cash (or default): split off any non-cash portion
     };
     for (const h of handovers) {
       const e = get(h.attendantId || null, h.attendantName || 'Unassigned');
@@ -254,38 +322,127 @@ export const MerchandiseHandoversPanel: React.FC<MerchandiseHandoversPanelProps>
         </Button>
       }
     >
-      <table className="shift-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+      <table
+        className="shift-table"
+        style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}
+      >
         <thead>
-          <tr style={{ backgroundColor: 'var(--bg-surface-alt)', borderBottom: '1px solid var(--border-soft)', textAlign: 'left', color: 'var(--text-muted)' }}>
+          <tr
+            style={{
+              backgroundColor: 'var(--bg-surface-alt)',
+              borderBottom: '1px solid var(--border-soft)',
+              textAlign: 'left',
+              color: 'var(--text-muted)',
+            }}
+          >
             {['Employee', 'Cash', 'Card/UPI', ...(hasCredit ? ['Credit'] : []), ''].map((h, i) => (
-              <th key={h || `sp${i}`} style={{ padding: '10px 16px', fontWeight: 600, color: 'var(--text-muted)', textAlign: i >= 1 && h ? 'right' : 'left' }}>{h}</th>
+              <th
+                key={h || `sp${i}`}
+                style={{
+                  padding: '10px 16px',
+                  fontWeight: 600,
+                  color: 'var(--text-muted)',
+                  textAlign: i >= 1 && h ? 'right' : 'left',
+                }}
+              >
+                {h}
+              </th>
             ))}
           </tr>
         </thead>
         <tbody>
           {loading ? (
-            <tr><td colSpan={colCount} style={{ padding: '20px', textAlign: 'center', color: 'var(--text-muted)' }}>Loading…</td></tr>
+            <tr>
+              <td
+                colSpan={colCount}
+                style={{ padding: '20px', textAlign: 'center', color: 'var(--text-muted)' }}
+              >
+                Loading…
+              </td>
+            </tr>
           ) : isEmpty ? (
-            <tr><td colSpan={colCount} style={{ padding: '20px', textAlign: 'center', color: 'var(--text-muted)' }}>No merchandise recorded yet.</td></tr>
+            <tr>
+              <td
+                colSpan={colCount}
+                style={{ padding: '20px', textAlign: 'center', color: 'var(--text-muted)' }}
+              >
+                No merchandise recorded yet.
+              </td>
+            </tr>
           ) : (
             employeeRows.map((e) => (
               <tr
                 key={e.attendantId || '__none__'}
                 onClick={() => openForEmployee(e.attendantId)}
-                style={{ borderBottom: '1px solid var(--border-soft)', cursor: e.attendantId ? 'pointer' : 'default' }}
+                style={{
+                  borderBottom: '1px solid var(--border-soft)',
+                  cursor: e.attendantId ? 'pointer' : 'default',
+                }}
               >
-                <td style={{ padding: '10px 16px', color: 'var(--text-strong)', fontWeight: 500 }}>{e.name}</td>
-                <td style={{ padding: '10px 16px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: e.cash ? 'var(--text-strong)' : 'var(--text-faint)' }}>{e.cash ? inr(e.cash) : '—'}</td>
-                <td style={{ padding: '10px 16px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: e.nonCash ? 'var(--text-strong)' : 'var(--text-faint)' }}>{e.nonCash ? inr(e.nonCash) : '—'}</td>
+                <td style={{ padding: '10px 16px', color: 'var(--text-strong)', fontWeight: 500 }}>
+                  {e.name}
+                </td>
+                <td
+                  style={{
+                    padding: '10px 16px',
+                    textAlign: 'right',
+                    fontFamily: 'var(--font-mono)',
+                    color: e.cash ? 'var(--text-strong)' : 'var(--text-faint)',
+                  }}
+                >
+                  {e.cash ? inr(e.cash) : '—'}
+                </td>
+                <td
+                  style={{
+                    padding: '10px 16px',
+                    textAlign: 'right',
+                    fontFamily: 'var(--font-mono)',
+                    color: e.nonCash ? 'var(--text-strong)' : 'var(--text-faint)',
+                  }}
+                >
+                  {e.nonCash ? inr(e.nonCash) : '—'}
+                </td>
                 {hasCredit && (
-                  <td style={{ padding: '10px 16px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: e.credit ? 'var(--text-strong)' : 'var(--text-faint)' }}>{e.credit ? inr(e.credit) : '—'}</td>
+                  <td
+                    style={{
+                      padding: '10px 16px',
+                      textAlign: 'right',
+                      fontFamily: 'var(--font-mono)',
+                      color: e.credit ? 'var(--text-strong)' : 'var(--text-faint)',
+                    }}
+                  >
+                    {e.credit ? inr(e.credit) : '—'}
+                  </td>
                 )}
                 <td style={{ padding: '10px 16px', textAlign: 'right', whiteSpace: 'nowrap' }}>
                   {e.attendantId && (
-                    <Button variant="secondary" size="xs" iconOnly aria-label="Edit" onClick={(ev) => { ev.stopPropagation(); openForEmployee(e.attendantId); }} style={{ marginRight: '4px' }}><Pencil size={13} /></Button>
+                    <Button
+                      variant="secondary"
+                      size="xs"
+                      iconOnly
+                      aria-label="Edit"
+                      onClick={(ev) => {
+                        ev.stopPropagation();
+                        openForEmployee(e.attendantId);
+                      }}
+                      style={{ marginRight: '4px' }}
+                    >
+                      <Pencil size={13} />
+                    </Button>
                   )}
                   {e.handover && (
-                    <Button variant="secondary" size="xs" iconOnly aria-label="Remove" onClick={(ev) => { ev.stopPropagation(); remove(e.handover); }}><Trash2 size={13} /></Button>
+                    <Button
+                      variant="secondary"
+                      size="xs"
+                      iconOnly
+                      aria-label="Remove"
+                      onClick={(ev) => {
+                        ev.stopPropagation();
+                        remove(e.handover);
+                      }}
+                    >
+                      <Trash2 size={13} />
+                    </Button>
                   )}
                 </td>
               </tr>
@@ -294,12 +451,49 @@ export const MerchandiseHandoversPanel: React.FC<MerchandiseHandoversPanelProps>
         </tbody>
         {!isEmpty && (
           <tfoot>
-            <tr style={{ borderTop: '1px solid var(--border-strong)', backgroundColor: 'var(--bg-surface-alt)' }}>
-              <td style={{ padding: '8px 16px', fontWeight: 700, color: 'var(--text-strong)' }}>Total merchandise{grandTotal ? ` · ${inr(grandTotal)}` : ''}</td>
-              <td style={{ padding: '8px 16px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--text-strong)' }}>{inr(cashTotal)}</td>
-              <td style={{ padding: '8px 16px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--text-strong)' }}>{inr(nonCashTotal)}</td>
+            <tr
+              style={{
+                borderTop: '1px solid var(--border-strong)',
+                backgroundColor: 'var(--bg-surface-alt)',
+              }}
+            >
+              <td style={{ padding: '8px 16px', fontWeight: 700, color: 'var(--text-strong)' }}>
+                Total merchandise{grandTotal ? ` · ${inr(grandTotal)}` : ''}
+              </td>
+              <td
+                style={{
+                  padding: '8px 16px',
+                  textAlign: 'right',
+                  fontWeight: 700,
+                  fontFamily: 'var(--font-mono)',
+                  color: 'var(--text-strong)',
+                }}
+              >
+                {inr(cashTotal)}
+              </td>
+              <td
+                style={{
+                  padding: '8px 16px',
+                  textAlign: 'right',
+                  fontWeight: 700,
+                  fontFamily: 'var(--font-mono)',
+                  color: 'var(--text-strong)',
+                }}
+              >
+                {inr(nonCashTotal)}
+              </td>
               {hasCredit && (
-                <td style={{ padding: '8px 16px', textAlign: 'right', fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--text-strong)' }}>{inr(creditTotal)}</td>
+                <td
+                  style={{
+                    padding: '8px 16px',
+                    textAlign: 'right',
+                    fontWeight: 700,
+                    fontFamily: 'var(--font-mono)',
+                    color: 'var(--text-strong)',
+                  }}
+                >
+                  {inr(creditTotal)}
+                </td>
               )}
               <td />
             </tr>
@@ -307,21 +501,40 @@ export const MerchandiseHandoversPanel: React.FC<MerchandiseHandoversPanelProps>
         )}
       </table>
 
-      <Drawer isOpen={drawerOpen} onClose={() => setDrawerOpen(false)} title={editingId ? 'Edit Merchandise Handover' : 'Record Merchandise Handover'}>
+      <Drawer
+        isOpen={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        title={editingId ? 'Edit Merchandise Handover' : 'Record Merchandise Handover'}
+      >
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           {error && (
-            <div style={{ backgroundColor: 'var(--state-danger-bg)', color: 'var(--state-danger-fg)', padding: '10px 12px', borderRadius: 'var(--radius-input)', fontSize: '12px' }}>{error}</div>
+            <div
+              style={{
+                backgroundColor: 'var(--state-danger-bg)',
+                color: 'var(--state-danger-fg)',
+                padding: '10px 12px',
+                borderRadius: 'var(--radius-input)',
+                fontSize: '12px',
+              }}
+            >
+              {error}
+            </div>
           )}
 
           <div>
             <label className="field-label">Employee</label>
-            <Select value={attendantId} onChange={(e) => handleSelectEmployee(e.target.value)} disabled={submitting}>
+            <Select
+              value={attendantId}
+              onChange={(e) => handleSelectEmployee(e.target.value)}
+              disabled={submitting}
+            >
               <option value="">— Select employee —</option>
               {sellers.map((s) => {
                 const recorded = handovers.some((h) => h.attendantId === s.userId);
                 return (
                   <option key={s.userId} value={s.userId}>
-                    {s.userName}{recorded ? ' · recorded (edit)' : ''}
+                    {s.userName}
+                    {recorded ? ' · recorded (edit)' : ''}
                   </option>
                 );
               })}
@@ -337,25 +550,83 @@ export const MerchandiseHandoversPanel: React.FC<MerchandiseHandoversPanelProps>
                 const t = p && qty > 0 ? lineTax(p, qty) : null;
                 const mrp = p?.sellingPrice != null ? Number(p.sellingPrice) : null;
                 return (
-                  <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: '6px', padding: '10px', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', backgroundColor: 'var(--bg-surface)' }}>
+                  <div
+                    key={i}
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '6px',
+                      padding: '10px',
+                      border: '1px solid var(--border-soft)',
+                      borderRadius: 'var(--radius-input)',
+                      backgroundColor: 'var(--bg-surface)',
+                    }}
+                  >
                     <Combobox
                       options={products.map((pr) => {
                         const onHand = stock[pr.id];
-                        const priceLabel = pr.sellingPrice != null ? `MRP ${inr(pr.sellingPrice)}` : 'No price set';
-                        const stockLabel = onHand != null ? `${formatQty(onHand, 0)} ${pr.unit || 'unit'} on hand` : null;
-                        return { value: pr.id, label: `${pr.name}${pr.brand ? ` · ${pr.brand}` : ''}`, sublabel: stockLabel ? `${priceLabel} · ${stockLabel}` : priceLabel };
+                        const priceLabel =
+                          pr.sellingPrice != null ? `MRP ${inr(pr.sellingPrice)}` : 'No price set';
+                        const stockLabel =
+                          onHand != null
+                            ? `${formatQty(onHand, 0)} ${pr.unit || 'unit'} on hand`
+                            : null;
+                        return {
+                          value: pr.id,
+                          label: `${pr.name}${pr.brand ? ` · ${pr.brand}` : ''}`,
+                          sublabel: stockLabel ? `${priceLabel} · ${stockLabel}` : priceLabel,
+                        };
                       })}
                       value={r.productId}
-                      onChange={(v) => setRows((prev) => prev.map((x, j) => (j === i ? { ...x, productId: v } : x)))}
+                      onChange={(v) =>
+                        setRows((prev) =>
+                          prev.map((x, j) => (j === i ? { ...x, productId: v } : x)),
+                        )
+                      }
                       placeholder="Select product…"
                     />
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '8px', alignItems: 'end' }}>
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: '1fr 1fr auto',
+                        gap: '8px',
+                        alignItems: 'end',
+                      }}
+                    >
                       <div>
-                        <label style={{ fontSize: '10px', color: 'var(--text-muted)', display: 'block', marginBottom: '2px' }}>Qty</label>
-                        <NumberInput placeholder="0" value={r.quantity} onChange={(e) => setRows((prev) => prev.map((x, j) => (j === i ? { ...x, quantity: e.target.value } : x)))} />
+                        <label
+                          style={{
+                            fontSize: '10px',
+                            color: 'var(--text-muted)',
+                            display: 'block',
+                            marginBottom: '2px',
+                          }}
+                        >
+                          Qty
+                        </label>
+                        <NumberInput
+                          placeholder="0"
+                          value={r.quantity}
+                          onChange={(e) =>
+                            setRows((prev) =>
+                              prev.map((x, j) =>
+                                j === i ? { ...x, quantity: e.target.value } : x,
+                              ),
+                            )
+                          }
+                        />
                       </div>
                       <div>
-                        <label style={{ fontSize: '10px', color: 'var(--text-muted)', display: 'block', marginBottom: '2px' }}>MRP</label>
+                        <label
+                          style={{
+                            fontSize: '10px',
+                            color: 'var(--text-muted)',
+                            display: 'block',
+                            marginBottom: '2px',
+                          }}
+                        >
+                          MRP
+                        </label>
                         <div
                           style={{
                             height: '32px',
@@ -375,11 +646,37 @@ export const MerchandiseHandoversPanel: React.FC<MerchandiseHandoversPanelProps>
                           {mrp != null ? inr(mrp) : '—'}
                         </div>
                       </div>
-                      <Button type="button" variant="secondary" size="sm" iconOnly aria-label="Remove line" style={{ height: 32 }} onClick={() => setRows((prev) => (prev.length > 1 ? prev.filter((_, j) => j !== i) : prev))}><Trash2 size={13} /></Button>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        iconOnly
+                        aria-label="Remove line"
+                        style={{ height: 32 }}
+                        onClick={() =>
+                          setRows((prev) =>
+                            prev.length > 1 ? prev.filter((_, j) => j !== i) : prev,
+                          )
+                        }
+                      >
+                        <Trash2 size={13} />
+                      </Button>
                     </div>
                     {t && (
-                      <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', display: 'flex', justifyContent: 'flex-end', gap: '8px', flexWrap: 'wrap' }}>
-                        <span>{inr(t.taxable)} + tax {inr(t.tax)}</span>
+                      <div
+                        style={{
+                          fontSize: '11px',
+                          color: 'var(--text-muted)',
+                          fontFamily: 'var(--font-mono)',
+                          display: 'flex',
+                          justifyContent: 'flex-end',
+                          gap: '8px',
+                          flexWrap: 'wrap',
+                        }}
+                      >
+                        <span>
+                          {inr(t.taxable)} + tax {inr(t.tax)}
+                        </span>
                         <span>=</span>
                         <strong style={{ color: 'var(--text-strong)' }}>{inr(t.total)}</strong>
                       </div>
@@ -388,53 +685,180 @@ export const MerchandiseHandoversPanel: React.FC<MerchandiseHandoversPanelProps>
                 );
               })}
             </div>
-            <Button type="button" variant="secondary" size="sm" leftIcon={<Plus size={13} />} style={{ marginTop: '8px' }} onClick={() => setRows((prev) => [...prev, { productId: '', quantity: '' }])}>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              leftIcon={<Plus size={13} />}
+              style={{ marginTop: '8px' }}
+              onClick={() => setRows((prev) => [...prev, { productId: '', quantity: '' }])}
+            >
               Add item
             </Button>
           </div>
 
           <div>
             <label className="field-label">Paid by card/UPI — non-cash (₹)</label>
-            <NumberInput placeholder="0" min="0" value={nonCash} onChange={(e) => setNonCash(e.target.value)} />
+            <NumberInput
+              placeholder="0"
+              min="0"
+              value={nonCash}
+              onChange={(e) => setNonCash(e.target.value)}
+            />
             <span style={{ fontSize: '11px', color: 'var(--text-faint)' }}>
-              Portion of this sale paid by card/UPI on a terminal. It's subtracted from the cash the employee hands over (the card money is in the terminal batch). Leave 0 if all cash.
+              Portion of this sale paid by card/UPI on a terminal. It's subtracted from the cash the
+              employee hands over (the card money is in the terminal batch). Leave 0 if all cash.
             </span>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', backgroundColor: 'var(--bg-surface-alt)', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', padding: '10px 12px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-muted)' }}><span>Taxable</span><span style={{ fontFamily: 'var(--font-mono)' }}>{inr(totals.taxable)}</span></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-muted)' }}><span>Tax (incl.)</span><span style={{ fontFamily: 'var(--font-mono)' }}>{inr(totals.tax)}</span></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-muted)' }}><span>Sale total</span><span style={{ fontFamily: 'var(--font-mono)' }}>{inr(totals.total)}</span></div>
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '4px',
+              backgroundColor: 'var(--bg-surface-alt)',
+              border: '1px solid var(--border-soft)',
+              borderRadius: 'var(--radius-input)',
+              padding: '10px 12px',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                fontSize: '12px',
+                color: 'var(--text-muted)',
+              }}
+            >
+              <span>Taxable</span>
+              <span style={{ fontFamily: 'var(--font-mono)' }}>{inr(totals.taxable)}</span>
+            </div>
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                fontSize: '12px',
+                color: 'var(--text-muted)',
+              }}
+            >
+              <span>Tax (incl.)</span>
+              <span style={{ fontFamily: 'var(--font-mono)' }}>{inr(totals.tax)}</span>
+            </div>
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                fontSize: '12px',
+                color: 'var(--text-muted)',
+              }}
+            >
+              <span>Sale total</span>
+              <span style={{ fontFamily: 'var(--font-mono)' }}>{inr(totals.total)}</span>
+            </div>
             {Number(nonCash) > 0 && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-muted)' }}><span>− Card/UPI (non-cash)</span><span style={{ fontFamily: 'var(--font-mono)' }}>{inr(Number(nonCash))}</span></div>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  fontSize: '12px',
+                  color: 'var(--text-muted)',
+                }}
+              >
+                <span>− Card/UPI (non-cash)</span>
+                <span style={{ fontFamily: 'var(--font-mono)' }}>{inr(Number(nonCash))}</span>
+              </div>
             )}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border-soft)', paddingTop: '4px' }}>
-              <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Cash to drawer</span>
-              <strong style={{ fontFamily: 'var(--font-mono)', fontSize: '15px', color: 'var(--text-strong)' }}>{inr(Math.max(0, totals.total - (Number(nonCash) || 0)))}</strong>
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                borderTop: '1px solid var(--border-soft)',
+                paddingTop: '4px',
+              }}
+            >
+              <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
+                Cash to drawer
+              </span>
+              <strong
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '15px',
+                  color: 'var(--text-strong)',
+                }}
+              >
+                {inr(Math.max(0, totals.total - (Number(nonCash) || 0)))}
+              </strong>
             </div>
           </div>
 
           {attendantId && billed.filter((b) => b.attendantId === attendantId).length > 0 && (
             <div>
               <label className="field-label">Billed sales by this employee (view only)</label>
-              <div style={{ border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', overflow: 'hidden' }}>
-                {billed.filter((b) => b.attendantId === attendantId).map((b) => (
-                  <div key={b.id} style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', padding: '6px 10px', borderBottom: '1px solid var(--border-soft)', fontSize: '12px' }}>
-                    <span style={{ color: 'var(--text-muted)' }}>
-                      {(b.items || []).map((it: any) => `${it.productName || 'Item'} × ${Number(it.quantity)}`).join(', ') || 'Sale'}
-                      {b.customerName ? ` · ${b.customerName}` : ''} · {b.paymentMethod}
-                    </span>
-                    <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-strong)', whiteSpace: 'nowrap' }}>{inr(b.totalAmount)}</span>
-                  </div>
-                ))}
+              <div
+                style={{
+                  border: '1px solid var(--border-soft)',
+                  borderRadius: 'var(--radius-input)',
+                  overflow: 'hidden',
+                }}
+              >
+                {billed
+                  .filter((b) => b.attendantId === attendantId)
+                  .map((b) => (
+                    <div
+                      key={b.id}
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        gap: '8px',
+                        padding: '6px 10px',
+                        borderBottom: '1px solid var(--border-soft)',
+                        fontSize: '12px',
+                      }}
+                    >
+                      <span style={{ color: 'var(--text-muted)' }}>
+                        {(b.items || [])
+                          .map((it: any) => `${it.productName || 'Item'} × ${Number(it.quantity)}`)
+                          .join(', ') || 'Sale'}
+                        {b.customerName ? ` · ${b.customerName}` : ''} · {b.paymentMethod}
+                      </span>
+                      <span
+                        style={{
+                          fontFamily: 'var(--font-mono)',
+                          color: 'var(--text-strong)',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {inr(b.totalAmount)}
+                      </span>
+                    </div>
+                  ))}
               </div>
-              <span style={{ fontSize: '11px', color: 'var(--text-faint)' }}>Recorded via the quick sale drawer — shown here for the full picture. Not editable here.</span>
+              <span style={{ fontSize: '11px', color: 'var(--text-faint)' }}>
+                Recorded via the quick sale drawer — shown here for the full picture. Not editable
+                here.
+              </span>
             </div>
           )}
 
           <div style={{ display: 'flex', gap: '8px' }}>
-            <Button variant="primary" size="md" style={{ flex: 1 }} loading={submitting} onClick={submit}>{editingId ? 'Update Handover' : 'Record Handover'}</Button>
-            <Button variant="secondary" size="md" disabled={submitting} onClick={() => setDrawerOpen(false)}>Cancel</Button>
+            <Button
+              variant="primary"
+              size="md"
+              style={{ flex: 1 }}
+              loading={submitting}
+              onClick={submit}
+            >
+              {editingId ? 'Update Handover' : 'Record Handover'}
+            </Button>
+            <Button
+              variant="secondary"
+              size="md"
+              disabled={submitting}
+              onClick={() => setDrawerOpen(false)}
+            >
+              Cancel
+            </Button>
           </div>
         </div>
       </Drawer>

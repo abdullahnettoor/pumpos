@@ -51,7 +51,10 @@ export const MenuContent = forwardRef<React.ElementRef<typeof RadixMenu.Content>
   },
 );
 
-export interface MenuItemProps extends Omit<React.ComponentPropsWithoutRef<typeof RadixMenu.Item>, 'children'> {
+export interface MenuItemProps extends Omit<
+  React.ComponentPropsWithoutRef<typeof RadixMenu.Item>,
+  'children'
+> {
   icon?: ReactNode;
   /** Right-aligned keyboard shortcut hint. */
   shortcut?: string;
@@ -73,7 +76,13 @@ export const MenuItem = forwardRef<React.ElementRef<typeof RadixMenu.Item>, Menu
         {...props}
       >
         {icon && (
-          <span className={cn('inline-flex size-4 items-center justify-center [&_svg]:size-4', tone === 'danger' ? 'text-danger-fg' : 'text-ink-muted')} aria-hidden="true">
+          <span
+            className={cn(
+              'inline-flex size-4 items-center justify-center [&_svg]:size-4',
+              tone === 'danger' ? 'text-danger-fg' : 'text-ink-muted',
+            )}
+            aria-hidden="true"
+          >
             {icon}
           </span>
         )}
@@ -88,20 +97,31 @@ export const MenuItem = forwardRef<React.ElementRef<typeof RadixMenu.Item>, Menu
   },
 );
 
-export const MenuSeparator = forwardRef<React.ElementRef<typeof RadixMenu.Separator>, React.ComponentPropsWithoutRef<typeof RadixMenu.Separator>>(
-  function MenuSeparator({ className, ...props }, ref) {
-    return <RadixMenu.Separator ref={ref} className={cn('my-1 h-px bg-border-soft', className)} {...props} />;
-  },
-);
+export const MenuSeparator = forwardRef<
+  React.ElementRef<typeof RadixMenu.Separator>,
+  React.ComponentPropsWithoutRef<typeof RadixMenu.Separator>
+>(function MenuSeparator({ className, ...props }, ref) {
+  return (
+    <RadixMenu.Separator
+      ref={ref}
+      className={cn('my-1 h-px bg-border-soft', className)}
+      {...props}
+    />
+  );
+});
 
-export const MenuLabel = forwardRef<React.ElementRef<typeof RadixMenu.Label>, React.ComponentPropsWithoutRef<typeof RadixMenu.Label>>(
-  function MenuLabel({ className, ...props }, ref) {
-    return (
-      <RadixMenu.Label
-        ref={ref}
-        className={cn('px-3 pb-1 pt-1.5 font-mono text-[10px] uppercase tracking-wider text-ink-faint', className)}
-        {...props}
-      />
-    );
-  },
-);
+export const MenuLabel = forwardRef<
+  React.ElementRef<typeof RadixMenu.Label>,
+  React.ComponentPropsWithoutRef<typeof RadixMenu.Label>
+>(function MenuLabel({ className, ...props }, ref) {
+  return (
+    <RadixMenu.Label
+      ref={ref}
+      className={cn(
+        'px-3 pb-1 pt-1.5 font-mono text-[10px] uppercase tracking-wider text-ink-faint',
+        className,
+      )}
+      {...props}
+    />
+  );
+});

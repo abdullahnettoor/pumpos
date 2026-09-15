@@ -114,7 +114,11 @@ export function createDispenserDraft(): OnboardingDispenserDraft {
   };
 }
 
-export function createNozzleDraft(dispenserDraftId = '', tankDraftId = '', productDraftId = ''): OnboardingNozzleDraft {
+export function createNozzleDraft(
+  dispenserDraftId = '',
+  tankDraftId = '',
+  productDraftId = '',
+): OnboardingNozzleDraft {
   return {
     draftId: createDraftId(),
     dispenserDraftId,
@@ -199,7 +203,10 @@ export function validateOnboardingDraft(draft: OnboardingDraft): OnboardingValid
 
     for (const day of openDays) {
       if (day.openTime >= day.closeTime) {
-        issues.push({ step: 2, message: `${formatWeekday(day.day)} operating hours must have opening time before closing time.` });
+        issues.push({
+          step: 2,
+          message: `${formatWeekday(day.day)} operating hours must have opening time before closing time.`,
+        });
       }
     }
   }
@@ -221,7 +228,10 @@ export function validateOnboardingDraft(draft: OnboardingDraft): OnboardingValid
       issues.push({ step: 3, message: 'Every fuel product needs a code.' });
     }
     if (product.currentPrice <= 0) {
-      issues.push({ step: 6, message: `${product.name || 'Fuel product'} needs a valid selling price.` });
+      issues.push({
+        step: 6,
+        message: `${product.name || 'Fuel product'} needs a valid selling price.`,
+      });
     }
     if (productCodes.has(code)) {
       issues.push({ step: 3, message: `Duplicate fuel code "${product.code}" found.` });
@@ -243,13 +253,22 @@ export function validateOnboardingDraft(draft: OnboardingDraft): OnboardingValid
       issues.push({ step: 4, message: 'Every tank needs a name.' });
     }
     if (!tank.productDraftId || !productMap.has(tank.productDraftId)) {
-      issues.push({ step: 4, message: `Tank "${tank.name || 'Untitled tank'}" must be linked to a fuel product.` });
+      issues.push({
+        step: 4,
+        message: `Tank "${tank.name || 'Untitled tank'}" must be linked to a fuel product.`,
+      });
     }
     if (tank.capacity <= 0) {
-      issues.push({ step: 4, message: `Tank "${tank.name || 'Untitled tank'}" needs a valid capacity.` });
+      issues.push({
+        step: 4,
+        message: `Tank "${tank.name || 'Untitled tank'}" needs a valid capacity.`,
+      });
     }
     if (tank.openingQuantity > tank.capacity) {
-      issues.push({ step: 6, message: `Opening quantity for tank "${tank.name || 'Untitled tank'}" cannot exceed capacity.` });
+      issues.push({
+        step: 6,
+        message: `Opening quantity for tank "${tank.name || 'Untitled tank'}" cannot exceed capacity.`,
+      });
     }
   }
 
@@ -280,21 +299,36 @@ export function validateOnboardingDraft(draft: OnboardingDraft): OnboardingValid
       issues.push({ step: 5, message: 'Every nozzle needs a name.' });
     }
     if (!nozzle.dispenserDraftId || !dispenserMap.has(nozzle.dispenserDraftId)) {
-      issues.push({ step: 5, message: `Nozzle "${nozzle.name || 'Untitled nozzle'}" must be linked to a dispenser.` });
+      issues.push({
+        step: 5,
+        message: `Nozzle "${nozzle.name || 'Untitled nozzle'}" must be linked to a dispenser.`,
+      });
     }
     if (!nozzle.tankDraftId || !tankMap.has(nozzle.tankDraftId)) {
-      issues.push({ step: 5, message: `Nozzle "${nozzle.name || 'Untitled nozzle'}" must be linked to a tank.` });
+      issues.push({
+        step: 5,
+        message: `Nozzle "${nozzle.name || 'Untitled nozzle'}" must be linked to a tank.`,
+      });
     }
     if (!nozzle.productDraftId || !productMap.has(nozzle.productDraftId)) {
-      issues.push({ step: 5, message: `Nozzle "${nozzle.name || 'Untitled nozzle'}" must be linked to a fuel product.` });
+      issues.push({
+        step: 5,
+        message: `Nozzle "${nozzle.name || 'Untitled nozzle'}" must be linked to a fuel product.`,
+      });
     }
     if (nozzle.openingReading < 0) {
-      issues.push({ step: 6, message: `Nozzle "${nozzle.name || 'Untitled nozzle'}" needs a non-negative opening reading.` });
+      issues.push({
+        step: 6,
+        message: `Nozzle "${nozzle.name || 'Untitled nozzle'}" needs a non-negative opening reading.`,
+      });
     }
 
     const tank = nozzle.tankDraftId ? tankMap.get(nozzle.tankDraftId) : null;
     if (tank && tank.productDraftId !== nozzle.productDraftId) {
-      issues.push({ step: 5, message: `Nozzle "${nozzle.name || 'Untitled nozzle'}" fuel must match the selected tank.` });
+      issues.push({
+        step: 5,
+        message: `Nozzle "${nozzle.name || 'Untitled nozzle'}" fuel must match the selected tank.`,
+      });
     }
   }
 
@@ -307,7 +341,10 @@ export function validateOnboardingDraft(draft: OnboardingDraft): OnboardingValid
       issues.push({ step: 7, message: 'Every shift template needs a name.' });
     }
     if (!template.startTime || !template.endTime) {
-      issues.push({ step: 7, message: `Shift template "${template.name || 'Untitled shift'}" needs start and end times.` });
+      issues.push({
+        step: 7,
+        message: `Shift template "${template.name || 'Untitled shift'}" needs start and end times.`,
+      });
     }
   }
 
@@ -318,10 +355,16 @@ export function validateOnboardingDraft(draft: OnboardingDraft): OnboardingValid
     if (!terminal.label.trim()) {
       issues.push({ step: 8, message: 'Every payment terminal needs a label.' });
     } else if (terminalLabels.has(label)) {
-      issues.push({ step: 8, message: `Duplicate payment terminal label "${terminal.label}" found.` });
+      issues.push({
+        step: 8,
+        message: `Duplicate payment terminal label "${terminal.label}" found.`,
+      });
     }
     if (!terminal.supportsCard && !terminal.supportsUpi) {
-      issues.push({ step: 8, message: `Terminal "${terminal.label || 'Untitled terminal'}" must support card and/or UPI.` });
+      issues.push({
+        step: 8,
+        message: `Terminal "${terminal.label || 'Untitled terminal'}" must support card and/or UPI.`,
+      });
     }
     terminalLabels.add(label);
   }

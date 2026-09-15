@@ -14,7 +14,16 @@ import { Drawer } from './Drawer.js';
 import { ExpenseEntryForm } from './transactions/ExpenseEntryForm.js';
 import { useIncome, useIncomeCategories, useInvalidateOperational } from '../query/hooks.js';
 import { useQueryClient } from '@tanstack/react-query';
-import { Panel, Button, KpiStrip, KpiTile, EmptyState, SearchInput, Select, DateText } from '../pump-ds/index.js';
+import {
+  Panel,
+  Button,
+  KpiStrip,
+  KpiTile,
+  EmptyState,
+  SearchInput,
+  Select,
+  DateText,
+} from '../pump-ds/index.js';
 import { Tabs } from './primitives/Tabs.js';
 import { LoadingSpinner } from './LoadingSpinner.js';
 import type { NavIntent } from './AppShell.js';
@@ -32,7 +41,12 @@ interface IncomeListProps {
   onIntentConsumed?: () => void;
 }
 
-export const IncomeList: React.FC<IncomeListProps> = ({ selectedStation, userRole, intent, onIntentConsumed }) => {
+export const IncomeList: React.FC<IncomeListProps> = ({
+  selectedStation,
+  userRole,
+  intent,
+  onIntentConsumed,
+}) => {
   const stationId = selectedStation?.id ?? null;
   const incomeQ = useIncome({ stationId: stationId ?? undefined });
   const categoriesQ = useIncomeCategories();
@@ -90,7 +104,15 @@ export const IncomeList: React.FC<IncomeListProps> = ({ selectedStation, userRol
     try {
       setSubmitting(true);
       setFormError(null);
-      await transactionService.recordIncome({ stationId: stationId ?? undefined, transactionDate: values.transactionDate || undefined, receivedInto: 'BANK', categoryId: values.categoryId, amount: Number(values.amount), description: values.description || undefined, accountId: values.accountId || undefined });
+      await transactionService.recordIncome({
+        stationId: stationId ?? undefined,
+        transactionDate: values.transactionDate || undefined,
+        receivedInto: 'BANK',
+        categoryId: values.categoryId,
+        amount: Number(values.amount),
+        description: values.description || undefined,
+        accountId: values.accountId || undefined,
+      });
       closeDrawer();
       invalidateOperational(stationId);
       toast.success('Income recorded.');
@@ -110,7 +132,8 @@ export const IncomeList: React.FC<IncomeListProps> = ({ selectedStation, userRol
       title: 'Void this income entry?',
       message: (
         <>
-          {inr(row.amount)} · {row.categoryName || 'Other Income'}. The entry stays in the ledger marked
+          {inr(row.amount)} · {row.categoryName || 'Other Income'}. The entry stays in the ledger
+          marked
           <strong> Voided</strong> and its money posting is reversed. This cannot be undone.
         </>
       ),
@@ -128,8 +151,11 @@ export const IncomeList: React.FC<IncomeListProps> = ({ selectedStation, userRol
     }
   };
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const ledgerColumns = useMemo(() => buildIncomeColumns(canVoid ? handleVoid : undefined), [canVoid, stationId]);
+  const ledgerColumns = useMemo(
+    () => buildIncomeColumns(canVoid ? handleVoid : undefined),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [canVoid, stationId],
+  );
 
   // KPIs — fixed windows (today / this month), independent of the table range filter.
   const kpis = useMemo(() => {
@@ -141,9 +167,13 @@ export const IncomeList: React.FC<IncomeListProps> = ({ selectedStation, userRol
       return d && d >= r.from && d <= r.to;
     };
     const monthRows = active.filter((e: any) => inWindow(e, month));
-    const todayTotal = active.filter((e: any) => inWindow(e, today)).reduce((sum: number, e: any) => sum + Number(e.amount || 0), 0);
+    const todayTotal = active
+      .filter((e: any) => inWindow(e, today))
+      .reduce((sum: number, e: any) => sum + Number(e.amount || 0), 0);
     const monthTotal = monthRows.reduce((sum: number, e: any) => sum + Number(e.amount || 0), 0);
-    const drawerMonth = monthRows.filter((e: any) => e.receivedInto === 'SHIFT_CASH').reduce((sum: number, e: any) => sum + Number(e.amount || 0), 0);
+    const drawerMonth = monthRows
+      .filter((e: any) => e.receivedInto === 'SHIFT_CASH')
+      .reduce((sum: number, e: any) => sum + Number(e.amount || 0), 0);
     const otherMonth = monthTotal - drawerMonth;
     return { todayTotal, monthTotal, entriesMonth: monthRows.length, drawerMonth, otherMonth };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -161,7 +191,10 @@ export const IncomeList: React.FC<IncomeListProps> = ({ selectedStation, userRol
     setGstLoading(true);
     setGstError(null);
     try {
-      setGstRows((await transactionService.getIncomeGstRegister(gstRange.from, gstRange.to, stationId)) || []);
+      setGstRows(
+        (await transactionService.getIncomeGstRegister(gstRange.from, gstRange.to, stationId)) ||
+          [],
+      );
     } catch (e: any) {
       setGstError(e.message || 'Failed to load GST register');
     } finally {
@@ -209,7 +242,11 @@ export const IncomeList: React.FC<IncomeListProps> = ({ selectedStation, userRol
   );
 
   if (!selectedStation) {
-    return <div style={{ color: 'var(--text-muted)', padding: '24px' }}>Please select a station to view income.</div>;
+    return (
+      <div style={{ color: 'var(--text-muted)', padding: '24px' }}>
+        Please select a station to view income.
+      </div>
+    );
   }
 
   return (
@@ -219,8 +256,23 @@ export const IncomeList: React.FC<IncomeListProps> = ({ selectedStation, userRol
         subtitle="Record indirect / other income — rentals, commissions, scrap, interest — and reconcile it into cash, bank or owner."
         actions={
           <div style={{ display: 'flex', gap: '8px' }}>
-            <Button variant="secondary" size="sm" leftIcon={<Tags />} onClick={() => setCategoryManagerOpen(true)}>Categories</Button>
-            <Button variant="primary" size="sm" leftIcon={<Plus />} onClick={openDrawer} disabled={categories.length === 0}>Add Income</Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              leftIcon={<Tags />}
+              onClick={() => setCategoryManagerOpen(true)}
+            >
+              Categories
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              leftIcon={<Plus />}
+              onClick={openDrawer}
+              disabled={categories.length === 0}
+            >
+              Add Income
+            </Button>
           </div>
         }
         toolbar={
@@ -237,64 +289,148 @@ export const IncomeList: React.FC<IncomeListProps> = ({ selectedStation, userRol
         }
       >
         {activeTab === 'ledger' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <KpiStrip columns="auto">
-            <KpiTile dot="success" valueTone="success" label="Received Today" value={inr(kpis.todayTotal)} hint="business day" />
-            <KpiTile dot="success" valueTone="success" label="Received This Month" value={inr(kpis.monthTotal)} hint={`${kpis.entriesMonth} ${kpis.entriesMonth === 1 ? 'entry' : 'entries'}`} />
-            <KpiTile dot="warning" label="Into Cash Drawer" value={inr(kpis.drawerMonth)} hint="this month" />
-            <KpiTile dot="info" label="Into Bank / Owner" value={inr(kpis.otherMonth)} hint="this month" />
-          </KpiStrip>
-
-          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', gap: '10px' }}>
-            <DateRangeField value={range} onChange={setRange} clock={clock} size="sm" />
-            <div style={{ flex: 1 }} />
-            <SearchInput inputSize="sm" value={searchQuery} onChange={setSearchQuery} placeholder="Search description / category…" style={{ width: '220px' }} />
-            <div style={{ width: '190px' }}>
-              <Select inputSize="sm" value={selectedCategoryFilter} onChange={(e) => setSelectedCategoryFilter(e.target.value)} aria-label="Filter by category">
-                <option value="">All categories</option>
-                {categories.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </Select>
-            </div>
-            <button
-              type="button"
-              title="Other income posts to the selected business day — no open shift required. Cash income entered from the shift workspace reconciles into the drawer."
-              aria-label="About income anchoring"
-              style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', height: '28px', width: '28px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-soft)', background: 'var(--bg-surface)', color: 'var(--text-muted)', cursor: 'help' }}
-            >
-              <HelpCircle size={14} />
-            </button>
-          </div>
-
-          <Panel flush title="Income ledger">
-            {incomeQ.isLoading ? (
-              <div style={{ padding: '16px' }}><EmptyState compact icon={<Banknote />} title="Loading…" description="Fetching income." /></div>
-            ) : filteredIncome.length === 0 ? (
-              <div style={{ padding: '12px' }}><EmptyState compact icon={<Banknote />} title={income.length === 0 ? 'No income yet' : 'No matches'} description={income.length === 0 ? 'Record your first income with “Add Income”.' : 'Adjust the range, search, or category filter.'} /></div>
-            ) : (
-              <DataTable
-                bare
-                columns={ledgerColumns}
-                data={filteredIncome}
-                error={incomeQ.error as Error | null}
-                emptyMessage="No matching income found."
-                getRowId={(r: any) => r.id}
-                initialSorting={[{ id: 'businessDate', desc: true }]}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <KpiStrip columns="auto">
+              <KpiTile
+                dot="success"
+                valueTone="success"
+                label="Received Today"
+                value={inr(kpis.todayTotal)}
+                hint="business day"
               />
-            )}
-          </Panel>
-        </div>
+              <KpiTile
+                dot="success"
+                valueTone="success"
+                label="Received This Month"
+                value={inr(kpis.monthTotal)}
+                hint={`${kpis.entriesMonth} ${kpis.entriesMonth === 1 ? 'entry' : 'entries'}`}
+              />
+              <KpiTile
+                dot="warning"
+                label="Into Cash Drawer"
+                value={inr(kpis.drawerMonth)}
+                hint="this month"
+              />
+              <KpiTile
+                dot="info"
+                label="Into Bank / Owner"
+                value={inr(kpis.otherMonth)}
+                hint="this month"
+              />
+            </KpiStrip>
+
+            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', gap: '10px' }}>
+              <DateRangeField value={range} onChange={setRange} clock={clock} size="sm" />
+              <div style={{ flex: 1 }} />
+              <SearchInput
+                inputSize="sm"
+                value={searchQuery}
+                onChange={setSearchQuery}
+                placeholder="Search description / category…"
+                style={{ width: '220px' }}
+              />
+              <div style={{ width: '190px' }}>
+                <Select
+                  inputSize="sm"
+                  value={selectedCategoryFilter}
+                  onChange={(e) => setSelectedCategoryFilter(e.target.value)}
+                  aria-label="Filter by category"
+                >
+                  <option value="">All categories</option>
+                  {categories.map((c: any) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <button
+                type="button"
+                title="Other income posts to the selected business day — no open shift required. Cash income entered from the shift workspace reconciles into the drawer."
+                aria-label="About income anchoring"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  height: '28px',
+                  width: '28px',
+                  borderRadius: 'var(--radius-input)',
+                  border: '1px solid var(--border-soft)',
+                  background: 'var(--bg-surface)',
+                  color: 'var(--text-muted)',
+                  cursor: 'help',
+                }}
+              >
+                <HelpCircle size={14} />
+              </button>
+            </div>
+
+            <Panel flush title="Income ledger">
+              {incomeQ.isLoading ? (
+                <div style={{ padding: '16px' }}>
+                  <EmptyState
+                    compact
+                    icon={<Banknote />}
+                    title="Loading…"
+                    description="Fetching income."
+                  />
+                </div>
+              ) : filteredIncome.length === 0 ? (
+                <div style={{ padding: '12px' }}>
+                  <EmptyState
+                    compact
+                    icon={<Banknote />}
+                    title={income.length === 0 ? 'No income yet' : 'No matches'}
+                    description={
+                      income.length === 0
+                        ? 'Record your first income with “Add Income”.'
+                        : 'Adjust the range, search, or category filter.'
+                    }
+                  />
+                </div>
+              ) : (
+                <DataTable
+                  bare
+                  columns={ledgerColumns}
+                  data={filteredIncome}
+                  error={incomeQ.error as Error | null}
+                  emptyMessage="No matching income found."
+                  getRowId={(r: any) => r.id}
+                  initialSorting={[{ id: 'businessDate', desc: true }]}
+                />
+              )}
+            </Panel>
+          </div>
         )}
 
         {activeTab === 'gst' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div style={{ backgroundColor: 'var(--state-info-bg)', color: 'var(--state-info-fg)', padding: '10px 12px', borderRadius: 'var(--radius-card)', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '8px', border: '1px solid var(--border-soft)' }}>
+            <div
+              style={{
+                backgroundColor: 'var(--state-info-bg)',
+                color: 'var(--state-info-fg)',
+                padding: '10px 12px',
+                borderRadius: 'var(--radius-card)',
+                fontSize: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                border: '1px solid var(--border-soft)',
+              }}
+            >
               <Info size={14} />
-              <span>Output GST you collected on other income (rentals, commissions, advertising). The split is frozen from the category&rsquo;s GST rate at the time each entry was recorded. Voided entries are excluded.</span>
+              <span>
+                Output GST you collected on other income (rentals, commissions, advertising). The
+                split is frozen from the category&rsquo;s GST rate at the time each entry was
+                recorded. Voided entries are excluded.
+              </span>
             </div>
 
             <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
               <DateRangeField value={gstRange} onChange={setGstRange} clock={clock} size="sm" />
-              <Button variant="secondary" size="sm" onClick={loadGstRegister} loading={gstLoading}>Apply</Button>
+              <Button variant="secondary" size="sm" onClick={loadGstRegister} loading={gstLoading}>
+                Apply
+              </Button>
             </div>
 
             <KpiStrip columns="auto">
@@ -302,58 +438,231 @@ export const IncomeList: React.FC<IncomeListProps> = ({ selectedStation, userRol
               <KpiTile label="CGST" value={inr(gstTotals.cgst)} />
               <KpiTile label="SGST" value={inr(gstTotals.sgst)} />
               <KpiTile label="IGST" value={inr(gstTotals.igst)} />
-              <KpiTile dot="brand" valueTone="brand" label="Output GST" value={inr(gstOutputTotal)} hint={`${gstRows.length} ${gstRows.length === 1 ? 'entry' : 'entries'}`} />
+              <KpiTile
+                dot="brand"
+                valueTone="brand"
+                label="Output GST"
+                value={inr(gstOutputTotal)}
+                hint={`${gstRows.length} ${gstRows.length === 1 ? 'entry' : 'entries'}`}
+              />
             </KpiStrip>
 
             <Panel flush title="GST register">
               {gstError ? (
-                <div style={{ padding: '12px', color: 'var(--state-danger-fg)', backgroundColor: 'var(--state-danger-bg)', fontSize: '12px' }}>{gstError}</div>
+                <div
+                  style={{
+                    padding: '12px',
+                    color: 'var(--state-danger-fg)',
+                    backgroundColor: 'var(--state-danger-bg)',
+                    fontSize: '12px',
+                  }}
+                >
+                  {gstError}
+                </div>
               ) : gstLoading ? (
-                <div style={{ padding: '16px' }}><LoadingSpinner text="Loading GST register…" /></div>
+                <div style={{ padding: '16px' }}>
+                  <LoadingSpinner text="Loading GST register…" />
+                </div>
               ) : gstRows.length === 0 ? (
-                <div style={{ padding: '12px' }}><EmptyState compact icon={<Percent />} title="No GST income in this period" description="Income only appears here when its category carries a GST rate." /></div>
+                <div style={{ padding: '12px' }}>
+                  <EmptyState
+                    compact
+                    icon={<Percent />}
+                    title="No GST income in this period"
+                    description="Income only appears here when its category carries a GST rate."
+                  />
+                </div>
               ) : (
                 <div style={{ overflow: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', textAlign: 'left' }}>
+                  <table
+                    style={{
+                      width: '100%',
+                      borderCollapse: 'collapse',
+                      fontSize: '12px',
+                      textAlign: 'left',
+                    }}
+                  >
                     <thead>
-                      <tr style={{ backgroundColor: 'var(--bg-surface-alt)', borderBottom: '1px solid var(--border-soft)', color: 'var(--text-muted)' }}>
-                        <th style={{ padding: '8px 10px', fontWeight: 600, whiteSpace: 'nowrap' }}>Date</th>
+                      <tr
+                        style={{
+                          backgroundColor: 'var(--bg-surface-alt)',
+                          borderBottom: '1px solid var(--border-soft)',
+                          color: 'var(--text-muted)',
+                        }}
+                      >
+                        <th style={{ padding: '8px 10px', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                          Date
+                        </th>
                         <th style={{ padding: '8px 10px', fontWeight: 600 }}>Category</th>
-                        <th style={{ padding: '8px 10px', fontWeight: 600 }}>Payer / Description</th>
-                        <th style={{ padding: '8px 10px', fontWeight: 600, textAlign: 'right' }}>Rate</th>
-                        <th style={{ padding: '8px 10px', fontWeight: 600, textAlign: 'right' }}>Taxable</th>
-                        <th style={{ padding: '8px 10px', fontWeight: 600, textAlign: 'right' }}>CGST</th>
-                        <th style={{ padding: '8px 10px', fontWeight: 600, textAlign: 'right' }}>SGST</th>
-                        <th style={{ padding: '8px 10px', fontWeight: 600, textAlign: 'right' }}>IGST</th>
-                        <th style={{ padding: '8px 10px', fontWeight: 600, textAlign: 'right' }}>Received</th>
+                        <th style={{ padding: '8px 10px', fontWeight: 600 }}>
+                          Payer / Description
+                        </th>
+                        <th style={{ padding: '8px 10px', fontWeight: 600, textAlign: 'right' }}>
+                          Rate
+                        </th>
+                        <th style={{ padding: '8px 10px', fontWeight: 600, textAlign: 'right' }}>
+                          Taxable
+                        </th>
+                        <th style={{ padding: '8px 10px', fontWeight: 600, textAlign: 'right' }}>
+                          CGST
+                        </th>
+                        <th style={{ padding: '8px 10px', fontWeight: 600, textAlign: 'right' }}>
+                          SGST
+                        </th>
+                        <th style={{ padding: '8px 10px', fontWeight: 600, textAlign: 'right' }}>
+                          IGST
+                        </th>
+                        <th style={{ padding: '8px 10px', fontWeight: 600, textAlign: 'right' }}>
+                          Received
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
                       {gstRows.map((r) => (
                         <tr key={r.id} style={{ borderBottom: '1px solid var(--border-soft)' }}>
-                          <td style={{ padding: '8px 10px', whiteSpace: 'nowrap' }}><DateText value={r.businessDate} variant="compact" tone="muted" /></td>
-                          <td style={{ padding: '8px 10px', color: 'var(--text-strong)', fontWeight: 600 }}>
-                            {r.categoryName}
-                            {r.hsnCode && <div style={{ fontSize: '10px', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontWeight: 400 }}>HSN/SAC {r.hsnCode}</div>}
+                          <td style={{ padding: '8px 10px', whiteSpace: 'nowrap' }}>
+                            <DateText value={r.businessDate} variant="compact" tone="muted" />
                           </td>
-                          <td style={{ padding: '8px 10px', color: 'var(--text-default)' }}>{r.payer || r.description || '—'}</td>
-                          <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>{Number(r.gstRate || 0)}%{r.interState ? ' · IGST' : ''}</td>
-                          <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{inr(Number(r.taxableAmount || 0))}</td>
-                          <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{inr(Number(r.cgst || 0))}</td>
-                          <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{inr(Number(r.sgst || 0))}</td>
-                          <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{inr(Number(r.igst || 0))}</td>
-                          <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--text-strong)' }}>{inr(Number(r.amount || 0))}</td>
+                          <td
+                            style={{
+                              padding: '8px 10px',
+                              color: 'var(--text-strong)',
+                              fontWeight: 600,
+                            }}
+                          >
+                            {r.categoryName}
+                            {r.hsnCode && (
+                              <div
+                                style={{
+                                  fontSize: '10px',
+                                  color: 'var(--text-muted)',
+                                  fontFamily: 'var(--font-mono)',
+                                  fontWeight: 400,
+                                }}
+                              >
+                                HSN/SAC {r.hsnCode}
+                              </div>
+                            )}
+                          </td>
+                          <td style={{ padding: '8px 10px', color: 'var(--text-default)' }}>
+                            {r.payer || r.description || '—'}
+                          </td>
+                          <td
+                            style={{
+                              padding: '8px 10px',
+                              textAlign: 'right',
+                              fontFamily: 'var(--font-mono)',
+                              color: 'var(--text-muted)',
+                            }}
+                          >
+                            {Number(r.gstRate || 0)}%{r.interState ? ' · IGST' : ''}
+                          </td>
+                          <td
+                            style={{
+                              padding: '8px 10px',
+                              textAlign: 'right',
+                              fontFamily: 'var(--font-mono)',
+                            }}
+                          >
+                            {inr(Number(r.taxableAmount || 0))}
+                          </td>
+                          <td
+                            style={{
+                              padding: '8px 10px',
+                              textAlign: 'right',
+                              fontFamily: 'var(--font-mono)',
+                            }}
+                          >
+                            {inr(Number(r.cgst || 0))}
+                          </td>
+                          <td
+                            style={{
+                              padding: '8px 10px',
+                              textAlign: 'right',
+                              fontFamily: 'var(--font-mono)',
+                            }}
+                          >
+                            {inr(Number(r.sgst || 0))}
+                          </td>
+                          <td
+                            style={{
+                              padding: '8px 10px',
+                              textAlign: 'right',
+                              fontFamily: 'var(--font-mono)',
+                            }}
+                          >
+                            {inr(Number(r.igst || 0))}
+                          </td>
+                          <td
+                            style={{
+                              padding: '8px 10px',
+                              textAlign: 'right',
+                              fontFamily: 'var(--font-mono)',
+                              fontWeight: 700,
+                              color: 'var(--text-strong)',
+                            }}
+                          >
+                            {inr(Number(r.amount || 0))}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
                     <tfoot>
-                      <tr style={{ backgroundColor: 'var(--bg-surface-alt)', fontWeight: 700, color: 'var(--text-strong)' }}>
-                        <td style={{ padding: '8px 10px' }} colSpan={4}>Total</td>
-                        <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{inr(gstTotals.taxable)}</td>
-                        <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{inr(gstTotals.cgst)}</td>
-                        <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{inr(gstTotals.sgst)}</td>
-                        <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{inr(gstTotals.igst)}</td>
-                        <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{inr(gstTotals.gross)}</td>
+                      <tr
+                        style={{
+                          backgroundColor: 'var(--bg-surface-alt)',
+                          fontWeight: 700,
+                          color: 'var(--text-strong)',
+                        }}
+                      >
+                        <td style={{ padding: '8px 10px' }} colSpan={4}>
+                          Total
+                        </td>
+                        <td
+                          style={{
+                            padding: '8px 10px',
+                            textAlign: 'right',
+                            fontFamily: 'var(--font-mono)',
+                          }}
+                        >
+                          {inr(gstTotals.taxable)}
+                        </td>
+                        <td
+                          style={{
+                            padding: '8px 10px',
+                            textAlign: 'right',
+                            fontFamily: 'var(--font-mono)',
+                          }}
+                        >
+                          {inr(gstTotals.cgst)}
+                        </td>
+                        <td
+                          style={{
+                            padding: '8px 10px',
+                            textAlign: 'right',
+                            fontFamily: 'var(--font-mono)',
+                          }}
+                        >
+                          {inr(gstTotals.sgst)}
+                        </td>
+                        <td
+                          style={{
+                            padding: '8px 10px',
+                            textAlign: 'right',
+                            fontFamily: 'var(--font-mono)',
+                          }}
+                        >
+                          {inr(gstTotals.igst)}
+                        </td>
+                        <td
+                          style={{
+                            padding: '8px 10px',
+                            textAlign: 'right',
+                            fontFamily: 'var(--font-mono)',
+                          }}
+                        >
+                          {inr(gstTotals.gross)}
+                        </td>
                       </tr>
                     </tfoot>
                   </table>

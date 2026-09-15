@@ -19,7 +19,11 @@ export class DrizzleDssrSnapshotRepository implements DssrSnapshotRepository {
       generatedAt: r.generatedAt.toISOString(),
     };
   }
-  async findByStationDate(organizationId: string, stationId: string, businessDate: string): Promise<DssrSnapshot | null> {
+  async findByStationDate(
+    organizationId: string,
+    stationId: string,
+    businessDate: string,
+  ): Promise<DssrSnapshot | null> {
     const [r] = await this.db
       .select()
       .from(schema.dssrSnapshots)
@@ -59,7 +63,10 @@ export class DrizzleDssrDataReader implements DssrDataReader {
   constructor(private readonly db: DbClient) {}
   async readBusinessDay(businessDayId: string): Promise<DssrSourceData> {
     const [businessDay] = await this.db
-      .select({ organizationId: schema.businessDays.organizationId, stationId: schema.businessDays.stationId })
+      .select({
+        organizationId: schema.businessDays.organizationId,
+        stationId: schema.businessDays.stationId,
+      })
       .from(schema.businessDays)
       .where(eq(schema.businessDays.id, businessDayId))
       .limit(1);
@@ -79,7 +86,10 @@ export class DrizzleDssrDataReader implements DssrDataReader {
       .where(eq(schema.shifts.businessDayId, businessDayId));
 
     const collectionRows = await this.db
-      .select({ paymentMethod: schema.collections.paymentMethod, amount: schema.collections.amount })
+      .select({
+        paymentMethod: schema.collections.paymentMethod,
+        amount: schema.collections.amount,
+      })
       .from(schema.collections)
       .where(eq(schema.collections.businessDayId, businessDayId));
 
@@ -108,7 +118,10 @@ export class DrizzleDssrDataReader implements DssrDataReader {
         cess: schema.otherIncome.cess,
       })
       .from(schema.otherIncome)
-      .leftJoin(schema.incomeCategories, eq(schema.incomeCategories.id, schema.otherIncome.categoryId))
+      .leftJoin(
+        schema.incomeCategories,
+        eq(schema.incomeCategories.id, schema.otherIncome.categoryId),
+      )
       .where(eq(schema.otherIncome.businessDayId, businessDayId));
 
     const purchaseRows = await this.db
@@ -159,7 +172,10 @@ export class DrizzleDssrDataReader implements DssrDataReader {
 
     // Credit receivables created today, with customer type (normal vs fleet).
     const creditSaleRows = await this.db
-      .select({ customerType: schema.customers.customerType, amount: schema.customerTransactions.amount })
+      .select({
+        customerType: schema.customers.customerType,
+        amount: schema.customerTransactions.amount,
+      })
       .from(schema.customerTransactions)
       .leftJoin(schema.customers, eq(schema.customers.id, schema.customerTransactions.customerId))
       .where(
@@ -189,7 +205,13 @@ export class DrizzleDssrDataReader implements DssrDataReader {
     // Reference lookups for enriching the fuel roll-up with names + cost basis.
     const productRows = organizationId
       ? await this.db
-          .select({ id: schema.products.id, name: schema.products.name, code: schema.products.code, unit: schema.products.unit, costBasis: schema.products.costBasis })
+          .select({
+            id: schema.products.id,
+            name: schema.products.name,
+            code: schema.products.code,
+            unit: schema.products.unit,
+            costBasis: schema.products.costBasis,
+          })
           .from(schema.products)
           .where(eq(schema.products.organizationId, organizationId))
       : [];
@@ -200,8 +222,17 @@ export class DrizzleDssrDataReader implements DssrDataReader {
           .where(eq(schema.nozzles.stationId, stationId))
       : [];
 
-    const products: Record<string, { name: string; code: string; unit: string; costBasis: number }> = {};
-    for (const p of productRows) products[p.id] = { name: p.name, code: p.code ?? '', unit: p.unit ?? 'L', costBasis: Number(p.costBasis ?? 0) };
+    const products: Record<
+      string,
+      { name: string; code: string; unit: string; costBasis: number }
+    > = {};
+    for (const p of productRows)
+      products[p.id] = {
+        name: p.name,
+        code: p.code ?? '',
+        unit: p.unit ?? 'L',
+        costBasis: Number(p.costBasis ?? 0),
+      };
     const nozzles: Record<string, string> = {};
     for (const n of nozzleRows) nozzles[n.id] = n.name;
 
@@ -212,8 +243,16 @@ export class DrizzleDssrDataReader implements DssrDataReader {
         closedAt: r.closedAt ? r.closedAt.toISOString() : null,
         snapshot: (r.snapshotData as Record<string, unknown>) ?? {},
       })),
-      collections: collectionRows.map((r) => ({ paymentMethod: r.paymentMethod, amount: Number(r.amount) })),
-      expenses: expenseRows.map((r) => ({ affectsDrawer: r.affectsDrawer, paidFrom: r.paidFrom, amount: Number(r.amount), status: r.status })),
+      collections: collectionRows.map((r) => ({
+        paymentMethod: r.paymentMethod,
+        amount: Number(r.amount),
+      })),
+      expenses: expenseRows.map((r) => ({
+        affectsDrawer: r.affectsDrawer,
+        paidFrom: r.paidFrom,
+        amount: Number(r.amount),
+        status: r.status,
+      })),
       income: incomeRows.map((r) => ({
         affectsDrawer: r.affectsDrawer,
         receivedInto: r.receivedInto,
@@ -228,9 +267,20 @@ export class DrizzleDssrDataReader implements DssrDataReader {
         cess: Number(r.cess ?? 0),
       })),
       purchases: purchaseRows.map((r) => ({ amount: Number(r.amount) })),
-      supplierPayments: supplierPaymentRows.map((r) => ({ affectsDrawer: r.affectsDrawer, paidFrom: r.paidFrom, amount: Number(r.amount) })),
-      sales: saleRows.map((r) => ({ paymentMethod: r.paymentMethod, saleType: r.saleType, totalAmount: Number(r.totalAmount) })),
-      creditSales: creditSaleRows.map((r) => ({ customerType: r.customerType ?? 'Regular', amount: Number(r.amount) })),
+      supplierPayments: supplierPaymentRows.map((r) => ({
+        affectsDrawer: r.affectsDrawer,
+        paidFrom: r.paidFrom,
+        amount: Number(r.amount),
+      })),
+      sales: saleRows.map((r) => ({
+        paymentMethod: r.paymentMethod,
+        saleType: r.saleType,
+        totalAmount: Number(r.totalAmount),
+      })),
+      creditSales: creditSaleRows.map((r) => ({
+        customerType: r.customerType ?? 'Regular',
+        amount: Number(r.amount),
+      })),
       stockVariances: varianceRows.map((r) => ({
         tankName: r.tankName ?? 'Unknown',
         productName: r.productName ?? 'Unknown',

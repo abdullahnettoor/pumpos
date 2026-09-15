@@ -73,7 +73,9 @@ export function DataTable<T>({
   if (error) {
     return (
       <div style={wrap}>
-        <div style={{ ...stateBox, color: 'var(--state-danger-fg)' }}>{error.message || 'Failed to load data.'}</div>
+        <div style={{ ...stateBox, color: 'var(--state-danger-fg)' }}>
+          {error.message || 'Failed to load data.'}
+        </div>
       </div>
     );
   }
@@ -97,7 +99,10 @@ export function DataTable<T>({
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
         <thead>
           {table.getHeaderGroups().map((hg) => (
-            <tr key={hg.id} style={{ borderBottom: '1px solid var(--border-strong)', textAlign: 'left' }}>
+            <tr
+              key={hg.id}
+              style={{ borderBottom: '1px solid var(--border-strong)', textAlign: 'left' }}
+            >
               {hg.headers.map((header) => {
                 const canSort = header.column.getCanSort();
                 const sorted = header.column.getIsSorted();
@@ -147,7 +152,14 @@ export function DataTable<T>({
                 }}
               >
                 {row.getVisibleCells().map((cell) => (
-                  <td key={cell.id} style={{ padding: '9px 12px', color: 'var(--text-default)', verticalAlign: 'middle' }}>
+                  <td
+                    key={cell.id}
+                    style={{
+                      padding: '9px 12px',
+                      color: 'var(--text-default)',
+                      verticalAlign: 'middle',
+                    }}
+                  >
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                   </td>
                 ))}

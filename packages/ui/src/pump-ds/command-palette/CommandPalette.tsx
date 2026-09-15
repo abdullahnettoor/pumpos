@@ -111,15 +111,22 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
                       )}
                     >
                       {item.icon && (
-                        <span className="inline-flex size-4 items-center justify-center text-ink-muted [&_svg]:size-4 data-[selected=true]:text-brand" aria-hidden="true">
+                        <span
+                          className="inline-flex size-4 items-center justify-center text-ink-muted [&_svg]:size-4 data-[selected=true]:text-brand"
+                          aria-hidden="true"
+                        >
                           {item.icon}
                         </span>
                       )}
                       <span className="flex-1 truncate">{item.label}</span>
                       {item.meta ? (
-                        <span className="ml-auto shrink-0 font-mono text-[11px] text-ink-faint">{item.meta}</span>
+                        <span className="ml-auto shrink-0 font-mono text-[11px] text-ink-faint">
+                          {item.meta}
+                        </span>
                       ) : item.shortcut ? (
-                        <span className="ml-auto"><Kbd>{item.shortcut}</Kbd></span>
+                        <span className="ml-auto">
+                          <Kbd>{item.shortcut}</Kbd>
+                        </span>
                       ) : null}
                     </Command.Item>
                   ))}
@@ -128,8 +135,16 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
             </Command.List>
 
             <div className="flex items-center gap-4 border-t border-border-soft px-4 py-2 text-[11px] text-ink-muted">
-              <span className="inline-flex items-center gap-1.5"><Kbd>↑</Kbd><Kbd>↓</Kbd> navigate</span>
-              <span className="inline-flex items-center gap-1.5"><Kbd><CornerDownLeft className="size-2.5" /></Kbd> select</span>
+              <span className="inline-flex items-center gap-1.5">
+                <Kbd>↑</Kbd>
+                <Kbd>↓</Kbd> navigate
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <Kbd>
+                  <CornerDownLeft className="size-2.5" />
+                </Kbd>{' '}
+                select
+              </span>
               <span className="ml-auto hidden sm:inline">{footerHint}</span>
             </div>
           </Command>

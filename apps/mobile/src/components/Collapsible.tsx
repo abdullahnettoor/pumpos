@@ -17,7 +17,13 @@ const BADGE_TONE = {
 } as const;
 
 /** Accordion section — a header that shows a summary and expands to reveal detail. */
-export const Collapsible: React.FC<Props> = ({ title, summary, badge, defaultOpen = false, children }) => {
+export const Collapsible: React.FC<Props> = ({
+  title,
+  summary,
+  badge,
+  defaultOpen = false,
+  children,
+}) => {
   const [open, setOpen] = useState(defaultOpen);
   const tone = BADGE_TONE[badge?.tone ?? 'default'];
   return (
@@ -32,9 +38,13 @@ export const Collapsible: React.FC<Props> = ({ title, summary, badge, defaultOpe
         aria-expanded={open}
       >
         <div className="min-w-0">
-          <p className="text-sm font-semibold" style={{ color: 'var(--text-strong)' }}>{title}</p>
+          <p className="text-sm font-semibold" style={{ color: 'var(--text-strong)' }}>
+            {title}
+          </p>
           {summary && !open && (
-            <p className="truncate text-[11px]" style={{ color: 'var(--text-muted)' }}>{summary}</p>
+            <p className="truncate text-[11px]" style={{ color: 'var(--text-muted)' }}>
+              {summary}
+            </p>
           )}
         </div>
         <div className="flex flex-shrink-0 items-center gap-2">
@@ -48,7 +58,11 @@ export const Collapsible: React.FC<Props> = ({ title, summary, badge, defaultOpe
           )}
           <span
             className="text-sm"
-            style={{ color: 'var(--text-muted)', transform: open ? 'rotate(90deg)' : 'none', transition: 'transform 150ms ease-out' }}
+            style={{
+              color: 'var(--text-muted)',
+              transform: open ? 'rotate(90deg)' : 'none',
+              transition: 'transform 150ms ease-out',
+            }}
           >
             ›
           </span>

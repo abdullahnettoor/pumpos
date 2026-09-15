@@ -13,9 +13,22 @@ import { useToast } from './primitives/ToastProvider.js';
 import { useAsk } from './primitives/ConfirmDialog.js';
 import { Drawer } from './Drawer.js';
 import { ExpenseEntryForm } from './transactions/ExpenseEntryForm.js';
-import { useExpenses, useShiftStatus, useExpenseCategories, useInvalidateOperational } from '../query/hooks.js';
+import {
+  useExpenses,
+  useShiftStatus,
+  useExpenseCategories,
+  useInvalidateOperational,
+} from '../query/hooks.js';
 import { useQueryClient } from '@tanstack/react-query';
-import { Panel, Button, KpiStrip, KpiTile, EmptyState, SearchInput, Select } from '../pump-ds/index.js';
+import {
+  Panel,
+  Button,
+  KpiStrip,
+  KpiTile,
+  EmptyState,
+  SearchInput,
+  Select,
+} from '../pump-ds/index.js';
 import type { NavIntent } from './AppShell.js';
 import { buildExpenseColumns } from './expenses/columns.js';
 import { ExpenseAnalytics } from './expenses/ExpenseAnalytics.js';
@@ -33,7 +46,13 @@ interface ExpensesListProps {
   onIntentConsumed?: () => void;
 }
 
-export const ExpensesList: React.FC<ExpensesListProps> = ({ selectedStation, defaultShiftId, userRole, intent, onIntentConsumed }) => {
+export const ExpensesList: React.FC<ExpensesListProps> = ({
+  selectedStation,
+  defaultShiftId,
+  userRole,
+  intent,
+  onIntentConsumed,
+}) => {
   const stationId = selectedStation?.id ?? null;
   const expensesQ = useExpenses();
   const statusQ = useShiftStatus(stationId, true);
@@ -66,7 +85,11 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({ selectedStation, def
   const [formError, setFormError] = useState<string | null>(null);
 
   const resolvePreferredShiftId = (active: any | null, closedList: any[]) => {
-    if (defaultShiftId && (active?.id === defaultShiftId || closedList.some((sh) => sh.id === defaultShiftId))) return defaultShiftId;
+    if (
+      defaultShiftId &&
+      (active?.id === defaultShiftId || closedList.some((sh) => sh.id === defaultShiftId))
+    )
+      return defaultShiftId;
     if (active) return active.id;
     if (closedList.length > 0) return closedList[0].id;
     return '';
@@ -102,7 +125,15 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({ selectedStation, def
     try {
       setSubmitting(true);
       setFormError(null);
-      await transactionService.recordExpense({ stationId: stationId ?? undefined, transactionDate: values.transactionDate || undefined, paidFrom: 'BANK', categoryId: values.categoryId, amount: Number(values.amount), description: values.description || undefined, accountId: values.accountId || undefined });
+      await transactionService.recordExpense({
+        stationId: stationId ?? undefined,
+        transactionDate: values.transactionDate || undefined,
+        paidFrom: 'BANK',
+        categoryId: values.categoryId,
+        amount: Number(values.amount),
+        description: values.description || undefined,
+        accountId: values.accountId || undefined,
+      });
       closeDrawer();
       invalidateOperational(stationId);
       toast.success('Expense recorded.');
@@ -140,8 +171,11 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({ selectedStation, def
     }
   };
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const ledgerColumns = useMemo(() => buildExpenseColumns(canVoid ? handleVoid : undefined), [canVoid, stationId]);
+  const ledgerColumns = useMemo(
+    () => buildExpenseColumns(canVoid ? handleVoid : undefined),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [canVoid, stationId],
+  );
 
   // KPIs — fixed windows (today / this month), independent of the table range filter.
   const kpis = useMemo(() => {
@@ -153,9 +187,13 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({ selectedStation, def
       return d && d >= r.from && d <= r.to;
     };
     const monthRows = active.filter((e: any) => inWindow(e, month));
-    const spentToday = active.filter((e: any) => inWindow(e, today)).reduce((sum: number, e: any) => sum + Number(e.amount || 0), 0);
+    const spentToday = active
+      .filter((e: any) => inWindow(e, today))
+      .reduce((sum: number, e: any) => sum + Number(e.amount || 0), 0);
     const spentMonth = monthRows.reduce((sum: number, e: any) => sum + Number(e.amount || 0), 0);
-    const drawerMonth = monthRows.filter((e: any) => e.paidFrom === 'SHIFT_CASH').reduce((sum: number, e: any) => sum + Number(e.amount || 0), 0);
+    const drawerMonth = monthRows
+      .filter((e: any) => e.paidFrom === 'SHIFT_CASH')
+      .reduce((sum: number, e: any) => sum + Number(e.amount || 0), 0);
     const otherMonth = spentMonth - drawerMonth;
     return { spentToday, spentMonth, entriesMonth: monthRows.length, drawerMonth, otherMonth };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -179,7 +217,11 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({ selectedStation, def
   );
 
   if (!selectedStation) {
-    return <div style={{ color: 'var(--text-muted)', padding: '24px' }}>Please select a station to view expenses.</div>;
+    return (
+      <div style={{ color: 'var(--text-muted)', padding: '24px' }}>
+        Please select a station to view expenses.
+      </div>
+    );
   }
 
   return (
@@ -189,8 +231,23 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({ selectedStation, def
         subtitle="Log and reconcile operational expenditure, and analyse spend by category."
         actions={
           <div style={{ display: 'flex', gap: '8px' }}>
-            <Button variant="secondary" size="sm" leftIcon={<Tags />} onClick={() => setCategoryManagerOpen(true)}>Categories</Button>
-            <Button variant="primary" size="sm" leftIcon={<Plus />} onClick={openDrawer} disabled={categories.length === 0}>Add Expense</Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              leftIcon={<Tags />}
+              onClick={() => setCategoryManagerOpen(true)}
+            >
+              Categories
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              leftIcon={<Plus />}
+              onClick={openDrawer}
+              disabled={categories.length === 0}
+            >
+              Add Expense
+            </Button>
           </div>
         }
         toolbar={
@@ -209,27 +266,75 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({ selectedStation, def
         {activeTab === 'ledger' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <KpiStrip columns="auto">
-              <KpiTile dot="danger" valueTone="danger" label="Spent Today" value={inr(kpis.spentToday)} hint="business day" />
-              <KpiTile dot="danger" valueTone="danger" label="Spent This Month" value={inr(kpis.spentMonth)} hint={`${kpis.entriesMonth} ${kpis.entriesMonth === 1 ? 'entry' : 'entries'}`} />
-              <KpiTile dot="warning" label="From Cash Drawer" value={inr(kpis.drawerMonth)} hint="this month" />
-              <KpiTile dot="info" label="From Bank / Owner" value={inr(kpis.otherMonth)} hint="this month" />
+              <KpiTile
+                dot="danger"
+                valueTone="danger"
+                label="Spent Today"
+                value={inr(kpis.spentToday)}
+                hint="business day"
+              />
+              <KpiTile
+                dot="danger"
+                valueTone="danger"
+                label="Spent This Month"
+                value={inr(kpis.spentMonth)}
+                hint={`${kpis.entriesMonth} ${kpis.entriesMonth === 1 ? 'entry' : 'entries'}`}
+              />
+              <KpiTile
+                dot="warning"
+                label="From Cash Drawer"
+                value={inr(kpis.drawerMonth)}
+                hint="this month"
+              />
+              <KpiTile
+                dot="info"
+                label="From Bank / Owner"
+                value={inr(kpis.otherMonth)}
+                hint="this month"
+              />
             </KpiStrip>
 
             <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', gap: '10px' }}>
               <DateRangeField value={range} onChange={setRange} clock={clock} size="sm" />
               <div style={{ flex: 1 }} />
-              <SearchInput inputSize="sm" value={searchQuery} onChange={setSearchQuery} placeholder="Search description / category…" style={{ width: '220px' }} />
+              <SearchInput
+                inputSize="sm"
+                value={searchQuery}
+                onChange={setSearchQuery}
+                placeholder="Search description / category…"
+                style={{ width: '220px' }}
+              />
               <div style={{ width: '190px' }}>
-                <Select inputSize="sm" value={selectedCategoryFilter} onChange={(e) => setSelectedCategoryFilter(e.target.value)} aria-label="Filter by category">
+                <Select
+                  inputSize="sm"
+                  value={selectedCategoryFilter}
+                  onChange={(e) => setSelectedCategoryFilter(e.target.value)}
+                  aria-label="Filter by category"
+                >
                   <option value="">All categories</option>
-                  {categories.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  {categories.map((c: any) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
                 </Select>
               </div>
               <button
                 type="button"
                 title="Business expenses post to the selected business day — no open shift required. Cash-drawer expenses are entered from the shift workspace so they reconcile against the drawer."
                 aria-label="About expense anchoring"
-                style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', height: '28px', width: '28px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-soft)', background: 'var(--bg-surface)', color: 'var(--text-muted)', cursor: 'help' }}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  height: '28px',
+                  width: '28px',
+                  borderRadius: 'var(--radius-input)',
+                  border: '1px solid var(--border-soft)',
+                  background: 'var(--bg-surface)',
+                  color: 'var(--text-muted)',
+                  cursor: 'help',
+                }}
               >
                 <HelpCircle size={14} />
               </button>
@@ -237,9 +342,27 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({ selectedStation, def
 
             <Panel flush title="Expense ledger">
               {expensesQ.isLoading ? (
-                <div style={{ padding: '16px' }}><EmptyState compact icon={<Receipt />} title="Loading…" description="Fetching expenses." /></div>
+                <div style={{ padding: '16px' }}>
+                  <EmptyState
+                    compact
+                    icon={<Receipt />}
+                    title="Loading…"
+                    description="Fetching expenses."
+                  />
+                </div>
               ) : filteredExpenses.length === 0 ? (
-                <div style={{ padding: '12px' }}><EmptyState compact icon={<Receipt />} title={expenses.length === 0 ? 'No expenses yet' : 'No matches'} description={expenses.length === 0 ? 'Record your first expense with “Add Expense”.' : 'Adjust the range, search, or category filter.'} /></div>
+                <div style={{ padding: '12px' }}>
+                  <EmptyState
+                    compact
+                    icon={<Receipt />}
+                    title={expenses.length === 0 ? 'No expenses yet' : 'No matches'}
+                    description={
+                      expenses.length === 0
+                        ? 'Record your first expense with “Add Expense”.'
+                        : 'Adjust the range, search, or category filter.'
+                    }
+                  />
+                </div>
               ) : (
                 <DataTable
                   bare

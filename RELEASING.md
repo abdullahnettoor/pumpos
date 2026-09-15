@@ -5,10 +5,10 @@ custom preview domains.
 
 - `git tag vX.Y.Z` (via `npm run release`) → **production** deploy of web/API.
 - `git push origin dev` → **preview** deploy to `*.abdullahnettoor.com` for only
-      the apps/packages that changed.
+  the apps/packages that changed.
 - `git tag desktop-vX.Y.Z` → desktop installers on a GitHub Release.
 - **Actions → Deploy → Run workflow** → targeted **preview** deploy (manual,
-      pick an app).
+  pick an app).
 
 Workflows: [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) (web),
 [`.github/workflows/desktop-release.yml`](.github/workflows/desktop-release.yml)
@@ -16,13 +16,13 @@ Workflows: [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) (web),
 
 ## Trigger matrix
 
-| Trigger | What deploys | Target |
-|---|---|---|
-| `git push origin dev` | Only changed web/API apps (path-filtered) | Preview custom domains (`*.abdullahnettoor.com`) |
-| `workflow_dispatch` on **Deploy** | Selected app (`all`, `console`, `marketing`, `mobile`, `api`) | Preview custom domains |
-| `vX.Y.Z` tag | Web/API production | `*.pumpos.app` |
-| `desktop-vX.Y.Z` tag | Desktop installers only | Draft GitHub Release |
-| Push to any non-`dev` branch | Nothing | No CI deploy |
+| Trigger                           | What deploys                                                  | Target                                           |
+| --------------------------------- | ------------------------------------------------------------- | ------------------------------------------------ |
+| `git push origin dev`             | Only changed web/API apps (path-filtered)                     | Preview custom domains (`*.abdullahnettoor.com`) |
+| `workflow_dispatch` on **Deploy** | Selected app (`all`, `console`, `marketing`, `mobile`, `api`) | Preview custom domains                           |
+| `vX.Y.Z` tag                      | Web/API production                                            | `*.pumpos.app`                                   |
+| `desktop-vX.Y.Z` tag              | Desktop installers only                                       | Draft GitHub Release                             |
+| Push to any non-`dev` branch      | Nothing                                                       | No CI deploy                                     |
 
 Path-filter behavior on `dev`:
 
@@ -64,9 +64,10 @@ Preview a bump without writing anything: `npm run release -- patch --dry`.
 ## One-time setup checklist
 
 ### Now (to make releases work)
+
 - [ ] Repo secret `CLOUDFLARE_API_TOKEN` (permission: **Edit Cloudflare Workers**).
 - [ ] Repo secret `CLOUDFLARE_ACCOUNT_ID`.
-- [ ] Repo → Settings → Actions → **Workflow permissions** = *Read and write*
+- [ ] Repo → Settings → Actions → **Workflow permissions** = _Read and write_
       (desktop release creates a GitHub Release). The workflow also requests it
       explicitly, but this is the backup.
 - [ ] **Disconnect** the old Cloudflare-managed console build (Workers & Pages →
@@ -74,6 +75,7 @@ Preview a bump without writing anything: `npm run release -- patch --dry`.
 - [ ] Commit `package-lock.json` if it ever changes (CI uses `npm ci`).
 
 ### Optional now (explicit dev config; otherwise baked-in fallbacks are used)
+
 - [ ] `DEV_SUPABASE_URL`, `DEV_SUPABASE_PUBLISHABLE_KEY`.
 - [ ] Repo variable `PREVIEW_API_URL=https://api.pumpos.abdullahnettoor.com`
       (optional; this is the default).
@@ -200,8 +202,7 @@ warnings.
 - [ ] Windows: code-signing cert.
 - [ ] Auto-updater (free Tauri keypair, separate from OS signing):
   - [ ] `npx @tauri-apps/cli signer generate -w ~/.tauri/pumpos.key`.
-  - [ ] Add the **public** key to `tauri.conf.json` → `plugins.updater.pubkey`
-        + an updater endpoint.
+  - [ ] Add the **public** key to `tauri.conf.json` → `plugins.updater.pubkey` + an updater endpoint.
   - [ ] Repo secrets `TAURI_SIGNING_PRIVATE_KEY` (+ `_PASSWORD`).
 
 ---

@@ -31,8 +31,19 @@ export interface PanelProps extends Omit<HTMLAttributes<HTMLDivElement>, 'title'
 }
 
 export const Panel = forwardRef<HTMLDivElement, PanelProps>(function Panel(
-  { className, title, icon, action, footer, flush = false, collapsible = false, defaultCollapsed = false, children, ...rest },
-  ref
+  {
+    className,
+    title,
+    icon,
+    action,
+    footer,
+    flush = false,
+    collapsible = false,
+    defaultCollapsed = false,
+    children,
+    ...rest
+  },
+  ref,
 ) {
   const [open, setOpen] = useState(!defaultCollapsed);
   const hasHeader = title != null || action != null || icon != null;
@@ -41,12 +52,31 @@ export const Panel = forwardRef<HTMLDivElement, PanelProps>(function Panel(
   const headerInner = (
     <>
       <div className="flex min-w-0 items-center gap-2">
-        {icon && <span className="inline-flex size-4 items-center justify-center text-ink-muted [&_svg]:size-4" aria-hidden="true">{icon}</span>}
-        {title && <span className="truncate text-[12px] font-semibold uppercase tracking-wider text-ink-muted">{title}</span>}
+        {icon && (
+          <span
+            className="inline-flex size-4 items-center justify-center text-ink-muted [&_svg]:size-4"
+            aria-hidden="true"
+          >
+            {icon}
+          </span>
+        )}
+        {title && (
+          <span className="truncate text-[12px] font-semibold uppercase tracking-wider text-ink-muted">
+            {title}
+          </span>
+        )}
       </div>
       <div className="flex flex-shrink-0 items-center gap-1.5">
         {action}
-        {collapsible && <ChevronDown className={cn('size-4 text-ink-faint transition-transform duration-150', open && 'rotate-180')} aria-hidden="true" />}
+        {collapsible && (
+          <ChevronDown
+            className={cn(
+              'size-4 text-ink-faint transition-transform duration-150',
+              open && 'rotate-180',
+            )}
+            aria-hidden="true"
+          />
+        )}
       </div>
     </>
   );
@@ -54,11 +84,14 @@ export const Panel = forwardRef<HTMLDivElement, PanelProps>(function Panel(
   return (
     <div
       ref={ref}
-      className={cn('flex min-w-0 flex-col overflow-hidden rounded-card border border-border-soft bg-surface', className)}
+      className={cn(
+        'flex min-w-0 flex-col overflow-hidden rounded-card border border-border-soft bg-surface',
+        className,
+      )}
       {...rest}
     >
-      {hasHeader && (
-        collapsible ? (
+      {hasHeader &&
+        (collapsible ? (
           <button
             type="button"
             onClick={() => setOpen((o) => !o)}
@@ -74,11 +107,11 @@ export const Panel = forwardRef<HTMLDivElement, PanelProps>(function Panel(
           <div className="flex items-center justify-between gap-3 border-b border-border-soft px-4 py-2.5">
             {headerInner}
           </div>
-        )
-      )}
+        ))}
       {showBody && <div className={cn('min-w-0 flex-1', !flush && 'p-4')}>{children}</div>}
-      {showBody && footer && <div className="border-t border-border-soft px-4 py-2.5">{footer}</div>}
+      {showBody && footer && (
+        <div className="border-t border-border-soft px-4 py-2.5">{footer}</div>
+      )}
     </div>
   );
 });
-

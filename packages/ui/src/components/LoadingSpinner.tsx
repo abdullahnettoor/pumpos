@@ -11,9 +11,9 @@ export const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
   size = 'md',
   className = '',
 }) => {
-  const sizeClass = size === 'sm' ? 'loading-spinner-sm' : 
-                    size === 'lg' ? 'loading-spinner-lg' : '';
-  
+  const sizeClass =
+    size === 'sm' ? 'loading-spinner-sm' : size === 'lg' ? 'loading-spinner-lg' : '';
+
   return (
     <div className={`loading-container ${className}`}>
       <div className={`loading-spinner ${sizeClass}`} />

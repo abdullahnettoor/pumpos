@@ -1,6 +1,17 @@
 import React, { useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
-import { Activity, ClipboardList, Receipt, Users, Warehouse, FileText, Building2, Fuel, Settings, ShieldCheck } from 'lucide-react';
+import {
+  Activity,
+  ClipboardList,
+  Receipt,
+  Users,
+  Warehouse,
+  FileText,
+  Building2,
+  Fuel,
+  Settings,
+  ShieldCheck,
+} from 'lucide-react';
 import { PageLayout } from './primitives/PageLayout.js';
 import { Tabs } from './primitives/Tabs.js';
 import { KpiStrip, KpiTile } from '../pump-ds/index.js';
@@ -8,7 +19,15 @@ import { DataTable } from './primitives/DataTable.js';
 import { SkeletonGrid } from './primitives/Skeleton.js';
 import { useToast } from './primitives/ToastProvider.js';
 import { useConfirm } from './primitives/ConfirmDialog.js';
-import { Field, TextInput, NumberInput, MoneyInput, Textarea, Select, DateField } from './primitives/Field.js';
+import {
+  Field,
+  TextInput,
+  NumberInput,
+  MoneyInput,
+  Textarea,
+  Select,
+  DateField,
+} from './primitives/Field.js';
 import { Checkbox, Switch } from './primitives/Toggle.js';
 import { Segmented } from './primitives/Segmented.js';
 import { Combobox } from './primitives/Combobox.js';
@@ -18,7 +37,11 @@ import { Banner } from './primitives/Banner.js';
 import { Drawer } from './Drawer.js';
 import { Chip } from '../pump-ds/index.js';
 import { inr, formatMoney, formatQty } from '../utils/format.js';
-import { PumpDsButtonsPanel, PumpDsComponentsPanel, PumpDsMetricsPanel } from './DesignSystemPumpDs.js';
+import {
+  PumpDsButtonsPanel,
+  PumpDsComponentsPanel,
+  PumpDsMetricsPanel,
+} from './DesignSystemPumpDs.js';
 import { DesignSystemShellProtoPanel } from './DesignSystemShellProto.js';
 
 /**
@@ -30,33 +53,95 @@ import { DesignSystemShellProtoPanel } from './DesignSystemShellProto.js';
 
 // ---- small presentational helpers (local to this reference page) ----
 
-const Section: React.FC<{ title: string; description?: string; children: React.ReactNode }> = ({ title, description, children }) => (
+const Section: React.FC<{ title: string; description?: string; children: React.ReactNode }> = ({
+  title,
+  description,
+  children,
+}) => (
   <section style={{ marginBottom: 'var(--space-8)' }}>
-    <h2 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-strong)', marginBottom: 'var(--space-1)' }}>{title}</h2>
-    {description && <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: 'var(--space-3)', maxWidth: 640 }}>{description}</p>}
+    <h2
+      style={{
+        fontSize: '15px',
+        fontWeight: 600,
+        color: 'var(--text-strong)',
+        marginBottom: 'var(--space-1)',
+      }}
+    >
+      {title}
+    </h2>
+    {description && (
+      <p
+        style={{
+          fontSize: '12px',
+          color: 'var(--text-muted)',
+          marginBottom: 'var(--space-3)',
+          maxWidth: 640,
+        }}
+      >
+        {description}
+      </p>
+    )}
     <div>{children}</div>
   </section>
 );
 
-const Card: React.FC<{ children: React.ReactNode; style?: React.CSSProperties }> = ({ children, style }) => (
-  <div style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-card)', padding: 'var(--space-4)', ...style }}>
+const Card: React.FC<{ children: React.ReactNode; style?: React.CSSProperties }> = ({
+  children,
+  style,
+}) => (
+  <div
+    style={{
+      backgroundColor: 'var(--bg-surface)',
+      border: '1px solid var(--border-soft)',
+      borderRadius: 'var(--radius-card)',
+      padding: 'var(--space-4)',
+      ...style,
+    }}
+  >
     {children}
   </div>
 );
 
 const Mono: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <code style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-muted)' }}>{children}</code>
+  <code style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-muted)' }}>
+    {children}
+  </code>
 );
 
-const ColorSwatch: React.FC<{ name: string; token: string; value: string; fg?: string }> = ({ name, token, value, fg }) => (
-  <div style={{ border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', overflow: 'hidden', backgroundColor: 'var(--bg-surface)' }}>
-    <div style={{ height: 56, backgroundColor: `var(${token})`, display: 'flex', alignItems: 'flex-end', padding: '6px 8px', color: fg ?? 'transparent', fontSize: '11px', fontWeight: 600 }}>
+const ColorSwatch: React.FC<{ name: string; token: string; value: string; fg?: string }> = ({
+  name,
+  token,
+  value,
+  fg,
+}) => (
+  <div
+    style={{
+      border: '1px solid var(--border-soft)',
+      borderRadius: 'var(--radius-input)',
+      overflow: 'hidden',
+      backgroundColor: 'var(--bg-surface)',
+    }}
+  >
+    <div
+      style={{
+        height: 56,
+        backgroundColor: `var(${token})`,
+        display: 'flex',
+        alignItems: 'flex-end',
+        padding: '6px 8px',
+        color: fg ?? 'transparent',
+        fontSize: '11px',
+        fontWeight: 600,
+      }}
+    >
       {fg ? 'Aa' : ''}
     </div>
     <div style={{ padding: '6px 8px' }}>
       <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-strong)' }}>{name}</div>
       <Mono>{token}</Mono>
-      <div style={{ fontSize: '11px', color: 'var(--text-faint)', fontFamily: 'var(--font-mono)' }}>{value}</div>
+      <div style={{ fontSize: '11px', color: 'var(--text-faint)', fontFamily: 'var(--font-mono)' }}>
+        {value}
+      </div>
     </div>
   </div>
 );
@@ -92,10 +177,34 @@ const BRAND = [
 ];
 
 const STATES: { label: string; bg: string; fg: string; bgVal: string; fgVal: string }[] = [
-  { label: 'Success', bg: '--state-success-bg', fg: '--state-success-fg', bgVal: '#E8F4EE', fgVal: '#1E6A4E' },
-  { label: 'Warning', bg: '--state-warning-bg', fg: '--state-warning-fg', bgVal: '#F9F0DA', fgVal: '#8A6116' },
-  { label: 'Danger', bg: '--state-danger-bg', fg: '--state-danger-fg', bgVal: '#F8E3E0', fgVal: '#9F3F36' },
-  { label: 'Info', bg: '--state-info-bg', fg: '--state-info-fg', bgVal: '#E8F0F7', fgVal: '#2E5E88' },
+  {
+    label: 'Success',
+    bg: '--state-success-bg',
+    fg: '--state-success-fg',
+    bgVal: '#E8F4EE',
+    fgVal: '#1E6A4E',
+  },
+  {
+    label: 'Warning',
+    bg: '--state-warning-bg',
+    fg: '--state-warning-fg',
+    bgVal: '#F9F0DA',
+    fgVal: '#8A6116',
+  },
+  {
+    label: 'Danger',
+    bg: '--state-danger-bg',
+    fg: '--state-danger-fg',
+    bgVal: '#F8E3E0',
+    fgVal: '#9F3F36',
+  },
+  {
+    label: 'Info',
+    bg: '--state-info-bg',
+    fg: '--state-info-fg',
+    bgVal: '#E8F0F7',
+    fgVal: '#2E5E88',
+  },
 ];
 
 const SPACING = [
@@ -126,7 +235,11 @@ const TYPE_SCALE = [
   { size: 11, weight: 600, use: 'Labels (uppercase)' },
 ];
 
-interface DemoRow { item: string; qty: number; amount: number; }
+interface DemoRow {
+  item: string;
+  qty: number;
+  amount: number;
+}
 
 const DEMO_ROWS: DemoRow[] = [
   { item: 'Petrol', qty: 1240.5, amount: 1240.5 * 106.34 },
@@ -135,84 +248,220 @@ const DEMO_ROWS: DemoRow[] = [
   { item: 'Coolant', qty: 8, amount: 8 * 220 },
 ];
 
-const monoRight: React.CSSProperties = { fontFamily: 'var(--font-mono)', display: 'block', textAlign: 'right' };
+const monoRight: React.CSSProperties = {
+  fontFamily: 'var(--font-mono)',
+  display: 'block',
+  textAlign: 'right',
+};
 
 const DEMO_COLUMNS: ColumnDef<DemoRow, any>[] = [
   { accessorKey: 'item', header: 'Item' },
-  { accessorKey: 'qty', header: 'Qty', cell: (c) => <span style={monoRight}>{formatQty(c.getValue() as number)}</span> },
-  { accessorKey: 'amount', header: 'Amount', cell: (c) => <span style={{ ...monoRight, fontWeight: 600 }}>{inr(c.getValue() as number)}</span> },
+  {
+    accessorKey: 'qty',
+    header: 'Qty',
+    cell: (c) => <span style={monoRight}>{formatQty(c.getValue() as number)}</span>,
+  },
+  {
+    accessorKey: 'amount',
+    header: 'Amount',
+    cell: (c) => (
+      <span style={{ ...monoRight, fontWeight: 600 }}>{inr(c.getValue() as number)}</span>
+    ),
+  },
 ];
 
 // ---- tab panels ----
 
 const TokensPanel: React.FC = () => (
   <div>
-    <Section title="Neutrals & Surfaces" description="Backgrounds and borders. The app is light-first: canvas behind, surfaces on top, soft borders for structure, strong borders for inputs.">
+    <Section
+      title="Neutrals & Surfaces"
+      description="Backgrounds and borders. The app is light-first: canvas behind, surfaces on top, soft borders for structure, strong borders for inputs."
+    >
       <div style={grid(150)}>
-        {NEUTRALS.map((c) => <ColorSwatch key={c.token} {...c} />)}
+        {NEUTRALS.map((c) => (
+          <ColorSwatch key={c.token} {...c} />
+        ))}
       </div>
     </Section>
 
-    <Section title="Text" description="Four text weights by emphasis. Prefer Strong for headings, Default for body, Muted for secondary, Faint for hints/placeholders.">
+    <Section
+      title="Text"
+      description="Four text weights by emphasis. Prefer Strong for headings, Default for body, Muted for secondary, Faint for hints/placeholders."
+    >
       <div style={grid(150)}>
-        {TEXT_COLORS.map((c) => <ColorSwatch key={c.token} {...c} />)}
+        {TEXT_COLORS.map((c) => (
+          <ColorSwatch key={c.token} {...c} />
+        ))}
       </div>
     </Section>
 
-    <Section title="Brand & Accent" description="Petrol Green is the primary action colour. Others carry meaning: Blue = diesel/info, Amber = warning/credit, Red = danger.">
+    <Section
+      title="Brand & Accent"
+      description="Petrol Green is the primary action colour. Others carry meaning: Blue = diesel/info, Amber = warning/credit, Red = danger."
+    >
       <div style={grid(150)}>
-        {BRAND.map((c) => <ColorSwatch key={c.token} {...c} />)}
+        {BRAND.map((c) => (
+          <ColorSwatch key={c.token} {...c} />
+        ))}
       </div>
     </Section>
 
-    <Section title="State Pairs" description="Background + foreground pairs used by badges, banners and inline status. Always use the pair together for adequate contrast.">
+    <Section
+      title="State Pairs"
+      description="Background + foreground pairs used by badges, banners and inline status. Always use the pair together for adequate contrast."
+    >
       <div style={grid(180)}>
         {STATES.map((s) => (
-          <div key={s.label} style={{ borderRadius: 'var(--radius-input)', overflow: 'hidden', border: '1px solid var(--border-soft)' }}>
-            <div style={{ backgroundColor: `var(${s.bg})`, color: `var(${s.fg})`, padding: '10px 12px', fontSize: '12px', fontWeight: 600 }}>
+          <div
+            key={s.label}
+            style={{
+              borderRadius: 'var(--radius-input)',
+              overflow: 'hidden',
+              border: '1px solid var(--border-soft)',
+            }}
+          >
+            <div
+              style={{
+                backgroundColor: `var(${s.bg})`,
+                color: `var(${s.fg})`,
+                padding: '10px 12px',
+                fontSize: '12px',
+                fontWeight: 600,
+              }}
+            >
               {s.label}
             </div>
             <div style={{ padding: '6px 8px', backgroundColor: 'var(--bg-surface)' }}>
-              <div><Mono>{s.bg}</Mono> <span style={{ fontSize: '11px', color: 'var(--text-faint)' }}>{s.bgVal}</span></div>
-              <div><Mono>{s.fg}</Mono> <span style={{ fontSize: '11px', color: 'var(--text-faint)' }}>{s.fgVal}</span></div>
+              <div>
+                <Mono>{s.bg}</Mono>{' '}
+                <span style={{ fontSize: '11px', color: 'var(--text-faint)' }}>{s.bgVal}</span>
+              </div>
+              <div>
+                <Mono>{s.fg}</Mono>{' '}
+                <span style={{ fontSize: '11px', color: 'var(--text-faint)' }}>{s.fgVal}</span>
+              </div>
             </div>
           </div>
         ))}
       </div>
     </Section>
 
-    <Section title="Typography" description="Plus Jakarta Sans for UI, Geist Mono for all numbers/currency/data. Mono keeps figures aligned in tables and KPIs.">
+    <Section
+      title="Typography"
+      description="Plus Jakarta Sans for UI, Geist Mono for all numbers/currency/data. Mono keeps figures aligned in tables and KPIs."
+    >
       <Card>
-        <div style={{ marginBottom: 'var(--space-4)', display: 'flex', gap: 'var(--space-6)', flexWrap: 'wrap' }}>
+        <div
+          style={{
+            marginBottom: 'var(--space-4)',
+            display: 'flex',
+            gap: 'var(--space-6)',
+            flexWrap: 'wrap',
+          }}
+        >
           <div>
-            <div style={{ fontFamily: 'var(--font-sans)', fontSize: '18px', color: 'var(--text-strong)' }}>Plus Jakarta Sans</div>
+            <div
+              style={{
+                fontFamily: 'var(--font-sans)',
+                fontSize: '18px',
+                color: 'var(--text-strong)',
+              }}
+            >
+              Plus Jakarta Sans
+            </div>
             <Mono>--font-sans</Mono>
           </div>
           <div>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '18px', color: 'var(--text-strong)' }}>Geist Mono 1234567890</div>
+            <div
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: '18px',
+                color: 'var(--text-strong)',
+              }}
+            >
+              Geist Mono 1234567890
+            </div>
             <Mono>--font-mono</Mono>
           </div>
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', borderTop: '1px solid var(--border-soft)', paddingTop: 'var(--space-3)' }}>
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 'var(--space-2)',
+            borderTop: '1px solid var(--border-soft)',
+            paddingTop: 'var(--space-3)',
+          }}
+        >
           {TYPE_SCALE.map((t) => (
-            <div key={t.size} style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--space-4)' }}>
-              <span style={{ width: 44, flexShrink: 0, fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-faint)' }}>{t.size}px</span>
-              <span style={{ fontSize: t.size, fontWeight: t.weight, color: 'var(--text-strong)', flex: 1 }}>The quick brown fox</span>
-              <span style={{ fontSize: '11px', color: 'var(--text-muted)', flexShrink: 0 }}>{t.use}</span>
+            <div
+              key={t.size}
+              style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--space-4)' }}
+            >
+              <span
+                style={{
+                  width: 44,
+                  flexShrink: 0,
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '11px',
+                  color: 'var(--text-faint)',
+                }}
+              >
+                {t.size}px
+              </span>
+              <span
+                style={{
+                  fontSize: t.size,
+                  fontWeight: t.weight,
+                  color: 'var(--text-strong)',
+                  flex: 1,
+                }}
+              >
+                The quick brown fox
+              </span>
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)', flexShrink: 0 }}>
+                {t.use}
+              </span>
             </div>
           ))}
         </div>
       </Card>
     </Section>
 
-    <Section title="Spacing (4px grid)" description="All gaps and padding derive from the 4px scale. Use the tokens rather than hard-coded pixels.">
+    <Section
+      title="Spacing (4px grid)"
+      description="All gaps and padding derive from the 4px scale. Use the tokens rather than hard-coded pixels."
+    >
       <Card>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
           {SPACING.map((s) => (
-            <div key={s.token} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-              <span style={{ width: 90, flexShrink: 0 }}><Mono>{s.token}</Mono></span>
-              <span style={{ width: 40, flexShrink: 0, fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-faint)' }}>{s.px}px</span>
-              <div style={{ height: 12, width: s.px, backgroundColor: 'var(--brand-primary)', borderRadius: 2 }} />
+            <div
+              key={s.token}
+              style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}
+            >
+              <span style={{ width: 90, flexShrink: 0 }}>
+                <Mono>{s.token}</Mono>
+              </span>
+              <span
+                style={{
+                  width: 40,
+                  flexShrink: 0,
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '11px',
+                  color: 'var(--text-faint)',
+                }}
+              >
+                {s.px}px
+              </span>
+              <div
+                style={{
+                  height: 12,
+                  width: s.px,
+                  backgroundColor: 'var(--brand-primary)',
+                  borderRadius: 2,
+                }}
+              />
             </div>
           ))}
         </div>
@@ -223,9 +472,21 @@ const TokensPanel: React.FC = () => (
       <div style={grid(140)}>
         {RADII.map((r) => (
           <Card key={r.token} style={{ textAlign: 'center' }}>
-            <div style={{ height: 48, backgroundColor: 'var(--bg-surface-alt)', border: '1px solid var(--border-strong)', borderRadius: r.px, marginBottom: 'var(--space-2)' }} />
-            <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-strong)' }}>{r.label}</div>
-            <Mono>{r.token} · {r.px === 999 ? 'full' : `${r.px}px`}</Mono>
+            <div
+              style={{
+                height: 48,
+                backgroundColor: 'var(--bg-surface-alt)',
+                border: '1px solid var(--border-strong)',
+                borderRadius: r.px,
+                marginBottom: 'var(--space-2)',
+              }}
+            />
+            <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-strong)' }}>
+              {r.label}
+            </div>
+            <Mono>
+              {r.token} · {r.px === 999 ? 'full' : `${r.px}px`}
+            </Mono>
           </Card>
         ))}
       </div>
@@ -246,108 +507,188 @@ const InputsPanel: React.FC = () => {
   const [customer, setCustomer] = useState('c1');
   const [method, setMethod] = useState('Cash');
   return (
-  <div>
-    <Section title="Form primitives (recommended)" description="The canonical building blocks: a Field wrapper (label · required marker · hint / error) plus ref-forwarding TextInput, NumberInput, MoneyInput, Select and Textarea. They drop straight into React Hook Form's register and give every form an identical look, focus ring, invalid state and disabled treatment. Prefer these over inline-styled inputs.">
-      <Card style={{ maxWidth: 460 }}>
-        <Field label="Station name" required hint="Shown on receipts and reports.">
-          <TextInput placeholder="e.g. HP Highway Fuels" defaultValue="HP Highway Fuels" />
-        </Field>
-        <Field label="Opening cash">
-          <MoneyInput defaultValue={5000} />
-        </Field>
-        <Field label="Volume dispensed">
-          <NumberInput defaultValue={1240.5} />
-        </Field>
-        <Field label="Business date">
-          <DateField defaultValue="2026-07-01" />
-        </Field>
-        <Field label="Fuel type">
-          <Select>
-            <option>Petrol</option>
-            <option>Diesel</option>
-          </Select>
-        </Field>
-        <Field label="Amount" required error="Amount is required">
-          <MoneyInput invalid placeholder="0.00" />
-        </Field>
-        <Field label="Notes">
-          <Textarea placeholder="Optional remarks…" />
-        </Field>
-        <Field label="Locked field" hint="Disabled state">
-          <TextInput value="Read-only value" disabled readOnly />
-        </Field>
-      </Card>
-    </Section>
+    <div>
+      <Section
+        title="Form primitives (recommended)"
+        description="The canonical building blocks: a Field wrapper (label · required marker · hint / error) plus ref-forwarding TextInput, NumberInput, MoneyInput, Select and Textarea. They drop straight into React Hook Form's register and give every form an identical look, focus ring, invalid state and disabled treatment. Prefer these over inline-styled inputs."
+      >
+        <Card style={{ maxWidth: 460 }}>
+          <Field label="Station name" required hint="Shown on receipts and reports.">
+            <TextInput placeholder="e.g. HP Highway Fuels" defaultValue="HP Highway Fuels" />
+          </Field>
+          <Field label="Opening cash">
+            <MoneyInput defaultValue={5000} />
+          </Field>
+          <Field label="Volume dispensed">
+            <NumberInput defaultValue={1240.5} />
+          </Field>
+          <Field label="Business date">
+            <DateField defaultValue="2026-07-01" />
+          </Field>
+          <Field label="Fuel type">
+            <Select>
+              <option>Petrol</option>
+              <option>Diesel</option>
+            </Select>
+          </Field>
+          <Field label="Amount" required error="Amount is required">
+            <MoneyInput invalid placeholder="0.00" />
+          </Field>
+          <Field label="Notes">
+            <Textarea placeholder="Optional remarks…" />
+          </Field>
+          <Field label="Locked field" hint="Disabled state">
+            <TextInput value="Read-only value" disabled readOnly />
+          </Field>
+        </Card>
+      </Section>
 
-    <Section title="Usage" description="Field owns the label + error/hint; the input owns the control + invalid flag.">
-      <Card>
-        <pre style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--text-default)', whiteSpace: 'pre-wrap', margin: 0 }}>
-{`<Field label="Opening cash" required error={errors.openingCash?.message}>
+      <Section
+        title="Usage"
+        description="Field owns the label + error/hint; the input owns the control + invalid flag."
+      >
+        <Card>
+          <pre
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: '12px',
+              color: 'var(--text-default)',
+              whiteSpace: 'pre-wrap',
+              margin: 0,
+            }}
+          >
+            {`<Field label="Opening cash" required error={errors.openingCash?.message}>
   <MoneyInput {...register('openingCash')} invalid={!!errors.openingCash} />
 </Field>`}
-        </pre>
-      </Card>
-    </Section>
+          </pre>
+        </Card>
+      </Section>
 
-    <Section title="Searchable select (Combobox)" description="For long dynamic lists — customers, products, suppliers — where a native select has no type-ahead. Keyboard: ↑/↓ move, Enter picks, Esc closes. Use a native Select for short fixed lists (payment method, status).">
-      <Card style={{ maxWidth: 460 }}>
-        <Field label="Customer account" hint={`Selected: ${COMBO_OPTIONS.find((o) => o.value === customer)?.label ?? '—'}`}>
-          <Combobox options={COMBO_OPTIONS} value={customer} onChange={setCustomer} placeholder="Select customer…" searchPlaceholder="Search customers…" />
-        </Field>
-      </Card>
-    </Section>
+      <Section
+        title="Searchable select (Combobox)"
+        description="For long dynamic lists — customers, products, suppliers — where a native select has no type-ahead. Keyboard: ↑/↓ move, Enter picks, Esc closes. Use a native Select for short fixed lists (payment method, status)."
+      >
+        <Card style={{ maxWidth: 460 }}>
+          <Field
+            label="Customer account"
+            hint={`Selected: ${COMBO_OPTIONS.find((o) => o.value === customer)?.label ?? '—'}`}
+          >
+            <Combobox
+              options={COMBO_OPTIONS}
+              value={customer}
+              onChange={setCustomer}
+              placeholder="Select customer…"
+              searchPlaceholder="Search customers…"
+            />
+          </Field>
+        </Card>
+      </Section>
 
-    <Section title="Segmented control" description="A compact button group for a small fixed set of options (payment method, filters, view toggles). Replaces the hand-rolled inline button grids. Controlled; wire into RHF with a Controller.">
-      <Card style={{ maxWidth: 460 }}>
-        <Field label={`Payment method — ${method}`}>
-          <Segmented
-            options={[
-              { value: 'Cash', label: 'Cash' },
-              { value: 'Card', label: 'Card' },
-              { value: 'UPI', label: 'UPI' },
-              { value: 'Credit', label: 'Credit' },
-            ]}
-            value={method}
-            onChange={setMethod}
-            aria-label="Payment method"
-          />
-        </Field>
-      </Card>
-    </Section>
+      <Section
+        title="Segmented control"
+        description="A compact button group for a small fixed set of options (payment method, filters, view toggles). Replaces the hand-rolled inline button grids. Controlled; wire into RHF with a Controller."
+      >
+        <Card style={{ maxWidth: 460 }}>
+          <Field label={`Payment method — ${method}`}>
+            <Segmented
+              options={[
+                { value: 'Cash', label: 'Cash' },
+                { value: 'Card', label: 'Card' },
+                { value: 'UPI', label: 'UPI' },
+                { value: 'Credit', label: 'Credit' },
+              ]}
+              value={method}
+              onChange={setMethod}
+              aria-label="Payment method"
+            />
+          </Field>
+        </Card>
+      </Section>
 
-    <Section title="Selection controls" description="Checkbox for multi-select / form booleans that submit; Switch for instant on/off settings. Both wrap a native input (brand-tinted / visually-hidden) so they stay keyboard-accessible and RHF-compatible.">
-      <Card>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', maxWidth: 360 }}>
-          <Checkbox defaultChecked label="Tax-inclusive pricing" description="Fuel is recorded inclusive of GST." />
-          <Checkbox label="Send daily DSSR email" />
-          <Checkbox disabled label="Locked option (disabled)" />
-          <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: 'var(--space-3)', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-            <Switch defaultChecked label="Station open" description="Toggle accepts shifts today." />
-            <Switch label="Maintenance mode" />
-            <Switch disabled label="Disabled switch" />
+      <Section
+        title="Selection controls"
+        description="Checkbox for multi-select / form booleans that submit; Switch for instant on/off settings. Both wrap a native input (brand-tinted / visually-hidden) so they stay keyboard-accessible and RHF-compatible."
+      >
+        <Card>
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 'var(--space-4)',
+              maxWidth: 360,
+            }}
+          >
+            <Checkbox
+              defaultChecked
+              label="Tax-inclusive pricing"
+              description="Fuel is recorded inclusive of GST."
+            />
+            <Checkbox label="Send daily DSSR email" />
+            <Checkbox disabled label="Locked option (disabled)" />
+            <div
+              style={{
+                borderTop: '1px solid var(--border-soft)',
+                paddingTop: 'var(--space-3)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 'var(--space-3)',
+              }}
+            >
+              <Switch
+                defaultChecked
+                label="Station open"
+                description="Toggle accepts shifts today."
+              />
+              <Switch label="Maintenance mode" />
+              <Switch disabled label="Disabled switch" />
+            </div>
           </div>
-        </div>
-      </Card>
-    </Section>
+        </Card>
+      </Section>
 
-    <Section title="Sizes" description="Two input heights. .input (36px) for forms/drawers, .input-compact (28px) for filter bars and toolbars.">
-      <Card>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', maxWidth: 320 }}>
-          <div><Mono>.input</Mono><input className="input" defaultValue="36px · forms" /></div>
-          <div><Mono>.input .input-compact</Mono><input className="input input-compact" defaultValue="28px · toolbars" /></div>
-        </div>
-      </Card>
-    </Section>
+      <Section
+        title="Sizes"
+        description="Two input heights. .input (36px) for forms/drawers, .input-compact (28px) for filter bars and toolbars."
+      >
+        <Card>
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 'var(--space-3)',
+              maxWidth: 320,
+            }}
+          >
+            <div>
+              <Mono>.input</Mono>
+              <input className="input" defaultValue="36px · forms" />
+            </div>
+            <div>
+              <Mono>.input .input-compact</Mono>
+              <input className="input input-compact" defaultValue="28px · toolbars" />
+            </div>
+          </div>
+        </Card>
+      </Section>
 
-    <Section title="Legacy .form-input — now unified" description="The old .form-input class and bare <select> elements are now aliased to the canonical .input look (36px · 13px · strong border), so existing setup screens match the primitives without a per-input rewrite. New forms should still use the Field + primitives above; .input-compact (28px) remains for filter bars.">
-      <Card>
-        <div style={{ display: 'flex', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
-          <div><Mono>.form-input (aliased)</Mono><input className="form-input" defaultValue="matches" style={{ maxWidth: 160 }} /></div>
-          <div><Mono>&lt;TextInput /&gt;</Mono><TextInput defaultValue="matches" style={{ maxWidth: 160 }} /></div>
-        </div>
-      </Card>
-    </Section>
-  </div>
+      <Section
+        title="Legacy .form-input — now unified"
+        description="The old .form-input class and bare <select> elements are now aliased to the canonical .input look (36px · 13px · strong border), so existing setup screens match the primitives without a per-input rewrite. New forms should still use the Field + primitives above; .input-compact (28px) remains for filter bars."
+      >
+        <Card>
+          <div style={{ display: 'flex', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
+            <div>
+              <Mono>.form-input (aliased)</Mono>
+              <input className="form-input" defaultValue="matches" style={{ maxWidth: 160 }} />
+            </div>
+            <div>
+              <Mono>&lt;TextInput /&gt;</Mono>
+              <TextInput defaultValue="matches" style={{ maxWidth: 160 }} />
+            </div>
+          </div>
+        </Card>
+      </Section>
+    </div>
   );
 };
 
@@ -357,31 +698,70 @@ const ComponentsPanel: React.FC = () => {
   const [cardTab, setCardTab] = useState('general');
   return (
     <div>
-      <Section title="Status badges" description="Compact status pills (pump-ds Chip). Pick the tone that matches meaning.">
+      <Section
+        title="Status badges"
+        description="Compact status pills (pump-ds Chip). Pick the tone that matches meaning."
+      >
         <Card>
           <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
-            <Chip tone="success" size="sm">Open</Chip>
-            <Chip tone="warning" size="sm">Pending</Chip>
-            <Chip tone="danger" size="sm">Variance</Chip>
-            <Chip tone="info" size="sm">Credit</Chip>
-            <Chip tone="neutral" size="sm">Closed</Chip>
+            <Chip tone="success" size="sm">
+              Open
+            </Chip>
+            <Chip tone="warning" size="sm">
+              Pending
+            </Chip>
+            <Chip tone="danger" size="sm">
+              Variance
+            </Chip>
+            <Chip tone="info" size="sm">
+              Credit
+            </Chip>
+            <Chip tone="neutral" size="sm">
+              Closed
+            </Chip>
           </div>
         </Card>
       </Section>
 
-      <Section title="KPI strip" description="Metric tiles in a gap-as-divider strip. Values use the mono font; the status dot and valueTone carry meaning.">
+      <Section
+        title="KPI strip"
+        description="Metric tiles in a gap-as-divider strip. Values use the mono font; the status dot and valueTone carry meaning."
+      >
         <KpiStrip columns="auto">
           <KpiTile dot="success" valueTone="success" label="Total Sales" value={inr(482350.5)} />
-          <KpiTile dot="danger" valueTone="danger" label="Cash Variance" value={inr(-320)} hint="Short by ₹320" />
+          <KpiTile
+            dot="danger"
+            valueTone="danger"
+            label="Cash Variance"
+            value={inr(-320)}
+            hint="Short by ₹320"
+          />
           <KpiTile dot="warning" valueTone="warning" label="Credit Given" value={inr(15400)} />
-          <KpiTile dot="info" label="Volume Sold" value={formatQty(3210.75)} hint="Petrol + Diesel" />
+          <KpiTile
+            dot="info"
+            label="Volume Sold"
+            value={formatQty(3210.75)}
+            hint="Petrol + Diesel"
+          />
         </KpiStrip>
       </Section>
 
-      <Section title="Tabs" description="The shared Tabs primitive — keyboard accessible, roving focus. Three visual variants share the same a11y contract, plus icon / tag / count support on every tab.">
+      <Section
+        title="Tabs"
+        description="The shared Tabs primitive — keyboard accessible, roving focus. Three visual variants share the same a11y contract, plus icon / tag / count support on every tab."
+      >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
           <div>
-            <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+            <div
+              style={{
+                fontSize: '11px',
+                fontWeight: 600,
+                color: 'var(--text-faint)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.06em',
+                marginBottom: 6,
+              }}
+            >
               variant: pill · default (historical PumpOS look, brand-tinted active label)
             </div>
             <Card>
@@ -389,31 +769,61 @@ const ComponentsPanel: React.FC = () => {
                 tabs={[
                   { id: 'overview', label: 'Overview', icon: <Activity /> },
                   { id: 'details', label: 'Details', icon: <ClipboardList />, badge: 3 },
-                  { id: 'history', label: 'History', icon: <FileText />, tag: { label: 'NEW', tone: 'success' } },
+                  {
+                    id: 'history',
+                    label: 'History',
+                    icon: <FileText />,
+                    tag: { label: 'NEW', tone: 'success' },
+                  },
                   { id: 'locked', label: 'Locked', icon: <ShieldCheck />, disabled: true },
                 ]}
                 activeId={tab}
                 onChange={setTab}
                 aria-label="Design system demo tabs (pill)"
               />
-              <div style={{ padding: 'var(--space-3)', fontSize: '13px', color: 'var(--text-muted)' }}>Active panel: <strong>{tab}</strong></div>
+              <div
+                style={{ padding: 'var(--space-3)', fontSize: '13px', color: 'var(--text-muted)' }}
+              >
+                Active panel: <strong>{tab}</strong>
+              </div>
             </Card>
           </div>
 
           <div>
-            <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
-              variant: underline · operator-panel look (Cloudflare / HPE dashboards, ink label, 3px accent)
+            <div
+              style={{
+                fontSize: '11px',
+                fontWeight: 600,
+                color: 'var(--text-faint)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.06em',
+                marginBottom: 6,
+              }}
+            >
+              variant: underline · operator-panel look (Cloudflare / HPE dashboards, ink label, 3px
+              accent)
             </div>
             <Card>
               <Tabs
                 variant="underline"
                 tabs={[
                   { id: 'summary', label: 'Summary', icon: <Activity /> },
-                  { id: 'shifts', label: 'Shifts', icon: <ClipboardList />, badge: 4, tone: 'success' },
+                  {
+                    id: 'shifts',
+                    label: 'Shifts',
+                    icon: <ClipboardList />,
+                    badge: 4,
+                    tone: 'success',
+                  },
                   { id: 'transactions', label: 'Transactions', icon: <Receipt />, badge: 128 },
                   { id: 'credit', label: 'Credit', icon: <Users />, badge: 2, tone: 'warning' },
                   { id: 'expenses', label: 'Expenses', badge: 12 },
-                  { id: 'inventory', label: 'Inventory', icon: <Warehouse />, tag: { label: 'BETA', tone: 'warning' } },
+                  {
+                    id: 'inventory',
+                    label: 'Inventory',
+                    icon: <Warehouse />,
+                    tag: { label: 'BETA', tone: 'warning' },
+                  },
                   { id: 'dssr', label: 'DSSR', icon: <FileText /> },
                   { id: 'audit', label: 'Audit log' },
                   { id: 'archived', label: 'Archived', disabled: true },
@@ -422,21 +832,47 @@ const ComponentsPanel: React.FC = () => {
                 onChange={setUnderlineTab}
                 aria-label="Design system demo tabs (underline)"
               />
-              <div style={{ padding: 'var(--space-3)', fontSize: '13px', color: 'var(--text-muted)' }}>Active panel: <strong>{underlineTab}</strong></div>
+              <div
+                style={{ padding: 'var(--space-3)', fontSize: '13px', color: 'var(--text-muted)' }}
+              >
+                Active panel: <strong>{underlineTab}</strong>
+              </div>
             </Card>
           </div>
 
           <div>
-            <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
-              variant: card · folder-tab look (settings / setup / wizards — the active tab is a raised section)
+            <div
+              style={{
+                fontSize: '11px',
+                fontWeight: 600,
+                color: 'var(--text-faint)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.06em',
+                marginBottom: 6,
+              }}
+            >
+              variant: card · folder-tab look (settings / setup / wizards — the active tab is a
+              raised section)
             </div>
-            <div style={{ background: 'var(--bg-canvas)', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-card)', padding: 'var(--space-4)' }}>
+            <div
+              style={{
+                background: 'var(--bg-canvas)',
+                border: '1px solid var(--border-soft)',
+                borderRadius: 'var(--radius-card)',
+                padding: 'var(--space-4)',
+              }}
+            >
               <Tabs
                 variant="card"
                 tabs={[
                   { id: 'general', label: 'General', icon: <Settings /> },
                   { id: 'org', label: 'Organization', icon: <Building2 /> },
-                  { id: 'fuel', label: 'Fuel & Pricing', icon: <Fuel />, tag: { label: 'PRO', tone: 'brand' } },
+                  {
+                    id: 'fuel',
+                    label: 'Fuel & Pricing',
+                    icon: <Fuel />,
+                    tag: { label: 'PRO', tone: 'brand' },
+                  },
                   { id: 'users', label: 'Users', icon: <Users />, badge: 6 },
                   { id: 'billing', label: 'Billing', icon: <Receipt />, badge: 2, tone: 'danger' },
                   { id: 'audit', label: 'Audit', icon: <ShieldCheck />, disabled: true },
@@ -445,27 +881,41 @@ const ComponentsPanel: React.FC = () => {
                 onChange={setCardTab}
                 aria-label="Design system demo tabs (card)"
               />
-              <div style={{
-                background: 'var(--bg-surface)',
-                border: '1px solid var(--border-soft)',
-                borderTop: 'none',
-                borderRadius: '0 0 var(--radius-card) var(--radius-card)',
-                padding: 'var(--space-5)',
-                fontSize: 13,
-                color: 'var(--text-muted)',
-              }}>
-                Active section: <strong style={{ color: 'var(--text-strong)' }}>{cardTab}</strong>. Card variant is for settings / setup wizards where each tab is a self-contained section. The active tab visually merges with this panel.
+              <div
+                style={{
+                  background: 'var(--bg-surface)',
+                  border: '1px solid var(--border-soft)',
+                  borderTop: 'none',
+                  borderRadius: '0 0 var(--radius-card) var(--radius-card)',
+                  padding: 'var(--space-5)',
+                  fontSize: 13,
+                  color: 'var(--text-muted)',
+                }}
+              >
+                Active section: <strong style={{ color: 'var(--text-strong)' }}>{cardTab}</strong>.
+                Card variant is for settings / setup wizards where each tab is a self-contained
+                section. The active tab visually merges with this panel.
               </div>
             </div>
           </div>
         </div>
       </Section>
 
-      <Section title="Data table" description="Dense sortable table (TanStack Table) with built-in loading / empty / error states. Click a header to sort. Use for all operational lists instead of hand-rolled tables.">
-        <DataTable columns={DEMO_COLUMNS} data={DEMO_ROWS} initialSorting={[{ id: 'amount', desc: true }]} />
+      <Section
+        title="Data table"
+        description="Dense sortable table (TanStack Table) with built-in loading / empty / error states. Click a header to sort. Use for all operational lists instead of hand-rolled tables."
+      >
+        <DataTable
+          columns={DEMO_COLUMNS}
+          data={DEMO_ROWS}
+          initialSorting={[{ id: 'amount', desc: true }]}
+        />
       </Section>
 
-      <Section title="Skeletons" description="Shimmer placeholders for lazy / partial loading — render the page shell immediately and swap these in for cards or rows while their data loads, instead of blocking the whole screen.">
+      <Section
+        title="Skeletons"
+        description="Shimmer placeholders for lazy / partial loading — render the page shell immediately and swap these in for cards or rows while their data loads, instead of blocking the whole screen."
+      >
         <SkeletonGrid count={3} />
       </Section>
     </div>
@@ -476,11 +926,18 @@ const OverlaysPanel: React.FC = () => {
   const [open, setOpen] = useState<false | 'default' | 'wide'>(false);
   return (
     <div>
-      <Section title="Drawer" description="Right-side panel for create / edit flows — the preferred alternative to modals (List → Drawer → Edit). Default and wide widths, an optional pinned footer, closes on Esc or backdrop click.">
+      <Section
+        title="Drawer"
+        description="Right-side panel for create / edit flows — the preferred alternative to modals (List → Drawer → Edit). Default and wide widths, an optional pinned footer, closes on Esc or backdrop click."
+      >
         <Card>
           <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
-            <button className="btn btn-primary btn-sm" onClick={() => setOpen('default')}>Open drawer</button>
-            <button className="btn btn-secondary btn-sm" onClick={() => setOpen('wide')}>Open wide drawer</button>
+            <button className="btn btn-primary btn-sm" onClick={() => setOpen('default')}>
+              Open drawer
+            </button>
+            <button className="btn btn-secondary btn-sm" onClick={() => setOpen('wide')}>
+              Open wide drawer
+            </button>
           </div>
         </Card>
       </Section>
@@ -491,8 +948,12 @@ const OverlaysPanel: React.FC = () => {
         widthVariant={open === 'wide' ? 'wide' : 'default'}
         footer={
           <>
-            <button className="btn btn-secondary btn-md" onClick={() => setOpen(false)}>Cancel</button>
-            <button className="btn btn-primary btn-md" onClick={() => setOpen(false)}>Save</button>
+            <button className="btn btn-secondary btn-md" onClick={() => setOpen(false)}>
+              Cancel
+            </button>
+            <button className="btn btn-primary btn-md" onClick={() => setOpen(false)}>
+              Save
+            </button>
           </>
         }
       >
@@ -503,15 +964,25 @@ const OverlaysPanel: React.FC = () => {
           </div>
           <div>
             <label className="field-label">Amount</label>
-            <input className="input" type="number" min="0" defaultValue={1200} style={{ fontFamily: 'var(--font-mono)', textAlign: 'right' }} />
+            <input
+              className="input"
+              type="number"
+              min="0"
+              defaultValue={1200}
+              style={{ fontFamily: 'var(--font-mono)', textAlign: 'right' }}
+            />
           </div>
           <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-            The body scrolls, the header carries a close button, and the footer stays pinned. Press Esc or click the backdrop to dismiss.
+            The body scrolls, the header carries a close button, and the footer stays pinned. Press
+            Esc or click the backdrop to dismiss.
           </p>
         </div>
       </Drawer>
 
-      <Section title="Dropdown menu" description="A trigger button plus a list of actions. Closes on select, outside click or Esc. Use for row / entity actions instead of crowding a row with buttons.">
+      <Section
+        title="Dropdown menu"
+        description="A trigger button plus a list of actions. Closes on select, outside click or Esc. Use for row / entity actions instead of crowding a row with buttons."
+      >
         <Card>
           <Menu
             trigger={<>Actions ▾</>}
@@ -525,26 +996,60 @@ const OverlaysPanel: React.FC = () => {
         </Card>
       </Section>
 
-      <Section title="Popover" description="A floating panel anchored to a trigger for richer content — filter forms, column pickers, quick summaries. Closes on outside click or Esc.">
+      <Section
+        title="Popover"
+        description="A floating panel anchored to a trigger for richer content — filter forms, column pickers, quick summaries. Closes on outside click or Esc."
+      >
         <Card>
           <Popover trigger={<>Filters</>}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', minWidth: 200, padding: 'var(--space-2)' }}>
-              <Field label="From" style={{ marginBottom: 0 }}><DateField defaultValue="2026-06-01" /></Field>
-              <Field label="To" style={{ marginBottom: 0 }}><DateField defaultValue="2026-06-30" /></Field>
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 'var(--space-3)',
+                minWidth: 200,
+                padding: 'var(--space-2)',
+              }}
+            >
+              <Field label="From" style={{ marginBottom: 0 }}>
+                <DateField defaultValue="2026-06-01" />
+              </Field>
+              <Field label="To" style={{ marginBottom: 0 }}>
+                <DateField defaultValue="2026-06-30" />
+              </Field>
               <Checkbox label="Only with variance" />
             </div>
           </Popover>
         </Card>
       </Section>
 
-      <Section title="Tooltip" description="Hover / focus bubble for hints and truncated values. Wire meaningful hints through this instead of bare title attributes.">
+      <Section
+        title="Tooltip"
+        description="Hover / focus bubble for hints and truncated values. Wire meaningful hints through this instead of bare title attributes."
+      >
         <Card>
-          <div style={{ display: 'flex', gap: 'var(--space-4)', alignItems: 'center', flexWrap: 'wrap' }}>
+          <div
+            style={{
+              display: 'flex',
+              gap: 'var(--space-4)',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+            }}
+          >
             <Tooltip content="Reconciles at shift close">
               <button className="btn btn-secondary btn-sm">Hover me</button>
             </Tooltip>
             <Tooltip content="Expected − Actual drawer cash" placement="bottom">
-              <span style={{ fontSize: '13px', color: 'var(--brand-secondary)', textDecoration: 'underline dotted', cursor: 'help' }}>What is variance?</span>
+              <span
+                style={{
+                  fontSize: '13px',
+                  color: 'var(--brand-secondary)',
+                  textDecoration: 'underline dotted',
+                  cursor: 'help',
+                }}
+              >
+                What is variance?
+              </span>
             </Tooltip>
           </div>
         </Card>
@@ -559,24 +1064,60 @@ const FeedbackPanel: React.FC = () => {
   const [lastResult, setLastResult] = useState('\u2014');
   return (
     <div>
-      <Section title="Toasts" description="Non-blocking notifications (replaces alert). Auto-dismiss after a few seconds; errors linger longer. Success after a save, error on failure, info for neutral notices.">
+      <Section
+        title="Toasts"
+        description="Non-blocking notifications (replaces alert). Auto-dismiss after a few seconds; errors linger longer. Success after a save, error on failure, info for neutral notices."
+      >
         <Card>
           <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
-            <button className="btn btn-primary btn-sm" onClick={() => toast.success('Shift closed successfully')}>Success</button>
-            <button className="btn btn-danger btn-sm" onClick={() => toast.error('Failed to save expense')}>Error</button>
-            <button className="btn btn-secondary btn-sm" onClick={() => toast.info('Sync in progress\u2026')}>Info</button>
-            <button className="btn btn-ghost btn-sm" onClick={() => toast.success('DSSR compiled for 01 Jul', { title: 'Report ready' })}>With title</button>
+            <button
+              className="btn btn-primary btn-sm"
+              onClick={() => toast.success('Shift closed successfully')}
+            >
+              Success
+            </button>
+            <button
+              className="btn btn-danger btn-sm"
+              onClick={() => toast.error('Failed to save expense')}
+            >
+              Error
+            </button>
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={() => toast.info('Sync in progress\u2026')}
+            >
+              Info
+            </button>
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={() => toast.success('DSSR compiled for 01 Jul', { title: 'Report ready' })}
+            >
+              With title
+            </button>
           </div>
         </Card>
       </Section>
 
-      <Section title="Confirm dialog" description="Promise-based confirmation (replaces window.confirm). Esc cancels, Enter confirms. Use the danger variant for destructive actions.">
+      <Section
+        title="Confirm dialog"
+        description="Promise-based confirmation (replaces window.confirm). Esc cancels, Enter confirms. Use the danger variant for destructive actions."
+      >
         <Card>
-          <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap', alignItems: 'center' }}>
+          <div
+            style={{
+              display: 'flex',
+              gap: 'var(--space-2)',
+              flexWrap: 'wrap',
+              alignItems: 'center',
+            }}
+          >
             <button
               className="btn btn-secondary btn-sm"
               onClick={async () => {
-                const ok = await confirm({ title: 'Discard changes?', message: 'Your unsaved edits will be lost.' });
+                const ok = await confirm({
+                  title: 'Discard changes?',
+                  message: 'Your unsaved edits will be lost.',
+                });
                 setLastResult(ok ? 'confirmed' : 'cancelled');
               }}
             >
@@ -585,28 +1126,37 @@ const FeedbackPanel: React.FC = () => {
             <button
               className="btn btn-danger btn-sm"
               onClick={async () => {
-                const ok = await confirm({ title: 'Delete vehicle?', message: 'This cannot be undone.', confirmLabel: 'Delete', danger: true });
+                const ok = await confirm({
+                  title: 'Delete vehicle?',
+                  message: 'This cannot be undone.',
+                  confirmLabel: 'Delete',
+                  danger: true,
+                });
                 setLastResult(ok ? 'confirmed (danger)' : 'cancelled');
               }}
             >
               Danger confirm
             </button>
             <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-              Last result: <strong style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-strong)' }}>{lastResult}</strong>
+              Last result:{' '}
+              <strong style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-strong)' }}>
+                {lastResult}
+              </strong>
             </span>
           </div>
         </Card>
       </Section>
 
-      <Section title="Banners" description="Inline, section-level status messages — the persistent counterpart to a toast. Persistent banners stay until their condition clears (low stock, offline); dismissible banners show a × and hide on click. Severity maps to state colours; supports an optional inline action.">
+      <Section
+        title="Banners"
+        description="Inline, section-level status messages — the persistent counterpart to a toast. Persistent banners stay until their condition clears (low stock, offline); dismissible banners show a × and hide on click. Severity maps to state colours; supports an optional inline action."
+      >
         <Card>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
             <Banner severity="danger" actionLabel="View Stock" onAction={() => {}}>
               Tank 1 (Petrol) critically low — 4% · 480 L
             </Banner>
-            <Banner severity="warning">
-              Tank 2 (Diesel) running low — 12% · 1,440 L
-            </Banner>
+            <Banner severity="warning">Tank 2 (Diesel) running low — 12% · 1,440 L</Banner>
             <Banner severity="info" title="Offline">
               Working from local cache — changes will sync when you reconnect.
             </Banner>
@@ -628,20 +1178,40 @@ const DataMoneyPanel: React.FC = () => {
   ];
   return (
     <div>
-      <Section title="Money formatter" description="Always render currency via inr() — 2-decimal, grouped, ₹ prefix. Never hand-roll toLocaleString for money.">
+      <Section
+        title="Money formatter"
+        description="Always render currency via inr() — 2-decimal, grouped, ₹ prefix. Never hand-roll toLocaleString for money."
+      >
         <Card>
-          <table style={{ width: '100%', maxWidth: 520, borderCollapse: 'collapse', fontSize: '13px' }}>
+          <table
+            style={{ width: '100%', maxWidth: 520, borderCollapse: 'collapse', fontSize: '13px' }}
+          >
             <tbody>
               {[
                 { call: 'inr(5000)', out: inr(5000) },
                 { call: 'inr(5000.5)', out: inr(5000.5) },
                 { call: 'inr(-320.4)', out: inr(-320.4) },
-                { call: "formatMoney(1234.5, { symbol: false })", out: formatMoney(1234.5, { symbol: false }) },
+                {
+                  call: 'formatMoney(1234.5, { symbol: false })',
+                  out: formatMoney(1234.5, { symbol: false }),
+                },
                 { call: 'formatQty(3210.75)', out: formatQty(3210.75) },
               ].map((r) => (
                 <tr key={r.call} style={{ borderBottom: '1px solid var(--border-soft)' }}>
-                  <td style={{ padding: '6px 8px' }}><Mono>{r.call}</Mono></td>
-                  <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--text-strong)' }}>{r.out}</td>
+                  <td style={{ padding: '6px 8px' }}>
+                    <Mono>{r.call}</Mono>
+                  </td>
+                  <td
+                    style={{
+                      padding: '6px 8px',
+                      textAlign: 'right',
+                      fontFamily: 'var(--font-mono)',
+                      fontWeight: 600,
+                      color: 'var(--text-strong)',
+                    }}
+                  >
+                    {r.out}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -649,24 +1219,100 @@ const DataMoneyPanel: React.FC = () => {
         </Card>
       </Section>
 
-      <Section title="Table pattern" description="Amounts/quantities right-align with the mono font; labels left-align with the sans font. This keeps figures scannable.">
+      <Section
+        title="Table pattern"
+        description="Amounts/quantities right-align with the mono font; labels left-align with the sans font. This keeps figures scannable."
+      >
         <Card style={{ padding: 0, overflow: 'hidden' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
             <thead>
               <tr style={{ backgroundColor: 'var(--bg-surface-alt)', textAlign: 'left' }}>
-                <th style={{ padding: '8px 12px', fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Item</th>
-                <th style={{ padding: '8px 12px', textAlign: 'right', fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Qty</th>
-                <th style={{ padding: '8px 12px', textAlign: 'right', fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Rate</th>
-                <th style={{ padding: '8px 12px', textAlign: 'right', fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Amount</th>
+                <th
+                  style={{
+                    padding: '8px 12px',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    color: 'var(--text-muted)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                  }}
+                >
+                  Item
+                </th>
+                <th
+                  style={{
+                    padding: '8px 12px',
+                    textAlign: 'right',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    color: 'var(--text-muted)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                  }}
+                >
+                  Qty
+                </th>
+                <th
+                  style={{
+                    padding: '8px 12px',
+                    textAlign: 'right',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    color: 'var(--text-muted)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                  }}
+                >
+                  Rate
+                </th>
+                <th
+                  style={{
+                    padding: '8px 12px',
+                    textAlign: 'right',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    color: 'var(--text-muted)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                  }}
+                >
+                  Amount
+                </th>
               </tr>
             </thead>
             <tbody>
               {rows.map((r) => (
                 <tr key={r.item} style={{ borderTop: '1px solid var(--border-soft)' }}>
                   <td style={{ padding: '8px 12px', color: 'var(--text-strong)' }}>{r.item}</td>
-                  <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{formatQty(r.qty)}</td>
-                  <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{inr(r.rate)}</td>
-                  <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--text-strong)' }}>{inr(r.amount)}</td>
+                  <td
+                    style={{
+                      padding: '8px 12px',
+                      textAlign: 'right',
+                      fontFamily: 'var(--font-mono)',
+                    }}
+                  >
+                    {formatQty(r.qty)}
+                  </td>
+                  <td
+                    style={{
+                      padding: '8px 12px',
+                      textAlign: 'right',
+                      fontFamily: 'var(--font-mono)',
+                    }}
+                  >
+                    {inr(r.rate)}
+                  </td>
+                  <td
+                    style={{
+                      padding: '8px 12px',
+                      textAlign: 'right',
+                      fontFamily: 'var(--font-mono)',
+                      fontWeight: 600,
+                      color: 'var(--text-strong)',
+                    }}
+                  >
+                    {inr(r.amount)}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -696,15 +1342,32 @@ export const DesignSystem: React.FC = () => {
     <PageLayout
       title="Design System"
       subtitle="Local-only reference for tokens, primitives and patterns. Verify design choices here before applying them to product screens."
-      toolbar={<Tabs tabs={TABS} activeId={active} onChange={setActive} aria-label="Design system sections" />}
+      toolbar={
+        <Tabs
+          tabs={TABS}
+          activeId={active}
+          onChange={setActive}
+          aria-label="Design system sections"
+        />
+      }
     >
       {active === 'tokens' && <TokensPanel />}
       {active === 'buttons' && <PumpDsButtonsPanel />}
       {active === 'inputs' && <InputsPanel />}
-      {active === 'components' && <><ComponentsPanel /><PumpDsComponentsPanel /></>}
+      {active === 'components' && (
+        <>
+          <ComponentsPanel />
+          <PumpDsComponentsPanel />
+        </>
+      )}
       {active === 'overlays' && <OverlaysPanel />}
       {active === 'feedback' && <FeedbackPanel />}
-      {active === 'data' && <><DataMoneyPanel /><PumpDsMetricsPanel /></>}
+      {active === 'data' && (
+        <>
+          <DataMoneyPanel />
+          <PumpDsMetricsPanel />
+        </>
+      )}
       {active === 'shell-proto' && <DesignSystemShellProtoPanel />}
     </PageLayout>
   );

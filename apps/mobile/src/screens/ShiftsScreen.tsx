@@ -18,11 +18,22 @@ function elapsed(from?: string): string {
 }
 
 const timeFmt = (iso?: string) =>
-  iso ? new Date(iso).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
+  iso
+    ? new Date(iso).toLocaleString('en-IN', {
+        day: '2-digit',
+        month: 'short',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    : '—';
 
 /** Variance chip color: faint (small), amber (moderate), red (large). */
 const varColor = (v: number) =>
-  Math.abs(v) < 50 ? 'var(--text-faint)' : Math.abs(v) < 200 ? 'var(--state-warning-fg)' : 'var(--state-danger-fg)';
+  Math.abs(v) < 50
+    ? 'var(--text-faint)'
+    : Math.abs(v) < 200
+      ? 'var(--state-warning-fg)'
+      : 'var(--state-danger-fg)';
 
 export const ShiftsScreen: React.FC<Props> = ({ station }) => {
   const settings: any = (station as any).settings || {};
@@ -41,7 +52,8 @@ export const ShiftsScreen: React.FC<Props> = ({ station }) => {
   const handoverByKey = new Map<string, any>(handovers.map((h) => [`${h.userId}:${h.duId}`, h]));
 
   const bizDay: any = statusQ.data?.businessDay;
-  const staleDayOpen = bizDay?.status === 'OPEN' && bizDay?.businessDate && bizDay.businessDate < todayBiz;
+  const staleDayOpen =
+    bizDay?.status === 'OPEN' && bizDay?.businessDate && bizDay.businessDate < todayBiz;
 
   const recorded = assignments.filter((a) => handoverByKey.has(`${a.userId}:${a.duId}`)).length;
 
@@ -55,7 +67,10 @@ export const ShiftsScreen: React.FC<Props> = ({ station }) => {
       {staleDayOpen && (
         <div
           className="rounded-xl border px-4 py-3"
-          style={{ backgroundColor: 'var(--state-warning-bg)', borderColor: 'var(--state-warning-fg)' }}
+          style={{
+            backgroundColor: 'var(--state-warning-bg)',
+            borderColor: 'var(--state-warning-fg)',
+          }}
         >
           <p className="text-sm font-medium" style={{ color: 'var(--state-warning-fg)' }}>
             Business day {bizDay.businessDate} still open
@@ -67,11 +82,16 @@ export const ShiftsScreen: React.FC<Props> = ({ station }) => {
       )}
 
       <section>
-        <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
+        <h2
+          className="mb-2 text-xs font-semibold uppercase tracking-wide"
+          style={{ color: 'var(--text-muted)' }}
+        >
           Live shift
         </h2>
         {statusQ.isLoading ? (
-          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Loading…</p>
+          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+            Loading…
+          </p>
         ) : active ? (
           <div
             className="rounded-xl border p-4"
@@ -88,18 +108,27 @@ export const ShiftsScreen: React.FC<Props> = ({ station }) => {
               </div>
               <span
                 className="rounded-full px-2.5 py-1 text-xs font-medium"
-                style={{ backgroundColor: 'var(--state-success-bg)', color: 'var(--state-success-fg)' }}
+                style={{
+                  backgroundColor: 'var(--state-success-bg)',
+                  color: 'var(--state-success-fg)',
+                }}
               >
                 {elapsed(active.openedAt)}
               </span>
             </div>
             <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
               <div>
-                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Opening cash</p>
-                <p className="font-mono font-semibold tabular-nums">{inr(Number(active.openingCash || 0))}</p>
+                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                  Opening cash
+                </p>
+                <p className="font-mono font-semibold tabular-nums">
+                  {inr(Number(active.openingCash || 0))}
+                </p>
               </div>
               <div>
-                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Nozzles</p>
+                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                  Nozzles
+                </p>
                 <p className="font-mono font-semibold tabular-nums">{readings.length}</p>
               </div>
             </div>
@@ -108,7 +137,10 @@ export const ShiftsScreen: React.FC<Props> = ({ station }) => {
             {assignments.length > 0 && (
               <div className="mt-3 border-t pt-3" style={{ borderColor: 'var(--border-soft)' }}>
                 <div className="mb-2 flex items-center justify-between">
-                  <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
+                  <p
+                    className="text-xs font-semibold uppercase tracking-wide"
+                    style={{ color: 'var(--text-muted)' }}
+                  >
                     Attendants
                   </p>
                   <p className="text-[11px]" style={{ color: 'var(--text-faint)' }}>
@@ -123,19 +155,28 @@ export const ShiftsScreen: React.FC<Props> = ({ station }) => {
                     return (
                       <div key={a.id ?? i} className="flex items-center justify-between">
                         <div className="min-w-0">
-                          <p className="truncate text-sm" style={{ color: 'var(--text-default)' }}>{a.userName}</p>
-                          <p className="text-[11px]" style={{ color: 'var(--text-faint)' }}>{a.duName}</p>
+                          <p className="truncate text-sm" style={{ color: 'var(--text-default)' }}>
+                            {a.userName}
+                          </p>
+                          <p className="text-[11px]" style={{ color: 'var(--text-faint)' }}>
+                            {a.duName}
+                          </p>
                         </div>
                         <div className="flex items-center gap-2">
                           {isRecorded && (
-                            <span className="font-mono text-[11px] tabular-nums" style={{ color: varColor(variance) }}>
+                            <span
+                              className="font-mono text-[11px] tabular-nums"
+                              style={{ color: varColor(variance) }}
+                            >
                               Var {inr(variance)}
                             </span>
                           )}
                           <span
                             className="rounded-full px-2 py-0.5 text-[11px] font-medium"
                             style={{
-                              backgroundColor: isRecorded ? 'var(--state-success-bg)' : 'var(--bg-surface-alt)',
+                              backgroundColor: isRecorded
+                                ? 'var(--state-success-bg)'
+                                : 'var(--bg-surface-alt)',
                               color: isRecorded ? 'var(--state-success-fg)' : 'var(--text-muted)',
                             }}
                           >
@@ -160,12 +201,17 @@ export const ShiftsScreen: React.FC<Props> = ({ station }) => {
       </section>
 
       <section>
-        <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
+        <h2
+          className="mb-2 text-xs font-semibold uppercase tracking-wide"
+          style={{ color: 'var(--text-muted)' }}
+        >
           Recent shifts
         </h2>
         <div className="flex flex-col gap-2">
           {recent.length === 0 && (
-            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>No closed shifts yet.</p>
+            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+              No closed shifts yet.
+            </p>
           )}
           {recent.map((s: any, i: number) => {
             const variance = Number(s.snapshotData?.cashVariance || 0);
@@ -179,7 +225,9 @@ export const ShiftsScreen: React.FC<Props> = ({ station }) => {
                   <p className="text-sm font-medium" style={{ color: 'var(--text-strong)' }}>
                     {s.templateName || 'Shift'}
                   </p>
-                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{timeFmt(s.openedAt)}</p>
+                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                    {timeFmt(s.openedAt)}
+                  </p>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="text-right">
@@ -193,7 +241,14 @@ export const ShiftsScreen: React.FC<Props> = ({ station }) => {
                   <ShareButton
                     iconOnly
                     label="Shift summary PDF"
-                    onShare={() => generateShiftSummaryPdf(station, s.snapshotData, s.shiftId ?? s.id, s.templateName)}
+                    onShare={() =>
+                      generateShiftSummaryPdf(
+                        station,
+                        s.snapshotData,
+                        s.shiftId ?? s.id,
+                        s.templateName,
+                      )
+                    }
                   />
                 </div>
               </div>

@@ -39,4 +39,3 @@ export function setExternalOpener(fn: ExternalOpener) {
 export async function openExternal(url: string): Promise<void> {
   await externalOpener(url);
 }
-

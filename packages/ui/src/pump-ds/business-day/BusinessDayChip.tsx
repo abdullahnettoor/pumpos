@@ -10,42 +10,48 @@ import { StatusChip } from '../chip/index.js';
  * universal record anchor, so it earns a permanent, prominent slot.
  */
 
-export interface BusinessDayChipProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'children'> {
+export interface BusinessDayChipProps extends Omit<
+  ButtonHTMLAttributes<HTMLButtonElement>,
+  'children'
+> {
   /** Formatted date label, e.g. "09 Jul". */
   date: string;
   status: 'open' | 'closed' | 'not-created' | 'unknown' | 'unavailable';
   pastOpenCount?: number;
 }
 
-export const BusinessDayChip = forwardRef<HTMLButtonElement, BusinessDayChipProps>(function BusinessDayChip(
-  { className, date, status, pastOpenCount = 0, ...props },
-  ref
-) {
-  return (
-    <button
-      ref={ref}
-      type="button"
-      className={cn(
-        'inline-flex h-8 items-center gap-2 rounded-button border border-border-soft bg-surface px-2.5 text-[12px] transition-colors hover:bg-surface-alt',
-        className,
-      )}
-      {...props}
-    >
-      <Calendar className="size-3.5 text-ink-muted" />
-      <span className="font-medium text-ink-strong">{date}</span>
-      {status === 'not-created' || status === 'unknown' || status === 'unavailable' ? (
-        <span className="rounded-chip bg-surface-alt px-1.5 py-0.5 text-[10px] font-medium text-ink-muted">
-          {status === 'unknown' ? 'Checking' : status === 'unavailable' ? 'Unavailable' : 'Not started'}
-        </span>
-      ) : (
-        <StatusChip status={status} size="xs" showIcon={false} pulse={status === 'open'} />
-      )}
-      {pastOpenCount > 0 && (
-        <span className="rounded-chip bg-warning-bg px-1.5 py-0.5 text-[10px] font-semibold text-warning-fg">
-          {pastOpenCount} past open
-        </span>
-      )}
-      <ChevronDown className="size-3.5 text-ink-faint" />
-    </button>
-  );
-});
+export const BusinessDayChip = forwardRef<HTMLButtonElement, BusinessDayChipProps>(
+  function BusinessDayChip({ className, date, status, pastOpenCount = 0, ...props }, ref) {
+    return (
+      <button
+        ref={ref}
+        type="button"
+        className={cn(
+          'inline-flex h-8 items-center gap-2 rounded-button border border-border-soft bg-surface px-2.5 text-[12px] transition-colors hover:bg-surface-alt',
+          className,
+        )}
+        {...props}
+      >
+        <Calendar className="size-3.5 text-ink-muted" />
+        <span className="font-medium text-ink-strong">{date}</span>
+        {status === 'not-created' || status === 'unknown' || status === 'unavailable' ? (
+          <span className="rounded-chip bg-surface-alt px-1.5 py-0.5 text-[10px] font-medium text-ink-muted">
+            {status === 'unknown'
+              ? 'Checking'
+              : status === 'unavailable'
+                ? 'Unavailable'
+                : 'Not started'}
+          </span>
+        ) : (
+          <StatusChip status={status} size="xs" showIcon={false} pulse={status === 'open'} />
+        )}
+        {pastOpenCount > 0 && (
+          <span className="rounded-chip bg-warning-bg px-1.5 py-0.5 text-[10px] font-semibold text-warning-fg">
+            {pastOpenCount} past open
+          </span>
+        )}
+        <ChevronDown className="size-3.5 text-ink-faint" />
+      </button>
+    );
+  },
+);
