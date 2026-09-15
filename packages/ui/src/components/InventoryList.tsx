@@ -33,6 +33,7 @@ import {
   MeterRow,
   EmptyState,
   DateText,
+  Form,
 } from '../pump-ds/index.js';
 import { tankPct, classifyTank } from '../utils/stock.js';
 import type { NavIntent } from './AppShell.js';
@@ -804,7 +805,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({
       </PageLayout>
 
       <Drawer isOpen={countOpen} onClose={() => setCountOpen(false)} title="Stock Reconciliation">
-        <form
+        <Form
           onSubmit={submitCount}
           style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}
         >
@@ -923,7 +924,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({
               Cancel
             </Button>
           </div>
-        </form>
+        </Form>
       </Drawer>
     </div>
   );

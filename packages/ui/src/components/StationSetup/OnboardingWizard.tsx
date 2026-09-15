@@ -40,11 +40,12 @@ import { Step6OpeningValues } from './OnboardingSteps/Step6OpeningValues.js';
 import { Step7ShiftTemplates } from './OnboardingSteps/Step7ShiftTemplates.js';
 import { Step8PaymentTerminals } from './OnboardingSteps/Step8PaymentTerminals.js';
 import { Step8Review } from './OnboardingSteps/Step8Review.js';
+import { useRunTask } from '../../utils/runTask.js';
 
 const stationService = new CloudStationService();
 
 interface OnboardingWizardProps {
-  onOnboardingComplete: (station: Station) => void;
+  onOnboardingComplete: (station: Station) => void | Promise<unknown>;
   /** Leave onboarding (e.g. after discarding the draft) — host routes home. */
   onExit?: () => void;
   userName: string;
@@ -166,6 +167,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
   onExit,
   userName,
 }) => {
+  const runTask = useRunTask();
   const [draft, setDraft] = useState<OnboardingDraft>(createEmptyOnboardingDraft());
   const [currentStep, setCurrentStep] = useState(1);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -2098,7 +2100,11 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                 variant="primary"
                 size="md"
                 onClick={() => {
-                  if (provisionedStation) onOnboardingComplete(provisionedStation);
+                  if (provisionedStation)
+                    runTask(
+                      onOnboardingComplete(provisionedStation),
+                      'Could not open the dashboard.',
+                    );
                 }}
               >
                 Go to dashboard

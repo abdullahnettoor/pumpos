@@ -69,7 +69,7 @@ export interface CloseShiftWizardProps {
 
   // Submission
   isClosing: boolean;
-  onConfirmClose: () => void;
+  onConfirmClose: () => void | Promise<unknown>;
 }
 
 type Step = 1 | 2 | 3 | 4;

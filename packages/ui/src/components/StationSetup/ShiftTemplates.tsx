@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { CloudShiftTemplateService } from '../../services/cloud.js';
 import { ShiftTemplate } from '@pump/shared';
-import { Chip } from '../../pump-ds/index.js';
+import { Chip, Form } from '../../pump-ds/index.js';
 import { Drawer } from '../Drawer.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import { useRunTask } from '../../utils/runTask.js';
@@ -184,7 +184,7 @@ export const ShiftTemplates: React.FC = () => {
             </p>
           </div>
           <button
-            onClick={prefillDefaultShifts}
+            onClick={() => runTask(prefillDefaultShifts(), 'Could not add the default shifts.')}
             style={{
               height: '30px',
               padding: '0 12px',
@@ -212,7 +212,7 @@ export const ShiftTemplates: React.FC = () => {
         }}
         title="Add Shift Template"
       >
-        <form
+        <Form
           onSubmit={handleCreate}
           style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
         >
@@ -312,7 +312,7 @@ export const ShiftTemplates: React.FC = () => {
               Cancel
             </button>
           </div>
-        </form>
+        </Form>
       </Drawer>
 
       {/* Shifts Grid View */}

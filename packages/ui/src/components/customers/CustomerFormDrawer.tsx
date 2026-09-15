@@ -5,7 +5,7 @@ import { customerCreateSchema } from '@pump/shared';
 import { Drawer } from '../Drawer.js';
 import { Field, TextInput, MoneyInput, Textarea, Select } from '../primitives/Field.js';
 import { Checkbox } from '../primitives/Toggle.js';
-import { Button } from '../../pump-ds/index.js';
+import { Button, Form } from '../../pump-ds/index.js';
 import { CloudTransactionService } from '../../services/cloud.js';
 import { useInvalidateOperational } from '../../query/hooks.js';
 import { useToast } from '../primitives/ToastProvider.js';
@@ -162,7 +162,7 @@ export const CustomerFormDrawer: React.FC<CustomerFormDrawerProps> = ({
       onClose={onClose}
       title={editingCustomer ? 'Edit Customer Profile' : 'Register New Customer'}
     >
-      <form
+      <Form
         onSubmit={handleSubmit(onSubmit)}
         style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
       >
@@ -396,7 +396,7 @@ export const CustomerFormDrawer: React.FC<CustomerFormDrawerProps> = ({
             Cancel
           </Button>
         </div>
-      </form>
+      </Form>
     </Drawer>
   );
 };

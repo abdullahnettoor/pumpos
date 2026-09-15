@@ -11,6 +11,7 @@ export * from './dot/index.js';
 export * from './delta/index.js';
 export * from './kpi/index.js';
 export * from './button/index.js';
+export * from './form/index.js';
 export * from './sync-pulse/index.js';
 export * from './menu/index.js';
 export * from './command-palette/index.js';

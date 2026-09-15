@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { looksLikePhone, phoneToAuthEmail } from '@pump/shared';
 import { supabase } from '../../services/supabase.js';
+import { Form } from '../../pump-ds/index.js';
 
 export const Login: React.FC = () => {
   const [identifier, setIdentifier] = useState('');
@@ -103,7 +104,7 @@ export const Login: React.FC = () => {
         )}
 
         {/* Login Form */}
-        <form
+        <Form
           onSubmit={handleLogin}
           style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}
         >
@@ -200,7 +201,7 @@ export const Login: React.FC = () => {
           >
             {loading ? 'Authenticating...' : 'Sign In ➜'}
           </button>
-        </form>
+        </Form>
 
         <div
           style={{

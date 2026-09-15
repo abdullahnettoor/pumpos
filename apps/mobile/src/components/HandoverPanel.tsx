@@ -21,6 +21,7 @@ import {
   type RecordHandoverResult,
 } from '@pump/ui';
 import { CashCountSheet } from './CashCountSheet.js';
+import { runTask } from '@pump/ui';
 
 /**
  * Shared self-service handover UI — mirrors the desktop HandoverDrawer. Loads the
@@ -366,7 +367,13 @@ const CustomerSaleForm: React.FC<{
                 {l.id && (
                   <button
                     type="button"
-                    onClick={() => onRemove(ch, l.id!)}
+                    onClick={() =>
+                      // The panel shows the operator-facing message via setError;
+                      // this only catches what that path re-throws.
+                      runTask(onRemove(ch, l.id!), (error: unknown) =>
+                        console.error('Failed to remove sale:', error),
+                      )
+                    }
                     disabled={busy}
                     className="grid h-7 w-7 place-items-center rounded-lg border disabled:opacity-50"
                     style={{ borderColor: 'var(--border-soft)', color: 'var(--state-danger-fg)' }}
@@ -502,7 +509,9 @@ const CustomerSaleForm: React.FC<{
             </button>
             <button
               type="button"
-              onClick={submit}
+              onClick={() =>
+                runTask(submit(), (error: unknown) => console.error('Failed to add sale:', error))
+              }
               disabled={adding || busy || (!isOmc && !customerId) || !(Number(amount) > 0)}
               className="flex-1 rounded-lg py-2 text-sm font-semibold text-white disabled:opacity-60"
               style={{ backgroundColor: 'var(--brand-primary)' }}
@@ -1466,7 +1475,11 @@ export const HandoverPanel: React.FC = () => {
         )}
         <button
           type="button"
-          onClick={handleSave}
+          onClick={() =>
+            runTask(handleSave(), (error: unknown) =>
+              console.error('Failed to save handover:', error),
+            )
+          }
           disabled={saving || formInvalid}
           className="w-full rounded-xl py-3 text-sm font-semibold text-white disabled:opacity-60"
           style={{ backgroundColor: 'var(--brand-primary)' }}

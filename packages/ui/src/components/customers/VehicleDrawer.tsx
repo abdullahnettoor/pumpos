@@ -4,7 +4,7 @@ import { Drawer } from '../Drawer.js';
 import { Field, TextInput, Select } from '../primitives/Field.js';
 import { Combobox } from '../primitives/Combobox.js';
 import { Checkbox } from '../primitives/Toggle.js';
-import { Button } from '../../pump-ds/index.js';
+import { Button, Form } from '../../pump-ds/index.js';
 import { CloudTransactionService } from '../../services/cloud.js';
 import { useToast } from '../primitives/ToastProvider.js';
 
@@ -120,7 +120,7 @@ export const VehicleDrawer: React.FC<VehicleDrawerProps> = ({
       onClose={onClose}
       title={editingVehicle ? 'Edit Vehicle' : 'Add Vehicle'}
     >
-      <form onSubmit={onSave} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+      <Form onSubmit={onSave} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
         {error && (
           <div
             style={{
@@ -208,7 +208,7 @@ export const VehicleDrawer: React.FC<VehicleDrawerProps> = ({
             Cancel
           </Button>
         </div>
-      </form>
+      </Form>
     </Drawer>
   );
 };

@@ -33,8 +33,8 @@ export interface ShiftCloseSuccessProps {
     expectedQuantity?: number;
     varianceQuantity?: number;
   }>;
-  onSaveTankDips?: () => void;
-  onDiscardTankDips?: () => void;
+  onSaveTankDips?: () => void | Promise<unknown>;
+  onDiscardTankDips?: () => void | Promise<unknown>;
 }
 
 /**

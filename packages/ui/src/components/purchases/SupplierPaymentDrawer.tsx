@@ -3,7 +3,7 @@ import { Drawer } from '../Drawer.js';
 import { Field, MoneyInput, TextInput } from '../primitives/Field.js';
 import { Combobox } from '../primitives/Combobox.js';
 import { AccountSelect } from '../primitives/AccountSelect.js';
-import { Button } from '../../pump-ds/index.js';
+import { Button, Form } from '../../pump-ds/index.js';
 import { inr } from '../../utils/format.js';
 import { CloudTransactionService } from '../../services/cloud.js';
 import { useInvalidateOperational } from '../../query/hooks.js';
@@ -98,7 +98,7 @@ export const SupplierPaymentDrawer: React.FC<SupplierPaymentDrawerProps> = ({
 
   return (
     <Drawer isOpen={isOpen} onClose={onClose} title="Record Supplier Payment">
-      <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      <Form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
         {error && (
           <div
             style={{
@@ -222,7 +222,7 @@ export const SupplierPaymentDrawer: React.FC<SupplierPaymentDrawerProps> = ({
             Cancel
           </Button>
         </div>
-      </form>
+      </Form>
     </Drawer>
   );
 };

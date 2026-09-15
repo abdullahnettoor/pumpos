@@ -13,6 +13,7 @@ import { useToast } from '../primitives/ToastProvider.js';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Edit, KeyRound } from 'lucide-react';
 import { useRunTask } from '../../utils/runTask.js';
+import { Form } from '../../pump-ds/index.js';
 
 const userService = new CloudUserAssignmentService();
 const stationService = new CloudStationService();
@@ -527,7 +528,9 @@ export const UserRolesAssignment: React.FC = () => {
 
       {/* List / Table */}
       <DataTable
-        columns={buildUserColumns(stations, startEdit, openReset, toggleActive)}
+        columns={buildUserColumns(stations, startEdit, openReset, (u) =>
+          runTask(toggleActive(u), 'Could not update the team member.'),
+        )}
         data={users}
         emptyMessage="No team members yet."
         getRowId={(r: any) => r.id}
@@ -547,7 +550,7 @@ export const UserRolesAssignment: React.FC = () => {
             toast={toast}
           />
         ) : (
-          <form
+          <Form
             onSubmit={handleSubmit(handleCreateOrUpdate)}
             style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
           >
@@ -661,10 +664,13 @@ export const UserRolesAssignment: React.FC = () => {
                     </button>
                     <button
                       type="button"
-                      onClick={async () =>
-                        (await copyText(watchPassword))
-                          ? toast.success('Password copied.')
-                          : toast.error('Copy failed.')
+                      onClick={() =>
+                        runTask(
+                          copyText(watchPassword).then((ok) =>
+                            ok ? toast.success('Password copied.') : toast.error('Copy failed.'),
+                          ),
+                          'Could not copy the password.',
+                        )
                       }
                       disabled={!watchPassword}
                       style={{
@@ -767,7 +773,7 @@ export const UserRolesAssignment: React.FC = () => {
             >
               {isSubmitting ? 'Saving...' : editingUser ? 'Save Changes' : 'Add Member'}
             </button>
-          </form>
+          </Form>
         )}
       </Drawer>
 
@@ -804,10 +810,13 @@ export const UserRolesAssignment: React.FC = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={async () =>
-                    (await copyText(resetPassword))
-                      ? toast.success('Password copied.')
-                      : toast.error('Copy failed.')
+                  onClick={() =>
+                    runTask(
+                      copyText(resetPassword).then((ok) =>
+                        ok ? toast.success('Password copied.') : toast.error('Copy failed.'),
+                      ),
+                      'Could not copy the password.',
+                    )
                   }
                   style={{
                     ...inputStyle,
@@ -822,7 +831,7 @@ export const UserRolesAssignment: React.FC = () => {
             </div>
             <button
               type="button"
-              onClick={confirmReset}
+              onClick={() => runTask(confirmReset(), 'Could not reset the password.')}
               disabled={resetBusy || resetPassword.length < 8}
               style={{
                 height: '36px',
@@ -850,6 +859,7 @@ const CredentialsCard: React.FC<{
   onCopy: (text: string) => Promise<boolean>;
   toast: ReturnType<typeof useToast>;
 }> = ({ credentials, onDone, onCopy, toast }) => {
+  const runTask = useRunTask();
   const rowStyle: React.CSSProperties = {
     display: 'flex',
     justifyContent: 'space-between',
@@ -909,10 +919,13 @@ const CredentialsCard: React.FC<{
         <button
           type="button"
           style={copyBtn}
-          onClick={async () =>
-            (await onCopy(credentials.login))
-              ? toast.success('Login copied.')
-              : toast.error('Copy failed.')
+          onClick={() =>
+            runTask(
+              onCopy(credentials.login).then((ok) =>
+                ok ? toast.success('Login copied.') : toast.error('Copy failed.'),
+              ),
+              'Could not copy the login.',
+            )
           }
         >
           Copy
@@ -943,10 +956,13 @@ const CredentialsCard: React.FC<{
         <button
           type="button"
           style={copyBtn}
-          onClick={async () =>
-            (await onCopy(credentials.password))
-              ? toast.success('Password copied.')
-              : toast.error('Copy failed.')
+          onClick={() =>
+            runTask(
+              onCopy(credentials.password).then((ok) =>
+                ok ? toast.success('Password copied.') : toast.error('Copy failed.'),
+              ),
+              'Could not copy the password.',
+            )
           }
         >
           Copy
@@ -954,10 +970,14 @@ const CredentialsCard: React.FC<{
       </div>
       <button
         type="button"
-        onClick={async () => {
-          await onCopy(`Login: ${credentials.login}\nPassword: ${credentials.password}`);
-          toast.success('Credentials copied.');
-        }}
+        onClick={() =>
+          runTask(
+            onCopy(`Login: ${credentials.login}\nPassword: ${credentials.password}`).then(() =>
+              toast.success('Credentials copied.'),
+            ),
+            'Could not copy the credentials.',
+          )
+        }
         style={{
           height: '32px',
           backgroundColor: 'var(--bg-surface)',

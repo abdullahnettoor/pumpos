@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { CloudProductService } from '../../services/cloud.js';
 import { queryKeys, TIER } from '../../query/hooks.js';
 import { Product, PRODUCT_UNITS } from '@pump/shared';
-import { Chip } from '../../pump-ds/index.js';
+import { Chip, Form } from '../../pump-ds/index.js';
 import { Drawer } from '../Drawer.js';
 import { ProductImportDrawer } from './ProductImportDrawer.js';
 import { DataTable } from '../primitives/DataTable.js';
@@ -396,7 +396,7 @@ export const ProductsCatalog: React.FC<{ selectedStation?: any | null }> = ({
             {!hasMS && (
               <button
                 type="button"
-                onClick={() => handleQuickAdd('MS')}
+                onClick={() => runTask(handleQuickAdd('MS'), 'Could not add the product.')}
                 style={{
                   height: '28px',
                   padding: '0 12px',
@@ -415,7 +415,7 @@ export const ProductsCatalog: React.FC<{ selectedStation?: any | null }> = ({
             {!hasHSD && (
               <button
                 type="button"
-                onClick={() => handleQuickAdd('HSD')}
+                onClick={() => runTask(handleQuickAdd('HSD'), 'Could not add the product.')}
                 style={{
                   height: '28px',
                   padding: '0 12px',
@@ -494,7 +494,7 @@ export const ProductsCatalog: React.FC<{ selectedStation?: any | null }> = ({
         }}
         title={editingProduct ? 'Edit Catalog Item' : 'New Catalog Item'}
       >
-        <form
+        <Form
           onSubmit={handleCreateOrUpdate}
           style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
         >
@@ -870,7 +870,7 @@ export const ProductsCatalog: React.FC<{ selectedStation?: any | null }> = ({
               Cancel
             </button>
           </div>
-        </form>
+        </Form>
       </Drawer>
 
       {/* Product List Table */}
@@ -914,7 +914,9 @@ export const ProductsCatalog: React.FC<{ selectedStation?: any | null }> = ({
         />
       </div>
       <DataTable
-        columns={buildProductColumns(startEdit, handleArchive)}
+        columns={buildProductColumns(startEdit, (id) =>
+          runTask(handleArchive(id), 'Could not archive the product.'),
+        )}
         data={products.filter((p) => {
           if (filterType && p.productType !== filterType) return false;
           if (filterText) {

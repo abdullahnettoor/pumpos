@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Globe, ExternalLink, Copy, Check, RefreshCw, LogOut } from 'lucide-react';
 import { Button } from '../../pump-ds/index.js';
 import { openExternal } from '../../utils/platform.js';
+import { useRunTask } from '../../utils/runTask.js';
 
 /**
  * WebOnboardingNotice — the desktop app's first-run gate when a station has not
@@ -21,8 +22,8 @@ export interface WebOnboardingNoticeProps {
   role: 'Owner' | 'Manager' | 'Accountant' | 'Staff' | string;
   userName?: string;
   /** Re-check whether the station has become ready (e.g. reload / refetch). */
-  onRecheck?: () => void;
-  onSignOut?: () => void;
+  onRecheck?: () => void | Promise<unknown>;
+  onSignOut?: () => void | Promise<unknown>;
   rechecking?: boolean;
 }
 
@@ -34,6 +35,7 @@ export const WebOnboardingNotice: React.FC<WebOnboardingNoticeProps> = ({
   onSignOut,
   rechecking = false,
 }) => {
+  const runTask = useRunTask();
   const [copied, setCopied] = useState(false);
   const canOnboard = role === 'Owner' || role === 'Manager';
 
@@ -202,7 +204,7 @@ export const WebOnboardingNotice: React.FC<WebOnboardingNoticeProps> = ({
           {userName && onSignOut && <span aria-hidden>·</span>}
           {onSignOut && (
             <button
-              onClick={onSignOut}
+              onClick={() => runTask(onSignOut?.(), 'Could not sign out.')}
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',

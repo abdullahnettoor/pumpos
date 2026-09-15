@@ -7,7 +7,7 @@ import { Field, TextInput, NumberInput, Select } from '../primitives/Field.js';
 import { Segmented } from '../primitives/Segmented.js';
 import { Combobox } from '../primitives/Combobox.js';
 import { Checkbox } from '../primitives/Toggle.js';
-import { Button } from '../../pump-ds/index.js';
+import { Button, Form } from '../../pump-ds/index.js';
 import { inr, formatQty } from '../../utils/format.js';
 import { Plus, Trash2 } from 'lucide-react';
 
@@ -130,7 +130,7 @@ export const MerchandiseSaleEntryForm: React.FC<MerchandiseSaleEntryFormProps> =
   const hasTax = taxValue > 0;
 
   return (
-    <form
+    <Form
       onSubmit={handleSubmit((values) => onSubmit(values))}
       style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}
     >
@@ -493,6 +493,6 @@ export const MerchandiseSaleEntryForm: React.FC<MerchandiseSaleEntryFormProps> =
           Cancel
         </Button>
       </div>
-    </form>
+    </Form>
   );
 };

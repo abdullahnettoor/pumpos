@@ -27,6 +27,7 @@ import {
   clearStoredOnboardingDraft,
   supabase,
   startSession,
+  useRunTask,
 } from '@pump/ui';
 import type { NavIntent } from '@pump/ui';
 import { Station } from '@pump/shared';
@@ -122,6 +123,7 @@ export const App: React.FC = () => {
   const lastUserIdRef = useRef<string | null>(null);
   const resolvedRef = useRef(false);
   const qc = useQueryClient();
+  const runTask = useRunTask();
   const isUnsupportedMobile = useIsUnsupportedMobile();
 
   useEffect(() => {
@@ -383,7 +385,7 @@ export const App: React.FC = () => {
               </p>
             )}
             <button
-              onClick={handleLogout}
+              onClick={() => runTask(handleLogout(), 'Could not sign out.')}
               style={{
                 height: '32px',
                 border: '1px solid var(--border-strong)',

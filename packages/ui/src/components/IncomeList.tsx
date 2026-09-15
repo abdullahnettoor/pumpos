@@ -154,7 +154,10 @@ export const IncomeList: React.FC<IncomeListProps> = ({
   };
 
   const ledgerColumns = useMemo(
-    () => buildIncomeColumns(canVoid ? handleVoid : undefined),
+    () =>
+      buildIncomeColumns(
+        canVoid ? (row) => runTask(handleVoid(row), 'Could not void the income entry.') : undefined,
+      ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [canVoid, stationId],
   );

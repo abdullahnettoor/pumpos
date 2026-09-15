@@ -45,9 +45,6 @@
     }
   },
   "apps/console/src/App.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 3
-    },
     "react-hooks/exhaustive-deps": {
       "count": 1
     },
@@ -56,9 +53,6 @@
     }
   },
   "apps/desktop/src/App.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 4
-    },
     "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 1
     },
@@ -70,9 +64,6 @@
     }
   },
   "apps/mobile/src/App.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 2
-    },
     "react-hooks/exhaustive-deps": {
       "count": 2
     },
@@ -86,9 +77,6 @@
     }
   },
   "apps/mobile/src/components/HandoverPanel.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 3
-    },
     "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 1
     },
@@ -97,16 +85,6 @@
     },
     "react-hooks/set-state-in-effect": {
       "count": 2
-    }
-  },
-  "apps/mobile/src/components/MobileShell.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    }
-  },
-  "apps/mobile/src/components/ShareButton.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
     }
   },
   "apps/mobile/src/screens/LedgerScreen.tsx": {
@@ -169,20 +147,7 @@
       "count": 1
     }
   },
-  "packages/ui/src/components/Auth/AcceptInvite.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 2
-    }
-  },
-  "packages/ui/src/components/Auth/Login.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    }
-  },
   "packages/ui/src/components/CustomersList.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    },
     "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 2
     },
@@ -194,30 +159,16 @@
     }
   },
   "packages/ui/src/components/DailyDssrView.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    },
     "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 1
     }
   },
   "packages/ui/src/components/Dashboard/DashboardOverview.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 2
-    },
     "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 2
     }
   },
-  "packages/ui/src/components/DesignSystem.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 2
-    }
-  },
   "packages/ui/src/components/ExpensesList.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 2
-    },
     "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 2
     },
@@ -229,9 +180,6 @@
     }
   },
   "packages/ui/src/components/IncomeList.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 3
-    },
     "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 2
     },
@@ -243,9 +191,6 @@
     }
   },
   "packages/ui/src/components/InventoryList.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    },
     "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 1
     },
@@ -256,20 +201,7 @@
       "count": 1
     }
   },
-  "packages/ui/src/components/Organization/ActivityFeed.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    }
-  },
-  "packages/ui/src/components/Organization/OrgProfile.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    }
-  },
   "packages/ui/src/components/PurchasesList.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 2
-    },
     "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 2
     },
@@ -281,9 +213,6 @@
     }
   },
   "packages/ui/src/components/ReportsOverview.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    },
     "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 3
     },
@@ -292,9 +221,6 @@
     }
   },
   "packages/ui/src/components/Shifts/BusinessDayTab.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    },
     "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 8
     },
@@ -303,9 +229,6 @@
     }
   },
   "packages/ui/src/components/Shifts/CloseShiftWizard.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    },
     "react-hooks/exhaustive-deps": {
       "count": 1
     },
@@ -314,25 +237,16 @@
     }
   },
   "packages/ui/src/components/Shifts/HandoverDrawer.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 4
-    },
     "react-hooks/exhaustive-deps": {
       "count": 1
     }
   },
   "packages/ui/src/components/Shifts/MerchandiseHandoversPanel.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 2
-    },
     "react-hooks/exhaustive-deps": {
       "count": 2
     }
   },
   "packages/ui/src/components/Shifts/OpenShiftForm.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    },
     "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 1
     },
@@ -352,17 +266,11 @@
     }
   },
   "packages/ui/src/components/Shifts/ShiftSummaryView.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 2
-    },
     "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 1
     }
   },
   "packages/ui/src/components/Shifts/ShiftTransactionsPanel.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 3
-    },
     "react-hooks/exhaustive-deps": {
       "count": 1
     },
@@ -371,9 +279,6 @@
     }
   },
   "packages/ui/src/components/Shifts/ShiftsManagement.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 7
-    },
     "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 1
     },
@@ -382,9 +287,6 @@
     }
   },
   "packages/ui/src/components/StationSetup/DispensersList.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    },
     "react-hooks/exhaustive-deps": {
       "count": 1
     },
@@ -393,25 +295,16 @@
     }
   },
   "packages/ui/src/components/StationSetup/FuelPricingPanel.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 2
-    },
     "react-hooks/immutability": {
       "count": 1
     }
   },
   "packages/ui/src/components/StationSetup/OnboardingWizard.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 2
-    },
     "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 1
     }
   },
   "packages/ui/src/components/StationSetup/PaymentTerminalsPanel.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 2
-    },
     "react-hooks/exhaustive-deps": {
       "count": 1
     },
@@ -419,15 +312,7 @@
       "count": 1
     }
   },
-  "packages/ui/src/components/StationSetup/ProductImportDrawer.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    }
-  },
   "packages/ui/src/components/StationSetup/ProductsCatalog.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 5
-    },
     "react-hooks/exhaustive-deps": {
       "count": 1
     },
@@ -436,9 +321,6 @@
     }
   },
   "packages/ui/src/components/StationSetup/ReportConfigPanel.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    },
     "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 1
     },
@@ -447,17 +329,11 @@
     }
   },
   "packages/ui/src/components/StationSetup/ShiftTemplates.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 2
-    },
     "react-hooks/immutability": {
       "count": 1
     }
   },
   "packages/ui/src/components/StationSetup/StationOverview.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 2
-    },
     "react-hooks/exhaustive-deps": {
       "count": 1
     },
@@ -469,9 +345,6 @@
     }
   },
   "packages/ui/src/components/StationSetup/TanksGrid.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 3
-    },
     "react-hooks/exhaustive-deps": {
       "count": 1
     },
@@ -480,22 +353,11 @@
     }
   },
   "packages/ui/src/components/StationSetup/UserRolesAssignment.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 8
-    },
     "react-hooks/exhaustive-deps": {
       "count": 1
     }
   },
-  "packages/ui/src/components/StationSetup/WebOnboardingNotice.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 2
-    }
-  },
   "packages/ui/src/components/customers/CustomerFormDrawer.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    },
     "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 3
     }
@@ -506,17 +368,11 @@
     }
   },
   "packages/ui/src/components/customers/TopupDrawer.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    },
     "react-hooks/set-state-in-effect": {
       "count": 1
     }
   },
   "packages/ui/src/components/customers/VehicleDrawer.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    },
     "react-hooks/set-state-in-effect": {
       "count": 1
     }
@@ -526,27 +382,14 @@
       "count": 1
     }
   },
-  "packages/ui/src/components/expenses/CategoryManagerDrawer.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 2
-    }
-  },
   "packages/ui/src/components/expenses/ExpenseAnalytics.tsx": {
     "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 1
     }
   },
   "packages/ui/src/components/finance/AccountsPanel.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 4
-    },
     "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 1
-    }
-  },
-  "packages/ui/src/components/income/IncomeCategoryManagerDrawer.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 2
     }
   },
   "packages/ui/src/components/primitives/CashCountPopover.tsx": {
@@ -560,17 +403,11 @@
     }
   },
   "packages/ui/src/components/purchases/SupplierFormDrawer.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    },
     "react-hooks/set-state-in-effect": {
       "count": 1
     }
   },
   "packages/ui/src/components/purchases/SupplierPaymentDrawer.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    },
     "react-hooks/set-state-in-effect": {
       "count": 1
     }
@@ -589,9 +426,6 @@
     }
   },
   "packages/ui/src/components/reports/InvoicesPanel.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    },
     "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 2
     },
@@ -613,30 +447,16 @@
     }
   },
   "packages/ui/src/components/reports/UnifiedLedger.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    },
     "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 4
     }
   },
   "packages/ui/src/components/transactions/CollectionEntryForm.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    },
     "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 2
     }
   },
-  "packages/ui/src/components/transactions/ExpenseEntryForm.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    }
-  },
   "packages/ui/src/components/transactions/MerchandiseSaleEntryForm.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    },
     "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 1
     }

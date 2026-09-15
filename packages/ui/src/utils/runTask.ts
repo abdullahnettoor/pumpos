@@ -13,8 +13,13 @@ import { useToast } from '../components/primitives/ToastProvider.js';
  * Prefer `await` wherever the calling function is already async. Reach for this
  * only at the sync boundary.
  */
-export function runTask(task: Promise<unknown>, onError: (error: unknown) => void): void {
-  task.catch(onError);
+export function runTask(
+  task: void | undefined | Promise<unknown>,
+  onError: (error: unknown) => void,
+): void {
+  // Accepts `void | Promise` so it can wrap the many callback slots typed that
+  // way. A synchronous handler simply has nothing to attach to.
+  if (task instanceof Promise) task.catch(onError);
 }
 
 /**
@@ -24,10 +29,10 @@ export function runTask(task: Promise<unknown>, onError: (error: unknown) => voi
  * `message` is operator-facing, so write it as the action that failed
  * ("Could not load tanks."), not as the exception.
  */
-export function useRunTask(): (task: Promise<unknown>, message: string) => void {
+export function useRunTask(): (task: void | undefined | Promise<unknown>, message: string) => void {
   const toast = useToast();
   return useCallback(
-    (task: Promise<unknown>, message: string) => {
+    (task: void | undefined | Promise<unknown>, message: string) => {
       runTask(task, (error) => {
         // Keep the stack for the console; give the operator the plain message.
         console.error(message, error);

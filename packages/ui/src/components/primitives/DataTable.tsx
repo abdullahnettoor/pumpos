@@ -7,6 +7,7 @@ import {
   type ColumnDef,
   type SortingState,
 } from '@tanstack/react-table';
+import { useRunTask } from '../../utils/runTask.js';
 
 export interface DataTableProps<T> {
   columns: ColumnDef<T, any>[];
@@ -15,7 +16,7 @@ export interface DataTableProps<T> {
   error?: Error | null;
   /** Message shown when there is no data (and no error/loading). */
   emptyMessage?: string;
-  onRowClick?: (row: T) => void;
+  onRowClick?: (row: T) => void | Promise<unknown>;
   /** Stable row key extractor; defaults to the row index. */
   getRowId?: (row: T, index: number) => string;
   initialSorting?: SortingState;
@@ -42,6 +43,7 @@ export function DataTable<T>({
   bare = false,
   highlightRowId,
 }: DataTableProps<T>) {
+  const runTask = useRunTask();
   const [sorting, setSorting] = React.useState<SortingState>(initialSorting ?? []);
   const scrolledToRef = React.useRef<string | null>(null);
 
@@ -136,7 +138,11 @@ export function DataTable<T>({
             return (
               <tr
                 key={row.id}
-                onClick={onRowClick ? () => onRowClick(row.original) : undefined}
+                onClick={
+                  onRowClick
+                    ? () => runTask(onRowClick(row.original), 'Could not open that row.')
+                    : undefined
+                }
                 ref={(el) => {
                   if (el && isHighlighted && scrolledToRef.current !== row.id) {
                     scrolledToRef.current = row.id;

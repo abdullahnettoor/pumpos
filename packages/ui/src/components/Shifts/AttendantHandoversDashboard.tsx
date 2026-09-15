@@ -4,7 +4,7 @@ import { inr } from '../../utils/format.js';
 interface AttendantHandoversDashboardProps {
   staffAssignments: any[];
   handovers: any[];
-  onRecordHandover: (assignment: any) => void;
+  onRecordHandover: (assignment: any) => void | Promise<unknown>;
 }
 
 /**

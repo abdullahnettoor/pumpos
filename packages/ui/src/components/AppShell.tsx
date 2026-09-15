@@ -48,7 +48,7 @@ export interface AppShellProps {
   userName: string;
   syncStatus: 'online' | 'offline' | 'synced' | 'pending' | 'failed';
   pendingSyncCount?: number;
-  onLogout: () => void;
+  onLogout: () => void | Promise<unknown>;
   stations?: Station[];
   selectedStation?: Station | null;
   onStationChange?: (station: Station) => void;

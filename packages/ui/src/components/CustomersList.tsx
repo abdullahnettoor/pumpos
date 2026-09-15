@@ -32,6 +32,7 @@ import {
 import { CustomerFormDrawer } from './customers/CustomerFormDrawer.js';
 import { VehicleDrawer } from './customers/VehicleDrawer.js';
 import { StatementDrawer } from './customers/StatementDrawer.js';
+import { useRunTask } from '../utils/runTask.js';
 
 const transactionService = new CloudTransactionService();
 
@@ -66,6 +67,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({
   const qc = useQueryClient();
   const confirm = useConfirm();
   const toast = useToast();
+  const runTask = useRunTask();
 
   const customers = customersActiveQ.data ?? [];
   const allCustomers = customersAllQ.data ?? [];
@@ -771,7 +773,9 @@ export const CustomersList: React.FC<CustomersListProps> = ({
                 ) : (
                   <DataTable
                     bare
-                    columns={buildVehicleColumns(openEditVehicle, onDeleteVehicle)}
+                    columns={buildVehicleColumns(openEditVehicle, (v) =>
+                      runTask(onDeleteVehicle(v), 'Could not delete the vehicle.'),
+                    )}
                     data={filteredVehicles}
                     emptyMessage="No vehicles registered."
                     getRowId={(r: any) => r.id}

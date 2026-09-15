@@ -43,6 +43,7 @@ import {
   PumpDsMetricsPanel,
 } from './DesignSystemPumpDs.js';
 import { DesignSystemShellProtoPanel } from './DesignSystemShellProto.js';
+import { useRunTask } from '../utils/runTask.js';
 
 /**
  * Living design-system reference. Mounted only in local development (see the
@@ -1061,6 +1062,7 @@ const OverlaysPanel: React.FC = () => {
 const FeedbackPanel: React.FC = () => {
   const toast = useToast();
   const confirm = useConfirm();
+  const runTask = useRunTask();
   const [lastResult, setLastResult] = useState('\u2014');
   return (
     <div>
@@ -1113,27 +1115,31 @@ const FeedbackPanel: React.FC = () => {
           >
             <button
               className="btn btn-secondary btn-sm"
-              onClick={async () => {
-                const ok = await confirm({
-                  title: 'Discard changes?',
-                  message: 'Your unsaved edits will be lost.',
-                });
-                setLastResult(ok ? 'confirmed' : 'cancelled');
-              }}
+              onClick={() =>
+                runTask(
+                  confirm({
+                    title: 'Discard changes?',
+                    message: 'Your unsaved edits will be lost.',
+                  }).then((ok) => setLastResult(ok ? 'confirmed' : 'cancelled')),
+                  'Could not open the confirmation.',
+                )
+              }
             >
               Standard confirm
             </button>
             <button
               className="btn btn-danger btn-sm"
-              onClick={async () => {
-                const ok = await confirm({
-                  title: 'Delete vehicle?',
-                  message: 'This cannot be undone.',
-                  confirmLabel: 'Delete',
-                  danger: true,
-                });
-                setLastResult(ok ? 'confirmed (danger)' : 'cancelled');
-              }}
+              onClick={() =>
+                runTask(
+                  confirm({
+                    title: 'Delete vehicle?',
+                    message: 'This cannot be undone.',
+                    confirmLabel: 'Delete',
+                    danger: true,
+                  }).then((ok) => setLastResult(ok ? 'confirmed (danger)' : 'cancelled')),
+                  'Could not open the confirmation.',
+                )
+              }
             >
               Danger confirm
             </button>

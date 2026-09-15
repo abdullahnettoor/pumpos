@@ -25,7 +25,7 @@ export interface MerchandiseHandoversPanelProps {
   /** Station whose merchandise stock-on-hand is shown in the product picker. */
   stationId?: string | null;
   /** Called after a handover is recorded/deleted so the shift reconciliation refreshes. */
-  onChanged?: () => void;
+  onChanged?: () => void | Promise<unknown>;
   /** Seed data from the shift-status payload so the tracker renders without a second round-trip. */
   initialHandovers?: any[];
   initialSales?: any[];
@@ -209,7 +209,7 @@ export const MerchandiseHandoversPanel: React.FC<MerchandiseHandoversPanelProps>
         nonCashAmount: nonCashNum,
       });
       setDrawerOpen(false);
-      onChanged?.();
+      await onChanged?.();
       toast.success('Merchandise handover recorded.');
       await reload();
     } catch (err: any) {
@@ -231,7 +231,7 @@ export const MerchandiseHandoversPanel: React.FC<MerchandiseHandoversPanelProps>
       return;
     try {
       await txService.deleteMerchandiseHandover(h.id);
-      onChanged?.();
+      await onChanged?.();
       toast.success('Merchandise handover removed.');
       await reload();
     } catch (err: any) {

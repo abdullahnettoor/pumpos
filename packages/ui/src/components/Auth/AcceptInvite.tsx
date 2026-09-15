@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../../services/supabase.js';
+import { Form } from '../../pump-ds/index.js';
 
 /**
  * AcceptInvite — the landing page for a Supabase invite / recovery link.
@@ -230,14 +231,16 @@ export const AcceptInvite: React.FC<AcceptInviteProps> = ({ onDone }) => {
                   <span>{desktopUrl}</span>
                   <button
                     type="button"
-                    onClick={async () => {
-                      try {
-                        await navigator.clipboard.writeText(desktopUrl);
-                        setCopied(true);
-                        setTimeout(() => setCopied(false), 1800);
-                      } catch {
-                        /* clipboard blocked — URL is shown as selectable text */
-                      }
+                    onClick={() => {
+                      navigator.clipboard
+                        .writeText(desktopUrl)
+                        .then(() => {
+                          setCopied(true);
+                          setTimeout(() => setCopied(false), 1800);
+                        })
+                        .catch(() => {
+                          /* clipboard blocked — URL is shown as selectable text */
+                        });
                     }}
                     style={{
                       flexShrink: 0,
@@ -324,7 +327,7 @@ export const AcceptInvite: React.FC<AcceptInviteProps> = ({ onDone }) => {
             </button>
           </div>
         ) : (
-          <form
+          <Form
             onSubmit={handleSubmit}
             style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}
           >
@@ -379,7 +382,7 @@ export const AcceptInvite: React.FC<AcceptInviteProps> = ({ onDone }) => {
             >
               {loading ? 'Saving…' : 'Set password & continue ➜'}
             </button>
-          </form>
+          </Form>
         )}
       </div>
     </div>

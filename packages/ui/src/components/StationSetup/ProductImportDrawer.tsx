@@ -136,7 +136,7 @@ interface ProductImportDrawerProps {
   onClose: () => void;
   existingProducts: Product[];
   selectedStation?: any | null;
-  onImported: () => void;
+  onImported: () => void | Promise<unknown>;
 }
 
 /** Split a single CSV line, honoring double-quoted fields (with "" escapes). */
@@ -343,7 +343,7 @@ export const ProductImportDrawer: React.FC<ProductImportDrawerProps> = ({
         toast.error(
           `${res.failed.length} row${res.failed.length === 1 ? '' : 's'} failed — see details.`,
         );
-      onImported();
+      await onImported();
     } catch (err: any) {
       toast.error(err.message || 'Import failed');
     } finally {
@@ -580,7 +580,7 @@ export const ProductImportDrawer: React.FC<ProductImportDrawerProps> = ({
               </button>
               <button
                 type="button"
-                onClick={runImport}
+                onClick={() => runTask(runImport(), 'Could not import the products.')}
                 disabled={importing || validCount === 0}
                 style={{
                   height: '34px',

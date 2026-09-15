@@ -5,7 +5,7 @@ import { useOrganization, queryKeys } from '../../query/hooks.js';
 import { CloudOrganizationService } from '../../services/cloud.js';
 import { useZodForm } from '../../forms/useZodForm.js';
 import { Field, TextInput } from '../primitives/Field.js';
-import { Button } from '../../pump-ds/index.js';
+import { Button, Form } from '../../pump-ds/index.js';
 import { useToast } from '../primitives/ToastProvider.js';
 
 const orgService = new CloudOrganizationService();
@@ -67,7 +67,7 @@ export const OrgProfile: React.FC = () => {
   const metaErrors = (errors.metadata as any) || {};
 
   return (
-    <form
+    <Form
       onSubmit={handleSubmit(onSubmit)}
       style={{ maxWidth: 520, display: 'flex', flexDirection: 'column' }}
     >
@@ -117,6 +117,6 @@ export const OrgProfile: React.FC = () => {
           Save changes
         </Button>
       </div>
-    </form>
+    </Form>
   );
 };

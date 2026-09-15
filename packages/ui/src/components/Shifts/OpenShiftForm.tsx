@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { FileText, Info, Play } from 'lucide-react';
-import { Panel, Button } from '../../pump-ds/index.js';
+import { Panel, Button, Form } from '../../pump-ds/index.js';
 import { Field, Select, NumberInput, DateField } from '../primitives/Field.js';
 import type { BusinessDayStatusItem } from '../../services/cloud.js';
 import { formatStationDateTime } from '@pump/shared';
@@ -30,7 +30,7 @@ interface OpenShiftFormProps {
   initialReadings: { nozzleId: string; openingReading: number }[];
   onInitialReadingChange: (nozzleId: string, value: number) => void;
   isOpening: boolean;
-  onSubmit: (values: OpenShiftFormValues) => void;
+  onSubmit: (values: OpenShiftFormValues) => void | Promise<unknown>;
   onViewLastShiftSummary: () => void;
 }
 
@@ -176,7 +176,7 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
       )}
 
       {/* Main open-shift form */}
-      <form
+      <Form
         onSubmit={handleSubmit(onSubmit)}
         noValidate
         style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
@@ -427,7 +427,7 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
             Start Shift Operations
           </Button>
         </div>
-      </form>
+      </Form>
     </div>
   );
 };

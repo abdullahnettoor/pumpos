@@ -36,7 +36,7 @@ interface ShiftSummaryViewProps {
   onReopenSuccess: () => void;
   onBack?: () => void;
   shiftStatus?: 'CLOSED' | 'LOCKED';
-  onTransactionAdded?: () => void;
+  onTransactionAdded?: () => void | Promise<unknown>;
   station?: any;
 }
 
