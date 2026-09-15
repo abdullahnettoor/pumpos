@@ -55,8 +55,8 @@ export const TopupDrawer: React.FC<TopupDrawerProps> = ({
         paymentMethod,
         notes: notes || undefined,
       });
-      invalidateOperational(stationId);
       toast.success('Top-up recorded.');
+      await invalidateOperational(stationId);
       onClose();
       onDone?.();
     } catch (err: any) {

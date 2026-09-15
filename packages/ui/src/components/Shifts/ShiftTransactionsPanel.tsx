@@ -15,6 +15,7 @@ import {
   Info,
   Calendar,
 } from 'lucide-react';
+import { useRunTask } from '../../utils/runTask.js';
 
 const transactionService = new CloudTransactionService();
 
@@ -32,6 +33,7 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
   isReadOnly = false,
 }) => {
   const qc = useQueryClient();
+  const runTask = useRunTask();
   const [activeTab, setActiveTab] = useState<'expenses' | 'purchases' | 'collections'>('expenses');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -84,7 +86,7 @@ export const ShiftTransactionsPanel: React.FC<ShiftTransactionsPanelProps> = ({
   const [collectionNotes, setCollectionNotes] = useState('');
 
   useEffect(() => {
-    loadData();
+    runTask(loadData(), 'Could not load shift transactions.');
   }, [shiftId]);
 
   const loadData = async () => {

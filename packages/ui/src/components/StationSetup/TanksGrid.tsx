@@ -6,6 +6,7 @@ import { Tank, Product } from '@pump/shared';
 import { Chip } from '../../pump-ds/index.js';
 import { Drawer } from '../Drawer.js';
 import { useToast } from '../primitives/ToastProvider.js';
+import { useRunTask } from '../../utils/runTask.js';
 
 const tankService = new CloudTankService();
 const productService = new CloudProductService();
@@ -17,6 +18,7 @@ export interface TanksGridProps {
 export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
   const qc = useQueryClient();
   const toast = useToast();
+  const runTask = useRunTask();
   const [tanks, setTanks] = useState<Tank[]>([]);
   const [fuelProducts, setFuelProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -33,7 +35,7 @@ export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
   const [quickSubmitting, setQuickSubmitting] = useState(false);
 
   useEffect(() => {
-    loadData();
+    runTask(loadData(), 'Could not load tanks.');
   }, [stationId]);
 
   const loadData = async (force = false) => {
@@ -64,6 +66,7 @@ export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
       setName(`Tank ${tankList.length + 1}`);
     } catch (err) {
       console.error('Failed to load tanks data:', err);
+      toast.error('Could not load tanks. Reopen the tab to retry.');
     } finally {
       setLoading(false);
     }
@@ -84,7 +87,7 @@ export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
       });
       setIsFormOpen(false);
       resetForm();
-      loadData(true);
+      await loadData(true);
       toast.success('Tank created.');
     } catch (err: any) {
       toast.error(err.message || 'Failed to create tank');

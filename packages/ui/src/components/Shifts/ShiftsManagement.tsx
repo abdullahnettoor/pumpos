@@ -16,6 +16,7 @@ import { BusinessDayTab } from './BusinessDayTab.js';
 import { OpenShiftForm } from './OpenShiftForm.js';
 import { Tabs } from '../primitives/Tabs.js';
 import { useToast } from '../primitives/ToastProvider.js';
+import { useRunTask } from '../../utils/runTask.js';
 import { useConfirm } from '../primitives/ConfirmDialog.js';
 import {
   useShiftStatus,
@@ -112,6 +113,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   const stationId = selectedStation?.id ?? null;
   const statusQ = useShiftStatus(stationId, false, { refetchOnWindowFocus: false });
   const invalidateOperational = useInvalidateOperational();
+  const runTask = useRunTask();
   const qc = useQueryClient();
   const toast = useToast();
   const confirm = useConfirm();
@@ -226,7 +228,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     setHandoverDrawerOpen(true);
     // Refresh the vehicle/customer caches so newly-added records (created in
     // another tab/session) are pickable in the Customer Sales section.
-    qc.invalidateQueries({ queryKey: ['vehicles'] });
+    await qc.invalidateQueries({ queryKey: ['vehicles'] });
     // Load customers pickable for on-account (Customer Sales) billing: all
     // customers except legacy station-prepaid non-fleet wallets. Prepaid Fleet
     // customers ARE included — they're OMC fleet cards (settled to CMS).
@@ -737,10 +739,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         );
       }
     }
-    // Not awaited: useInvalidateOperational is synchronous and its
-    // invalidateQueries calls float. See issue #41 before re-adding `await` —
-    // awaiting it today would await `undefined`, not the refetches.
-    invalidateOperational(stationId);
+    await invalidateOperational(stationId);
   };
 
   const discardTankDips = async () => {
@@ -935,7 +934,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         onTransactionAdded={loadShiftStatus}
         onReopenSuccess={() => {
           setViewingShiftSummary(false);
-          loadShiftStatus();
+          runTask(loadShiftStatus(), 'Shift reopened, but the screen could not be refreshed.');
         }}
         onBack={() => setViewingShiftSummary(false)}
       />

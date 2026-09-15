@@ -12,6 +12,7 @@ import { Checkbox, Switch } from '../primitives/Toggle.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Edit, KeyRound } from 'lucide-react';
+import { useRunTask } from '../../utils/runTask.js';
 
 const userService = new CloudUserAssignmentService();
 const stationService = new CloudStationService();
@@ -230,6 +231,7 @@ const buildUserColumns = (
 export const UserRolesAssignment: React.FC = () => {
   const qc = useQueryClient();
   const toast = useToast();
+  const runTask = useRunTask();
   const [users, setUsers] = useState<any[]>([]);
   const [stations, setStations] = useState<Station[]>([]);
   const [loading, setLoading] = useState(true);
@@ -278,7 +280,7 @@ export const UserRolesAssignment: React.FC = () => {
   const watchPassword = watch('password') || '';
 
   useEffect(() => {
-    loadData();
+    runTask(loadData(), 'Could not load team members.');
   }, []);
 
   const loadData = async (force = false) => {
@@ -304,20 +306,23 @@ export const UserRolesAssignment: React.FC = () => {
       setUsers(userList);
       setStations(stationList);
     } catch (err) {
-      console.error(err);
+      console.error('Failed to load team members:', err);
+      toast.error('Could not load team members. Reopen the tab to retry.');
     } finally {
       setLoading(false);
     }
   };
 
-  const mergeUser = (row: any) => {
+  // The row is written straight into the cache, so this only marks the key stale
+  // for the next mount — `refetchType: 'none'` means nothing is refetched here.
+  const mergeUser = async (row: any) => {
     const merge = (list: any[] = []) =>
       list.some((u) => u.id === row.id)
         ? list.map((u) => (u.id === row.id ? { ...u, ...row } : u))
         : [...list, row];
     setUsers((prev) => merge(prev));
     qc.setQueryData(queryKeys.users(), (prev: any[] | undefined) => merge(prev));
-    qc.invalidateQueries({ queryKey: queryKeys.users(), refetchType: 'none' });
+    await qc.invalidateQueries({ queryKey: queryKeys.users(), refetchType: 'none' });
   };
 
   const handleCreateOrUpdate = async (values: UserFormValues) => {
@@ -370,9 +375,9 @@ export const UserRolesAssignment: React.FC = () => {
 
       const rowId = editingUser?.id ?? (saved as any)?.id;
       if (rowId) {
-        mergeUser({ ...(editingUser || {}), id: rowId, ...(saved as any), ...payload });
+        await mergeUser({ ...(editingUser || {}), id: rowId, ...(saved as any), ...payload });
       } else {
-        loadData(true);
+        await loadData(true);
       }
       resetForm();
       toast.success(editingUser ? 'Team member updated.' : 'Team member added.');
@@ -452,7 +457,7 @@ export const UserRolesAssignment: React.FC = () => {
         u.status === 'INACTIVE'
           ? await userService.reactivateUser(u.id)
           : await userService.deactivateUser(u.id);
-      mergeUser({ ...u, ...(updated as any) });
+      await mergeUser({ ...u, ...(updated as any) });
       toast.success(u.status === 'INACTIVE' ? 'Member reactivated.' : 'Member deactivated.');
     } catch (err: any) {
       toast.error(err.message || 'Failed to update member');

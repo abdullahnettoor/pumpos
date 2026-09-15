@@ -5,6 +5,7 @@ import { Combobox } from '../primitives/Combobox.js';
 import { Select, NumberInput } from '../primitives/Field.js';
 import { Panel, Button } from '../../pump-ds/index.js';
 import { useToast } from '../primitives/ToastProvider.js';
+import { useRunTask } from '../../utils/runTask.js';
 import { useConfirm } from '../primitives/ConfirmDialog.js';
 import {
   CloudTransactionService,
@@ -72,6 +73,7 @@ export const MerchandiseHandoversPanel: React.FC<MerchandiseHandoversPanelProps>
   initialSales,
 }) => {
   const toast = useToast();
+  const runTask = useRunTask();
   const confirm = useConfirm();
   const qc = useQueryClient();
   const handoversQ = useMerchandiseHandovers(
@@ -97,10 +99,12 @@ export const MerchandiseHandoversPanel: React.FC<MerchandiseHandoversPanelProps>
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const reload = () => {
-    qc.invalidateQueries({ queryKey: queryKeys.merchandiseHandovers(shiftId) });
-    qc.invalidateQueries({ queryKey: queryKeys.merchandiseSales(shiftId) });
-  };
+  /** Resolves once both panel queries have refetched. Does not reject. */
+  const reload = () =>
+    Promise.all([
+      qc.invalidateQueries({ queryKey: queryKeys.merchandiseHandovers(shiftId) }),
+      qc.invalidateQueries({ queryKey: queryKeys.merchandiseSales(shiftId) }),
+    ]);
 
   const ensureRefData = async () => {
     if (products.length === 0) {
@@ -205,9 +209,9 @@ export const MerchandiseHandoversPanel: React.FC<MerchandiseHandoversPanelProps>
         nonCashAmount: nonCashNum,
       });
       setDrawerOpen(false);
-      reload();
       onChanged?.();
       toast.success('Merchandise handover recorded.');
+      await reload();
     } catch (err: any) {
       setError(err.message || 'Failed to record merchandise handover.');
     } finally {
@@ -227,9 +231,9 @@ export const MerchandiseHandoversPanel: React.FC<MerchandiseHandoversPanelProps>
       return;
     try {
       await txService.deleteMerchandiseHandover(h.id);
-      reload();
       onChanged?.();
       toast.success('Merchandise handover removed.');
+      await reload();
     } catch (err: any) {
       toast.error(err.message || 'Failed to remove handover.');
     }
@@ -373,7 +377,12 @@ export const MerchandiseHandoversPanel: React.FC<MerchandiseHandoversPanelProps>
             employeeRows.map((e) => (
               <tr
                 key={e.attendantId || '__none__'}
-                onClick={() => openForEmployee(e.attendantId)}
+                onClick={() =>
+                  runTask(
+                    openForEmployee(e.attendantId),
+                    'Could not open the merchandise handover.',
+                  )
+                }
                 style={{
                   borderBottom: '1px solid var(--border-soft)',
                   cursor: e.attendantId ? 'pointer' : 'default',
@@ -423,7 +432,10 @@ export const MerchandiseHandoversPanel: React.FC<MerchandiseHandoversPanelProps>
                       aria-label="Edit"
                       onClick={(ev) => {
                         ev.stopPropagation();
-                        openForEmployee(e.attendantId);
+                        runTask(
+                          openForEmployee(e.attendantId),
+                          'Could not open the merchandise handover.',
+                        );
                       }}
                       style={{ marginRight: '4px' }}
                     >
@@ -438,7 +450,7 @@ export const MerchandiseHandoversPanel: React.FC<MerchandiseHandoversPanelProps>
                       aria-label="Remove"
                       onClick={(ev) => {
                         ev.stopPropagation();
-                        remove(e.handover);
+                        runTask(remove(e.handover), 'Could not remove the handover.');
                       }}
                     >
                       <Trash2 size={13} />

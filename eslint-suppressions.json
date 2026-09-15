@@ -180,9 +180,6 @@
     }
   },
   "packages/ui/src/components/CustomersList.tsx": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 1
-    },
     "@typescript-eslint/no-misused-promises": {
       "count": 1
     },
@@ -232,9 +229,6 @@
     }
   },
   "packages/ui/src/components/IncomeList.tsx": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 1
-    },
     "@typescript-eslint/no-misused-promises": {
       "count": 3
     },
@@ -249,9 +243,6 @@
     }
   },
   "packages/ui/src/components/InventoryList.tsx": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 4
-    },
     "@typescript-eslint/no-misused-promises": {
       "count": 1
     },
@@ -276,9 +267,6 @@
     }
   },
   "packages/ui/src/components/PurchasesList.tsx": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 1
-    },
     "@typescript-eslint/no-misused-promises": {
       "count": 2
     },
@@ -293,9 +281,6 @@
     }
   },
   "packages/ui/src/components/ReportsOverview.tsx": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 2
-    },
     "@typescript-eslint/no-misused-promises": {
       "count": 1
     },
@@ -307,9 +292,6 @@
     }
   },
   "packages/ui/src/components/Shifts/BusinessDayTab.tsx": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 2
-    },
     "@typescript-eslint/no-misused-promises": {
       "count": 1
     },
@@ -340,11 +322,8 @@
     }
   },
   "packages/ui/src/components/Shifts/MerchandiseHandoversPanel.tsx": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 4
-    },
     "@typescript-eslint/no-misused-promises": {
-      "count": 3
+      "count": 2
     },
     "react-hooks/exhaustive-deps": {
       "count": 2
@@ -362,9 +341,6 @@
     }
   },
   "packages/ui/src/components/Shifts/ShiftHistoryTab.tsx": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 1
-    },
     "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 1
     },
@@ -384,9 +360,6 @@
     }
   },
   "packages/ui/src/components/Shifts/ShiftTransactionsPanel.tsx": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 1
-    },
     "@typescript-eslint/no-misused-promises": {
       "count": 3
     },
@@ -398,9 +371,6 @@
     }
   },
   "packages/ui/src/components/Shifts/ShiftsManagement.tsx": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 2
-    },
     "@typescript-eslint/no-misused-promises": {
       "count": 7
     },
@@ -412,9 +382,6 @@
     }
   },
   "packages/ui/src/components/StationSetup/DispensersList.tsx": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 2
-    },
     "@typescript-eslint/no-misused-promises": {
       "count": 1
     },
@@ -426,9 +393,6 @@
     }
   },
   "packages/ui/src/components/StationSetup/FuelPricingPanel.tsx": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 1
-    },
     "@typescript-eslint/no-misused-promises": {
       "count": 2
     },
@@ -445,9 +409,6 @@
     }
   },
   "packages/ui/src/components/StationSetup/PaymentTerminalsPanel.tsx": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 3
-    },
     "@typescript-eslint/no-misused-promises": {
       "count": 2
     },
@@ -459,17 +420,11 @@
     }
   },
   "packages/ui/src/components/StationSetup/ProductImportDrawer.tsx": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 1
-    },
     "@typescript-eslint/no-misused-promises": {
       "count": 1
     }
   },
   "packages/ui/src/components/StationSetup/ProductsCatalog.tsx": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 4
-    },
     "@typescript-eslint/no-misused-promises": {
       "count": 5
     },
@@ -492,9 +447,6 @@
     }
   },
   "packages/ui/src/components/StationSetup/ShiftTemplates.tsx": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 2
-    },
     "@typescript-eslint/no-misused-promises": {
       "count": 2
     },
@@ -503,9 +455,6 @@
     }
   },
   "packages/ui/src/components/StationSetup/StationOverview.tsx": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 4
-    },
     "@typescript-eslint/no-misused-promises": {
       "count": 2
     },
@@ -520,9 +469,6 @@
     }
   },
   "packages/ui/src/components/StationSetup/TanksGrid.tsx": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 2
-    },
     "@typescript-eslint/no-misused-promises": {
       "count": 3
     },
@@ -534,9 +480,6 @@
     }
   },
   "packages/ui/src/components/StationSetup/UserRolesAssignment.tsx": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 3
-    },
     "@typescript-eslint/no-misused-promises": {
       "count": 8
     },
@@ -571,9 +514,6 @@
     }
   },
   "packages/ui/src/components/customers/VehicleDrawer.tsx": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 1
-    },
     "@typescript-eslint/no-misused-promises": {
       "count": 1
     },
@@ -636,9 +576,6 @@
     }
   },
   "packages/ui/src/components/purchases/SupplierStatementDrawer.tsx": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    },
     "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 1
     }
@@ -652,9 +589,6 @@
     }
   },
   "packages/ui/src/components/reports/InvoicesPanel.tsx": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 2
-    },
     "@typescript-eslint/no-misused-promises": {
       "count": 1
     },
@@ -712,24 +646,11 @@
       "count": 2
     }
   },
-  "packages/ui/src/query/hooks.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 24
-    }
-  },
   "packages/ui/src/query/queryClient.tsx": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 1
-    },
     "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 1
     },
     "react-hooks/globals": {
-      "count": 1
-    }
-  },
-  "packages/ui/src/quick-entry/QuickEntryHost.tsx": {
-    "@typescript-eslint/no-floating-promises": {
       "count": 1
     }
   },

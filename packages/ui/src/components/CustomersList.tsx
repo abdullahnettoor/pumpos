@@ -235,8 +235,8 @@ export const CustomersList: React.FC<CustomersListProps> = ({
       return;
     try {
       await transactionService.deleteCustomerVehicle(vehicle.id);
-      qc.invalidateQueries({ queryKey: ['vehicles'] });
       toast.success('Vehicle deleted.');
+      await qc.invalidateQueries({ queryKey: ['vehicles'] });
     } catch (err: any) {
       toast.error(err.message || 'Failed to delete vehicle');
     }
@@ -307,8 +307,8 @@ export const CustomersList: React.FC<CustomersListProps> = ({
         accountId: values.accountId || undefined,
       });
       closeCollectionDrawer();
-      invalidateOperational(stationId);
       toast.success('Collection recorded.');
+      await invalidateOperational(stationId);
     } catch (err: any) {
       setFormError(err.message || 'Failed to record entry');
     } finally {

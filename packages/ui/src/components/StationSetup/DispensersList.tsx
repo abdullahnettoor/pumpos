@@ -10,6 +10,7 @@ import { queryKeys, TIER } from '../../query/hooks.js';
 import { DispenserUnit, Tank, Product, Nozzle } from '@pump/shared';
 import { Drawer } from '../Drawer.js';
 import { useToast } from '../primitives/ToastProvider.js';
+import { useRunTask } from '../../utils/runTask.js';
 
 const dispenserService = new CloudDispenserService();
 const tankService = new CloudTankService();
@@ -30,6 +31,7 @@ interface NozzleInput {
 export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => {
   const qc = useQueryClient();
   const toast = useToast();
+  const runTask = useRunTask();
   const [dispensers, setDispensers] = useState<DispenserUnit[]>([]);
   const [tanks, setTanks] = useState<Tank[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -45,7 +47,7 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
   const [nozzlesList, setNozzlesList] = useState<NozzleInput[]>([]);
 
   useEffect(() => {
-    loadData();
+    runTask(loadData(), 'Could not load dispenser units.');
   }, [stationId]);
 
   const loadData = async (force = false) => {
@@ -92,6 +94,7 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
       setCode(`DU-${String(duList.length + 1).padStart(2, '0')}`);
     } catch (err) {
       console.error('Failed to load dispenser setup data:', err);
+      toast.error('Could not load dispenser units. Reopen the tab to retry.');
     } finally {
       setLoading(false);
     }
@@ -204,7 +207,7 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
 
       setIsFormOpen(false);
       resetForm();
-      loadData(true);
+      await loadData(true);
       toast.success('Dispenser unit created.');
     } catch (err: any) {
       toast.error(err.message || 'Failed to create dispenser unit and nozzles');

@@ -1,6 +1,7 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { Drawer } from '../Drawer.js';
 import { useToast } from '../primitives/ToastProvider.js';
+import { useRunTask } from '../../utils/runTask.js';
 import { CloudProductService } from '../../services/cloud.js';
 import type { Product } from '@pump/shared';
 import { PRODUCT_UNITS } from '@pump/shared';
@@ -173,6 +174,7 @@ export const ProductImportDrawer: React.FC<ProductImportDrawerProps> = ({
   onImported,
 }) => {
   const toast = useToast();
+  const runTask = useRunTask();
   const fileRef = useRef<HTMLInputElement>(null);
   const [fileName, setFileName] = useState('');
   const [rows, setRows] = useState<ParsedRow[]>([]);
@@ -438,7 +440,7 @@ export const ProductImportDrawer: React.FC<ProductImportDrawerProps> = ({
             style={{ display: 'none' }}
             onChange={(e) => {
               const f = e.target.files?.[0];
-              if (f) handleFile(f);
+              if (f) runTask(handleFile(f), 'Could not read that CSV file.');
             }}
           />
         </div>

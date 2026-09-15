@@ -33,6 +33,7 @@ import { purchaseColumns, buildSupplierColumns } from './purchases/columns.js';
 import { SupplierFormDrawer } from './purchases/SupplierFormDrawer.js';
 import { SupplierStatementDrawer } from './purchases/SupplierStatementDrawer.js';
 import { SupplierPaymentDrawer } from './purchases/SupplierPaymentDrawer.js';
+import { useRunTask } from '../utils/runTask.js';
 
 const transactionService = new CloudTransactionService();
 
@@ -64,6 +65,7 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({
   const tanksQ = useTanks(stationId);
   const invalidateOperational = useInvalidateOperational();
   const toast = useToast();
+  const runTask = useRunTask();
 
   const purchases = purchasesQ.data ?? [];
   const activeShift = statusQ.data?.activeShift ?? null;
@@ -167,7 +169,7 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({
   };
 
   useEffect(() => {
-    if (activeTab === 'gst') loadGstRegister();
+    if (activeTab === 'gst') runTask(loadGstRegister(), 'Could not load the GST register.');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
 
@@ -303,10 +305,10 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({
       });
 
       closePurchaseDrawer();
-      invalidateOperational(stationId);
       toast.success(
         payment && payment.amount > 0 ? 'Purchase recorded with payment.' : 'Purchase recorded.',
       );
+      await invalidateOperational(stationId);
     } catch (err: any) {
       setFormError(err.message || 'Failed to record supplier purchase');
     } finally {

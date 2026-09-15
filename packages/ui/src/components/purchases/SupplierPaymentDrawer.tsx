@@ -20,7 +20,7 @@ interface SupplierPaymentDrawerProps {
   stationId: string | null;
   onClose: () => void;
   /** Called after a successful payment (e.g. to refresh the open statement). */
-  onDone?: () => void;
+  onDone?: () => void | Promise<unknown>;
 }
 
 /**
@@ -85,10 +85,10 @@ export const SupplierPaymentDrawer: React.FC<SupplierPaymentDrawerProps> = ({
         accountId: accountId || undefined,
         notes: notes || undefined,
       });
-      invalidateOperational(stationId);
       toast.success('Supplier payment recorded.');
+      await invalidateOperational(stationId);
       onClose();
-      onDone?.();
+      await onDone?.();
     } catch (err: any) {
       setError(err.message || 'Failed to record supplier payment');
     } finally {

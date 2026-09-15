@@ -19,6 +19,7 @@ import { inr } from '../utils/format.js';
 import { resolveBusinessDate } from '@pump/shared';
 import { Panel, Button, KpiStrip, KpiTile, EmptyState, DateText } from '../pump-ds/index.js';
 import { Play, Zap, Receipt, Wallet, BookOpen, FileText, TrendingUp, Percent } from 'lucide-react';
+import { useRunTask } from '../utils/runTask.js';
 
 const shiftService = new CloudShiftService();
 
@@ -88,6 +89,7 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
   onIntentConsumed,
 }) => {
   const qc = useQueryClient();
+  const runTask = useRunTask();
   const stationId = selectedStation?.id ?? null;
   const s = (selectedStation as any)?.settings || {};
   const clock = { timeZone: s.timezone, dayStartsAt: s.business_day_starts_at };
@@ -134,20 +136,25 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
     handledDssrDateRef.current = date;
     setActiveTab('daily-dssr');
     let cancelled = false;
-    (async () => {
-      try {
-        const result = await shiftService.getDailyDssrPreview(stationId, date);
-        if (!cancelled) setActiveDailyDssr(result);
-      } catch {
-        if (!cancelled) setSelectedDate(date);
-      } finally {
-        onIntentConsumed?.();
-      }
-    })();
+    runTask(
+      (async () => {
+        try {
+          const result = await shiftService.getDailyDssrPreview(stationId, date);
+          if (!cancelled) setActiveDailyDssr(result);
+        } catch {
+          // No snapshot for that day yet: fall back to selecting it so the
+          // operator can generate one.
+          if (!cancelled) setSelectedDate(date);
+        } finally {
+          onIntentConsumed?.();
+        }
+      })(),
+      'Could not open the report for that day.',
+    );
     return () => {
       cancelled = true;
     };
-  }, [intent?.openDssrDate, stationId, onIntentConsumed]);
+  }, [intent?.openDssrDate, stationId, onIntentConsumed, runTask]);
 
   const handleGenerateDailyDssr = async () => {
     if (!selectedStation || !selectedDate) return;
@@ -156,7 +163,7 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
       setGenerateError(null);
       const result = await shiftService.generateDailyDssr(selectedStation.id, selectedDate);
       // The list is a cached query — invalidate so the new snapshot appears.
-      qc.invalidateQueries({ queryKey: ['dssr-range'] });
+      await qc.invalidateQueries({ queryKey: ['dssr-range'] });
       setActiveDailyDssr(result);
     } catch (err: any) {
       setGenerateError(err.message || 'Failed to generate daily DSSR');

@@ -4,11 +4,13 @@ import { ShiftTemplate } from '@pump/shared';
 import { Chip } from '../../pump-ds/index.js';
 import { Drawer } from '../Drawer.js';
 import { useToast } from '../primitives/ToastProvider.js';
+import { useRunTask } from '../../utils/runTask.js';
 
 const templateService = new CloudShiftTemplateService();
 
 export const ShiftTemplates: React.FC = () => {
   const toast = useToast();
+  const runTask = useRunTask();
   const [templates, setTemplates] = useState<ShiftTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -19,8 +21,9 @@ export const ShiftTemplates: React.FC = () => {
   const [endTime, setEndTime] = useState('14:00');
 
   useEffect(() => {
-    loadTemplates();
-  }, []);
+    runTask(loadTemplates(), 'Could not load shift templates.');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runTask]);
 
   const loadTemplates = async () => {
     try {
@@ -45,6 +48,7 @@ export const ShiftTemplates: React.FC = () => {
       }
     } catch (err) {
       console.error('Failed to load shift templates:', err);
+      toast.error('Could not load shift templates. Reopen the tab to retry.');
     } finally {
       setLoading(false);
     }
@@ -60,7 +64,7 @@ export const ShiftTemplates: React.FC = () => {
         isActive: true,
       });
       setIsFormOpen(false);
-      loadTemplates();
+      await loadTemplates();
       toast.success('Shift template created.');
     } catch (err: any) {
       toast.error(err.message || 'Failed to create shift template');

@@ -135,8 +135,8 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
         accountId: values.accountId || undefined,
       });
       closeDrawer();
-      invalidateOperational(stationId);
       toast.success('Expense recorded.');
+      await invalidateOperational(stationId);
     } catch (err: any) {
       setFormError(err.message || 'Failed to record expense');
     } finally {
@@ -164,8 +164,8 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
     if (!confirmed) return;
     try {
       await transactionService.voidExpense(row.id, value);
-      invalidateOperational(stationId);
       toast.success('Expense voided.');
+      await invalidateOperational(stationId);
     } catch (err: any) {
       toast.error(err.message || 'Failed to void expense');
     }

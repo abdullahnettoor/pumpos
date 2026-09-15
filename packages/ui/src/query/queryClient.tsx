@@ -1,6 +1,7 @@
 import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { persistQueryClient } from '@tanstack/query-persist-client-core';
+import { runTask } from '../utils/runTask.js';
 import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister';
 
 // Query-key prefixes whose data is safe to persist across reloads (static +
@@ -110,7 +111,7 @@ function enablePersistence(client: QueryClient) {
     storage: window.localStorage,
     key: PERSISTED_QUERY_CACHE_KEY,
   });
-  persistQueryClient({
+  const [, restored] = persistQueryClient({
     queryClient: client as any,
     persister,
     maxAge: 24 * 60 * 60_000,
@@ -119,6 +120,21 @@ function enablePersistence(client: QueryClient) {
       shouldDehydrateQuery: (query) =>
         query.state.status === 'success' && PERSIST_PREFIXES.has(String(query.queryKey?.[0])),
     },
+  });
+
+  // Restoring reads and parses localStorage, so it can reject on a corrupt or
+  // truncated payload (a half-written entry, or a quota failure mid-write).
+  // That must not take the app down: the cache is a paint-speed optimisation,
+  // not a source of truth, so drop the bad payload and carry on fetching from
+  // the network. Deliberately not surfaced to the operator — there is nothing
+  // for them to do, and the only visible effect is a slower first paint.
+  runTask(restored, (error) => {
+    console.error('Could not restore the persisted query cache; continuing without it.', error);
+    try {
+      window.localStorage.removeItem(PERSISTED_QUERY_CACHE_KEY);
+    } catch {
+      // Storage is unavailable (private mode, quota). Nothing further to do.
+    }
   });
 }
 

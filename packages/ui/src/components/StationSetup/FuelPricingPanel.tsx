@@ -21,6 +21,7 @@ import {
   DateText,
 } from '../../pump-ds/index.js';
 import { Fuel, Package, Search } from 'lucide-react';
+import { useRunTask } from '../../utils/runTask.js';
 
 const pricingService = new CloudPricingService();
 const productService = new CloudProductService();
@@ -90,6 +91,7 @@ const fuelHistoryColumns: ColumnDef<any, any>[] = [
 
 export const FuelPricingPanel: React.FC<FuelPricingPanelProps> = ({ selectedStation }) => {
   const toast = useToast();
+  const runTask = useRunTask();
   const qc = useQueryClient();
   const [activeTab, setActiveTab] = useState<TabType>('fuels');
 
@@ -103,7 +105,7 @@ export const FuelPricingPanel: React.FC<FuelPricingPanelProps> = ({ selectedStat
   const [effectiveFrom, setEffectiveFrom] = useState('');
 
   useEffect(() => {
-    loadPricingData();
+    runTask(loadPricingData(), 'Could not load fuel pricing.');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedStation]);
 
@@ -123,6 +125,7 @@ export const FuelPricingPanel: React.FC<FuelPricingPanelProps> = ({ selectedStat
       setEffectiveFrom(localNow.toISOString().slice(0, 16));
     } catch (err) {
       console.error('Failed to load pricing data:', err);
+      toast.error('Could not load fuel pricing. Reopen the tab to retry.');
     } finally {
       setLoading(false);
     }

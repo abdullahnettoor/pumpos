@@ -148,8 +148,8 @@ export const CustomerFormDrawer: React.FC<CustomerFormDrawerProps> = ({
         });
         onCreated?.(created);
       }
-      invalidateOperational(stationId);
       toast.success(editingCustomer ? 'Customer updated.' : 'Customer created.');
+      await invalidateOperational(stationId);
       onClose();
     } catch (err: any) {
       setDrawerError(err.message || 'Failed to save customer');

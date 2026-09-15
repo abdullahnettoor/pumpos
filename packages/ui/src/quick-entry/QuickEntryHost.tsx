@@ -13,6 +13,7 @@ import { CollectionEntryForm } from '../components/transactions/CollectionEntryF
 import { PurchaseEntryForm } from '../components/transactions/PurchaseEntryForm.js';
 import { MerchandiseSaleEntryForm } from '../components/transactions/MerchandiseSaleEntryForm.js';
 import { useToast } from '../components/primitives/ToastProvider.js';
+import { useRunTask } from '../utils/runTask.js';
 import {
   CloudTransactionService,
   CloudProductService,
@@ -50,6 +51,7 @@ export const QuickEntryHost: React.FC<QuickEntryHostProps> = ({ selectedStation 
   const qe = useQuickEntry();
   const qc = useQueryClient();
   const toast = useToast();
+  const runTask = useRunTask();
   const invalidateOperational = useInvalidateOperational();
 
   const stationId = selectedStation?.id ?? null;
@@ -80,95 +82,98 @@ export const QuickEntryHost: React.FC<QuickEntryHostProps> = ({ selectedStation 
     if (!qe.open || !qe.type || !stationId) return;
     let cancelled = false;
     const type = qe.type;
-    (async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        if (type === 'expense') {
-          const cats = await qc.ensureQueryData({
-            queryKey: queryKeys.expenseCategories(),
-            queryFn: () => txService.getExpenseCategories(),
-            staleTime: TIER.semi.staleTime,
-          });
-          if (!cancelled) setCategories(cats || []);
-        } else if (type === 'income') {
-          const cats = await qc.ensureQueryData({
-            queryKey: queryKeys.incomeCategories(),
-            queryFn: () => txService.getIncomeCategories(),
-            staleTime: TIER.semi.staleTime,
-          });
-          if (!cancelled) setCategories(cats || []);
-        } else if (type === 'collection') {
-          const custs = await qc.ensureQueryData({
-            queryKey: queryKeys.customers(true),
-            queryFn: () => txService.getCustomers(true),
-            staleTime: TIER.semi.staleTime,
-          });
-          if (!cancelled) setCustomers(custs || []);
-        } else if (type === 'purchase') {
-          const [sups, prods, tks] = await Promise.all([
-            qc.ensureQueryData({
-              queryKey: queryKeys.suppliers(true),
-              queryFn: () => txService.getSuppliers(true),
+    runTask(
+      (async () => {
+        try {
+          setLoading(true);
+          setError(null);
+          if (type === 'expense') {
+            const cats = await qc.ensureQueryData({
+              queryKey: queryKeys.expenseCategories(),
+              queryFn: () => txService.getExpenseCategories(),
               staleTime: TIER.semi.staleTime,
-            }),
-            qc.ensureQueryData({
-              queryKey: queryKeys.products(),
-              queryFn: () => productService.listProducts(),
+            });
+            if (!cancelled) setCategories(cats || []);
+          } else if (type === 'income') {
+            const cats = await qc.ensureQueryData({
+              queryKey: queryKeys.incomeCategories(),
+              queryFn: () => txService.getIncomeCategories(),
               staleTime: TIER.semi.staleTime,
-            }),
-            qc.ensureQueryData({
-              queryKey: queryKeys.tanks(stationId),
-              queryFn: () => tankService.listTanks(stationId),
-              staleTime: TIER.static.staleTime,
-            }),
-          ]);
-          if (!cancelled) {
-            setSuppliers(sups || []);
-            setProducts(prods || []);
-            setTanks(tks || []);
-          }
-        } else if (type === 'merchandise-sale') {
-          const [prods, custs, items] = await Promise.all([
-            qc.ensureQueryData({
-              queryKey: queryKeys.products(),
-              queryFn: () => productService.listProducts(),
-              staleTime: TIER.semi.staleTime,
-            }),
-            qc.ensureQueryData({
+            });
+            if (!cancelled) setCategories(cats || []);
+          } else if (type === 'collection') {
+            const custs = await qc.ensureQueryData({
               queryKey: queryKeys.customers(true),
               queryFn: () => txService.getCustomers(true),
               staleTime: TIER.semi.staleTime,
-            }),
-            txService.getInventoryItems(stationId).catch(() => []),
-          ]);
-          const users = await qc
-            .ensureQueryData({
-              queryKey: queryKeys.users(),
-              queryFn: () => userService.listUsers(),
-              staleTime: TIER.static.staleTime,
-            })
-            .catch(() => []);
-          if (cancelled) return;
-          setProducts((prods || []).filter((p: any) => p.productType !== 'FUEL'));
-          setCustomers(custs || []);
-          const stockMap: Record<string, number> = {};
-          (items || []).forEach((i: any) => {
-            stockMap[i.productId] = Number(i.quantity);
-          });
-          setStock(stockMap);
-          setSellers(
-            (users || [])
-              .filter((u: any) => (u.status ? u.status === 'ACTIVE' : true))
-              .map((u: any) => ({ userId: u.id, userName: u.fullName || u.email || 'User' })),
-          );
+            });
+            if (!cancelled) setCustomers(custs || []);
+          } else if (type === 'purchase') {
+            const [sups, prods, tks] = await Promise.all([
+              qc.ensureQueryData({
+                queryKey: queryKeys.suppliers(true),
+                queryFn: () => txService.getSuppliers(true),
+                staleTime: TIER.semi.staleTime,
+              }),
+              qc.ensureQueryData({
+                queryKey: queryKeys.products(),
+                queryFn: () => productService.listProducts(),
+                staleTime: TIER.semi.staleTime,
+              }),
+              qc.ensureQueryData({
+                queryKey: queryKeys.tanks(stationId),
+                queryFn: () => tankService.listTanks(stationId),
+                staleTime: TIER.static.staleTime,
+              }),
+            ]);
+            if (!cancelled) {
+              setSuppliers(sups || []);
+              setProducts(prods || []);
+              setTanks(tks || []);
+            }
+          } else if (type === 'merchandise-sale') {
+            const [prods, custs, items] = await Promise.all([
+              qc.ensureQueryData({
+                queryKey: queryKeys.products(),
+                queryFn: () => productService.listProducts(),
+                staleTime: TIER.semi.staleTime,
+              }),
+              qc.ensureQueryData({
+                queryKey: queryKeys.customers(true),
+                queryFn: () => txService.getCustomers(true),
+                staleTime: TIER.semi.staleTime,
+              }),
+              txService.getInventoryItems(stationId).catch(() => []),
+            ]);
+            const users = await qc
+              .ensureQueryData({
+                queryKey: queryKeys.users(),
+                queryFn: () => userService.listUsers(),
+                staleTime: TIER.static.staleTime,
+              })
+              .catch(() => []);
+            if (cancelled) return;
+            setProducts((prods || []).filter((p: any) => p.productType !== 'FUEL'));
+            setCustomers(custs || []);
+            const stockMap: Record<string, number> = {};
+            (items || []).forEach((i: any) => {
+              stockMap[i.productId] = Number(i.quantity);
+            });
+            setStock(stockMap);
+            setSellers(
+              (users || [])
+                .filter((u: any) => (u.status ? u.status === 'ACTIVE' : true))
+                .map((u: any) => ({ userId: u.id, userName: u.fullName || u.email || 'User' })),
+            );
+          }
+        } catch (err: any) {
+          if (!cancelled) setError(err.message || 'Failed to load form data');
+        } finally {
+          if (!cancelled) setLoading(false);
         }
-      } catch (err: any) {
-        if (!cancelled) setError(err.message || 'Failed to load form data');
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
+      })(),
+      'Could not load the quick-entry form.',
+    );
     return () => {
       cancelled = true;
     };
@@ -189,10 +194,13 @@ export const QuickEntryHost: React.FC<QuickEntryHostProps> = ({ selectedStation 
     setSubmitting(false);
     closeQuickEntry();
   };
-  const done = (msg: string) => {
+  // Tell the operator and close first, then wait for the caches: the promise is
+  // a "caches have settled" signal, so awaiting it keeps the screens behind the
+  // sheet honest without delaying the confirmation.
+  const done = async (msg: string) => {
     toast.success(msg);
-    invalidateOperational(stationId);
     close();
+    await invalidateOperational(stationId);
   };
 
   const handleExpense = async (values: ExpenseEntryFormValues) => {
@@ -219,7 +227,7 @@ export const QuickEntryHost: React.FC<QuickEntryHostProps> = ({ selectedStation 
               accountId: values.accountId || undefined,
             },
       );
-      done('Expense recorded.');
+      await done('Expense recorded.');
     } catch (err: any) {
       setError(err.message || 'Failed to record expense');
     } finally {
@@ -251,7 +259,7 @@ export const QuickEntryHost: React.FC<QuickEntryHostProps> = ({ selectedStation 
               accountId: values.accountId || undefined,
             },
       );
-      done('Income recorded.');
+      await done('Income recorded.');
     } catch (err: any) {
       setError(err.message || 'Failed to record income');
     } finally {
@@ -276,7 +284,7 @@ export const QuickEntryHost: React.FC<QuickEntryHostProps> = ({ selectedStation 
           ? { shiftId, ...base }
           : { stationId: stationId ?? undefined, transactionDate: businessDate, ...base },
       );
-      done('Collection recorded.');
+      await done('Collection recorded.');
     } catch (err: any) {
       setError(err.message || 'Failed to record collection');
     } finally {
@@ -325,7 +333,7 @@ export const QuickEntryHost: React.FC<QuickEntryHostProps> = ({ selectedStation 
               ...base,
             },
       );
-      done(pay ? 'Purchase recorded with payment.' : 'Purchase recorded.');
+      await done(pay ? 'Purchase recorded with payment.' : 'Purchase recorded.');
     } catch (err: any) {
       setError(err.message || 'Failed to record purchase');
     } finally {
@@ -374,7 +382,7 @@ export const QuickEntryHost: React.FC<QuickEntryHostProps> = ({ selectedStation 
           : undefined,
         saveAsCustomer: useBuyer ? !!values.saveAsCustomer : undefined,
       });
-      done('Sale recorded.');
+      await done('Sale recorded.');
     } catch (err: any) {
       setError(err.message || 'Failed to record merchandise sale');
     } finally {
