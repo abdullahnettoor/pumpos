@@ -23,6 +23,13 @@ export default tseslint.config(
   {
     // Global ignores. Build output, vendored code, and the standalone
     // marketing app (own lockfile + Astro toolchain, not in the workspace).
+    //
+    // The lint scripts target the repository root (`eslint .`), so this list is
+    // the ONLY thing that decides what is checked. Adding a new top-level source
+    // directory therefore needs no script change. Patterns ending in `/**` are
+    // fine: ESLint prunes the whole subtree rather than walking it, so a
+    // multi-gigabyte `src-tauri/target` costs nothing (measured: +3s on a 100k
+    // file target directory).
     ignores: [
       '**/dist/**',
       '**/build/**',
@@ -37,6 +44,11 @@ export default tseslint.config(
       // hand-written service worker (browser globals, no module system).
       '.agents/**',
       '.opencode/**',
+      '.codex/**',
+      // Local scratch space, not tracked as source.
+      '.scratch/**',
+      '.impeccable/**',
+      'tmp/**',
       '**/public/**',
       '**/*.umd.js',
       '**/*.min.js',
