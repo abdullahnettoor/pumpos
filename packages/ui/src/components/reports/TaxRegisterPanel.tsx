@@ -3,10 +3,9 @@ import { useSalesTaxRegister, useIncomeGstRegister } from '../../query/hooks.js'
 import { computeRange } from '../primitives/DateRangeField.js';
 import type { DateRange } from '../primitives/DateRangeField.js';
 import { inr } from '../../utils/format.js';
-import { KpiStrip, KpiTile, Panel, EmptyState, DateText } from '../../pump-ds/index.js';
+import { KpiStrip, KpiTile, Panel, EmptyState, DateText, Icon } from '../../pump-ds/index.js';
 import { ReportRangeBar } from './ReportRangeBar.js';
 import { LoadingSpinner } from '../LoadingSpinner.js';
-import { Percent } from 'lucide-react';
 
 export interface TaxRegisterPanelProps {
   selectedStation: any | null;
@@ -130,7 +129,7 @@ export const TaxRegisterPanel: React.FC<TaxRegisterPanelProps> = ({ selectedStat
               <div style={{ padding: '12px' }}>
                 <EmptyState
                   compact
-                  icon={<Percent />}
+                  icon={<Icon name="percent" size="md" />}
                   title="No GST sales in this period"
                   description="Merchandise lines appear here once their product carries a GST rate."
                 />
@@ -229,7 +228,7 @@ export const TaxRegisterPanel: React.FC<TaxRegisterPanelProps> = ({ selectedStat
               <div style={{ padding: '12px' }}>
                 <EmptyState
                   compact
-                  icon={<Percent />}
+                  icon={<Icon name="percent" size="md" />}
                   title="No VAT fuel lines in this period"
                   description="Fuel lines appear here once the product carries a VAT rate."
                 />

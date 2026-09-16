@@ -2,7 +2,6 @@ import React, { useCallback, useMemo, useState } from 'react';
 import type { ExpenseEntryFormValues } from '@pump/shared';
 import { canManageExpenseCategory, canVoidExpense } from '@pump/shared';
 import { CloudTransactionService } from '../services/cloud.js';
-import { Plus, HelpCircle, Tags, Receipt, ArrowLeftRight } from 'lucide-react';
 import { PageLayout } from './primitives/PageLayout.js';
 import { DataTable } from './primitives/DataTable.js';
 import { Tabs } from './primitives/Tabs.js';
@@ -28,6 +27,7 @@ import {
   EmptyState,
   SearchInput,
   Select,
+  Icon,
 } from '../pump-ds/index.js';
 import { buildExpenseColumns } from './expenses/columns.js';
 import { ExpenseAnalytics } from './expenses/ExpenseAnalytics.js';
@@ -228,7 +228,7 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
             <Button
               variant="secondary"
               size="sm"
-              leftIcon={<Tags />}
+              leftIcon={<Icon name="tags" size="sm" />}
               onClick={() => setCategoryManagerOpen(true)}
             >
               Categories
@@ -236,7 +236,7 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
             <Button
               variant="primary"
               size="sm"
-              leftIcon={<Plus />}
+              leftIcon={<Icon name="plus" size="sm" />}
               onClick={openDrawer}
               disabled={categories.length === 0}
             >
@@ -251,8 +251,12 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
             activeId={activeTab}
             onChange={(id) => setActiveTab(id as TabType)}
             tabs={[
-              { id: 'ledger', label: 'Ledger', icon: <Receipt size={15} /> },
-              { id: 'analytics', label: 'By Category', icon: <ArrowLeftRight size={15} /> },
+              { id: 'ledger', label: 'Ledger', icon: <Icon name="receipt" size="xs" /> },
+              {
+                id: 'analytics',
+                label: 'By Category',
+                icon: <Icon name="arrow-left-right" size="xs" />,
+              },
             ]}
           />
         }
@@ -330,7 +334,7 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
                   cursor: 'help',
                 }}
               >
-                <HelpCircle size={14} />
+                <Icon name="help" size="xs" />
               </button>
             </div>
 
@@ -339,7 +343,7 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
                 <div style={{ padding: '16px' }}>
                   <EmptyState
                     compact
-                    icon={<Receipt />}
+                    icon={<Icon name="receipt" size="md" />}
                     title="Loading…"
                     description="Fetching expenses."
                   />
@@ -348,7 +352,7 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
                 <div style={{ padding: '12px' }}>
                   <EmptyState
                     compact
-                    icon={<Receipt />}
+                    icon={<Icon name="receipt" size="md" />}
                     title={expenses.length === 0 ? 'No expenses yet' : 'No matches'}
                     description={
                       expenses.length === 0

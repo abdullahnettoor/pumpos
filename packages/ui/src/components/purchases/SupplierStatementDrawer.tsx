@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
-import { Edit, Wallet, ShoppingCart } from 'lucide-react';
 import { Drawer } from '../Drawer.js';
 import { LedgerView } from '../ledger/LedgerView.js';
-import { Button } from '../../pump-ds/index.js';
+import { Button, Icon } from '../../pump-ds/index.js';
 import { inr, formatDate, formatTime } from '../../utils/format.js';
 import { useSupplierLedger } from '../../query/hooks.js';
 import { SupplierPaymentDrawer } from './SupplierPaymentDrawer.js';
@@ -197,7 +196,7 @@ export const SupplierStatementDrawer: React.FC<SupplierStatementDrawerProps> = (
               <Button
                 variant="secondary"
                 size="sm"
-                leftIcon={<Edit />}
+                leftIcon={<Icon name="edit" size="sm" />}
                 onClick={() => onEdit(supplier)}
               >
                 Edit
@@ -205,7 +204,7 @@ export const SupplierStatementDrawer: React.FC<SupplierStatementDrawerProps> = (
               <Button
                 variant="secondary"
                 size="sm"
-                leftIcon={<Wallet />}
+                leftIcon={<Icon name="wallet" size="sm" />}
                 onClick={() => setPayOpen(true)}
               >
                 Record payment
@@ -213,7 +212,7 @@ export const SupplierStatementDrawer: React.FC<SupplierStatementDrawerProps> = (
               <Button
                 variant="secondary"
                 size="sm"
-                leftIcon={<ShoppingCart />}
+                leftIcon={<Icon name="cart" size="sm" />}
                 onClick={() => onNewPurchase(supplier)}
               >
                 New purchase

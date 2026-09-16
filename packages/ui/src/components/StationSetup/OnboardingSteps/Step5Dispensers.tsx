@@ -1,6 +1,6 @@
 import React from 'react';
 import { OnboardingDraft, OnboardingDispenserDraft } from '@pump/shared';
-import { Button } from '../../../pump-ds/index.js';
+import { Button, Icon } from '../../../pump-ds/index.js';
 
 interface Step5DispensersProps {
   draft: OnboardingDraft;
@@ -43,11 +43,23 @@ export const Step5Dispensers: React.FC<Step5DispensersProps> = ({
           </p>
         </div>
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          <Button type="button" variant="secondary" size="sm" onClick={onAddDualDispenser}>
-            + Add Dual (2 Nozzles)
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            leftIcon={<Icon name="plus" size="xs" />}
+            onClick={onAddDualDispenser}
+          >
+            Add Dual (2 Nozzles)
           </Button>
-          <Button type="button" variant="secondary" size="sm" onClick={onAddQuadDispenser}>
-            + Add Quad (4 Nozzles)
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            leftIcon={<Icon name="plus" size="xs" />}
+            onClick={onAddQuadDispenser}
+          >
+            Add Quad (4 Nozzles)
           </Button>
           <Button type="button" variant="primary" size="sm" onClick={onAddCustomDispenser}>
             Add Custom
@@ -65,7 +77,7 @@ export const Step5Dispensers: React.FC<Step5DispensersProps> = ({
             fontSize: '13px',
           }}
         >
-          No dispensers configured yet. Click "+ Add Dual", "+ Add Quad", or "Add Custom" to begin.
+          No dispensers configured yet. Click "Add Dual", "Add Quad", or "Add Custom" to begin.
         </div>
       ) : (
         <div

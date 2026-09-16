@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { AppTopBar } from './AppTopBar.js';
 import { cn } from '../pump-ds/lib/cn.js';
+import { Icon, type IconName, ICON_REGISTRY } from '../pump-ds/icon/index.js';
 import { Station } from '@pump/shared';
 
 export interface NavItem {
@@ -33,340 +34,72 @@ export interface AppShellProps {
   stationReady?: boolean;
 }
 
-// Inline SVGs for Navigation
-const getIconSvg = (label: string) => {
-  const size = 18;
-  switch (label.toLowerCase()) {
+/**
+ * Map navigation item label/path to an IconName from the canonical registry.
+ */
+function resolveNavIcon(item: NavItem): IconName {
+  if (item.icon && item.icon in ICON_REGISTRY) {
+    return item.icon as IconName;
+  }
+  const normalized = item.label.trim().toLowerCase();
+  switch (normalized) {
     case 'dashboard':
-      return (
-        <svg
-          width={size}
-          height={size}
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <rect x="3" y="3" width="7" height="9" />
-          <rect x="14" y="3" width="7" height="5" />
-          <rect x="14" y="12" width="7" height="9" />
-          <rect x="3" y="16" width="7" height="5" />
-        </svg>
-      );
+      return 'dashboard';
     case 'shifts':
-      return (
-        <svg
-          width={size}
-          height={size}
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M3 22V2a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v20" />
-          <path d="M15 2h5a2 2 0 0 1 2 2v13.5a2.5 2.5 0 0 1-5 0" />
-          <circle cx="10" cy="8" r="2" />
-          <path d="M15 22H3" />
-        </svg>
-      );
+      return 'shifts';
     case 'station overview':
-      return (
-        <svg
-          width={size}
-          height={size}
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <circle cx="12" cy="12" r="3" />
-          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-        </svg>
-      );
+      return 'station';
     case 'products catalog':
-      return (
-        <svg
-          width={size}
-          height={size}
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <line x1="16.5" y1="9.4" x2="7.5" y2="4.21" />
-          <polygon points="12 22.08 12 12 3 6.92 3 17.08 12 22.08" />
-          <polygon points="12 22.08 21 17.08 21 6.92 12 12 12 22.08" />
-          <polygon points="12 12 21 6.92 12 1.92 3 6.92 12 12" />
-        </svg>
-      );
+      return 'products';
     case 'storage tanks':
-      return (
-        <svg
-          width={size}
-          height={size}
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <ellipse cx="12" cy="5" rx="9" ry="3" />
-          <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" />
-          <path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3" />
-        </svg>
-      );
+      return 'tank';
     case 'dispenser units':
-      return (
-        <svg
-          width={size}
-          height={size}
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <rect x="5" y="2" width="14" height="20" rx="2" ry="2" />
-          <line x1="12" y1="18" x2="12" y2="18.01" />
-          <line x1="9" y1="6" x2="15" y2="6" />
-          <line x1="9" y1="10" x2="15" y2="10" />
-        </svg>
-      );
+      return 'dispenser';
     case 'nozzles mapping':
-      return (
-        <svg
-          width={size}
-          height={size}
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M12 22a7 7 0 0 0 7-7c0-4.3-7-11-7-11S5 10.7 5 15a7 7 0 0 0 7 7z" />
-        </svg>
-      );
+      return 'fuel';
     case 'shift templates':
-      return (
-        <svg
-          width={size}
-          height={size}
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-          <line x1="16" y1="2" x2="16" y2="6" />
-          <line x1="8" y1="2" x2="8" y2="6" />
-          <line x1="3" y1="10" x2="21" y2="10" />
-        </svg>
-      );
+      return 'calendar';
     case 'team roles':
-      return (
-        <svg
-          width={size}
-          height={size}
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-          <circle cx="9" cy="7" r="4" />
-          <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-          <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-        </svg>
-      );
+      return 'users';
     case 'expenses':
-      return (
-        <svg
-          width={size}
-          height={size}
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <rect x="2" y="4" width="20" height="16" rx="2" ry="2" />
-          <line x1="12" y1="10" x2="12" y2="14" />
-          <line x1="2" y1="10" x2="22" y2="10" />
-        </svg>
-      );
+      return 'expenses';
     case 'income':
-      return (
-        <svg
-          width={size}
-          height={size}
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <rect x="2" y="6" width="20" height="12" rx="2" ry="2" />
-          <circle cx="12" cy="12" r="2" />
-          <path d="M6 12h.01M18 12h.01" />
-        </svg>
-      );
+      return 'income';
     case 'purchases':
-      return (
-        <svg
-          width={size}
-          height={size}
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <circle cx="9" cy="21" r="1" />
-          <circle cx="20" cy="21" r="1" />
-          <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
-        </svg>
-      );
+      return 'purchases';
     case 'customers':
-      return (
-        <svg
-          width={size}
-          height={size}
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <circle cx="12" cy="8" r="5" />
-          <path d="M20 21a8 8 0 0 0-16 0" />
-        </svg>
-      );
+      return 'customers';
     case 'inventory':
-      return (
-        <svg
-          width={size}
-          height={size}
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <ellipse cx="12" cy="5" rx="9" ry="3" />
-          <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" />
-          <path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3" />
-        </svg>
-      );
+      return 'inventory';
     case 'reports':
-      return (
-        <svg
-          width={size}
-          height={size}
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <line x1="18" y1="20" x2="18" y2="10" />
-          <line x1="12" y1="20" x2="12" y2="4" />
-          <line x1="6" y1="20" x2="6" y2="14" />
-        </svg>
-      );
+      return 'reports';
     case 'fuel pricing':
     case 'pricing':
-      return (
-        <svg
-          width={size}
-          height={size}
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M7.5 3H4a1 1 0 0 0-1 1v3.5a2 2 0 0 0 .586 1.414l9.5 9.5a2 2 0 0 0 2.828 0l3.5-3.5a2 2 0 0 0 0-2.828l-9.5-9.5A2 2 0 0 0 7.5 3Z" />
-          <circle cx="7.5" cy="7.5" r="1" />
-        </svg>
-      );
+      return 'pricing';
     case 'organization':
-      return (
-        <svg
-          width={size}
-          height={size}
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <rect x="3" y="7" width="18" height="14" rx="1" />
-          <path d="M8 7V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v3" />
-          <line x1="9" y1="11" x2="9" y2="11.01" />
-          <line x1="15" y1="11" x2="15" y2="11.01" />
-          <line x1="9" y1="15" x2="9" y2="15.01" />
-          <line x1="15" y1="15" x2="15" y2="15.01" />
-        </svg>
-      );
+      return 'organization';
     case 'accounts':
-      return (
-        <svg
-          width={size}
-          height={size}
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M19 5H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Z" />
-          <path d="M16 12h.01" />
-          <path d="M3 10h18" />
-        </svg>
-      );
+      return 'accounts';
+    case 'onboarding setup':
+      return 'onboarding';
+    case 'design system':
+      return 'design-system';
+    case 'audit logs':
+      return 'file-text';
+    case 'settings':
+      return 'settings';
+    case 'profile':
+      return 'user';
+    case 'terminals':
+    case 'pos terminals':
+      return 'terminal';
     default:
-      return (
-        <svg
-          width={size}
-          height={size}
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <circle cx="12" cy="12" r="10" />
-          <line x1="12" y1="8" x2="12" y2="16" />
-          <line x1="8" y1="12" x2="16" y2="12" />
-        </svg>
-      );
+      if (normalized in ICON_REGISTRY) {
+        return normalized as IconName;
+      }
+      return 'fuel';
   }
-};
+}
 
 /**
  * Sidebar section grouping. Items are matched to sections by `path`; order
@@ -510,7 +243,7 @@ export const AppShell: React.FC<AppShellProps> = ({
                             isActive ? 'text-info-fg' : 'text-ink-muted',
                           )}
                         >
-                          {getIconSvg(item.label)}
+                          <Icon name={resolveNavIcon(item)} size="md" />
                         </span>
                         {!collapsed && <span className="truncate">{item.label}</span>}
                       </button>

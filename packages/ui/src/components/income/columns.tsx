@@ -1,8 +1,7 @@
 import React from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
-import { Ban } from 'lucide-react';
 import { inr } from '../../utils/format.js';
-import { Chip, DateText } from '../../pump-ds/index.js';
+import { Chip, DateText, Icon } from '../../pump-ds/index.js';
 import { voidActionColumn } from '../finance/voidActionColumn.js';
 
 export const RECEIVED_INTO: Record<
@@ -91,5 +90,5 @@ export const incomeColumns: ColumnDef<any, any>[] = baseColumns;
 /** Ledger columns with a Void row action (omit `onVoid` for read-only roles). */
 export const buildIncomeColumns = (onVoid?: (row: any) => void): ColumnDef<any, any>[] =>
   onVoid
-    ? [...baseColumns, voidActionColumn(onVoid, 'Void income entry', <Ban size={14} />)]
+    ? [...baseColumns, voidActionColumn(onVoid, 'Void income entry', <Icon name="ban" size="xs" />)]
     : baseColumns;

@@ -1,9 +1,8 @@
 import React, { useState } from 'react';
 import { Drawer } from '../Drawer.js';
-import { Button, Chip, EmptyState, Input, Form } from '../../pump-ds/index.js';
+import { Button, Chip, EmptyState, Input, Form, Icon } from '../../pump-ds/index.js';
 import { CloudTransactionService } from '../../services/cloud.js';
 import { useToast } from '../primitives/ToastProvider.js';
-import { Pencil, Plus, Check, X, Tag } from 'lucide-react';
 
 const service = new CloudTransactionService();
 
@@ -155,7 +154,7 @@ export const IncomeCategoryManagerDrawer: React.FC<IncomeCategoryManagerDrawerPr
                 type="submit"
                 variant="primary"
                 size="md"
-                leftIcon={<Plus />}
+                leftIcon={<Icon name="plus" size="sm" />}
                 loading={adding}
                 disabled={!newName.trim()}
               >
@@ -182,7 +181,7 @@ export const IncomeCategoryManagerDrawer: React.FC<IncomeCategoryManagerDrawerPr
             <div style={{ padding: '8px 0' }}>
               <EmptyState
                 compact
-                icon={<Tag />}
+                icon={<Icon name="tag" size="md" />}
                 title="No categories"
                 description={canManage ? 'Add one above.' : 'None yet.'}
               />
@@ -227,7 +226,7 @@ export const IncomeCategoryManagerDrawer: React.FC<IncomeCategoryManagerDrawerPr
                       variant="primary"
                       size="sm"
                       iconOnly
-                      leftIcon={<Check />}
+                      leftIcon={<Icon name="check" size="xs" />}
                       aria-label="Save"
                       loading={savingId === c.id}
                       disabled={!editName.trim()}
@@ -237,7 +236,7 @@ export const IncomeCategoryManagerDrawer: React.FC<IncomeCategoryManagerDrawerPr
                       variant="ghost"
                       size="sm"
                       iconOnly
-                      leftIcon={<X />}
+                      leftIcon={<Icon name="x" size="xs" />}
                       aria-label="Cancel"
                       onClick={cancelEdit}
                     />
@@ -268,7 +267,7 @@ export const IncomeCategoryManagerDrawer: React.FC<IncomeCategoryManagerDrawerPr
                         variant="ghost"
                         size="sm"
                         iconOnly
-                        leftIcon={<Pencil />}
+                        leftIcon={<Icon name="pencil" size="xs" />}
                         aria-label="Edit"
                         onClick={() => startEdit(c)}
                       />

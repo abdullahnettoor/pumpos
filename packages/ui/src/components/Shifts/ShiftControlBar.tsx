@@ -1,7 +1,7 @@
 import React from 'react';
 import { inr } from '../../utils/format.js';
 import { Clock3, FileText, Fuel, Receipt, ShoppingBag, ShoppingCart, Wallet } from 'lucide-react';
-import { Button, Chip } from '../../pump-ds/index.js';
+import { Button, Chip, Icon } from '../../pump-ds/index.js';
 import { ShiftBusinessDateContext } from './ShiftBusinessDateContext.js';
 
 type QuickAction = {
@@ -142,8 +142,9 @@ export const ShiftControlBar: React.FC<ShiftControlBarProps> = ({
             size="sm"
             onClick={onCloseShiftClick}
             title={closePromoted ? 'Ready to close' : 'Begin close review'}
+            rightIcon={!isPreparingClose ? <Icon name="arrow-right" size="xs" /> : undefined}
           >
-            {isPreparingClose ? 'Continue Close' : 'Begin Close →'}
+            {isPreparingClose ? 'Continue Close' : 'Begin Close'}
           </Button>
         </div>
       </div>

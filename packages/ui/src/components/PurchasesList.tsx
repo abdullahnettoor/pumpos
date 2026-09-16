@@ -10,16 +10,6 @@ import {
   useInvalidateOperational,
   usePurchaseGstRegister,
 } from '../query/hooks.js';
-import {
-  Plus,
-  ShoppingCart,
-  Info,
-  Building2,
-  Percent,
-  Search,
-  HelpCircle,
-  Wallet,
-} from 'lucide-react';
 import { LoadingSpinner } from './LoadingSpinner.js';
 import { Drawer } from './Drawer.js';
 import { PurchaseEntryForm } from './transactions/PurchaseEntryForm.js';
@@ -28,7 +18,7 @@ import { inr } from '../utils/format.js';
 import { Tabs } from './primitives/Tabs.js';
 import { PageLayout } from './primitives/PageLayout.js';
 import { useToast } from './primitives/ToastProvider.js';
-import { Panel, Button, KpiStrip, KpiTile, EmptyState, DateText } from '../pump-ds/index.js';
+import { Panel, Button, KpiStrip, KpiTile, EmptyState, DateText, Icon } from '../pump-ds/index.js';
 import { resolveBusinessDate, type PurchaseEntryFormValues } from '@pump/shared';
 import { purchaseColumns, buildSupplierColumns } from './purchases/columns.js';
 import { SupplierFormDrawer } from './purchases/SupplierFormDrawer.js';
@@ -348,7 +338,7 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({
               <Button
                 variant="secondary"
                 size="sm"
-                leftIcon={<Wallet />}
+                leftIcon={<Icon name="wallet" size="sm" />}
                 onClick={() => setPaymentDrawerOpen(true)}
               >
                 Record Payment
@@ -356,7 +346,7 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({
               <Button
                 variant="primary"
                 size="sm"
-                leftIcon={<Plus />}
+                leftIcon={<Icon name="plus" size="sm" />}
                 onClick={() => openPurchaseDrawer()}
               >
                 Add Purchase
@@ -368,12 +358,17 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({
               <Button
                 variant="secondary"
                 size="sm"
-                leftIcon={<Wallet />}
+                leftIcon={<Icon name="wallet" size="sm" />}
                 onClick={() => setPaymentDrawerOpen(true)}
               >
                 Record Payment
               </Button>
-              <Button variant="primary" size="sm" leftIcon={<Plus />} onClick={openCreateSupplier}>
+              <Button
+                variant="primary"
+                size="sm"
+                leftIcon={<Icon name="plus" size="sm" />}
+                onClick={openCreateSupplier}
+              >
                 Add Supplier
               </Button>
             </>
@@ -387,9 +382,13 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({
           activeId={activeTab}
           onChange={(id) => setActiveTab(id as TabType)}
           tabs={[
-            { id: 'transactions', label: 'Intakes & Drops', icon: <ShoppingCart size={15} /> },
-            { id: 'registry', label: 'Supplier Registry', icon: <Building2 size={15} /> },
-            { id: 'gst', label: 'GST / ITC', icon: <Percent size={15} /> },
+            { id: 'transactions', label: 'Intakes & Drops', icon: <Icon name="cart" size="xs" /> },
+            {
+              id: 'registry',
+              label: 'Supplier Registry',
+              icon: <Icon name="building" size="xs" />,
+            },
+            { id: 'gst', label: 'GST / ITC', icon: <Icon name="percent" size="xs" /> },
           ]}
         />
       }
@@ -422,8 +421,9 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({
               action={
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <div style={{ position: 'relative' }}>
-                    <Search
-                      size={13}
+                    <Icon
+                      name="search"
+                      size="xs"
                       style={{
                         position: 'absolute',
                         left: '8px',
@@ -464,7 +464,7 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({
                       cursor: 'help',
                     }}
                   >
-                    <HelpCircle size={15} />
+                    <Icon name="help" size="xs" />
                   </button>
                 </div>
               }
@@ -477,7 +477,7 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({
                 <div style={{ padding: '12px' }}>
                   <EmptyState
                     compact
-                    icon={<ShoppingCart />}
+                    icon={<Icon name="cart" size="md" />}
                     title={purchases.length === 0 ? 'No purchases yet' : 'No matching purchases'}
                     description={
                       purchases.length === 0
@@ -525,7 +525,7 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({
                 border: '1px solid var(--border-soft)',
               }}
             >
-              <Info size={14} />
+              <Icon name="info" size="xs" />
               <span>
                 Input GST credit (ITC) on GST purchase lines. Fuel (VAT) and exempt items carry no
                 input credit and are excluded.

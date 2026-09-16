@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Drawer } from '../Drawer.js';
-import { Button, Form } from '../../pump-ds/index.js';
+import { Button, Form, Icon } from '../../pump-ds/index.js';
 import { Combobox } from '../primitives/Combobox.js';
 import { CashCountPopover, type CashBreakdown } from '../primitives/CashCountPopover.js';
 import { CustomerFormDrawer } from '../customers/CustomerFormDrawer.js';
@@ -1261,16 +1261,19 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
                             }
                             disabled={ccBusy}
                             title="Void this credit sale"
+                            aria-label="Void this credit sale"
                             style={{
                               background: 'transparent',
                               border: 'none',
                               color: 'var(--brand-danger)',
                               cursor: 'pointer',
-                              fontSize: '12px',
                               padding: '2px 4px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
                             }}
                           >
-                            ✕
+                            <Icon name="x" size="xs" />
                           </button>
                         </div>
                       </div>
@@ -1353,16 +1356,19 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
                         }
                         disabled={ccBusy}
                         title="Void this OMC card sale"
+                        aria-label="Void this OMC card sale"
                         style={{
                           background: 'transparent',
                           border: 'none',
                           color: 'var(--brand-danger)',
                           cursor: 'pointer',
-                          fontSize: '12px',
                           padding: '2px 4px',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
                         }}
                       >
-                        ✕
+                        <Icon name="x" size="xs" />
                       </button>
                     </div>
                   </div>
@@ -1375,10 +1381,11 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
                 type="button"
                 variant="secondary"
                 size="sm"
+                leftIcon={<Icon name="plus" size="xs" />}
                 onClick={() => setCcOpen(true)}
                 style={{ alignSelf: 'flex-start' }}
               >
-                + Add customer sale
+                Add customer sale
               </Button>
             ) : (
               <div
@@ -1599,11 +1606,12 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
                     type="button"
                     variant="primary"
                     size="sm"
+                    leftIcon={<Icon name="plus" size="xs" />}
                     onClick={addCreditLine}
                     disabled={(ccChannel === 'credit' && !ccCustomerId) || !(Number(ccAmount) > 0)}
                     loading={ccBusy}
                   >
-                    {ccChannel === 'omc' ? '+ Add OMC card sale' : '+ Add credit sale'}
+                    {ccChannel === 'omc' ? 'Add OMC card sale' : 'Add credit sale'}
                   </Button>
                   <Button
                     type="button"
