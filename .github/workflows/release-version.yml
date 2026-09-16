@@ -49,9 +49,12 @@ jobs:
       - name: Derive the release version
         id: derive
         run: |
-          # Everything this PR brings to main, ignoring what main already has.
-          git fetch --no-tags --depth=0 origin "${{ github.base_ref }}" >/dev/null 2>&1 || true
-          derived="$(node scripts/next-version.mjs --json)"
+          # Everything this PR brings to main, bumped on top of the version
+          # main already ships — so re-runs after the bump lands are stable
+          # instead of ratcheting the version up forever.
+          git fetch --no-tags origin "${{ github.base_ref }}" >/dev/null 2>&1
+          base="$(git show "origin/${{ github.base_ref }}:package.json" | node -p 'JSON.parse(require("fs").readFileSync(0,"utf8")).version')"
+          derived="$(node scripts/next-version.mjs --json --base "$base" --range "origin/${{ github.base_ref }}..HEAD")"
           echo "$derived"
           echo "bump=$(echo "$derived" | node -p 'JSON.parse(require("fs").readFileSync(0,"utf8")).bump')" >> "$GITHUB_OUTPUT"
           echo "version=$(echo "$derived" | node -p 'JSON.parse(require("fs").readFileSync(0,"utf8")).version')" >> "$GITHUB_OUTPUT"
