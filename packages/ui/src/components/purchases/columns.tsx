@@ -1,8 +1,7 @@
 import React from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
-import { Building, Edit } from 'lucide-react';
 import { inr } from '../../utils/format.js';
-import { StatusChip, DateText } from '../../pump-ds/index.js';
+import { StatusChip, DateText, Icon } from '../../pump-ds/index.js';
 
 /** Column builders for the Purchases screen tables (extracted from PurchasesList). */
 
@@ -95,7 +94,7 @@ export const buildSupplierColumns = (
       const sup = row.original;
       return (
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Building size={14} style={{ color: 'var(--text-muted)' }} />
+          <Icon name="building" size="xs" style={{ color: 'var(--text-muted)' }} />
           <div>
             <button
               type="button"
@@ -190,7 +189,7 @@ export const buildSupplierColumns = (
           padding: '4px',
         }}
       >
-        <Edit size={14} />
+        <Icon name="edit" size="xs" />
       </button>
     ),
   },

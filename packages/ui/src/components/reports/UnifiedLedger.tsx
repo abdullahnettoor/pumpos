@@ -13,8 +13,7 @@ import { Combobox } from '../primitives/Combobox.js';
 import { DateRangeField, computeRange } from '../primitives/DateRangeField.js';
 import type { DateRange } from '../primitives/DateRangeField.js';
 import { inr, formatDate } from '../../utils/format.js';
-import { KpiStrip, KpiTile, Panel, Button, EmptyState } from '../../pump-ds/index.js';
-import { BookOpen, Download } from 'lucide-react';
+import { KpiStrip, KpiTile, Panel, Button, EmptyState, Icon } from '../../pump-ds/index.js';
 
 /** Tone for the closing-balance KPI (kept local; the old KpiCard primitive is retired). */
 type BalanceTone = 'default' | 'success' | 'warning' | 'danger' | 'info';
@@ -424,7 +423,7 @@ export const UnifiedLedger: React.FC<UnifiedLedgerProps> = ({ selectedStation })
       {!committed ? (
         <EmptyState
           compact
-          icon={<BookOpen />}
+          icon={<Icon name="ledger" size="md" />}
           title="Select a ledger"
           description="Pick an entity and period, then View Ledger to load the statement."
         />
@@ -457,7 +456,7 @@ export const UnifiedLedger: React.FC<UnifiedLedgerProps> = ({ selectedStation })
             <Button
               variant="secondary"
               size="sm"
-              leftIcon={<Download />}
+              leftIcon={<Icon name="download" size="sm" />}
               onClick={downloadPdf}
               loading={downloading}
               disabled={loading || computed.rows.length === 0}

@@ -81,7 +81,6 @@ describe('Action Icons migration', () => {
       nozzles: [],
       shiftTemplates: [],
       paymentTerminals: [],
-      operatingSchedule: [] as any,
     };
 
     render(
@@ -119,7 +118,6 @@ describe('Action Icons migration', () => {
       nozzles: [],
       shiftTemplates: [],
       paymentTerminals: [],
-      operatingSchedule: [] as any,
     };
 
     render(

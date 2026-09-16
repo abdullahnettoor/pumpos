@@ -5,8 +5,7 @@ import { DataTable } from '../primitives/DataTable.js';
 import { DateRangeField, computeRange } from '../primitives/DateRangeField.js';
 import type { DateRange } from '../primitives/DateRangeField.js';
 import { inr } from '../../utils/format.js';
-import { KpiStrip, KpiTile, Panel, EmptyState } from '../../pump-ds/index.js';
-import { Receipt } from 'lucide-react';
+import { KpiStrip, KpiTile, Panel, EmptyState, Icon } from '../../pump-ds/index.js';
 
 export interface ExpenseAnalyticsProps {
   selectedStation: any | null;
@@ -171,7 +170,7 @@ export const ExpenseAnalytics: React.FC<ExpenseAnalyticsProps> = ({ selectedStat
           <div style={{ padding: '16px' }}>
             <EmptyState
               compact
-              icon={<Receipt />}
+              icon={<Icon name="receipt" size="md" />}
               title="Loading…"
               description="Fetching expenses."
             />
@@ -180,7 +179,7 @@ export const ExpenseAnalytics: React.FC<ExpenseAnalyticsProps> = ({ selectedStat
           <div style={{ padding: '12px' }}>
             <EmptyState
               compact
-              icon={<Receipt />}
+              icon={<Icon name="receipt" size="md" />}
               title="No expenses"
               description="No expenses in this date range."
             />

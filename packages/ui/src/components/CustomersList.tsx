@@ -11,7 +11,6 @@ import {
   useCreditSales,
   useAllVehicles,
 } from '../query/hooks.js';
-import { Users, CreditCard, Plus, Truck, Search, Wallet, HelpCircle } from 'lucide-react';
 import { LoadingSpinner } from './LoadingSpinner.js';
 import { Drawer } from './Drawer.js';
 import { CollectionEntryForm } from './transactions/CollectionEntryForm.js';
@@ -21,7 +20,7 @@ import { Tabs } from './primitives/Tabs.js';
 import { PageLayout } from './primitives/PageLayout.js';
 import { useConfirm } from './primitives/ConfirmDialog.js';
 import { useToast } from './primitives/ToastProvider.js';
-import { Panel, Button, Chip, KpiStrip, KpiTile, EmptyState } from '../pump-ds/index.js';
+import { Panel, Button, Chip, KpiStrip, KpiTile, EmptyState, Icon } from '../pump-ds/index.js';
 import { resolveBusinessDate, type CollectionEntryFormValues } from '@pump/shared';
 import {
   buildCustomerColumns,
@@ -389,14 +388,19 @@ export const CustomersList: React.FC<CustomersListProps> = ({
             <Button
               variant="primary"
               size="sm"
-              leftIcon={<Plus />}
+              leftIcon={<Icon name="plus" size="sm" />}
               onClick={() => openCollectionDrawer()}
             >
               Add Collection
             </Button>
           )}
           {activeTab === 'registry' && (
-            <Button variant="primary" size="sm" leftIcon={<Plus />} onClick={openCreateCustomer}>
+            <Button
+              variant="primary"
+              size="sm"
+              leftIcon={<Icon name="plus" size="sm" />}
+              onClick={openCreateCustomer}
+            >
               Add Customer
             </Button>
           )}
@@ -404,7 +408,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({
             <Button
               variant="primary"
               size="sm"
-              leftIcon={<Plus />}
+              leftIcon={<Icon name="plus" size="sm" />}
               disabled={eligibleCustomers.length === 0}
               onClick={openCreateVehicle}
             >
@@ -420,10 +424,10 @@ export const CustomersList: React.FC<CustomersListProps> = ({
           activeId={activeTab}
           onChange={(id) => setActiveTab(id as TabType)}
           tabs={[
-            { id: 'transactions', label: 'Collections', icon: <Wallet size={15} /> },
-            { id: 'sales', label: 'Credit Sales', icon: <CreditCard size={15} /> },
-            { id: 'registry', label: 'Customer Registry', icon: <Users size={15} /> },
-            { id: 'vehicles', label: 'Vehicles', icon: <Truck size={15} /> },
+            { id: 'transactions', label: 'Collections', icon: <Icon name="wallet" size="xs" /> },
+            { id: 'sales', label: 'Credit Sales', icon: <Icon name="card" size="xs" /> },
+            { id: 'registry', label: 'Customer Registry', icon: <Icon name="users" size="xs" /> },
+            { id: 'vehicles', label: 'Vehicles', icon: <Icon name="truck" size="xs" /> },
           ]}
         />
       }
@@ -469,8 +473,9 @@ export const CustomersList: React.FC<CustomersListProps> = ({
               action={
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <div style={{ position: 'relative' }}>
-                    <Search
-                      size={13}
+                    <Icon
+                      name="search"
+                      size="xs"
                       style={{
                         position: 'absolute',
                         left: '8px',
@@ -542,7 +547,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({
                       cursor: 'help',
                     }}
                   >
-                    <HelpCircle size={15} />
+                    <Icon name="help" size="xs" />
                   </button>
                 </div>
               }
@@ -555,7 +560,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({
                 <div style={{ padding: '12px' }}>
                   <EmptyState
                     compact
-                    icon={<Wallet />}
+                    icon={<Icon name="wallet" size="md" />}
                     title={
                       allCollections.length === 0 ? 'No collections yet' : 'No matching collections'
                     }
@@ -608,8 +613,9 @@ export const CustomersList: React.FC<CustomersListProps> = ({
               action={
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <div style={{ position: 'relative' }}>
-                    <Search
-                      size={13}
+                    <Icon
+                      name="search"
+                      size="xs"
                       style={{
                         position: 'absolute',
                         left: '8px',
@@ -650,7 +656,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({
                       cursor: 'help',
                     }}
                   >
-                    <HelpCircle size={15} />
+                    <Icon name="help" size="xs" />
                   </button>
                 </div>
               }
@@ -663,7 +669,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({
                 <div style={{ padding: '12px' }}>
                   <EmptyState
                     compact
-                    icon={<CreditCard />}
+                    icon={<Icon name="card" size="md" />}
                     title={
                       allCreditSales.length === 0
                         ? 'No credit sales yet'
@@ -743,8 +749,9 @@ export const CustomersList: React.FC<CustomersListProps> = ({
                 action={
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <div style={{ position: 'relative' }}>
-                      <Search
-                        size={13}
+                      <Icon
+                        name="search"
+                        size="xs"
                         style={{
                           position: 'absolute',
                           left: '8px',
@@ -778,7 +785,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({
                   <div style={{ padding: '12px' }}>
                     <EmptyState
                       compact
-                      icon={<Truck />}
+                      icon={<Icon name="truck" size="md" />}
                       title={allVehicles.length === 0 ? 'No vehicles' : 'No matching vehicles'}
                       description={
                         allVehicles.length === 0

@@ -1,8 +1,7 @@
 import React from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
-import { User, Edit, Trash2 } from 'lucide-react';
 import { inr } from '../../utils/format.js';
-import { Chip, StatusChip, DateText } from '../../pump-ds/index.js';
+import { Chip, StatusChip, DateText, Icon } from '../../pump-ds/index.js';
 
 /**
  * Column builders for the Customers screen tables. These are pure functions
@@ -39,7 +38,7 @@ export const buildCustomerColumns = (
         const c = row.original;
         return (
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <User size={14} style={{ color: 'var(--text-muted)' }} />
+            <Icon name="user" size="xs" style={{ color: 'var(--text-muted)' }} />
             <div>
               <button
                 type="button"
@@ -239,7 +238,7 @@ export const buildCustomerColumns = (
             padding: '4px',
           }}
         >
-          <Edit size={14} />
+          <Icon name="edit" size="xs" />
         </button>
       ),
     },
@@ -451,7 +450,7 @@ export const buildVehicleColumns = (
           }}
           title="Edit vehicle"
         >
-          <Edit size={14} />
+          <Icon name="edit" size="xs" />
         </button>
         <button
           onClick={() => onDelete(row.original)}
@@ -464,7 +463,7 @@ export const buildVehicleColumns = (
           }}
           title="Delete vehicle"
         >
-          <Trash2 size={14} />
+          <Icon name="trash" size="xs" />
         </button>
       </div>
     ),

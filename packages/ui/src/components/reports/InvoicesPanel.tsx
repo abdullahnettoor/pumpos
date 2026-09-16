@@ -10,9 +10,16 @@ import type { DateRange } from '../primitives/DateRangeField.js';
 import { paperFromStation } from '../../services/reports/reportConfig.js';
 import { letterheadFromStation } from '../../services/reports/letterhead.js';
 import { inr } from '../../utils/format.js';
-import { KpiStrip, KpiTile, Panel, Button, EmptyState, DateText } from '../../pump-ds/index.js';
+import {
+  KpiStrip,
+  KpiTile,
+  Panel,
+  Button,
+  EmptyState,
+  DateText,
+  Icon,
+} from '../../pump-ds/index.js';
 import { ReportRangeBar } from './ReportRangeBar.js';
-import { FileText, Download } from 'lucide-react';
 
 const txService = new CloudTransactionService();
 
@@ -155,7 +162,13 @@ export const InvoicesPanel: React.FC<InvoicesPanelProps> = ({ selectedStation, u
             <Button
               variant="secondary"
               size="xs"
-              leftIcon={r.invoiceNumber ? <Download /> : <FileText />}
+              leftIcon={
+                r.invoiceNumber ? (
+                  <Icon name="download" size="xs" />
+                ) : (
+                  <Icon name="file-text" size="xs" />
+                )
+              }
               loading={busyId === r.id}
               disabled={busyId === r.id || (!canIssue && !r.invoiceNumber)}
               onClick={() => handleInvoice(r.id)}
@@ -194,7 +207,7 @@ export const InvoicesPanel: React.FC<InvoicesPanelProps> = ({ selectedStation, u
           <div style={{ padding: '16px' }}>
             <EmptyState
               compact
-              icon={<FileText />}
+              icon={<Icon name="file-text" size="md" />}
               title="Loading…"
               description="Fetching merchandise sales."
             />
@@ -203,7 +216,7 @@ export const InvoicesPanel: React.FC<InvoicesPanelProps> = ({ selectedStation, u
           <div style={{ padding: '12px' }}>
             <EmptyState
               compact
-              icon={<FileText />}
+              icon={<Icon name="file-text" size="md" />}
               title="No merchandise sales"
               description="No merchandise sales in this date range."
             />

@@ -1,16 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
 import { useNavIntent, clearNavIntent } from '../nav-intent/store.js';
-import {
-  Database,
-  ArrowUpRight,
-  ArrowDownRight,
-  ClipboardCheck,
-  Package,
-  ArrowLeftRight,
-  Scale,
-  Search,
-} from 'lucide-react';
 import { PageLayout } from './primitives/PageLayout.js';
 import { DataTable } from './primitives/DataTable.js';
 import { Tabs } from './primitives/Tabs.js';
@@ -35,6 +25,7 @@ import {
   EmptyState,
   DateText,
   Form,
+  Icon,
 } from '../pump-ds/index.js';
 import { tankPct, classifyTank } from '../utils/stock.js';
 import {
@@ -62,8 +53,9 @@ const SearchBox: React.FC<{
   placeholder?: string;
 }> = ({ value, onChange, placeholder }) => (
   <div style={{ position: 'relative' }}>
-    <Search
-      size={13}
+    <Icon
+      name="search"
+      size="xs"
       style={{
         position: 'absolute',
         left: '8px',
@@ -144,7 +136,11 @@ const movementColumns: ColumnDef<any, any>[] = [
             fontWeight: positive ? 600 : 400,
           }}
         >
-          {positive ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
+          {positive ? (
+            <Icon name="arrow-up-right" size="xs" />
+          ) : (
+            <Icon name="arrow-down-right" size="xs" />
+          )}
           {Math.abs(q).toLocaleString('en-IN', { maximumFractionDigits: 3 })} {unit}
         </span>
       );
@@ -490,7 +486,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation })
           <Button
             variant="primary"
             size="sm"
-            leftIcon={<ClipboardCheck />}
+            leftIcon={<Icon name="clipboard-check" size="sm" />}
             onClick={() => openCount(activeTab === 'tanks' ? 'tank' : 'item')}
           >
             Reconcile Stock
@@ -503,10 +499,14 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation })
             activeId={activeTab}
             onChange={(id) => setActiveTab(id as TabType)}
             tabs={[
-              { id: 'tanks', label: 'Tank Status', icon: <Database size={15} /> },
-              { id: 'items', label: 'Merchandise Stock', icon: <Package size={15} /> },
-              { id: 'movements', label: 'Stock Movements', icon: <ArrowLeftRight size={15} /> },
-              { id: 'variances', label: 'Reconciliations', icon: <Scale size={15} /> },
+              { id: 'tanks', label: 'Tank Status', icon: <Icon name="tank" size="xs" /> },
+              { id: 'items', label: 'Merchandise Stock', icon: <Icon name="package" size="xs" /> },
+              {
+                id: 'movements',
+                label: 'Stock Movements',
+                icon: <Icon name="arrow-left-right" size="xs" />,
+              },
+              { id: 'variances', label: 'Reconciliations', icon: <Icon name="scale" size="xs" /> },
             ]}
           />
         }
@@ -553,7 +553,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation })
               <div style={{ padding: '16px' }}>
                 <EmptyState
                   compact
-                  icon={<Database />}
+                  icon={<Icon name="tank" size="md" />}
                   title="Loading tanks…"
                   description="Fetching current tank levels."
                 />
@@ -561,7 +561,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation })
             ) : tanks.length === 0 ? (
               <EmptyState
                 compact
-                icon={<Database />}
+                icon={<Icon name="tank" size="md" />}
                 title="No fuel tanks"
                 description="No fuel tanks configured for this station."
               />
@@ -693,7 +693,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation })
                 <div style={{ padding: '16px' }}>
                   <EmptyState
                     compact
-                    icon={<Package />}
+                    icon={<Icon name="package" size="md" />}
                     title="Loading…"
                     description="Fetching merchandise stock."
                   />
@@ -702,7 +702,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation })
                 <div style={{ padding: '12px' }}>
                   <EmptyState
                     compact
-                    icon={<Package />}
+                    icon={<Icon name="package" size="md" />}
                     title={items.length === 0 ? 'No merchandise' : 'No matches'}
                     description={
                       items.length === 0
@@ -741,7 +741,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation })
                 <div style={{ padding: '16px' }}>
                   <EmptyState
                     compact
-                    icon={<ArrowLeftRight />}
+                    icon={<Icon name="arrow-left-right" size="md" />}
                     title="Loading…"
                     description="Fetching movements."
                   />
@@ -750,7 +750,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation })
                 <div style={{ padding: '12px' }}>
                   <EmptyState
                     compact
-                    icon={<ArrowLeftRight />}
+                    icon={<Icon name="arrow-left-right" size="md" />}
                     title={(movementsQ.data ?? []).length === 0 ? 'No movements' : 'No matches'}
                     description={
                       (movementsQ.data ?? []).length === 0
@@ -777,7 +777,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation })
                 <div style={{ padding: '16px' }}>
                   <EmptyState
                     compact
-                    icon={<Scale />}
+                    icon={<Icon name="scale" size="md" />}
                     title="Loading…"
                     description="Fetching variances."
                   />
@@ -786,7 +786,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation })
                 <div style={{ padding: '12px' }}>
                   <EmptyState
                     compact
-                    icon={<Scale />}
+                    icon={<Icon name="scale" size="md" />}
                     title="No reconciliations"
                     description="No reconciliation logs or physical variances logged yet."
                   />
@@ -853,7 +853,13 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation })
                   variant={countScope === s ? 'primary' : 'secondary'}
                   size="sm"
                   fullWidth
-                  leftIcon={s === 'item' ? <Package /> : <Database />}
+                  leftIcon={
+                    s === 'item' ? (
+                      <Icon name="package" size="sm" />
+                    ) : (
+                      <Icon name="tank" size="sm" />
+                    )
+                  }
                   onClick={() => {
                     setCountScope(s);
                     setCountTargetId(

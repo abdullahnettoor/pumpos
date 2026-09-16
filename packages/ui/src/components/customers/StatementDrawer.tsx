@@ -1,8 +1,7 @@
 import React from 'react';
-import { Edit, Wallet } from 'lucide-react';
 import { Drawer } from '../Drawer.js';
 import { LedgerView } from '../ledger/LedgerView.js';
-import { Button } from '../../pump-ds/index.js';
+import { Button, Icon } from '../../pump-ds/index.js';
 import { inr, formatDate, formatTime } from '../../utils/format.js';
 import { useCustomerLedger } from '../../query/hooks.js';
 
@@ -175,8 +174,8 @@ export const StatementDrawer: React.FC<StatementDrawerProps> = ({
                     gap: '6px',
                   }}
                 >
-                  <Wallet size={13} /> OMC fleet card — fuel is settled to the OMC (CMS account),
-                  not billed to this customer.
+                  <Icon name="wallet" size="xs" /> OMC fleet card — fuel is settled to the OMC (CMS
+                  account), not billed to this customer.
                 </div>
               )}
 
@@ -272,7 +271,7 @@ export const StatementDrawer: React.FC<StatementDrawerProps> = ({
               <Button
                 variant="secondary"
                 size="sm"
-                leftIcon={<Edit />}
+                leftIcon={<Icon name="edit" size="sm" />}
                 onClick={() => onEdit(customer)}
               >
                 Edit profile
@@ -280,7 +279,7 @@ export const StatementDrawer: React.FC<StatementDrawerProps> = ({
               <Button
                 variant="secondary"
                 size="sm"
-                leftIcon={<Wallet />}
+                leftIcon={<Icon name="wallet" size="sm" />}
                 onClick={() => onRecordCollection(customer)}
               >
                 Record collection

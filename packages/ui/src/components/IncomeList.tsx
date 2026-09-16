@@ -2,7 +2,6 @@ import React, { useMemo, useState, useEffect } from 'react';
 import type { ExpenseEntryFormValues } from '@pump/shared';
 import { canManageExpenseCategory, canVoidExpense } from '@pump/shared';
 import { CloudTransactionService } from '../services/cloud.js';
-import { Plus, HelpCircle, Tags, Banknote, Percent, Info } from 'lucide-react';
 import { PageLayout } from './primitives/PageLayout.js';
 import { DataTable } from './primitives/DataTable.js';
 import { DateRangeField, computeRange } from './primitives/DateRangeField.js';
@@ -23,6 +22,7 @@ import {
   SearchInput,
   Select,
   DateText,
+  Icon,
 } from '../pump-ds/index.js';
 import { Tabs } from './primitives/Tabs.js';
 import { LoadingSpinner } from './LoadingSpinner.js';
@@ -245,7 +245,7 @@ export const IncomeList: React.FC<IncomeListProps> = ({ selectedStation, userRol
             <Button
               variant="secondary"
               size="sm"
-              leftIcon={<Tags />}
+              leftIcon={<Icon name="tags" size="sm" />}
               onClick={() => setCategoryManagerOpen(true)}
             >
               Categories
@@ -253,7 +253,7 @@ export const IncomeList: React.FC<IncomeListProps> = ({ selectedStation, userRol
             <Button
               variant="primary"
               size="sm"
-              leftIcon={<Plus />}
+              leftIcon={<Icon name="plus" size="sm" />}
               onClick={openDrawer}
               disabled={categories.length === 0}
             >
@@ -268,8 +268,8 @@ export const IncomeList: React.FC<IncomeListProps> = ({ selectedStation, userRol
             activeId={activeTab}
             onChange={(id) => setActiveTab(id as IncomeTab)}
             tabs={[
-              { id: 'ledger', label: 'Income Ledger', icon: <Banknote size={15} /> },
-              { id: 'gst', label: 'GST on Income', icon: <Percent size={15} /> },
+              { id: 'ledger', label: 'Income Ledger', icon: <Icon name="cash" size="xs" /> },
+              { id: 'gst', label: 'GST on Income', icon: <Icon name="percent" size="xs" /> },
             ]}
           />
         }
@@ -347,7 +347,7 @@ export const IncomeList: React.FC<IncomeListProps> = ({ selectedStation, userRol
                   cursor: 'help',
                 }}
               >
-                <HelpCircle size={14} />
+                <Icon name="help" size="xs" />
               </button>
             </div>
 
@@ -356,7 +356,7 @@ export const IncomeList: React.FC<IncomeListProps> = ({ selectedStation, userRol
                 <div style={{ padding: '16px' }}>
                   <EmptyState
                     compact
-                    icon={<Banknote />}
+                    icon={<Icon name="cash" size="md" />}
                     title="Loading…"
                     description="Fetching income."
                   />
@@ -365,7 +365,7 @@ export const IncomeList: React.FC<IncomeListProps> = ({ selectedStation, userRol
                 <div style={{ padding: '12px' }}>
                   <EmptyState
                     compact
-                    icon={<Banknote />}
+                    icon={<Icon name="cash" size="md" />}
                     title={income.length === 0 ? 'No income yet' : 'No matches'}
                     description={
                       income.length === 0
@@ -404,7 +404,7 @@ export const IncomeList: React.FC<IncomeListProps> = ({ selectedStation, userRol
                 border: '1px solid var(--border-soft)',
               }}
             >
-              <Info size={14} />
+              <Icon name="info" size="xs" />
               <span>
                 Output GST you collected on other income (rentals, commissions, advertising). The
                 split is frozen from the category&rsquo;s GST rate at the time each entry was
@@ -453,7 +453,7 @@ export const IncomeList: React.FC<IncomeListProps> = ({ selectedStation, userRol
                 <div style={{ padding: '12px' }}>
                   <EmptyState
                     compact
-                    icon={<Percent />}
+                    icon={<Icon name="percent" size="md" />}
                     title="No GST income in this period"
                     description="Income only appears here when its category carries a GST rate."
                   />
