@@ -11,7 +11,7 @@ import {
 } from '@pump/shared';
 import { CloudStationService } from '../../services/cloud.js';
 import { Drawer } from '../Drawer.js';
-import { Button, Chip } from '../../pump-ds/index.js';
+import { Button, Chip, Icon } from '../../pump-ds/index.js';
 import { Check } from 'lucide-react';
 import { useConfirm } from '../primitives/ConfirmDialog.js';
 import {
@@ -1697,6 +1697,9 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                   <button
                     type="button"
                     style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px',
                       height: '26px',
                       padding: '0 8px',
                       backgroundColor: 'var(--bg-surface)',
@@ -1730,7 +1733,8 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                       });
                     }}
                   >
-                    + Nozzle
+                    <Icon name="plus" size="xs" />
+                    <span>Nozzle</span>
                   </button>
                 </div>
               </div>

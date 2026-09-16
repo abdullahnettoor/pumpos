@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { CloudPaymentTerminalService, CloudFinanceService } from '../../services/cloud.js';
 import { PaymentTerminal } from '@pump/shared';
-import { Chip, Form } from '../../pump-ds/index.js';
+import { Button, Chip, Form, Icon } from '../../pump-ds/index.js';
 import { Drawer } from '../Drawer.js';
 import { DataTable } from '../primitives/DataTable.js';
 import { Checkbox } from '../primitives/Toggle.js';
@@ -261,22 +261,14 @@ export const PaymentTerminalsPanel: React.FC<PaymentTerminalsPanelProps> = ({ st
           </p>
         </div>
         {!isFormOpen && (
-          <button
+          <Button
+            variant="primary"
+            size="sm"
+            leftIcon={<Icon name="plus" size="sm" />}
             onClick={openCreate}
-            style={{
-              height: '32px',
-              padding: '0 12px',
-              backgroundColor: 'var(--brand-primary)',
-              color: '#ffffff',
-              border: 'none',
-              borderRadius: 'var(--radius-button)',
-              fontWeight: 600,
-              fontSize: '13px',
-              cursor: 'pointer',
-            }}
           >
-            + Add Terminal
-          </button>
+            Add Terminal
+          </Button>
         )}
       </div>
 

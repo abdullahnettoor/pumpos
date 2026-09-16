@@ -7,9 +7,8 @@ import { Field, TextInput, NumberInput, Select } from '../primitives/Field.js';
 import { Segmented } from '../primitives/Segmented.js';
 import { Combobox } from '../primitives/Combobox.js';
 import { Checkbox } from '../primitives/Toggle.js';
-import { Button, Form } from '../../pump-ds/index.js';
+import { Button, Form, Icon } from '../../pump-ds/index.js';
 import { inr, formatQty } from '../../utils/format.js';
-import { Plus, Trash2 } from 'lucide-react';
 
 export interface MerchandiseSaleEntryFormProps {
   shiftOptions: ShiftOption[];
@@ -275,7 +274,7 @@ export const MerchandiseSaleEntryForm: React.FC<MerchandiseSaleEntryFormProps> =
                       onClick={() => remove(i)}
                       aria-label="Remove line"
                     >
-                      <Trash2 size={13} />
+                      <Icon name="trash" size="xs" />
                     </Button>
                   </div>
                   {t && (
@@ -306,7 +305,7 @@ export const MerchandiseSaleEntryForm: React.FC<MerchandiseSaleEntryFormProps> =
             type="button"
             variant="secondary"
             size="sm"
-            leftIcon={<Plus size={13} />}
+            leftIcon={<Icon name="plus" size="xs" />}
             style={{ marginTop: '8px' }}
             disabled={submitting}
             onClick={() =>

@@ -124,3 +124,4 @@ export type { BannerProps, BannerSeverity } from './components/primitives/Banner
 export { useZodForm } from './forms/useZodForm.js';
 export { formatMoney, inr, formatQty } from './utils/format.js';
 export { runTask, useRunTask } from './utils/runTask.js';
+export * from './pump-ds/icon/index.js';

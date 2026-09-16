@@ -13,7 +13,7 @@ import { useToast, type ToastApi } from '../primitives/ToastProvider.js';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Edit, KeyRound } from 'lucide-react';
 import { useRunTask } from '../../utils/runTask.js';
-import { Button, Form } from '../../pump-ds/index.js';
+import { Button, Form, Icon } from '../../pump-ds/index.js';
 
 const userService = new CloudUserAssignmentService();
 
@@ -530,26 +530,18 @@ export const UserRolesAssignment: React.FC = () => {
           </p>
         </div>
         {!isFormOpen && (
-          <button
+          <Button
+            variant="primary"
+            size="sm"
+            leftIcon={<Icon name="plus" size="sm" />}
             onClick={() => {
               resetForm();
               setCredentials(null);
               setIsFormOpen(true);
             }}
-            style={{
-              height: '32px',
-              padding: '0 12px',
-              backgroundColor: 'var(--brand-primary)',
-              color: '#ffffff',
-              border: 'none',
-              borderRadius: 'var(--radius-button)',
-              fontWeight: 600,
-              fontSize: '13px',
-              cursor: 'pointer',
-            }}
           >
-            + Add Team Member
-          </button>
+            Add Team Member
+          </Button>
         )}
       </div>
 
