@@ -1,14 +1,7 @@
 import React, { forwardRef, type ReactNode } from 'react';
-import {
-  Menu as MenuIcon,
-  Search,
-  Bell,
-  ChevronDown,
-  Command as CommandIcon,
-  Fuel,
-} from 'lucide-react';
 import { cn } from '../lib/cn.js';
 import { Button } from '../button/index.js';
+import { Icon } from '../icon/index.js';
 import { SyncPulse, type SyncStatus } from '../sync-pulse/index.js';
 import { BusinessDayChip } from '../business-day/index.js';
 import {
@@ -68,52 +61,56 @@ export interface BusinessDayOption {
   lastActivityAt?: string;
 }
 
-/** True on macOS/iPadOS — render the ⌘ glyph instead of the "Ctrl" text. */
-const IS_MAC =
-  typeof navigator !== 'undefined' &&
-  /Mac|iP(hone|ad|od)/i.test(navigator.platform || navigator.userAgent || '');
-
 export interface TopBarProps {
+  /** Callback to toggle sidebar collapse. Omit if shell is not collapsible. */
   onToggleSidebar?: () => void;
-
-  /** Brand mark rendered at the far left (next to the sidebar toggle). */
+  /** Brand wordmark or logo. Defaults to "PumpOS". */
   brand?: ReactNode;
-
+  /** Current business date string (e.g. "09 Jul 2026"). */
   businessDate: string;
+  /** Status of current business day. */
   businessDayStatus: 'open' | 'closed' | 'not-created' | 'unknown' | 'unavailable';
-  /** Hide the business-day anchor entirely (e.g. pre-onboarding hub). */
+  /** When false, business-day affordances are hidden (pre-onboarding hub). */
   showBusinessDay?: boolean;
-  /** Navigate to today's live view (dashboard). */
+  /** Callback when user clicks the business day chip (e.g. opens day-close drawer). */
   onBusinessDay?: () => void;
-  /** Recent past business days shown in the anchor dropdown. */
+  /** Past business days that remain open and need attention. */
   businessDays?: BusinessDayOption[];
-  businessDaysState?: 'loading' | 'ready' | 'unavailable';
-  /** Open a past day's summary. */
+  /** State of the past business days query. */
+  businessDaysState?: 'ready' | 'loading' | 'unavailable';
+  /** Callback when user selects a past business day from the menu. */
   onSelectBusinessDay?: (date: string) => void;
-  /** Notified when the business-day dropdown opens/closes (for lazy loading). */
+  /** Callback when the business day menu opens or closes. */
   onBusinessDayMenuOpenChange?: (open: boolean) => void;
-
-  /** Single-station label (switcher deferred). Omit to hide. */
+  /** Active station name (shown when app is scoped to one station). */
   stationLabel?: string;
-
-  /** Opens the command palette. */
-  onOpenSearch: () => void;
+  /** Global search click/shortcut handler. Opens command palette. */
+  onOpenSearch?: () => void;
+  /** Search button placeholder text. Defaults to "Search customers, invoices, shifts…". */
   searchPlaceholder?: string;
-
+  /** Quick-create actions shown in the "+ New" menu. */
   quickCreate?: QuickCreateAction[];
-
+  /** Notification items. Empty array hides the badge. */
   notifications?: NotificationItem[];
-
+  /** Sync status for the local-first engine. */
   syncStatus: SyncStatus;
+  /** Pending mutations waiting to sync. */
   pendingSyncCount?: number;
-
-  userInitials: string;
-  userName: string;
-  userRole: string;
-  userMenu: UserMenuAction[];
-
+  /** User initials for the avatar button. */
+  userInitials?: string;
+  /** User display name. */
+  userName?: string;
+  /** User role name (e.g. "Owner", "Manager"). */
+  userRole?: string;
+  /** User menu actions (Profile, Settings, Log out). */
+  userMenu?: UserMenuAction[];
   className?: string;
 }
+
+const IS_MAC =
+  typeof window !== 'undefined' &&
+  typeof navigator !== 'undefined' &&
+  /Mac|iPod|iPhone|iPad/.test(navigator.platform);
 
 const IconBtn = forwardRef<
   HTMLButtonElement,
@@ -122,6 +119,7 @@ const IconBtn = forwardRef<
   return (
     <button
       ref={ref}
+      type="button"
       className={cn(
         'relative inline-flex size-8 items-center justify-center rounded-button text-ink-muted transition-colors hover:bg-surface-alt hover:text-ink-strong',
         className,
@@ -151,7 +149,7 @@ export const TopBar: React.FC<TopBarProps> = ({
   onBusinessDayMenuOpenChange,
   stationLabel,
   onOpenSearch,
-  searchPlaceholder = 'Search customers, invoices, shifts…',
+  searchPlaceholder = 'Search customers, invoices, shifts\u2026',
   quickCreate = [],
   notifications = [],
   syncStatus,
@@ -159,7 +157,7 @@ export const TopBar: React.FC<TopBarProps> = ({
   userInitials,
   userName,
   userRole,
-  userMenu,
+  userMenu = [],
   className,
 }) => {
   const notifCount = notifications.length;
@@ -173,7 +171,7 @@ export const TopBar: React.FC<TopBarProps> = ({
     >
       {onToggleSidebar && (
         <IconBtn onClick={onToggleSidebar} aria-label="Toggle sidebar">
-          <MenuIcon className="size-[18px]" />
+          <Icon name="menu" size="md" />
         </IconBtn>
       )}
 
@@ -259,7 +257,7 @@ export const TopBar: React.FC<TopBarProps> = ({
           className="hidden items-center gap-1.5 rounded-button px-2 text-[12px] text-ink-muted lg:inline-flex"
           title="Single station"
         >
-          <Fuel className="size-3.5" />
+          <Icon name="fuel" size="xs" />
           <span>{stationLabel}</span>
         </div>
       )}
@@ -269,11 +267,11 @@ export const TopBar: React.FC<TopBarProps> = ({
         onClick={onOpenSearch}
         className="group flex h-9 max-w-[420px] flex-1 items-center gap-2 rounded-button border border-border-soft bg-canvas px-3 text-[12.5px] text-ink-muted transition-colors hover:border-border-strong focus:outline-none focus-visible:outline-none focus-visible:border-border-strong"
       >
-        <Search className="size-4" />
+        <Icon name="search" size="sm" />
         <span className="flex-1 truncate text-left">{searchPlaceholder}</span>
         <span className="flex items-center gap-0.5">
           <kbd className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded border border-border-strong border-b-2 bg-surface px-1 font-mono text-[10px] font-medium text-ink-strong">
-            {IS_MAC ? <CommandIcon className="size-2.5" /> : 'Ctrl'}
+            {IS_MAC ? <Icon name="command" size="xs" className="size-2.5" /> : 'Ctrl'}
           </kbd>
           <kbd className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded border border-border-strong border-b-2 bg-surface px-1 font-mono text-[10px] font-medium text-ink-strong">
             K
@@ -285,11 +283,7 @@ export const TopBar: React.FC<TopBarProps> = ({
         {quickCreate.length > 0 && (
           <Menu>
             <MenuTrigger asChild>
-              <Button
-                variant="primary"
-                size="sm"
-                leftIcon={<span className="text-[15px] leading-none">+</span>}
-              >
+              <Button variant="primary" size="sm" leftIcon={<Icon name="plus" size="xs" />}>
                 New
               </Button>
             </MenuTrigger>
@@ -308,7 +302,7 @@ export const TopBar: React.FC<TopBarProps> = ({
         <Menu>
           <MenuTrigger asChild>
             <IconBtn aria-label={`Notifications (${notifCount})`} badge={notifCount}>
-              <Bell className="size-[18px]" />
+              <Icon name="bell" size="md" />
             </IconBtn>
           </MenuTrigger>
           <MenuContent align="end" className="w-[320px] py-0">
@@ -376,7 +370,7 @@ export const TopBar: React.FC<TopBarProps> = ({
               <span className="hidden text-[12px] font-medium text-ink-strong sm:inline">
                 {userName}
               </span>
-              <ChevronDown className="size-3.5 text-ink-faint" />
+              <Icon name="chevron-down" size="xs" className="text-ink-faint" />
             </button>
           </MenuTrigger>
           <MenuContent align="end">
