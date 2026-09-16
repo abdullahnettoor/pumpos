@@ -24,6 +24,14 @@
  *   node scripts/next-version.mjs                 # human-readable
  *   node scripts/next-version.mjs --json          # { current, bump, version }
  *   node scripts/next-version.mjs --range a..b    # explicit commit range
+ *   node scripts/next-version.mjs --base 1.2.0    # version to bump from
+ *
+ * `--base` is the version the bump applies on top of (e.g. what `main`
+ * currently ships). Without it, the committed version is the base — which is
+ * only correct when the range's commits are not already reflected in that
+ * version. If the committed version is already at or above the required one,
+ * it is reported unchanged: versions never move backwards, and re-deriving
+ * the same range must not ratchet the version forever.
  */
 import { execSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
@@ -34,6 +42,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const args = process.argv.slice(2);
 const asJson = args.includes('--json');
 const rangeArg = args.includes('--range') ? args[args.indexOf('--range') + 1] : null;
+const baseArg = args.includes('--base') ? args[args.indexOf('--base') + 1] : null;
 
 const git = (cmd) => execSync(`git ${cmd}`, { cwd: root }).toString().trim();
 
@@ -88,14 +97,26 @@ function nextVersion(cur, kind) {
   return cur;
 }
 
-const version = nextVersion(current, bump);
+const version = nextVersion(baseArg || current, bump);
+
+/** Semver comparison: negative when a < b. */
+function compare(a, b) {
+  const [amaj, amin, apat] = a.split('.').map(Number);
+  const [bmaj, bmin, bpat] = b.split('.').map(Number);
+  return amaj - bmaj || amin - bmin || apat - bpat;
+}
+
+// The committed version may already cover this range (a bump landed via a
+// reviewed PR). Never derive a version below it.
+const required = compare(current, version) >= 0 ? current : version;
 
 if (asJson) {
-  console.log(JSON.stringify({ current, bump, version, range, commits: commits.length }));
+  console.log(JSON.stringify({ current, bump, version: required, range, commits: commits.length }));
 } else {
   console.log(`range    ${range}`);
   console.log(`commits  ${commits.length}`);
+  console.log(`base     ${baseArg || current}`);
   console.log(`current  ${current}`);
   console.log(`bump     ${bump}`);
-  console.log(`version  ${bump === 'none' ? '(no release)' : version}`);
+  console.log(`version  ${bump === 'none' ? '(no release)' : required}`);
 }
