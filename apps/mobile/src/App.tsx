@@ -48,7 +48,7 @@ const SignOutButton: React.FC = () => (
 export const App: React.FC = () => {
   const { status, role, userName, error } = useSession();
   const stationsQ = useStations({ enabled: status === 'ready' });
-  const stations = (stationsQ.data || []) as Station[];
+  const stations = useMemo(() => (stationsQ.data || []) as Station[], [stationsQ.data]);
 
   // Non-attendant roles who happen to be assigned to a DU on an open shift get an
   // extra "My handover" tab with the same self-service UI as the Attendant shell.

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { CloudPaymentTerminalService, CloudFinanceService } from '../../services/cloud.js';
 import { PaymentTerminal } from '@pump/shared';
 import { Chip, Form } from '../../pump-ds/index.js';
