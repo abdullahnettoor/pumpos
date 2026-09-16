@@ -83,8 +83,18 @@ interface HandoverDrawerProps {
   onSaveSuccess: () => void;
 }
 
-export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
-  isOpen,
+/**
+ * The body only exists while the drawer is open, so everything it prefills from
+ * props is an initial value rather than something an effect has to push in and
+ * then defend with a latch. The latch existed because recording a credit sale
+ * calls `onCreditChanged()`, which refetches and hands back fresh `nozzles` /
+ * `terminals` / `existingHandover` identities mid-entry; unmounting on close
+ * expresses "once per open" directly, so the refetch is simply not a re-open.
+ */
+export const HandoverDrawer: React.FC<HandoverDrawerProps> = (props) =>
+  props.isOpen ? <HandoverDrawerBody {...props} /> : null;
+
+const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
   onClose,
   shiftId,
   stationId,
@@ -110,7 +120,14 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
   // declared needs one explicit confirmation before submit.
   const [zeroTerminalsConfirmed, setZeroTerminalsConfirmed] = useState(false);
   const [acceptedResult, setAcceptedResult] = useState<RecordHandoverResult | null>(null);
-  const handoverRequestRef = useRef<{ fingerprint: string; idempotencyKey: string } | null>(null);
+  // Lazily, once per open: a bare useRef argument is evaluated on every render,
+  // which would re-read localStorage on every keystroke in this drawer.
+  const [initialHandoverRequest] = useState(() =>
+    stationId ? loadHandoverRequestIdentity(stationId, shiftId, userId, duId) : null,
+  );
+  const handoverRequestRef = useRef<{ fingerprint: string; idempotencyKey: string } | null>(
+    initialHandoverRequest,
+  );
   const recordHandover = useRecordHandoverMutation();
   // Denomination counts for the handover cash (held here so re-opening the
   // popover preserves them). Reset when the drawer opens.
@@ -124,15 +141,34 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
     formState: { errors },
   } = useForm<HandoverFormValues>({
     resolver: zodResolver(handoverFormSchema),
-    defaultValues: {
-      cashHandedOver: 0,
-      cardHandedOver: 0,
-      upiHandedOver: 0,
-      nozzleReadings: {},
-      nozzleTesting: {},
-      terminalCard: {},
-      terminalUpi: {},
-    },
+    // Built once on open. Closing readings start from the opening reading as a
+    // helpful anchor, and testing pre-fills from the previously-saved value so
+    // re-saving a handover cannot silently zero a calibration volume.
+    defaultValues: (() => {
+      const existingEntries: any[] = existingHandover?.terminalEntries ?? [];
+      const nozzleReadings: Record<string, number> = {};
+      const nozzleTesting: Record<string, any> = {};
+      for (const nz of nozzles) {
+        nozzleReadings[nz.nozzleId] = Number(nz.closingReading ?? nz.openingReading ?? 0);
+        nozzleTesting[nz.nozzleId] = (Number(nz.testingVolume) || '') as any;
+      }
+      const terminalCard: Record<string, any> = {};
+      const terminalUpi: Record<string, any> = {};
+      for (const t of terminals.filter((x: any) => x.duId === duId)) {
+        const prior = existingEntries.find((e) => e.terminalId === t.terminalId);
+        terminalCard[t.terminalId] = (Number(prior?.cardAmount) || '') as any;
+        terminalUpi[t.terminalId] = (Number(prior?.upiAmount) || '') as any;
+      }
+      return {
+        cashHandedOver: (Number(existingHandover?.cashHandedOver) || '') as any,
+        cardHandedOver: (Number(existingHandover?.cardHandedOver) || '') as any,
+        upiHandedOver: (Number(existingHandover?.upiHandedOver) || '') as any,
+        nozzleReadings,
+        nozzleTesting,
+        terminalCard,
+        terminalUpi,
+      };
+    })(),
   });
   const acceptedFormFingerprintRef = useRef<string | null>(null);
 
@@ -143,54 +179,6 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
   // fresh `nozzles`/`terminals`/`existingHandover` identities. Without this guard
   // the effect would re-run on that refetch and overwrite the operator's
   // in-progress nozzle/POS/cash entries.
-  const prefilledRef = useRef(false);
-  useEffect(() => {
-    if (!isOpen) {
-      prefilledRef.current = false;
-      return;
-    }
-    if (prefilledRef.current) return;
-    prefilledRef.current = true;
-
-    setError(null);
-    setAcceptedResult(null);
-    setZeroTerminalsConfirmed(false);
-    handoverRequestRef.current = stationId
-      ? loadHandoverRequestIdentity(stationId, shiftId, userId, duId)
-      : null;
-    if (existingHandover) {
-      setValue('cashHandedOver', (Number(existingHandover.cashHandedOver) || '') as any);
-      setValue('cardHandedOver', (Number(existingHandover.cardHandedOver) || '') as any);
-      setValue('upiHandedOver', (Number(existingHandover.upiHandedOver) || '') as any);
-    } else {
-      setValue('cashHandedOver', '' as any);
-      setValue('cardHandedOver', '' as any);
-      setValue('upiHandedOver', '' as any);
-    }
-
-    // Initialize readings and testing maps. Closing keeps the opening reading as a
-    // helpful starting point; testing pre-fills from the previously-saved value so
-    // re-saving the handover doesn't silently zero the calibration volume.
-    nozzles.forEach((nz) => {
-      setValue(
-        `nozzleReadings.${nz.nozzleId}`,
-        Number(nz.closingReading ?? nz.openingReading ?? 0),
-      );
-      setValue(`nozzleTesting.${nz.nozzleId}`, (Number(nz.testingVolume) || '') as any);
-    });
-
-    // Initialize per-terminal POS batch maps for THIS DU's terminals only
-    // (pre-fill from existing entries). Shift-wide / other-DU machines are not
-    // shown to the attendant.
-    const existingEntries: any[] = existingHandover?.terminalEntries ?? [];
-    terminals
-      .filter((t: any) => t.duId === duId)
-      .forEach((t: any) => {
-        const prior = existingEntries.find((e) => e.terminalId === t.terminalId);
-        setValue(`terminalCard.${t.terminalId}`, (Number(prior?.cardAmount) || '') as any);
-        setValue(`terminalUpi.${t.terminalId}`, (Number(prior?.upiAmount) || '') as any);
-      });
-  }, [isOpen, existingHandover, nozzles, terminals, duId, setValue]);
 
   // Watch form values reactively for live expected sales and variance computations
   const formValues = watch();
@@ -231,9 +219,10 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
       : 0;
 
   // ---- Fuel-on-credit (credit chits) declared for this (attendant, DU) ----
-  const [creditLines, setCreditLines] = useState<any[]>([]);
+  // Seeded on open; the drawer unmounts on close, so there is nothing to reset.
+  const [creditLines, setCreditLines] = useState<any[]>(() => creditSales ?? []);
   // ---- OMC fleet-card sales (settled to CMS, not a receivable) ----
-  const [omcLines, setOmcLines] = useState<any[]>([]);
+  const [omcLines, setOmcLines] = useState<any[]>(() => omcSales ?? []);
   const [ccOpen, setCcOpen] = useState(false);
   // Channel for a new line: 'credit' = station receivable, 'omc' = OMC card → CMS.
   const [ccChannel, setCcChannel] = useState<'credit' | 'omc'>('credit');
@@ -276,18 +265,6 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
     setCcAmount('');
     setCcNotes('');
   };
-  useEffect(() => {
-    if (isOpen) {
-      setCreditLines(creditSales ?? []);
-      setOmcLines(omcSales ?? []);
-      setCcOpen(false);
-      resetCcRow();
-      setExtraCustomers([]);
-      setExtraVehicles([]);
-      setCashBreakdown({});
-    }
-  }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
-
   // Fuel products dispensed at this DU (from its nozzles).
   const duProducts = Array.from(
     new Map(
@@ -754,11 +731,7 @@ export const HandoverDrawer: React.FC<HandoverDrawerProps> = ({
 
   return (
     <>
-      <Drawer
-        isOpen={isOpen}
-        onClose={onClose}
-        title={`Attendant Handover: ${userName} (${duCode})`}
-      >
+      <Drawer isOpen onClose={onClose} title={`Attendant Handover: ${userName} (${duCode})`}>
         <Form
           onSubmit={handleSubmit(onSubmit)}
           style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}

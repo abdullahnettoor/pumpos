@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Eye } from 'lucide-react';
 import { Panel, Button, StatusChip, DateText } from '../../pump-ds/index.js';
@@ -31,18 +31,28 @@ export const ShiftHistoryTab: React.FC<ShiftHistoryTabProps> = ({
   const timeZone = (selectedStation?.settings as { timezone?: string } | undefined)?.timezone;
   const summariesQ = useShiftSummaries(stationId);
   const runTask = useRunTask();
-  const summaries = summariesQ.data ?? [];
-  const [activeSummary, setActiveSummary] = useState<any | null>(null);
+  const summaries = useMemo(() => summariesQ.data ?? [], [summariesQ.data]);
+  const [pickedSummary, setPickedSummary] = useState<any | null>(null);
 
-  useEffect(() => {
-    if (viewShiftId && summaries.length > 0) {
-      const match = summaries.find((d: any) => d.shiftId === viewShiftId);
-      if (match) setActiveSummary(match);
-    }
-  }, [viewShiftId, summaries]);
+  // A shift requested by id (deep link from the shifts workspace) is derived
+  // rather than copied into state by an effect. The old version waited for
+  // `summaries` to arrive and re-ran when it did; deriving simply resolves once
+  // the list lands, and a row the operator picks takes precedence.
+  const activeSummary =
+    pickedSummary ??
+    (viewShiftId ? (summaries.find((d: any) => d.shiftId === viewShiftId) ?? null) : null);
+
+  // Stable so the column definitions below keep memoising.
+  const setActiveSummary = useCallback(
+    (row: any) => {
+      onClearViewShiftId?.();
+      setPickedSummary(row);
+    },
+    [onClearViewShiftId],
+  );
 
   const handleBack = () => {
-    setActiveSummary(null);
+    setPickedSummary(null);
     onClearViewShiftId?.();
   };
 
@@ -141,7 +151,7 @@ export const ShiftHistoryTab: React.FC<ShiftHistoryTabProps> = ({
         ),
       },
     ],
-    [timeZone],
+    [timeZone, setActiveSummary],
   );
 
   if (!selectedStation) {

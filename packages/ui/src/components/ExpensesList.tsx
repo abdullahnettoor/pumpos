@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import type { ExpenseEntryFormValues } from '@pump/shared';
 import { canManageExpenseCategory, canVoidExpense } from '@pump/shared';
 import { CloudTransactionService } from '../services/cloud.js';
@@ -60,7 +60,10 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
   const ask = useAsk();
 
   const s = selectedStation?.settings || {};
-  const clock = { timeZone: s.timezone, dayStartsAt: s.business_day_starts_at };
+  const clock = useMemo(
+    () => ({ timeZone: s.timezone, dayStartsAt: s.business_day_starts_at }),
+    [s.timezone, s.business_day_starts_at],
+  );
 
   const expenses = useMemo(() => expensesQ.data ?? [], [expensesQ.data]);
   const categories = categoriesQ.data ?? [];
@@ -134,36 +137,39 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
 
   // Corrections are never edits: an expense is voided (status → VOIDED) and its
   // ledger posting reversed, keeping history append-only.
-  const handleVoid = async (row: any) => {
-    const { confirmed, value } = await ask({
-      title: 'Void this expense?',
-      message: (
-        <>
-          {inr(row.amount)} · {row.categoryName || 'General'}. The entry stays in the ledger marked
-          <strong> Voided</strong> and its money posting is reversed. This cannot be undone.
-        </>
-      ),
-      input: { label: 'Reason (optional)', placeholder: 'e.g. duplicate entry, wrong amount' },
-      confirmLabel: 'Void expense',
-      danger: true,
-    });
-    if (!confirmed) return;
-    try {
-      await transactionService.voidExpense(row.id, value);
-      toast.success('Expense voided.');
-      await invalidateOperational(stationId);
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to void expense');
-    }
-  };
+  const handleVoid = useCallback(
+    async (row: any) => {
+      const { confirmed, value } = await ask({
+        title: 'Void this expense?',
+        message: (
+          <>
+            {inr(row.amount)} · {row.categoryName || 'General'}. The entry stays in the ledger
+            marked
+            <strong> Voided</strong> and its money posting is reversed. This cannot be undone.
+          </>
+        ),
+        input: { label: 'Reason (optional)', placeholder: 'e.g. duplicate entry, wrong amount' },
+        confirmLabel: 'Void expense',
+        danger: true,
+      });
+      if (!confirmed) return;
+      try {
+        await transactionService.voidExpense(row.id, value);
+        toast.success('Expense voided.');
+        await invalidateOperational(stationId);
+      } catch (err: any) {
+        toast.error(err.message || 'Failed to void expense');
+      }
+    },
+    [ask, invalidateOperational, stationId, toast],
+  );
 
   const ledgerColumns = useMemo(
     () =>
       buildExpenseColumns(
         canVoid ? (row) => runTask(handleVoid(row), 'Could not void the expense.') : undefined,
       ),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [canVoid, stationId],
+    [canVoid, handleVoid, runTask],
   );
 
   // KPIs — fixed windows (today / this month), independent of the table range filter.
@@ -185,8 +191,7 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
       .reduce((sum: number, e: any) => sum + Number(e.amount || 0), 0);
     const otherMonth = spentMonth - drawerMonth;
     return { spentToday, spentMonth, entriesMonth: monthRows.length, drawerMonth, otherMonth };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [expenses, clock.timeZone, clock.dayStartsAt]);
+  }, [expenses, clock]);
 
   const filteredExpenses = useMemo(
     () =>

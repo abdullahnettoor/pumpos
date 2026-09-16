@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useRef, useEffect, useMemo, useState } from 'react';
 import { useNavIntent, clearNavIntent } from '../../nav-intent/store.js';
 import { useQueryClient } from '@tanstack/react-query';
 import { inr } from '../../utils/format.js';
@@ -171,12 +171,16 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   );
 
   // A Station change always starts from that Station's Current Business Date.
-  useEffect(() => {
+  // Adjusted during render rather than in an effect: an effect would have to
+  // depend on `currentBusinessDate` to be honest, and would then also fire at
+  // the day-start rollover — which the rollover effect below owns and handles
+  // differently (it respects "Open next Shift" for a historical date).
+  const [lastStationId, setLastStationId] = useState(selectedStation?.id);
+  if (selectedStation?.id !== lastStationId) {
+    setLastStationId(selectedStation?.id);
     setPreserveNextShiftDate(false);
     setBusinessDate(currentBusinessDate);
-    // currentBusinessDate is intentionally handled by the rollover effect below.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedStation?.id]);
+  }
 
   // Advance an idle form at the Station's day-start boundary unless the operator
   // explicitly chose "Open next Shift" for a historical Business Date.
@@ -417,6 +421,24 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     { key: 'purchase', label: 'Add Purchase', onClick: triggerPurchaseDrawer, hotkey: 'P' },
   ];
 
+  // The shortcut triggers are re-created every render, so the listener reads
+  // them through a ref. Adding them to the dependency list would instead tear
+  // down and re-register the window listener on every render.
+  const shortcutActionsRef = useRef({
+    triggerExpenseDrawer,
+    triggerCollectionDrawer,
+    triggerMerchandiseSaleDrawer,
+    triggerPurchaseDrawer,
+  });
+  useEffect(() => {
+    shortcutActionsRef.current = {
+      triggerExpenseDrawer,
+      triggerCollectionDrawer,
+      triggerMerchandiseSaleDrawer,
+      triggerPurchaseDrawer,
+    };
+  });
+
   // Keyboard shortcuts (E/C/V/P) — active only on Today tab with an open shift and no other overlay focused.
   useEffect(() => {
     if (!data?.activeShift?.id) return;
@@ -435,16 +457,16 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
       const k = e.key.toLowerCase();
       if (k === 'e') {
         e.preventDefault();
-        triggerExpenseDrawer();
+        shortcutActionsRef.current.triggerExpenseDrawer();
       } else if (k === 'c') {
         e.preventDefault();
-        triggerCollectionDrawer();
+        shortcutActionsRef.current.triggerCollectionDrawer();
       } else if (k === 'm') {
         e.preventDefault();
-        triggerMerchandiseSaleDrawer();
+        shortcutActionsRef.current.triggerMerchandiseSaleDrawer();
       } else if (k === 'p') {
         e.preventDefault();
-        triggerPurchaseDrawer();
+        shortcutActionsRef.current.triggerPurchaseDrawer();
       }
     };
     window.addEventListener('keydown', handler);
@@ -508,8 +530,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         tankDipDraftShiftIdRef.current = null;
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusQ.data]);
+  }, [statusQ.data, selectedStation]);
 
   // Keep broad operational invalidation, then wait for the active full status
   // query so lifecycle transitions cannot render its stale active Shift.

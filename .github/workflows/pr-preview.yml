@@ -13,6 +13,13 @@ name: PR preview
 # making. PR previews therefore talk to the shared preview API, which is what a
 # reviewer wants anyway.
 #
+# CORS: because these are served from workers.dev rather than a pumpos domain,
+# the preview API has to allow their origin explicitly. That lives in
+# apps/api/src/infra/cors.ts, gated on ENVIRONMENT = "preview" so a workers.dev
+# origin can never reach production. If a preview reports "network error" right
+# after login while the API is plainly up, that gate is the first place to look
+# — the origin shape here (pr-<n>-pumpos-<app>) and the pattern there must agree.
+#
 # Each app deploys with its own `wrangler.pr.toml` — a route-free config — so a
 # preview can never claim a production hostname.
 

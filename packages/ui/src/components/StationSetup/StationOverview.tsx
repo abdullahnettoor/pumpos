@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { CloudStationService } from '../../services/cloud.js';
-import { queryKeys } from '../../query/hooks.js';
+import { queryKeys, useStations } from '../../query/hooks.js';
 import { Station } from '@pump/shared';
 import { ProductsCatalog } from './ProductsCatalog.js';
 import { TanksGrid } from './TanksGrid.js';
@@ -24,12 +24,26 @@ export interface StationOverviewProps {
   selectedStation: Station | null;
 }
 
-export const StationOverview: React.FC<StationOverviewProps> = ({
+/**
+ * Keyed on the station so the form below is rebuilt from props when the
+ * operator switches station, rather than synced field-by-field in an effect.
+ * The station's saved values are the form's *initial* values; an effect made
+ * them a reaction, which also discarded unsaved edits whenever an unrelated
+ * refresh landed a new station object.
+ */
+export const StationOverview: React.FC<StationOverviewProps> = (props) => (
+  <StationOverviewBody key={props.selectedStation?.id ?? 'none'} {...props} />
+);
+
+const StationOverviewBody: React.FC<StationOverviewProps> = ({
   onStationSelected,
   selectedStation,
 }) => {
-  const [stationsList, setStationsList] = useState<Station[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Read through the shared static-tier hook rather than fetching into local
+  // state from an effect declared above its loader.
+  const stationsQ = useStations();
+  const stationsList = useMemo<Station[]>(() => stationsQ.data ?? [], [stationsQ.data]);
+  const loading = stationsQ.isLoading;
   const qc = useQueryClient();
   const toast = useToast();
   const runTask = useRunTask();
@@ -47,69 +61,45 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
   >('general');
 
   // General tab form states
-  const [name, setName] = useState('');
-  const [code, setCode] = useState('');
-  const [address, setAddress] = useState('');
-  const [phone, setPhone] = useState('');
-  const [graceMinutes, setGraceMinutes] = useState(15);
-  const [timezone, setTimezone] = useState('Asia/Kolkata');
-  const [businessDayStartsAt, setBusinessDayStartsAt] = useState('06:00');
+  const [name, setName] = useState(selectedStation?.name ?? '');
+  const [code, setCode] = useState(selectedStation?.code ?? '');
+  const [address, setAddress] = useState(selectedStation?.address || '');
+  const [phone, setPhone] = useState(selectedStation?.phone || '');
+  const [graceMinutes, setGraceMinutes] = useState(
+    selectedStation?.settings?.shift_grace_minutes || 15,
+  );
+  const [timezone, setTimezone] = useState(selectedStation?.settings?.timezone || 'Asia/Kolkata');
+  const [businessDayStartsAt, setBusinessDayStartsAt] = useState(
+    selectedStation?.settings?.business_day_starts_at || '06:00',
+  );
   // Legal / branding (letterhead for reports & invoices)
-  const [legalName, setLegalName] = useState('');
-  const [gstin, setGstin] = useState('');
-  const [stateCode, setStateCode] = useState('');
-  const [legalAddress, setLegalAddress] = useState('');
-  const [pincode, setPincode] = useState('');
-  const [roCode, setRoCode] = useState('');
-  const [fuelBrand, setFuelBrand] = useState('');
-  const [logoDataUrl, setLogoDataUrl] = useState<string | null>(null);
-  const [onboardingStatus, setOnboardingStatus] = useState<string>('NOT_STARTED');
+  const [legalName, setLegalName] = useState(selectedStation?.settings?.legal?.legalName || '');
+  const [gstin, setGstin] = useState(selectedStation?.settings?.legal?.gstin || '');
+  const [stateCode, setStateCode] = useState(selectedStation?.settings?.legal?.stateCode || '');
+  const [legalAddress, setLegalAddress] = useState(
+    selectedStation?.settings?.legal?.addressLine || '',
+  );
+  const [pincode, setPincode] = useState(selectedStation?.settings?.legal?.pincode || '');
+  const [roCode, setRoCode] = useState(selectedStation?.settings?.legal?.roCode || '');
+  const [fuelBrand, setFuelBrand] = useState(selectedStation?.settings?.fuel_brand || '');
+  const [logoDataUrl, setLogoDataUrl] = useState<string | null>(
+    selectedStation?.settings?.logo_data_url || null,
+  );
+  const [onboardingStatus, setOnboardingStatus] = useState<string>(
+    selectedStation?.onboardingStatus || 'NOT_STARTED',
+  );
 
+  // Selecting a default station is a genuine side effect on the parent, not
+  // local state being synced, so it stays an effect — but it is now honest
+  // about what it depends on.
   useEffect(() => {
-    runTask(loadStations(), 'Could not load stations.');
-  }, []);
+    if (!selectedStation && stationsList.length > 0) onStationSelected(stationsList[0]);
+  }, [selectedStation, stationsList, onStationSelected]);
 
-  useEffect(() => {
-    if (selectedStation) {
-      setName(selectedStation.name);
-      setCode(selectedStation.code);
-      setAddress(selectedStation.address || '');
-      setPhone(selectedStation.phone || '');
-      setGraceMinutes(selectedStation.settings?.shift_grace_minutes || 15);
-      setTimezone(selectedStation.settings?.timezone || 'Asia/Kolkata');
-      setBusinessDayStartsAt(selectedStation.settings?.business_day_starts_at || '06:00');
-      const legal = selectedStation.settings?.legal || {};
-      setLegalName(legal.legalName || '');
-      setGstin(legal.gstin || '');
-      setStateCode(legal.stateCode || '');
-      setLegalAddress(legal.addressLine || '');
-      setPincode(legal.pincode || '');
-      setRoCode(legal.roCode || '');
-      setFuelBrand(selectedStation.settings?.fuel_brand || '');
-      setLogoDataUrl(selectedStation.settings?.logo_data_url || null);
-      setOnboardingStatus(selectedStation.onboardingStatus || 'NOT_STARTED');
-    }
-  }, [selectedStation]);
-
-  const loadStations = async (force = false) => {
-    try {
-      setLoading(true);
-      if (force) await qc.invalidateQueries({ queryKey: queryKeys.stations() });
-      // Shared cache: repeat visits within staleTime serve from cache (+ localStorage)
-      // instead of re-hitting /setup/stations on every mount.
-      const list = await qc.fetchQuery({
-        queryKey: queryKeys.stations(),
-        queryFn: () => stationService.getStations(),
-        staleTime: 24 * 60 * 60_000,
-      });
-      setStationsList(list);
-      if (list.length > 0 && !selectedStation) {
-        onStationSelected(list[0]);
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
+  /** Force a refetch of the station list after a save. */
+  const loadStations = useCallback(async () => {
+    await qc.invalidateQueries({ queryKey: queryKeys.stations() });
+  }, [qc]);
 
   const handleSaveGeneral = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -134,7 +124,7 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
       });
       onStationSelected(updated);
       setEditing(false);
-      runTask(loadStations(true), 'Saved, but the station list could not be refreshed.');
+      runTask(loadStations(), 'Saved, but the station list could not be refreshed.');
       toast.success('Station details saved.');
     } catch (err: any) {
       toast.error(err.message);
@@ -163,7 +153,7 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
       });
       onStationSelected(updated);
       setEditingBusiness(false);
-      runTask(loadStations(true), 'Saved, but the station list could not be refreshed.');
+      runTask(loadStations(), 'Saved, but the station list could not be refreshed.');
       toast.success('Business details saved.');
     } catch (err: any) {
       toast.error(err.message);
@@ -807,7 +797,7 @@ export const StationOverview: React.FC<StationOverviewProps> = ({
                 selectedStation={selectedStation}
                 onSaved={(updated) => {
                   onStationSelected(updated);
-                  runTask(loadStations(true), 'Could not refresh the station list.');
+                  runTask(loadStations(), 'Could not refresh the station list.');
                 }}
               />
             )}

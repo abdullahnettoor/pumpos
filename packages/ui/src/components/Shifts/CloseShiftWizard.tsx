@@ -88,8 +88,18 @@ const STEP_ICONS: Record<Step, React.ReactNode> = {
   4: <FileText size={13} />,
 };
 
-export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
-  isOpen,
+export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = (props) =>
+  props.isOpen ? <CloseShiftWizardBody {...props} /> : null;
+
+/**
+ * The wizard body only exists while the drawer is open, so every piece of
+ * progress it holds — the step, the denomination count, the dip toggle — is
+ * discarded on close by unmounting rather than by effects reaching back in.
+ * That also removes a stale-state hazard the old reset only half covered: the
+ * step and the dip acknowledgement survived a close, so reopening for the next
+ * shift could land the operator on step 4 with a previous acknowledgement.
+ */
+const CloseShiftWizardBody: React.FC<CloseShiftWizardProps> = ({
   onClose,
   shiftTemplateName,
   openedAt,
@@ -121,12 +131,9 @@ export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
   const [recordDip, setRecordDip] = useState(false);
   const [confirmPostCloseDip, setConfirmPostCloseDip] = useState(false);
   const [showVarianceWhy, setShowVarianceWhy] = useState(false);
-  // Denomination counts for the counted safe cash (held here so re-opening the
-  // popover / navigating steps preserves them). Reset when the drawer closes.
+  // Denomination counts for the counted safe cash, held here so re-opening the
+  // popover / navigating steps preserves them.
   const [cashBreakdown, setCashBreakdown] = useState<CashBreakdown>({});
-  React.useEffect(() => {
-    if (!isOpen) setCashBreakdown({});
-  }, [isOpen]);
 
   const cashVariance = closingCash - expectedCash;
   const hasWarnings = warnings.length > 0;
@@ -136,13 +143,6 @@ export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
 
   const goNext = () => setStep((s) => (s < 4 ? ((s + 1) as Step) : s));
   const goBack = () => setStep((s) => (s > 1 ? ((s - 1) as Step) : s));
-
-  // Reset to step 1 when drawer is freshly opened
-  React.useEffect(() => {
-    if (isOpen && step !== 1 && !confirmWarningsChecked && closingCash === 0) {
-      // Drawer reopened from scratch — keep current step (preserve progress)
-    }
-  }, [isOpen]);
 
   const stepper = (
     <div className="close-wizard-stepper">
@@ -205,7 +205,7 @@ export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
 
   return (
     <Drawer
-      isOpen={isOpen}
+      isOpen
       onClose={onClose}
       title={`Close Shift · ${shiftTemplateName}`}
       widthVariant="wide"
