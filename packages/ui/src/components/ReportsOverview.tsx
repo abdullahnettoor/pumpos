@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavIntentEntry, clearNavIntent } from '../nav-intent/store.js';
 import type { ColumnDef } from '@tanstack/react-table';
 import { CloudShiftService } from '../services/cloud.js';
 import { useDailyDssrRange } from '../query/hooks.js';
 import { useQueryClient } from '@tanstack/react-query';
 import { DailyDssrView } from './DailyDssrView.js';
-import type { NavIntent } from './AppShell.js';
 import { PageLayout } from './primitives/PageLayout.js';
 import { Tabs } from './primitives/Tabs.js';
 import { DataTable } from './primitives/DataTable.js';
@@ -75,26 +75,25 @@ const dssrColumns: ColumnDef<any, any>[] = [
 interface ReportsOverviewProps {
   selectedStation: any | null;
   userRole: 'Owner' | 'Manager' | 'Accountant' | 'Staff';
-  intent?: NavIntent | null;
-  onIntentConsumed?: () => void;
 }
 
 type ReportsTab =
   'daily-dssr' | 'pnl' | 'ledger' | 'invoices' | 'tax-register' | 'expense-register' | 'cash-bank';
 
-export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
-  selectedStation,
-  userRole,
-  intent,
-  onIntentConsumed,
-}) => {
+export const ReportsOverview: React.FC<ReportsOverviewProps> = ({ selectedStation, userRole }) => {
   const qc = useQueryClient();
   const runTask = useRunTask();
   const stationId = selectedStation?.id ?? null;
   const s = selectedStation?.settings || {};
   const clock = { timeZone: s.timezone, dayStartsAt: s.business_day_starts_at };
 
-  const [activeTab, setActiveTab] = useState<ReportsTab>('daily-dssr');
+  const [selectedTab, setSelectedTab] = useState<ReportsTab>('daily-dssr');
+  const { intent, token: intentToken } = useNavIntentEntry();
+  const activeTab: ReportsTab = intent?.openDssrDate ? 'daily-dssr' : selectedTab;
+  const setActiveTab = (tab: ReportsTab) => {
+    clearNavIntent();
+    setSelectedTab(tab);
+  };
   const [activeDailyDssr, setActiveDailyDssr] = useState<any | null>(null);
   const [selectedDate, setSelectedDate] = useState<string>(() =>
     resolveBusinessDate({ timeZone: clock.timeZone, dayStartsAt: clock.dayStartsAt }),
@@ -130,13 +129,16 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
 
   // Deep-link: opening a past business day from the top-bar anchor dropdown.
   // Uses the on-the-fly preview so it works whether or not a snapshot exists.
-  const handledDssrDateRef = useRef<string | null>(null);
+  // The only consumer that still needs an effect, because it performs I/O — but
+  // the tab is derived like everywhere else, and the guard is now the store's
+  // token rather than the date string. The old date-keyed ref silently ignored
+  // a second navigation to the same day.
+  const handledTokenRef = useRef<number | null>(null);
   useEffect(() => {
     const date = intent?.openDssrDate;
     if (!date || !stationId) return;
-    if (handledDssrDateRef.current === date) return;
-    handledDssrDateRef.current = date;
-    setActiveTab('daily-dssr');
+    if (handledTokenRef.current === intentToken) return;
+    handledTokenRef.current = intentToken;
     let cancelled = false;
     runTask(
       (async () => {
@@ -148,7 +150,7 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
           // operator can generate one.
           if (!cancelled) setSelectedDate(date);
         } finally {
-          onIntentConsumed?.();
+          clearNavIntent();
         }
       })(),
       'Could not open the report for that day.',
@@ -156,7 +158,7 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [intent?.openDssrDate, stationId, onIntentConsumed, runTask]);
+  }, [intent?.openDssrDate, intentToken, stationId, runTask]);
 
   const handleGenerateDailyDssr = async () => {
     if (!selectedStation || !selectedDate) return;

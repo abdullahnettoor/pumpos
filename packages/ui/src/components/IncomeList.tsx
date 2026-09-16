@@ -1,4 +1,5 @@
-import React, { useMemo, useState, useEffect, useRef } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
+import { useNavIntent, clearNavIntent } from '../nav-intent/store.js';
 import type { ExpenseEntryFormValues } from '@pump/shared';
 import { canManageExpenseCategory, canVoidExpense } from '@pump/shared';
 import { CloudTransactionService } from '../services/cloud.js';
@@ -26,7 +27,6 @@ import {
 } from '../pump-ds/index.js';
 import { Tabs } from './primitives/Tabs.js';
 import { LoadingSpinner } from './LoadingSpinner.js';
-import type { NavIntent } from './AppShell.js';
 import { buildIncomeColumns } from './income/columns.js';
 import { IncomeCategoryManagerDrawer } from './income/IncomeCategoryManagerDrawer.js';
 import { useRunTask } from '../utils/runTask.js';
@@ -38,16 +38,9 @@ type IncomeTab = 'ledger' | 'gst';
 interface IncomeListProps {
   selectedStation: any | null;
   userRole?: string;
-  intent?: NavIntent | null;
-  onIntentConsumed?: () => void;
 }
 
-export const IncomeList: React.FC<IncomeListProps> = ({
-  selectedStation,
-  userRole,
-  intent,
-  onIntentConsumed,
-}) => {
+export const IncomeList: React.FC<IncomeListProps> = ({ selectedStation, userRole }) => {
   const stationId = selectedStation?.id ?? null;
   const incomeQ = useIncome({ stationId: stationId ?? undefined });
   const categoriesQ = useIncomeCategories();
@@ -60,7 +53,7 @@ export const IncomeList: React.FC<IncomeListProps> = ({
   const s = selectedStation?.settings || {};
   const clock = { timeZone: s.timezone, dayStartsAt: s.business_day_starts_at };
 
-  const income = incomeQ.data ?? [];
+  const income = useMemo(() => incomeQ.data ?? [], [incomeQ.data]);
   const categories = categoriesQ.data ?? [];
   const canManageCategories = canManageExpenseCategory((userRole as any) ?? 'Staff');
   const canVoid = canVoidExpense((userRole as any) ?? 'Staff');
@@ -71,7 +64,11 @@ export const IncomeList: React.FC<IncomeListProps> = ({
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState('');
 
   // Drawers
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [drawerOpen, setIsDrawerOpen] = useState(false);
+  // Command-palette deep-link: derived from the pending intent rather than
+  // opened by an effect, so there is nothing to guard against re-firing.
+  const intent = useNavIntent();
+  const isDrawerOpen = intent?.open === 'new-income' || drawerOpen;
   const [categoryManagerOpen, setCategoryManagerOpen] = useState(false);
   const [formDefaults, setFormDefaults] = useState<Partial<ExpenseEntryFormValues>>({});
   const [submitting, setSubmitting] = useState(false);
@@ -88,19 +85,10 @@ export const IncomeList: React.FC<IncomeListProps> = ({
     });
     setIsDrawerOpen(true);
   };
-  const closeDrawer = () => setIsDrawerOpen(false);
-
-  // Command-palette deep-link: open the entry drawer on arrival.
-  const handledIntentRef = useRef<NavIntent | null>(null);
-  useEffect(() => {
-    if (!intent || handledIntentRef.current === intent) return;
-    if (intent.open === 'new-income') {
-      handledIntentRef.current = intent;
-      openDrawer();
-      onIntentConsumed?.();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [intent]);
+  const closeDrawer = () => {
+    clearNavIntent();
+    setIsDrawerOpen(false);
+  };
 
   const handleAddIncome = async (values: ExpenseEntryFormValues) => {
     try {

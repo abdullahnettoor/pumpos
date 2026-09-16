@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { CloudTransactionService } from '../services/cloud.js';
+import { useNavIntent, clearNavIntent } from '../nav-intent/store.js';
 import {
   usePurchases,
   useShiftStatus,
@@ -28,7 +29,6 @@ import { PageLayout } from './primitives/PageLayout.js';
 import { useToast } from './primitives/ToastProvider.js';
 import { Panel, Button, KpiStrip, KpiTile, EmptyState, DateText } from '../pump-ds/index.js';
 import { resolveBusinessDate, type PurchaseEntryFormValues } from '@pump/shared';
-import type { NavIntent } from './AppShell.js';
 import { purchaseColumns, buildSupplierColumns } from './purchases/columns.js';
 import { SupplierFormDrawer } from './purchases/SupplierFormDrawer.js';
 import { SupplierStatementDrawer } from './purchases/SupplierStatementDrawer.js';
@@ -40,10 +40,6 @@ const transactionService = new CloudTransactionService();
 interface PurchasesListProps {
   selectedStation: any | null;
   defaultShiftId?: string;
-  /** Optional deep-link intent (focus a supplier). */
-  intent?: NavIntent | null;
-  /** Called once the intent has been handled so the parent can clear it. */
-  onIntentConsumed?: () => void;
 }
 
 type TabType = 'transactions' | 'registry' | 'gst';
@@ -51,10 +47,19 @@ type TabType = 'transactions' | 'registry' | 'gst';
 export const PurchasesList: React.FC<PurchasesListProps> = ({
   selectedStation,
   defaultShiftId,
-  intent,
-  onIntentConsumed,
 }) => {
-  const [activeTab, setActiveTab] = useState<TabType>('transactions');
+  const [selectedTab, setSelectedTab] = useState<TabType>('transactions');
+  // --- deep-link intent (from global search) ---
+  // Derived, not copied into state by an effect: the old version bailed while
+  // `suppliersAllQ` loaded and relied on re-running, so a deep link could be
+  // dropped. A derivation just resolves once the suppliers land.
+  const intent = useNavIntent();
+  const focusSupplierId = intent?.focusSupplierId ?? null;
+  const activeTab: TabType = focusSupplierId ? 'registry' : selectedTab;
+  const setActiveTab = (tab: TabType) => {
+    clearNavIntent();
+    setSelectedTab(tab);
+  };
 
   const stationId = selectedStation?.id ?? null;
   const purchasesQ = usePurchases();
@@ -67,11 +72,11 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({
   const toast = useToast();
   const runTask = useRunTask();
 
-  const purchases = purchasesQ.data ?? [];
+  const purchases = useMemo(() => purchasesQ.data ?? [], [purchasesQ.data]);
   const activeShift = statusQ.data?.activeShift ?? null;
   const recentClosedShifts: any[] = statusQ.data?.recentClosedShifts ?? [];
   const suppliers = suppliersActiveQ.data ?? [];
-  const allSuppliers = suppliersAllQ.data ?? [];
+  const allSuppliers = useMemo(() => suppliersAllQ.data ?? [], [suppliersAllQ.data]);
   const products = productsQ.data ?? [];
   const tanks = tanksQ.data ?? [];
 
@@ -239,8 +244,21 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({
   const [isPurchaseDrawerOpen, setIsPurchaseDrawerOpen] = useState(false);
   const [isSupplierDrawerOpen, setIsSupplierDrawerOpen] = useState(false);
   const [editingSupplier, setEditingSupplier] = useState<any | null>(null);
-  const [statementSupplier, setStatementSupplier] = useState<any | null>(null);
-  const [isPaymentDrawerOpen, setIsPaymentDrawerOpen] = useState(false);
+  const [statementSupplierId, setStatementSupplierId] = useState<string | null>(null);
+  const [paymentDrawerOpen, setIsPaymentDrawerOpen] = useState(false);
+  const statementSupplier = focusSupplierId
+    ? (allSuppliers.find((x: any) => x.id === focusSupplierId) ?? null)
+    : (allSuppliers.find((x: any) => x.id === statementSupplierId) ?? null);
+  const isPaymentDrawerOpen = intent?.open === 'supplier-payment' || paymentDrawerOpen;
+  /** Closing the statement drops the deep link that opened it. */
+  const closeStatement = () => {
+    clearNavIntent();
+    setStatementSupplierId(null);
+  };
+  const closePaymentDrawer = () => {
+    clearNavIntent();
+    setIsPaymentDrawerOpen(false);
+  };
   const openCreateSupplier = () => {
     setEditingSupplier(null);
     setIsSupplierDrawerOpen(true);
@@ -315,24 +333,6 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({
       setSubmitting(false);
     }
   };
-
-  // --- deep-link intent (from global search) ---
-  const handledIntentRef = useRef<NavIntent | null>(null);
-  useEffect(() => {
-    if (!intent || handledIntentRef.current === intent) return;
-    if (intent.focusSupplierId && suppliersAllQ.isLoading) return;
-    handledIntentRef.current = intent;
-    if (intent.focusSupplierId) {
-      const sup = allSuppliers.find((s: any) => s.id === intent.focusSupplierId);
-      if (sup) {
-        setActiveTab('registry');
-        setStatementSupplier(sup);
-      }
-    }
-    if (intent.open === 'supplier-payment') setIsPaymentDrawerOpen(true);
-    onIntentConsumed?.();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [intent, allSuppliers, suppliersAllQ.isLoading]);
 
   if (!selectedStation) {
     return (
@@ -538,7 +538,10 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({
 
         {activeTab === 'registry' && (
           <DataTable
-            columns={buildSupplierColumns(setStatementSupplier, openEditSupplier)}
+            columns={buildSupplierColumns(
+              (sup: any) => setStatementSupplierId(sup.id),
+              openEditSupplier,
+            )}
             data={allSuppliers}
             emptyMessage="No suppliers registered."
             getRowId={(r: any) => r.id}
@@ -1253,13 +1256,13 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({
       <SupplierStatementDrawer
         supplier={statementSupplier}
         stationId={stationId}
-        onClose={() => setStatementSupplier(null)}
+        onClose={closeStatement}
         onEdit={(sup) => {
-          setStatementSupplier(null);
+          closeStatement();
           openEditSupplier(sup);
         }}
         onNewPurchase={(sup) => {
-          setStatementSupplier(null);
+          closeStatement();
           openPurchaseDrawer(sup.id);
         }}
       />
@@ -1268,7 +1271,7 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({
         isOpen={isPaymentDrawerOpen}
         suppliers={allSuppliers}
         stationId={stationId}
-        onClose={() => setIsPaymentDrawerOpen(false)}
+        onClose={closePaymentDrawer}
         onDone={() => invalidateOperational(stationId)}
       />
     </PageLayout>
