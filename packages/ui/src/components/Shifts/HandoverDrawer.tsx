@@ -120,8 +120,13 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
   // declared needs one explicit confirmation before submit.
   const [zeroTerminalsConfirmed, setZeroTerminalsConfirmed] = useState(false);
   const [acceptedResult, setAcceptedResult] = useState<RecordHandoverResult | null>(null);
-  const handoverRequestRef = useRef<{ fingerprint: string; idempotencyKey: string } | null>(
+  // Lazily, once per open: a bare useRef argument is evaluated on every render,
+  // which would re-read localStorage on every keystroke in this drawer.
+  const [initialHandoverRequest] = useState(() =>
     stationId ? loadHandoverRequestIdentity(stationId, shiftId, userId, duId) : null,
+  );
+  const handoverRequestRef = useRef<{ fingerprint: string; idempotencyKey: string } | null>(
+    initialHandoverRequest,
   );
   const recordHandover = useRecordHandoverMutation();
   // Denomination counts for the handover cash (held here so re-opening the

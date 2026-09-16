@@ -87,7 +87,10 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
     settings.business_day_starts_at,
   );
   const [pickedBusinessDate, setPickedBusinessDate] = useState<string | null>(null);
-  const businessDate = requestedBusinessDate ?? pickedBusinessDate ?? currentBusinessDate;
+  // A day the operator picked always wins. The requested date only applies
+  // until then: if the parent ever failed to clear it, ordering it first would
+  // override every subsequent click and strand them on that day.
+  const businessDate = pickedBusinessDate ?? requestedBusinessDate ?? currentBusinessDate;
 
   const initializedStationId = useRef<string | null>(null);
 

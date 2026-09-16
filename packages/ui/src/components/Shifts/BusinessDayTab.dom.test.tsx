@@ -169,6 +169,28 @@ describe('BusinessDayTab', () => {
       await waitFor(() => expect(onBusinessDateSelected).toHaveBeenCalled());
     });
 
+    it('lets the operator pick a different day even if the request is never cleared', async () => {
+      // `onBusinessDateSelected` is omitted, so the requested date stays set.
+      // It must not out-vote an explicit click.
+      renderTab({
+        requestedBusinessDate: '2026-02-27',
+        openBusinessDays: [
+          { businessDate: TODAY, id: 'bd-1' },
+          { businessDate: '2026-02-27', id: 'bd-old' },
+        ],
+      });
+      const dayButtons = await screen.findAllByRole('button', { pressed: false });
+      const today = dayButtons.find((b) => b.textContent?.includes('01'));
+      if (today) {
+        fireEvent.click(today);
+        await waitFor(() =>
+          expect(
+            screen.getAllByRole('button').some((b) => b.getAttribute('aria-pressed') === 'true'),
+          ).toBe(true),
+        );
+      }
+    });
+
     it('adopts a date requested after mount, not only the one it started with', async () => {
       const onBusinessDateSelected = vi.fn();
       const { rerender } = renderTab({ onBusinessDateSelected });
