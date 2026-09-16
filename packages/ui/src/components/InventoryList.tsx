@@ -345,13 +345,18 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation })
     setSelectedTab(tab);
   };
 
-  // Fade the highlight out after a few seconds so it doesn't linger. Dropping
-  // the intent is the fade: `highlightId` is derived from it.
+  // Fade the highlight after a few seconds. The intent carries two different
+  // lifetimes — the highlight is transient, the tab selection is not — so the
+  // durable half is committed to local state before the intent is dropped.
+  // Clearing alone would snap the operator back to the previous tab mid-use.
   useEffect(() => {
-    if (!highlightId) return;
-    const t = setTimeout(() => clearNavIntent(), 4000);
+    if (!focusTab) return;
+    const t = setTimeout(() => {
+      setSelectedTab(focusTab);
+      clearNavIntent();
+    }, 4000);
     return () => clearTimeout(t);
-  }, [highlightId]);
+  }, [focusTab]);
 
   // Stock count / opening balance / adjustment
   const [countOpen, setCountOpen] = useState(false);

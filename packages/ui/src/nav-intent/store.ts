@@ -26,15 +26,17 @@ export interface NavIntent {
   /** Focus a specific inventory tab + entity (tank card / merchandise row). */
   focusInventoryTab?: 'tanks' | 'items';
   focusInventoryId?: string;
-  /** Open a drawer immediately on arrival at the destination page. */
-  open?:
-    | 'customer-statement'
-    | 'new-customer'
-    | 'new-collection'
-    | 'supplier-statement'
-    | 'supplier-payment'
-    | 'new-expense'
-    | 'new-income';
+  /**
+   * Open a drawer immediately on arrival at the destination page.
+   *
+   * `new-expense` / `new-income` / `new-collection` used to live here but were
+   * fossils: the quick-entry store took over in-place entry and nothing emitted
+   * them any more. They are deliberately not listed — a derived `isOpen` opens
+   * a drawer without running the `openDrawer()` that seeds its form defaults,
+   * so reviving one here would open an entry form with an empty target shift.
+   * Route those through `openQuickEntry` instead.
+   */
+  open?: 'customer-statement' | 'new-customer' | 'supplier-statement' | 'supplier-payment';
   /** Open a specific past business day's DSSR summary (Reports page). */
   openDssrDate?: string;
   /** Open a specific Business Day in the Shifts workspace. */
@@ -100,5 +102,4 @@ export function useNavIntent(): NavIntent | null {
 /** Test seam: reset module state between cases. */
 export function __resetNavIntentForTests() {
   state = EMPTY;
-  listeners.clear();
 }

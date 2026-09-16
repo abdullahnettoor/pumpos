@@ -134,9 +134,16 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     clearNavIntent();
     setSelectedSubTab(tab);
   };
+  /**
+   * BusinessDayTab reports the requested date as consumed on mount. Commit the
+   * durable half — that we are on the business-day sub-tab — into local state
+   * first: clearing the intent alone would drop the tab derivation and bounce
+   * the operator straight back to Active Shift.
+   */
   const setRequestedBusinessDayDate = (date: string | null) => {
-    clearNavIntent();
+    setSelectedSubTab('business-day');
     setSelectedBusinessDayDate(date);
+    clearNavIntent();
   };
   const [viewHistoryShiftId, setViewHistoryShiftId] = useState<string | null>(null);
 

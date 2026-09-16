@@ -196,10 +196,12 @@ export const CustomersList: React.FC<CustomersListProps> = ({
   const [customerDrawerOpen, setCustomerDrawerOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<any | null>(null);
   const openCreateCustomer = () => {
+    clearNavIntent();
     setEditingCustomer(null);
     setCustomerDrawerOpen(true);
   };
   const openEditCustomer = (cust: any) => {
+    clearNavIntent();
     setEditingCustomer(cust);
     setCustomerDrawerOpen(true);
   };
@@ -245,7 +247,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({
   }, [customersAllQ.data]);
 
   // --- Collection drawer ---
-  const [collectionDrawerOpen, setIsCollectionDrawerOpen] = useState(false);
+  const [collectionDrawerOpen, setCollectionDrawerOpen] = useState(false);
   const [collectionDefaults, setCollectionDefaults] = useState<Partial<CollectionEntryFormValues>>(
     {},
   );
@@ -278,12 +280,12 @@ export const CustomersList: React.FC<CustomersListProps> = ({
   };
 
   const openCollectionDrawer = (customerId?: string) => {
+    clearNavIntent();
     resetCollectionForm(customerId);
-    setIsCollectionDrawerOpen(true);
+    setCollectionDrawerOpen(true);
   };
   const closeCollectionDrawer = () => {
-    clearNavIntent();
-    setIsCollectionDrawerOpen(false);
+    setCollectionDrawerOpen(false);
     resetCollectionForm();
   };
 
@@ -326,7 +328,8 @@ export const CustomersList: React.FC<CustomersListProps> = ({
     : (allCustomers.find((c: any) => c.id === statementCustomerId) ?? null);
 
   // `open: 'new-customer'` arrives from the quick-create menu and the command
-  // palette; `new-collection` is retained for parity though nothing emits it.
+  // palette. `CustomerFormDrawer` seeds its own defaults, so opening it by
+  // derivation is safe here in a way it would not be for an entry drawer.
   const isCustomerDrawerOpen = intent?.open === 'new-customer' || customerDrawerOpen;
   const closeCustomerDrawer = () => {
     clearNavIntent();
@@ -337,11 +340,16 @@ export const CustomersList: React.FC<CustomersListProps> = ({
     clearNavIntent();
     setSelectedTab(tab);
   };
-  /** Closing the statement drops the deep link that opened it. */
-  const closeStatement = () => {
+  /**
+   * Any setter that competes with a derived intent value must also drop the
+   * intent, or the deep link silently out-votes the operator — clicking a row
+   * while a focus intent is pending would otherwise do nothing on screen.
+   */
+  const showStatementFor = (id: string | null) => {
     clearNavIntent();
-    setStatementCustomerId(null);
+    setStatementCustomerId(id);
   };
+  const closeStatement = () => showStatementFor(null);
 
   if (!selectedStation) {
     return (
@@ -709,7 +717,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({
             <DataTable
               bare
               columns={buildCustomerColumns(
-                (c: any) => setStatementCustomerId(c.id),
+                (c: any) => showStatementFor(c.id),
                 openEditCustomer,
                 anyPrepaid,
               )}
@@ -805,7 +813,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({
 
       {/* Collections Drawer */}
       <Drawer
-        isOpen={intent?.open === 'new-collection' || collectionDrawerOpen}
+        isOpen={collectionDrawerOpen}
         onClose={closeCollectionDrawer}
         title="Log Customer Collection"
       >

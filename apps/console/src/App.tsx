@@ -29,6 +29,7 @@ import {
   startSession,
   useRunTask,
   publishNavIntent,
+  clearNavIntent,
 } from '@pump/ui';
 import type { NavIntent } from '@pump/ui';
 import { Station } from '@pump/shared';
@@ -233,6 +234,8 @@ export const App: React.FC = () => {
   }, []);
 
   const handleStationChange = (station: Station) => {
+    // A pending deep link points at the previous station's entities.
+    clearNavIntent();
     setSelectedStation(station);
     // Dashboard is home for both ready and pre-ready stations (the dashboard
     // shows a getting-started hero until the station is operational).

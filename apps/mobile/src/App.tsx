@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Login, useStations, useMyAssignment } from '@pump/ui';
 import type { Station } from '@pump/shared';
 import { resolveBusinessDate } from '@pump/shared';
@@ -55,23 +55,25 @@ export const App: React.FC = () => {
   const myAssignmentQ = useMyAssignment({ enabled: status === 'ready' && role !== 'Attendant' });
   const hasHandoverTab = role !== 'Attendant' && !!myAssignmentQ.data;
 
-  const [selectedStationId, setSelectedStationId] = useState<string | null>(null);
-  const [tab, setTab] = useState<TabKey>('home');
+  // All three selections below are *derived* rather than synced into state by
+  // an effect. Each is "the operator's pick, falling back to a default that
+  // depends on data which may not have loaded yet" — a fallback is a render
+  // concern, and an effect only made it arrive one render late.
+  const [pickedStationId, setPickedStationId] = useState<string | null>(null);
+  const [pickedTab, setPickedTab] = useState<TabKey>('home');
 
   const allowedTabs = useMemo<TabKey[]>(() => {
     const base = role ? TABS_BY_ROLE[role] : [];
     return hasHandoverTab ? [...base, 'handover'] : base;
   }, [role, hasHandoverTab]);
 
-  // Default the station once loaded.
-  useEffect(() => {
-    if (!selectedStationId && stations.length > 0) setSelectedStationId(stations[0].id);
-  }, [stations, selectedStationId]);
+  // Default to the first station until one is picked.
+  const selectedStationId = pickedStationId ?? stations[0]?.id ?? null;
+  const setSelectedStationId = setPickedStationId;
 
   // Keep the active tab within what the role + view allows.
-  useEffect(() => {
-    if (allowedTabs.length && !allowedTabs.includes(tab)) setTab(allowedTabs[0]);
-  }, [allowedTabs, tab]);
+  const tab = allowedTabs.length && !allowedTabs.includes(pickedTab) ? allowedTabs[0] : pickedTab;
+  const setTab = setPickedTab;
 
   const selectedStation = useMemo(
     () => stations.find((s) => s.id === selectedStationId) ?? null,
@@ -87,14 +89,10 @@ export const App: React.FC = () => {
         dayStartsAt: stationSettings.business_day_starts_at,
       })
     : undefined;
-  const [bizDate, setBizDate] = useState<string | null>(null);
-  useEffect(() => {
-    if (todayBiz && !bizDate) setBizDate(todayBiz);
-  }, [todayBiz, bizDate]);
-  // Clamp a stale selection if the day rolled over past what's now selectable.
-  useEffect(() => {
-    if (todayBiz && bizDate && bizDate > todayBiz) setBizDate(todayBiz);
-  }, [todayBiz, bizDate]);
+  const [pickedBizDate, setBizDate] = useState<string | null>(null);
+  // Defaults to today, and clamps a stale pick if the day rolled over past what
+  // is now selectable.
+  const bizDate = pickedBizDate && todayBiz && pickedBizDate > todayBiz ? todayBiz : pickedBizDate;
   const businessDate = bizDate ?? todayBiz ?? null;
   const showBusinessDay = tab === 'home' || tab === 'dssr';
 

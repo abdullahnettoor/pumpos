@@ -245,19 +245,20 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({
   const [isSupplierDrawerOpen, setIsSupplierDrawerOpen] = useState(false);
   const [editingSupplier, setEditingSupplier] = useState<any | null>(null);
   const [statementSupplierId, setStatementSupplierId] = useState<string | null>(null);
-  const [paymentDrawerOpen, setIsPaymentDrawerOpen] = useState(false);
+  const [paymentDrawerOpen, setPaymentDrawerOpen] = useState(false);
   const statementSupplier = focusSupplierId
     ? (allSuppliers.find((x: any) => x.id === focusSupplierId) ?? null)
     : (allSuppliers.find((x: any) => x.id === statementSupplierId) ?? null);
   const isPaymentDrawerOpen = intent?.open === 'supplier-payment' || paymentDrawerOpen;
-  /** Closing the statement drops the deep link that opened it. */
-  const closeStatement = () => {
+  /** See CustomersList: a setter competing with a derived intent must clear it. */
+  const showStatementFor = (id: string | null) => {
     clearNavIntent();
-    setStatementSupplierId(null);
+    setStatementSupplierId(id);
   };
+  const closeStatement = () => showStatementFor(null);
   const closePaymentDrawer = () => {
     clearNavIntent();
-    setIsPaymentDrawerOpen(false);
+    setPaymentDrawerOpen(false);
   };
   const openCreateSupplier = () => {
     setEditingSupplier(null);
@@ -384,7 +385,7 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({
                 variant="secondary"
                 size="sm"
                 leftIcon={<Wallet />}
-                onClick={() => setIsPaymentDrawerOpen(true)}
+                onClick={() => setPaymentDrawerOpen(true)}
               >
                 Record Payment
               </Button>
@@ -404,7 +405,7 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({
                 variant="secondary"
                 size="sm"
                 leftIcon={<Wallet />}
-                onClick={() => setIsPaymentDrawerOpen(true)}
+                onClick={() => setPaymentDrawerOpen(true)}
               >
                 Record Payment
               </Button>
@@ -538,10 +539,7 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({
 
         {activeTab === 'registry' && (
           <DataTable
-            columns={buildSupplierColumns(
-              (sup: any) => setStatementSupplierId(sup.id),
-              openEditSupplier,
-            )}
+            columns={buildSupplierColumns((sup: any) => showStatementFor(sup.id), openEditSupplier)}
             data={allSuppliers}
             emptyMessage="No suppliers registered."
             getRowId={(r: any) => r.id}

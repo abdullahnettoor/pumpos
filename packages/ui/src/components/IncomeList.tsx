@@ -1,5 +1,4 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { useNavIntent, clearNavIntent } from '../nav-intent/store.js';
 import type { ExpenseEntryFormValues } from '@pump/shared';
 import { canManageExpenseCategory, canVoidExpense } from '@pump/shared';
 import { CloudTransactionService } from '../services/cloud.js';
@@ -64,11 +63,8 @@ export const IncomeList: React.FC<IncomeListProps> = ({ selectedStation, userRol
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState('');
 
   // Drawers
-  const [drawerOpen, setIsDrawerOpen] = useState(false);
-  // Command-palette deep-link: derived from the pending intent rather than
-  // opened by an effect, so there is nothing to guard against re-firing.
-  const intent = useNavIntent();
-  const isDrawerOpen = intent?.open === 'new-income' || drawerOpen;
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+
   const [categoryManagerOpen, setCategoryManagerOpen] = useState(false);
   const [formDefaults, setFormDefaults] = useState<Partial<ExpenseEntryFormValues>>({});
   const [submitting, setSubmitting] = useState(false);
@@ -85,10 +81,7 @@ export const IncomeList: React.FC<IncomeListProps> = ({ selectedStation, userRol
     });
     setIsDrawerOpen(true);
   };
-  const closeDrawer = () => {
-    clearNavIntent();
-    setIsDrawerOpen(false);
-  };
+  const closeDrawer = () => setIsDrawerOpen(false);
 
   const handleAddIncome = async (values: ExpenseEntryFormValues) => {
     try {

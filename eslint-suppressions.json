@@ -1,9 +1,4 @@
 {
-  "apps/mobile/src/App.tsx": {
-    "react-hooks/set-state-in-effect": {
-      "count": 4
-    }
-  },
   "apps/mobile/src/components/HandoverPanel.tsx": {
     "react-hooks/exhaustive-deps": {
       "count": 1
