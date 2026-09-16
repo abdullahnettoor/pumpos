@@ -36,6 +36,7 @@ import { verifySupabaseJwt } from './infra/supabase-jwt.js';
 import { SupabaseAdmin } from './infra/supabase-admin.js';
 import { DrizzleEventStore } from './infra/events.js';
 import { rateLimit } from './infra/rate-limit.js';
+import { resolveCorsOrigin } from './infra/cors.js';
 import type { AuthenticatedPrincipal } from './infra/authenticated-principal.js';
 import {
   readActivityMetadata,
@@ -183,37 +184,13 @@ function tripHyperdriveBreaker(reason: string): void {
   hyperdriveDisabledUntilMs = until;
 }
 
-const allowedCorsOrigins = new Set([
-  'https://pumpos.app',
-  'https://console.pumpos.app',
-  'https://m.pumpos.app',
-  'https://pumpos.abdullahnettoor.com',
-  'https://console.pumpos.abdullahnettoor.com',
-  'https://m.pumpos.abdullahnettoor.com',
-  'http://localhost:1420',
-  'http://127.0.0.1:1420',
-  'http://localhost:3000',
-  'http://127.0.0.1:3000',
-  'http://localhost:3100',
-  'http://127.0.0.1:3100',
-  'http://localhost:4321',
-  'http://127.0.0.1:4321',
-  'http://localhost:5173',
-  'http://127.0.0.1:5173',
-  'tauri://localhost',
-  'http://tauri.localhost',
-  'https://tauri.localhost',
-]);
-
 // Enable CORS for known browser/Tauri origins. Non-browser clients are not
 // blocked by CORS; requests without an Origin header are allowed through.
+// The decision lives in `infra/cors.ts` so it can be tested directly.
 app.use(
   '*',
   cors({
-    origin: (origin) => {
-      if (!origin) return null;
-      return allowedCorsOrigins.has(origin) ? origin : null;
-    },
+    origin: (origin, c) => resolveCorsOrigin(origin, c.env),
     allowHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key'],
     allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     exposeHeaders: ['Content-Length', 'Server-Timing'],

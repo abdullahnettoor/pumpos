@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   useMyAssignment,
@@ -525,6 +525,42 @@ const CustomerSaleForm: React.FC<{
   );
 };
 
+/** What a DU's entry looks like before the attendant touches it. Pure over `du`. */
+function seedForm(du: any): DuFormState {
+  const readings: Record<string, string> = {};
+  const testing: Record<string, string> = {};
+  for (const nz of du.nozzles) {
+    readings[nz.nozzleId] = String(nz.closingReading ?? nz.openingReading ?? 0);
+    testing[nz.nozzleId] =
+      nz.testingVolume != null && Number(nz.testingVolume) > 0
+        ? String(Number(nz.testingVolume))
+        : '';
+  }
+  const terminals: TerminalState = {};
+  for (const t of du.terminals) {
+    const entry = (du.terminalEntries || []).find((e: any) => e.terminalId === t.terminalId);
+    terminals[t.terminalId] = {
+      card: entry?.cardAmount != null ? String(Number(entry.cardAmount)) : '',
+      upi: entry?.upiAmount != null ? String(Number(entry.upiAmount)) : '',
+      batch: entry?.batchRef ?? '',
+    };
+  }
+  return {
+    readings,
+    testing,
+    terminals,
+    aggregateCard:
+      du.terminals.length === 0 && du.handover?.cardHandedOver != null
+        ? String(Number(du.handover.cardHandedOver))
+        : '',
+    aggregateUpi:
+      du.terminals.length === 0 && du.handover?.upiHandedOver != null
+        ? String(Number(du.handover.upiHandedOver))
+        : '',
+    cash: du.handover?.cashHandedOver != null ? String(Number(du.handover.cashHandedOver)) : '',
+  };
+}
+
 export const HandoverPanel: React.FC = () => {
   const assignmentQ = useMyAssignment();
   const productsQ = useProducts();
@@ -534,7 +570,9 @@ export const HandoverPanel: React.FC = () => {
   const recordHandover = useRecordHandoverMutation();
 
   const data = assignmentQ.data;
-  const dus: any[] = data?.dispenserUnits ?? [];
+  // Memoised: a bare `?? []` gives the seed effect below a new array identity
+  // every render, which is what made its dependency list unsatisfiable.
+  const dus: any[] = useMemo(() => data?.dispenserUnits ?? [], [data?.dispenserUnits]);
   const shiftId: string | undefined = data?.shift?.id;
   const attendantId: string | undefined = data?.userId;
   const stationId: string | undefined = data?.station?.id ?? data?.shift?.stationId;
@@ -542,14 +580,13 @@ export const HandoverPanel: React.FC = () => {
   const inventoryQ = useInventoryItems(stationId ?? null);
   const merchHandoversQ = useMerchandiseHandovers(shiftId ?? null);
 
-  const [forms, setForms] = useState<Record<string, DuFormState>>({});
-  const [creditByDu, setCreditByDu] = useState<Record<string, CreditLine[]>>({});
-  const [omcByDu, setOmcByDu] = useState<Record<string, CreditLine[]>>({});
-  const [merchRows, setMerchRows] = useState<{ productId: string; quantity: string }[]>([
-    { productId: '', quantity: '' },
-  ]);
-  const [merchNonCash, setMerchNonCash] = useState('');
-  const [merchSeeded, setMerchSeeded] = useState(false);
+  const [editedForms, setEditedForms] = useState<Record<string, DuFormState>>({});
+  const [editedCreditByDu, setEditedCreditByDu] = useState<Record<string, CreditLine[]>>({});
+  const [editedOmcByDu, setEditedOmcByDu] = useState<Record<string, CreditLine[]>>({});
+  const [editedMerchRows, setEditedMerchRows] = useState<
+    { productId: string; quantity: string }[] | null
+  >(null);
+  const [editedMerchNonCash, setEditedMerchNonCash] = useState<string | null>(null);
   const [ccBusy, setCcBusy] = useState(false);
   // Cash denomination counter (bottom sheet): which DU's sheet is open + per-DU
   // counts (parent-held so re-opening preserves them; future backend = drop-in).
@@ -574,62 +611,33 @@ export const HandoverPanel: React.FC = () => {
     merchandiseRequestRef.current = null;
   };
 
-  // Seed local state once from the assignment (incl. any saved draft + credit lines).
-  useEffect(() => {
-    if (!dus.length) return;
-    setForms((prev) => {
-      if (Object.keys(prev).length) return prev; // don't clobber in-progress edits
-      const next: Record<string, DuFormState> = {};
-      for (const du of dus) {
-        const readings: Record<string, string> = {};
-        const testing: Record<string, string> = {};
-        for (const nz of du.nozzles) {
-          readings[nz.nozzleId] = String(nz.closingReading ?? nz.openingReading ?? 0);
-          testing[nz.nozzleId] =
-            nz.testingVolume != null && Number(nz.testingVolume) > 0
-              ? String(Number(nz.testingVolume))
-              : '';
-        }
-        const terminals: TerminalState = {};
-        for (const t of du.terminals) {
-          const entry = (du.terminalEntries || []).find((e: any) => e.terminalId === t.terminalId);
-          terminals[t.terminalId] = {
-            card: entry?.cardAmount != null ? String(Number(entry.cardAmount)) : '',
-            upi: entry?.upiAmount != null ? String(Number(entry.upiAmount)) : '',
-            batch: entry?.batchRef ?? '',
-          };
-        }
-        next[du.duId] = {
-          readings,
-          testing,
-          terminals,
-          aggregateCard:
-            du.terminals.length === 0 && du.handover?.cardHandedOver != null
-              ? String(Number(du.handover.cardHandedOver))
-              : '',
-          aggregateUpi:
-            du.terminals.length === 0 && du.handover?.upiHandedOver != null
-              ? String(Number(du.handover.upiHandedOver))
-              : '',
-          cash:
-            du.handover?.cashHandedOver != null ? String(Number(du.handover.cashHandedOver)) : '',
-        };
-      }
-      return next;
-    });
-    setCreditByDu((prev) => {
-      if (Object.keys(prev).length) return prev;
-      const next: Record<string, CreditLine[]> = {};
-      for (const du of dus) next[du.duId] = (du.creditSales || []) as CreditLine[];
-      return next;
-    });
-    setOmcByDu((prev) => {
-      if (Object.keys(prev).length) return prev;
-      const next: Record<string, CreditLine[]> = {};
-      for (const du of dus) next[du.duId] = (du.omcSales || []) as CreditLine[];
-      return next;
-    });
-  }, [dus]);
+  /**
+   * The attendant's entry for each DU: what they have typed, falling back to
+   * what the assignment says. Derived rather than copied in by an effect — the
+   * effect needed an anti-clobber guard precisely because recording a credit
+   * sale refetches the assignment mid-entry, and a fallback expresses that
+   * directly: a DU the attendant has touched is simply never re-seeded.
+   */
+
+  const forms = useMemo(() => {
+    const out: Record<string, DuFormState> = {};
+    for (const du of dus) out[du.duId] = editedForms[du.duId] ?? seedForm(du);
+    return out;
+  }, [dus, editedForms]);
+
+  const creditByDu = useMemo(() => {
+    const out: Record<string, CreditLine[]> = {};
+    for (const du of dus)
+      out[du.duId] = editedCreditByDu[du.duId] ?? ((du.creditSales || []) as CreditLine[]);
+    return out;
+  }, [dus, editedCreditByDu]);
+
+  const omcByDu = useMemo(() => {
+    const out: Record<string, CreditLine[]> = {};
+    for (const du of dus)
+      out[du.duId] = editedOmcByDu[du.duId] ?? ((du.omcSales || []) as CreditLine[]);
+    return out;
+  }, [dus, editedOmcByDu]);
 
   // Merchandise products (non-fuel), for the add-line picker.
   const merchProducts = useMemo(
@@ -670,23 +678,28 @@ export const HandoverPanel: React.FC = () => {
     [merchProducts, stock],
   );
 
-  // Pre-fill the attendant's existing merchandise closing so re-saving edits it
-  // instead of wiping it (the server replaces the whole handover on each save).
-  useEffect(() => {
-    if (merchSeeded || !attendantId || !merchHandoversQ.data) return;
-    const mine = merchHandoversQ.data.find((h) => h.attendantId === attendantId);
-    if (mine && (mine.items?.length ?? 0) > 0) {
-      setMerchRows(
-        mine.items.map((it: any) => ({
-          productId: it.productId,
-          quantity: String(Number(it.quantity)),
-        })),
-      );
-      if (mine.nonCashAmount != null && Number(mine.nonCashAmount) > 0)
-        setMerchNonCash(String(Number(mine.nonCashAmount)));
-    }
-    setMerchSeeded(true);
-  }, [merchHandoversQ.data, attendantId, merchSeeded]);
+  /**
+   * The attendant's merchandise closing: what they have typed, else whatever
+   * they already declared this shift. Derived rather than seeded by an effect —
+   * the server replaces the whole handover on each save, so a prefill that
+   * arrived a frame late could submit an empty list over a real one.
+   */
+  const myMerchandise = useMemo(
+    () => (merchHandoversQ.data ?? []).find((h: any) => h.attendantId === attendantId),
+    [merchHandoversQ.data, attendantId],
+  );
+  const merchRows = useMemo<{ productId: string; quantity: string }[]>(() => {
+    if (editedMerchRows) return editedMerchRows;
+    const items = myMerchandise?.items ?? [];
+    return items.length
+      ? items.map((it: any) => ({ productId: it.productId, quantity: String(Number(it.quantity)) }))
+      : [{ productId: '', quantity: '' }];
+  }, [editedMerchRows, myMerchandise]);
+  const merchNonCash =
+    editedMerchNonCash ??
+    (myMerchandise?.nonCashAmount != null && Number(myMerchandise.nonCashAmount) > 0
+      ? String(Number(myMerchandise.nonCashAmount))
+      : '');
 
   // Customers pickable for on-account sales: all except legacy station-prepaid
   // non-fleet wallets. Prepaid Fleet ARE included (OMC fleet cards → CMS).
@@ -728,25 +741,31 @@ export const HandoverPanel: React.FC = () => {
   };
   const setReading = (duId: string, nozzleId: string, v: string) => {
     resetAcceptedHandover(duId);
-    setForms((f) => ({
+    setEditedForms((f) => ({
       ...f,
-      [duId]: { ...f[duId], readings: { ...f[duId].readings, [nozzleId]: v } },
+      [duId]: {
+        ...(f[duId] ?? forms[duId]),
+        readings: { ...(f[duId] ?? forms[duId]).readings, [nozzleId]: v },
+      },
     }));
   };
   const setTesting = (duId: string, nozzleId: string, v: string) => {
     resetAcceptedHandover(duId);
-    setForms((f) => ({
+    setEditedForms((f) => ({
       ...f,
-      [duId]: { ...f[duId], testing: { ...f[duId].testing, [nozzleId]: v } },
+      [duId]: {
+        ...(f[duId] ?? forms[duId]),
+        testing: { ...(f[duId] ?? forms[duId]).testing, [nozzleId]: v },
+      },
     }));
   };
   const setCash = (duId: string, v: string) => {
     resetAcceptedHandover(duId);
-    setForms((f) => ({ ...f, [duId]: { ...f[duId], cash: v } }));
+    setEditedForms((f) => ({ ...f, [duId]: { ...(f[duId] ?? forms[duId]), cash: v } }));
   };
   const setAggregate = (duId: string, field: 'aggregateCard' | 'aggregateUpi', v: string) => {
     resetAcceptedHandover(duId);
-    setForms((f) => ({ ...f, [duId]: { ...f[duId], [field]: v } }));
+    setEditedForms((f) => ({ ...f, [duId]: { ...(f[duId] ?? forms[duId]), [field]: v } }));
   };
   const setTerminal = (
     duId: string,
@@ -755,13 +774,13 @@ export const HandoverPanel: React.FC = () => {
     v: string,
   ) => {
     resetAcceptedHandover(duId);
-    setForms((f) => ({
+    setEditedForms((f) => ({
       ...f,
       [duId]: {
-        ...f[duId],
+        ...(f[duId] ?? forms[duId]),
         terminals: {
-          ...f[duId].terminals,
-          [terminalId]: { ...f[duId].terminals[terminalId], [field]: v },
+          ...(f[duId] ?? forms[duId]).terminals,
+          [terminalId]: { ...(f[duId] ?? forms[duId]).terminals[terminalId], [field]: v },
         },
       },
     }));
@@ -795,8 +814,13 @@ export const HandoverPanel: React.FC = () => {
       );
       const stamped = { ...line, id: entry?.id };
       resetAcceptedHandover(duId);
-      if (channel === 'omc') setOmcByDu((c) => ({ ...c, [duId]: [...(c[duId] || []), stamped] }));
-      else setCreditByDu((c) => ({ ...c, [duId]: [...(c[duId] || []), stamped] }));
+      if (channel === 'omc')
+        setEditedOmcByDu((c) => ({ ...c, [duId]: [...(c[duId] ?? omcByDu[duId] ?? []), stamped] }));
+      else
+        setEditedCreditByDu((c) => ({
+          ...c,
+          [duId]: [...(c[duId] ?? creditByDu[duId] ?? []), stamped],
+        }));
     } catch (e: any) {
       setError(e?.message ?? 'Failed to add sale');
       throw e;
@@ -812,11 +836,17 @@ export const HandoverPanel: React.FC = () => {
       if (channel === 'omc') {
         await txService.voidOmcCardSale(id);
         resetAcceptedHandover(duId);
-        setOmcByDu((c) => ({ ...c, [duId]: (c[duId] || []).filter((l) => l.id !== id) }));
+        setEditedOmcByDu((c) => ({
+          ...c,
+          [duId]: (c[duId] ?? omcByDu[duId] ?? []).filter((l) => l.id !== id),
+        }));
       } else {
         await txService.voidCreditSale(id);
         resetAcceptedHandover(duId);
-        setCreditByDu((c) => ({ ...c, [duId]: (c[duId] || []).filter((l) => l.id !== id) }));
+        setEditedCreditByDu((c) => ({
+          ...c,
+          [duId]: (c[duId] ?? creditByDu[duId] ?? []).filter((l) => l.id !== id),
+        }));
       }
     } catch (e: any) {
       setError(e?.message ?? 'Failed to remove sale');
@@ -955,10 +985,10 @@ export const HandoverPanel: React.FC = () => {
         acceptedFingerprintByDuRef.current[du.duId] = fingerprint;
         delete handoverRequestByDuRef.current[du.duId];
         setAcceptedByDu((current) => ({ ...current, [du.duId]: result }));
-        setForms((current) => ({
+        setEditedForms((current) => ({
           ...current,
           [du.duId]: {
-            ...current[du.duId],
+            ...(current[du.duId] ?? forms[du.duId]),
             cash: String(Number(result.handover.cashHandedOver)),
             aggregateCard: String(Number(result.handover.cardHandedOver)),
             aggregateUpi: String(Number(result.handover.upiHandedOver)),
@@ -1309,8 +1339,8 @@ export const HandoverPanel: React.FC = () => {
                   value={row.productId}
                   onChange={(v) => {
                     resetMerchandiseAcceptance();
-                    setMerchRows((rs) =>
-                      rs.map((r, i) => (i === idx ? { ...r, productId: v } : r)),
+                    setEditedMerchRows(
+                      merchRows.map((r, i) => (i === idx ? { ...r, productId: v } : r)),
                     );
                   }}
                   placeholder="Select product…"
@@ -1329,8 +1359,10 @@ export const HandoverPanel: React.FC = () => {
                       placeholder="0"
                       onChange={(e) => {
                         resetMerchandiseAcceptance();
-                        setMerchRows((rs) =>
-                          rs.map((r, i) => (i === idx ? { ...r, quantity: e.target.value } : r)),
+                        setEditedMerchRows(
+                          merchRows.map((r, i) =>
+                            i === idx ? { ...r, quantity: e.target.value } : r,
+                          ),
                         );
                       }}
                       className="rounded-lg border px-3 py-2 text-right text-sm font-mono tabular-nums"
@@ -1347,9 +1379,9 @@ export const HandoverPanel: React.FC = () => {
                     type="button"
                     onClick={() => {
                       resetMerchandiseAcceptance();
-                      setMerchRows((rs) =>
-                        rs.length > 1
-                          ? rs.filter((_, i) => i !== idx)
+                      setEditedMerchRows(
+                        merchRows.length > 1
+                          ? merchRows.filter((_, i) => i !== idx)
                           : [{ productId: '', quantity: '' }],
                       );
                     }}
@@ -1369,7 +1401,7 @@ export const HandoverPanel: React.FC = () => {
           type="button"
           onClick={() => {
             resetMerchandiseAcceptance();
-            setMerchRows((rs) => [...rs, { productId: '', quantity: '' }]);
+            setEditedMerchRows([...merchRows, { productId: '', quantity: '' }]);
           }}
           className="w-full rounded-lg border border-dashed py-2 text-sm font-medium"
           style={{ borderColor: 'var(--border-soft)', color: 'var(--text-muted)' }}
@@ -1382,7 +1414,7 @@ export const HandoverPanel: React.FC = () => {
           value={merchNonCash}
           onChange={(value) => {
             resetMerchandiseAcceptance();
-            setMerchNonCash(value);
+            setEditedMerchNonCash(value);
           }}
           sub="Portion of merchandise not collected as cash"
         />

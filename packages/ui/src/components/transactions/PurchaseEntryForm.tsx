@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useFieldArray } from 'react-hook-form';
 import { purchaseEntryFormSchema, type PurchaseEntryFormValues } from '@pump/shared';
 import { useZodForm } from '../../forms/useZodForm.js';
@@ -67,7 +67,19 @@ const EMPTY_DEFAULTS: PurchaseEntryFormValues = {
   ],
 };
 
-export const PurchaseEntryForm: React.FC<PurchaseEntryFormProps> = ({
+/**
+ * Remounted when the defaults change rather than reset by an effect. Besides
+ * removing the effect, this fixes a real bug: `reset()` regenerated the
+ * field-array ids *after* the auto-allocation effect had keyed its entry to the
+ * old ones, so a single-tank fuel line opened with defaults showed an empty
+ * tank allocation and refused to submit until the operator retyped the
+ * quantity. Mounting fresh means the ids are stable from the start.
+ */
+export const PurchaseEntryForm: React.FC<PurchaseEntryFormProps> = (props) => (
+  <PurchaseEntryFormBody key={JSON.stringify(props.defaultValues ?? {})} {...props} />
+);
+
+const PurchaseEntryFormBody: React.FC<PurchaseEntryFormProps> = ({
   shiftOptions,
   suppliers,
   products,
@@ -95,7 +107,6 @@ export const PurchaseEntryForm: React.FC<PurchaseEntryFormProps> = ({
   const {
     register,
     handleSubmit,
-    reset,
     watch,
     control,
     setValue,
@@ -105,8 +116,12 @@ export const PurchaseEntryForm: React.FC<PurchaseEntryFormProps> = ({
   });
   const { fields, append, remove } = useFieldArray({ control, name: 'lines' });
 
-  // Tank allocations per line, keyed by the field-array row id then tankId.
-  const [allocations, setAllocations] = useState<Record<string, Record<string, string>>>({});
+  // Tank allocations the operator has typed, keyed by field-array row id then
+  // tankId. What the form uses is derived below: an explicit split wins,
+  // otherwise a single-tank fuel line is filled automatically.
+  const [manualAllocations, setManualAllocations] = useState<
+    Record<string, Record<string, string>>
+  >({});
   const [allocError, setAllocError] = useState<string | null>(null);
   // Fuel lines are entered as an invoice TOTAL (tax-inclusive); ₹/L is derived.
   // Keyed by field-array row id.
@@ -119,75 +134,60 @@ export const PurchaseEntryForm: React.FC<PurchaseEntryFormProps> = ({
   const [paymentAccountId, setPaymentAccountId] = useState('');
   const [paymentAmount, setPaymentAmount] = useState('');
 
-  const serializedDefaults = JSON.stringify(defaultValues ?? {});
-  useEffect(() => {
-    reset({ ...EMPTY_DEFAULTS, ...defaultValues });
-    setAllocations({});
-    setLineTotals({});
-    setAllocError(null);
-    setProductKind('FUEL');
-    setRecordPayment(false);
-    setPaymentAccountId('');
-    setPaymentAmount('');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [serializedDefaults]);
-
-  const watchedLines = watch('lines') || [];
+  // React Hook Form mutates the watched array in place, so its identity is
+  // stable even as the values change — which makes it useless as a dependency.
+  // Round-tripping through the signature gives the derivations below an
+  // identity that changes exactly when the values do, and nothing else.
+  const linesSignature = JSON.stringify(watch('lines') ?? []);
+  const watchedLines = useMemo<any[]>(() => JSON.parse(linesSignature), [linesSignature]);
 
   // Fuel lines: derive unit price (₹/L) = total ÷ quantity, keeping the entered
   // total fixed as quantity changes.
-  useEffect(() => {
+  // The rates the fuel lines *should* carry, derived during render. Keeping the
+  // derivation out of the effect means the effect's only job is to write them
+  // into the form, so its dependency list can be honest.
+  const desiredFuelRates = useMemo(() => {
+    const out: { path: `lines.${number}.unitPrice`; rate: number | undefined }[] = [];
     watchedLines.forEach((line: any, i: number) => {
       const fieldId = fields[i]?.id;
       const product = products.find((p) => p.id === line?.productId);
-      if (product?.productType === 'FUEL' && fieldId) {
-        const total = Number(lineTotals[fieldId]);
-        const qty = Number(line?.quantity);
-        const rate = total > 0 && qty > 0 ? total / qty : 0;
-        if (Math.abs(Number(line?.unitPrice || 0) - rate) > 1e-6) {
-          setValue(`lines.${i}.unitPrice` as const, (rate || undefined) as unknown as number);
-        }
-      }
+      if (product?.productType !== 'FUEL' || !fieldId) return;
+      const total = Number(lineTotals[fieldId]);
+      const qty = Number(line?.quantity);
+      const rate = total > 0 && qty > 0 ? total / qty : 0;
+      if (Math.abs(Number(line?.unitPrice || 0) - rate) > 1e-6)
+        out.push({ path: `lines.${i}.unitPrice` as const, rate: rate || undefined });
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    JSON.stringify(watchedLines.map((l: any) => ({ p: l?.productId, q: l?.quantity }))),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    JSON.stringify(lineTotals),
-  ]);
+    return out;
+  }, [watchedLines, fields, products, lineTotals]);
 
-  // Auto-fill allocation for a single-tank fuel line; clear non-fuel lines.
   useEffect(() => {
-    setAllocations((prev) => {
-      const next = { ...prev };
-      let changed = false;
-      fields.forEach((f, i) => {
-        const line = watchedLines[i];
-        const product = products.find((p) => p.id === line?.productId);
-        const isFuel = product?.productType === 'FUEL';
-        const productTanks = tanks.filter((t) => t.productId === line?.productId);
-        if (!isFuel) {
-          if (next[f.id] && Object.keys(next[f.id]).length) {
-            delete next[f.id];
-            changed = true;
-          }
-        } else if (productTanks.length === 1 && line?.quantity) {
-          const desired = { [productTanks[0].id]: String(line.quantity) };
-          if (JSON.stringify(next[f.id]) !== JSON.stringify(desired)) {
-            next[f.id] = desired;
-            changed = true;
-          }
-        }
-      });
-      return changed ? next : prev;
+    for (const { path, rate } of desiredFuelRates) setValue(path, rate as unknown as number);
+  }, [desiredFuelRates, setValue]);
+
+  /**
+   * Auto-fill a single-tank fuel line, drop anything held against a line that
+   * is no longer fuel, and let an explicit split override both. Derived during
+   * render rather than pushed into state by an effect, so it cannot lag a
+   * product or quantity change by a frame.
+   */
+  const allocations = useMemo(() => {
+    const out: Record<string, Record<string, string>> = {};
+    fields.forEach((f, i) => {
+      const line = watchedLines[i];
+      const product = products.find((p) => p.id === line?.productId);
+      if (product?.productType !== 'FUEL') return;
+      const manual = manualAllocations[f.id];
+      if (manual && Object.keys(manual).length) {
+        out[f.id] = manual;
+        return;
+      }
+      const productTanks = tanks.filter((t) => t.productId === line?.productId);
+      if (productTanks.length === 1 && line?.quantity)
+        out[f.id] = { [productTanks[0].id]: String(line.quantity) };
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    JSON.stringify(watchedLines.map((l: any) => ({ p: l?.productId, q: l?.quantity }))),
-    fields.length,
-  ]);
+    return out;
+  }, [fields, watchedLines, products, tanks, manualAllocations]);
 
   // ---- Invoice tax preview (client estimate; server is authoritative) ----
   // Only GST lines add tax on our side; fuel is recorded tax-inclusive.
@@ -412,9 +412,15 @@ export const PurchaseEntryForm: React.FC<PurchaseEntryFormProps> = ({
                       })),
                     ]}
                     value={line?.productId ?? ''}
-                    onChange={(v) =>
-                      setValue(`lines.${i}.productId` as const, v, { shouldValidate: true })
-                    }
+                    onChange={(v) => {
+                      setManualAllocations((prev) => {
+                        if (!prev[field.id]) return prev;
+                        const n = { ...prev };
+                        delete n[field.id];
+                        return n;
+                      });
+                      setValue(`lines.${i}.productId` as const, v, { shouldValidate: true });
+                    }}
                     placeholder="Select product…"
                     searchPlaceholder="Search products…"
                     invalid={!!errors.lines?.[i]?.productId}
@@ -431,7 +437,7 @@ export const PurchaseEntryForm: React.FC<PurchaseEntryFormProps> = ({
                     disabled={submitting}
                     onClick={() => {
                       remove(i);
-                      setAllocations((prev) => {
+                      setManualAllocations((prev) => {
                         const n = { ...prev };
                         delete n[field.id];
                         return n;
@@ -556,9 +562,12 @@ export const PurchaseEntryForm: React.FC<PurchaseEntryFormProps> = ({
                         disabled={submitting}
                         value={alloc[tank.id] || ''}
                         onChange={(e) =>
-                          setAllocations((prev) => ({
+                          setManualAllocations((prev) => ({
                             ...prev,
-                            [field.id]: { ...(prev[field.id] || {}), [tank.id]: e.target.value },
+                            [field.id]: {
+                              ...(prev[field.id] ?? allocations[field.id] ?? {}),
+                              [tank.id]: e.target.value,
+                            },
                           }))
                         }
                         style={{

@@ -189,6 +189,36 @@ describe('OpenShiftForm', () => {
       expect(onSubmit.mock.calls[0][0].businessDate).toBe('2026-02-27');
     });
 
+    it('keeps a date the operator chose when an unrelated prop change lands', async () => {
+      // Deliberate change: the old setValue effect overwrote the field on every
+      // prop change, so a day-start rollover could silently move a shift the
+      // operator had already dated. `keepDirtyValues` leaves their choice.
+      const onSubmit = vi.fn();
+      const client = createTestQueryClient();
+      for (const d of [TODAY, '2026-02-27']) {
+        seedStatus(client, d, {
+          requestedState: 'OPEN',
+          openBusinessDays: [{ businessDate: d, id: d }],
+        });
+      }
+
+      const { rerender } = renderWithProviders(
+        <OpenShiftForm {...baseProps({ onSubmit, businessDate: TODAY, openingCash: 5000 })} />,
+        { queryClient: client },
+      );
+      await waitFor(() => expect(openButton().disabled).toBe(false));
+
+      const dateInput = document.querySelector('input[name="businessDate"]') as HTMLInputElement;
+      if (dateInput) {
+        fireEvent.change(dateInput, { target: { value: '2026-02-27' } });
+        // An unrelated prop moves; the chosen date must survive it.
+        rerender(
+          <OpenShiftForm {...baseProps({ onSubmit, businessDate: TODAY, openingCash: 7250 })} />,
+        );
+        await waitFor(() => expect(dateInput.value).toBe('2026-02-27'));
+      }
+    });
+
     it('re-derives the submitted opening cash when the prop changes', async () => {
       const onSubmit = vi.fn();
       const client = createTestQueryClient();

@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useCallback, useMemo, useState, useEffect } from 'react';
 import type { ExpenseEntryFormValues } from '@pump/shared';
 import { canManageExpenseCategory, canVoidExpense } from '@pump/shared';
 import { CloudTransactionService } from '../services/cloud.js';
@@ -11,7 +11,12 @@ import { useToast } from './primitives/ToastProvider.js';
 import { useAsk } from './primitives/ConfirmDialog.js';
 import { Drawer } from './Drawer.js';
 import { ExpenseEntryForm } from './transactions/ExpenseEntryForm.js';
-import { useIncome, useIncomeCategories, useInvalidateOperational } from '../query/hooks.js';
+import {
+  useIncome,
+  useIncomeCategories,
+  useInvalidateOperational,
+  useIncomeGstRegister,
+} from '../query/hooks.js';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   Panel,
@@ -50,7 +55,10 @@ export const IncomeList: React.FC<IncomeListProps> = ({ selectedStation, userRol
   const ask = useAsk();
 
   const s = selectedStation?.settings || {};
-  const clock = { timeZone: s.timezone, dayStartsAt: s.business_day_starts_at };
+  const clock = useMemo(
+    () => ({ timeZone: s.timezone, dayStartsAt: s.business_day_starts_at }),
+    [s.timezone, s.business_day_starts_at],
+  );
 
   const income = useMemo(() => incomeQ.data ?? [], [incomeQ.data]);
   const categories = categoriesQ.data ?? [];
@@ -110,37 +118,39 @@ export const IncomeList: React.FC<IncomeListProps> = ({ selectedStation, userRol
 
   // Corrections are never edits: an income entry is voided (status → VOIDED) and
   // its ledger posting reversed, keeping history append-only.
-  const handleVoid = async (row: any) => {
-    const { confirmed, value } = await ask({
-      title: 'Void this income entry?',
-      message: (
-        <>
-          {inr(row.amount)} · {row.categoryName || 'Other Income'}. The entry stays in the ledger
-          marked
-          <strong> Voided</strong> and its money posting is reversed. This cannot be undone.
-        </>
-      ),
-      input: { label: 'Reason (optional)', placeholder: 'e.g. duplicate entry, wrong amount' },
-      confirmLabel: 'Void income',
-      danger: true,
-    });
-    if (!confirmed) return;
-    try {
-      await transactionService.voidIncome(row.id, value);
-      toast.success('Income voided.');
-      await invalidateOperational(stationId);
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to void income');
-    }
-  };
+  const handleVoid = useCallback(
+    async (row: any) => {
+      const { confirmed, value } = await ask({
+        title: 'Void this income entry?',
+        message: (
+          <>
+            {inr(row.amount)} · {row.categoryName || 'Other Income'}. The entry stays in the ledger
+            marked
+            <strong> Voided</strong> and its money posting is reversed. This cannot be undone.
+          </>
+        ),
+        input: { label: 'Reason (optional)', placeholder: 'e.g. duplicate entry, wrong amount' },
+        confirmLabel: 'Void income',
+        danger: true,
+      });
+      if (!confirmed) return;
+      try {
+        await transactionService.voidIncome(row.id, value);
+        toast.success('Income voided.');
+        await invalidateOperational(stationId);
+      } catch (err: any) {
+        toast.error(err.message || 'Failed to void income');
+      }
+    },
+    [ask, invalidateOperational, stationId, toast],
+  );
 
   const ledgerColumns = useMemo(
     () =>
       buildIncomeColumns(
         canVoid ? (row) => runTask(handleVoid(row), 'Could not void the income entry.') : undefined,
       ),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [canVoid, stationId],
+    [canVoid, handleVoid, runTask],
   );
 
   // KPIs — fixed windows (today / this month), independent of the table range filter.
@@ -162,36 +172,21 @@ export const IncomeList: React.FC<IncomeListProps> = ({ selectedStation, userRol
       .reduce((sum: number, e: any) => sum + Number(e.amount || 0), 0);
     const otherMonth = monthTotal - drawerMonth;
     return { todayTotal, monthTotal, entriesMonth: monthRows.length, drawerMonth, otherMonth };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [income, clock.timeZone, clock.dayStartsAt]);
+  }, [income, clock]);
 
   // FI4 — output GST register. Read straight from the API (not the tiered cache):
   // it is a period report driven by its own date inputs, not the ledger range.
   const [gstRange, setGstRange] = useState<DateRange>(() => computeRange('this-month', clock));
-  const [gstRows, setGstRows] = useState<any[]>([]);
-  const [gstLoading, setGstLoading] = useState(false);
-  const [gstError, setGstError] = useState<string | null>(null);
-
-  const loadGstRegister = async () => {
-    if (!stationId) return;
-    setGstLoading(true);
-    setGstError(null);
-    try {
-      setGstRows(
-        (await transactionService.getIncomeGstRegister(gstRange.from, gstRange.to, stationId)) ||
-          [],
-      );
-    } catch (e: any) {
-      setGstError(e.message || 'Failed to load GST register');
-    } finally {
-      setGstLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (activeTab === 'gst') runTask(loadGstRegister(), 'Could not load the GST register.');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, stationId]);
+  // Read through the shared hook, fetched only while the GST tab is showing.
+  // The old version loaded it from an effect keyed on the tab, which is the
+  // same thing a gated query expresses without the effect or the local mirror.
+  const gstQ = useIncomeGstRegister(
+    { stationId, from: gstRange.from, to: gstRange.to },
+    { enabled: !!stationId && activeTab === 'gst' },
+  );
+  const gstRows = useMemo(() => gstQ.data ?? [], [gstQ.data]);
+  const gstLoading = gstQ.isFetching;
+  const gstError = gstQ.error ? gstQ.error.message : null;
 
   const gstTotals = useMemo(
     () =>
@@ -414,7 +409,12 @@ export const IncomeList: React.FC<IncomeListProps> = ({ selectedStation, userRol
 
             <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
               <DateRangeField value={gstRange} onChange={setGstRange} clock={clock} size="sm" />
-              <Button variant="secondary" size="sm" onClick={loadGstRegister} loading={gstLoading}>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => void gstQ.refetch()}
+                loading={gstLoading}
+              >
                 Apply
               </Button>
             </div>
