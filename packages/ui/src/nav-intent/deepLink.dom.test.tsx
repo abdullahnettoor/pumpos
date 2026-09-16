@@ -79,9 +79,63 @@ const InventoryScreen: React.FC = () => {
   );
 };
 
+/**
+ * Mirrors ShiftsManagement's `openShiftSummaryId` deep link (dashboard "Last
+ * closed shift" card): the intent picks the History sub-tab *and* the shift
+ * whose summary opens. Dismissing the summary must leave the operator in
+ * History, not bounce them back to Active Shift.
+ */
+const ShiftsScreen: React.FC = () => {
+  const [selectedSubTab, setSelectedSubTab] = useState('today');
+  const [viewShiftId, setViewShiftId] = useState<string | null>(null);
+
+  const intent = useNavIntent();
+  const intentShiftSummaryId = intent?.openShiftSummaryId ?? null;
+  const subTab = intentShiftSummaryId ? 'history' : selectedSubTab;
+  const requestedShiftId = intentShiftSummaryId ?? viewShiftId;
+
+  return (
+    <div>
+      <span data-testid="tab">{subTab}</span>
+      <span data-testid="statement">{requestedShiftId ?? 'none'}</span>
+      <button
+        onClick={() => {
+          setSelectedSubTab('history');
+          setViewShiftId(null);
+          clearNavIntent();
+        }}
+      >
+        Close summary
+      </button>
+    </div>
+  );
+};
+
 describe('nav intent deep links', () => {
   beforeEach(() => __resetNavIntentForTests());
   afterEach(cleanup);
+
+  describe('shift summary deep link', () => {
+    it('opens the requested shift summary on the History sub-tab', () => {
+      act(() => publishNavIntent({ openShiftSummaryId: 'shift-9' }));
+      render(<ShiftsScreen />);
+      expect(tab()).toBe('history');
+      expect(statement()).toBe('shift-9');
+    });
+
+    it('stays on History once the summary is dismissed', () => {
+      act(() => publishNavIntent({ openShiftSummaryId: 'shift-9' }));
+      render(<ShiftsScreen />);
+      act(() => {
+        screen.getByText('Close summary').click();
+      });
+      // Clearing the intent without committing the tab would snap the operator
+      // back to the Active Shift ('today') sub-tab.
+      expect(tab()).toBe('history');
+      expect(statement()).toBe('none');
+      expect(getNavIntentState().intent).toBeNull();
+    });
+  });
 
   it('applies an intent published before the destination mounted', () => {
     // This is the real ordering: navigation publishes, then the screen mounts.

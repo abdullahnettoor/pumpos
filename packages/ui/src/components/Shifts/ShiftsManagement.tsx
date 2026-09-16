@@ -128,7 +128,13 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   // the parent nulling the prop in time.
   const intent = useNavIntent();
   const intentBusinessDay = intent?.openBusinessDayDate ?? null;
-  const shiftSubTab = intentBusinessDay ? 'business-day' : selectedSubTab;
+  // Deep link to one closed shift's summary (dashboard "Last closed shift" card).
+  const intentShiftSummaryId = intent?.openShiftSummaryId ?? null;
+  const shiftSubTab = intentBusinessDay
+    ? 'business-day'
+    : intentShiftSummaryId
+      ? 'history'
+      : selectedSubTab;
   const requestedBusinessDayDate = intentBusinessDay ?? selectedBusinessDayDate;
   const setShiftSubTab = (tab: 'today' | 'business-day' | 'history') => {
     clearNavIntent();
@@ -146,6 +152,17 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     clearNavIntent();
   };
   const [viewHistoryShiftId, setViewHistoryShiftId] = useState<string | null>(null);
+  const requestedHistoryShiftId = intentShiftSummaryId ?? viewHistoryShiftId;
+  /**
+   * Mirror of `setRequestedBusinessDayDate`: commit the durable half (we are on
+   * History) before clearing the intent, so dismissing the summary leaves the
+   * operator in History rather than bouncing back to Active Shift.
+   */
+  const clearRequestedHistoryShiftId = () => {
+    setSelectedSubTab('history');
+    setViewHistoryShiftId(null);
+    clearNavIntent();
+  };
 
   // Open Shift Form States
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
@@ -443,7 +460,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   useEffect(() => {
     if (!data?.activeShift?.id) return;
     if (shiftSubTab !== 'today') return;
-    if (viewingShiftSummary || viewHistoryShiftId) return;
+    if (viewingShiftSummary || requestedHistoryShiftId) return;
     if (closeWizardOpen || qe.open || handoverDrawerOpen) return;
 
     const handler = (e: KeyboardEvent) => {
@@ -475,7 +492,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     data?.activeShift?.id,
     shiftSubTab,
     viewingShiftSummary,
-    viewHistoryShiftId,
+    requestedHistoryShiftId,
     closeWizardOpen,
     qe.open,
     handoverDrawerOpen,
@@ -823,7 +840,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   const {
     activeShift,
     lastShift,
-    lastDssr: lastShiftSummary,
+    lastShiftSummary,
     canReopenLastShift,
     gracePeriodExpiresAt,
     templates,
@@ -917,8 +934,8 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         <ShiftHistoryTab
           selectedStation={selectedStation}
           userRole={userRole}
-          viewShiftId={viewHistoryShiftId}
-          onClearViewShiftId={() => setViewHistoryShiftId(null)}
+          viewShiftId={requestedHistoryShiftId}
+          onClearViewShiftId={clearRequestedHistoryShiftId}
         />
       </div>
     );

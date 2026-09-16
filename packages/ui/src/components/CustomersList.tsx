@@ -704,6 +704,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({
                   type="button"
                   onClick={() => setRegistryEodOnly((v) => !v)}
                   title="Show only end-of-day customers with an outstanding balance"
+                  aria-pressed={registryEodOnly}
                   style={{
                     border: 'none',
                     background: 'transparent',
@@ -713,7 +714,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({
                 >
                   <Chip tone={registryEodOnly ? 'danger' : 'neutral'} size="xs">
                     EOD due · {eodDueCount}
-                    {registryEodOnly ? ' ✕' : ''}
+                    {registryEodOnly && <Icon name="x" size="xs" aria-hidden />}
                   </Chip>
                 </button>
               ) : undefined

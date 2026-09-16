@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../../services/supabase.js';
-import { Form } from '../../pump-ds/index.js';
+import { Form, Icon } from '../../pump-ds/index.js';
 
 /**
  * AcceptInvite — the landing page for a Supabase invite / recovery link.
@@ -295,9 +295,14 @@ export const AcceptInvite: React.FC<AcceptInviteProps> = ({ onDone }) => {
                     fontSize: '13px',
                     cursor: 'pointer',
                     width: '100%',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px',
                   }}
                 >
-                  Continue ➜
+                  Continue
+                  <Icon name="arrow-right" size="xs" aria-hidden />
                 </button>
               </>
             )}
@@ -378,9 +383,20 @@ export const AcceptInvite: React.FC<AcceptInviteProps> = ({ onDone }) => {
                 cursor: loading ? 'not-allowed' : 'pointer',
                 marginTop: '8px',
                 width: '100%',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px',
               }}
             >
-              {loading ? 'Saving…' : 'Set password & continue ➜'}
+              {loading ? (
+                'Saving…'
+              ) : (
+                <>
+                  Set password &amp; continue
+                  <Icon name="arrow-right" size="xs" aria-hidden />
+                </>
+              )}
             </button>
           </Form>
         )}

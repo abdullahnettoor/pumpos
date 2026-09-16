@@ -312,7 +312,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
     );
   }
 
-  const { activeShift, lastShift, lastDssr, canReopenLastShift, gracePeriodExpiresAt } =
+  const { activeShift, lastShift, lastShiftSummary, canReopenLastShift, gracePeriodExpiresAt } =
     summary || {};
   const isAccountant = userRole === 'Accountant';
 
@@ -326,6 +326,11 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   const timeZone: string | undefined = stationSettings.timezone;
   const dayStartsAt: string | undefined = stationSettings.business_day_starts_at;
   const todayBiz = resolveBusinessDate({ timeZone, dayStartsAt });
+  // The active shift's own business date, which is not necessarily today: a
+  // shift opened on a past (still-open) business day stays anchored to it.
+  const activeShiftBusinessDate: string | null = activeShift?.businessDate ?? null;
+  const heroBusinessDate = activeShiftBusinessDate ?? todayBiz;
+  const shiftOnPastDay = !!activeShiftBusinessDate && activeShiftBusinessDate !== todayBiz;
 
   const sumToday = (rows: any[] | undefined) =>
     (rows || [])
@@ -433,8 +438,12 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
               size="xs"
               label={activeShift ? 'Shift open' : 'No active shift'}
             />
-            <Chip tone="neutral" size="xs">
-              Business day {todayBiz}
+            {/* The open shift may belong to a *past* business day (a day is
+                closed independently of today), so label it with the shift's own
+                business date — never today's. */}
+            <Chip tone={shiftOnPastDay ? 'warning' : 'neutral'} size="xs">
+              Business day {heroBusinessDate}
+              {shiftOnPastDay ? ' · past day' : ''}
             </Chip>
           </>
         }
@@ -583,10 +592,11 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
           )}
         </Panel>
 
-        {/* Latest DSSR — financial roles */}
+        {/* Last closed shift — its shift-close summary (NOT a DSSR, which is
+            the business-day-close snapshot). Financial roles only. */}
         {canSeeFinancials && (
           <Panel
-            title="Latest DSSR"
+            title="Last closed shift"
             icon={<FileText />}
             action={
               lastShift ? (
@@ -604,9 +614,9 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                     size="sm"
                     leftIcon={<FileText />}
                     className="flex-1"
-                    onClick={() => onNavigate('/shifts')}
+                    onClick={() => onNavigate('/shifts', { openShiftSummaryId: lastShift.id })}
                   >
-                    View last DSSR
+                    View shift summary
                   </Button>
                   {canReopenLastShift && (
                     <Button
@@ -636,13 +646,13 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                     timeStyle: 'short',
                   })}
                 </div>
-                {lastDssr && (
+                {lastShiftSummary && (
                   <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-[12.5px]">
                     <div className="text-ink-muted">
                       Fuel sold
                       <span className="mt-0.5 block font-mono font-semibold text-ink-strong">
                         {(() => {
-                          const snap = lastDssr.snapshotData || {};
+                          const snap = lastShiftSummary.snapshotData || {};
                           const units = Array.from(
                             new Set<string>(
                               (snap.fuelByProduct || []).map((p: any) => String(p.unit || 'L')),
@@ -656,7 +666,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                     <div className="text-ink-muted">
                       Closing cash
                       <span className="mt-0.5 block font-mono font-semibold text-ink-strong">
-                        {inr(lastDssr.snapshotData.closingCash)}
+                        {inr(lastShiftSummary.snapshotData.closingCash)}
                       </span>
                     </div>
                   </div>
@@ -666,8 +676,8 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
               <EmptyState
                 compact
                 icon={<FileText />}
-                title="No reports yet"
-                description="Close a shift to compile its DSSR."
+                title="No closed shifts yet"
+                description="Close a shift to compile its summary."
               />
             )}
           </Panel>

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { looksLikePhone, phoneToAuthEmail } from '@pump/shared';
 import { supabase } from '../../services/supabase.js';
-import { Form } from '../../pump-ds/index.js';
+import { Form, Icon } from '../../pump-ds/index.js';
 
 export const Login: React.FC = () => {
   const [identifier, setIdentifier] = useState('');
@@ -197,9 +197,20 @@ export const Login: React.FC = () => {
               marginTop: '8px',
               transition: 'background-color 0.15s ease',
               width: '100%',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px',
             }}
           >
-            {loading ? 'Authenticating...' : 'Sign In ➜'}
+            {loading ? (
+              'Authenticating...'
+            ) : (
+              <>
+                Sign In
+                <Icon name="arrow-right" size="xs" aria-hidden />
+              </>
+            )}
           </button>
         </Form>
 

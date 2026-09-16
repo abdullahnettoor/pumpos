@@ -181,6 +181,7 @@ export const buildSupplierColumns = (
       <button
         onClick={() => openEdit(row.original)}
         title="Edit supplier"
+        aria-label="Edit supplier"
         style={{
           border: 'none',
           background: 'none',

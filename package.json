@@ -31,7 +31,7 @@
     "test": "npm run test --workspaces --if-present",
     "fonts": "node scripts/download-fonts.mjs",
     "release": "node scripts/release.mjs",
-    "lint": "node scripts/check-no-hook-disables.mjs && eslint . --pass-on-unpruned-suppressions",
+    "lint": "node scripts/check-no-hook-disables.mjs && node scripts/check-icon-button-labels.mjs && eslint . --pass-on-unpruned-suppressions",
     "lint:no-hook-disables": "node scripts/check-no-hook-disables.mjs",
     "test:scripts": "vitest run --config vitest.scripts.config.ts",
     "lint:fix": "npm run lint -- --fix",
