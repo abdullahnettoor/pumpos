@@ -59,6 +59,11 @@ jobs:
   # in eslint-suppressions.json, so today's code passes. Only NEW violations of
   # the error-level rules fail. Warnings (currently ~7.2k, mostly `any`-related)
   # never fail the build — run `npm run lint:warnings` to see them.
+  #
+  # `npm run lint` first runs scripts/check-no-hook-disables.mjs, which fails on
+  # inline `eslint-disable` comments for react-hooks rules. Those are invisible
+  # to `--prune-suppressions`, so without it the suppressions file can read `{}`
+  # while violations remain in the source — which is what happened in #75.
   lint:
     name: lint
     runs-on: ubuntu-latest
@@ -78,6 +83,7 @@ jobs:
       - name: Build types
         run: npx tsc -b
 
+      # Runs the inline-disable check first; see the note above.
       - name: ESLint
         run: npm run lint
 
