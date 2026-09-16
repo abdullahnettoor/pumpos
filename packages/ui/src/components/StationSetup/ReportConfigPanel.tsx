@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { CloudStationService } from '../../services/cloud.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import { Checkbox } from '../primitives/Toggle.js';
@@ -57,24 +57,33 @@ type ListId = 'ss' | 'dssr';
  * live preview of the letterhead + ordered sections. Ordering is persisted (the
  * enabled sections are stored in display order).
  */
-export const ReportConfigPanel: React.FC<ReportConfigPanelProps> = ({
-  selectedStation,
-  onSaved,
-}) => {
+export const ReportConfigPanel: React.FC<ReportConfigPanelProps> = (props) => (
+  /*
+   * The saved config is the form's *initial* value, not something to sync into
+   * state on every change. Keying on the station rebuilds the editor from
+   * scratch when the station switches, which is what the old effect emulated —
+   * and unlike the effect it cannot quietly discard unsaved edits mid-session.
+   */
+  <ReportConfigForm key={props.selectedStation?.id ?? 'none'} {...props} />
+);
+
+const ReportConfigForm: React.FC<ReportConfigPanelProps> = ({ selectedStation, onSaved }) => {
   const toast = useToast();
-  const [paper, setPaper] = useState<'A4' | 'LETTER'>('A4');
-  const [ss, setSs] = useState<OrderedSection[]>([]);
-  const [dssr, setDssr] = useState<OrderedSection[]>([]);
+  const [paper, setPaper] = useState<'A4' | 'LETTER'>(() =>
+    selectedStation?.settings?.report_config?.paper === 'LETTER' ? 'LETTER' : 'A4',
+  );
+  const [ss, setSs] = useState<OrderedSection[]>(() =>
+    buildOrdered(
+      DEFAULT_SHIFT_SUMMARY_CONFIG.sections,
+      selectedStation?.settings?.report_config?.shiftSummary,
+    ),
+  );
+  const [dssr, setDssr] = useState<OrderedSection[]>(() =>
+    buildOrdered(DEFAULT_DSSR_CONFIG.sections, selectedStation?.settings?.report_config?.dssr),
+  );
   const [previewDoc, setPreviewDoc] = useState<'shiftSummary' | 'dssr'>('shiftSummary');
   const [saving, setSaving] = useState(false);
   const [drag, setDrag] = useState<{ list: ListId; index: number } | null>(null);
-
-  useEffect(() => {
-    const rc = selectedStation?.settings?.report_config || {};
-    setPaper(rc.paper === 'LETTER' ? 'LETTER' : 'A4');
-    setSs(buildOrdered(DEFAULT_SHIFT_SUMMARY_CONFIG.sections, rc.shiftSummary));
-    setDssr(buildOrdered(DEFAULT_DSSR_CONFIG.sections, rc.dssr));
-  }, [selectedStation]);
 
   const legal = selectedStation?.settings?.legal || {};
   const fuelBrand = selectedStation?.settings?.fuel_brand;

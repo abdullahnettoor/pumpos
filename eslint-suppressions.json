@@ -55,11 +55,6 @@
       "count": 3
     }
   },
-  "packages/ui/src/components/ReportsOverview.tsx": {
-    "react-hooks/exhaustive-deps": {
-      "count": 1
-    }
-  },
   "packages/ui/src/components/Shifts/BusinessDayTab.tsx": {
     "react-hooks/set-state-in-effect": {
       "count": 1
@@ -101,11 +96,6 @@
       "count": 1
     }
   },
-  "packages/ui/src/components/StationSetup/ReportConfigPanel.tsx": {
-    "react-hooks/set-state-in-effect": {
-      "count": 1
-    }
-  },
   "packages/ui/src/components/StationSetup/StationOverview.tsx": {
     "react-hooks/exhaustive-deps": {
       "count": 1
@@ -115,46 +105,6 @@
     },
     "react-hooks/set-state-in-effect": {
       "count": 1
-    }
-  },
-  "packages/ui/src/components/StationSetup/UserRolesAssignment.tsx": {
-    "react-hooks/exhaustive-deps": {
-      "count": 1
-    }
-  },
-  "packages/ui/src/components/customers/TopupDrawer.tsx": {
-    "react-hooks/set-state-in-effect": {
-      "count": 1
-    }
-  },
-  "packages/ui/src/components/customers/VehicleDrawer.tsx": {
-    "react-hooks/set-state-in-effect": {
-      "count": 1
-    }
-  },
-  "packages/ui/src/components/primitives/Combobox.tsx": {
-    "react-hooks/set-state-in-effect": {
-      "count": 2
-    }
-  },
-  "packages/ui/src/components/purchases/SupplierFormDrawer.tsx": {
-    "react-hooks/set-state-in-effect": {
-      "count": 1
-    }
-  },
-  "packages/ui/src/components/purchases/SupplierPaymentDrawer.tsx": {
-    "react-hooks/set-state-in-effect": {
-      "count": 1
-    }
-  },
-  "packages/ui/src/components/reports/InvoicesPanel.tsx": {
-    "react-hooks/exhaustive-deps": {
-      "count": 1
-    }
-  },
-  "packages/ui/src/components/reports/TaxRegisterPanel.tsx": {
-    "react-hooks/exhaustive-deps": {
-      "count": 2
     }
   },
   "packages/ui/src/components/transactions/PurchaseEntryForm.tsx": {

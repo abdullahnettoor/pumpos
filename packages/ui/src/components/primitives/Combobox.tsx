@@ -75,23 +75,31 @@ export const Combobox: React.FC<ComboboxProps> = ({
     return () => document.removeEventListener('mousedown', onDown);
   }, [open]);
 
-  useEffect(() => {
+  /**
+   * Opening is an event, not a state change to react to, so the panel is primed
+   * here rather than in an effect. Note the highlight is resolved against
+   * `options` and not `filtered`: the query is being cleared in the same breath,
+   * so the full list is what the reopened panel actually shows.
+   */
+  const toggleOpen = () => {
+    if (disabled) return;
     if (open) {
-      setQuery('');
-      const idx = Math.max(
-        0,
-        filtered.findIndex((o) => o.value === value),
-      );
-      setActiveIndex(idx === -1 ? 0 : idx);
-      // Focus the search field once the panel is mounted.
-      requestAnimationFrame(() => inputRef.current?.focus());
+      setOpen(false);
+      return;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+    setQuery('');
+    const idx = options.findIndex((o) => o.value === value);
+    setActiveIndex(idx === -1 ? 0 : idx);
+    // Focus the search field once the panel has been painted.
+    requestAnimationFrame(() => inputRef.current?.focus());
+    setOpen(true);
+  };
 
-  useEffect(() => {
+  /** Typing re-filters the list, so the highlight returns to the first match. */
+  const onQueryChange = (next: string) => {
+    setQuery(next);
     setActiveIndex(0);
-  }, [query]);
+  };
 
   const commit = (opt: ComboboxOption) => {
     onChange(opt.value);
@@ -129,7 +137,7 @@ export const Combobox: React.FC<ComboboxProps> = ({
         disabled={disabled}
         aria-haspopup="listbox"
         aria-expanded={open}
-        onClick={() => !disabled && setOpen((o) => !o)}
+        onClick={toggleOpen}
         className={cx('input', invalid && 'input-invalid')}
         style={{
           display: 'flex',
@@ -186,7 +194,7 @@ export const Combobox: React.FC<ComboboxProps> = ({
               className="input input-compact"
               placeholder={searchPlaceholder}
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(e) => onQueryChange(e.target.value)}
               onKeyDown={onKeyDown}
             />
           </div>

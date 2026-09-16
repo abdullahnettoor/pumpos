@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Drawer } from '../Drawer.js';
 import { Field, MoneyInput, Textarea, Select } from '../primitives/Field.js';
 import { Button, Form } from '../../pump-ds/index.js';
@@ -25,6 +25,28 @@ export const TopupDrawer: React.FC<TopupDrawerProps> = ({
   stationId,
   onClose,
   onDone,
+}) => (
+  <Drawer isOpen={isOpen} onClose={onClose} title="Prepaid Wallet Top-Up">
+    {/*
+     * `Drawer` renders nothing while closed, so the form below unmounts on close
+     * and comes back with fresh state — no reset-on-open effect needed. The key
+     * covers the one case unmounting does not: swapping customer while open.
+     */}
+    <TopupForm
+      key={customer?.id ?? 'none'}
+      customer={customer}
+      stationId={stationId}
+      onClose={onClose}
+      onDone={onDone}
+    />
+  </Drawer>
+);
+
+const TopupForm: React.FC<Omit<TopupDrawerProps, 'isOpen'>> = ({
+  customer,
+  stationId,
+  onClose,
+  onDone,
 }) => {
   const invalidateOperational = useInvalidateOperational();
   const toast = useToast();
@@ -35,14 +57,6 @@ export const TopupDrawer: React.FC<TopupDrawerProps> = ({
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    setAmount('');
-    setPaymentMethod('Cash');
-    setNotes('');
-    setError(null);
-  }, [isOpen]);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -67,70 +81,62 @@ export const TopupDrawer: React.FC<TopupDrawerProps> = ({
   };
 
   return (
-    <Drawer isOpen={isOpen} onClose={onClose} title="Prepaid Wallet Top-Up">
-      <Form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-        {error && (
-          <div
-            style={{
-              backgroundColor: 'var(--state-danger-bg)',
-              color: 'var(--state-danger-fg)',
-              padding: '8px 12px',
-              borderRadius: 'var(--radius-input)',
-              fontSize: '12px',
-            }}
-          >
-            {error}
-          </div>
-        )}
-
-        <Field label="Amount" required>
-          <MoneyInput
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            disabled={submitting}
-            placeholder="0.00"
-            step="0.01"
-          />
-        </Field>
-
-        <Field label="Payment Method" required>
-          <Select
-            value={paymentMethod}
-            onChange={(e) => setPaymentMethod(e.target.value as any)}
-            disabled={submitting}
-          >
-            <option value="Cash">Cash</option>
-            <option value="Card">Card</option>
-            <option value="UPI">UPI</option>
-            <option value="BankTransfer">Bank Transfer</option>
-          </Select>
-        </Field>
-
-        <Field label="Notes">
-          <Textarea
-            rows={2}
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            disabled={submitting}
-            placeholder="Optional reference or remark"
-          />
-        </Field>
-
-        <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
-          <Button type="submit" variant="primary" fullWidth loading={submitting} disabled={!amount}>
-            Record Top-Up
-          </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            fullWidth
-            disabled={submitting}
-            onClick={onClose}
-          >
-            Cancel
-          </Button>
+    <Form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      {error && (
+        <div
+          style={{
+            backgroundColor: 'var(--state-danger-bg)',
+            color: 'var(--state-danger-fg)',
+            padding: '8px 12px',
+            borderRadius: 'var(--radius-input)',
+            fontSize: '12px',
+          }}
+        >
+          {error}
         </div>
-      </Form>
-    </Drawer>
+      )}
+
+      <Field label="Amount" required>
+        <MoneyInput
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          disabled={submitting}
+          placeholder="0.00"
+          step="0.01"
+        />
+      </Field>
+
+      <Field label="Payment Method" required>
+        <Select
+          value={paymentMethod}
+          onChange={(e) => setPaymentMethod(e.target.value as any)}
+          disabled={submitting}
+        >
+          <option value="Cash">Cash</option>
+          <option value="Card">Card</option>
+          <option value="UPI">UPI</option>
+          <option value="BankTransfer">Bank Transfer</option>
+        </Select>
+      </Field>
+
+      <Field label="Notes">
+        <Textarea
+          rows={2}
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          disabled={submitting}
+          placeholder="Optional reference or remark"
+        />
+      </Field>
+
+      <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
+        <Button type="submit" variant="primary" fullWidth loading={submitting} disabled={!amount}>
+          Record Top-Up
+        </Button>
+        <Button type="button" variant="secondary" fullWidth disabled={submitting} onClick={onClose}>
+          Cancel
+        </Button>
+      </div>
+    </Form>
   );
 };

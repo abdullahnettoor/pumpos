@@ -113,7 +113,9 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({
   const dssrQ = useDailyDssrRange(stationId, from, to, {
     enabled: !!stationId && activeTab === 'daily-dssr',
   } as any);
-  const dssrList = dssrQ.data ?? [];
+  // Memoised so `kpis` below actually memoises: a bare `?? []` hands the
+  // dependency list a new array on every render while the query is loading.
+  const dssrList = useMemo(() => dssrQ.data ?? [], [dssrQ.data]);
 
   const kpis = useMemo(() => {
     let volume = 0;
