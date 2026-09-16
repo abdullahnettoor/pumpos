@@ -353,7 +353,8 @@ export interface ShiftClosePayload {
 export interface ShiftDashboardSummary {
   activeShift: (Shift & { templateName: string; openedByName: string }) | null;
   lastShift: (Shift & { templateName: string; closedByName: string }) | null;
-  lastDssr: DssrSnapshot | null;
+  /** Shift-close snapshot for `lastShift` (was misnamed `lastDssr`). */
+  lastShiftSummary: ShiftSummarySnapshot | null;
   canReopenLastShift: boolean;
   gracePeriodExpiresAt?: string | null;
 }
@@ -522,7 +523,12 @@ export interface Purchase {
   createdAt: string;
 }
 
-export interface DssrSnapshot {
+/**
+ * The snapshot written when a **shift** is closed. Not a DSSR: a DSSR
+ * (`dssr_snapshots`) is the business-day-close snapshot and is keyed by
+ * station + business date, not by shift.
+ */
+export interface ShiftSummarySnapshot {
   id: string;
   shiftId: string;
   snapshotData: Record<string, any>;

@@ -41,6 +41,12 @@ export interface NavIntent {
   openDssrDate?: string;
   /** Open a specific Business Day in the Shifts workspace. */
   openBusinessDayDate?: string;
+  /**
+   * Open one closed shift's **Shift Summary** (Shifts → History). Distinct from
+   * `openDssrDate`: a shift summary is the shift-close snapshot, a DSSR is the
+   * business-day-close snapshot.
+   */
+  openShiftSummaryId?: string;
 }
 
 export interface NavIntentState {
