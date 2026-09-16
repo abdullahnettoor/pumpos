@@ -18,7 +18,7 @@ import { DispenserUnit, Tank, Product, Nozzle } from '@pump/shared';
 import { Drawer } from '../Drawer.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import { useRunTask } from '../../utils/runTask.js';
-import { Form } from '../../pump-ds/index.js';
+import { Button, Form, Icon } from '../../pump-ds/index.js';
 
 const dispenserService = new CloudDispenserService();
 const tankService = new CloudTankService();
@@ -291,25 +291,17 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
           </p>
         </div>
         {!isFormOpen && (
-          <button
+          <Button
+            variant="primary"
+            size="sm"
+            leftIcon={<Icon name="plus" size="sm" />}
             onClick={() => {
               resetForm();
               setIsFormOpen(true);
             }}
-            style={{
-              height: '32px',
-              padding: '0 12px',
-              backgroundColor: 'var(--brand-primary)',
-              color: '#ffffff',
-              border: 'none',
-              borderRadius: 'var(--radius-button)',
-              fontWeight: 600,
-              fontSize: '13px',
-              cursor: 'pointer',
-            }}
           >
-            + Add Dispenser
-          </button>
+            Add Dispenser
+          </Button>
         )}
       </div>
 
@@ -444,22 +436,15 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
               <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-strong)' }}>
                 Map Nozzles
               </span>
-              <button
+              <Button
                 type="button"
+                variant="secondary"
+                size="xs"
+                leftIcon={<Icon name="plus" size="xs" />}
                 onClick={addNozzleRow}
-                style={{
-                  padding: '4px 8px',
-                  backgroundColor: 'var(--bg-canvas)',
-                  border: '1px solid var(--border-strong)',
-                  color: 'var(--text-default)',
-                  borderRadius: 'var(--radius-button)',
-                  fontSize: '11px',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                }}
               >
-                + Add Nozzle
-              </button>
+                Add Nozzle
+              </Button>
             </div>
 
             {nozzlesList.length > 0 ? (
@@ -612,7 +597,7 @@ export const DispensersList: React.FC<DispensersListProps> = ({ stationId }) => 
                   padding: '12px',
                 }}
               >
-                No nozzles mapped yet. Click "+ Add Nozzle" to connect fuel lines to this dispenser.
+                No nozzles mapped yet. Click "Add Nozzle" to connect fuel lines to this dispenser.
               </p>
             )}
           </div>

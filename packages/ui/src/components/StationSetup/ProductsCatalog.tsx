@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { CloudProductService } from '../../services/cloud.js';
 import { queryKeys, TIER, useProducts } from '../../query/hooks.js';
 import { Product, PRODUCT_UNITS } from '@pump/shared';
-import { Chip, Form } from '../../pump-ds/index.js';
+import { Button, Chip, Form, Icon } from '../../pump-ds/index.js';
 import { Drawer } from '../Drawer.js';
 import { ProductImportDrawer } from './ProductImportDrawer.js';
 import { DataTable } from '../primitives/DataTable.js';
@@ -380,42 +380,26 @@ export const ProductsCatalog: React.FC<{ selectedStation?: any | null }> = ({
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
             {!hasMS && (
-              <button
+              <Button
                 type="button"
+                variant="primary"
+                size="xs"
+                leftIcon={<Icon name="plus" size="xs" />}
                 onClick={() => runTask(handleQuickAdd('MS'), 'Could not add the product.')}
-                style={{
-                  height: '28px',
-                  padding: '0 12px',
-                  backgroundColor: 'var(--brand-primary)',
-                  color: '#ffffff',
-                  border: 'none',
-                  borderRadius: 'var(--radius-button)',
-                  fontWeight: 600,
-                  fontSize: '12px',
-                  cursor: 'pointer',
-                }}
               >
-                + Add Petrol (MS)
-              </button>
+                Add Petrol (MS)
+              </Button>
             )}
             {!hasHSD && (
-              <button
+              <Button
                 type="button"
+                variant="primary"
+                size="xs"
+                leftIcon={<Icon name="plus" size="xs" />}
                 onClick={() => runTask(handleQuickAdd('HSD'), 'Could not add the product.')}
-                style={{
-                  height: '28px',
-                  padding: '0 12px',
-                  backgroundColor: 'var(--brand-primary)',
-                  color: '#ffffff',
-                  border: 'none',
-                  borderRadius: 'var(--radius-button)',
-                  fontWeight: 600,
-                  fontSize: '12px',
-                  cursor: 'pointer',
-                }}
               >
-                + Add Diesel (HSD)
-              </button>
+                Add Diesel (HSD)
+              </Button>
             )}
           </div>
         </div>
@@ -433,41 +417,20 @@ export const ProductsCatalog: React.FC<{ selectedStation?: any | null }> = ({
         </div>
         {!isFormOpen && (
           <div style={{ display: 'flex', gap: '8px' }}>
-            <button
-              onClick={() => setIsImportOpen(true)}
-              style={{
-                height: '32px',
-                padding: '0 12px',
-                backgroundColor: 'var(--bg-surface)',
-                color: 'var(--text-default)',
-                border: '1px solid var(--border-strong)',
-                borderRadius: 'var(--radius-button)',
-                fontWeight: 600,
-                fontSize: '13px',
-                cursor: 'pointer',
-              }}
-            >
+            <Button variant="secondary" size="sm" onClick={() => setIsImportOpen(true)}>
               Import CSV
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              leftIcon={<Icon name="plus" size="sm" />}
               onClick={() => {
                 resetForm();
                 setIsFormOpen(true);
               }}
-              style={{
-                height: '32px',
-                padding: '0 12px',
-                backgroundColor: 'var(--brand-primary)',
-                color: '#ffffff',
-                border: 'none',
-                borderRadius: 'var(--radius-button)',
-                fontWeight: 600,
-                fontSize: '13px',
-                cursor: 'pointer',
-              }}
             >
-              + Add Product
-            </button>
+              Add Product
+            </Button>
           </div>
         )}
       </div>

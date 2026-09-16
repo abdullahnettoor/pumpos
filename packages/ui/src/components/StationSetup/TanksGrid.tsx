@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { CloudTankService, CloudProductService } from '../../services/cloud.js';
 import { queryKeys, TIER, useProducts, useTanks } from '../../query/hooks.js';
 import { Tank, Product } from '@pump/shared';
-import { Chip, Form } from '../../pump-ds/index.js';
+import { Button, Chip, Form, Icon } from '../../pump-ds/index.js';
 import { Drawer } from '../Drawer.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import { useRunTask } from '../../utils/runTask.js';
@@ -153,25 +153,17 @@ export const TanksGrid: React.FC<TanksGridProps> = ({ stationId }) => {
           </p>
         </div>
         {!isFormOpen && (
-          <button
+          <Button
+            variant="primary"
+            size="sm"
+            leftIcon={<Icon name="plus" size="sm" />}
             onClick={() => {
               resetForm();
               setIsFormOpen(true);
             }}
-            style={{
-              height: '32px',
-              padding: '0 12px',
-              backgroundColor: 'var(--brand-primary)',
-              color: '#ffffff',
-              border: 'none',
-              borderRadius: 'var(--radius-button)',
-              fontWeight: 600,
-              fontSize: '13px',
-              cursor: 'pointer',
-            }}
           >
-            + Add Tank
-          </button>
+            Add Tank
+          </Button>
         )}
       </div>
 

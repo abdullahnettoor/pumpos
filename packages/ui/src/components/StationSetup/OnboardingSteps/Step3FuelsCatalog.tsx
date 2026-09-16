@@ -1,6 +1,6 @@
 import React from 'react';
 import { OnboardingDraft, OnboardingProductDraft } from '@pump/shared';
-import { Chip, Button } from '../../../pump-ds/index.js';
+import { Chip, Button, Icon } from '../../../pump-ds/index.js';
 
 interface Step3FuelsCatalogProps {
   draft: OnboardingDraft;
@@ -47,9 +47,10 @@ export const Step3FuelsCatalog: React.FC<Step3FuelsCatalogProps> = ({
               type="button"
               variant="secondary"
               size="sm"
+              leftIcon={<Icon name="plus" size="xs" />}
               onClick={() => handleQuickFuel('MS')}
             >
-              + Petrol (MS)
+              Petrol (MS)
             </Button>
           )}
           {!hasQuickHsd && (
@@ -57,9 +58,10 @@ export const Step3FuelsCatalog: React.FC<Step3FuelsCatalogProps> = ({
               type="button"
               variant="secondary"
               size="sm"
+              leftIcon={<Icon name="plus" size="xs" />}
               onClick={() => handleQuickFuel('HSD')}
             >
-              + Diesel (HSD)
+              Diesel (HSD)
             </Button>
           )}
           <Button type="button" variant="primary" size="sm" onClick={onAddProduct}>
@@ -78,7 +80,7 @@ export const Step3FuelsCatalog: React.FC<Step3FuelsCatalogProps> = ({
             fontSize: '13px',
           }}
         >
-          No fuel products added yet. Click "+ Petrol (MS)" or "Add Fuel" to begin.
+          No fuel products added yet. Click "Petrol (MS)" or "Add Fuel" to begin.
         </div>
       ) : (
         <div
