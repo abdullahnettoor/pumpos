@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Login, useStations, useMyAssignment } from '@pump/ui';
 import type { Station } from '@pump/shared';
 import { resolveBusinessDate } from '@pump/shared';
@@ -12,6 +12,7 @@ import { LedgerScreen } from './screens/LedgerScreen.js';
 import { MoreScreen } from './screens/MoreScreen.js';
 import { AttendantScreen } from './screens/AttendantScreen.js';
 import { HandoverPanel } from './components/HandoverPanel.js';
+import { runTask } from '@pump/ui';
 
 /** Tabs each role may access on mobile. */
 const TABS_BY_ROLE: Record<UserRole, TabKey[]> = {
@@ -36,7 +37,7 @@ const Centered: React.FC<{ children: React.ReactNode }> = ({ children }) => (
  *  persisted cache (see session.ts), which resolves stale-cache lockouts. */
 const SignOutButton: React.FC = () => (
   <button
-    onClick={() => signOut()}
+    onClick={() => runTask(signOut(), (error: unknown) => console.error('Sign out failed:', error))}
     className="mt-3 rounded-lg px-4 py-2 text-sm font-semibold"
     style={{ backgroundColor: 'var(--brand-primary)', color: '#ffffff' }}
   >
@@ -47,30 +48,32 @@ const SignOutButton: React.FC = () => (
 export const App: React.FC = () => {
   const { status, role, userName, error } = useSession();
   const stationsQ = useStations({ enabled: status === 'ready' });
-  const stations = (stationsQ.data || []) as Station[];
+  const stations = useMemo(() => (stationsQ.data || []) as Station[], [stationsQ.data]);
 
   // Non-attendant roles who happen to be assigned to a DU on an open shift get an
   // extra "My handover" tab with the same self-service UI as the Attendant shell.
   const myAssignmentQ = useMyAssignment({ enabled: status === 'ready' && role !== 'Attendant' });
   const hasHandoverTab = role !== 'Attendant' && !!myAssignmentQ.data;
 
-  const [selectedStationId, setSelectedStationId] = useState<string | null>(null);
-  const [tab, setTab] = useState<TabKey>('home');
+  // All three selections below are *derived* rather than synced into state by
+  // an effect. Each is "the operator's pick, falling back to a default that
+  // depends on data which may not have loaded yet" — a fallback is a render
+  // concern, and an effect only made it arrive one render late.
+  const [pickedStationId, setPickedStationId] = useState<string | null>(null);
+  const [pickedTab, setPickedTab] = useState<TabKey>('home');
 
   const allowedTabs = useMemo<TabKey[]>(() => {
     const base = role ? TABS_BY_ROLE[role] : [];
     return hasHandoverTab ? [...base, 'handover'] : base;
   }, [role, hasHandoverTab]);
 
-  // Default the station once loaded.
-  useEffect(() => {
-    if (!selectedStationId && stations.length > 0) setSelectedStationId(stations[0].id);
-  }, [stations, selectedStationId]);
+  // Default to the first station until one is picked.
+  const selectedStationId = pickedStationId ?? stations[0]?.id ?? null;
+  const setSelectedStationId = setPickedStationId;
 
   // Keep the active tab within what the role + view allows.
-  useEffect(() => {
-    if (allowedTabs.length && !allowedTabs.includes(tab)) setTab(allowedTabs[0]);
-  }, [allowedTabs, tab]);
+  const tab = allowedTabs.length && !allowedTabs.includes(pickedTab) ? allowedTabs[0] : pickedTab;
+  const setTab = setPickedTab;
 
   const selectedStation = useMemo(
     () => stations.find((s) => s.id === selectedStationId) ?? null,
@@ -81,23 +84,24 @@ export const App: React.FC = () => {
   // business date; the pill lets the user page back to any prior day.
   const stationSettings: any = (selectedStation as any)?.settings || {};
   const todayBiz = selectedStation
-    ? resolveBusinessDate({ timeZone: stationSettings.timezone, dayStartsAt: stationSettings.business_day_starts_at })
+    ? resolveBusinessDate({
+        timeZone: stationSettings.timezone,
+        dayStartsAt: stationSettings.business_day_starts_at,
+      })
     : undefined;
-  const [bizDate, setBizDate] = useState<string | null>(null);
-  useEffect(() => {
-    if (todayBiz && !bizDate) setBizDate(todayBiz);
-  }, [todayBiz, bizDate]);
-  // Clamp a stale selection if the day rolled over past what's now selectable.
-  useEffect(() => {
-    if (todayBiz && bizDate && bizDate > todayBiz) setBizDate(todayBiz);
-  }, [todayBiz, bizDate]);
+  const [pickedBizDate, setBizDate] = useState<string | null>(null);
+  // Defaults to today, and clamps a stale pick if the day rolled over past what
+  // is now selectable.
+  const bizDate = pickedBizDate && todayBiz && pickedBizDate > todayBiz ? todayBiz : pickedBizDate;
   const businessDate = bizDate ?? todayBiz ?? null;
   const showBusinessDay = tab === 'home' || tab === 'dssr';
 
   if (status === 'loading') {
     return (
       <Centered>
-        <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Connecting…</p>
+        <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+          Connecting…
+        </p>
       </Centered>
     );
   }
@@ -111,7 +115,9 @@ export const App: React.FC = () => {
       <Centered>
         <p className="text-4xl">⚠️</p>
         <p className="font-semibold">Couldn't load your account</p>
-        <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{error?.message}</p>
+        <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+          {error?.message}
+        </p>
         <SignOutButton />
       </Centered>
     );
@@ -119,7 +125,14 @@ export const App: React.FC = () => {
 
   // Attendants get a dedicated mobile-only handover shell (no owner tabs).
   if (role === 'Attendant') {
-    return <AttendantScreen userName={userName} onSignOut={() => signOut()} />;
+    return (
+      <AttendantScreen
+        userName={userName}
+        onSignOut={() =>
+          runTask(signOut(), (error: unknown) => console.error('Sign out failed:', error))
+        }
+      />
+    );
   }
 
   if (allowedTabs.length === 0) {
@@ -154,7 +167,10 @@ export const App: React.FC = () => {
         </p>
       );
     }
-    if (tab === 'home') return <HomeScreen station={selectedStation} businessDate={businessDate} onNavigate={setTab} />;
+    if (tab === 'home')
+      return (
+        <HomeScreen station={selectedStation} businessDate={businessDate} onNavigate={setTab} />
+      );
     if (tab === 'shifts') return <ShiftsScreen station={selectedStation} />;
     if (tab === 'dssr') return <DssrScreen station={selectedStation} businessDate={businessDate} />;
     if (tab === 'more') return <MoreScreen station={selectedStation} onNavigate={setTab} />;

@@ -1,7 +1,18 @@
 import React, { useState } from 'react';
+import { runTask } from '@pump/ui';
 
 const DownloadIcon: React.FC<{ size?: number }> = ({ size = 15 }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
     <path d="M12 3v12" />
     <path d="m7 12 5 4 5-4" />
     <path d="M5 21h14" />
@@ -33,7 +44,7 @@ export const ShareButton: React.FC<Props> = ({ onShare, label = 'Share', onError
   return (
     <button
       type="button"
-      onClick={handle}
+      onClick={() => runTask(handle(), (error: unknown) => onError?.(String(error)))}
       disabled={busy}
       aria-label={label}
       className={

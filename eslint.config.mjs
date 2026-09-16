@@ -12,6 +12,24 @@
 // where a dropped `await` inside runInTransaction can commit state without its
 // outbox event, and a stale React closure can show an operator the wrong
 // drawer balance. TypeScript catches neither.
+//
+// ---------------------------------------------------------------------------
+// On the "root lint hangs" report (issue #49)
+// ---------------------------------------------------------------------------
+// It does not, on ESLint 10.10.0. Measured on the tree at the time of writing:
+// `eslint .` took 37s against 34s for the old hand-listed
+// `eslint packages apps scripts eslint.config.mjs`, and both produced a
+// byte-identical report. The extra top-level directories the root run visits
+// (docs, supabase, migrations, tmp, .github) contain no lintable files, so the
+// directory list was buying nothing while letting any new top-level source
+// directory go silently unchecked.
+//
+// The traversal-cost theory was tested and disproved: ignore patterns ending in
+// `/**` DO prune the directory subtree, so `apps/desktop/src-tauri/target` is
+// never walked — synthesising a 100k-file target directory moved the root run
+// from 37s to 40s. Running with every global ignore removed took 84s. If a hang
+// ever returns, start by re-measuring those two numbers rather than adding
+// ignore entries speculatively.
 
 import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
@@ -23,6 +41,11 @@ export default tseslint.config(
   {
     // Global ignores. Build output, vendored code, and the standalone
     // marketing app (own lockfile + Astro toolchain, not in the workspace).
+    //
+    // The lint scripts target the repository root (`eslint .`), so this list is
+    // the ONLY thing that decides what is checked. Adding a new top-level source
+    // directory therefore needs no script change — see the note on issue #49 at
+    // the top of this file.
     ignores: [
       '**/dist/**',
       '**/build/**',
@@ -37,6 +60,11 @@ export default tseslint.config(
       // hand-written service worker (browser globals, no module system).
       '.agents/**',
       '.opencode/**',
+      '.codex/**',
+      // Local scratch space, not tracked as source.
+      '.scratch/**',
+      '.impeccable/**',
+      'tmp/**',
       '**/public/**',
       '**/*.umd.js',
       '**/*.min.js',

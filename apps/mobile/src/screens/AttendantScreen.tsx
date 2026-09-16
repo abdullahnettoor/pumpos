@@ -5,7 +5,10 @@ import { HandoverPanel } from '../components/HandoverPanel.js';
  * Attendant shell (mobile-only): a header + the shared handover panel. Other
  * roles reach the same panel via the "My handover" tab when assigned to a DU.
  */
-export const AttendantScreen: React.FC<{ userName: string; onSignOut: () => void }> = ({ userName, onSignOut }) => {
+export const AttendantScreen: React.FC<{ userName: string; onSignOut: () => void }> = ({
+  userName,
+  onSignOut,
+}) => {
   return (
     <div className="flex h-[100dvh] flex-col" style={{ backgroundColor: 'var(--bg-canvas)' }}>
       <header

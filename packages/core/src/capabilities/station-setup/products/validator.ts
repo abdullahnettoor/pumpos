@@ -3,7 +3,16 @@ import { err, ok, validationError } from '../../../kernel/index.js';
 import type { Result } from '../../../kernel/index.js';
 import type { CreateProductCommand, UpdateProductCommand } from './command.js';
 
-const productTypeEnum = z.enum(['FUEL', 'LUBRICANT', 'ADDITIVE', 'ACCESSORY', 'CONSUMABLE', 'SPARE_PART', 'SERVICE', 'OTHER']);
+const productTypeEnum = z.enum([
+  'FUEL',
+  'LUBRICANT',
+  'ADDITIVE',
+  'ACCESSORY',
+  'CONSUMABLE',
+  'SPARE_PART',
+  'SERVICE',
+  'OTHER',
+]);
 const inventoryTypeEnum = z.enum(['BULK', 'ITEM', 'NONE']);
 const taxCategoryEnum = z.enum(['FUEL_VAT', 'GST', 'EXEMPT', 'NON_TAXABLE']);
 const taxConfigSchema = z
@@ -37,7 +46,9 @@ const createSchema = z.object({
 export function validateCreateProduct(input: unknown): Result<CreateProductCommand> {
   const parsed = createSchema.safeParse(input);
   if (!parsed.success) {
-    return err(validationError('Invalid CreateProduct command', { issues: parsed.error.flatten() }));
+    return err(
+      validationError('Invalid CreateProduct command', { issues: parsed.error.flatten() }),
+    );
   }
   return ok(parsed.data);
 }
@@ -62,7 +73,9 @@ const updateSchema = z.object({
 export function validateUpdateProduct(input: unknown): Result<UpdateProductCommand> {
   const parsed = updateSchema.safeParse(input);
   if (!parsed.success) {
-    return err(validationError('Invalid UpdateProduct command', { issues: parsed.error.flatten() }));
+    return err(
+      validationError('Invalid UpdateProduct command', { issues: parsed.error.flatten() }),
+    );
   }
   return ok(parsed.data);
 }

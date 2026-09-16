@@ -1,10 +1,4 @@
-import {
-  BusinessEvents,
-  conflictError,
-  err,
-  eventFromContext,
-  ok,
-} from '../../../kernel/index.js';
+import { BusinessEvents, conflictError, err, eventFromContext, ok } from '../../../kernel/index.js';
 import type {
   DomainEvent,
   EventPublisher,
@@ -17,7 +11,11 @@ import type { CreateProductCommand } from './command.js';
 import { validateCreateProduct } from './validator.js';
 import { defaultInventoryType, type Product, type ProductRepository } from './ports.js';
 import type { StockMovement, StockMovementRepository } from '../../inventory/index.js';
-import { resolveBusinessDayWrite, type BusinessDay, type BusinessDayWriteRepository } from '../../station-ops/business-days/index.js';
+import {
+  resolveBusinessDayWrite,
+  type BusinessDay,
+  type BusinessDayWriteRepository,
+} from '../../station-ops/business-days/index.js';
 
 export interface CreateProductDeps {
   repository: ProductRepository;
@@ -31,16 +29,15 @@ export interface CreateProductDeps {
 export class CreateProduct implements UseCase<CreateProductCommand, Product> {
   constructor(private readonly deps: CreateProductDeps) {}
 
-  async execute(
-    input: CreateProductCommand,
-    ctx: ExecutionContext,
-  ): Promise<Result<Product>> {
+  async execute(input: CreateProductCommand, ctx: ExecutionContext): Promise<Result<Product>> {
     const validated = validateCreateProduct(input);
     if (!validated.success) return validated;
     const cmd = validated.data;
 
     if (await this.deps.repository.existsByCode(ctx.organizationId, cmd.code)) {
-      return err(conflictError(`A product with code "${cmd.code}" already exists`, { code: cmd.code }));
+      return err(
+        conflictError(`A product with code "${cmd.code}" already exists`, { code: cmd.code }),
+      );
     }
 
     const inventoryType = cmd.inventoryType ?? defaultInventoryType(cmd.productType);
@@ -62,7 +59,11 @@ export class CreateProduct implements UseCase<CreateProductCommand, Product> {
       category: cmd.category ?? null,
       sellingPrice: cmd.sellingPrice != null ? String(cmd.sellingPrice) : null,
       costBasis: cmd.costBasis != null ? String(cmd.costBasis) : '0',
-      taxConfig: cmd.taxConfig ?? (taxCategory === 'FUEL_VAT' ? { vat_rate: 0, hsn_code: '' } : { gst_rate: 18, hsn_code: '', price_inclusive: true }),
+      taxConfig:
+        cmd.taxConfig ??
+        (taxCategory === 'FUEL_VAT'
+          ? { vat_rate: 0, hsn_code: '' }
+          : { gst_rate: 18, hsn_code: '', price_inclusive: true }),
       isActive: true,
       createdAt: now,
       updatedAt: now,
@@ -71,10 +72,25 @@ export class CreateProduct implements UseCase<CreateProductCommand, Product> {
     const openingStock = cmd.openingStock != null ? Number(cmd.openingStock) : 0;
     const stationId = cmd.stationId ?? ctx.stationId ?? null;
     let openingStockDay: BusinessDay | null = null;
-    if (openingStock > 0 && inventoryType === 'ITEM' && product.stockTracked && stationId && this.deps.stock && this.deps.businessDays) {
-      const date = resolveBusinessDate({ now: ctx.clock.now(), timeZone: ctx.timeZone, dayStartsAt: ctx.businessDayStartsAt });
-      const eligibility = await resolveBusinessDayWrite(this.deps.businessDays, ctx, { stationId, businessDate: date, kind: 'STOCK' });
-      if (!eligibility.success) return eligibility as unknown as Result<Product>;
+    if (
+      openingStock > 0 &&
+      inventoryType === 'ITEM' &&
+      product.stockTracked &&
+      stationId &&
+      this.deps.stock &&
+      this.deps.businessDays
+    ) {
+      const date = resolveBusinessDate({
+        now: ctx.clock.now(),
+        timeZone: ctx.timeZone,
+        dayStartsAt: ctx.businessDayStartsAt,
+      });
+      const eligibility = await resolveBusinessDayWrite(this.deps.businessDays, ctx, {
+        stationId,
+        businessDate: date,
+        kind: 'STOCK',
+      });
+      if (!eligibility.success) return eligibility;
       openingStockDay = eligibility.data.businessDay;
     }
 

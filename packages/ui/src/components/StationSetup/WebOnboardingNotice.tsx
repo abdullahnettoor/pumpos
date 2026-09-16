@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Globe, ExternalLink, Copy, Check, RefreshCw, LogOut } from 'lucide-react';
 import { Button } from '../../pump-ds/index.js';
 import { openExternal } from '../../utils/platform.js';
+import { useRunTask } from '../../utils/runTask.js';
 
 /**
  * WebOnboardingNotice — the desktop app's first-run gate when a station has not
@@ -21,8 +22,8 @@ export interface WebOnboardingNoticeProps {
   role: 'Owner' | 'Manager' | 'Accountant' | 'Staff' | string;
   userName?: string;
   /** Re-check whether the station has become ready (e.g. reload / refetch). */
-  onRecheck?: () => void;
-  onSignOut?: () => void;
+  onRecheck?: () => void | Promise<unknown>;
+  onSignOut?: () => void | Promise<unknown>;
   rechecking?: boolean;
 }
 
@@ -34,6 +35,7 @@ export const WebOnboardingNotice: React.FC<WebOnboardingNoticeProps> = ({
   onSignOut,
   rechecking = false,
 }) => {
+  const runTask = useRunTask();
   const [copied, setCopied] = useState(false);
   const canOnboard = role === 'Owner' || role === 'Manager';
 
@@ -87,22 +89,36 @@ export const WebOnboardingNotice: React.FC<WebOnboardingNoticeProps> = ({
           <Globe size={24} />
         </div>
 
-        <h2 style={{ fontSize: '17px', fontWeight: 700, color: 'var(--text-strong)', letterSpacing: '-0.01em' }}>
+        <h2
+          style={{
+            fontSize: '17px',
+            fontWeight: 700,
+            color: 'var(--text-strong)',
+            letterSpacing: '-0.01em',
+          }}
+        >
           {canOnboard ? "Let's finish setting up on the web" : 'Station setup isn’t finished yet'}
         </h2>
 
-        <p style={{ color: 'var(--text-muted)', fontSize: '13px', lineHeight: 1.5, marginTop: '10px' }}>
+        <p
+          style={{
+            color: 'var(--text-muted)',
+            fontSize: '13px',
+            lineHeight: 1.5,
+            marginTop: '10px',
+          }}
+        >
           {canOnboard ? (
             <>
               First-time station setup — tanks, dispensers, products and staff — is done once in the
-              PumpOS <strong style={{ color: 'var(--text-default)' }}>web console</strong>. As soon as it’s
-              complete, this desktop app unlocks for daily operations.
+              PumpOS <strong style={{ color: 'var(--text-default)' }}>web console</strong>. As soon
+              as it’s complete, this desktop app unlocks for daily operations.
             </>
           ) : (
             <>
               Your Owner or Manager needs to finish the station’s setup in the PumpOS
-              <strong style={{ color: 'var(--text-default)' }}> web console</strong>. This desktop app will
-              unlock automatically once that’s done.
+              <strong style={{ color: 'var(--text-default)' }}> web console</strong>. This desktop
+              app will unlock automatically once that’s done.
             </>
           )}
         </p>
@@ -188,7 +204,7 @@ export const WebOnboardingNotice: React.FC<WebOnboardingNoticeProps> = ({
           {userName && onSignOut && <span aria-hidden>·</span>}
           {onSignOut && (
             <button
-              onClick={onSignOut}
+              onClick={() => runTask(onSignOut?.(), 'Could not sign out.')}
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',

@@ -24,10 +24,7 @@ export function coreError(
   return { code, message, details };
 }
 
-export function validationError(
-  message: string,
-  details?: Record<string, unknown>,
-): CoreError {
+export function validationError(message: string, details?: Record<string, unknown>): CoreError {
   return { code: ErrorCodes.VALIDATION, message, details };
 }
 
@@ -39,10 +36,7 @@ export function notFoundError(entity: string, id?: string): CoreError {
   };
 }
 
-export function conflictError(
-  message: string,
-  details?: Record<string, unknown>,
-): CoreError {
+export function conflictError(message: string, details?: Record<string, unknown>): CoreError {
   return { code: ErrorCodes.CONFLICT, message, details };
 }
 
@@ -53,9 +47,6 @@ export function forbiddenError(
   return { code: ErrorCodes.FORBIDDEN, message, details };
 }
 
-export function invariantViolation(
-  message: string,
-  details?: Record<string, unknown>,
-): CoreError {
+export function invariantViolation(message: string, details?: Record<string, unknown>): CoreError {
   return { code: ErrorCodes.INVARIANT_VIOLATION, message, details };
 }

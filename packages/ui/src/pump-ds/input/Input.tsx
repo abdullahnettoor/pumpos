@@ -41,7 +41,8 @@ const ICON_PAD: Record<InputSize, { left: string; right: string; pos: string }> 
 };
 
 export interface InputProps
-  extends Omit<InputHTMLAttributes<HTMLInputElement>, 'size'>,
+  extends
+    Omit<InputHTMLAttributes<HTMLInputElement>, 'size'>,
     Omit<VariantProps<typeof inputVariants>, 'invalid'> {
   invalid?: boolean;
   leftIcon?: ReactNode;
@@ -54,22 +55,40 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
 ) {
   const pad = ICON_PAD[inputSize ?? 'md'];
   const iconStyle = (side: 'left' | 'right'): React.CSSProperties => ({
-    position: 'absolute', [side]: pad.pos, top: '50%', transform: 'translateY(-50%)',
-    color: 'var(--text-muted)', display: 'inline-flex', pointerEvents: 'none',
+    position: 'absolute',
+    [side]: pad.pos,
+    top: '50%',
+    transform: 'translateY(-50%)',
+    color: 'var(--text-muted)',
+    display: 'inline-flex',
+    pointerEvents: 'none',
   });
   const field = (
     <input
       ref={ref}
-      className={cn(inputVariants({ inputSize, invalid }), leftIcon && pad.left, rightIcon && pad.right, className)}
+      className={cn(
+        inputVariants({ inputSize, invalid }),
+        leftIcon && pad.left,
+        rightIcon && pad.right,
+        className,
+      )}
       {...rest}
     />
   );
   if (!leftIcon && !rightIcon) return field;
   return (
     <div style={{ position: 'relative' }}>
-      {leftIcon && <span style={iconStyle('left')} aria-hidden="true">{leftIcon}</span>}
+      {leftIcon && (
+        <span style={iconStyle('left')} aria-hidden="true">
+          {leftIcon}
+        </span>
+      )}
       {field}
-      {rightIcon && <span style={iconStyle('right')} aria-hidden="true">{rightIcon}</span>}
+      {rightIcon && (
+        <span style={iconStyle('right')} aria-hidden="true">
+          {rightIcon}
+        </span>
+      )}
     </div>
   );
 });
@@ -82,21 +101,47 @@ export interface SearchInputProps extends Omit<InputProps, 'leftIcon' | 'value' 
 }
 
 export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(function SearchInput(
-  { value, onChange, clearable = true, inputSize = 'md', placeholder = 'Search…', className, style, ...rest },
+  {
+    value,
+    onChange,
+    clearable = true,
+    inputSize = 'md',
+    placeholder = 'Search…',
+    className,
+    style,
+    ...rest
+  },
   ref,
 ) {
   const pad = ICON_PAD[inputSize ?? 'md'];
   const size = inputSize ?? 'md';
   return (
     <div style={{ position: 'relative', ...style }}>
-      <Search size={size === 'sm' ? 13 : 15} style={{ position: 'absolute', left: pad.pos, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} aria-hidden="true" />
+      <Search
+        size={size === 'sm' ? 13 : 15}
+        style={{
+          position: 'absolute',
+          left: pad.pos,
+          top: '50%',
+          transform: 'translateY(-50%)',
+          color: 'var(--text-muted)',
+          pointerEvents: 'none',
+        }}
+        aria-hidden="true"
+      />
       <input
         ref={ref}
         type="search"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className={cn(inputVariants({ inputSize }), pad.left, value && clearable && pad.right, '[&::-webkit-search-cancel-button]:hidden', className)}
+        className={cn(
+          inputVariants({ inputSize }),
+          pad.left,
+          value && clearable && pad.right,
+          '[&::-webkit-search-cancel-button]:hidden',
+          className,
+        )}
         {...rest}
       />
       {value && clearable && (
@@ -104,7 +149,18 @@ export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(functi
           type="button"
           onClick={() => onChange('')}
           aria-label="Clear search"
-          style={{ position: 'absolute', right: pad.pos, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', display: 'inline-flex', cursor: 'pointer', background: 'none', border: 'none', padding: 0 }}
+          style={{
+            position: 'absolute',
+            right: pad.pos,
+            top: '50%',
+            transform: 'translateY(-50%)',
+            color: 'var(--text-muted)',
+            display: 'inline-flex',
+            cursor: 'pointer',
+            background: 'none',
+            border: 'none',
+            padding: 0,
+          }}
         >
           <X size={size === 'sm' ? 13 : 15} />
         </button>

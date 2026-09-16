@@ -43,7 +43,9 @@ export const Sparkline: React.FC<SparklineProps> = ({
 }) => {
   const gradId = useId();
   if (!data || data.length === 0) {
-    return <svg width={width} height={height} className={className} role="img" aria-label={ariaLabel} />;
+    return (
+      <svg width={width} height={height} className={className} role="img" aria-label={ariaLabel} />
+    );
   }
 
   const min = Math.min(...data);
@@ -60,12 +62,22 @@ export const Sparkline: React.FC<SparklineProps> = ({
     return [x, y] as const;
   });
 
-  const line = points.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(2)},${y.toFixed(2)}`).join(' ');
+  const line = points
+    .map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(2)},${y.toFixed(2)}`)
+    .join(' ');
   const area = `${line} L${points[points.length - 1][0].toFixed(2)},${(height - pad).toFixed(2)} L${points[0][0].toFixed(2)},${(height - pad).toFixed(2)} Z`;
   const color = STROKE[tone];
 
   return (
-    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className={className} role="img" aria-label={ariaLabel} preserveAspectRatio="none">
+    <svg
+      width={width}
+      height={height}
+      viewBox={`0 0 ${width} ${height}`}
+      className={className}
+      role="img"
+      aria-label={ariaLabel}
+      preserveAspectRatio="none"
+    >
       {fill && (
         <>
           <defs>
@@ -77,7 +89,15 @@ export const Sparkline: React.FC<SparklineProps> = ({
           <path d={area} fill={`url(#${gradId})`} stroke="none" />
         </>
       )}
-      <path d={line} fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+      <path
+        d={line}
+        fill="none"
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        vectorEffect="non-scaling-stroke"
+      />
     </svg>
   );
 };

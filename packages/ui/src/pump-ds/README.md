@@ -32,7 +32,7 @@ a time — never in place.
 
 ```ts
 // apps/*/src/main.tsx
-import '@pump/ui/src/index.css';            // 1. raw --* variables + legacy classes
+import '@pump/ui/src/index.css'; // 1. raw --* variables + legacy classes
 import '@pump/ui/src/pump-ds/tailwind.css'; // 2. Tailwind + @theme bridge over the raw variables
 ```
 

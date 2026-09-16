@@ -11,7 +11,7 @@ import {
 } from '@pump/shared';
 import { CloudStationService } from '../../services/cloud.js';
 import { Drawer } from '../Drawer.js';
-import { Button, Chip } from '../../pump-ds/index.js';
+import { Button, Chip, Icon } from '../../pump-ds/index.js';
 import { Check } from 'lucide-react';
 import { useConfirm } from '../primitives/ConfirmDialog.js';
 import {
@@ -40,11 +40,12 @@ import { Step6OpeningValues } from './OnboardingSteps/Step6OpeningValues.js';
 import { Step7ShiftTemplates } from './OnboardingSteps/Step7ShiftTemplates.js';
 import { Step8PaymentTerminals } from './OnboardingSteps/Step8PaymentTerminals.js';
 import { Step8Review } from './OnboardingSteps/Step8Review.js';
+import { useRunTask } from '../../utils/runTask.js';
 
 const stationService = new CloudStationService();
 
 interface OnboardingWizardProps {
-  onOnboardingComplete: (station: Station) => void;
+  onOnboardingComplete: (station: Station) => void | Promise<unknown>;
   /** Leave onboarding (e.g. after discarding the draft) — host routes home. */
   onExit?: () => void;
   userName: string;
@@ -111,11 +112,16 @@ function cloneFuelDraft(product?: OnboardingProductDraft | null): OnboardingProd
   return product ? { ...product, taxConfig: { ...product.taxConfig } } : createFuelDraft();
 }
 
-function cloneTankDraft(tank?: OnboardingTankDraft | null, productDraftId = ''): OnboardingTankDraft {
+function cloneTankDraft(
+  tank?: OnboardingTankDraft | null,
+  productDraftId = '',
+): OnboardingTankDraft {
   return tank ? { ...tank } : createTankDraft(productDraftId);
 }
 
-function cloneShiftTemplateDraft(template?: OnboardingShiftTemplateDraft | null): OnboardingShiftTemplateDraft {
+function cloneShiftTemplateDraft(
+  template?: OnboardingShiftTemplateDraft | null,
+): OnboardingShiftTemplateDraft {
   return template ? { ...template } : createShiftTemplateDraft();
 }
 
@@ -125,20 +131,29 @@ function parseTimeToMinutes(t: string): number {
 }
 
 function formatMinutesToTime(min: number): string {
-  const norm = (min % 1440 + 1440) % 1440;
+  const norm = ((min % 1440) + 1440) % 1440;
   const h = Math.floor(norm / 60);
   const m = norm % 60;
   return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
 }
 
-function cloneDispenserDraft(dispenser?: OnboardingDispenserDraft | null): OnboardingDispenserDraft {
+function cloneDispenserDraft(
+  dispenser?: OnboardingDispenserDraft | null,
+): OnboardingDispenserDraft {
   return dispenser ? { ...dispenser } : createDispenserDraft();
 }
 
-function cloneNozzleDraft(nozzle?: OnboardingNozzleDraft | null, defaults?: Partial<OnboardingNozzleDraft>): OnboardingNozzleDraft {
+function cloneNozzleDraft(
+  nozzle?: OnboardingNozzleDraft | null,
+  defaults?: Partial<OnboardingNozzleDraft>,
+): OnboardingNozzleDraft {
   if (nozzle) return { ...nozzle };
   return {
-    ...createNozzleDraft(defaults?.dispenserDraftId || '', defaults?.tankDraftId || '', defaults?.productDraftId || ''),
+    ...createNozzleDraft(
+      defaults?.dispenserDraftId || '',
+      defaults?.tankDraftId || '',
+      defaults?.productDraftId || '',
+    ),
     ...defaults,
   };
 }
@@ -152,6 +167,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
   onExit,
   userName,
 }) => {
+  const runTask = useRunTask();
   const [draft, setDraft] = useState<OnboardingDraft>(createEmptyOnboardingDraft());
   const [currentStep, setCurrentStep] = useState(1);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -162,7 +178,8 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
   // Modal Drawers
   const [fuelDrawer, setFuelDrawer] = useState<OnboardingProductDraft | null>(null);
   const [tankDrawer, setTankDrawer] = useState<OnboardingTankDraft | null>(null);
-  const [shiftTemplateDrawer, setShiftTemplateDrawer] = useState<OnboardingShiftTemplateDraft | null>(null);
+  const [shiftTemplateDrawer, setShiftTemplateDrawer] =
+    useState<OnboardingShiftTemplateDraft | null>(null);
   const [dispenserDrawer, setDispenserDrawer] = useState<{
     dispenser: OnboardingDispenserDraft;
     nozzles: OnboardingNozzleDraft[];
@@ -258,14 +275,18 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
       status: 'ACTIVE',
     };
 
-    const msProducts = draft.products.filter(p => p.code.toUpperCase() === 'MS');
-    const hsdProducts = draft.products.filter(p => p.code.toUpperCase() === 'HSD');
+    const msProducts = draft.products.filter((p) => p.code.toUpperCase() === 'MS');
+    const hsdProducts = draft.products.filter((p) => p.code.toUpperCase() === 'HSD');
 
     const msProduct = msProducts[0] || draft.products[0];
     const hsdProduct = hsdProducts[0] || draft.products[1] || draft.products[0];
 
-    const msTanks = msProduct ? draft.tanks.filter(t => t.productDraftId === msProduct.draftId) : [];
-    const hsdTanks = hsdProduct ? draft.tanks.filter(t => t.productDraftId === hsdProduct.draftId) : [];
+    const msTanks = msProduct
+      ? draft.tanks.filter((t) => t.productDraftId === msProduct.draftId)
+      : [];
+    const hsdTanks = hsdProduct
+      ? draft.tanks.filter((t) => t.productDraftId === hsdProduct.draftId)
+      : [];
 
     const msTank = msTanks[0] || draft.tanks[0];
     const hsdTank = hsdTanks[0] || draft.tanks[1] || draft.tanks[0];
@@ -306,14 +327,18 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
       status: 'ACTIVE',
     };
 
-    const msProducts = draft.products.filter(p => p.code.toUpperCase() === 'MS');
-    const hsdProducts = draft.products.filter(p => p.code.toUpperCase() === 'HSD');
+    const msProducts = draft.products.filter((p) => p.code.toUpperCase() === 'MS');
+    const hsdProducts = draft.products.filter((p) => p.code.toUpperCase() === 'HSD');
 
     const msProduct = msProducts[0] || draft.products[0];
     const hsdProduct = hsdProducts[0] || draft.products[1] || draft.products[0];
 
-    const msTanks = msProduct ? draft.tanks.filter(t => t.productDraftId === msProduct.draftId) : [];
-    const hsdTanks = hsdProduct ? draft.tanks.filter(t => t.productDraftId === hsdProduct.draftId) : [];
+    const msTanks = msProduct
+      ? draft.tanks.filter((t) => t.productDraftId === msProduct.draftId)
+      : [];
+    const hsdTanks = hsdProduct
+      ? draft.tanks.filter((t) => t.productDraftId === hsdProduct.draftId)
+      : [];
 
     const msTank1 = msTanks[0] || draft.tanks[0];
     const msTank2 = msTanks[1] || msTanks[0] || draft.tanks[0];
@@ -370,7 +395,9 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
       return {
         ...prev,
         products: exists
-          ? prev.products.map((product) => (product.draftId === fuelDrawer.draftId ? fuelDrawer : product))
+          ? prev.products.map((product) =>
+              product.draftId === fuelDrawer.draftId ? fuelDrawer : product,
+            )
           : [...prev.products, fuelDrawer],
       };
     });
@@ -394,11 +421,15 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
   const saveShiftTemplate = () => {
     if (!shiftTemplateDrawer) return;
     updateDraft((prev) => {
-      const exists = prev.shiftTemplates.some((template) => template.draftId === shiftTemplateDrawer.draftId);
+      const exists = prev.shiftTemplates.some(
+        (template) => template.draftId === shiftTemplateDrawer.draftId,
+      );
       return {
         ...prev,
         shiftTemplates: exists
-          ? prev.shiftTemplates.map((template) => (template.draftId === shiftTemplateDrawer.draftId ? shiftTemplateDrawer : template))
+          ? prev.shiftTemplates.map((template) =>
+              template.draftId === shiftTemplateDrawer.draftId ? shiftTemplateDrawer : template,
+            )
           : [...prev.shiftTemplates, shiftTemplateDrawer],
       };
     });
@@ -408,13 +439,19 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
   const saveDispenser = () => {
     if (!dispenserDrawer) return;
     updateDraft((prev) => {
-      const otherNozzles = prev.nozzles.filter((nozzle) => nozzle.dispenserDraftId !== dispenserDrawer.dispenser.draftId);
-      const dispenserExists = prev.dispensers.some((item) => item.draftId === dispenserDrawer.dispenser.draftId);
+      const otherNozzles = prev.nozzles.filter(
+        (nozzle) => nozzle.dispenserDraftId !== dispenserDrawer.dispenser.draftId,
+      );
+      const dispenserExists = prev.dispensers.some(
+        (item) => item.draftId === dispenserDrawer.dispenser.draftId,
+      );
 
       return {
         ...prev,
         dispensers: dispenserExists
-          ? prev.dispensers.map((item) => (item.draftId === dispenserDrawer.dispenser.draftId ? dispenserDrawer.dispenser : item))
+          ? prev.dispensers.map((item) =>
+              item.draftId === dispenserDrawer.dispenser.draftId ? dispenserDrawer.dispenser : item,
+            )
           : [...prev.dispensers, dispenserDrawer.dispenser],
         nozzles: [...otherNozzles, ...dispenserDrawer.nozzles],
       };
@@ -493,7 +530,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
   const handleAutofillShifts = (count: 2 | 3) => {
     const is247 = draft.businessRules.operatingSchedule.isTwentyFourSeven;
     const bizStart = draft.businessRules.businessDayStartsAt || '06:00';
-    
+
     let templates: OnboardingShiftTemplateDraft[] = [];
 
     if (is247) {
@@ -541,7 +578,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
         ];
       }
     } else {
-      const openDay = draft.businessRules.operatingSchedule.days.find(d => d.isOpen);
+      const openDay = draft.businessRules.operatingSchedule.days.find((d) => d.isOpen);
       const openTime = openDay?.openTime || '06:00';
       const closeTime = openDay?.closeTime || '22:00';
 
@@ -605,7 +642,15 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
   };
 
   const discardDraft = async () => {
-    if (!(await confirm({ title: 'Discard onboarding draft?', message: 'This will clear the locally stored setup and start over.', confirmLabel: 'Discard', danger: true }))) return;
+    if (
+      !(await confirm({
+        title: 'Discard onboarding draft?',
+        message: 'This will clear the locally stored setup and start over.',
+        confirmLabel: 'Discard',
+        danger: true,
+      }))
+    )
+      return;
     clearStoredOnboardingDraft();
     setDraft(createEmptyOnboardingDraft());
     setCurrentStep(1);
@@ -646,7 +691,9 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     try {
       await wait(150);
       setProvisioning((prev) => ({ ...prev, stageIndex: 1 }));
-      const result = await stationService.finalizeOnboarding({ draft }) as FinalizeOnboardingResult;
+      const result = await stationService.finalizeOnboarding({
+        draft,
+      });
 
       setProvisioning((prev) => ({ ...prev, stageIndex: 2 }));
       await wait(150);
@@ -672,7 +719,15 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
 
   if (!isHydrated) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', color: 'var(--text-muted)' }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          minHeight: '100vh',
+          color: 'var(--text-muted)',
+        }}
+      >
         Preparing onboarding workspace...
       </div>
     );
@@ -681,109 +736,252 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
   if (showIntro) {
     const prepItems: { t: string; d: string }[] = [
       { t: 'Station details', d: 'Name, address, timezone and when your business day starts.' },
-      { t: 'Fuels & selling rates', d: 'The fuels you sell (Petrol, Diesel, …) and their current prices.' },
+      {
+        t: 'Fuels & selling rates',
+        d: 'The fuels you sell (Petrol, Diesel, …) and their current prices.',
+      },
       { t: 'Tanks', d: "Each tank's capacity, the fuel it holds, and its current stock." },
-      { t: 'Dispensers & nozzles', d: 'Your dispenser layout and which tank each nozzle draws from.' },
+      {
+        t: 'Dispensers & nozzles',
+        d: 'Your dispenser layout and which tank each nozzle draws from.',
+      },
       { t: 'Opening meter readings', d: 'The current cumulative reading on each nozzle.' },
       { t: 'Shift timings', d: 'Your operating shifts (for example, day and night).' },
       { t: 'Payment terminals', d: 'Card / UPI machines — optional, and easy to add later.' },
     ];
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', backgroundColor: 'var(--bg-canvas)', overflow: 'hidden' }}>
-        <header style={{
-          height: '68px', backgroundColor: 'var(--bg-surface)', borderBottom: '1px solid var(--border-soft)',
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 24px', gap: '16px', flexShrink: 0,
-        }}>
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          height: '100vh',
+          backgroundColor: 'var(--bg-canvas)',
+          overflow: 'hidden',
+        }}
+      >
+        <header
+          style={{
+            height: '68px',
+            backgroundColor: 'var(--bg-surface)',
+            borderBottom: '1px solid var(--border-soft)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '0 24px',
+            gap: '16px',
+            flexShrink: 0,
+          }}
+        >
           <div style={{ display: 'flex', flexDirection: 'column' }}>
-            <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-strong)' }}>PumpOS Setup</span>
-            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Let's bring your station online</span>
+            <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-strong)' }}>
+              PumpOS Setup
+            </span>
+            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+              Let's bring your station online
+            </span>
           </div>
           {onExit && (
-            <Button type="button" variant="secondary" size="sm" onClick={() => onExit()}>Back to dashboard</Button>
+            <Button type="button" variant="secondary" size="sm" onClick={() => onExit()}>
+              Back to dashboard
+            </Button>
           )}
         </header>
 
-        <main style={{ flex: 1, overflowY: 'auto', padding: '24px', display: 'flex', justifyContent: 'center' }}>
-          <div style={{ width: '100%', maxWidth: '760px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        <main
+          style={{
+            flex: 1,
+            overflowY: 'auto',
+            padding: '24px',
+            display: 'flex',
+            justifyContent: 'center',
+          }}
+        >
+          <div
+            style={{
+              width: '100%',
+              maxWidth: '760px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '20px',
+            }}
+          >
             <div>
-              <h1 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--text-strong)', margin: 0 }}>Let's set up your station</h1>
-              <p style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.6, marginTop: '6px' }}>
-                PumpOS is built around your station's real infrastructure. Have these details handy so setup is
-                quick and accurate — it usually takes about 5–7 minutes.
+              <h1
+                style={{
+                  fontSize: '20px',
+                  fontWeight: 700,
+                  color: 'var(--text-strong)',
+                  margin: 0,
+                }}
+              >
+                Let's set up your station
+              </h1>
+              <p
+                style={{
+                  fontSize: '13px',
+                  color: 'var(--text-muted)',
+                  lineHeight: 1.6,
+                  marginTop: '6px',
+                }}
+              >
+                PumpOS is built around your station's real infrastructure. Have these details handy
+                so setup is quick and accurate — it usually takes about 5–7 minutes.
               </p>
             </div>
 
             <div style={panelStyle}>
-              <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-strong)' }}>What to have ready</span>
-              <ul style={{ display: 'flex', flexDirection: 'column', gap: '12px', margin: 0, padding: 0, listStyle: 'none' }}>
+              <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-strong)' }}>
+                What to have ready
+              </span>
+              <ul
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '12px',
+                  margin: 0,
+                  padding: 0,
+                  listStyle: 'none',
+                }}
+              >
                 {prepItems.map((item, i) => (
-                  <li key={item.t} style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                  <li
+                    key={item.t}
+                    style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}
+                  >
                     <span
                       aria-hidden="true"
                       style={{
-                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                        width: '22px', height: '22px', borderRadius: '999px', fontSize: '11px', fontWeight: 700,
-                        backgroundColor: 'var(--bg-surface-alt)', color: 'var(--text-muted)', border: '1px solid var(--border-strong)',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                        width: '22px',
+                        height: '22px',
+                        borderRadius: '999px',
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        backgroundColor: 'var(--bg-surface-alt)',
+                        color: 'var(--text-muted)',
+                        border: '1px solid var(--border-strong)',
                       }}
                     >
                       {i + 1}
                     </span>
-                    <span style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: '1px' }}>
-                      <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-strong)' }}>{item.t}</span>
-                      <span style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.45 }}>{item.d}</span>
+                    <span
+                      style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: '1px' }}
+                    >
+                      <span
+                        style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-strong)' }}
+                      >
+                        {item.t}
+                      </span>
+                      <span
+                        style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.45 }}
+                      >
+                        {item.d}
+                      </span>
                     </span>
                   </li>
                 ))}
               </ul>
             </div>
 
-            <div style={{
-              padding: '14px 16px', borderRadius: 'var(--radius-card)', border: '1px solid var(--border-soft)',
-              backgroundColor: 'var(--bg-surface-alt)', fontSize: '12.5px', color: 'var(--text-muted)', lineHeight: 1.55,
-            }}>
-              <span style={{ fontWeight: 600, color: 'var(--text-strong)' }}>Set the infrastructure carefully. </span>
-              Your tanks, dispensers and nozzles are linked and drive every sale, so getting them right now saves
-              rework — editing them later ripples across the system. Details like payment terminals are easy to
-              change anytime.
+            <div
+              style={{
+                padding: '14px 16px',
+                borderRadius: 'var(--radius-card)',
+                border: '1px solid var(--border-soft)',
+                backgroundColor: 'var(--bg-surface-alt)',
+                fontSize: '12.5px',
+                color: 'var(--text-muted)',
+                lineHeight: 1.55,
+              }}
+            >
+              <span style={{ fontWeight: 600, color: 'var(--text-strong)' }}>
+                Set the infrastructure carefully.{' '}
+              </span>
+              Your tanks, dispensers and nozzles are linked and drive every sale, so getting them
+              right now saves rework — editing them later ripples across the system. Details like
+              payment terminals are easy to change anytime.
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: 'var(--text-muted)' }}>
-              <Chip tone="neutral" size="xs">Saved automatically</Chip>
-              <span>Your progress is saved as you go — you can leave and pick up where you left off.</span>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                fontSize: '12px',
+                color: 'var(--text-muted)',
+              }}
+            >
+              <Chip tone="neutral" size="xs">
+                Saved automatically
+              </Chip>
+              <span>
+                Your progress is saved as you go — you can leave and pick up where you left off.
+              </span>
             </div>
           </div>
         </main>
 
-        <footer style={{
-          height: '72px', backgroundColor: 'var(--bg-surface)', borderTop: '1px solid var(--border-soft)',
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 24px', flexShrink: 0,
-        }}>
+        <footer
+          style={{
+            height: '72px',
+            backgroundColor: 'var(--bg-surface)',
+            borderTop: '1px solid var(--border-soft)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '0 24px',
+            flexShrink: 0,
+          }}
+        >
           {onExit ? (
-            <Button type="button" variant="secondary" size="sm" onClick={() => onExit()}>Back to dashboard</Button>
-          ) : <span />}
-          <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>~5–7 minutes · editable later</div>
-          <Button type="button" variant="primary" size="md" onClick={() => setShowIntro(false)}>Start setup</Button>
+            <Button type="button" variant="secondary" size="sm" onClick={() => onExit()}>
+              Back to dashboard
+            </Button>
+          ) : (
+            <span />
+          )}
+          <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+            ~5–7 minutes · editable later
+          </div>
+          <Button type="button" variant="primary" size="md" onClick={() => setShowIntro(false)}>
+            Start setup
+          </Button>
         </footer>
       </div>
     );
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', backgroundColor: 'var(--bg-canvas)', overflow: 'hidden' }}>
-      <header style={{
-        height: '68px',
-        backgroundColor: 'var(--bg-surface)',
-        borderBottom: '1px solid var(--border-soft)',
+    <div
+      style={{
         display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: '0 24px',
-        gap: '16px',
-        flexShrink: 0,
-        position: 'relative',
-      }}>
+        flexDirection: 'column',
+        height: '100vh',
+        backgroundColor: 'var(--bg-canvas)',
+        overflow: 'hidden',
+      }}
+    >
+      <header
+        style={{
+          height: '68px',
+          backgroundColor: 'var(--bg-surface)',
+          borderBottom: '1px solid var(--border-soft)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '0 24px',
+          gap: '16px',
+          flexShrink: 0,
+          position: 'relative',
+        }}
+      >
         <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-strong)' }}>PumpOS Setup</span>
+          <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-strong)' }}>
+            PumpOS Setup
+          </span>
           <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
             Setting up your station · saved automatically as you go
           </span>
@@ -804,11 +1002,12 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                   width: '8px',
                   height: '8px',
                   borderRadius: '50%',
-                  backgroundColor: currentStep === s.num
-                    ? 'var(--brand-primary)'
-                    : currentStep > s.num
-                      ? 'var(--state-success-fg)'
-                      : 'var(--border-strong)',
+                  backgroundColor:
+                    currentStep === s.num
+                      ? 'var(--brand-primary)'
+                      : currentStep > s.num
+                        ? 'var(--state-success-fg)'
+                        : 'var(--border-strong)',
                   cursor: s.num <= currentStep ? 'pointer' : 'default',
                   transition: 'background-color 200ms ease',
                 }}
@@ -819,47 +1018,66 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <Chip tone="neutral" size="xs">Draft saved</Chip>
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            onClick={discardDraft}
-          >
+          <Chip tone="neutral" size="xs">
+            Draft saved
+          </Chip>
+          <Button type="button" variant="secondary" size="sm" onClick={discardDraft}>
             Discard Draft
           </Button>
         </div>
 
         {/* Global Progress Bar */}
-        <div style={{
-          position: 'absolute',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          height: '2.5px',
-          backgroundColor: 'var(--border-soft)',
-        }}>
-          <div style={{
-            height: '100%',
-            width: `${(currentStep / steps.length) * 100}%`,
-            backgroundColor: 'var(--brand-primary)',
-            transition: 'width 250ms ease-out',
-          }} />
+        <div
+          style={{
+            position: 'absolute',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            height: '2.5px',
+            backgroundColor: 'var(--border-soft)',
+          }}
+        >
+          <div
+            style={{
+              height: '100%',
+              width: `${(currentStep / steps.length) * 100}%`,
+              backgroundColor: 'var(--brand-primary)',
+              transition: 'width 250ms ease-out',
+            }}
+          />
         </div>
       </header>
 
-      <main style={{ flex: 1, overflowY: 'auto', padding: '24px', display: 'flex', justifyContent: 'center' }}>
-        <div style={{ width: '100%', maxWidth: '1120px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      <main
+        style={{
+          flex: 1,
+          overflowY: 'auto',
+          padding: '24px',
+          display: 'flex',
+          justifyContent: 'center',
+        }}
+      >
+        <div
+          style={{
+            width: '100%',
+            maxWidth: '1120px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '20px',
+          }}
+        >
           {errorMsg && (
-            <div style={{
-              backgroundColor: 'var(--state-danger-bg)',
-              color: 'var(--state-danger-fg)',
-              border: '1px solid rgba(159, 63, 54, 0.15)',
-              borderRadius: 'var(--radius-card)',
-              padding: '12px 16px',
-              fontSize: '13px',
-              fontWeight: 500,
-            }}>
+            <div
+              style={{
+                backgroundColor: 'var(--state-danger-bg)',
+                color: 'var(--state-danger-fg)',
+                border: '1px solid rgba(159, 63, 54, 0.15)',
+                borderRadius: 'var(--radius-card)',
+                padding: '12px 16px',
+                fontSize: '13px',
+                fontWeight: 500,
+              }}
+            >
               {errorMsg}
             </div>
           )}
@@ -903,7 +1121,9 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
             <Step4Tanks
               draft={draft}
               handleQuickAddTank={handleQuickAddTank}
-              onAddTank={() => setTankDrawer(cloneTankDraft(null, draft.products[0]?.draftId || ''))}
+              onAddTank={() =>
+                setTankDrawer(cloneTankDraft(null, draft.products[0]?.draftId || ''))
+              }
               onEditTank={(t) => setTankDrawer(cloneTankDraft(t))}
               onRemoveTank={removeTank}
               panelStyle={panelStyle}
@@ -966,16 +1186,18 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
         </div>
       </main>
 
-      <footer style={{
-        height: '72px',
-        backgroundColor: 'var(--bg-surface)',
-        borderTop: '1px solid var(--border-soft)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: '0 24px',
-        flexShrink: 0,
-      }}>
+      <footer
+        style={{
+          height: '72px',
+          backgroundColor: 'var(--bg-surface)',
+          borderTop: '1px solid var(--border-soft)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '0 24px',
+          flexShrink: 0,
+        }}
+      >
         <Button
           type="button"
           variant="secondary"
@@ -1010,11 +1232,16 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
       >
         {fuelDrawer && (
           <form
-            onSubmit={(e) => { e.preventDefault(); saveFuel(); }}
+            onSubmit={(e) => {
+              e.preventDefault();
+              saveFuel();
+            }}
             style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
           >
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Fuel Name *</label>
+              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
+                Fuel Name *
+              </label>
               <input
                 type="text"
                 value={fuelDrawer.name}
@@ -1027,14 +1254,16 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                   border: '1px solid var(--border-strong)',
                   fontSize: '13px',
                   backgroundColor: 'var(--bg-surface)',
-                  color: 'var(--text-strong)'
+                  color: 'var(--text-strong)',
                 }}
                 required
               />
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Fuel Code *</label>
+              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
+                Fuel Code *
+              </label>
               <input
                 type="text"
                 value={fuelDrawer.code}
@@ -1043,7 +1272,11 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                   // Gaseous fuels are metered/sold by mass (kg), not volume. Nudge
                   // the unit to kg for CNG/LPG-type codes while it's still the L default.
                   const isGas = /^(CNG|LPG|AUTOLPG|LNG|CBG)$/.test(code);
-                  setFuelDrawer({ ...fuelDrawer, code, unit: isGas && !/^kg$/i.test(fuelDrawer.unit) ? 'kg' : fuelDrawer.unit });
+                  setFuelDrawer({
+                    ...fuelDrawer,
+                    code,
+                    unit: isGas && !/^kg$/i.test(fuelDrawer.unit) ? 'kg' : fuelDrawer.unit,
+                  });
                 }}
                 placeholder="e.g. MS"
                 style={{
@@ -1053,14 +1286,16 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                   border: '1px solid var(--border-strong)',
                   fontSize: '13px',
                   backgroundColor: 'var(--bg-surface)',
-                  color: 'var(--text-strong)'
+                  color: 'var(--text-strong)',
                 }}
                 required
               />
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Sales Unit *</label>
+              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
+                Sales Unit *
+              </label>
               <select
                 value={/^kg$/i.test(fuelDrawer.unit) ? 'kg' : 'L'}
                 onChange={(e) => setFuelDrawer({ ...fuelDrawer, unit: e.target.value })}
@@ -1071,17 +1306,18 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                   border: '1px solid var(--border-strong)',
                   fontSize: '13px',
                   backgroundColor: 'var(--bg-surface)',
-                  color: 'var(--text-strong)'
+                  color: 'var(--text-strong)',
                 }}
                 required
               >
                 <option value="L">Liters (L) — Petrol / Diesel / Ethanol</option>
                 <option value="kg">Kilograms (kg) — CNG / Auto-LPG</option>
               </select>
-              <span style={{ fontSize: '10px', color: 'var(--text-faint)' }}>Gaseous fuels (CNG, Auto-LPG) are metered by weight, so tank stock and readings for this fuel are tracked in kg.</span>
+              <span style={{ fontSize: '10px', color: 'var(--text-faint)' }}>
+                Gaseous fuels (CNG, Auto-LPG) are metered by weight, so tank stock and readings for
+                this fuel are tracked in kg.
+              </span>
             </div>
-
-
 
             <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
               <button
@@ -1122,18 +1358,19 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
         )}
       </Drawer>
 
-      <Drawer
-        isOpen={!!tankDrawer}
-        onClose={() => setTankDrawer(null)}
-        title="Tank Configuration"
-      >
+      <Drawer isOpen={!!tankDrawer} onClose={() => setTankDrawer(null)} title="Tank Configuration">
         {tankDrawer && (
           <form
-            onSubmit={(e) => { e.preventDefault(); saveTank(); }}
+            onSubmit={(e) => {
+              e.preventDefault();
+              saveTank();
+            }}
             style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
           >
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Tank Identifier *</label>
+              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
+                Tank Identifier *
+              </label>
               <input
                 type="text"
                 value={tankDrawer.name}
@@ -1146,14 +1383,16 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                   border: '1px solid var(--border-strong)',
                   fontSize: '13px',
                   backgroundColor: 'var(--bg-surface)',
-                  color: 'var(--text-strong)'
+                  color: 'var(--text-strong)',
                 }}
                 required
               />
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Linked Fuel Product *</label>
+              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
+                Linked Fuel Product *
+              </label>
               <select
                 value={tankDrawer.productDraftId}
                 onChange={(e) => setTankDrawer({ ...tankDrawer, productDraftId: e.target.value })}
@@ -1164,7 +1403,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                   border: '1px solid var(--border-strong)',
                   fontSize: '13px',
                   backgroundColor: 'var(--bg-surface)',
-                  color: 'var(--text-strong)'
+                  color: 'var(--text-strong)',
                 }}
                 required
               >
@@ -1178,13 +1417,19 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Capacity ({draft.products.find((p) => p.draftId === tankDrawer.productDraftId)?.unit || 'L'}) *</label>
+              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
+                Capacity (
+                {draft.products.find((p) => p.draftId === tankDrawer.productDraftId)?.unit || 'L'})
+                *
+              </label>
               <input
                 type="number"
                 min={0}
                 step="0.1"
                 value={tankDrawer.capacity || ''}
-                onChange={(e) => setTankDrawer({ ...tankDrawer, capacity: Number(e.target.value) || 0 })}
+                onChange={(e) =>
+                  setTankDrawer({ ...tankDrawer, capacity: Number(e.target.value) || 0 })
+                }
                 placeholder="e.g. 20000"
                 style={{
                   height: '32px',
@@ -1193,7 +1438,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                   border: '1px solid var(--border-strong)',
                   fontSize: '13px',
                   backgroundColor: 'var(--bg-surface)',
-                  color: 'var(--text-strong)'
+                  color: 'var(--text-strong)',
                 }}
                 required
               />
@@ -1245,15 +1490,22 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
       >
         {shiftTemplateDrawer && (
           <form
-            onSubmit={(e) => { e.preventDefault(); saveShiftTemplate(); }}
+            onSubmit={(e) => {
+              e.preventDefault();
+              saveShiftTemplate();
+            }}
             style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
           >
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Template Name *</label>
+              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
+                Template Name *
+              </label>
               <input
                 type="text"
                 value={shiftTemplateDrawer.name}
-                onChange={(e) => setShiftTemplateDrawer({ ...shiftTemplateDrawer, name: e.target.value })}
+                onChange={(e) =>
+                  setShiftTemplateDrawer({ ...shiftTemplateDrawer, name: e.target.value })
+                }
                 placeholder="e.g. Morning Shift"
                 style={{
                   height: '32px',
@@ -1262,7 +1514,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                   border: '1px solid var(--border-strong)',
                   fontSize: '13px',
                   backgroundColor: 'var(--bg-surface)',
-                  color: 'var(--text-strong)'
+                  color: 'var(--text-strong)',
                 }}
                 required
               />
@@ -1270,11 +1522,15 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Start Time *</label>
+                <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
+                  Start Time *
+                </label>
                 <input
                   type="time"
                   value={shiftTemplateDrawer.startTime}
-                  onChange={(e) => setShiftTemplateDrawer({ ...shiftTemplateDrawer, startTime: e.target.value })}
+                  onChange={(e) =>
+                    setShiftTemplateDrawer({ ...shiftTemplateDrawer, startTime: e.target.value })
+                  }
                   style={{
                     height: '32px',
                     padding: '0 8px',
@@ -1282,17 +1538,21 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                     border: '1px solid var(--border-strong)',
                     fontSize: '13px',
                     backgroundColor: 'var(--bg-surface)',
-                    color: 'var(--text-strong)'
+                    color: 'var(--text-strong)',
                   }}
                   required
                 />
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>End Time *</label>
+                <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
+                  End Time *
+                </label>
                 <input
                   type="time"
                   value={shiftTemplateDrawer.endTime}
-                  onChange={(e) => setShiftTemplateDrawer({ ...shiftTemplateDrawer, endTime: e.target.value })}
+                  onChange={(e) =>
+                    setShiftTemplateDrawer({ ...shiftTemplateDrawer, endTime: e.target.value })
+                  }
                   style={{
                     height: '32px',
                     padding: '0 8px',
@@ -1300,7 +1560,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                     border: '1px solid var(--border-strong)',
                     fontSize: '13px',
                     backgroundColor: 'var(--bg-surface)',
-                    color: 'var(--text-strong)'
+                    color: 'var(--text-strong)',
                   }}
                   required
                 />
@@ -1353,15 +1613,25 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
       >
         {dispenserDrawer && (
           <form
-            onSubmit={(e) => { e.preventDefault(); saveDispenser(); }}
+            onSubmit={(e) => {
+              e.preventDefault();
+              saveDispenser();
+            }}
             style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
           >
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Dispenser Name *</label>
+              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
+                Dispenser Name *
+              </label>
               <input
                 type="text"
                 value={dispenserDrawer.dispenser.name}
-                onChange={(e) => setDispenserDrawer({ ...dispenserDrawer, dispenser: { ...dispenserDrawer.dispenser, name: e.target.value } })}
+                onChange={(e) =>
+                  setDispenserDrawer({
+                    ...dispenserDrawer,
+                    dispenser: { ...dispenserDrawer.dispenser, name: e.target.value },
+                  })
+                }
                 placeholder="e.g. Dispenser 1"
                 style={{
                   height: '32px',
@@ -1370,18 +1640,25 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                   border: '1px solid var(--border-strong)',
                   fontSize: '13px',
                   backgroundColor: 'var(--bg-surface)',
-                  color: 'var(--text-strong)'
+                  color: 'var(--text-strong)',
                 }}
                 required
               />
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Code / Reference ID *</label>
+              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
+                Code / Reference ID *
+              </label>
               <input
                 type="text"
                 value={dispenserDrawer.dispenser.code}
-                onChange={(e) => setDispenserDrawer({ ...dispenserDrawer, dispenser: { ...dispenserDrawer.dispenser, code: e.target.value.toUpperCase() } })}
+                onChange={(e) =>
+                  setDispenserDrawer({
+                    ...dispenserDrawer,
+                    dispenser: { ...dispenserDrawer.dispenser, code: e.target.value.toUpperCase() },
+                  })
+                }
                 placeholder="e.g. DU-01"
                 style={{
                   height: '32px',
@@ -1390,22 +1667,39 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                   border: '1px solid var(--border-strong)',
                   fontSize: '13px',
                   backgroundColor: 'var(--bg-surface)',
-                  color: 'var(--text-strong)'
+                  color: 'var(--text-strong)',
                 }}
                 required
               />
             </div>
 
-            <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div
+              style={{
+                borderTop: '1px solid var(--border-soft)',
+                paddingTop: '16px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px',
+              }}
+            >
+              <div
+                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+              >
                 <div>
-                  <h4 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-strong)' }}>Nozzle Mappings</h4>
-                  <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>Map each nozzle to a storage tank and fuel type.</p>
+                  <h4 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-strong)' }}>
+                    Nozzle Mappings
+                  </h4>
+                  <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                    Map each nozzle to a storage tank and fuel type.
+                  </p>
                 </div>
                 <div style={{ display: 'flex', gap: '6px' }}>
                   <button
                     type="button"
                     style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px',
                       height: '26px',
                       padding: '0 8px',
                       backgroundColor: 'var(--bg-surface)',
@@ -1414,13 +1708,16 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                       borderRadius: 'var(--radius-button)',
                       fontSize: '11px',
                       fontWeight: 600,
-                      cursor: 'pointer'
+                      cursor: 'pointer',
                     }}
                     onClick={() => {
-                      const otherNozzlesCount = draft.nozzles.filter((n) => n.dispenserDraftId !== dispenserDrawer.dispenser.draftId).length;
+                      const otherNozzlesCount = draft.nozzles.filter(
+                        (n) => n.dispenserDraftId !== dispenserDrawer.dispenser.draftId,
+                      ).length;
                       const nextNum = otherNozzlesCount + dispenserDrawer.nozzles.length + 1;
                       const firstTank = draft.tanks[0];
-                      const defaultFuelId = firstTank?.productDraftId || draft.products[0]?.draftId || '';
+                      const defaultFuelId =
+                        firstTank?.productDraftId || draft.products[0]?.draftId || '';
                       const defaultTankId = firstTank?.draftId || '';
                       setDispenserDrawer({
                         ...dispenserDrawer,
@@ -1436,19 +1733,31 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                       });
                     }}
                   >
-                    + Nozzle
+                    <Icon name="plus" size="xs" />
+                    <span>Nozzle</span>
                   </button>
                 </div>
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 {dispenserDrawer.nozzles.length === 0 ? (
-                  <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px', border: '1px dashed var(--border-soft)', borderRadius: 'var(--radius-card)' }}>
+                  <div
+                    style={{
+                      padding: '20px',
+                      textAlign: 'center',
+                      color: 'var(--text-muted)',
+                      fontSize: '12px',
+                      border: '1px dashed var(--border-soft)',
+                      borderRadius: 'var(--radius-card)',
+                    }}
+                  >
                     No nozzles configured for this dispenser yet.
                   </div>
                 ) : (
                   dispenserDrawer.nozzles.map((nozzle, index) => {
-                    const filteredTanks = draft.tanks.filter(t => t.productDraftId === nozzle.productDraftId);
+                    const filteredTanks = draft.tanks.filter(
+                      (t) => t.productDraftId === nozzle.productDraftId,
+                    );
                     return (
                       <div
                         key={nozzle.draftId}
@@ -1459,24 +1768,42 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                           backgroundColor: 'var(--bg-surface-alt)',
                           display: 'flex',
                           flexDirection: 'column',
-                          gap: '8px'
+                          gap: '8px',
                         }}
                       >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)' }}>Nozzle #{index + 1}</span>
+                        <div
+                          style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                          }}
+                        >
+                          <span
+                            style={{
+                              fontSize: '11px',
+                              fontWeight: 700,
+                              color: 'var(--text-muted)',
+                            }}
+                          >
+                            Nozzle #{index + 1}
+                          </span>
                           <button
                             type="button"
-                            onClick={() => setDispenserDrawer({
-                              ...dispenserDrawer,
-                              nozzles: dispenserDrawer.nozzles.filter((item) => item.draftId !== nozzle.draftId),
-                            })}
+                            onClick={() =>
+                              setDispenserDrawer({
+                                ...dispenserDrawer,
+                                nozzles: dispenserDrawer.nozzles.filter(
+                                  (item) => item.draftId !== nozzle.draftId,
+                                ),
+                              })
+                            }
                             style={{
                               border: 'none',
                               background: 'none',
                               color: 'var(--state-danger-fg)',
                               cursor: 'pointer',
                               fontSize: '11px',
-                              fontWeight: 600
+                              fontWeight: 600,
                             }}
                           >
                             Remove
@@ -1485,14 +1812,22 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
 
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '8px' }}>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                            <label style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Name</label>
+                            <label style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                              Name
+                            </label>
                             <input
                               type="text"
                               value={nozzle.name}
-                              onChange={(e) => setDispenserDrawer({
-                                ...dispenserDrawer,
-                                nozzles: dispenserDrawer.nozzles.map((item) => item.draftId === nozzle.draftId ? { ...item, name: e.target.value } : item),
-                              })}
+                              onChange={(e) =>
+                                setDispenserDrawer({
+                                  ...dispenserDrawer,
+                                  nozzles: dispenserDrawer.nozzles.map((item) =>
+                                    item.draftId === nozzle.draftId
+                                      ? { ...item, name: e.target.value }
+                                      : item,
+                                  ),
+                                })
+                              }
                               style={{
                                 height: '28px',
                                 padding: '0 8px',
@@ -1500,27 +1835,37 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                                 border: '1px solid var(--border-strong)',
                                 fontSize: '12px',
                                 backgroundColor: 'var(--bg-surface)',
-                                color: 'var(--text-strong)'
+                                color: 'var(--text-strong)',
                               }}
                               required
                             />
                           </div>
                         </div>
 
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                        <div
+                          style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}
+                        >
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                            <label style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Fuel</label>
+                            <label style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                              Fuel
+                            </label>
                             <select
                               value={nozzle.productDraftId}
                               onChange={(e) => {
                                 const nextFuelId = e.target.value;
-                                const firstMatchedTank = draft.tanks.find(t => t.productDraftId === nextFuelId);
+                                const firstMatchedTank = draft.tanks.find(
+                                  (t) => t.productDraftId === nextFuelId,
+                                );
                                 setDispenserDrawer({
                                   ...dispenserDrawer,
                                   nozzles: dispenserDrawer.nozzles.map((item) =>
                                     item.draftId === nozzle.draftId
-                                      ? { ...item, productDraftId: nextFuelId, tankDraftId: firstMatchedTank?.draftId || '' }
-                                      : item
+                                      ? {
+                                          ...item,
+                                          productDraftId: nextFuelId,
+                                          tankDraftId: firstMatchedTank?.draftId || '',
+                                        }
+                                      : item,
                                   ),
                                 });
                               }}
@@ -1531,24 +1876,34 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                                 border: '1px solid var(--border-strong)',
                                 fontSize: '12px',
                                 backgroundColor: 'var(--bg-surface)',
-                                color: 'var(--text-strong)'
+                                color: 'var(--text-strong)',
                               }}
                               required
                             >
                               <option value="">Select fuel</option>
-                              {draft.products.map(p => (
-                                <option key={p.draftId} value={p.draftId}>{p.name}</option>
+                              {draft.products.map((p) => (
+                                <option key={p.draftId} value={p.draftId}>
+                                  {p.name}
+                                </option>
                               ))}
                             </select>
                           </div>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                            <label style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Tank</label>
+                            <label style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                              Tank
+                            </label>
                             <select
                               value={nozzle.tankDraftId}
-                              onChange={(e) => setDispenserDrawer({
-                                ...dispenserDrawer,
-                                nozzles: dispenserDrawer.nozzles.map((item) => item.draftId === nozzle.draftId ? { ...item, tankDraftId: e.target.value } : item),
-                              })}
+                              onChange={(e) =>
+                                setDispenserDrawer({
+                                  ...dispenserDrawer,
+                                  nozzles: dispenserDrawer.nozzles.map((item) =>
+                                    item.draftId === nozzle.draftId
+                                      ? { ...item, tankDraftId: e.target.value }
+                                      : item,
+                                  ),
+                                })
+                              }
                               style={{
                                 height: '28px',
                                 padding: '0 4px',
@@ -1556,13 +1911,15 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                                 border: '1px solid var(--border-strong)',
                                 fontSize: '12px',
                                 backgroundColor: 'var(--bg-surface)',
-                                color: 'var(--text-strong)'
+                                color: 'var(--text-strong)',
                               }}
                               required
                             >
                               <option value="">Select tank</option>
-                              {filteredTanks.map(t => (
-                                <option key={t.draftId} value={t.draftId}>{t.name}</option>
+                              {filteredTanks.map((t) => (
+                                <option key={t.draftId} value={t.draftId}>
+                                  {t.name}
+                                </option>
                               ))}
                             </select>
                           </div>
@@ -1615,38 +1972,85 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
 
       {/* Provisioning overlay modal */}
       {provisioning.isOpen && (
-        <div style={{
-          position: 'fixed',
-          inset: 0,
-          backgroundColor: 'rgba(15, 23, 42, 0.25)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 9999,
-          padding: '24px',
-        }}>
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(15, 23, 42, 0.25)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999,
+            padding: '24px',
+          }}
+        >
           {provisioning.completed && !provisioning.failedMessage ? (
-            <div style={{
-              width: '100%',
-              maxWidth: '520px',
-              backgroundColor: 'var(--bg-surface)',
-              borderRadius: 'var(--radius-card)',
-              border: '1px solid var(--border-soft)',
-              boxShadow: '0 20px 48px rgba(15, 23, 42, 0.15)',
-              padding: '28px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '18px',
-            }} className="animate-fade-in">
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', textAlign: 'center' }}>
-                <div style={{ width: '48px', height: '48px', borderRadius: '999px', backgroundColor: 'var(--state-success-bg)', color: 'var(--state-success-fg)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div
+              style={{
+                width: '100%',
+                maxWidth: '520px',
+                backgroundColor: 'var(--bg-surface)',
+                borderRadius: 'var(--radius-card)',
+                border: '1px solid var(--border-soft)',
+                boxShadow: '0 20px 48px rgba(15, 23, 42, 0.15)',
+                padding: '28px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '18px',
+              }}
+              className="animate-fade-in"
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '10px',
+                  textAlign: 'center',
+                }}
+              >
+                <div
+                  style={{
+                    width: '48px',
+                    height: '48px',
+                    borderRadius: '999px',
+                    backgroundColor: 'var(--state-success-bg)',
+                    color: 'var(--state-success-fg)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
                   <Check size={26} />
                 </div>
-                <h3 style={{ fontSize: '19px', fontWeight: 700, color: 'var(--text-strong)', margin: 0 }}>Your station is live</h3>
-                <p style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.5, margin: 0 }}>
-                  {provisionedStation?.name
-                    ? <><strong style={{ color: 'var(--text-strong)' }}>{provisionedStation.name}</strong> is set up and ready for operations.</>
-                    : 'Your station is set up and ready for operations.'}
+                <h3
+                  style={{
+                    fontSize: '19px',
+                    fontWeight: 700,
+                    color: 'var(--text-strong)',
+                    margin: 0,
+                  }}
+                >
+                  Your station is live
+                </h3>
+                <p
+                  style={{
+                    fontSize: '13px',
+                    color: 'var(--text-muted)',
+                    lineHeight: 1.5,
+                    margin: 0,
+                  }}
+                >
+                  {provisionedStation?.name ? (
+                    <>
+                      <strong style={{ color: 'var(--text-strong)' }}>
+                        {provisionedStation.name}
+                      </strong>{' '}
+                      is set up and ready for operations.
+                    </>
+                  ) : (
+                    'Your station is set up and ready for operations.'
+                  )}
                 </p>
               </div>
 
@@ -1659,14 +2063,39 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                   { label: 'Shift templates', value: draft.shiftTemplates.length },
                   { label: 'Terminals', value: draft.paymentTerminals?.length ?? 0 },
                 ].map((t) => (
-                  <div key={t.label} style={{ backgroundColor: 'var(--bg-surface-alt)', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-card)', padding: '12px', textAlign: 'center' }}>
-                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: '18px', fontWeight: 700, color: 'var(--text-strong)' }}>{t.value}</div>
+                  <div
+                    key={t.label}
+                    style={{
+                      backgroundColor: 'var(--bg-surface-alt)',
+                      border: '1px solid var(--border-soft)',
+                      borderRadius: 'var(--radius-card)',
+                      padding: '12px',
+                      textAlign: 'center',
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: '18px',
+                        fontWeight: 700,
+                        color: 'var(--text-strong)',
+                      }}
+                    >
+                      {t.value}
+                    </div>
                     <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{t.label}</div>
                   </div>
                 ))}
               </div>
 
-              <p style={{ fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center', margin: 0 }}>
+              <p
+                style={{
+                  fontSize: '12px',
+                  color: 'var(--text-muted)',
+                  textAlign: 'center',
+                  margin: 0,
+                }}
+              >
                 You can fine-tune fuels, pricing and infrastructure anytime from Station Overview.
               </p>
 
@@ -1674,149 +2103,218 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                 type="button"
                 variant="primary"
                 size="md"
-                onClick={() => { if (provisionedStation) onOnboardingComplete(provisionedStation); }}
+                onClick={() => {
+                  if (provisionedStation)
+                    runTask(
+                      onOnboardingComplete(provisionedStation),
+                      'Could not open the dashboard.',
+                    );
+                }}
               >
                 Go to dashboard
               </Button>
             </div>
           ) : (
-          <div style={{
-            width: '100%',
-            maxWidth: '520px',
-            backgroundColor: 'var(--bg-surface)',
-            borderRadius: 'var(--radius-card)',
-            border: '1px solid var(--border-soft)',
-            boxShadow: '0 20px 48px rgba(15, 23, 42, 0.15)',
-            padding: '24px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '18px',
-          }}>
-            <div>
-              <h3 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-strong)' }}>
-                {provisioning.completed ? 'Station Provisioned' : 'Provisioning Station'}
-              </h3>
-              <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px' }}>
-                {provisioning.failedMessage
-                  ? 'The draft is still safe locally. Fix the issue and try again.'
-                  : 'Applying the full onboarding draft in one backend workflow.'}
-              </p>
-            </div>
+            <div
+              style={{
+                width: '100%',
+                maxWidth: '520px',
+                backgroundColor: 'var(--bg-surface)',
+                borderRadius: 'var(--radius-card)',
+                border: '1px solid var(--border-soft)',
+                boxShadow: '0 20px 48px rgba(15, 23, 42, 0.15)',
+                padding: '24px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '18px',
+              }}
+            >
+              <div>
+                <h3 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-strong)' }}>
+                  {provisioning.completed ? 'Station Provisioned' : 'Provisioning Station'}
+                </h3>
+                <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                  {provisioning.failedMessage
+                    ? 'The draft is still safe locally. Fix the issue and try again.'
+                    : 'Applying the full onboarding draft in one backend workflow.'}
+                </p>
+              </div>
 
-            <div style={{ height: '8px', backgroundColor: 'var(--bg-surface-alt)', borderRadius: '999px', overflow: 'hidden' }}>
               <div
                 style={{
-                  height: '100%',
-                  width: provisioning.failedMessage
-                    ? '100%'
-                    : `${((provisioning.stageIndex + (provisioning.completed ? 1 : 0)) / provisioningStages.length) * 100}%`,
-                  backgroundColor: provisioning.failedMessage ? 'var(--brand-danger)' : 'var(--brand-primary)',
-                  transition: 'width 200ms ease',
+                  height: '8px',
+                  backgroundColor: 'var(--bg-surface-alt)',
+                  borderRadius: '999px',
+                  overflow: 'hidden',
                 }}
-              />
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {provisioningStages.map((stage, index) => {
-                const isActive = provisioning.stageIndex === index && !provisioning.failedMessage && !provisioning.completed;
-                const isCompleted = provisioning.completed || (!provisioning.failedMessage && provisioning.stageIndex > index);
-                const isFailed = provisioning.failedStage === stage;
-
-                return (
-                  <div key={stage} style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    padding: '10px 12px',
-                    borderRadius: 'var(--radius-card)',
-                    backgroundColor: isActive ? 'var(--bg-surface-alt)' : 'transparent',
-                    border: `1px solid ${isActive ? 'var(--border-strong)' : 'transparent'}`,
-                  }}>
-                    <span style={{ fontSize: '13px', color: 'var(--text-default)', fontWeight: isActive ? 600 : 500 }}>{stage}</span>
-                    {isFailed ? (
-                      <Chip tone="danger" size="sm">Failed</Chip>
-                    ) : isCompleted ? (
-                      <Chip tone="success" size="sm">Done</Chip>
-                    ) : isActive ? (
-                      <Chip tone="info" size="sm">Running</Chip>
-                    ) : (
-                      <Chip tone="neutral" size="sm">Queued</Chip>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-
-            {provisioning.failedMessage && (
-              <div style={{
-                backgroundColor: 'var(--state-danger-bg)',
-                color: 'var(--state-danger-fg)',
-                borderRadius: 'var(--radius-card)',
-                border: '1px solid rgba(159, 63, 54, 0.15)',
-                padding: '12px 14px',
-                fontSize: '12px',
-              }}>
-                {provisioning.failedMessage}
+              >
+                <div
+                  style={{
+                    height: '100%',
+                    width: provisioning.failedMessage
+                      ? '100%'
+                      : `${((provisioning.stageIndex + (provisioning.completed ? 1 : 0)) / provisioningStages.length) * 100}%`,
+                    backgroundColor: provisioning.failedMessage
+                      ? 'var(--brand-danger)'
+                      : 'var(--brand-primary)',
+                    transition: 'width 200ms ease',
+                  }}
+                />
               </div>
-            )}
 
-            {(provisioning.failedMessage || provisioning.completed) && (
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-                {provisioning.failedMessage && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {provisioningStages.map((stage, index) => {
+                  const isActive =
+                    provisioning.stageIndex === index &&
+                    !provisioning.failedMessage &&
+                    !provisioning.completed;
+                  const isCompleted =
+                    provisioning.completed ||
+                    (!provisioning.failedMessage && provisioning.stageIndex > index);
+                  const isFailed = provisioning.failedStage === stage;
+
+                  return (
+                    <div
+                      key={stage}
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        padding: '10px 12px',
+                        borderRadius: 'var(--radius-card)',
+                        backgroundColor: isActive ? 'var(--bg-surface-alt)' : 'transparent',
+                        border: `1px solid ${isActive ? 'var(--border-strong)' : 'transparent'}`,
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: '13px',
+                          color: 'var(--text-default)',
+                          fontWeight: isActive ? 600 : 500,
+                        }}
+                      >
+                        {stage}
+                      </span>
+                      {isFailed ? (
+                        <Chip tone="danger" size="sm">
+                          Failed
+                        </Chip>
+                      ) : isCompleted ? (
+                        <Chip tone="success" size="sm">
+                          Done
+                        </Chip>
+                      ) : isActive ? (
+                        <Chip tone="info" size="sm">
+                          Running
+                        </Chip>
+                      ) : (
+                        <Chip tone="neutral" size="sm">
+                          Queued
+                        </Chip>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {provisioning.failedMessage && (
+                <div
+                  style={{
+                    backgroundColor: 'var(--state-danger-bg)',
+                    color: 'var(--state-danger-fg)',
+                    borderRadius: 'var(--radius-card)',
+                    border: '1px solid rgba(159, 63, 54, 0.15)',
+                    padding: '12px 14px',
+                    fontSize: '12px',
+                  }}
+                >
+                  {provisioning.failedMessage}
+                </div>
+              )}
+
+              {(provisioning.failedMessage || provisioning.completed) && (
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                  {provisioning.failedMessage && (
+                    <Button
+                      type="button"
+                      variant="primary"
+                      size="sm"
+                      onClick={() => {
+                        const msg = provisioning.failedMessage || '';
+                        const stage = provisioning.failedStage || '';
+                        let targetStep = 8;
+                        const lower = msg.toLowerCase();
+                        if (lower.includes('station name') || lower.includes('station code'))
+                          targetStep = 1;
+                        else if (
+                          lower.includes('business day') ||
+                          lower.includes('operating hour') ||
+                          lower.includes('operating schedule') ||
+                          lower.includes('timezone')
+                        )
+                          targetStep = 2;
+                        else if (
+                          lower.includes('price') ||
+                          lower.includes('selling rate') ||
+                          lower.includes('fuel rate') ||
+                          lower.includes('selling price')
+                        )
+                          targetStep = 6;
+                        else if (lower.includes('fuel') || lower.includes('product'))
+                          targetStep = 3;
+                        else if (lower.includes('opening stock') || lower.includes('capacity'))
+                          targetStep = 6;
+                        else if (lower.includes('tank')) targetStep = 4;
+                        else if (lower.includes('opening reading')) targetStep = 6;
+                        else if (
+                          lower.includes('nozzle') ||
+                          lower.includes('dispenser') ||
+                          lower.includes('du')
+                        )
+                          targetStep = 5;
+                        else if (lower.includes('shift template')) targetStep = 7;
+                        else if (stage === 'Validating draft') targetStep = 8;
+                        else if (stage === 'Creating station') targetStep = 1;
+                        else if (stage === 'Linking infrastructure') targetStep = 4;
+                        else if (
+                          stage === 'Applying opening values' ||
+                          stage === 'Applying go-live values'
+                        )
+                          targetStep = 6;
+
+                        setCurrentStep(targetStep);
+                        setProvisioning({
+                          isOpen: false,
+                          stageIndex: 0,
+                          failedMessage: null,
+                          failedStage: null,
+                          completed: false,
+                        });
+                        setErrorMsg(msg);
+                      }}
+                    >
+                      Go to Section
+                    </Button>
+                  )}
                   <Button
                     type="button"
-                    variant="primary"
+                    variant="secondary"
                     size="sm"
-                    onClick={() => {
-                      const msg = provisioning.failedMessage || '';
-                      const stage = provisioning.failedStage || '';
-                      let targetStep = 8;
-                      const lower = msg.toLowerCase();
-                      if (lower.includes('station name') || lower.includes('station code')) targetStep = 1;
-                      else if (lower.includes('business day') || lower.includes('operating hour') || lower.includes('operating schedule') || lower.includes('timezone')) targetStep = 2;
-                      else if (lower.includes('price') || lower.includes('selling rate') || lower.includes('fuel rate') || lower.includes('selling price')) targetStep = 6;
-                      else if (lower.includes('fuel') || lower.includes('product')) targetStep = 3;
-                      else if (lower.includes('opening stock') || lower.includes('capacity')) targetStep = 6;
-                      else if (lower.includes('tank')) targetStep = 4;
-                      else if (lower.includes('opening reading')) targetStep = 6;
-                      else if (lower.includes('nozzle') || lower.includes('dispenser') || lower.includes('du')) targetStep = 5;
-                      else if (lower.includes('shift template')) targetStep = 7;
-                      else if (stage === 'Validating draft') targetStep = 8;
-                      else if (stage === 'Creating station') targetStep = 1;
-                      else if (stage === 'Linking infrastructure') targetStep = 4;
-                      else if (stage === 'Applying opening values' || stage === 'Applying go-live values') targetStep = 6;
-
-                      setCurrentStep(targetStep);
+                    onClick={() =>
                       setProvisioning({
                         isOpen: false,
                         stageIndex: 0,
                         failedMessage: null,
                         failedStage: null,
                         completed: false,
-                      });
-                      setErrorMsg(msg);
-                    }}
+                      })
+                    }
                   >
-                    Go to Section
+                    Close
                   </Button>
-                )}
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => setProvisioning({
-                    isOpen: false,
-                    stageIndex: 0,
-                    failedMessage: null,
-                    failedStage: null,
-                    completed: false,
-                  })}
-                >
-                  Close
-                </Button>
-              </div>
-            )}
-          </div>
+                </div>
+              )}
+            </div>
           )}
         </div>
       )}

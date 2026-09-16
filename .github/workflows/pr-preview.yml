@@ -1,0 +1,189 @@
+name: PR preview
+
+# A preview per pull request, not per branch.
+#
+# Previously every PR shared the one `dev` preview environment, so a reviewer
+# could not open the specific change under review and two PRs in flight
+# overwrote each other. Each PR now gets its own Worker, named for the PR
+# number, on a workers.dev URL — independent by construction.
+#
+# Scope note: the three FRONTEND surfaces only. A per-PR API Worker would need
+# its own Hyperdrive binding and Supabase secrets, and pointing throwaway
+# Workers at the real database to review a UI change is not a trade worth
+# making. PR previews therefore talk to the shared preview API, which is what a
+# reviewer wants anyway.
+#
+# CORS: because these are served from workers.dev rather than a pumpos domain,
+# the preview API has to allow their origin explicitly. That lives in
+# apps/api/src/infra/cors.ts, gated on ENVIRONMENT = "preview" so a workers.dev
+# origin can never reach production. If a preview reports "network error" right
+# after login while the API is plainly up, that gate is the first place to look
+# — the origin shape here (pr-<n>-pumpos-<app>) and the pattern there must agree.
+#
+# Each app deploys with its own `wrangler.pr.toml` — a route-free config — so a
+# preview can never claim a production hostname.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+
+concurrency:
+  # One deploy per PR at a time; a new push supersedes an in-flight preview.
+  group: pr-preview-${{ github.event.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  changes:
+    if: github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    outputs:
+      console: ${{ steps.filter.outputs.console }}
+      marketing: ${{ steps.filter.outputs.marketing }}
+      mobile: ${{ steps.filter.outputs.mobile }}
+    steps:
+      - uses: actions/checkout@v7
+      # On a pull_request event paths-filter diffs against the PR's own base,
+      # so this reflects what the PR actually changes. (The push-triggered
+      # filter in deploy.yml defaults to comparing against the default branch,
+      # which is the bug fixed separately in that file.)
+      - uses: dorny/paths-filter@v4
+        id: filter
+        with:
+          filters: |
+            console:
+              - 'apps/console/**'
+              - 'packages/ui/**'
+              - 'packages/shared/**'
+              - 'package-lock.json'
+              - '.github/workflows/pr-preview.yml'
+            marketing:
+              - 'apps/marketing/**'
+              - '.github/workflows/pr-preview.yml'
+            mobile:
+              - 'apps/mobile/**'
+              - 'packages/ui/**'
+              - 'packages/shared/**'
+              - 'package-lock.json'
+              - '.github/workflows/pr-preview.yml'
+
+  console:
+    needs: changes
+    if: github.event.action != 'closed' && needs.changes.outputs.console == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      url: ${{ steps.deploy.outputs.url }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Build console
+        run: npm run build:ui-console
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.DEV_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.DEV_SUPABASE_PUBLISHABLE_KEY }}
+          VITE_API_URL: ${{ vars.PREVIEW_API_URL || 'https://api.pumpos.abdullahnettoor.com' }}
+      - name: Deploy console preview
+        id: deploy
+        working-directory: apps/console
+        run: ../../scripts/pr-preview-deploy.sh console "${{ github.event.number }}"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+  mobile:
+    needs: changes
+    if: github.event.action != 'closed' && needs.changes.outputs.mobile == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      url: ${{ steps.deploy.outputs.url }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Build mobile
+        run: npm run build:ui-mobile
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.DEV_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.DEV_SUPABASE_PUBLISHABLE_KEY }}
+          VITE_API_URL: ${{ vars.PREVIEW_API_URL || 'https://api.pumpos.abdullahnettoor.com' }}
+      - name: Deploy mobile preview
+        id: deploy
+        working-directory: apps/mobile
+        run: ../../scripts/pr-preview-deploy.sh mobile "${{ github.event.number }}"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+  marketing:
+    needs: changes
+    if: github.event.action != 'closed' && needs.changes.outputs.marketing == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      url: ${{ steps.deploy.outputs.url }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/marketing/package-lock.json
+      - run: npm ci
+        working-directory: apps/marketing
+      - name: Build marketing
+        run: npm run build
+        working-directory: apps/marketing
+        env:
+          SITE: https://pumpos.abdullahnettoor.com
+          PUBLIC_CONSOLE_URL: https://console.pumpos.abdullahnettoor.com
+      - name: Deploy marketing preview
+        id: deploy
+        working-directory: apps/marketing
+        run: ../../scripts/pr-preview-deploy.sh marketing "${{ github.event.number }}"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+  # One sticky comment listing every preview this PR has, so the URLs are
+  # discoverable from the PR itself rather than buried in a job log.
+  comment:
+    needs: [changes, console, mobile, marketing]
+    if: always() && github.event.action != 'closed' && needs.changes.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Post or update the preview comment
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.number }}
+          CONSOLE_URL: ${{ needs.console.outputs.url }}
+          MOBILE_URL: ${{ needs.mobile.outputs.url }}
+          MARKETING_URL: ${{ needs.marketing.outputs.url }}
+        run: scripts/pr-preview-comment.sh
+
+  # Previews are cheap but not free, and a Worker per merged PR accumulates
+  # forever. Tear them down when the PR closes, merged or not.
+  cleanup:
+    if: github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Delete this PR's preview Workers
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          for app in console mobile marketing; do
+            name="pr-${{ github.event.number }}-pumpos-$app"
+            echo "Deleting $name (ignored if it was never created)"
+            npx wrangler delete --name "$name" --force || true
+          done

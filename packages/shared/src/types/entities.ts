@@ -358,7 +358,6 @@ export interface ShiftDashboardSummary {
   gracePeriodExpiresAt?: string | null;
 }
 
-
 export interface ShiftStaffAssignment {
   id: string;
   shiftId: string;

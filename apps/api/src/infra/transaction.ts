@@ -44,6 +44,12 @@ export async function runInTransaction<T>(
 }
 
 /** Serialize inventory-affecting Shift boundaries and Tank reconciliations per Station. */
-export async function lockStationInventory(db: DbClient, organizationId: string, stationId: string): Promise<void> {
-  await db.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`inventory:${organizationId}:${stationId}`}, 0))`);
+export async function lockStationInventory(
+  db: DbClient,
+  organizationId: string,
+  stationId: string,
+): Promise<void> {
+  await db.execute(
+    sql`select pg_advisory_xact_lock(hashtextextended(${`inventory:${organizationId}:${stationId}`}, 0))`,
+  );
 }

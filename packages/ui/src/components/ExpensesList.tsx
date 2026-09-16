@@ -1,8 +1,7 @@
-import React, { useMemo, useState, useEffect, useRef } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import type { ExpenseEntryFormValues } from '@pump/shared';
 import { canManageExpenseCategory, canVoidExpense } from '@pump/shared';
 import { CloudTransactionService } from '../services/cloud.js';
-import { Plus, HelpCircle, Tags, Receipt, ArrowLeftRight } from 'lucide-react';
 import { PageLayout } from './primitives/PageLayout.js';
 import { DataTable } from './primitives/DataTable.js';
 import { Tabs } from './primitives/Tabs.js';
@@ -13,13 +12,27 @@ import { useToast } from './primitives/ToastProvider.js';
 import { useAsk } from './primitives/ConfirmDialog.js';
 import { Drawer } from './Drawer.js';
 import { ExpenseEntryForm } from './transactions/ExpenseEntryForm.js';
-import { useExpenses, useShiftStatus, useExpenseCategories, useInvalidateOperational } from '../query/hooks.js';
+import {
+  useExpenses,
+  useShiftStatus,
+  useExpenseCategories,
+  useInvalidateOperational,
+} from '../query/hooks.js';
 import { useQueryClient } from '@tanstack/react-query';
-import { Panel, Button, KpiStrip, KpiTile, EmptyState, SearchInput, Select } from '../pump-ds/index.js';
-import type { NavIntent } from './AppShell.js';
+import {
+  Panel,
+  Button,
+  KpiStrip,
+  KpiTile,
+  EmptyState,
+  SearchInput,
+  Select,
+  Icon,
+} from '../pump-ds/index.js';
 import { buildExpenseColumns } from './expenses/columns.js';
 import { ExpenseAnalytics } from './expenses/ExpenseAnalytics.js';
 import { CategoryManagerDrawer } from './expenses/CategoryManagerDrawer.js';
+import { useRunTask } from '../utils/runTask.js';
 
 const transactionService = new CloudTransactionService();
 
@@ -29,11 +42,13 @@ interface ExpensesListProps {
   selectedStation: any | null;
   defaultShiftId?: string;
   userRole?: string;
-  intent?: NavIntent | null;
-  onIntentConsumed?: () => void;
 }
 
-export const ExpensesList: React.FC<ExpensesListProps> = ({ selectedStation, defaultShiftId, userRole, intent, onIntentConsumed }) => {
+export const ExpensesList: React.FC<ExpensesListProps> = ({
+  selectedStation,
+  defaultShiftId,
+  userRole,
+}) => {
   const stationId = selectedStation?.id ?? null;
   const expensesQ = useExpenses();
   const statusQ = useShiftStatus(stationId, true);
@@ -41,12 +56,16 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({ selectedStation, def
   const invalidateOperational = useInvalidateOperational();
   const qc = useQueryClient();
   const toast = useToast();
+  const runTask = useRunTask();
   const ask = useAsk();
 
-  const s = (selectedStation as any)?.settings || {};
-  const clock = { timeZone: s.timezone, dayStartsAt: s.business_day_starts_at };
+  const s = selectedStation?.settings || {};
+  const clock = useMemo(
+    () => ({ timeZone: s.timezone, dayStartsAt: s.business_day_starts_at }),
+    [s.timezone, s.business_day_starts_at],
+  );
 
-  const expenses = expensesQ.data ?? [];
+  const expenses = useMemo(() => expensesQ.data ?? [], [expensesQ.data]);
   const categories = categoriesQ.data ?? [];
   const activeShift = statusQ.data?.activeShift ?? null;
   const recentClosedShifts: any[] = statusQ.data?.recentClosedShifts ?? [];
@@ -60,13 +79,18 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({ selectedStation, def
 
   // Drawers
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+
   const [categoryManagerOpen, setCategoryManagerOpen] = useState(false);
   const [formDefaults, setFormDefaults] = useState<Partial<ExpenseEntryFormValues>>({});
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
   const resolvePreferredShiftId = (active: any | null, closedList: any[]) => {
-    if (defaultShiftId && (active?.id === defaultShiftId || closedList.some((sh) => sh.id === defaultShiftId))) return defaultShiftId;
+    if (
+      defaultShiftId &&
+      (active?.id === defaultShiftId || closedList.some((sh) => sh.id === defaultShiftId))
+    )
+      return defaultShiftId;
     if (active) return active.id;
     if (closedList.length > 0) return closedList[0].id;
     return '';
@@ -86,26 +110,22 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({ selectedStation, def
   };
   const closeDrawer = () => setIsDrawerOpen(false);
 
-  // Command-palette deep-link: open the entry drawer on arrival.
-  const handledIntentRef = useRef<NavIntent | null>(null);
-  useEffect(() => {
-    if (!intent || handledIntentRef.current === intent) return;
-    if (intent.open === 'new-expense') {
-      handledIntentRef.current = intent;
-      openDrawer();
-      onIntentConsumed?.();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [intent]);
-
   const handleAddExpense = async (values: ExpenseEntryFormValues) => {
     try {
       setSubmitting(true);
       setFormError(null);
-      await transactionService.recordExpense({ stationId: stationId ?? undefined, transactionDate: values.transactionDate || undefined, paidFrom: 'BANK', categoryId: values.categoryId, amount: Number(values.amount), description: values.description || undefined, accountId: values.accountId || undefined });
+      await transactionService.recordExpense({
+        stationId: stationId ?? undefined,
+        transactionDate: values.transactionDate || undefined,
+        paidFrom: 'BANK',
+        categoryId: values.categoryId,
+        amount: Number(values.amount),
+        description: values.description || undefined,
+        accountId: values.accountId || undefined,
+      });
       closeDrawer();
-      invalidateOperational(stationId);
       toast.success('Expense recorded.');
+      await invalidateOperational(stationId);
     } catch (err: any) {
       setFormError(err.message || 'Failed to record expense');
     } finally {
@@ -117,31 +137,40 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({ selectedStation, def
 
   // Corrections are never edits: an expense is voided (status → VOIDED) and its
   // ledger posting reversed, keeping history append-only.
-  const handleVoid = async (row: any) => {
-    const { confirmed, value } = await ask({
-      title: 'Void this expense?',
-      message: (
-        <>
-          {inr(row.amount)} · {row.categoryName || 'General'}. The entry stays in the ledger marked
-          <strong> Voided</strong> and its money posting is reversed. This cannot be undone.
-        </>
-      ),
-      input: { label: 'Reason (optional)', placeholder: 'e.g. duplicate entry, wrong amount' },
-      confirmLabel: 'Void expense',
-      danger: true,
-    });
-    if (!confirmed) return;
-    try {
-      await transactionService.voidExpense(row.id, value);
-      invalidateOperational(stationId);
-      toast.success('Expense voided.');
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to void expense');
-    }
-  };
+  const handleVoid = useCallback(
+    async (row: any) => {
+      const { confirmed, value } = await ask({
+        title: 'Void this expense?',
+        message: (
+          <>
+            {inr(row.amount)} · {row.categoryName || 'General'}. The entry stays in the ledger
+            marked
+            <strong> Voided</strong> and its money posting is reversed. This cannot be undone.
+          </>
+        ),
+        input: { label: 'Reason (optional)', placeholder: 'e.g. duplicate entry, wrong amount' },
+        confirmLabel: 'Void expense',
+        danger: true,
+      });
+      if (!confirmed) return;
+      try {
+        await transactionService.voidExpense(row.id, value);
+        toast.success('Expense voided.');
+        await invalidateOperational(stationId);
+      } catch (err: any) {
+        toast.error(err.message || 'Failed to void expense');
+      }
+    },
+    [ask, invalidateOperational, stationId, toast],
+  );
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const ledgerColumns = useMemo(() => buildExpenseColumns(canVoid ? handleVoid : undefined), [canVoid, stationId]);
+  const ledgerColumns = useMemo(
+    () =>
+      buildExpenseColumns(
+        canVoid ? (row) => runTask(handleVoid(row), 'Could not void the expense.') : undefined,
+      ),
+    [canVoid, handleVoid, runTask],
+  );
 
   // KPIs — fixed windows (today / this month), independent of the table range filter.
   const kpis = useMemo(() => {
@@ -153,13 +182,16 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({ selectedStation, def
       return d && d >= r.from && d <= r.to;
     };
     const monthRows = active.filter((e: any) => inWindow(e, month));
-    const spentToday = active.filter((e: any) => inWindow(e, today)).reduce((sum: number, e: any) => sum + Number(e.amount || 0), 0);
+    const spentToday = active
+      .filter((e: any) => inWindow(e, today))
+      .reduce((sum: number, e: any) => sum + Number(e.amount || 0), 0);
     const spentMonth = monthRows.reduce((sum: number, e: any) => sum + Number(e.amount || 0), 0);
-    const drawerMonth = monthRows.filter((e: any) => e.paidFrom === 'SHIFT_CASH').reduce((sum: number, e: any) => sum + Number(e.amount || 0), 0);
+    const drawerMonth = monthRows
+      .filter((e: any) => e.paidFrom === 'SHIFT_CASH')
+      .reduce((sum: number, e: any) => sum + Number(e.amount || 0), 0);
     const otherMonth = spentMonth - drawerMonth;
     return { spentToday, spentMonth, entriesMonth: monthRows.length, drawerMonth, otherMonth };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [expenses, clock.timeZone, clock.dayStartsAt]);
+  }, [expenses, clock]);
 
   const filteredExpenses = useMemo(
     () =>
@@ -179,7 +211,11 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({ selectedStation, def
   );
 
   if (!selectedStation) {
-    return <div style={{ color: 'var(--text-muted)', padding: '24px' }}>Please select a station to view expenses.</div>;
+    return (
+      <div style={{ color: 'var(--text-muted)', padding: '24px' }}>
+        Please select a station to view expenses.
+      </div>
+    );
   }
 
   return (
@@ -189,8 +225,23 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({ selectedStation, def
         subtitle="Log and reconcile operational expenditure, and analyse spend by category."
         actions={
           <div style={{ display: 'flex', gap: '8px' }}>
-            <Button variant="secondary" size="sm" leftIcon={<Tags />} onClick={() => setCategoryManagerOpen(true)}>Categories</Button>
-            <Button variant="primary" size="sm" leftIcon={<Plus />} onClick={openDrawer} disabled={categories.length === 0}>Add Expense</Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              leftIcon={<Icon name="tags" size="sm" />}
+              onClick={() => setCategoryManagerOpen(true)}
+            >
+              Categories
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              leftIcon={<Icon name="plus" size="sm" />}
+              onClick={openDrawer}
+              disabled={categories.length === 0}
+            >
+              Add Expense
+            </Button>
           </div>
         }
         toolbar={
@@ -200,8 +251,12 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({ selectedStation, def
             activeId={activeTab}
             onChange={(id) => setActiveTab(id as TabType)}
             tabs={[
-              { id: 'ledger', label: 'Ledger', icon: <Receipt size={15} /> },
-              { id: 'analytics', label: 'By Category', icon: <ArrowLeftRight size={15} /> },
+              { id: 'ledger', label: 'Ledger', icon: <Icon name="receipt" size="xs" /> },
+              {
+                id: 'analytics',
+                label: 'By Category',
+                icon: <Icon name="arrow-left-right" size="xs" />,
+              },
             ]}
           />
         }
@@ -209,43 +264,109 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({ selectedStation, def
         {activeTab === 'ledger' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <KpiStrip columns="auto">
-              <KpiTile dot="danger" valueTone="danger" label="Spent Today" value={inr(kpis.spentToday)} hint="business day" />
-              <KpiTile dot="danger" valueTone="danger" label="Spent This Month" value={inr(kpis.spentMonth)} hint={`${kpis.entriesMonth} ${kpis.entriesMonth === 1 ? 'entry' : 'entries'}`} />
-              <KpiTile dot="warning" label="From Cash Drawer" value={inr(kpis.drawerMonth)} hint="this month" />
-              <KpiTile dot="info" label="From Bank / Owner" value={inr(kpis.otherMonth)} hint="this month" />
+              <KpiTile
+                dot="danger"
+                valueTone="danger"
+                label="Spent Today"
+                value={inr(kpis.spentToday)}
+                hint="business day"
+              />
+              <KpiTile
+                dot="danger"
+                valueTone="danger"
+                label="Spent This Month"
+                value={inr(kpis.spentMonth)}
+                hint={`${kpis.entriesMonth} ${kpis.entriesMonth === 1 ? 'entry' : 'entries'}`}
+              />
+              <KpiTile
+                dot="warning"
+                label="From Cash Drawer"
+                value={inr(kpis.drawerMonth)}
+                hint="this month"
+              />
+              <KpiTile
+                dot="info"
+                label="From Bank / Owner"
+                value={inr(kpis.otherMonth)}
+                hint="this month"
+              />
             </KpiStrip>
 
             <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', gap: '10px' }}>
               <DateRangeField value={range} onChange={setRange} clock={clock} size="sm" />
               <div style={{ flex: 1 }} />
-              <SearchInput inputSize="sm" value={searchQuery} onChange={setSearchQuery} placeholder="Search description / category…" style={{ width: '220px' }} />
+              <SearchInput
+                inputSize="sm"
+                value={searchQuery}
+                onChange={setSearchQuery}
+                placeholder="Search description / category…"
+                style={{ width: '220px' }}
+              />
               <div style={{ width: '190px' }}>
-                <Select inputSize="sm" value={selectedCategoryFilter} onChange={(e) => setSelectedCategoryFilter(e.target.value)} aria-label="Filter by category">
+                <Select
+                  inputSize="sm"
+                  value={selectedCategoryFilter}
+                  onChange={(e) => setSelectedCategoryFilter(e.target.value)}
+                  aria-label="Filter by category"
+                >
                   <option value="">All categories</option>
-                  {categories.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  {categories.map((c: any) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
                 </Select>
               </div>
               <button
                 type="button"
                 title="Business expenses post to the selected business day — no open shift required. Cash-drawer expenses are entered from the shift workspace so they reconcile against the drawer."
                 aria-label="About expense anchoring"
-                style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', height: '28px', width: '28px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-soft)', background: 'var(--bg-surface)', color: 'var(--text-muted)', cursor: 'help' }}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  height: '28px',
+                  width: '28px',
+                  borderRadius: 'var(--radius-input)',
+                  border: '1px solid var(--border-soft)',
+                  background: 'var(--bg-surface)',
+                  color: 'var(--text-muted)',
+                  cursor: 'help',
+                }}
               >
-                <HelpCircle size={14} />
+                <Icon name="help" size="xs" />
               </button>
             </div>
 
             <Panel flush title="Expense ledger">
               {expensesQ.isLoading ? (
-                <div style={{ padding: '16px' }}><EmptyState compact icon={<Receipt />} title="Loading…" description="Fetching expenses." /></div>
+                <div style={{ padding: '16px' }}>
+                  <EmptyState
+                    compact
+                    icon={<Icon name="receipt" size="md" />}
+                    title="Loading…"
+                    description="Fetching expenses."
+                  />
+                </div>
               ) : filteredExpenses.length === 0 ? (
-                <div style={{ padding: '12px' }}><EmptyState compact icon={<Receipt />} title={expenses.length === 0 ? 'No expenses yet' : 'No matches'} description={expenses.length === 0 ? 'Record your first expense with “Add Expense”.' : 'Adjust the range, search, or category filter.'} /></div>
+                <div style={{ padding: '12px' }}>
+                  <EmptyState
+                    compact
+                    icon={<Icon name="receipt" size="md" />}
+                    title={expenses.length === 0 ? 'No expenses yet' : 'No matches'}
+                    description={
+                      expenses.length === 0
+                        ? 'Record your first expense with “Add Expense”.'
+                        : 'Adjust the range, search, or category filter.'
+                    }
+                  />
+                </div>
               ) : (
                 <DataTable
                   bare
                   columns={ledgerColumns}
                   data={filteredExpenses}
-                  error={expensesQ.error as Error | null}
+                  error={expensesQ.error}
                   emptyMessage="No matching expenses found."
                   getRowId={(r: any) => r.id}
                   initialSorting={[{ id: 'businessDate', desc: true }]}

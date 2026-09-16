@@ -1,11 +1,11 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { collectionEntryFormSchema, type CollectionEntryFormValues } from '@pump/shared';
 import { useZodForm } from '../../forms/useZodForm.js';
 import { Field, TextInput, NumberInput, Select, DateField } from '../primitives/Field.js';
 import { Segmented } from '../primitives/Segmented.js';
 import { Combobox } from '../primitives/Combobox.js';
 import { AccountSelect } from '../primitives/AccountSelect.js';
-import { Button } from '../../pump-ds/index.js';
+import { Button, Form } from '../../pump-ds/index.js';
 
 export interface ShiftOption {
   id: string;
@@ -49,7 +49,16 @@ const EMPTY_DEFAULTS: CollectionEntryFormValues = {
   accountId: '',
 };
 
-export const CollectionEntryForm: React.FC<CollectionEntryFormProps> = ({
+/**
+ * Remounted when the defaults change rather than reset by an effect — the same
+ * treatment as PurchaseEntryForm. The defaults are the form's *initial* values,
+ * so mounting fresh says that directly, and there is no effect to keep honest.
+ */
+export const CollectionEntryForm: React.FC<CollectionEntryFormProps> = (props) => (
+  <CollectionEntryFormBody key={JSON.stringify(props.defaultValues ?? {})} {...props} />
+);
+
+const CollectionEntryFormBody: React.FC<CollectionEntryFormProps> = ({
   shiftOptions,
   customers,
   stationId,
@@ -76,27 +85,35 @@ export const CollectionEntryForm: React.FC<CollectionEntryFormProps> = ({
 }) => {
   const hasMultipleShiftOptions = shiftOptions.length > 1;
 
-  const { register, handleSubmit, reset, watch, setValue, setError, clearErrors, formState: { errors } } = useZodForm<CollectionEntryFormValues>(collectionEntryFormSchema, {
+  const {
+    register,
+    handleSubmit,
+    watch,
+    setValue,
+    setError,
+    clearErrors,
+    formState: { errors },
+  } = useZodForm<CollectionEntryFormValues>(collectionEntryFormSchema, {
     defaultValues: { ...EMPTY_DEFAULTS, ...defaultValues },
   });
-
-  const serializedDefaults = JSON.stringify(defaultValues ?? {});
-  useEffect(() => {
-    reset({ ...EMPTY_DEFAULTS, ...defaultValues });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [serializedDefaults]);
 
   const paymentMethod = watch('paymentMethod');
   const customerId = watch('customerId');
 
   return (
-    <form onSubmit={handleSubmit((values) => {
-      if (requireCustomer && !values.customerId) {
-        setError('customerId', { type: 'manual', message: 'Select a customer for this collection.' });
-        return;
-      }
-      return onSubmit(values);
-    })} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+    <Form
+      onSubmit={handleSubmit((values) => {
+        if (requireCustomer && !values.customerId) {
+          setError('customerId', {
+            type: 'manual',
+            message: 'Select a customer for this collection.',
+          });
+          return;
+        }
+        return onSubmit(values);
+      })}
+      style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}
+    >
       {showDateField && (
         <Field label={dateLabel}>
           <DateField disabled={submitting} {...register('transactionDate')} />
@@ -106,18 +123,22 @@ export const CollectionEntryForm: React.FC<CollectionEntryFormProps> = ({
         <Field label="Target Shift">
           <Select disabled={submitting} {...register('targetShiftId')}>
             {shiftOptions.map((option) => (
-              <option key={option.id} value={option.id}>{option.label}</option>
+              <option key={option.id} value={option.id}>
+                {option.label}
+              </option>
             ))}
           </Select>
         </Field>
       ) : showShiftHintWhenSingle && shiftOptions.length === 1 ? (
-        <div style={{
-          backgroundColor: 'var(--state-info-bg)',
-          color: 'var(--state-info-fg)',
-          padding: '10px 12px',
-          borderRadius: 'var(--radius-input)',
-          fontSize: '12px',
-        }}>
+        <div
+          style={{
+            backgroundColor: 'var(--state-info-bg)',
+            color: 'var(--state-info-fg)',
+            padding: '10px 12px',
+            borderRadius: 'var(--radius-input)',
+            fontSize: '12px',
+          }}
+        >
           Logging to shift: <strong>{shiftOptions[0].label}</strong>
         </div>
       ) : null}
@@ -132,7 +153,10 @@ export const CollectionEntryForm: React.FC<CollectionEntryFormProps> = ({
               { value: 'BankTransfer', label: 'Bank' },
             ]}
             value={paymentMethod}
-            onChange={(v) => { setValue('paymentMethod', v as typeof paymentMethod, { shouldValidate: true }); if (v === 'Cash') setValue('accountId', ''); }}
+            onChange={(v) => {
+              setValue('paymentMethod', v, { shouldValidate: true });
+              if (v === 'Cash') setValue('accountId', '');
+            }}
             disabled={submitting}
             aria-label={paymentMethodLabel}
           />
@@ -146,7 +170,10 @@ export const CollectionEntryForm: React.FC<CollectionEntryFormProps> = ({
         )}
       </Field>
 
-      <Field label={requireCustomer ? 'Customer Account' : customerLabel} error={errors.customerId?.message as string | undefined}>
+      <Field
+        label={requireCustomer ? 'Customer Account' : customerLabel}
+        error={errors.customerId?.message}
+      >
         <Combobox
           options={[
             ...(requireCustomer ? [] : [{ value: '', label: walkInOptionLabel }]),
@@ -156,7 +183,10 @@ export const CollectionEntryForm: React.FC<CollectionEntryFormProps> = ({
             })),
           ]}
           value={customerId ?? ''}
-          onChange={(v) => { setValue('customerId', v, { shouldValidate: true }); if (v) clearErrors('customerId'); }}
+          onChange={(v) => {
+            setValue('customerId', v, { shouldValidate: true });
+            if (v) clearErrors('customerId');
+          }}
           placeholder={requireCustomer ? 'Select a customer…' : walkInOptionLabel}
           searchPlaceholder="Search customers…"
           disabled={submitting}
@@ -164,12 +194,24 @@ export const CollectionEntryForm: React.FC<CollectionEntryFormProps> = ({
       </Field>
 
       <Field label={amountLabel} error={errors.amount?.message}>
-        <NumberInput placeholder={amountPlaceholder} disabled={submitting} invalid={!!errors.amount} {...register('amount')} />
+        <NumberInput
+          placeholder={amountPlaceholder}
+          disabled={submitting}
+          invalid={!!errors.amount}
+          {...register('amount')}
+        />
       </Field>
 
       {paymentMethod !== 'Cash' && (
         <Field label="Deposit to (Bank)">
-          <AccountSelect stationId={stationId} value={watch('accountId') || ''} onChange={(v) => setValue('accountId', v, { shouldValidate: true })} types={['BANK']} disabled={submitting} autoLabel="Auto (default bank)" />
+          <AccountSelect
+            stationId={stationId}
+            value={watch('accountId') || ''}
+            onChange={(v) => setValue('accountId', v, { shouldValidate: true })}
+            types={['BANK']}
+            disabled={submitting}
+            autoLabel="Auto (default bank)"
+          />
         </Field>
       )}
 
@@ -178,24 +220,34 @@ export const CollectionEntryForm: React.FC<CollectionEntryFormProps> = ({
       </Field>
 
       {error && (
-        <div style={{
-          backgroundColor: 'var(--state-danger-bg)',
-          color: 'var(--state-danger-fg)',
-          padding: '8px 12px',
-          borderRadius: 'var(--radius-input)',
-          fontSize: '12px',
-          border: '1px solid var(--border-soft)'
-        }}>
+        <div
+          style={{
+            backgroundColor: 'var(--state-danger-bg)',
+            color: 'var(--state-danger-fg)',
+            padding: '8px 12px',
+            borderRadius: 'var(--radius-input)',
+            fontSize: '12px',
+            border: '1px solid var(--border-soft)',
+          }}
+        >
           {error}
         </div>
       )}
 
       <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
-        <Button type="button" variant="secondary" size="md" onClick={onCancel} disabled={submitting}>Cancel</Button>
+        <Button
+          type="button"
+          variant="secondary"
+          size="md"
+          onClick={onCancel}
+          disabled={submitting}
+        >
+          Cancel
+        </Button>
         <Button type="submit" variant="primary" size="md" loading={submitting}>
           {submitLabel}
         </Button>
       </div>
-    </form>
+    </Form>
   );
 };

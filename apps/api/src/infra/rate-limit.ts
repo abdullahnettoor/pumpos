@@ -52,13 +52,23 @@ function clientIp(c: Context): string {
  * Hono middleware that limits requests per client IP within a fixed window.
  * `scope` namespaces the counter so different route groups don't share budget.
  */
-export function rateLimit(opts: { scope: string; max: number; windowMs: number }): MiddlewareHandler {
+export function rateLimit(opts: {
+  scope: string;
+  max: number;
+  windowMs: number;
+}): MiddlewareHandler {
   return async (c, next) => {
     if (c.req.method === 'OPTIONS') return await next();
     const key = `${opts.scope}:${clientIp(c)}`;
     if (!take(key, opts.max, opts.windowMs)) {
       return c.json(
-        { success: false, error: { code: 'RATE_LIMITED', message: 'Too many requests. Please slow down and try again shortly.' } },
+        {
+          success: false,
+          error: {
+            code: 'RATE_LIMITED',
+            message: 'Too many requests. Please slow down and try again shortly.',
+          },
+        },
         429,
       );
     }

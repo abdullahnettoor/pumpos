@@ -192,11 +192,11 @@ creative checkpoint.
 Local preview: `/design-review/identity` in the Astro development server.
 The review route is excluded from production generation and marked noindex.
 
-| Direction | Monogram | Typography | Homepage composition |
-| --- | --- | --- | --- |
-| A: Open ledger | Cut-open P with inset entry | Barlow Semi Condensed + Public Sans | Petrol-green opening, left-aligned headline, statement alongside |
-| B: Continuity | Continuous rounded P | Sora + Public Sans | Centred opening, wide statement read left to right |
-| C: Station stamp | Solid chamfered P | Archivo + Public Sans | White reading column beside green statement area |
+| Direction        | Monogram                    | Typography                          | Homepage composition                                             |
+| ---------------- | --------------------------- | ----------------------------------- | ---------------------------------------------------------------- |
+| A: Open ledger   | Cut-open P with inset entry | Barlow Semi Condensed + Public Sans | Petrol-green opening, left-aligned headline, statement alongside |
+| B: Continuity    | Continuous rounded P        | Sora + Public Sans                  | Centred opening, wide statement read left to right               |
+| C: Station stamp | Solid chamfered P           | Archivo + Public Sans               | White reading column beside green statement area                 |
 
 Each concept includes a homepage opening, app icon, 16/24/32 px mark specimens,
 one-colour report header and palette/type sample. The designer recommends A;
@@ -311,11 +311,11 @@ content. Fonts and the raster social-sharing image are served locally.
 
 Mobile Lighthouse against the local production build:
 
-| Page | Performance | Accessibility | Best practices | SEO | LCP | CLS | TBT |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| Home | 99 | 100 | 100 | 100 | 1.7 s | 0 | 0 ms |
-| Product | 100 | 100 | 100 | 100 | 1.7 s | 0 | 0 ms |
-| Demo | 100 | 100 | 100 | 100 | 1.2 s | 0 | 0 ms |
+| Page    | Performance | Accessibility | Best practices | SEO | LCP   | CLS | TBT  |
+| ------- | ----------- | ------------- | -------------- | --- | ----- | --- | ---- |
+| Home    | 99          | 100           | 100            | 100 | 1.7 s | 0   | 0 ms |
+| Product | 100         | 100           | 100            | 100 | 1.7 s | 0   | 0 ms |
+| Demo    | 100         | 100           | 100            | 100 | 1.2 s | 0   | 0 ms |
 
 These are local lab measurements, not field results. Automated accessibility
 scores supplement the manual checks and do not certify complete WCAG compliance.

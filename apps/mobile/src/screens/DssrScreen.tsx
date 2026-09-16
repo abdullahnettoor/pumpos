@@ -14,23 +14,45 @@ const numberFmt = (n: number, dec = 2) =>
   n.toLocaleString('en-IN', { minimumFractionDigits: dec, maximumFractionDigits: dec });
 
 const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
-  <section className="rounded-xl border p-4" style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-soft)' }}>
-    <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>{title}</h3>
+  <section
+    className="rounded-xl border p-4"
+    style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-soft)' }}
+  >
+    <h3
+      className="mb-3 text-xs font-semibold uppercase tracking-wide"
+      style={{ color: 'var(--text-muted)' }}
+    >
+      {title}
+    </h3>
     {children}
   </section>
 );
 
-const Row: React.FC<{ label: string; value: string; strong?: boolean }> = ({ label, value, strong }) => (
+const Row: React.FC<{ label: string; value: string; strong?: boolean }> = ({
+  label,
+  value,
+  strong,
+}) => (
   <div className="flex items-center justify-between text-sm">
     <span style={{ color: 'var(--text-muted)' }}>{label}</span>
-    <span className="font-mono tabular-nums" style={{ color: strong ? 'var(--text-strong)' : 'var(--text-default)', fontWeight: strong ? 600 : 400 }}>
+    <span
+      className="font-mono tabular-nums"
+      style={{
+        color: strong ? 'var(--text-strong)' : 'var(--text-default)',
+        fontWeight: strong ? 600 : 400,
+      }}
+    >
       {value}
     </span>
   </div>
 );
 
 const varColor = (v: number) =>
-  Math.abs(v) < 50 ? 'var(--text-faint)' : Math.abs(v) < 200 ? 'var(--state-warning-fg)' : 'var(--state-danger-fg)';
+  Math.abs(v) < 50
+    ? 'var(--text-faint)'
+    : Math.abs(v) < 200
+      ? 'var(--state-warning-fg)'
+      : 'var(--state-danger-fg)';
 
 /**
  * DSSR — the formal Daily Station Sales Report (the report of record). Distinct
@@ -60,12 +82,18 @@ export const DssrScreen: React.FC<Props> = ({ station, businessDate }) => {
 
   const [error, setError] = useState<string | null>(null);
   const shareDssr = () =>
-    generateDssrPdf(station, { snapshotData: snapshot, businessDate: date, generatedAt: new Date().toISOString() });
+    generateDssrPdf(station, {
+      snapshotData: snapshot,
+      businessDate: date,
+      generatedAt: new Date().toISOString(),
+    });
 
   return (
     <div className="flex flex-col gap-4">
       {q.isLoading ? (
-        <p className="py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>Loading…</p>
+        <p className="py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>
+          Loading…
+        </p>
       ) : q.isError ? (
         <p className="py-8 text-center text-sm" style={{ color: 'var(--state-danger-fg)' }}>
           Could not load the report for this date.
@@ -75,15 +103,22 @@ export const DssrScreen: React.FC<Props> = ({ station, businessDate }) => {
           {/* Header */}
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-semibold" style={{ color: 'var(--text-strong)' }}>Daily report</p>
+              <p className="text-sm font-semibold" style={{ color: 'var(--text-strong)' }}>
+                Daily report
+              </p>
               <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
                 {date}
-                {date === todayBiz ? ' · live preview' : ''} · {shifts.length} shift{shifts.length === 1 ? '' : 's'}
+                {date === todayBiz ? ' · live preview' : ''} · {shifts.length} shift
+                {shifts.length === 1 ? '' : 's'}
               </p>
             </div>
             <ShareButton label="PDF" onShare={shareDssr} onError={setError} />
           </div>
-          {error && <p className="text-center text-xs" style={{ color: 'var(--state-danger-fg)' }}>{error}</p>}
+          {error && (
+            <p className="text-center text-xs" style={{ color: 'var(--state-danger-fg)' }}>
+              {error}
+            </p>
+          )}
 
           {/* Financial summary */}
           <Section title="Financial summary">
@@ -102,7 +137,11 @@ export const DssrScreen: React.FC<Props> = ({ station, businessDate }) => {
               <Row label="Purchases" value={inr(Number(purchases.total || 0))} />
               {hasCostBasis && (
                 <div className="mt-1 border-t pt-2" style={{ borderColor: 'var(--border-soft)' }}>
-                  <Row label="Net profit (after COGS)" value={inr(Number(pnl.netProfit || 0))} strong />
+                  <Row
+                    label="Net profit (after COGS)"
+                    value={inr(Number(pnl.netProfit || 0))}
+                    strong
+                  />
                 </div>
               )}
             </div>
@@ -111,9 +150,16 @@ export const DssrScreen: React.FC<Props> = ({ station, businessDate }) => {
           {/* Collections by mode */}
           <Section title="Collections by mode">
             <div className="flex flex-col gap-2">
-              {([['Cash', collections.Cash], ['Card', collections.Card], ['UPI', collections.UPI], ['Bank transfer', collections.BankTransfer]] as const).map(
-                ([label, val]) => <Row key={label} label={label} value={inr(Number(val || 0))} />,
-              )}
+              {(
+                [
+                  ['Cash', collections.Cash],
+                  ['Card', collections.Card],
+                  ['UPI', collections.UPI],
+                  ['Bank transfer', collections.BankTransfer],
+                ] as const
+              ).map(([label, val]) => (
+                <Row key={label} label={label} value={inr(Number(val || 0))} />
+              ))}
             </div>
           </Section>
 
@@ -124,12 +170,17 @@ export const DssrScreen: React.FC<Props> = ({ station, businessDate }) => {
                 {byProduct.map((p, i) => (
                   <div key={p.productId ?? i} className="flex items-center justify-between text-sm">
                     <div className="min-w-0">
-                      <p className="truncate" style={{ color: 'var(--text-default)' }}>{p.productName}</p>
+                      <p className="truncate" style={{ color: 'var(--text-default)' }}>
+                        {p.productName}
+                      </p>
                       <p className="text-[11px]" style={{ color: 'var(--text-faint)' }}>
                         {numberFmt(Number(p.netVolume || 0))} {p.unit || 'L'} net
                       </p>
                     </div>
-                    <span className="font-mono tabular-nums" style={{ color: 'var(--text-strong)' }}>
+                    <span
+                      className="font-mono tabular-nums"
+                      style={{ color: 'var(--text-strong)' }}
+                    >
                       {inr(Number(p.salesValue || 0))}
                     </span>
                   </div>
@@ -152,7 +203,10 @@ export const DssrScreen: React.FC<Props> = ({ station, businessDate }) => {
                           {numberFmt(Number(s.netVolume || 0))} L net
                         </p>
                       </div>
-                      <span className="font-mono text-xs tabular-nums" style={{ color: varColor(v) }}>
+                      <span
+                        className="font-mono text-xs tabular-nums"
+                        style={{ color: varColor(v) }}
+                      >
                         Var {inr(v)}
                       </span>
                     </div>

@@ -55,32 +55,56 @@ export async function resolveFinancialAnchor(
   const drawerLabel = opts.drawerLabel ?? 'Drawer entries';
 
   if (cmd.shiftId) {
-    const eligibility = await resolveShiftBusinessDayWrite(deps.shifts, deps.businessDays, ctx, cmd.shiftId, kind);
+    const eligibility = await resolveShiftBusinessDayWrite(
+      deps.shifts,
+      deps.businessDays,
+      ctx,
+      cmd.shiftId,
+      kind,
+    );
     if (!eligibility.success) return eligibility;
     const { shift, businessDay, lateEntry } = eligibility.data;
     if (affectsDrawer && (lateEntry || shift.status !== 'OPEN')) {
-      return err(invariantViolation(`${drawerLabel} require an open Shift and open Business Day`, {
-        shiftId: shift.id,
-        shiftStatus: shift.status,
-        businessDayId: businessDay.id,
-      }));
+      return err(
+        invariantViolation(`${drawerLabel} require an open Shift and open Business Day`, {
+          shiftId: shift.id,
+          shiftStatus: shift.status,
+          businessDayId: businessDay.id,
+        }),
+      );
     }
     return ok(anchor(shift.stationId, businessDay.id, shift.id, lateEntry));
   }
 
   if (cmd.stationId) {
     if (affectsDrawer) return err(validationError(`${drawerLabel} require shiftId`));
-    const businessDate = cmd.transactionDate
-      ?? resolveBusinessDate({ now: ctx.clock.now(), timeZone: ctx.timeZone, dayStartsAt: ctx.businessDayStartsAt });
-    const eligibility = await resolveBusinessDayWrite(deps.businessDays, ctx, { stationId: cmd.stationId, businessDate, kind });
+    const businessDate =
+      cmd.transactionDate ??
+      resolveBusinessDate({
+        now: ctx.clock.now(),
+        timeZone: ctx.timeZone,
+        dayStartsAt: ctx.businessDayStartsAt,
+      });
+    const eligibility = await resolveBusinessDayWrite(deps.businessDays, ctx, {
+      stationId: cmd.stationId,
+      businessDate,
+      kind,
+    });
     if (!eligibility.success) return eligibility;
-    return ok(anchor(cmd.stationId, eligibility.data.businessDay.id, null, eligibility.data.lateEntry));
+    return ok(
+      anchor(cmd.stationId, eligibility.data.businessDay.id, null, eligibility.data.lateEntry),
+    );
   }
 
   return err(validationError('Either shiftId or stationId is required'));
 }
 
-function anchor(stationId: string, businessDayId: string, shiftId: string | null, lateEntry: boolean): FinancialAnchor {
+function anchor(
+  stationId: string,
+  businessDayId: string,
+  shiftId: string | null,
+  lateEntry: boolean,
+): FinancialAnchor {
   return {
     stationId,
     businessDayId,

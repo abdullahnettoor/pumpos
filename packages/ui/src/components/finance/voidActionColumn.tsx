@@ -15,14 +15,22 @@ export const voidActionColumn = (
   header: '',
   enableSorting: false,
   cell: ({ row }) => {
-    if (row.original.status === 'VOIDED') return <span style={{ color: 'var(--text-faint)' }}>—</span>;
+    if (row.original.status === 'VOIDED')
+      return <span style={{ color: 'var(--text-faint)' }}>—</span>;
     return (
       <button
         type="button"
         onClick={() => onVoid(row.original)}
         title={title}
         aria-label={title}
-        style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '4px', display: 'inline-flex' }}
+        style={{
+          border: 'none',
+          background: 'none',
+          cursor: 'pointer',
+          color: 'var(--text-muted)',
+          padding: '4px',
+          display: 'inline-flex',
+        }}
       >
         {icon}
       </button>

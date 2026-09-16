@@ -32,7 +32,9 @@ export const CashCountSheet: React.FC<CashCountSheetProps> = ({
 }) => {
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [open, onClose]);
@@ -41,18 +43,26 @@ export const CashCountSheet: React.FC<CashCountSheetProps> = ({
 
   const total = DENOMS.reduce((s, d) => s + d * (Number(breakdown[String(d)]) || 0), 0);
   const hasMismatch =
-    currentValue != null && Math.round(currentValue) !== Math.round(total) && (currentValue > 0 || total > 0);
+    currentValue != null &&
+    Math.round(currentValue) !== Math.round(total) &&
+    (currentValue > 0 || total > 0);
 
   const setCount = (d: number, raw: string) => {
     const n = Math.max(0, Math.floor(Number(raw) || 0));
     const next = { ...breakdown };
-    if (n > 0) next[String(d)] = n; else delete next[String(d)];
+    if (n > 0) next[String(d)] = n;
+    else delete next[String(d)];
     onBreakdownChange(next);
   };
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col justify-end">
-      <div className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.5)' }} onClick={onClose} aria-hidden />
+      <div
+        className="absolute inset-0"
+        style={{ background: 'rgba(0,0,0,0.5)' }}
+        onClick={onClose}
+        aria-hidden
+      />
       <div
         role="dialog"
         aria-label="Cash denomination counter"
@@ -61,14 +71,21 @@ export const CashCountSheet: React.FC<CashCountSheetProps> = ({
       >
         {/* Grab handle */}
         <div className="flex justify-center pb-1 pt-2.5">
-          <span className="h-1 w-10 rounded-full" style={{ backgroundColor: 'var(--border-strong)' }} />
+          <span
+            className="h-1 w-10 rounded-full"
+            style={{ backgroundColor: 'var(--border-strong)' }}
+          />
         </div>
 
         {/* Header */}
         <div className="flex items-start justify-between px-4 pb-3 pt-1">
           <div>
-            <h3 className="text-[15px] font-semibold" style={{ color: 'var(--text-strong)' }}>{title}</h3>
-            <p className="text-[11px]" style={{ color: 'var(--text-faint)' }}>Enter the number of notes &amp; coins</p>
+            <h3 className="text-[15px] font-semibold" style={{ color: 'var(--text-strong)' }}>
+              {title}
+            </h3>
+            <p className="text-[11px]" style={{ color: 'var(--text-faint)' }}>
+              Enter the number of notes &amp; coins
+            </p>
           </div>
           <button
             type="button"
@@ -90,15 +107,23 @@ export const CashCountSheet: React.FC<CashCountSheetProps> = ({
               <div
                 key={d}
                 className="flex items-center gap-2.5 rounded-xl border px-2.5 py-1.5"
-                style={{ borderColor: active ? 'var(--brand-primary)' : 'var(--border-soft)', backgroundColor: active ? 'var(--bg-surface-alt)' : 'var(--bg-surface)' }}
+                style={{
+                  borderColor: active ? 'var(--brand-primary)' : 'var(--border-soft)',
+                  backgroundColor: active ? 'var(--bg-surface-alt)' : 'var(--bg-surface)',
+                }}
               >
                 <span
                   className="grid h-8 w-12 flex-shrink-0 place-items-center rounded-lg text-[13px] font-bold tabular-nums"
-                  style={{ backgroundColor: active ? 'var(--brand-primary)' : 'var(--bg-surface-alt)', color: active ? '#fff' : 'var(--text-muted)' }}
+                  style={{
+                    backgroundColor: active ? 'var(--brand-primary)' : 'var(--bg-surface-alt)',
+                    color: active ? '#fff' : 'var(--text-muted)',
+                  }}
                 >
                   ₹{d}
                 </span>
-                <span className="text-xs" style={{ color: 'var(--text-faint)' }}>×</span>
+                <span className="text-xs" style={{ color: 'var(--text-faint)' }}>
+                  ×
+                </span>
                 <input
                   type="number"
                   inputMode="numeric"
@@ -109,7 +134,11 @@ export const CashCountSheet: React.FC<CashCountSheetProps> = ({
                   onChange={(e) => setCount(d, e.target.value)}
                   aria-label={`Count of ₹${d}`}
                   className="w-16 rounded-lg border py-1.5 text-center text-[15px] font-mono tabular-nums"
-                  style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-soft)', color: 'var(--text-strong)' }}
+                  style={{
+                    backgroundColor: 'var(--bg-surface)',
+                    borderColor: 'var(--border-soft)',
+                    color: 'var(--text-strong)',
+                  }}
                 />
                 <span
                   className="flex-1 text-right text-sm font-mono tabular-nums"
@@ -129,12 +158,22 @@ export const CashCountSheet: React.FC<CashCountSheetProps> = ({
         >
           {hasMismatch && (
             <p className="text-[11px]" style={{ color: 'var(--state-warning-fg)' }}>
-              Field shows {inr(currentValue!)} — Apply to replace it.
+              Field shows {inr(currentValue)} — Apply to replace it.
             </p>
           )}
-          <div className="flex items-center justify-between rounded-xl px-3 py-2.5" style={{ backgroundColor: 'var(--bg-surface-alt)' }}>
-            <span className="text-[13px] font-medium" style={{ color: 'var(--text-muted)' }}>Total counted</span>
-            <span className="font-mono text-lg font-bold tabular-nums" style={{ color: 'var(--text-strong)' }}>{inr(total)}</span>
+          <div
+            className="flex items-center justify-between rounded-xl px-3 py-2.5"
+            style={{ backgroundColor: 'var(--bg-surface-alt)' }}
+          >
+            <span className="text-[13px] font-medium" style={{ color: 'var(--text-muted)' }}>
+              Total counted
+            </span>
+            <span
+              className="font-mono text-lg font-bold tabular-nums"
+              style={{ color: 'var(--text-strong)' }}
+            >
+              {inr(total)}
+            </span>
           </div>
           <div className="flex gap-2">
             <button
@@ -148,7 +187,10 @@ export const CashCountSheet: React.FC<CashCountSheetProps> = ({
             </button>
             <button
               type="button"
-              onClick={() => { onApply(total); onClose(); }}
+              onClick={() => {
+                onApply(total);
+                onClose();
+              }}
               className="flex-1 rounded-xl py-3 text-sm font-semibold text-white"
               style={{ backgroundColor: 'var(--brand-primary)' }}
             >

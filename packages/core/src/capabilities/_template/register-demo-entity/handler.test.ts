@@ -5,11 +5,7 @@ import {
   InProcessEventDispatcher,
   SequentialIdGenerator,
 } from '../../../kernel/index.js';
-import type {
-  DomainEvent,
-  EventHandler,
-  ExecutionContext,
-} from '../../../kernel/index.js';
+import type { DomainEvent, EventHandler, ExecutionContext } from '../../../kernel/index.js';
 import { RegisterDemoEntity } from './handler.js';
 import { DEMO_ENTITY_REGISTERED } from './events.js';
 import type { DemoEntity, DemoEntityRepository } from './ports.js';
@@ -26,9 +22,7 @@ class InMemoryDemoRepo implements DemoEntityRepository {
   }
 
   async existsByName(organizationId: string, name: string): Promise<boolean> {
-    return this.rows.some(
-      (r) => r.organizationId === organizationId && r.name === name,
-    );
+    return this.rows.some((r) => r.organizationId === organizationId && r.name === name);
   }
 }
 

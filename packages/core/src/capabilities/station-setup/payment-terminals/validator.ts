@@ -1,10 +1,7 @@
 import { z } from 'zod';
 import { err, ok, validationError } from '../../../kernel/index.js';
 import type { Result } from '../../../kernel/index.js';
-import type {
-  RegisterPaymentTerminalCommand,
-  UpdatePaymentTerminalCommand,
-} from './command.js';
+import type { RegisterPaymentTerminalCommand, UpdatePaymentTerminalCommand } from './command.js';
 
 const registerSchema = z.object({
   stationId: z.string().uuid('stationId must be a valid id'),

@@ -3,24 +3,22 @@
 This document defines:
 
 - Visual design language
-    
+
 - Reusable UI components
-    
+
 - Layout standards
-    
+
 - Interaction patterns
-    
 
 Goals:
 
 - Consistency
-    
+
 - Reusability
-    
+
 - Fast development
-    
+
 - Minimal cognitive load
-    
 
 ---
 
@@ -998,24 +996,23 @@ Lucide Icons
 # UI Architecture Principles
 
 1. Every screen uses AppShell.
-    
+
 2. Every CRUD screen uses DataTable + Drawer.
-    
+
 3. Every form uses FormShell.
-    
+
 4. Side drawers are preferred over modals.
-    
+
 5. KPI cards are used for summaries.
-    
+
 6. Tables are used only where comparison matters.
-    
+
 7. Cards are preferred for operational workflows.
-    
+
 8. Sync status is always visible.
-    
+
 9. Mobile remains monitoring-focused.
-    
+
 10. New features must be built from existing components before introducing new UI patterns.
-    
 
 ---

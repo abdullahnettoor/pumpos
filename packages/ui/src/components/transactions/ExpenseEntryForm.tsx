@@ -1,9 +1,9 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { expenseEntryFormSchema, type ExpenseEntryFormValues } from '@pump/shared';
 import { useZodForm } from '../../forms/useZodForm.js';
 import { Field, TextInput, NumberInput, Select, DateField } from '../primitives/Field.js';
 import { AccountSelect } from '../primitives/AccountSelect.js';
-import { Button } from '../../pump-ds/index.js';
+import { Button, Form } from '../../pump-ds/index.js';
 
 export interface ShiftOption {
   id: string;
@@ -44,7 +44,16 @@ const EMPTY_DEFAULTS: ExpenseEntryFormValues = {
   accountId: '',
 };
 
-export const ExpenseEntryForm: React.FC<ExpenseEntryFormProps> = ({
+/**
+ * Remounted when the defaults change rather than reset by an effect — the same
+ * treatment as PurchaseEntryForm. The defaults are the form's *initial* values,
+ * so mounting fresh says that directly, and there is no effect to keep honest.
+ */
+export const ExpenseEntryForm: React.FC<ExpenseEntryFormProps> = (props) => (
+  <ExpenseEntryFormBody key={JSON.stringify(props.defaultValues ?? {})} {...props} />
+);
+
+const ExpenseEntryFormBody: React.FC<ExpenseEntryFormProps> = ({
   shiftOptions,
   categories,
   stationId,
@@ -67,18 +76,21 @@ export const ExpenseEntryForm: React.FC<ExpenseEntryFormProps> = ({
 }) => {
   const hasMultipleShiftOptions = shiftOptions.length > 1;
 
-  const { register, handleSubmit, reset, watch, setValue, formState: { errors } } = useZodForm<ExpenseEntryFormValues>(expenseEntryFormSchema, {
+  const {
+    register,
+    handleSubmit,
+    watch,
+    setValue,
+    formState: { errors },
+  } = useZodForm<ExpenseEntryFormValues>(expenseEntryFormSchema, {
     defaultValues: { ...EMPTY_DEFAULTS, ...defaultValues },
   });
 
-  const serializedDefaults = JSON.stringify(defaultValues ?? {});
-  useEffect(() => {
-    reset({ ...EMPTY_DEFAULTS, ...defaultValues });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [serializedDefaults]);
-
   return (
-    <form onSubmit={handleSubmit((values) => onSubmit(values))} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+    <Form
+      onSubmit={handleSubmit((values) => onSubmit(values))}
+      style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}
+    >
       {showDateField && (
         <Field label={dateLabel}>
           <DateField disabled={submitting} {...register('transactionDate')} />
@@ -88,18 +100,22 @@ export const ExpenseEntryForm: React.FC<ExpenseEntryFormProps> = ({
         <Field label="Target Shift">
           <Select disabled={submitting} {...register('targetShiftId')}>
             {shiftOptions.map((option) => (
-              <option key={option.id} value={option.id}>{option.label}</option>
+              <option key={option.id} value={option.id}>
+                {option.label}
+              </option>
             ))}
           </Select>
         </Field>
       ) : showShiftHintWhenSingle && shiftOptions.length === 1 ? (
-        <div style={{
-          backgroundColor: 'var(--state-info-bg)',
-          color: 'var(--state-info-fg)',
-          padding: '10px 12px',
-          borderRadius: 'var(--radius-input)',
-          fontSize: '12px',
-        }}>
+        <div
+          style={{
+            backgroundColor: 'var(--state-info-bg)',
+            color: 'var(--state-info-fg)',
+            padding: '10px 12px',
+            borderRadius: 'var(--radius-input)',
+            fontSize: '12px',
+          }}
+        >
           Logging to shift: <strong>{shiftOptions[0].label}</strong>
         </div>
       ) : null}
@@ -112,7 +128,9 @@ export const ExpenseEntryForm: React.FC<ExpenseEntryFormProps> = ({
         ) : (
           <Select disabled={submitting} invalid={!!errors.categoryId} {...register('categoryId')}>
             {categories.map((cat) => (
-              <option key={cat.id} value={cat.id}>{cat.name}</option>
+              <option key={cat.id} value={cat.id}>
+                {cat.name}
+              </option>
             ))}
           </Select>
         )}
@@ -123,32 +141,57 @@ export const ExpenseEntryForm: React.FC<ExpenseEntryFormProps> = ({
       </Field>
 
       <Field label={descriptionLabel}>
-        <TextInput placeholder={descriptionPlaceholder} disabled={submitting} {...register('description')} />
+        <TextInput
+          placeholder={descriptionPlaceholder}
+          disabled={submitting}
+          {...register('description')}
+        />
       </Field>
 
       <Field label={accountLabel}>
-        <AccountSelect stationId={stationId} value={watch('accountId') || ''} onChange={(v) => setValue('accountId', v, { shouldValidate: true })} disabled={submitting} />
+        <AccountSelect
+          stationId={stationId}
+          value={watch('accountId') || ''}
+          onChange={(v) => setValue('accountId', v, { shouldValidate: true })}
+          disabled={submitting}
+        />
       </Field>
 
       {error && (
-        <div style={{
-          backgroundColor: 'var(--state-danger-bg)',
-          color: 'var(--state-danger-fg)',
-          padding: '8px 12px',
-          borderRadius: 'var(--radius-input)',
-          fontSize: '12px',
-          border: '1px solid var(--border-soft)'
-        }}>
+        <div
+          style={{
+            backgroundColor: 'var(--state-danger-bg)',
+            color: 'var(--state-danger-fg)',
+            padding: '8px 12px',
+            borderRadius: 'var(--radius-input)',
+            fontSize: '12px',
+            border: '1px solid var(--border-soft)',
+          }}
+        >
           {error}
         </div>
       )}
 
       <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
-        <Button type="button" variant="secondary" size="md" onClick={onCancel} disabled={submitting}>Cancel</Button>
-        <Button type="submit" variant="primary" size="md" loading={submitting} disabled={categories.length === 0}>
+        <Button
+          type="button"
+          variant="secondary"
+          size="md"
+          onClick={onCancel}
+          disabled={submitting}
+        >
+          Cancel
+        </Button>
+        <Button
+          type="submit"
+          variant="primary"
+          size="md"
+          loading={submitting}
+          disabled={categories.length === 0}
+        >
           {submitLabel}
         </Button>
       </div>
-    </form>
+    </Form>
   );
 };

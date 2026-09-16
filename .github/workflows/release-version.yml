@@ -1,0 +1,114 @@
+name: Release version
+
+# Keeps the release version off human memory.
+#
+# The version used to be bumped by hand before merging to `main`, with two quiet
+# failure modes: forget, and the merge silently no-ops because the tag already
+# exists; or run the script and push tags first, and the tag-release workflow
+# skips for the opposite reason. Nothing ships and nothing says so.
+#
+# This job runs on every PR into `main` and derives the version from what the PR
+# actually contains (see scripts/next-version.mjs). If the committed version
+# does not match, it writes the bump onto the PR branch — so the version arrives
+# through review like any other change, and never by a CI push to a protected
+# branch.
+#
+# A PR with no feat/fix/perf/breaking commit needs no version at all. That is a
+# supported answer, not a failure: a docs or CI PR should not put a build in
+# front of the production approval gate.
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: release-version-${{ github.event.number }}
+  cancel-in-progress: true
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The version is derived from history, so shallow will not do. Check
+          # out the PR branch itself so a bump can be pushed back to it.
+          fetch-depth: 0
+          ref: ${{ github.head_ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Derive the release version
+        id: derive
+        run: |
+          # Everything this PR brings to main, bumped on top of the version
+          # main already ships — so re-runs after the bump lands are stable
+          # instead of ratcheting the version up forever.
+          git fetch --no-tags origin "${{ github.base_ref }}" >/dev/null 2>&1
+          base="$(git show "origin/${{ github.base_ref }}:package.json" | node -p 'JSON.parse(require("fs").readFileSync(0,"utf8")).version')"
+          derived="$(node scripts/next-version.mjs --json --base "$base" --range "origin/${{ github.base_ref }}..HEAD")"
+          echo "$derived"
+          echo "bump=$(echo "$derived" | node -p 'JSON.parse(require("fs").readFileSync(0,"utf8")).bump')" >> "$GITHUB_OUTPUT"
+          echo "version=$(echo "$derived" | node -p 'JSON.parse(require("fs").readFileSync(0,"utf8")).version')" >> "$GITHUB_OUTPUT"
+          echo "current=$(node -p 'require("./package.json").version')" >> "$GITHUB_OUTPUT"
+
+      - name: No release-worthy change
+        if: steps.derive.outputs.bump == 'none'
+        run: |
+          {
+            echo "### No release"
+            echo
+            echo "Nothing in this PR is release-worthy (no \`feat\`, \`fix\`, \`perf\`,"
+            echo "or breaking commit), so merging it will not cut a version."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Apply the version bump
+        if: steps.derive.outputs.bump != 'none' && steps.derive.outputs.version != steps.derive.outputs.current
+        env:
+          VERSION: ${{ steps.derive.outputs.version }}
+          BUMP: ${{ steps.derive.outputs.bump }}
+        run: |
+          node scripts/release.mjs "$VERSION" --no-git
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "release: v$VERSION" -m "Derived from a '$BUMP' change set by scripts/next-version.mjs."
+          if git push origin "HEAD:${{ github.head_ref }}"; then
+            {
+              echo "### Version bumped to \`$VERSION\` ($BUMP)"
+              echo
+              echo "Pushed to this PR so the bump is reviewed like any other change."
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            # The head branch is protected (e.g. the dev → main promotion PR),
+            # so CI cannot push the bump there — by design. The bump must land
+            # on the head branch through a reviewed PR instead.
+            {
+              echo "### Version bump required: \`$VERSION\` ($BUMP)"
+              echo
+              echo "\`${{ github.head_ref }}\` is protected, so this bump cannot be pushed by CI."
+              echo "Land it manually before merging:"
+              echo
+              echo '```sh'
+              echo "git checkout -b release/v$VERSION ${{ github.head_ref }}"
+              echo "node scripts/release.mjs $VERSION --no-git"
+              echo "git commit -am \"release: v$VERSION\""
+              echo "gh pr create --base ${{ github.head_ref }}"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::Version must be bumped to $VERSION, but ${{ github.head_ref }} is protected. See the job summary."
+            exit 1
+          fi
+
+      - name: Version already correct
+        if: steps.derive.outputs.bump != 'none' && steps.derive.outputs.version == steps.derive.outputs.current
+        run: |
+          echo "### Version already at \`${{ steps.derive.outputs.current }}\`" >> "$GITHUB_STEP_SUMMARY"

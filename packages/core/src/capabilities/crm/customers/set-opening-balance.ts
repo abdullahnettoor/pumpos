@@ -1,8 +1,18 @@
 import { z } from 'zod';
 import { resolveBusinessDate } from '@pump/shared';
-import { BusinessEvents, err, eventFromContext, notFoundError, ok, validationError } from '../../../kernel/index.js';
+import {
+  BusinessEvents,
+  err,
+  eventFromContext,
+  notFoundError,
+  ok,
+  validationError,
+} from '../../../kernel/index.js';
 import type { EventPublisher, ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
-import { resolveBusinessDayWrite, type BusinessDayWriteRepository } from '../../station-ops/business-days/index.js';
+import {
+  resolveBusinessDayWrite,
+  type BusinessDayWriteRepository,
+} from '../../station-ops/business-days/index.js';
 import type { CustomerLedgerEntry, CustomerLedgerRepository } from '../collections/index.js';
 import type { CustomerRepository } from './index.js';
 
@@ -20,7 +30,10 @@ const schema = z.object({
   customerId: z.string().min(1, 'customerId is required'),
   amount: z.coerce.number().positive('amount must be positive'),
   stationId: z.string().min(1, 'stationId is required'),
-  asOfDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'asOfDate must be YYYY-MM-DD').optional(),
+  asOfDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'asOfDate must be YYYY-MM-DD')
+    .optional(),
 });
 
 export interface SetCustomerOpeningBalanceDeps {
@@ -39,20 +52,40 @@ export interface SetCustomerOpeningBalanceDeps {
  * derived balance (Σ debits − Σ collections) picks it up automatically.
  * Run inside runInTransaction.
  */
-export class SetCustomerOpeningBalance implements UseCase<SetCustomerOpeningBalanceCommand, CustomerLedgerEntry> {
+export class SetCustomerOpeningBalance implements UseCase<
+  SetCustomerOpeningBalanceCommand,
+  CustomerLedgerEntry
+> {
   constructor(private readonly deps: SetCustomerOpeningBalanceDeps) {}
 
-  async execute(input: SetCustomerOpeningBalanceCommand, ctx: ExecutionContext): Promise<Result<CustomerLedgerEntry>> {
+  async execute(
+    input: SetCustomerOpeningBalanceCommand,
+    ctx: ExecutionContext,
+  ): Promise<Result<CustomerLedgerEntry>> {
     const p = schema.safeParse(input);
-    if (!p.success) return err(validationError('Invalid SetCustomerOpeningBalance command', { issues: p.error.flatten() }));
+    if (!p.success)
+      return err(
+        validationError('Invalid SetCustomerOpeningBalance command', { issues: p.error.flatten() }),
+      );
     const cmd = p.data;
 
     const customer = await this.deps.customers.findById(cmd.customerId);
-    if (!customer || customer.organizationId !== ctx.organizationId) return err(notFoundError('Customer', cmd.customerId));
+    if (!customer || customer.organizationId !== ctx.organizationId)
+      return err(notFoundError('Customer', cmd.customerId));
 
-    const date = cmd.asOfDate ?? resolveBusinessDate({ now: ctx.clock.now(), timeZone: ctx.timeZone, dayStartsAt: ctx.businessDayStartsAt });
-    const eligibility = await resolveBusinessDayWrite(this.deps.businessDays, ctx, { stationId: cmd.stationId, businessDate: date, kind: 'FINANCIAL' });
-    if (!eligibility.success) return eligibility as unknown as Result<CustomerLedgerEntry>;
+    const date =
+      cmd.asOfDate ??
+      resolveBusinessDate({
+        now: ctx.clock.now(),
+        timeZone: ctx.timeZone,
+        dayStartsAt: ctx.businessDayStartsAt,
+      });
+    const eligibility = await resolveBusinessDayWrite(this.deps.businessDays, ctx, {
+      stationId: cmd.stationId,
+      businessDate: date,
+      kind: 'FINANCIAL',
+    });
+    if (!eligibility.success) return eligibility;
     const bd = eligibility.data.businessDay;
     const lateEntry = eligibility.data.lateEntry;
 

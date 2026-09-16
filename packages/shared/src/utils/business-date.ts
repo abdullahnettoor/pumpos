@@ -26,7 +26,9 @@ export function isValidBusinessDate(value: string): boolean {
   const month = Number(match[2]);
   const day = Number(match[3]);
   const date = new Date(Date.UTC(year, month - 1, day));
-  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+  return (
+    date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day
+  );
 }
 
 /**
@@ -54,7 +56,9 @@ export function resolveBusinessDate(opts: BusinessDateOptions = {}): string {
       minute: '2-digit',
       hour12: false,
     });
-    const parts = Object.fromEntries(fmt.formatToParts(now).map((p) => [p.type, p.value])) as Record<string, string>;
+    const parts = Object.fromEntries(
+      fmt.formatToParts(now).map((p) => [p.type, p.value]),
+    ) as Record<string, string>;
     year = Number(parts.year);
     month = Number(parts.month);
     day = Number(parts.day);
@@ -82,6 +86,7 @@ export function businessDateSettings(settings: unknown): { timeZone: string; day
   const s = (settings ?? {}) as Record<string, unknown>;
   return {
     timeZone: (typeof s.timezone === 'string' && s.timezone) || DEFAULT_TIMEZONE,
-    dayStartsAt: (typeof s.business_day_starts_at === 'string' && s.business_day_starts_at) || '00:00',
+    dayStartsAt:
+      (typeof s.business_day_starts_at === 'string' && s.business_day_starts_at) || '00:00',
   };
 }

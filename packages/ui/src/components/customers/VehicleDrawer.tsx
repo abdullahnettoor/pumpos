@@ -1,10 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Drawer } from '../Drawer.js';
 import { Field, TextInput, Select } from '../primitives/Field.js';
 import { Combobox } from '../primitives/Combobox.js';
 import { Checkbox } from '../primitives/Toggle.js';
-import { Button } from '../../pump-ds/index.js';
+import { Button, Form } from '../../pump-ds/index.js';
 import { CloudTransactionService } from '../../services/cloud.js';
 import { useToast } from '../primitives/ToastProvider.js';
 
@@ -26,38 +26,57 @@ interface VehicleDrawerProps {
 }
 
 /**
- * Add / edit a customer vehicle. Self-contained: owns its form state, resets on
- * open, and performs the save + `['vehicles']` cache invalidation + toast.
+ * Add / edit a customer vehicle. Self-contained: owns its form state and
+ * performs the save + `['vehicles']` cache invalidation + toast.
  */
-export const VehicleDrawer: React.FC<VehicleDrawerProps> = ({ isOpen, editingVehicle, defaultCustomerId, eligibleCustomers, fuelProducts, onClose, onCreated }) => {
+export const VehicleDrawer: React.FC<VehicleDrawerProps> = ({ isOpen, onClose, ...rest }) => (
+  <Drawer
+    isOpen={isOpen}
+    onClose={onClose}
+    title={rest.editingVehicle ? 'Edit Vehicle' : 'Add Vehicle'}
+  >
+    {/*
+     * `Drawer` renders nothing while closed, so the form below unmounts on close
+     * and is rebuilt from props on open — no reset-on-open effect needed. The key
+     * covers what unmounting does not: switching record while the drawer stays open.
+     */}
+    <VehicleForm
+      key={rest.editingVehicle?.id ?? `new:${rest.defaultCustomerId}`}
+      onClose={onClose}
+      {...rest}
+    />
+  </Drawer>
+);
+
+const VehicleForm: React.FC<Omit<VehicleDrawerProps, 'isOpen'>> = ({
+  editingVehicle,
+  defaultCustomerId,
+  eligibleCustomers,
+  fuelProducts,
+  onClose,
+  onCreated,
+}) => {
   const qc = useQueryClient();
   const toast = useToast();
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [form, setForm] = useState({
-    customerId: '',
-    registrationNumber: '',
-    vehicleType: '',
-    defaultProductId: '',
-    isActive: true,
-  });
-
-  useEffect(() => {
-    if (!isOpen) return;
-    setError(null);
-    if (editingVehicle) {
-      setForm({
-        customerId: editingVehicle.customerId,
-        registrationNumber: editingVehicle.registrationNumber || '',
-        vehicleType: editingVehicle.vehicleType || '',
-        defaultProductId: editingVehicle.defaultProductId || '',
-        isActive: editingVehicle.isActive,
-      });
-    } else {
-      setForm({ customerId: defaultCustomerId, registrationNumber: '', vehicleType: '', defaultProductId: '', isActive: true });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, editingVehicle, defaultCustomerId]);
+  const [form, setForm] = useState(() =>
+    editingVehicle
+      ? {
+          customerId: editingVehicle.customerId,
+          registrationNumber: editingVehicle.registrationNumber || '',
+          vehicleType: editingVehicle.vehicleType || '',
+          defaultProductId: editingVehicle.defaultProductId || '',
+          isActive: editingVehicle.isActive,
+        }
+      : {
+          customerId: defaultCustomerId,
+          registrationNumber: '',
+          vehicleType: '',
+          defaultProductId: '',
+          isActive: true,
+        },
+  );
 
   const onSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -90,9 +109,9 @@ export const VehicleDrawer: React.FC<VehicleDrawerProps> = ({ isOpen, editingVeh
           defaultProductName: prod?.name ?? null,
         });
       }
-      qc.invalidateQueries({ queryKey: ['vehicles'] });
       toast.success(editingVehicle ? 'Vehicle updated.' : 'Vehicle added.');
       onClose();
+      await qc.invalidateQueries({ queryKey: ['vehicles'] });
     } catch (err: any) {
       setError(err.message || 'Failed to save vehicle');
     } finally {
@@ -101,73 +120,88 @@ export const VehicleDrawer: React.FC<VehicleDrawerProps> = ({ isOpen, editingVeh
   };
 
   return (
-    <Drawer isOpen={isOpen} onClose={onClose} title={editingVehicle ? 'Edit Vehicle' : 'Add Vehicle'}>
-      <form onSubmit={onSave} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-        {error && (
-          <div style={{ backgroundColor: 'var(--state-danger-bg)', color: 'var(--state-danger-fg)', padding: '8px 12px', borderRadius: 'var(--radius-input)', fontSize: '12px' }}>
-            {error}
-          </div>
-        )}
-
-        {!editingVehicle && (
-          <Field label="Customer" required>
-            <Combobox
-              options={eligibleCustomers.map((c: any) => ({ value: c.id, label: `${c.name} (${c.customerType})` }))}
-              value={form.customerId}
-              onChange={(value) => setForm((prev) => ({ ...prev, customerId: value }))}
-              placeholder="Select customer…"
-              searchPlaceholder="Search customers…"
-            />
-          </Field>
-        )}
-
-        <Field label="Registration Number" required>
-          <TextInput
-            value={form.registrationNumber}
-            onChange={(e) => setForm((prev) => ({ ...prev, registrationNumber: e.target.value.toUpperCase() }))}
-            disabled={submitting}
-            placeholder="e.g. KL07AB1234"
-          />
-        </Field>
-
-        <Field label="Vehicle Type" required>
-          <TextInput
-            value={form.vehicleType}
-            onChange={(e) => setForm((prev) => ({ ...prev, vehicleType: e.target.value }))}
-            disabled={submitting}
-            placeholder="e.g. Truck, Bus"
-          />
-        </Field>
-
-        <Field label="Default Fuel Product">
-          <Select
-            value={form.defaultProductId}
-            onChange={(e) => setForm((prev) => ({ ...prev, defaultProductId: e.target.value }))}
-            disabled={submitting}
-          >
-            <option value="">-- Select Product --</option>
-            {fuelProducts.map((p: any) => (
-              <option key={p.id} value={p.id}>
-                {p.name} ({p.code})
-              </option>
-            ))}
-          </Select>
-        </Field>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Checkbox
-            label="Vehicle Active"
-            checked={form.isActive}
-            onChange={(e) => setForm((prev) => ({ ...prev, isActive: e.target.checked }))}
-            disabled={submitting}
-          />
+    <Form onSubmit={onSave} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+      {error && (
+        <div
+          style={{
+            backgroundColor: 'var(--state-danger-bg)',
+            color: 'var(--state-danger-fg)',
+            padding: '8px 12px',
+            borderRadius: 'var(--radius-input)',
+            fontSize: '12px',
+          }}
+        >
+          {error}
         </div>
+      )}
 
-        <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
-          <Button type="submit" variant="primary" fullWidth loading={submitting}>Save Vehicle</Button>
-          <Button type="button" variant="secondary" fullWidth disabled={submitting} onClick={onClose}>Cancel</Button>
-        </div>
-      </form>
-    </Drawer>
+      {!editingVehicle && (
+        <Field label="Customer" required>
+          <Combobox
+            options={eligibleCustomers.map((c: any) => ({
+              value: c.id,
+              label: `${c.name} (${c.customerType})`,
+            }))}
+            value={form.customerId}
+            onChange={(value) => setForm((prev) => ({ ...prev, customerId: value }))}
+            placeholder="Select customer…"
+            searchPlaceholder="Search customers…"
+          />
+        </Field>
+      )}
+
+      <Field label="Registration Number" required>
+        <TextInput
+          value={form.registrationNumber}
+          onChange={(e) =>
+            setForm((prev) => ({ ...prev, registrationNumber: e.target.value.toUpperCase() }))
+          }
+          disabled={submitting}
+          placeholder="e.g. KL07AB1234"
+        />
+      </Field>
+
+      <Field label="Vehicle Type" required>
+        <TextInput
+          value={form.vehicleType}
+          onChange={(e) => setForm((prev) => ({ ...prev, vehicleType: e.target.value }))}
+          disabled={submitting}
+          placeholder="e.g. Truck, Bus"
+        />
+      </Field>
+
+      <Field label="Default Fuel Product">
+        <Select
+          value={form.defaultProductId}
+          onChange={(e) => setForm((prev) => ({ ...prev, defaultProductId: e.target.value }))}
+          disabled={submitting}
+        >
+          <option value="">-- Select Product --</option>
+          {fuelProducts.map((p: any) => (
+            <option key={p.id} value={p.id}>
+              {p.name} ({p.code})
+            </option>
+          ))}
+        </Select>
+      </Field>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <Checkbox
+          label="Vehicle Active"
+          checked={form.isActive}
+          onChange={(e) => setForm((prev) => ({ ...prev, isActive: e.target.checked }))}
+          disabled={submitting}
+        />
+      </div>
+
+      <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
+        <Button type="submit" variant="primary" fullWidth loading={submitting}>
+          Save Vehicle
+        </Button>
+        <Button type="button" variant="secondary" fullWidth disabled={submitting} onClick={onClose}>
+          Cancel
+        </Button>
+      </div>
+    </Form>
   );
 };

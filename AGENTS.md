@@ -12,12 +12,12 @@ PumpOS is a multi-tenant fuel station management platform designed primarily for
 
 Primary goals:
 
-* Operational simplicity
-* Network resilience (graceful degradation, not offline-first)
-* Strong auditability
-* Multi-tenant isolation
-* Fast desktop experience
-* Future extensibility
+- Operational simplicity
+- Network resilience (graceful degradation, not offline-first)
+- Strong auditability
+- Multi-tenant isolation
+- Fast desktop experience
+- Future extensibility
 
 This is NOT a POS system.
 
@@ -34,9 +34,9 @@ This is an operational operating system focused on fuel station management.
 The platform has two anchors, and using the right one is the single most
 important domain rule:
 
-* **`business_day_id`** is the **universal anchor**. Every operational and
+- **`business_day_id`** is the **universal anchor**. Every operational and
   financial record belongs to a business day.
-* **`shift_id`** is an **optional** anchor. A shift is an attendant-accountability
+- **`shift_id`** is an **optional** anchor. A shift is an attendant-accountability
   window for drawer cash. It is set by default when money touches the physical
   drawer (and for sales), and may be passed explicitly or preselected on other
   records when shift attribution is useful.
@@ -59,17 +59,17 @@ Reports
 
 Anchoring rules (DO NOT couple everything to a shift):
 
-* Fuel/product **sales** occur within a shift (attendant accountability) →
+- Fuel/product **sales** occur within a shift (attendant accountability) →
   `shift_id` set by default.
-* **Cash** collections / cash supplier payments / drawer (`SHIFT_CASH`) expenses
+- **Cash** collections / cash supplier payments / drawer (`SHIFT_CASH`) expenses
   touch the drawer → `shift_id` set by default.
-* **Card / UPI / bank / online** collections, **bank/owner** expenses,
+- **Card / UPI / bank / online** collections, **bank/owner** expenses,
   **purchases**, and **credit sales** do NOT touch the drawer → `shift_id`
   defaults to NULL, anchored to the business day. The field remains optional:
   callers may pass a `shift_id`, or the UI may preselect the open shift, when
   attributing the record to a shift window helps future capabilities slice
   historical data.
-* **Credit sales are receivables**, not drawer cash. A fleet fuel-on-credit sale
+- **Credit sales are receivables**, not drawer cash. A fleet fuel-on-credit sale
   records only a customer-ledger debit (receivable); it never moves stock again
   (the fuel is already metered via nozzle readings). Customer balance =
   Σ credit sales − Σ collections.
@@ -104,29 +104,29 @@ from `@pump/shared`, which converts the instant to the station's timezone and
 rolls back to the previous date when the local time is before the station's
 `business_day_starts_at` (a fuel day commonly runs 06:00 → 06:00).
 
-* The station's `timezone` + `business_day_starts_at` are captured at onboarding
+- The station's `timezone` + `business_day_starts_at` are captured at onboarding
   and stored in `stations.settings`.
-* The API resolves them via `loadStationClock(db, stationId)` and passes them into
+- The API resolves them via `loadStationClock(db, stationId)` and passes them into
   `buildContext` → `ExecutionContext.timeZone` / `.businessDayStartsAt`; core
   use-cases read those when calling `resolveBusinessDate`.
-* The same helper is used client-side to default the shift-open date field.
-* TODO: render displayed timestamps in station timezone (currently UTC-instant).
+- The same helper is used client-side to default the shift-open date field.
+- TODO: render displayed timestamps in station timezone (currently UTC-instant).
 
 ---
 
 ## Code Organization (ports & adapters)
 
-* **`packages/core`** (`@pump/core`) — framework-agnostic domain. Capability
+- **`packages/core`** (`@pump/core`) — framework-agnostic domain. Capability
   folders (`station-setup`, `station-ops`, `inventory`, `retail`, `purchasing`,
   `crm`, `finance`, `reporting`) composed of **use-cases**. Repository **ports**
   (interfaces) live here. Core never imports Hono, Drizzle, React or SQL.
-* **`apps/api`** — thin Hono routes that wire Drizzle repository **adapters** +
+- **`apps/api`** — thin Hono routes that wire Drizzle repository **adapters** +
   the event dispatcher into core use-cases. Mutations run inside
   `runInTransaction(db, (tx, events) => useCase.execute(...))`, a transactional
   outbox: state changes AND the `events` append commit atomically.
-* Response envelope is always `{ success: true, data }` or
+- Response envelope is always `{ success: true, data }` or
   `{ success: false, error: { code, message } }`.
-* Mutating routes honor an optional `Idempotency-Key` header (dedupes retries /
+- Mutating routes honor an optional `Idempotency-Key` header (dedupes retries /
   offline replays via the `idempotency_keys` store).
 
 ---
@@ -147,13 +147,13 @@ Write outbox — Tauri SQLite (desktop) / IndexedDB (web)
 
 Rules:
 
-* PostgreSQL is always authoritative.
-* The local store is a durable **write outbox + warm read cache**, never the
+- PostgreSQL is always authoritative.
+- The local store is a durable **write outbox + warm read cache**, never the
   final source of truth.
-* The product target is **Level 2 resilience** (online-primary, graceful
+- The product target is **Level 2 resilience** (online-primary, graceful
   degradation on connectivity drops) — NOT cold-start offline-first and NOT
   multi-day disconnected operation. See `docs/roadmap/phase-O-offline-sync.md`.
-* Sync eventually reconciles queued local events to cloud; replay is idempotent.
+- Sync eventually reconciles queued local events to cloud; replay is idempotent.
 
 ---
 
@@ -174,9 +174,9 @@ DSSR_GENERATED
 
 Business events:
 
-* Drive synchronization
-* Drive auditing
-* Drive reporting
+- Drive synchronization
+- Drive auditing
+- Drive reporting
 
 Do not bypass event creation.
 
@@ -227,18 +227,18 @@ See `CONTEXT.md` ("Sale", "Fuel Sale", "Product Sale") for the shared language.
 
 There are **two** immutable report snapshots:
 
-* **Shift Summary** — created when a **shift is closed** (`shift_summaries`).
+- **Shift Summary** — created when a **shift is closed** (`shift_summaries`).
   Holds that shift's nozzle reconciliation, drawer reconciliation, and totals.
-* **DSSR** (Daily Station Sales Report) — created when a **business day is
+- **DSSR** (Daily Station Sales Report) — created when a **business day is
   closed** / generated on demand (`dssr_snapshots`). Composes all of the day's
   closed-shift summaries plus business-day-anchored financials (collections,
   expenses, purchases, supplier payments, credit sales).
 
 Rules for both:
 
-* Stored permanently.
-* Never recalculated historically.
-* Never modified after generation (regeneration is explicit + idempotent).
+- Stored permanently.
+- Never recalculated historically.
+- Never modified after generation (regeneration is explicit + idempotent).
 
 ---
 
@@ -371,16 +371,16 @@ Custom Permissions
 
 Inspiration:
 
-* Notion
-* Linear
-* Atlassian
-* Stripe Dashboard
+- Notion
+- Linear
+- Atlassian
+- Stripe Dashboard
 
 Avoid:
 
-* Traditional ERP layouts
-* SAP-style interfaces
-* Tally-style interfaces
+- Traditional ERP layouts
+- SAP-style interfaces
+- Tally-style interfaces
 
 ---
 
@@ -482,9 +482,9 @@ Supabase PostgreSQL
 
 Prefer:
 
-* Type-safe APIs
-* Shared schemas
-* Shared validation
+- Type-safe APIs
+- Shared schemas
+- Shared validation
 
 ---
 
@@ -528,13 +528,13 @@ operational  (shift status, sales, collections, inventory, DSSR)                
 
 Mandatory rules:
 
-* Read through query hooks / `ensureQueryData` with a **centralized key** — never call
+- Read through query hooks / `ensureQueryData` with a **centralized key** — never call
   `service.getX()` directly in a component (that bypasses the cache).
-* **Every mutation invalidates its key(s).** Setup edits invalidate their static/semi key;
+- **Every mutation invalidates its key(s).** Setup edits invalidate their static/semi key;
   operational writes use `useInvalidateOperational` (which also refreshes `customers` and
   `suppliers` whose balances move).
-* Persist only static/semi (`PERSIST_PREFIXES`); bump `CACHE_BUSTER` on payload shape changes.
-* Never use `refetchOnMount: 'always'` on tiered queries.
+- Persist only static/semi (`PERSIST_PREFIXES`); bump `CACHE_BUSTER` on payload shape changes.
+- Never use `refetchOnMount: 'always'` on tiered queries.
 
 Full plan + audit: `docs/roadmap/phase-P-performance.md`. Practice + review checklist:
 `.agents/skills/pump-data-caching/SKILL.md`.
@@ -555,13 +555,13 @@ calls need the network. Mobile is online-only.
 
 Rules when connectivity drops mid-session:
 
-* Never block a core operator action (sale, expense, collection, shift
+- Never block a core operator action (sale, expense, collection, shift
   open/**close**) on the network — queue it, don't gate it.
-* Writes: optimistic apply → durable local outbox → retry/backoff → idempotent
+- Writes: optimistic apply → durable local outbox → retry/backoff → idempotent
   replay (via `idempotency_keys` + unique `event_id`).
-* Reads: serve from the warm TanStack Query cache; show honest sync state
+- Reads: serve from the warm TanStack Query cache; show honest sync state
   (online / pending N / failed).
-* Cloud stays authoritative; last-writer-wins on projections; flag only
+- Cloud stays authoritative; last-writer-wins on projections; flag only
   money-sensitive collisions (drawer / shift-close) for review.
 
 Every sync operation must be idempotent.

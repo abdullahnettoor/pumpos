@@ -21,7 +21,9 @@ export const Step1StationBasics: React.FC<Step1StationBasicsProps> = ({
   return (
     <div style={{ ...panelStyle, gap: '20px' }}>
       <div>
-        <h2 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-strong)' }}>Station Basics</h2>
+        <h2 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-strong)' }}>
+          Station Basics
+        </h2>
         <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px' }}>
           Capture the core station identity once, then finish all provisioning in one smooth submit.
         </p>
@@ -33,7 +35,12 @@ export const Step1StationBasics: React.FC<Step1StationBasicsProps> = ({
           <input
             type="text"
             value={draft.station.name}
-            onChange={(e) => updateDraft((prev) => ({ ...prev, station: { ...prev.station, name: e.target.value } }))}
+            onChange={(e) =>
+              updateDraft((prev) => ({
+                ...prev,
+                station: { ...prev.station, name: e.target.value },
+              }))
+            }
             style={inputStyle}
             placeholder="e.g. Shell Gachibowli"
           />
@@ -43,7 +50,12 @@ export const Step1StationBasics: React.FC<Step1StationBasicsProps> = ({
           <input
             type="text"
             value={draft.station.code}
-            onChange={(e) => updateDraft((prev) => ({ ...prev, station: { ...prev.station, code: e.target.value.toUpperCase() } }))}
+            onChange={(e) =>
+              updateDraft((prev) => ({
+                ...prev,
+                station: { ...prev.station, code: e.target.value.toUpperCase() },
+              }))
+            }
             style={inputStyle}
             placeholder="e.g. SH-HYD-01"
           />
@@ -54,7 +66,12 @@ export const Step1StationBasics: React.FC<Step1StationBasicsProps> = ({
         <label style={fieldLabelStyle}>Station Address</label>
         <textarea
           value={draft.station.address || ''}
-          onChange={(e) => updateDraft((prev) => ({ ...prev, station: { ...prev.station, address: e.target.value } }))}
+          onChange={(e) =>
+            updateDraft((prev) => ({
+              ...prev,
+              station: { ...prev.station, address: e.target.value },
+            }))
+          }
           style={textAreaStyle}
           placeholder="Address or landmark"
         />
@@ -66,7 +83,12 @@ export const Step1StationBasics: React.FC<Step1StationBasicsProps> = ({
           <input
             type="text"
             value={draft.station.phone || ''}
-            onChange={(e) => updateDraft((prev) => ({ ...prev, station: { ...prev.station, phone: e.target.value } }))}
+            onChange={(e) =>
+              updateDraft((prev) => ({
+                ...prev,
+                station: { ...prev.station, phone: e.target.value },
+              }))
+            }
             style={inputStyle}
             placeholder="+91 9876543210"
           />
@@ -77,10 +99,12 @@ export const Step1StationBasics: React.FC<Step1StationBasicsProps> = ({
             type="number"
             min={0}
             value={draft.station.shiftGraceMinutes}
-            onChange={(e) => updateDraft((prev) => ({
-              ...prev,
-              station: { ...prev.station, shiftGraceMinutes: Number(e.target.value) || 0 },
-            }))}
+            onChange={(e) =>
+              updateDraft((prev) => ({
+                ...prev,
+                station: { ...prev.station, shiftGraceMinutes: Number(e.target.value) || 0 },
+              }))
+            }
             style={inputStyle}
           />
         </div>

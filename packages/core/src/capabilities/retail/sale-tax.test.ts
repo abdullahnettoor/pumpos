@@ -1,8 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import { splitSaleLineTax } from './sale-tax.js';
 
-const gstProduct = (cfg: Record<string, unknown> | null) => ({ taxCategory: 'GST' as const, taxConfig: cfg as any });
-const fuelProduct = (cfg: Record<string, unknown> | null) => ({ taxCategory: 'FUEL_VAT' as const, taxConfig: cfg as any });
+const gstProduct = (cfg: Record<string, unknown> | null) => ({
+  taxCategory: 'GST' as const,
+  taxConfig: cfg as any,
+});
+const fuelProduct = (cfg: Record<string, unknown> | null) => ({
+  taxCategory: 'FUEL_VAT' as const,
+  taxConfig: cfg as any,
+});
 
 describe('splitSaleLineTax (T5)', () => {
   it('extracts GST from an MRP-inclusive merchandise line without changing the total', () => {

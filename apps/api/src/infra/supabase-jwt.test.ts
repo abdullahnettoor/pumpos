@@ -10,7 +10,10 @@ type TestJwk = JsonWebKey & { kid: string; alg: string; use: string };
 type Keys = { privateKey: CryptoKey; jwk: TestJwk };
 
 async function generateKeys(kid: string): Promise<Keys> {
-  const pair = (await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify'])) as CryptoKeyPair;
+  const pair = (await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, [
+    'sign',
+    'verify',
+  ])) as CryptoKeyPair;
   const jwk = (await crypto.subtle.exportKey('jwk', pair.publicKey)) as JsonWebKey;
   return { privateKey: pair.privateKey, jwk: { ...jwk, kid, alg: 'ES256', use: 'sig' } };
 }
@@ -22,25 +25,34 @@ function b64url(input: string | Uint8Array): string {
   return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
-async function makeToken(keys: Keys, kid: string, claims: Record<string, unknown>): Promise<string> {
+async function makeToken(
+  keys: Keys,
+  kid: string,
+  claims: Record<string, unknown>,
+): Promise<string> {
   const header = b64url(JSON.stringify({ alg: 'ES256', typ: 'JWT', kid }));
-  const payload = b64url(JSON.stringify({ sub: 'auth-user-1', exp: Math.floor(Date.now() / 1000) + 300, ...claims }));
+  const payload = b64url(
+    JSON.stringify({ sub: 'auth-user-1', exp: Math.floor(Date.now() / 1000) + 300, ...claims }),
+  );
   const signingInput = `${header}.${payload}`;
   const sig = await crypto.subtle.sign(
     { name: 'ECDSA', hash: 'SHA-256' },
     keys.privateKey,
-    new TextEncoder().encode(signingInput)
+    new TextEncoder().encode(signingInput),
   );
   return `${signingInput}.${b64url(new Uint8Array(sig))}`;
 }
 
 function stubJwks(map: Record<string, TestJwk[]>) {
-  vi.stubGlobal('fetch', vi.fn(async (url: string | URL) => {
-    const u = String(url);
-    const keys = map[u];
-    if (!keys) return new Response('not found', { status: 404 });
-    return new Response(JSON.stringify({ keys }), { status: 200 });
-  }));
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string | URL) => {
+      const u = String(url);
+      const keys = map[u];
+      if (!keys) return new Response('not found', { status: 404 });
+      return new Response(JSON.stringify({ keys }), { status: 200 });
+    }),
+  );
 }
 
 describe('verifySupabaseJwt', () => {
@@ -111,10 +123,15 @@ describe('verifySupabaseJwt', () => {
 
   it('does not apply the dev fallback outside local requests', async () => {
     const keys = await generateKeys('kid-1');
-    vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('network down'); }));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new Error('network down');
+      }),
+    );
     const token = await makeToken(keys, 'kid-1', { iss: TRUSTED_ISSUER, aud: 'authenticated' });
     await expect(
-      verifySupabaseJwt(token, { ...env, ENVIRONMENT: 'development' }, REQ_URL)
+      verifySupabaseJwt(token, { ...env, ENVIRONMENT: 'development' }, REQ_URL),
     ).rejects.toThrow();
   });
 });

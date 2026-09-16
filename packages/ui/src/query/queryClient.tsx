@@ -1,14 +1,27 @@
 import React from 'react';
+import { clearNavIntent } from '../nav-intent/store.js';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { persistQueryClient } from '@tanstack/query-persist-client-core';
+import { runTask } from '../utils/runTask.js';
 import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister';
 
 // Query-key prefixes whose data is safe to persist across reloads (static +
 // semi-static tiers). Operational/live data and anything auth-related are never
 // persisted. Bump CACHE_BUSTER on shape changes to drop stale persisted cache.
 const PERSIST_PREFIXES = new Set([
-  'tanks', 'products', 'customers', 'suppliers', 'expense-categories',
-  'stations', 'dispensers', 'nozzles', 'users', 'shift-templates', 'pricing', 'organization',
+  'tanks',
+  'products',
+  'customers',
+  'suppliers',
+  'expense-categories',
+  'stations',
+  'dispensers',
+  'nozzles',
+  'users',
+  'shift-templates',
+  'payment-terminals',
+  'pricing',
+  'organization',
 ]);
 // Bump to invalidate all persisted client caches on next load. v3 drops stale
 // empty `stations` lists cached while a user briefly resolved to a wrong/empty
@@ -58,6 +71,9 @@ export function clearClientSessionData(qc: QueryClient) {
   qc.clear();
   clearPersistedQueryCache();
   clearPendingWorkflowKeys();
+  // The nav-intent store is module-global, so an unconsumed deep link would
+  // otherwise outlive the session and fire for the next user who signs in.
+  clearNavIntent();
 }
 
 /**
@@ -90,15 +106,31 @@ export interface QueryProviderProps {
 let fallbackClient: QueryClient | null = null;
 
 /**
+ * The client used when a shell does not pass one in. Created on first use and
+ * shared thereafter, so every consumer sees one cache.
+ *
+ * Lazily created from a function rather than assigned during render: mutating
+ * module state while rendering is not safe under concurrent React, where a
+ * render can be started and thrown away.
+ */
+function getFallbackClient(): QueryClient {
+  fallbackClient ??= createQueryClient();
+  return fallbackClient;
+}
+
+/**
  * Persists the static/semi-static slices of the cache to localStorage so the
  * shell + dropdowns paint instantly on reload without a network wait. Called
  * once per client; no-op outside the browser (e.g. SSR / tests).
  */
 function enablePersistence(client: QueryClient) {
   if (typeof window === 'undefined' || !window.localStorage) return;
-  const persister = createSyncStoragePersister({ storage: window.localStorage, key: PERSISTED_QUERY_CACHE_KEY });
-  persistQueryClient({
-    queryClient: client as any,
+  const persister = createSyncStoragePersister({
+    storage: window.localStorage,
+    key: PERSISTED_QUERY_CACHE_KEY,
+  });
+  const [, restored] = persistQueryClient({
+    queryClient: client,
     persister,
     maxAge: 24 * 60 * 60_000,
     buster: CACHE_BUSTER,
@@ -107,13 +139,28 @@ function enablePersistence(client: QueryClient) {
         query.state.status === 'success' && PERSIST_PREFIXES.has(String(query.queryKey?.[0])),
     },
   });
+
+  // Restoring reads and parses localStorage, so it can reject on a corrupt or
+  // truncated payload (a half-written entry, or a quota failure mid-write).
+  // That must not take the app down: the cache is a paint-speed optimisation,
+  // not a source of truth, so drop the bad payload and carry on fetching from
+  // the network. Deliberately not surfaced to the operator — there is nothing
+  // for them to do, and the only visible effect is a slower first paint.
+  runTask(restored, (error) => {
+    console.error('Could not restore the persisted query cache; continuing without it.', error);
+    try {
+      window.localStorage.removeItem(PERSISTED_QUERY_CACHE_KEY);
+    } catch {
+      // Storage is unavailable (private mode, quota). Nothing further to do.
+    }
+  });
 }
 
 export const QueryProvider: React.FC<QueryProviderProps> = ({ client, children }) => {
-  if (!client && !fallbackClient) {
-    fallbackClient = createQueryClient();
-  }
-  const active = client ?? fallbackClient!;
+  // useState's initialiser runs once per mount and, unlike a bare assignment,
+  // is not a render-phase mutation of module scope.
+  const [fallback] = React.useState(() => (client ? null : getFallbackClient()));
+  const active = client ?? fallback!;
   React.useEffect(() => {
     enablePersistence(active);
   }, [active]);

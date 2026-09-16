@@ -26,7 +26,10 @@ export const AlertList: React.FC<Props> = ({ alerts, onNavigate, limit, emptyTex
         className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs"
         style={{ backgroundColor: 'var(--state-success-bg)', color: 'var(--state-success-fg)' }}
       >
-        <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: 'var(--state-success-fg)' }} />
+        <span
+          className="h-1.5 w-1.5 rounded-full"
+          style={{ backgroundColor: 'var(--state-success-fg)' }}
+        />
         {emptyText}
       </div>
     ) : null;
@@ -46,13 +49,24 @@ export const AlertList: React.FC<Props> = ({ alerts, onNavigate, limit, emptyTex
             className="flex items-center gap-2 rounded-lg px-3 py-2 text-left"
             style={{ backgroundColor: c.bg, cursor: tappable ? 'pointer' : 'default' }}
           >
-            <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full" style={{ backgroundColor: c.fg }} />
+            <span
+              className="h-1.5 w-1.5 flex-shrink-0 rounded-full"
+              style={{ backgroundColor: c.fg }}
+            />
             <div className="min-w-0 flex-1">
-              <p className="truncate text-xs font-medium" style={{ color: c.fg }}>{a.title}</p>
-              {a.meta && <p className="truncate text-[11px]" style={{ color: 'var(--text-muted)' }}>{a.meta}</p>}
+              <p className="truncate text-xs font-medium" style={{ color: c.fg }}>
+                {a.title}
+              </p>
+              {a.meta && (
+                <p className="truncate text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                  {a.meta}
+                </p>
+              )}
             </div>
             {tappable && (
-              <span className="flex-shrink-0 text-xs" style={{ color: c.fg }}>›</span>
+              <span className="flex-shrink-0 text-xs" style={{ color: c.fg }}>
+                ›
+              </span>
             )}
           </button>
         );

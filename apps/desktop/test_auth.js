@@ -11,7 +11,7 @@ async function test() {
   try {
     const { data, error } = await supabase.auth.signInWithPassword({
       email: 'manager@pump.com',
-      password: 'password123'
+      password: 'password123',
     });
 
     if (error) {

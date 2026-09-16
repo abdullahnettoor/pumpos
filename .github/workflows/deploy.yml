@@ -26,7 +26,16 @@ name: Deploy
 #   PREVIEW_API_URL         defaults to https://api.pumpos.abdullahnettoor.com
 #   MARKETING_SITE          defaults to https://pumpos.app for tags
 #   CONSOLE_URL             defaults to https://console.pumpos.app for tags
+#   MOBILE_URL              defaults to https://m.pumpos.app for tags
+#   PREVIEW_CONSOLE_URL     defaults to https://console.pumpos.abdullahnettoor.com
+#   PREVIEW_MARKETING_SITE  defaults to https://pumpos.abdullahnettoor.com
+#   PREVIEW_MOBILE_URL      defaults to https://m.pumpos.abdullahnettoor.com
 #   DOWNLOAD_MANIFEST_URL   empty => bundled placeholder manifest
+#
+# Every deploy job ends with a smoke check (scripts/smoke-deploy.mjs). Upload
+# success is not health: a Worker that builds, uploads and then throws on every
+# request looks identical to a good one until an operator hits it. The API check
+# exercises a real routed endpoint, not just /health.
 
 on:
   push:
@@ -70,6 +79,9 @@ jobs:
       mobile: ${{ steps.filter.outputs.mobile }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          # paths-filter needs both ends of the range in the local history.
+          fetch-depth: 0
       - name: Resolve deploy mode
         id: mode
         run: |
@@ -78,9 +90,29 @@ jobs:
           else
             echo "mode=preview" >> "$GITHUB_OUTPUT"
           fi
+      # The diff base must be the previous commit on THIS branch, not the
+      # default branch. paths-filter defaults `base` to the repository default
+      # branch for push events, so whenever `dev` and `main` were level it saw
+      # no changes and skipped every preview — which, with a
+      # merge-to-main-soon-after habit, was most of the time.
+      #
+      # Left empty for anything that is not an ordinary push (manual dispatch,
+      # the production workflow_call, a brand-new branch whose `before` is all
+      # zeroes); those paths do not consult the filter anyway.
+      - name: Resolve diff base
+        id: base
+        run: |
+          before="${{ github.event.before }}"
+          empty="0000000000000000000000000000000000000000"
+          if [ "${{ github.event_name }}" != "push" ] || [ -z "$before" ] || [ "$before" = "$empty" ]; then
+            echo "base=" >> "$GITHUB_OUTPUT"
+          else
+            echo "base=$before" >> "$GITHUB_OUTPUT"
+          fi
       - uses: dorny/paths-filter@v4
         id: filter
         with:
+          base: ${{ steps.base.outputs.base }}
           filters: |
             api:
               - 'apps/api/**'
@@ -146,6 +178,14 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
+      - name: Smoke-check console
+        run: |
+          if [ "${{ needs.changes.outputs.mode }}" = "production" ]; then
+            node scripts/smoke-deploy.mjs console "${{ vars.CONSOLE_URL || 'https://console.pumpos.app' }}"
+          else
+            node scripts/smoke-deploy.mjs console "${{ vars.PREVIEW_CONSOLE_URL || 'https://console.pumpos.abdullahnettoor.com' }}"
+          fi
+
   marketing:
     needs: changes
     if: needs.changes.outputs.mode == 'production' || contains(fromJSON('["all","marketing"]'), github.event.inputs.app) || (github.event_name == 'push' && github.ref_name == 'dev' && needs.changes.outputs.marketing == 'true')
@@ -184,6 +224,15 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Smoke-check marketing
+        working-directory: ${{ github.workspace }}
+        run: |
+          if [ "${{ needs.changes.outputs.mode }}" = "production" ]; then
+            node scripts/smoke-deploy.mjs marketing "${{ vars.MARKETING_SITE || 'https://pumpos.app' }}"
+          else
+            node scripts/smoke-deploy.mjs marketing "${{ vars.PREVIEW_MARKETING_SITE || 'https://pumpos.abdullahnettoor.com' }}"
+          fi
 
   mobile:
     needs: changes
@@ -225,6 +274,14 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
+      - name: Smoke-check mobile
+        run: |
+          if [ "${{ needs.changes.outputs.mode }}" = "production" ]; then
+            node scripts/smoke-deploy.mjs mobile "${{ vars.MOBILE_URL || 'https://m.pumpos.app' }}"
+          else
+            node scripts/smoke-deploy.mjs mobile "${{ vars.PREVIEW_MOBILE_URL || 'https://m.pumpos.abdullahnettoor.com' }}"
+          fi
+
   api:
     needs: changes
     if: needs.changes.outputs.mode == 'production' || contains(fromJSON('["all","api"]'), github.event.inputs.app) || (github.event_name == 'push' && github.ref_name == 'dev' && needs.changes.outputs.api == 'true')
@@ -253,3 +310,11 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Smoke-check API
+        run: |
+          if [ "${{ needs.changes.outputs.mode }}" = "production" ]; then
+            node scripts/smoke-deploy.mjs api "${{ secrets.PROD_API_URL }}"
+          else
+            node scripts/smoke-deploy.mjs api "${{ vars.PREVIEW_API_URL || 'https://api.pumpos.abdullahnettoor.com' }}"
+          fi

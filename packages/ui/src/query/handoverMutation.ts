@@ -1,5 +1,9 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { CloudShiftService, type RecordHandoverPayload, type RecordHandoverResult } from '../services/cloud.js';
+import {
+  CloudShiftService,
+  type RecordHandoverPayload,
+  type RecordHandoverResult,
+} from '../services/cloud.js';
 import { queryKeys } from './hooks.js';
 
 const shiftService = new CloudShiftService();
@@ -19,19 +23,36 @@ export interface HandoverRequestIdentity {
   idempotencyKey: string;
 }
 
-const handoverRequestKey = (stationId: string, shiftId: string, attendantId: string, duId: string) =>
-  `pumpos:pending-handover:${stationId}:${shiftId}:${attendantId}:${duId}`;
+const handoverRequestKey = (
+  stationId: string,
+  shiftId: string,
+  attendantId: string,
+  duId: string,
+) => `pumpos:pending-handover:${stationId}:${shiftId}:${attendantId}:${duId}`;
 
-export function loadHandoverRequestIdentity(stationId: string, shiftId: string, attendantId: string, duId: string): HandoverRequestIdentity | null {
+export function loadHandoverRequestIdentity(
+  stationId: string,
+  shiftId: string,
+  attendantId: string,
+  duId: string,
+): HandoverRequestIdentity | null {
   if (typeof localStorage === 'undefined') return null;
   try {
-    return JSON.parse(localStorage.getItem(handoverRequestKey(stationId, shiftId, attendantId, duId)) ?? 'null') as HandoverRequestIdentity | null;
+    return JSON.parse(
+      localStorage.getItem(handoverRequestKey(stationId, shiftId, attendantId, duId)) ?? 'null',
+    ) as HandoverRequestIdentity | null;
   } catch {
     return null;
   }
 }
 
-export function saveHandoverRequestIdentity(stationId: string, shiftId: string, attendantId: string, duId: string, identity: HandoverRequestIdentity | null): void {
+export function saveHandoverRequestIdentity(
+  stationId: string,
+  shiftId: string,
+  attendantId: string,
+  duId: string,
+  identity: HandoverRequestIdentity | null,
+): void {
   if (typeof localStorage === 'undefined') return;
   const key = handoverRequestKey(stationId, shiftId, attendantId, duId);
   if (identity) localStorage.setItem(key, JSON.stringify(identity));
@@ -44,19 +65,23 @@ export function resolveHandoverRequestIdentity(
   createKey = createIdempotencyKey,
 ): HandoverRequestIdentity {
   const fingerprint = handoverPayloadFingerprint(payload);
-  return current?.fingerprint === fingerprint ? current : { fingerprint, idempotencyKey: createKey() };
+  return current?.fingerprint === fingerprint
+    ? current
+    : { fingerprint, idempotencyKey: createKey() };
 }
 
 export function selectHandoverSummary(
   preview: { expectedTotal: number; declaredTotal: number; varianceAmount: number },
   accepted?: RecordHandoverResult | null,
 ) {
-  return accepted ? {
-    source: 'accepted' as const,
-    expectedTotal: accepted.expectedTotal,
-    declaredTotal: accepted.declaredTotal,
-    varianceAmount: accepted.varianceAmount,
-  } : { source: 'preview' as const, ...preview };
+  return accepted
+    ? {
+        source: 'accepted' as const,
+        expectedTotal: accepted.expectedTotal,
+        declaredTotal: accepted.declaredTotal,
+        varianceAmount: accepted.varianceAmount,
+      }
+    : { source: 'preview' as const, ...preview };
 }
 
 export interface RecordHandoverMutationInput {
@@ -80,7 +105,11 @@ export function useRecordHandoverMutation() {
     mutationFn: ({ payload, idempotencyKey }: RecordHandoverMutationInput) =>
       shiftService.recordHandover(payload, { idempotencyKey }),
     onSuccess: async (_result, { stationId }) => {
-      await Promise.all(handoverInvalidationKeys(stationId).map((queryKey) => queryClient.invalidateQueries({ queryKey })));
+      await Promise.all(
+        handoverInvalidationKeys(stationId).map((queryKey) =>
+          queryClient.invalidateQueries({ queryKey }),
+        ),
+      );
     },
   });
 }

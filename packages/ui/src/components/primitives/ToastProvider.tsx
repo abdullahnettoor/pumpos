@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
 
 export type ToastVariant = 'error' | 'success' | 'info';
 
@@ -30,9 +30,26 @@ export const useToast = (): ToastApi => {
   return ctx;
 };
 
+/**
+ * The toast api if there is a provider above, otherwise null.
+ *
+ * For shared primitives that want to report a failure when they are inside an
+ * app, but must still render in isolation — design-system pages, tests — where
+ * no provider exists. Application code should use `useToast` and fail loudly.
+ */
+export const useOptionalToast = (): ToastApi | null => useContext(ToastContext);
+
 const VARIANT_STYLE: Record<ToastVariant, { border: string; bg: string; fg: string }> = {
-  error: { border: 'var(--brand-danger)', bg: 'var(--state-danger-bg)', fg: 'var(--state-danger-fg)' },
-  success: { border: 'var(--brand-success)', bg: 'var(--state-success-bg)', fg: 'var(--state-success-fg)' },
+  error: {
+    border: 'var(--brand-danger)',
+    bg: 'var(--state-danger-bg)',
+    fg: 'var(--state-danger-fg)',
+  },
+  success: {
+    border: 'var(--brand-success)',
+    bg: 'var(--state-success-bg)',
+    fg: 'var(--state-success-fg)',
+  },
   info: { border: 'var(--brand-primary)', bg: 'var(--state-info-bg)', fg: 'var(--state-info-fg)' },
 };
 
@@ -44,19 +61,29 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
-  const show = useCallback((message: string, variant: ToastVariant = 'info', opts?: ToastOptions) => {
-    const id = ++idRef.current;
-    const duration = opts?.duration ?? (variant === 'error' ? 6000 : 4500);
-    setToasts((prev) => [...prev, { id, message, variant, ...opts }]);
-    if (duration > 0) window.setTimeout(() => remove(id), duration);
-  }, [remove]);
+  const show = useCallback(
+    (message: string, variant: ToastVariant = 'info', opts?: ToastOptions) => {
+      const id = ++idRef.current;
+      const duration = opts?.duration ?? (variant === 'error' ? 6000 : 4500);
+      setToasts((prev) => [...prev, { id, message, variant, ...opts }]);
+      if (duration > 0) window.setTimeout(() => remove(id), duration);
+    },
+    [remove],
+  );
 
-  const api: ToastApi = {
-    show,
-    error: useCallback((m: string, o?: ToastOptions) => show(m, 'error', o), [show]),
-    success: useCallback((m: string, o?: ToastOptions) => show(m, 'success', o), [show]),
-    info: useCallback((m: string, o?: ToastOptions) => show(m, 'info', o), [show]),
-  };
+  const error = useCallback((m: string, o?: ToastOptions) => show(m, 'error', o), [show]);
+  const success = useCallback((m: string, o?: ToastOptions) => show(m, 'success', o), [show]);
+  const info = useCallback((m: string, o?: ToastOptions) => show(m, 'info', o), [show]);
+
+  // `show` and `remove` are already stable, so memoising the object makes the
+  // whole context value stable for the life of the provider. Without this the
+  // value was a fresh literal on every render, which (a) re-rendered every
+  // consumer each time a toast appeared or expired, and (b) would make anything
+  // derived from it — such as `useRunTask` — unusable as an effect dependency.
+  const api = useMemo<ToastApi>(
+    () => ({ show, error, success, info }),
+    [show, error, success, info],
+  );
 
   return (
     <ToastContext.Provider value={api}>

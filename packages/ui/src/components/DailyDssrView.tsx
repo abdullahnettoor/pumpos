@@ -42,9 +42,14 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
   const singleDssrUnit: string | null = dssrFuelUnits.length === 1 ? dssrFuelUnits[0] : null;
   const dssrUnitTotals = (getter: (p: any) => number, dec = 3): string => {
     const m: Record<string, number> = {};
-    for (const p of byProduct) { const u = p.unit || 'L'; m[u] = (m[u] || 0) + Number(getter(p) || 0); }
+    for (const p of byProduct) {
+      const u = p.unit || 'L';
+      m[u] = (m[u] || 0) + Number(getter(p) || 0);
+    }
     const entries = Object.entries(m);
-    return entries.length ? entries.map(([u, v]) => `${Number(v).toFixed(dec)} ${u}`).join(' \u00b7 ') : `${(0).toFixed(dec)} L`;
+    return entries.length
+      ? entries.map(([u, v]) => `${Number(v).toFixed(dec)} ${u}`).join(' \u00b7 ')
+      : `${(0).toFixed(dec)} L`;
   };
   const totalCashCollections = Number(collections.Cash || 0);
   const totalCardCollections = Number(collections.Card || 0);
@@ -60,14 +65,21 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
   const incomeTaxTotal = Number(incomeTax.total || 0);
   // T5 — output tax on sales. GST (merchandise) and VAT (fuel) stay on separate
   // lines: fuel VAT is outside GST and carries no input credit for the buyer.
-  const salesTax = (snapshot.salesTax || {}) as { gst?: Record<string, number>; vat?: Record<string, number> };
+  const salesTax = (snapshot.salesTax || {}) as {
+    gst?: Record<string, number>;
+    vat?: Record<string, number>;
+  };
   const salesGstTotal = Number(salesTax.gst?.total || 0);
   const salesVatTotal = Number(salesTax.vat?.vat || 0);
   const pnl = snapshot.pnl || {};
   const inr = (n: number) => `₹${n.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
 
   return (
-    <div ref={printRef} className="card card-comfortable print-area" style={{ maxWidth: '920px', margin: '0 auto' }}>
+    <div
+      ref={printRef}
+      className="card card-comfortable print-area"
+      style={{ maxWidth: '920px', margin: '0 auto' }}
+    >
       <div
         className="no-print"
         style={{
@@ -84,20 +96,41 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
         </Button>
 
         <div style={{ display: 'flex', gap: '8px' }}>
-          <Button variant="secondary" size="sm" leftIcon={<Download />} onClick={async () => {
-            const [{ exportReactPdf }, doc] = await Promise.all([
-              import('../services/exportPdf.js'),
-              import('../services/reports/dssrDoc.js'),
-            ]);
-            const sections = station?.settings?.report_config?.dssr?.length ? station.settings.report_config.dssr : DEFAULT_DSSR_CONFIG.sections;
-            const config = { ...DEFAULT_DSSR_CONFIG, sections: sections as any, stationName: station?.name, letterhead: letterheadFromStation(station), paper: paperFromStation(station) };
-            await exportReactPdf(React.createElement(doc.DssrDoc, { dssr: dailyDssr, config }), `Daily_DSSR_${dailyDssr?.businessDate || ''}`);
-          }}>
+          <Button
+            variant="secondary"
+            size="sm"
+            leftIcon={<Download />}
+            onClick={async () => {
+              const [{ exportReactPdf }, doc] = await Promise.all([
+                import('../services/exportPdf.js'),
+                import('../services/reports/dssrDoc.js'),
+              ]);
+              const sections = station?.settings?.report_config?.dssr?.length
+                ? station.settings.report_config.dssr
+                : DEFAULT_DSSR_CONFIG.sections;
+              const config = {
+                ...DEFAULT_DSSR_CONFIG,
+                sections: sections,
+                stationName: station?.name,
+                letterhead: letterheadFromStation(station),
+                paper: paperFromStation(station),
+              };
+              await exportReactPdf(
+                React.createElement(doc.DssrDoc, { dssr: dailyDssr, config }),
+                `Daily_DSSR_${dailyDssr?.businessDate || ''}`,
+              );
+            }}
+          >
             Save PDF
           </Button>
           {/* window.print() is a no-op in the Tauri webview — desktop uses Save PDF. */}
           {!isDesktopApp() && (
-            <Button variant="secondary" size="sm" leftIcon={<Printer />} onClick={() => window.print()}>
+            <Button
+              variant="secondary"
+              size="sm"
+              leftIcon={<Printer />}
+              onClick={() => window.print()}
+            >
               Print Daily DSSR
             </Button>
           )}
@@ -138,7 +171,10 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
           }}
         >
           <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: '1px' }} />
-          <span>{lateEntryCount} late {lateEntryCount === 1 ? 'entry was' : 'entries were'} recorded after day close. The immutable snapshot below was not changed.</span>
+          <span>
+            {lateEntryCount} late {lateEntryCount === 1 ? 'entry was' : 'entries were'} recorded
+            after day close. The immutable snapshot below was not changed.
+          </span>
         </div>
       )}
 
@@ -157,7 +193,10 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
         }}
       >
         <Info size={14} style={{ flexShrink: 0, marginTop: '1px' }} />
-        <span>Financial sections include records available as of {formatDateTime(generatedAt)}. Financial entries recorded later are not included in this report.</span>
+        <span>
+          Financial sections include records available as of {formatDateTime(generatedAt)}.
+          Financial entries recorded later are not included in this report.
+        </span>
       </div>
 
       <div
@@ -173,39 +212,108 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
         }}
       >
         <div>
-          <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', textTransform: 'uppercase', fontWeight: 600 }}>
+          <span
+            style={{
+              fontSize: '11px',
+              color: 'var(--text-muted)',
+              display: 'block',
+              textTransform: 'uppercase',
+              fontWeight: 600,
+            }}
+          >
             Shifts Included
           </span>
-          <strong style={{ fontSize: '16px', color: 'var(--text-strong)' }}>{snapshot.shiftsIncluded || 0}</strong>
+          <strong style={{ fontSize: '16px', color: 'var(--text-strong)' }}>
+            {snapshot.shiftsIncluded || 0}
+          </strong>
         </div>
         <div>
-          <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', textTransform: 'uppercase', fontWeight: 600 }}>
+          <span
+            style={{
+              fontSize: '11px',
+              color: 'var(--text-muted)',
+              display: 'block',
+              textTransform: 'uppercase',
+              fontWeight: 600,
+            }}
+          >
             Net Fuel Volume
           </span>
-          <strong style={{ fontSize: '16px', color: 'var(--text-strong)', fontFamily: 'var(--font-mono)' }}>
-            {singleDssrUnit ? `${totalNetVolume.toFixed(3)} ${singleDssrUnit}` : dssrUnitTotals((p) => Number(p.netVolume || 0))}
+          <strong
+            style={{
+              fontSize: '16px',
+              color: 'var(--text-strong)',
+              fontFamily: 'var(--font-mono)',
+            }}
+          >
+            {singleDssrUnit
+              ? `${totalNetVolume.toFixed(3)} ${singleDssrUnit}`
+              : dssrUnitTotals((p) => Number(p.netVolume || 0))}
           </strong>
-          <span style={{ fontSize: '10px', color: 'var(--text-muted)', display: 'block', fontFamily: 'var(--font-mono)' }}>
+          <span
+            style={{
+              fontSize: '10px',
+              color: 'var(--text-muted)',
+              display: 'block',
+              fontFamily: 'var(--font-mono)',
+            }}
+          >
             Gross {totalGrossVolume.toFixed(3)} − Testing {totalTestingVolume.toFixed(3)}
           </span>
         </div>
         <div>
-          <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', textTransform: 'uppercase', fontWeight: 600 }}>
+          <span
+            style={{
+              fontSize: '11px',
+              color: 'var(--text-muted)',
+              display: 'block',
+              textTransform: 'uppercase',
+              fontWeight: 600,
+            }}
+          >
             Fuel Sales Value
           </span>
-          <strong style={{ fontSize: '16px', color: 'var(--text-strong)', fontFamily: 'var(--font-mono)' }}>
+          <strong
+            style={{
+              fontSize: '16px',
+              color: 'var(--text-strong)',
+              fontFamily: 'var(--font-mono)',
+            }}
+          >
             {inr(totalFuelSalesValue)}
           </strong>
         </div>
         <div>
-          <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', textTransform: 'uppercase', fontWeight: 600 }}>
+          <span
+            style={{
+              fontSize: '11px',
+              color: 'var(--text-muted)',
+              display: 'block',
+              textTransform: 'uppercase',
+              fontWeight: 600,
+            }}
+          >
             Total Collections
           </span>
-          <strong style={{ fontSize: '16px', color: 'var(--state-success-fg)', fontFamily: 'var(--font-mono)' }}>
+          <strong
+            style={{
+              fontSize: '16px',
+              color: 'var(--state-success-fg)',
+              fontFamily: 'var(--font-mono)',
+            }}
+          >
             {inr(totalCollections)}
           </strong>
-          <span style={{ fontSize: '10px', color: 'var(--text-muted)', display: 'block', fontFamily: 'var(--font-mono)' }}>
-            Cash {inr(totalCashCollections)} · Non-cash {inr(totalCardCollections + totalUpiCollections + totalBankCollections)}
+          <span
+            style={{
+              fontSize: '10px',
+              color: 'var(--text-muted)',
+              display: 'block',
+              fontFamily: 'var(--font-mono)',
+            }}
+          >
+            Cash {inr(totalCashCollections)} · Non-cash{' '}
+            {inr(totalCardCollections + totalUpiCollections + totalBankCollections)}
           </span>
         </div>
       </div>
@@ -223,7 +331,11 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
           }}
         >
           <strong style={{ display: 'block', marginBottom: '6px' }}>
-            <AlertTriangle size={14} style={{ marginRight: '6px', verticalAlign: 'middle', display: 'inline' }} /> Daily Warnings
+            <AlertTriangle
+              size={14}
+              style={{ marginRight: '6px', verticalAlign: 'middle', display: 'inline' }}
+            />{' '}
+            Daily Warnings
           </strong>
           <ul style={{ margin: 0, paddingLeft: '20px' }}>
             {warnings.map((warn: string, idx: number) => (
@@ -235,7 +347,16 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
         </div>
       )}
 
-      <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
+      <h3
+        style={{
+          fontSize: '14px',
+          fontWeight: 600,
+          color: 'var(--text-strong)',
+          marginBottom: '12px',
+          textTransform: 'uppercase',
+          letterSpacing: '0.02em',
+        }}
+      >
         Profitability (P&amp;L)
       </h3>
       <div
@@ -249,33 +370,101 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
           marginBottom: '8px',
         }}
       >
-        {([
-          { label: 'Revenue — Fuel', value: inr(Number(pnl.revenueFuel || 0)) },
-          { label: 'Revenue — Merchandise', value: inr(Number(pnl.revenueMerch || 0)) },
-          { label: 'Total Revenue', value: inr(Number(pnl.revenue || 0)), strong: true },
-          { label: 'COGS — Fuel', value: `(${inr(Number(pnl.cogsFuel || 0))})`, color: 'var(--brand-warning)' },
-          { label: 'COGS — Merchandise', value: `(${inr(Number(pnl.cogsMerch || 0))})`, color: 'var(--brand-warning)' },
-          { label: 'Gross Margin', value: inr(Number(pnl.grossMargin || 0)), strong: true },
-          { label: 'Operating Expenses', value: `(${inr(Number(pnl.expenses ?? totalExpenses))})`, color: 'var(--brand-warning)' },
-          ...(Number(pnl.otherIncome ?? totalOtherIncome) > 0 ? [{ label: 'Other Income', value: inr(Number(pnl.otherIncome ?? totalOtherIncome)), color: 'var(--brand-success)' }] : []),
-        ] as Array<{ label: string; value: string; color?: string; strong?: boolean }>).map((r, i) => (
-          <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '11px 16px', borderBottom: '1px solid var(--border-soft)', backgroundColor: r.strong ? 'var(--bg-surface-alt)' : 'transparent' }}>
+        {(
+          [
+            { label: 'Revenue — Fuel', value: inr(Number(pnl.revenueFuel || 0)) },
+            { label: 'Revenue — Merchandise', value: inr(Number(pnl.revenueMerch || 0)) },
+            { label: 'Total Revenue', value: inr(Number(pnl.revenue || 0)), strong: true },
+            {
+              label: 'COGS — Fuel',
+              value: `(${inr(Number(pnl.cogsFuel || 0))})`,
+              color: 'var(--brand-warning)',
+            },
+            {
+              label: 'COGS — Merchandise',
+              value: `(${inr(Number(pnl.cogsMerch || 0))})`,
+              color: 'var(--brand-warning)',
+            },
+            { label: 'Gross Margin', value: inr(Number(pnl.grossMargin || 0)), strong: true },
+            {
+              label: 'Operating Expenses',
+              value: `(${inr(Number(pnl.expenses ?? totalExpenses))})`,
+              color: 'var(--brand-warning)',
+            },
+            ...(Number(pnl.otherIncome ?? totalOtherIncome) > 0
+              ? [
+                  {
+                    label: 'Other Income',
+                    value: inr(Number(pnl.otherIncome ?? totalOtherIncome)),
+                    color: 'var(--brand-success)',
+                  },
+                ]
+              : []),
+          ] as Array<{ label: string; value: string; color?: string; strong?: boolean }>
+        ).map((r, i) => (
+          <div
+            key={i}
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              padding: '11px 16px',
+              borderBottom: '1px solid var(--border-soft)',
+              backgroundColor: r.strong ? 'var(--bg-surface-alt)' : 'transparent',
+            }}
+          >
             <span style={{ fontWeight: r.strong ? 700 : 400 }}>{r.label}</span>
-            <span style={{ fontWeight: r.strong ? 700 : 600, fontFamily: 'var(--font-mono)', color: r.color || 'var(--text-default)' }}>{r.value}</span>
+            <span
+              style={{
+                fontWeight: r.strong ? 700 : 600,
+                fontFamily: 'var(--font-mono)',
+                color: r.color || 'var(--text-default)',
+              }}
+            >
+              {r.value}
+            </span>
           </div>
         ))}
-        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '13px 16px', backgroundColor: 'var(--bg-surface-alt)' }}>
-          <span style={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.02em' }}>Net Profit</span>
-          <span style={{ fontWeight: 700, fontFamily: 'var(--font-mono)', fontSize: '15px', color: Number(pnl.netProfit || 0) < 0 ? 'var(--state-danger-fg)' : 'var(--state-success-fg)' }}>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            padding: '13px 16px',
+            backgroundColor: 'var(--bg-surface-alt)',
+          }}
+        >
+          <span style={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.02em' }}>
+            Net Profit
+          </span>
+          <span
+            style={{
+              fontWeight: 700,
+              fontFamily: 'var(--font-mono)',
+              fontSize: '15px',
+              color:
+                Number(pnl.netProfit || 0) < 0
+                  ? 'var(--state-danger-fg)'
+                  : 'var(--state-success-fg)',
+            }}
+          >
             {inr(Number(pnl.netProfit || 0))}
           </span>
         </div>
       </div>
       <p style={{ fontSize: '10px', color: 'var(--text-faint)', marginBottom: '24px' }}>
-        COGS uses each product&apos;s weighted-average cost at day close. Fuel VAT is output tax (excluded from cost); merchandise cost is pre-tax.
+        COGS uses each product&apos;s weighted-average cost at day close. Fuel VAT is output tax
+        (excluded from cost); merchandise cost is pre-tax.
       </p>
 
-      <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
+      <h3
+        style={{
+          fontSize: '14px',
+          fontWeight: 600,
+          color: 'var(--text-strong)',
+          marginBottom: '12px',
+          textTransform: 'uppercase',
+          letterSpacing: '0.02em',
+        }}
+      >
         Financial Summary
       </h3>
       <div
@@ -289,93 +478,304 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
           marginBottom: '28px',
         }}
       >
-        {([
-          { label: 'Cash Collections', value: inr(totalCashCollections) },
-          { label: 'Card Collections', value: inr(totalCardCollections) },
-          { label: 'UPI Collections', value: inr(totalUpiCollections) },
-          { label: 'Bank Transfer Collections', value: inr(totalBankCollections) },
-          { label: 'Merchandise Sales', value: inr(Number(merchandise.salesValue || 0)) },
-          { label: 'Normal Credit Sales', value: inr(normalCredit), color: 'var(--brand-warning)' },
-          { label: 'Fleet Credit Sales', value: inr(fleetCredit), color: 'var(--brand-warning)' },
-          { label: 'Purchases', value: inr(Number(purchases.total || 0)) },
-          { label: 'Supplier Payments (Drawer / Bank)', value: `${inr(Number(supplierPayments.drawer || 0))} / ${inr(Number(supplierPayments.bank || 0))}` },
-          { label: 'Drawer Expenses', value: inr(Number(expenses.drawer || 0)) },
-          { label: 'Business Expenses', value: inr(Number(expenses.business || 0)) },
-          ...(totalOtherIncome > 0 ? [{ label: 'Other Income (Cash / Bank)', value: `${inr(Number(income.drawer || 0))} / ${inr(Number(income.business || 0))}`, color: 'var(--brand-success)' }] : []),
-          ...(salesGstTotal > 0
-            ? [
-                { label: 'Merchandise — Taxable Value', value: inr(Number(salesTax.gst?.taxable || 0)) },
-                Number(salesTax.gst?.igst || 0) > 0
-                  ? { label: 'Output GST on Sales (IGST)', value: inr(Number(salesTax.gst?.igst || 0)) }
-                  : { label: 'Output GST on Sales (CGST / SGST)', value: `${inr(Number(salesTax.gst?.cgst || 0))} / ${inr(Number(salesTax.gst?.sgst || 0))}` },
-              ]
-            : []),
-          ...(salesVatTotal > 0 ? [{ label: 'Output VAT on Fuel', value: inr(salesVatTotal) }] : []),
-          ...(incomeTaxTotal > 0
-            ? [
-                { label: 'Other Income — Taxable Value', value: inr(Number(incomeTax.taxable || 0)) },
-                Number(incomeTax.igst || 0) > 0
-                  ? { label: 'Output GST on Income (IGST)', value: inr(Number(incomeTax.igst || 0)) }
-                  : { label: 'Output GST on Income (CGST / SGST)', value: `${inr(Number(incomeTax.cgst || 0))} / ${inr(Number(incomeTax.sgst || 0))}` },
-              ]
-            : []),
-        ] as Array<{ label: string; value: string; color?: string }>).map((r, i) => (
-          <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '11px 16px', borderBottom: '1px solid var(--border-soft)' }}>
+        {(
+          [
+            { label: 'Cash Collections', value: inr(totalCashCollections) },
+            { label: 'Card Collections', value: inr(totalCardCollections) },
+            { label: 'UPI Collections', value: inr(totalUpiCollections) },
+            { label: 'Bank Transfer Collections', value: inr(totalBankCollections) },
+            { label: 'Merchandise Sales', value: inr(Number(merchandise.salesValue || 0)) },
+            {
+              label: 'Normal Credit Sales',
+              value: inr(normalCredit),
+              color: 'var(--brand-warning)',
+            },
+            { label: 'Fleet Credit Sales', value: inr(fleetCredit), color: 'var(--brand-warning)' },
+            { label: 'Purchases', value: inr(Number(purchases.total || 0)) },
+            {
+              label: 'Supplier Payments (Drawer / Bank)',
+              value: `${inr(Number(supplierPayments.drawer || 0))} / ${inr(Number(supplierPayments.bank || 0))}`,
+            },
+            { label: 'Drawer Expenses', value: inr(Number(expenses.drawer || 0)) },
+            { label: 'Business Expenses', value: inr(Number(expenses.business || 0)) },
+            ...(totalOtherIncome > 0
+              ? [
+                  {
+                    label: 'Other Income (Cash / Bank)',
+                    value: `${inr(Number(income.drawer || 0))} / ${inr(Number(income.business || 0))}`,
+                    color: 'var(--brand-success)',
+                  },
+                ]
+              : []),
+            ...(salesGstTotal > 0
+              ? [
+                  {
+                    label: 'Merchandise — Taxable Value',
+                    value: inr(Number(salesTax.gst?.taxable || 0)),
+                  },
+                  Number(salesTax.gst?.igst || 0) > 0
+                    ? {
+                        label: 'Output GST on Sales (IGST)',
+                        value: inr(Number(salesTax.gst?.igst || 0)),
+                      }
+                    : {
+                        label: 'Output GST on Sales (CGST / SGST)',
+                        value: `${inr(Number(salesTax.gst?.cgst || 0))} / ${inr(Number(salesTax.gst?.sgst || 0))}`,
+                      },
+                ]
+              : []),
+            ...(salesVatTotal > 0
+              ? [{ label: 'Output VAT on Fuel', value: inr(salesVatTotal) }]
+              : []),
+            ...(incomeTaxTotal > 0
+              ? [
+                  {
+                    label: 'Other Income — Taxable Value',
+                    value: inr(Number(incomeTax.taxable || 0)),
+                  },
+                  Number(incomeTax.igst || 0) > 0
+                    ? {
+                        label: 'Output GST on Income (IGST)',
+                        value: inr(Number(incomeTax.igst || 0)),
+                      }
+                    : {
+                        label: 'Output GST on Income (CGST / SGST)',
+                        value: `${inr(Number(incomeTax.cgst || 0))} / ${inr(Number(incomeTax.sgst || 0))}`,
+                      },
+                ]
+              : []),
+          ] as Array<{ label: string; value: string; color?: string }>
+        ).map((r, i) => (
+          <div
+            key={i}
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              padding: '11px 16px',
+              borderBottom: '1px solid var(--border-soft)',
+            }}
+          >
             <span>{r.label}</span>
-            <span style={{ fontWeight: 600, fontFamily: 'var(--font-mono)', color: r.color || 'var(--text-default)' }}>{r.value}</span>
+            <span
+              style={{
+                fontWeight: 600,
+                fontFamily: 'var(--font-mono)',
+                color: r.color || 'var(--text-default)',
+              }}
+            >
+              {r.value}
+            </span>
           </div>
         ))}
-        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 16px', backgroundColor: 'var(--bg-surface-alt)' }}>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            padding: '12px 16px',
+            backgroundColor: 'var(--bg-surface-alt)',
+          }}
+        >
           <span style={{ fontWeight: 700 }}>Total Expenses</span>
-          <span style={{ fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--brand-danger)' }}>{inr(totalExpenses)}</span>
+          <span
+            style={{
+              fontWeight: 700,
+              fontFamily: 'var(--font-mono)',
+              color: 'var(--brand-danger)',
+            }}
+          >
+            {inr(totalExpenses)}
+          </span>
         </div>
       </div>
 
-      <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
+      <h3
+        style={{
+          fontSize: '14px',
+          fontWeight: 600,
+          color: 'var(--text-strong)',
+          marginBottom: '12px',
+          textTransform: 'uppercase',
+          letterSpacing: '0.02em',
+        }}
+      >
         Fuel Sales by Product
       </h3>
-      <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '28px', fontSize: '13px' }}>
+      <table
+        style={{
+          width: '100%',
+          borderCollapse: 'collapse',
+          marginBottom: '28px',
+          fontSize: '13px',
+        }}
+      >
         <thead>
-          <tr style={{ borderBottom: '2px solid var(--border-strong)', textAlign: 'left', color: 'var(--text-muted)' }}>
+          <tr
+            style={{
+              borderBottom: '2px solid var(--border-strong)',
+              textAlign: 'left',
+              color: 'var(--text-muted)',
+            }}
+          >
             <th style={{ padding: '8px 12px', fontWeight: 600 }}>Product</th>
             <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Gross</th>
             <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Testing</th>
             <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Net</th>
-            <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Sales Value</th>
+            <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>
+              Sales Value
+            </th>
           </tr>
         </thead>
         <tbody>
           {byProduct.length > 0 ? (
             byProduct.map((p: any, idx: number) => (
               <tr key={idx} style={{ borderBottom: '1px solid var(--border-soft)' }}>
-                <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--text-strong)' }}>{p.productName || 'Unknown'}{p.productCode ? ` (${p.productCode})` : ''}</td>
-                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{Number(p.grossVolume || 0).toFixed(3)} {p.unit || 'L'}</td>
-                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: Number(p.testingVolume || 0) > 0 ? 'var(--brand-warning)' : 'var(--text-muted)' }}>{Number(p.testingVolume || 0).toFixed(3)} {p.unit || 'L'}</td>
-                <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, fontFamily: 'var(--font-mono)' }}>{Number(p.netVolume || 0).toFixed(3)} {p.unit || 'L'}</td>
-                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{inr(Number(p.salesValue || 0))}</td>
+                <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--text-strong)' }}>
+                  {p.productName || 'Unknown'}
+                  {p.productCode ? ` (${p.productCode})` : ''}
+                </td>
+                <td
+                  style={{
+                    padding: '10px 12px',
+                    textAlign: 'right',
+                    fontFamily: 'var(--font-mono)',
+                  }}
+                >
+                  {Number(p.grossVolume || 0).toFixed(3)} {p.unit || 'L'}
+                </td>
+                <td
+                  style={{
+                    padding: '10px 12px',
+                    textAlign: 'right',
+                    fontFamily: 'var(--font-mono)',
+                    color:
+                      Number(p.testingVolume || 0) > 0
+                        ? 'var(--brand-warning)'
+                        : 'var(--text-muted)',
+                  }}
+                >
+                  {Number(p.testingVolume || 0).toFixed(3)} {p.unit || 'L'}
+                </td>
+                <td
+                  style={{
+                    padding: '10px 12px',
+                    textAlign: 'right',
+                    fontWeight: 600,
+                    fontFamily: 'var(--font-mono)',
+                  }}
+                >
+                  {Number(p.netVolume || 0).toFixed(3)} {p.unit || 'L'}
+                </td>
+                <td
+                  style={{
+                    padding: '10px 12px',
+                    textAlign: 'right',
+                    fontFamily: 'var(--font-mono)',
+                  }}
+                >
+                  {inr(Number(p.salesValue || 0))}
+                </td>
               </tr>
             ))
           ) : (
             <tr>
-              <td colSpan={5} style={{ padding: '16px 12px', textAlign: 'center', color: 'var(--text-muted)' }}>No fuel sales in this daily DSSR.</td>
+              <td
+                colSpan={5}
+                style={{ padding: '16px 12px', textAlign: 'center', color: 'var(--text-muted)' }}
+              >
+                No fuel sales in this daily DSSR.
+              </td>
             </tr>
           )}
-          <tr style={{ borderTop: '2px solid var(--border-strong)', backgroundColor: 'var(--bg-surface-alt)', fontWeight: 700 }}>
-            <td style={{ padding: '10px 12px', textTransform: 'uppercase', fontSize: '11px', color: 'var(--text-muted)' }}>Total</td>
-            <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>{dssrUnitTotals((p) => Number(p.grossVolume || 0))}</td>
-            <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>{dssrUnitTotals((p) => Number(p.testingVolume || 0))}</td>
-            <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--text-strong)', fontSize: '14px' }}>{dssrUnitTotals((p) => Number(p.netVolume || 0))}</td>
-            <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--text-strong)' }}>{inr(totalFuelSalesValue)}</td>
+          <tr
+            style={{
+              borderTop: '2px solid var(--border-strong)',
+              backgroundColor: 'var(--bg-surface-alt)',
+              fontWeight: 700,
+            }}
+          >
+            <td
+              style={{
+                padding: '10px 12px',
+                textTransform: 'uppercase',
+                fontSize: '11px',
+                color: 'var(--text-muted)',
+              }}
+            >
+              Total
+            </td>
+            <td
+              style={{
+                padding: '10px 12px',
+                textAlign: 'right',
+                fontFamily: 'var(--font-mono)',
+                color: 'var(--text-muted)',
+              }}
+            >
+              {dssrUnitTotals((p) => Number(p.grossVolume || 0))}
+            </td>
+            <td
+              style={{
+                padding: '10px 12px',
+                textAlign: 'right',
+                fontFamily: 'var(--font-mono)',
+                color: 'var(--text-muted)',
+              }}
+            >
+              {dssrUnitTotals((p) => Number(p.testingVolume || 0))}
+            </td>
+            <td
+              style={{
+                padding: '10px 12px',
+                textAlign: 'right',
+                fontFamily: 'var(--font-mono)',
+                color: 'var(--text-strong)',
+                fontSize: '14px',
+              }}
+            >
+              {dssrUnitTotals((p) => Number(p.netVolume || 0))}
+            </td>
+            <td
+              style={{
+                padding: '10px 12px',
+                textAlign: 'right',
+                fontFamily: 'var(--font-mono)',
+                color: 'var(--text-strong)',
+              }}
+            >
+              {inr(totalFuelSalesValue)}
+            </td>
           </tr>
         </tbody>
       </table>
 
-      <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
+      <h3
+        style={{
+          fontSize: '14px',
+          fontWeight: 600,
+          color: 'var(--text-strong)',
+          marginBottom: '12px',
+          textTransform: 'uppercase',
+          letterSpacing: '0.02em',
+        }}
+      >
         Nozzle Aggregation
       </h3>
-      <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '28px', fontSize: '13px' }}>
+      <table
+        style={{
+          width: '100%',
+          borderCollapse: 'collapse',
+          marginBottom: '28px',
+          fontSize: '13px',
+        }}
+      >
         <thead>
-          <tr style={{ borderBottom: '2px solid var(--border-strong)', textAlign: 'left', color: 'var(--text-muted)' }}>
+          <tr
+            style={{
+              borderBottom: '2px solid var(--border-strong)',
+              textAlign: 'left',
+              color: 'var(--text-muted)',
+            }}
+          >
             <th style={{ padding: '8px 12px', fontWeight: 600 }}>Nozzle</th>
             <th style={{ padding: '8px 12px', fontWeight: 600 }}>Product</th>
             <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Gross</th>
@@ -387,16 +787,54 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
           {nozzles.length > 0 ? (
             nozzles.map((nz: any, idx: number) => (
               <tr key={idx} style={{ borderBottom: '1px solid var(--border-soft)' }}>
-                <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--text-strong)' }}>{nz.nozzleName || 'Unknown'}</td>
-                <td style={{ padding: '10px 12px', color: 'var(--text-default)' }}>{nz.productName || 'Unknown'}</td>
-                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{Number(nz.grossVolume || 0).toFixed(3)} {nz.unit || 'L'}</td>
-                <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: Number(nz.testingVolume || 0) > 0 ? 'var(--brand-warning)' : 'var(--text-muted)' }}>{Number(nz.testingVolume || 0).toFixed(3)} {nz.unit || 'L'}</td>
-                <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, fontFamily: 'var(--font-mono)' }}>{Number(nz.netVolume || 0).toFixed(3)} {nz.unit || 'L'}</td>
+                <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--text-strong)' }}>
+                  {nz.nozzleName || 'Unknown'}
+                </td>
+                <td style={{ padding: '10px 12px', color: 'var(--text-default)' }}>
+                  {nz.productName || 'Unknown'}
+                </td>
+                <td
+                  style={{
+                    padding: '10px 12px',
+                    textAlign: 'right',
+                    fontFamily: 'var(--font-mono)',
+                  }}
+                >
+                  {Number(nz.grossVolume || 0).toFixed(3)} {nz.unit || 'L'}
+                </td>
+                <td
+                  style={{
+                    padding: '10px 12px',
+                    textAlign: 'right',
+                    fontFamily: 'var(--font-mono)',
+                    color:
+                      Number(nz.testingVolume || 0) > 0
+                        ? 'var(--brand-warning)'
+                        : 'var(--text-muted)',
+                  }}
+                >
+                  {Number(nz.testingVolume || 0).toFixed(3)} {nz.unit || 'L'}
+                </td>
+                <td
+                  style={{
+                    padding: '10px 12px',
+                    textAlign: 'right',
+                    fontWeight: 600,
+                    fontFamily: 'var(--font-mono)',
+                  }}
+                >
+                  {Number(nz.netVolume || 0).toFixed(3)} {nz.unit || 'L'}
+                </td>
               </tr>
             ))
           ) : (
             <tr>
-              <td colSpan={5} style={{ padding: '16px 12px', textAlign: 'center', color: 'var(--text-muted)' }}>No nozzle data in this daily DSSR.</td>
+              <td
+                colSpan={5}
+                style={{ padding: '16px 12px', textAlign: 'center', color: 'var(--text-muted)' }}
+              >
+                No nozzle data in this daily DSSR.
+              </td>
             </tr>
           )}
         </tbody>
@@ -404,32 +842,96 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
 
       {fuelStockVariance.length > 0 && (
         <>
-          <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
+          <h3
+            style={{
+              fontSize: '14px',
+              fontWeight: 600,
+              color: 'var(--text-strong)',
+              marginBottom: '12px',
+              textTransform: 'uppercase',
+              letterSpacing: '0.02em',
+            }}
+          >
             Tank Dip &amp; Fuel Stock Variance
           </h3>
-          <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '28px', fontSize: '13px' }}>
+          <table
+            style={{
+              width: '100%',
+              borderCollapse: 'collapse',
+              marginBottom: '28px',
+              fontSize: '13px',
+            }}
+          >
             <thead>
-              <tr style={{ borderBottom: '2px solid var(--border-strong)', textAlign: 'left', color: 'var(--text-muted)' }}>
+              <tr
+                style={{
+                  borderBottom: '2px solid var(--border-strong)',
+                  textAlign: 'left',
+                  color: 'var(--text-muted)',
+                }}
+              >
                 <th style={{ padding: '8px 12px', fontWeight: 600 }}>Tank</th>
                 <th style={{ padding: '8px 12px', fontWeight: 600 }}>Product</th>
                 <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Book</th>
                 <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Dip</th>
-                <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Variance</th>
+                <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>
+                  Variance
+                </th>
                 <th style={{ padding: '8px 12px', fontWeight: 600 }}>Status</th>
               </tr>
             </thead>
             <tbody>
               {fuelStockVariance.map((v: any, idx: number) => {
                 const variance = Number(v.varianceQuantity || 0);
-                const varColor = variance < 0 ? 'var(--brand-danger)' : variance > 0 ? 'var(--brand-warning)' : 'var(--state-success-fg)';
+                const varColor =
+                  variance < 0
+                    ? 'var(--brand-danger)'
+                    : variance > 0
+                      ? 'var(--brand-warning)'
+                      : 'var(--state-success-fg)';
                 return (
                   <tr key={idx} style={{ borderBottom: '1px solid var(--border-soft)' }}>
-                    <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--text-strong)' }}>{v.tankName || 'Unknown'}</td>
-                    <td style={{ padding: '10px 12px', color: 'var(--text-default)' }}>{v.productName || 'Unknown'}</td>
-                    <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{Number(v.expectedQuantity || 0).toFixed(3)} {v.unit || 'L'}</td>
-                    <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{Number(v.actualQuantity || 0).toFixed(3)} {v.unit || 'L'}</td>
-                    <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, fontFamily: 'var(--font-mono)', color: varColor }}>{variance > 0 ? '+' : ''}{variance.toFixed(3)} {v.unit || 'L'}</td>
-                    <td style={{ padding: '10px 12px', color: varColor, fontWeight: 600 }}>{v.status || '-'}</td>
+                    <td
+                      style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--text-strong)' }}
+                    >
+                      {v.tankName || 'Unknown'}
+                    </td>
+                    <td style={{ padding: '10px 12px', color: 'var(--text-default)' }}>
+                      {v.productName || 'Unknown'}
+                    </td>
+                    <td
+                      style={{
+                        padding: '10px 12px',
+                        textAlign: 'right',
+                        fontFamily: 'var(--font-mono)',
+                      }}
+                    >
+                      {Number(v.expectedQuantity || 0).toFixed(3)} {v.unit || 'L'}
+                    </td>
+                    <td
+                      style={{
+                        padding: '10px 12px',
+                        textAlign: 'right',
+                        fontFamily: 'var(--font-mono)',
+                      }}
+                    >
+                      {Number(v.actualQuantity || 0).toFixed(3)} {v.unit || 'L'}
+                    </td>
+                    <td
+                      style={{
+                        padding: '10px 12px',
+                        textAlign: 'right',
+                        fontWeight: 600,
+                        fontFamily: 'var(--font-mono)',
+                        color: varColor,
+                      }}
+                    >
+                      {variance > 0 ? '+' : ''}
+                      {variance.toFixed(3)} {v.unit || 'L'}
+                    </td>
+                    <td style={{ padding: '10px 12px', color: varColor, fontWeight: 600 }}>
+                      {v.status || '-'}
+                    </td>
                   </tr>
                 );
               })}
@@ -440,32 +942,108 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
 
       {merchandiseStockVariance.length > 0 && (
         <>
-          <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
-            Merchandise Stock Variance <span style={{ textTransform: 'none', fontWeight: 400, color: 'var(--text-muted)', fontSize: '12px' }}>(Units)</span>
+          <h3
+            style={{
+              fontSize: '14px',
+              fontWeight: 600,
+              color: 'var(--text-strong)',
+              marginBottom: '12px',
+              textTransform: 'uppercase',
+              letterSpacing: '0.02em',
+            }}
+          >
+            Merchandise Stock Variance{' '}
+            <span
+              style={{
+                textTransform: 'none',
+                fontWeight: 400,
+                color: 'var(--text-muted)',
+                fontSize: '12px',
+              }}
+            >
+              (Units)
+            </span>
           </h3>
-          <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '28px', fontSize: '13px' }}>
+          <table
+            style={{
+              width: '100%',
+              borderCollapse: 'collapse',
+              marginBottom: '28px',
+              fontSize: '13px',
+            }}
+          >
             <thead>
-              <tr style={{ borderBottom: '2px solid var(--border-strong)', textAlign: 'left', color: 'var(--text-muted)' }}>
+              <tr
+                style={{
+                  borderBottom: '2px solid var(--border-strong)',
+                  textAlign: 'left',
+                  color: 'var(--text-muted)',
+                }}
+              >
                 <th style={{ padding: '8px 12px', fontWeight: 600 }}>Product</th>
                 <th style={{ padding: '8px 12px', fontWeight: 600 }}>Unit</th>
                 <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Book</th>
-                <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Counted</th>
-                <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Variance</th>
+                <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>
+                  Counted
+                </th>
+                <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>
+                  Variance
+                </th>
                 <th style={{ padding: '8px 12px', fontWeight: 600 }}>Status</th>
               </tr>
             </thead>
             <tbody>
               {merchandiseStockVariance.map((v: any, idx: number) => {
                 const variance = Number(v.varianceQuantity || 0);
-                const varColor = variance < 0 ? 'var(--brand-danger)' : variance > 0 ? 'var(--brand-warning)' : 'var(--state-success-fg)';
+                const varColor =
+                  variance < 0
+                    ? 'var(--brand-danger)'
+                    : variance > 0
+                      ? 'var(--brand-warning)'
+                      : 'var(--state-success-fg)';
                 return (
                   <tr key={idx} style={{ borderBottom: '1px solid var(--border-soft)' }}>
-                    <td style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--text-strong)' }}>{v.productName || 'Unknown'}</td>
-                    <td style={{ padding: '10px 12px', color: 'var(--text-muted)' }}>{v.unit || '-'}</td>
-                    <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{Number(v.expectedQuantity || 0).toLocaleString('en-IN')}</td>
-                    <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{Number(v.actualQuantity || 0).toLocaleString('en-IN')}</td>
-                    <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, fontFamily: 'var(--font-mono)', color: varColor }}>{variance > 0 ? '+' : ''}{Number(variance).toLocaleString('en-IN')}</td>
-                    <td style={{ padding: '10px 12px', color: varColor, fontWeight: 600 }}>{v.status || '-'}</td>
+                    <td
+                      style={{ padding: '10px 12px', fontWeight: 600, color: 'var(--text-strong)' }}
+                    >
+                      {v.productName || 'Unknown'}
+                    </td>
+                    <td style={{ padding: '10px 12px', color: 'var(--text-muted)' }}>
+                      {v.unit || '-'}
+                    </td>
+                    <td
+                      style={{
+                        padding: '10px 12px',
+                        textAlign: 'right',
+                        fontFamily: 'var(--font-mono)',
+                      }}
+                    >
+                      {Number(v.expectedQuantity || 0).toLocaleString('en-IN')}
+                    </td>
+                    <td
+                      style={{
+                        padding: '10px 12px',
+                        textAlign: 'right',
+                        fontFamily: 'var(--font-mono)',
+                      }}
+                    >
+                      {Number(v.actualQuantity || 0).toLocaleString('en-IN')}
+                    </td>
+                    <td
+                      style={{
+                        padding: '10px 12px',
+                        textAlign: 'right',
+                        fontWeight: 600,
+                        fontFamily: 'var(--font-mono)',
+                        color: varColor,
+                      }}
+                    >
+                      {variance > 0 ? '+' : ''}
+                      {Number(variance).toLocaleString('en-IN')}
+                    </td>
+                    <td style={{ padding: '10px 12px', color: varColor, fontWeight: 600 }}>
+                      {v.status || '-'}
+                    </td>
                   </tr>
                 );
               })}
@@ -474,43 +1052,102 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
         </>
       )}
 
-      <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
+      <h3
+        style={{
+          fontSize: '14px',
+          fontWeight: 600,
+          color: 'var(--text-strong)',
+          marginBottom: '12px',
+          textTransform: 'uppercase',
+          letterSpacing: '0.02em',
+        }}
+      >
         Included Shifts
       </h3>
-      <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '28px', fontSize: '13px' }}>
+      <table
+        style={{
+          width: '100%',
+          borderCollapse: 'collapse',
+          marginBottom: '28px',
+          fontSize: '13px',
+        }}
+      >
         <thead>
-          <tr style={{ borderBottom: '2px solid var(--border-strong)', textAlign: 'left', color: 'var(--text-muted)' }}>
+          <tr
+            style={{
+              borderBottom: '2px solid var(--border-strong)',
+              textAlign: 'left',
+              color: 'var(--text-muted)',
+            }}
+          >
             <th style={{ padding: '8px 12px', fontWeight: 600 }}>Shift ID</th>
             <th style={{ padding: '8px 12px', fontWeight: 600 }}>Template</th>
             <th style={{ padding: '8px 12px', fontWeight: 600 }}>Closed At</th>
-            <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Net Volume (L)</th>
-            <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Cash Variance (₹)</th>
+            <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>
+              Net Volume (L)
+            </th>
+            <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>
+              Cash Variance (₹)
+            </th>
           </tr>
         </thead>
         <tbody>
           {shifts.length > 0 ? (
             shifts.map((shift: any, idx: number) => {
               const variance = Number(shift.cashVariance || 0);
-              const varColor = variance < 0 ? 'var(--brand-danger)' : variance > 0 ? 'var(--brand-warning)' : 'var(--state-success-fg)';
+              const varColor =
+                variance < 0
+                  ? 'var(--brand-danger)'
+                  : variance > 0
+                    ? 'var(--brand-warning)'
+                    : 'var(--state-success-fg)';
               return (
                 <tr key={idx} style={{ borderBottom: '1px solid var(--border-soft)' }}>
-                  <td style={{ padding: '10px 12px', fontFamily: 'var(--font-mono)', color: 'var(--text-strong)' }}>
+                  <td
+                    style={{
+                      padding: '10px 12px',
+                      fontFamily: 'var(--font-mono)',
+                      color: 'var(--text-strong)',
+                    }}
+                  >
                     {(shift.shiftId || '').slice(0, 8)}...
                   </td>
-                  <td style={{ padding: '10px 12px', color: 'var(--text-default)' }}>{shift.templateName || 'Custom'}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text-default)' }}>
+                    {shift.templateName || 'Custom'}
+                  </td>
                   <td style={{ padding: '10px 12px', color: 'var(--text-default)' }}>
                     {shift.closedAt ? new Date(shift.closedAt).toLocaleString('en-IN') : '-'}
                   </td>
-                  <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{Number(shift.netVolume || 0).toFixed(3)}</td>
-                  <td style={{ padding: '10px 12px', textAlign: 'right', color: varColor, fontWeight: 600, fontFamily: 'var(--font-mono)' }}>
-                    {variance > 0 ? '+' : ''}{variance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  <td
+                    style={{
+                      padding: '10px 12px',
+                      textAlign: 'right',
+                      fontFamily: 'var(--font-mono)',
+                    }}
+                  >
+                    {Number(shift.netVolume || 0).toFixed(3)}
+                  </td>
+                  <td
+                    style={{
+                      padding: '10px 12px',
+                      textAlign: 'right',
+                      color: varColor,
+                      fontWeight: 600,
+                      fontFamily: 'var(--font-mono)',
+                    }}
+                  >
+                    {variance > 0 ? '+' : ''}
+                    {variance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                   </td>
                 </tr>
               );
             })
           ) : (
             <tr>
-              <td colSpan={5} style={{ padding: '16px 12px', textAlign: 'center', color: 'var(--text-muted)' }}>
+              <td
+                colSpan={5}
+                style={{ padding: '16px 12px', textAlign: 'center', color: 'var(--text-muted)' }}
+              >
                 No shifts were included for this day.
               </td>
             </tr>

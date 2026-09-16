@@ -62,12 +62,10 @@ export const MobileBlock: React.FC = () => {
       }}
     >
       <div style={{ fontSize: 40, lineHeight: 1 }}>🖥️</div>
-      <h1 style={{ fontSize: 20, fontWeight: 600, margin: 0 }}>
-        PumpOS Console is desktop-only
-      </h1>
+      <h1 style={{ fontSize: 20, fontWeight: 600, margin: 0 }}>PumpOS Console is desktop-only</h1>
       <p style={{ maxWidth: 380, color: 'var(--text-muted)', fontSize: 14, margin: 0 }}>
-        The full operations console is built for a desktop browser. On your
-        phone, use the PumpOS mobile app for owner reports and live data.
+        The full operations console is built for a desktop browser. On your phone, use the PumpOS
+        mobile app for owner reports and live data.
       </p>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
         {mUrl && (

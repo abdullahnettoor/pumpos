@@ -12,7 +12,12 @@ function label(isoDate: string, max: string): string {
   if (isoDate === max) return 'Today';
   const [y, m, d] = isoDate.split('-').map(Number);
   const dt = new Date(Date.UTC(y, m - 1, d));
-  return dt.toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', timeZone: 'UTC' });
+  return dt.toLocaleDateString('en-IN', {
+    weekday: 'short',
+    day: '2-digit',
+    month: 'short',
+    timeZone: 'UTC',
+  });
 }
 
 interface Props {

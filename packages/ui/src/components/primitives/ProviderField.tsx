@@ -18,7 +18,12 @@ export interface ProviderFieldProps {
  * feeds the "Auto — group by provider" clearing-account grouping. Give it a
  * `key` that changes when the edited entity changes so its Other-mode resets.
  */
-export const ProviderField: React.FC<ProviderFieldProps> = ({ value, onChange, disabled, style }) => {
+export const ProviderField: React.FC<ProviderFieldProps> = ({
+  value,
+  onChange,
+  disabled,
+  style,
+}) => {
   const inList = PAYMENT_PROVIDERS.includes(value);
   const [other, setOther] = useState<boolean>(!inList && !!value);
   const comboValue = other ? OTHER : inList ? value : '';

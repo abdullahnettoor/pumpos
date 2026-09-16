@@ -1,10 +1,5 @@
 import { conflictError, err, eventFromContext, ok } from '../../../kernel/index.js';
-import type {
-  EventPublisher,
-  ExecutionContext,
-  Result,
-  UseCase,
-} from '../../../kernel/index.js';
+import type { EventPublisher, ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
 import type { RegisterDemoEntityCommand } from './command.js';
 import { validateRegisterDemoEntity } from './validator.js';
 import { DEMO_ENTITY_REGISTERED } from './events.js';
@@ -22,9 +17,7 @@ export interface RegisterDemoEntityDeps {
  * Copy this folder structure for real capabilities. This `_template` folder is
  * illustrative and is excluded from the public package surface.
  */
-export class RegisterDemoEntity
-  implements UseCase<RegisterDemoEntityCommand, DemoEntity>
-{
+export class RegisterDemoEntity implements UseCase<RegisterDemoEntityCommand, DemoEntity> {
   constructor(private readonly deps: RegisterDemoEntityDeps) {}
 
   async execute(
@@ -36,9 +29,7 @@ export class RegisterDemoEntity
     const { name } = validated.data;
 
     if (await this.deps.repository.existsByName(ctx.organizationId, name)) {
-      return err(
-        conflictError(`A demo entity named "${name}" already exists`, { name }),
-      );
+      return err(conflictError(`A demo entity named "${name}" already exists`, { name }));
     }
 
     const entity: DemoEntity = {

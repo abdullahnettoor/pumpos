@@ -35,12 +35,12 @@ Today the desktop app uses no native APIs. When platform-specific behavior is re
 **abstract it behind an interface in `@pump/ui`** with a web implementation now and a
 Tauri implementation later — so screens never call Tauri APIs directly. Likely seams:
 
-| Capability | Web impl | Desktop (Tauri) impl |
-|---|---|---|
-| Printing (shift summary / DSSR) | `window.print()` | native print / PDF export |
+| Capability                        | Web impl           | Desktop (Tauri) impl      |
+| --------------------------------- | ------------------ | ------------------------- |
+| Printing (shift summary / DSSR)   | `window.print()`   | native print / PDF export |
 | Local storage / resilience outbox | IndexedDB (future) | SQLite via Tauri (future) |
-| File export (reports) | download blob | native save dialog |
-| Keyboard shortcuts | web handlers | native menu accelerators |
+| File export (reports)             | download blob      | native save dialog        |
+| Keyboard shortcuts                | web handlers       | native menu accelerators  |
 
 ## Guidance
 

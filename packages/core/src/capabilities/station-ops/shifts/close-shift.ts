@@ -1,5 +1,13 @@
 import { z } from 'zod';
-import { BusinessEvents, err, eventFromContext, invariantViolation, notFoundError, ok, validationError } from '../../../kernel/index.js';
+import {
+  BusinessEvents,
+  err,
+  eventFromContext,
+  invariantViolation,
+  notFoundError,
+  ok,
+  validationError,
+} from '../../../kernel/index.js';
 import type { EventPublisher, ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
 import type { NozzleRepository } from '../../station-setup/nozzles/index.js';
 import type {
@@ -21,13 +29,17 @@ export interface CloseShiftCommand {
   notes?: string;
 }
 
-const schema = z.object({
-  shiftId: z.string().min(1, 'shiftId is required'),
-  closingCash: z.coerce.number().min(0, 'closingCash must be >= 0'),
-  nozzleReadings: z.array(z.object({ nozzleId: z.string().min(1), closingReading: z.coerce.number().min(0) })).optional(),
-  cashDrops: z.coerce.number().min(0).optional(),
-  notes: z.string().max(500).optional(),
-}).strict();
+const schema = z
+  .object({
+    shiftId: z.string().min(1, 'shiftId is required'),
+    closingCash: z.coerce.number().min(0, 'closingCash must be >= 0'),
+    nozzleReadings: z
+      .array(z.object({ nozzleId: z.string().min(1), closingReading: z.coerce.number().min(0) }))
+      .optional(),
+    cashDrops: z.coerce.number().min(0).optional(),
+    notes: z.string().max(500).optional(),
+  })
+  .strict();
 
 export interface CloseShiftDeps {
   shifts: ShiftRepository;
@@ -58,17 +70,27 @@ export interface CloseShiftResult {
 export class CloseShift implements UseCase<CloseShiftCommand, CloseShiftResult> {
   constructor(private readonly deps: CloseShiftDeps) {}
 
-  async execute(input: CloseShiftCommand, ctx: ExecutionContext): Promise<Result<CloseShiftResult>> {
+  async execute(
+    input: CloseShiftCommand,
+    ctx: ExecutionContext,
+  ): Promise<Result<CloseShiftResult>> {
     const p = schema.safeParse(input);
-    if (!p.success) return err(validationError('Invalid CloseShift command', { issues: p.error.flatten() }));
+    if (!p.success)
+      return err(validationError('Invalid CloseShift command', { issues: p.error.flatten() }));
     const cmd = p.data;
 
     const shift = await this.deps.shifts.findById(cmd.shiftId);
-    if (!shift || shift.organizationId !== ctx.organizationId) return err(notFoundError('Shift', cmd.shiftId));
-    if (shift.status !== 'OPEN') return err(invariantViolation('Shift is not open', { shiftId: shift.id, status: shift.status }));
+    if (!shift || shift.organizationId !== ctx.organizationId)
+      return err(notFoundError('Shift', cmd.shiftId));
+    if (shift.status !== 'OPEN')
+      return err(
+        invariantViolation('Shift is not open', { shiftId: shift.id, status: shift.status }),
+      );
 
     const dbReadings = await this.deps.nozzleReadings.listByShift(shift.id);
-    const closingByNozzle = new Map((cmd.nozzleReadings ?? []).map((r) => [r.nozzleId, r.closingReading]));
+    const closingByNozzle = new Map(
+      (cmd.nozzleReadings ?? []).map((r) => [r.nozzleId, r.closingReading]),
+    );
 
     // Apply any provided closing readings.
     for (const reading of dbReadings) {
@@ -76,7 +98,11 @@ export class CloseShift implements UseCase<CloseShiftCommand, CloseShiftResult> 
       if (provided === undefined) continue;
       const opening = Number(reading.openingReading);
       if (provided < opening) {
-        return err(validationError(`Closing reading (${provided}) is below opening (${opening})`, { nozzleId: reading.nozzleId }));
+        return err(
+          validationError(`Closing reading (${provided}) is below opening (${opening})`, {
+            nozzleId: reading.nozzleId,
+          }),
+        );
       }
       const volume = provided - opening;
       await this.deps.nozzleReadings.updateClosing(reading.id, String(provided), String(volume));
@@ -143,7 +169,13 @@ export class CloseShift implements UseCase<CloseShiftCommand, CloseShiftResult> 
     const closingCash = cmd.closingCash;
     const cashDrops = Number(cmd.cashDrops ?? 0);
     const expectedDrawerCash =
-      openingCash + totals.cashSales + totals.cashCollections + (totals.cashIncome ?? 0) - totals.drawerExpenses - totals.drawerSupplierPayments - cashDrops;
+      openingCash +
+      totals.cashSales +
+      totals.cashCollections +
+      (totals.cashIncome ?? 0) -
+      totals.drawerExpenses -
+      totals.drawerSupplierPayments -
+      cashDrops;
     const cashVariance = closingCash - expectedDrawerCash;
 
     // Fetch credit sales with vehicle information for immutable snapshot.

@@ -22,9 +22,14 @@ import { AccountProvisioningService } from './account-provisioning.js';
 export class LedgerPostingService {
   constructor(private readonly db: DbClient) {}
 
-  private async businessDayMeta(businessDayId: string): Promise<{ stationId: string; businessDate: string } | null> {
+  private async businessDayMeta(
+    businessDayId: string,
+  ): Promise<{ stationId: string; businessDate: string } | null> {
     const rows = await this.db
-      .select({ stationId: schema.businessDays.stationId, businessDate: schema.businessDays.businessDate })
+      .select({
+        stationId: schema.businessDays.stationId,
+        businessDate: schema.businessDays.businessDate,
+      })
       .from(schema.businessDays)
       .where(eq(schema.businessDays.id, businessDayId))
       .limit(1);
@@ -32,7 +37,11 @@ export class LedgerPostingService {
   }
 
   /** Find (or lazily create) the station's system account of a given type. */
-  private async ensureAccount(organizationId: string, stationId: string, type: FinancialAccountType): Promise<string> {
+  private async ensureAccount(
+    organizationId: string,
+    stationId: string,
+    type: FinancialAccountType,
+  ): Promise<string> {
     const existing = await this.db
       .select({ id: schema.financialAccounts.id })
       .from(schema.financialAccounts)
@@ -78,12 +87,22 @@ export class LedgerPostingService {
 
   /** Resolve the target account: an explicitly chosen one (validated to the org),
    *  else the station's system account of the fallback type (created on demand). */
-  private async resolveTarget(organizationId: string, stationId: string, explicitId: string | null | undefined, fallbackType: FinancialAccountType): Promise<string> {
+  private async resolveTarget(
+    organizationId: string,
+    stationId: string,
+    explicitId: string | null | undefined,
+    fallbackType: FinancialAccountType,
+  ): Promise<string> {
     if (explicitId) {
       const rows = await this.db
         .select({ id: schema.financialAccounts.id })
         .from(schema.financialAccounts)
-        .where(and(eq(schema.financialAccounts.id, explicitId), eq(schema.financialAccounts.organizationId, organizationId)))
+        .where(
+          and(
+            eq(schema.financialAccounts.id, explicitId),
+            eq(schema.financialAccounts.organizationId, organizationId),
+          ),
+        )
         .limit(1);
       if (rows[0]) return rows[0].id;
     }
@@ -124,12 +143,23 @@ export class LedgerPostingService {
   /** Customer collection → money IN (cash → drawer, else bank). */
   async postCollection(
     organizationId: string,
-    collection: { id: string; amount: string; paymentMethod: string; businessDayId: string; shiftId: string | null },
+    collection: {
+      id: string;
+      amount: string;
+      paymentMethod: string;
+      businessDayId: string;
+      shiftId: string | null;
+    },
     accountId?: string | null,
   ): Promise<void> {
     const meta = await this.businessDayMeta(collection.businessDayId);
     if (!meta) return;
-    const target = await this.resolveTarget(organizationId, meta.stationId, accountId, accountTypeForPaymentMethod(collection.paymentMethod));
+    const target = await this.resolveTarget(
+      organizationId,
+      meta.stationId,
+      accountId,
+      accountTypeForPaymentMethod(collection.paymentMethod),
+    );
     await this.postEntry({
       organizationId,
       stationId: meta.stationId,
@@ -148,12 +178,23 @@ export class LedgerPostingService {
   /** Expense → money OUT of drawer / petty / bank / owner (chosen account or by paidFrom). */
   async postExpense(
     organizationId: string,
-    expense: { id: string; amount: string; paidFrom: string; businessDayId: string; shiftId: string | null },
+    expense: {
+      id: string;
+      amount: string;
+      paidFrom: string;
+      businessDayId: string;
+      shiftId: string | null;
+    },
     accountId?: string | null,
   ): Promise<void> {
     const meta = await this.businessDayMeta(expense.businessDayId);
     if (!meta) return;
-    const target = await this.resolveTarget(organizationId, meta.stationId, accountId, accountTypeForPaidFrom(expense.paidFrom));
+    const target = await this.resolveTarget(
+      organizationId,
+      meta.stationId,
+      accountId,
+      accountTypeForPaidFrom(expense.paidFrom),
+    );
     await this.postEntry({
       organizationId,
       stationId: meta.stationId,
@@ -172,12 +213,23 @@ export class LedgerPostingService {
   /** Other/indirect income → money IN to drawer / bank / owner (by receivedInto). */
   async postIncome(
     organizationId: string,
-    income: { id: string; amount: string; receivedInto: string; businessDayId: string; shiftId: string | null },
+    income: {
+      id: string;
+      amount: string;
+      receivedInto: string;
+      businessDayId: string;
+      shiftId: string | null;
+    },
     accountId?: string | null,
   ): Promise<void> {
     const meta = await this.businessDayMeta(income.businessDayId);
     if (!meta) return;
-    const target = await this.resolveTarget(organizationId, meta.stationId, accountId, accountTypeForPaidFrom(income.receivedInto));
+    const target = await this.resolveTarget(
+      organizationId,
+      meta.stationId,
+      accountId,
+      accountTypeForPaidFrom(income.receivedInto),
+    );
     await this.postEntry({
       organizationId,
       stationId: meta.stationId,
@@ -196,12 +248,23 @@ export class LedgerPostingService {
   /** Supplier payment → money OUT of drawer / petty / bank / owner (chosen account or by paidFrom). */
   async postSupplierPayment(
     organizationId: string,
-    txn: { id: string; amount: string; paidFrom: string; businessDayId: string; shiftId: string | null },
+    txn: {
+      id: string;
+      amount: string;
+      paidFrom: string;
+      businessDayId: string;
+      shiftId: string | null;
+    },
     accountId?: string | null,
   ): Promise<void> {
     const meta = await this.businessDayMeta(txn.businessDayId);
     if (!meta) return;
-    const target = await this.resolveTarget(organizationId, meta.stationId, accountId, accountTypeForPaidFrom(txn.paidFrom));
+    const target = await this.resolveTarget(
+      organizationId,
+      meta.stationId,
+      accountId,
+      accountTypeForPaidFrom(txn.paidFrom),
+    );
     await this.postEntry({
       organizationId,
       stationId: meta.stationId,
@@ -225,7 +288,14 @@ export class LedgerPostingService {
    *  swipe still keeps its slip/driver details). */
   async postOmcCardSale(
     organizationId: string,
-    sale: { id: string; amount: string; businessDayId: string; shiftId: string | null; customerId?: string | null; notes?: string | null },
+    sale: {
+      id: string;
+      amount: string;
+      businessDayId: string;
+      shiftId: string | null;
+      customerId?: string | null;
+      notes?: string | null;
+    },
   ): Promise<void> {
     const meta = await this.businessDayMeta(sale.businessDayId);
     if (!meta) return;
@@ -238,7 +308,9 @@ export class LedgerPostingService {
         .from(schema.customers)
         .where(eq(schema.customers.id, sale.customerId))
         .limit(1);
-      const label = cust ? `${cust.name}${cust.fleetCode ? ` (${cust.fleetCode})` : ''}` : 'Customer';
+      const label = cust
+        ? `${cust.name}${cust.fleetCode ? ` (${cust.fleetCode})` : ''}`
+        : 'Customer';
       note = `OMC card · ${label}`;
       if (sale.notes) note += ` · ${sale.notes}`;
     } else if (sale.notes) {
@@ -264,21 +336,36 @@ export class LedgerPostingService {
   async reverseOmcCardSale(sourceId: string): Promise<void> {
     await this.db
       .delete(schema.ledgerEntries)
-      .where(and(eq(schema.ledgerEntries.sourceType, 'SALE_OMC'), eq(schema.ledgerEntries.sourceId, sourceId)));
+      .where(
+        and(
+          eq(schema.ledgerEntries.sourceType, 'SALE_OMC'),
+          eq(schema.ledgerEntries.sourceId, sourceId),
+        ),
+      );
   }
 
   /** Reverse the money-out for a voided expense. */
   async reverseExpense(sourceId: string): Promise<void> {
     await this.db
       .delete(schema.ledgerEntries)
-      .where(and(eq(schema.ledgerEntries.sourceType, 'EXPENSE'), eq(schema.ledgerEntries.sourceId, sourceId)));
+      .where(
+        and(
+          eq(schema.ledgerEntries.sourceType, 'EXPENSE'),
+          eq(schema.ledgerEntries.sourceId, sourceId),
+        ),
+      );
   }
 
   /** Reverse the money-in for a voided income entry. */
   async reverseIncome(sourceId: string): Promise<void> {
     await this.db
       .delete(schema.ledgerEntries)
-      .where(and(eq(schema.ledgerEntries.sourceType, 'INCOME'), eq(schema.ledgerEntries.sourceId, sourceId)));
+      .where(
+        and(
+          eq(schema.ledgerEntries.sourceType, 'INCOME'),
+          eq(schema.ledgerEntries.sourceId, sourceId),
+        ),
+      );
   }
 
   // ---- FA3: shift-close sales posting -------------------------------------
@@ -290,7 +377,12 @@ export class LedgerPostingService {
   async reverseShiftClose(shiftId: string): Promise<void> {
     await this.db
       .delete(schema.ledgerEntries)
-      .where(and(eq(schema.ledgerEntries.shiftId, shiftId), inArray(schema.ledgerEntries.sourceType, this.SHIFT_CLOSE_SOURCES as unknown as string[])));
+      .where(
+        and(
+          eq(schema.ledgerEntries.shiftId, shiftId),
+          inArray(schema.ledgerEntries.sourceType, this.SHIFT_CLOSE_SOURCES as unknown as string[]),
+        ),
+      );
   }
 
   /**
@@ -321,7 +413,10 @@ export class LedgerPostingService {
         label: schema.paymentTerminals.label,
       })
       .from(schema.handoverTerminalEntries)
-      .innerJoin(schema.paymentTerminals, eq(schema.paymentTerminals.id, schema.handoverTerminalEntries.terminalId))
+      .innerJoin(
+        schema.paymentTerminals,
+        eq(schema.paymentTerminals.id, schema.handoverTerminalEntries.terminalId),
+      )
       .where(eq(schema.handoverTerminalEntries.shiftId, shift.id));
 
     const provisioner = new AccountProvisioningService(this.db);
@@ -329,7 +424,9 @@ export class LedgerPostingService {
     for (const e of termEntries) {
       const amt = Number(e.card ?? 0) + Number(e.upi ?? 0);
       if (amt <= 0) continue;
-      const accountId = e.clearingAccountId ?? (await provisioner.ensureClearingForProvider(organizationId, shift.stationId, e.provider));
+      const accountId =
+        e.clearingAccountId ??
+        (await provisioner.ensureClearingForProvider(organizationId, shift.stationId, e.provider));
       cardPosts.push({ accountId, amount: amt, note: `Shift card/UPI · ${e.label || 'terminal'}` });
     }
 
@@ -337,20 +434,34 @@ export class LedgerPostingService {
     // split (legacy / single-acquirer). Route to the station's clearing account.
     if (cardPosts.length === 0) {
       const handovers = await this.db
-        .select({ card: schema.attendantHandovers.cardHandedOver, upi: schema.attendantHandovers.upiHandedOver })
+        .select({
+          card: schema.attendantHandovers.cardHandedOver,
+          upi: schema.attendantHandovers.upiHandedOver,
+        })
         .from(schema.attendantHandovers)
         .where(eq(schema.attendantHandovers.shiftId, shift.id));
-      const cardUpi = handovers.reduce((acc, h) => acc + Number(h.card ?? 0) + Number(h.upi ?? 0), 0);
+      const cardUpi = handovers.reduce(
+        (acc, h) => acc + Number(h.card ?? 0) + Number(h.upi ?? 0),
+        0,
+      );
       if (cardUpi > 0) {
         // Card/UPI money implies a machine was used → create a clearing account if
         // none exists yet (money-driven, not a pre-provisioned empty bucket).
         const existing = await this.db
           .select({ id: schema.financialAccounts.id })
           .from(schema.financialAccounts)
-          .where(and(eq(schema.financialAccounts.organizationId, organizationId), eq(schema.financialAccounts.stationId, shift.stationId), eq(schema.financialAccounts.accountType, 'MERCHANT_CLEARING')))
+          .where(
+            and(
+              eq(schema.financialAccounts.organizationId, organizationId),
+              eq(schema.financialAccounts.stationId, shift.stationId),
+              eq(schema.financialAccounts.accountType, 'MERCHANT_CLEARING'),
+            ),
+          )
           .orderBy(schema.financialAccounts.createdAt)
           .limit(1);
-        const accountId = existing[0]?.id ?? (await provisioner.ensureClearingForProvider(organizationId, shift.stationId, null));
+        const accountId =
+          existing[0]?.id ??
+          (await provisioner.ensureClearingForProvider(organizationId, shift.stationId, null));
         cardPosts.push({ accountId, amount: cardUpi, note: 'Shift card/UPI (terminal batch)' });
       }
     }

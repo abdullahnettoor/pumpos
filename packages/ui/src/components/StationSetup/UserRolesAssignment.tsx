@@ -1,20 +1,21 @@
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { CloudUserAssignmentService, CloudStationService } from '../../services/cloud.js';
+import { CloudUserAssignmentService } from '../../services/cloud.js';
 import { useQueryClient } from '@tanstack/react-query';
-import { queryKeys, TIER } from '../../query/hooks.js';
+import { queryKeys, useStations, useUsers } from '../../query/hooks.js';
 import { Station } from '@pump/shared';
 import { Drawer } from '../Drawer.js';
 import { DataTable } from '../primitives/DataTable.js';
 import { Checkbox, Switch } from '../primitives/Toggle.js';
-import { useToast } from '../primitives/ToastProvider.js';
+import { useToast, type ToastApi } from '../primitives/ToastProvider.js';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Edit, KeyRound } from 'lucide-react';
+import { useRunTask } from '../../utils/runTask.js';
+import { Button, Form, Icon } from '../../pump-ds/index.js';
 
 const userService = new CloudUserAssignmentService();
-const stationService = new CloudStationService();
 
 const userFormSchema = z.object({
   fullName: z.string().min(2, 'Full name must be at least 2 characters'),
@@ -53,6 +54,25 @@ async function copyText(text: string): Promise<boolean> {
   }
 }
 
+/**
+ * Copy + tell the operator whether it worked, in one place.
+ *
+ * Clipboard access is blocked often enough (insecure origin, permission denied)
+ * that "did it copy?" is a real question, and these credentials are the one
+ * thing the operator cannot re-read later. The trailing `.catch` is the
+ * rejection path for a `copy` that rejects rather than resolving false.
+ */
+function copyWithFeedback(
+  copy: (text: string) => Promise<boolean>,
+  text: string,
+  label: string,
+  toast: ToastApi,
+): void {
+  copy(text)
+    .then((ok) => (ok ? toast.success(`${label} copied.`) : toast.error('Copy failed.')))
+    .catch(() => toast.error('Copy failed.'));
+}
+
 const inputStyle: React.CSSProperties = {
   height: '32px',
   padding: '0 8px',
@@ -85,14 +105,30 @@ const buildUserColumns = (
   onReset: (u: any) => void,
   onToggleActive: (u: any) => void,
 ): ColumnDef<any, any>[] => [
-  { accessorKey: 'fullName', header: 'Name', cell: ({ getValue }) => <span style={{ fontWeight: 600, color: 'var(--text-strong)' }}>{getValue() as string}</span> },
+  {
+    accessorKey: 'fullName',
+    header: 'Name',
+    cell: ({ getValue }) => (
+      <span style={{ fontWeight: 600, color: 'var(--text-strong)' }}>{getValue() as string}</span>
+    ),
+  },
   {
     id: 'identity',
     header: 'Login',
     cell: ({ row }) => {
       const u = row.original;
       const id = loginIdentity(u);
-      return <span style={{ fontSize: '12px', color: u.hasLogin ? 'var(--text-default)' : 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{id}</span>;
+      return (
+        <span
+          style={{
+            fontSize: '12px',
+            color: u.hasLogin ? 'var(--text-default)' : 'var(--text-muted)',
+            fontFamily: 'var(--font-mono)',
+          }}
+        >
+          {id}
+        </span>
+      );
     },
   },
   {
@@ -100,9 +136,28 @@ const buildUserColumns = (
     header: 'Role',
     cell: ({ row }) => {
       const u = row.original;
-      const bg = u.role === 'Owner' ? 'rgba(99, 102, 241, 0.15)' : u.role === 'Manager' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(46, 94, 136, 0.15)';
-      const fg = u.role === 'Owner' ? '#6366f1' : u.role === 'Manager' ? 'rgb(52, 211, 153)' : '#2e5e88';
-      return <span style={{ fontSize: '11px', fontWeight: 650, padding: '2px 6px', borderRadius: '4px', backgroundColor: bg, color: fg }}>{u.role}</span>;
+      const bg =
+        u.role === 'Owner'
+          ? 'rgba(99, 102, 241, 0.15)'
+          : u.role === 'Manager'
+            ? 'rgba(16, 185, 129, 0.15)'
+            : 'rgba(46, 94, 136, 0.15)';
+      const fg =
+        u.role === 'Owner' ? '#6366f1' : u.role === 'Manager' ? 'rgb(52, 211, 153)' : '#2e5e88';
+      return (
+        <span
+          style={{
+            fontSize: '11px',
+            fontWeight: 650,
+            padding: '2px 6px',
+            borderRadius: '4px',
+            backgroundColor: bg,
+            color: fg,
+          }}
+        >
+          {u.role}
+        </span>
+      );
     },
   },
   {
@@ -110,7 +165,20 @@ const buildUserColumns = (
     header: 'Status',
     cell: ({ row }) => {
       const meta = STATUS_META[statusOf(row.original)];
-      return <span style={{ fontSize: '11px', fontWeight: 650, padding: '2px 6px', borderRadius: '4px', backgroundColor: meta.bg, color: meta.fg }}>{meta.label}</span>;
+      return (
+        <span
+          style={{
+            fontSize: '11px',
+            fontWeight: 650,
+            padding: '2px 6px',
+            borderRadius: '4px',
+            backgroundColor: meta.bg,
+            color: meta.fg,
+          }}
+        >
+          {meta.label}
+        </span>
+      );
     },
   },
   {
@@ -118,8 +186,16 @@ const buildUserColumns = (
     header: 'Assigned Stations',
     cell: ({ row }) => {
       const u = row.original;
-      const assignedNames = u.stationIds ? u.stationIds.map((sid: string) => stations.find((s) => s.id === sid)?.name || 'Unknown').join(', ') : 'None';
-      return <span style={{ color: 'var(--text-muted)' }}>{u.role === 'Owner' ? 'All Stations (Global)' : assignedNames || 'None'}</span>;
+      const assignedNames = u.stationIds
+        ? u.stationIds
+            .map((sid: string) => stations.find((s) => s.id === sid)?.name || 'Unknown')
+            .join(', ')
+        : 'None';
+      return (
+        <span style={{ color: 'var(--text-muted)' }}>
+          {u.role === 'Owner' ? 'All Stations (Global)' : assignedNames || 'None'}
+        </span>
+      );
     },
   },
   {
@@ -127,10 +203,24 @@ const buildUserColumns = (
     header: '',
     cell: ({ row }) => {
       const u = row.original;
-      const iconBtn: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', height: '26px', width: '26px', background: 'none', border: 'none', borderRadius: '4px', cursor: 'pointer', color: 'var(--text-muted)', padding: 0 };
+      const iconBtn: React.CSSProperties = {
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        height: '26px',
+        width: '26px',
+        background: 'none',
+        border: 'none',
+        borderRadius: '4px',
+        cursor: 'pointer',
+        color: 'var(--text-muted)',
+        padding: 0,
+      };
       const isActive = u.status !== 'INACTIVE';
       return (
-        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', alignItems: 'center' }}>
+        <div
+          style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', alignItems: 'center' }}
+        >
           <button onClick={() => startEdit(u)} title="Edit member" style={iconBtn}>
             <Edit size={14} />
           </button>
@@ -160,9 +250,16 @@ const buildUserColumns = (
 export const UserRolesAssignment: React.FC = () => {
   const qc = useQueryClient();
   const toast = useToast();
-  const [users, setUsers] = useState<any[]>([]);
-  const [stations, setStations] = useState<Station[]>([]);
-  const [loading, setLoading] = useState(true);
+  const runTask = useRunTask();
+  // Read through the shared static-tier hooks rather than fetching into local
+  // state: the team list is already cached, and `mergeUser` below writes the
+  // cache directly, so a local mirror would only be a second source of truth.
+  const usersQ = useUsers();
+  const stationsQ = useStations();
+  const users = useMemo(() => usersQ.data ?? [], [usersQ.data]);
+  const stations = useMemo<Station[]>(() => stationsQ.data ?? [], [stationsQ.data]);
+  const loading = usersQ.isLoading || stationsQ.isLoading;
+  const loadError = usersQ.error ?? stationsQ.error;
 
   // Drawer visibility state
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -189,7 +286,7 @@ export const UserRolesAssignment: React.FC = () => {
     setValue,
     watch,
     reset,
-    formState: { errors, isSubmitting }
+    formState: { errors, isSubmitting },
   } = useForm<UserFormValues>({
     resolver: zodResolver(userFormSchema),
     defaultValues: {
@@ -200,44 +297,30 @@ export const UserRolesAssignment: React.FC = () => {
       status: 'ACTIVE' as const,
       role: 'Staff',
       enableAppAccess: true,
-    }
+    },
   });
 
   const watchEnableAppAccess = watch('enableAppAccess');
   const watchRole = watch('role');
   const watchPassword = watch('password') || '';
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = async (force = false) => {
-    try {
-      setLoading(true);
-      if (force) await Promise.all([
-        qc.invalidateQueries({ queryKey: queryKeys.users() }),
-        qc.invalidateQueries({ queryKey: queryKeys.stations() }),
-      ]);
-      const [userList, stationList] = await Promise.all([
-        qc.ensureQueryData({ queryKey: queryKeys.users(), queryFn: () => userService.listUsers(), staleTime: TIER.static.staleTime }),
-        qc.ensureQueryData({ queryKey: queryKeys.stations(), queryFn: () => stationService.getStations(), staleTime: TIER.static.staleTime }),
-      ]);
-      setUsers(userList);
-      setStations(stationList);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
+  /** Force a refetch of both lists (used when a save could not be merged locally). */
+  const reloadData = async () => {
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: queryKeys.users() }),
+      qc.invalidateQueries({ queryKey: queryKeys.stations() }),
+    ]);
   };
 
-  const mergeUser = (row: any) => {
-    const merge = (list: any[] = []) => (list.some((u) => u.id === row.id)
-      ? list.map((u) => (u.id === row.id ? { ...u, ...row } : u))
-      : [...list, row]);
-    setUsers((prev) => merge(prev));
+  // The row is written straight into the cache, so this only marks the key stale
+  // for the next mount — `refetchType: 'none'` means nothing is refetched here.
+  const mergeUser = async (row: any) => {
+    const merge = (list: any[] = []) =>
+      list.some((u) => u.id === row.id)
+        ? list.map((u) => (u.id === row.id ? { ...u, ...row } : u))
+        : [...list, row];
     qc.setQueryData(queryKeys.users(), (prev: any[] | undefined) => merge(prev));
-    qc.invalidateQueries({ queryKey: queryKeys.users(), refetchType: 'none' });
+    await qc.invalidateQueries({ queryKey: queryKeys.users(), refetchType: 'none' });
   };
 
   const handleCreateOrUpdate = async (values: UserFormValues) => {
@@ -265,7 +348,7 @@ export const UserRolesAssignment: React.FC = () => {
         fullName: values.fullName,
         // For a phone identity we deliberately clear email so the server uses
         // the synthetic phone handle as the login identity.
-        email: wantsLogin && !isPhone ? values.email : (editingUser ? values.email || null : null),
+        email: wantsLogin && !isPhone ? values.email : editingUser ? values.email || null : null,
         phone: values.phone || null,
         status: values.status,
         role: wantsLogin ? values.role : 'Staff',
@@ -290,9 +373,9 @@ export const UserRolesAssignment: React.FC = () => {
 
       const rowId = editingUser?.id ?? (saved as any)?.id;
       if (rowId) {
-        mergeUser({ ...(editingUser || {}), id: rowId, ...(saved as any), ...payload });
+        await mergeUser({ ...(editingUser || {}), id: rowId, ...(saved as any), ...payload });
       } else {
-        loadData(true);
+        runTask(reloadData(), 'Saved, but the team list could not be refreshed.');
       }
       resetForm();
       toast.success(editingUser ? 'Team member updated.' : 'Team member added.');
@@ -340,7 +423,9 @@ export const UserRolesAssignment: React.FC = () => {
   };
 
   const handleStationCheckbox = (stationId: string, checked: boolean) => {
-    setStationIds((prev) => (checked ? [...prev, stationId] : prev.filter((id) => id !== stationId)));
+    setStationIds((prev) =>
+      checked ? [...prev, stationId] : prev.filter((id) => id !== stationId),
+    );
   };
 
   const openReset = (u: any) => {
@@ -366,61 +451,105 @@ export const UserRolesAssignment: React.FC = () => {
 
   const toggleActive = async (u: any) => {
     try {
-      const updated = u.status === 'INACTIVE'
-        ? await userService.reactivateUser(u.id)
-        : await userService.deactivateUser(u.id);
-      mergeUser({ ...u, ...(updated as any) });
+      const updated =
+        u.status === 'INACTIVE'
+          ? await userService.reactivateUser(u.id)
+          : await userService.deactivateUser(u.id);
+      await mergeUser({ ...u, ...(updated as any) });
       toast.success(u.status === 'INACTIVE' ? 'Member reactivated.' : 'Member deactivated.');
     } catch (err: any) {
       toast.error(err.message || 'Failed to update member');
     }
   };
 
-  if (loading) return <div style={{ color: '#9ca3af', fontFamily: 'var(--font-mono)' }}>Loading team assignments...</div>;
+  if (loading)
+    return (
+      <div style={{ color: '#9ca3af', fontFamily: 'var(--font-mono)' }}>
+        Loading team assignments...
+      </div>
+    );
+
+  // Without this the fetch failing would fall through to an empty team table,
+  // which reads as "this station has no members" rather than "we could not ask".
+  if (loadError)
+    return (
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          backgroundColor: 'var(--state-danger-bg)',
+          color: 'var(--state-danger-fg)',
+          padding: '12px 14px',
+          borderRadius: 'var(--radius-input)',
+          fontSize: '13px',
+        }}
+      >
+        <span>{loadError.message || 'Could not load team members.'}</span>
+        <Button
+          variant="secondary"
+          size="xs"
+          onClick={() => runTask(reloadData(), 'Could not reload team members.')}
+        >
+          Retry
+        </Button>
+      </div>
+    );
 
   const radioLabel = (value: 'Email' | 'Phone', label: string) => (
-    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', cursor: 'pointer' }}>
-      <input type="radio" value={value} checked={identityType === value} onChange={() => setIdentityType(value)} />
+    <label
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '6px',
+        fontSize: '13px',
+        cursor: 'pointer',
+      }}
+    >
+      <input
+        type="radio"
+        value={value}
+        checked={identityType === value}
+        onChange={() => setIdentityType(value)}
+      />
       {label}
     </label>
   );
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }} className="animate-fade-in">
-
+    <div
+      style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
+      className="animate-fade-in"
+    >
       {/* Header section with + Add Button */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <h2 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-strong)' }}>Team</h2>
-          <p style={{ color: 'var(--text-muted)', fontSize: '12px' }}>Add members with an email or phone, set their password, and manage access.</p>
+          <p style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
+            Add members with an email or phone, set their password, and manage access.
+          </p>
         </div>
         {!isFormOpen && (
-          <button
+          <Button
+            variant="primary"
+            size="sm"
+            leftIcon={<Icon name="plus" size="sm" />}
             onClick={() => {
               resetForm();
               setCredentials(null);
               setIsFormOpen(true);
             }}
-            style={{
-              height: '32px',
-              padding: '0 12px',
-              backgroundColor: 'var(--brand-primary)',
-              color: '#ffffff',
-              border: 'none',
-              borderRadius: 'var(--radius-button)',
-              fontWeight: 600,
-              fontSize: '13px',
-              cursor: 'pointer',
-            }}
           >
-            + Add Team Member
-          </button>
+            Add Team Member
+          </Button>
         )}
       </div>
 
       {/* List / Table */}
       <DataTable
-        columns={buildUserColumns(stations, startEdit, openReset, toggleActive)}
+        columns={buildUserColumns(stations, startEdit, openReset, (u) =>
+          runTask(toggleActive(u), 'Could not update the team member.'),
+        )}
         data={users}
         emptyMessage="No team members yet."
         getRowId={(r: any) => r.id}
@@ -433,50 +562,139 @@ export const UserRolesAssignment: React.FC = () => {
         title={editingUser ? 'Edit Team Member' : 'New Team Member'}
       >
         {credentials ? (
-          <CredentialsCard credentials={credentials} onDone={closeForm} onCopy={copyText} toast={toast} />
+          <CredentialsCard
+            credentials={credentials}
+            onDone={closeForm}
+            onCopy={copyText}
+            toast={toast}
+          />
         ) : (
-          <form onSubmit={handleSubmit(handleCreateOrUpdate)} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <Form
+            onSubmit={handleSubmit(handleCreateOrUpdate)}
+            style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
+          >
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Full Name *</label>
-              <input type="text" style={inputStyle} placeholder="e.g. John Doe" {...register('fullName')} />
-              {errors.fullName && <span style={{ color: 'var(--state-danger-fg)', fontSize: '11px' }}>{errors.fullName.message}</span>}
+              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
+                Full Name *
+              </label>
+              <input
+                type="text"
+                style={inputStyle}
+                placeholder="e.g. John Doe"
+                {...register('fullName')}
+              />
+              {errors.fullName && (
+                <span style={{ color: 'var(--state-danger-fg)', fontSize: '11px' }}>
+                  {errors.fullName.message}
+                </span>
+              )}
             </div>
 
             {!editingUser && (
               <div style={{ margin: '4px 0' }}>
-                <Checkbox label="Enable app access (allows login)" {...register('enableAppAccess')} />
+                <Checkbox
+                  label="Enable app access (allows login)"
+                  {...register('enableAppAccess')}
+                />
               </div>
             )}
 
             {/* Identity picker — only when provisioning a new login */}
             {!editingUser && watchEnableAppAccess && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', padding: '12px', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', backgroundColor: 'var(--bg-canvas)' }}>
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '10px',
+                  padding: '12px',
+                  border: '1px solid var(--border-soft)',
+                  borderRadius: 'var(--radius-input)',
+                  backgroundColor: 'var(--bg-canvas)',
+                }}
+              >
                 <div style={{ display: 'flex', gap: '20px' }}>
-                  <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Login with</span>
+                  <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
+                    Login with
+                  </span>
                   {radioLabel('Phone', 'Phone')}
                   {radioLabel('Email', 'Email')}
                 </div>
 
                 {identityType === 'Email' ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Email Address *</label>
-                    <input type="email" style={inputStyle} placeholder="e.g. john@station.com" {...register('email')} />
-                    {errors.email && <span style={{ color: 'var(--state-danger-fg)', fontSize: '11px' }}>{errors.email.message}</span>}
+                    <label
+                      style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}
+                    >
+                      Email Address *
+                    </label>
+                    <input
+                      type="email"
+                      style={inputStyle}
+                      placeholder="e.g. john@station.com"
+                      {...register('email')}
+                    />
+                    {errors.email && (
+                      <span style={{ color: 'var(--state-danger-fg)', fontSize: '11px' }}>
+                        {errors.email.message}
+                      </span>
+                    )}
                   </div>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Phone Number *</label>
-                    <input type="tel" style={inputStyle} placeholder="e.g. 98765 43210" {...register('phone')} />
-                    <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>They sign in with this phone number + password. No SMS is sent.</span>
+                    <label
+                      style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}
+                    >
+                      Phone Number *
+                    </label>
+                    <input
+                      type="tel"
+                      style={inputStyle}
+                      placeholder="e.g. 98765 43210"
+                      {...register('phone')}
+                    />
+                    <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                      They sign in with this phone number + password. No SMS is sent.
+                    </span>
                   </div>
                 )}
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Password *</label>
+                  <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
+                    Password *
+                  </label>
                   <div style={{ display: 'flex', gap: '6px' }}>
-                    <input type="text" style={{ ...inputStyle, flex: 1, fontFamily: 'var(--font-mono)' }} placeholder="At least 8 characters" {...register('password')} />
-                    <button type="button" onClick={() => setValue('password', generatePassword())} style={{ ...inputStyle, cursor: 'pointer', backgroundColor: 'var(--bg-surface)', fontWeight: 600 }}>Generate</button>
-                    <button type="button" onClick={async () => (await copyText(watchPassword)) ? toast.success('Password copied.') : toast.error('Copy failed.')} disabled={!watchPassword} style={{ ...inputStyle, cursor: watchPassword ? 'pointer' : 'not-allowed', backgroundColor: 'var(--bg-surface)', fontWeight: 600, opacity: watchPassword ? 1 : 0.5 }}>Copy</button>
+                    <input
+                      type="text"
+                      style={{ ...inputStyle, flex: 1, fontFamily: 'var(--font-mono)' }}
+                      placeholder="At least 8 characters"
+                      {...register('password')}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setValue('password', generatePassword())}
+                      style={{
+                        ...inputStyle,
+                        cursor: 'pointer',
+                        backgroundColor: 'var(--bg-surface)',
+                        fontWeight: 600,
+                      }}
+                    >
+                      Generate
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => copyWithFeedback(copyText, watchPassword, 'Password', toast)}
+                      disabled={!watchPassword}
+                      style={{
+                        ...inputStyle,
+                        cursor: watchPassword ? 'pointer' : 'not-allowed',
+                        backgroundColor: 'var(--bg-surface)',
+                        fontWeight: 600,
+                        opacity: watchPassword ? 1 : 0.5,
+                      }}
+                    >
+                      Copy
+                    </button>
                   </div>
                 </div>
               </div>
@@ -485,15 +703,27 @@ export const UserRolesAssignment: React.FC = () => {
             {/* Profile phone for record-only / edit (non-login) */}
             {(editingUser || !watchEnableAppAccess) && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Phone Number</label>
-                <input type="tel" style={inputStyle} placeholder="e.g. 98765 43210" {...register('phone')} />
+                <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
+                  Phone Number
+                </label>
+                <input
+                  type="tel"
+                  style={inputStyle}
+                  placeholder="e.g. 98765 43210"
+                  {...register('phone')}
+                />
               </div>
             )}
 
             {(editingUser ? !!editingUser.hasLogin : watchEnableAppAccess) && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>System Role</label>
-                <select style={{ ...inputStyle, color: 'var(--text-strong)' }} {...register('role')}>
+                <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
+                  System Role
+                </label>
+                <select
+                  style={{ ...inputStyle, color: 'var(--text-strong)' }}
+                  {...register('role')}
+                >
                   <option value="Owner">Owner (Global Admin)</option>
                   <option value="Manager">Manager</option>
                   <option value="Accountant">Accountant</option>
@@ -505,8 +735,12 @@ export const UserRolesAssignment: React.FC = () => {
 
             {watchRole !== 'Owner' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Assign Stations</label>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '6px' }}>
+                <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
+                  Assign Stations
+                </label>
+                <div
+                  style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '6px' }}
+                >
                   {stations.map((s) => (
                     <Checkbox
                       key={s.id}
@@ -521,8 +755,13 @@ export const UserRolesAssignment: React.FC = () => {
 
             {editingUser && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Status</label>
-                <select style={{ ...inputStyle, color: 'var(--text-strong)' }} {...register('status')}>
+                <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
+                  Status
+                </label>
+                <select
+                  style={{ ...inputStyle, color: 'var(--text-strong)' }}
+                  {...register('status')}
+                >
                   <option value="ACTIVE">Active</option>
                   <option value="INACTIVE">Inactive</option>
                 </select>
@@ -544,36 +783,71 @@ export const UserRolesAssignment: React.FC = () => {
                 opacity: isSubmitting ? 0.6 : 1,
               }}
             >
-              {isSubmitting ? 'Saving...' : (editingUser ? 'Save Changes' : 'Add Member')}
+              {isSubmitting ? 'Saving...' : editingUser ? 'Save Changes' : 'Add Member'}
             </button>
-          </form>
+          </Form>
         )}
       </Drawer>
 
       {/* Reset password dialog */}
-      <Drawer
-        isOpen={!!resetTarget}
-        onClose={() => setResetTarget(null)}
-        title="Reset password"
-      >
+      <Drawer isOpen={!!resetTarget} onClose={() => setResetTarget(null)} title="Reset password">
         {resetTarget && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <p style={{ fontSize: '13px', color: 'var(--text-default)' }}>
-              Set a new password for <strong>{resetTarget.fullName}</strong> ({loginIdentity(resetTarget)}). The old password stops working immediately.
+              Set a new password for <strong>{resetTarget.fullName}</strong> (
+              {loginIdentity(resetTarget)}). The old password stops working immediately.
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>New Password *</label>
+              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
+                New Password *
+              </label>
               <div style={{ display: 'flex', gap: '6px' }}>
-                <input type="text" style={{ ...inputStyle, flex: 1, fontFamily: 'var(--font-mono)' }} value={resetPassword} onChange={(e) => setResetPassword(e.target.value)} />
-                <button type="button" onClick={() => setResetPassword(generatePassword())} style={{ ...inputStyle, cursor: 'pointer', backgroundColor: 'var(--bg-surface)', fontWeight: 600 }}>Generate</button>
-                <button type="button" onClick={async () => (await copyText(resetPassword)) ? toast.success('Password copied.') : toast.error('Copy failed.')} style={{ ...inputStyle, cursor: 'pointer', backgroundColor: 'var(--bg-surface)', fontWeight: 600 }}>Copy</button>
+                <input
+                  type="text"
+                  style={{ ...inputStyle, flex: 1, fontFamily: 'var(--font-mono)' }}
+                  value={resetPassword}
+                  onChange={(e) => setResetPassword(e.target.value)}
+                />
+                <button
+                  type="button"
+                  onClick={() => setResetPassword(generatePassword())}
+                  style={{
+                    ...inputStyle,
+                    cursor: 'pointer',
+                    backgroundColor: 'var(--bg-surface)',
+                    fontWeight: 600,
+                  }}
+                >
+                  Generate
+                </button>
+                <button
+                  type="button"
+                  onClick={() => copyWithFeedback(copyText, resetPassword, 'Password', toast)}
+                  style={{
+                    ...inputStyle,
+                    cursor: 'pointer',
+                    backgroundColor: 'var(--bg-surface)',
+                    fontWeight: 600,
+                  }}
+                >
+                  Copy
+                </button>
               </div>
             </div>
             <button
               type="button"
-              onClick={confirmReset}
+              onClick={() => runTask(confirmReset(), 'Could not reset the password.')}
               disabled={resetBusy || resetPassword.length < 8}
-              style={{ height: '36px', backgroundColor: 'var(--brand-primary)', border: 'none', color: '#fff', borderRadius: 'var(--radius-button)', fontWeight: 600, cursor: 'pointer', opacity: resetBusy || resetPassword.length < 8 ? 0.6 : 1 }}
+              style={{
+                height: '36px',
+                backgroundColor: 'var(--brand-primary)',
+                border: 'none',
+                color: '#fff',
+                borderRadius: 'var(--radius-button)',
+                fontWeight: 600,
+                cursor: 'pointer',
+                opacity: resetBusy || resetPassword.length < 8 ? 0.6 : 1,
+              }}
             >
               {resetBusy ? 'Resetting...' : 'Set New Password'}
             </button>
@@ -590,38 +864,135 @@ const CredentialsCard: React.FC<{
   onCopy: (text: string) => Promise<boolean>;
   toast: ReturnType<typeof useToast>;
 }> = ({ credentials, onDone, onCopy, toast }) => {
-  const rowStyle: React.CSSProperties = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', padding: '8px 10px', borderRadius: 'var(--radius-input)', backgroundColor: 'var(--bg-canvas)', border: '1px solid var(--border-soft)' };
-  const copyBtn: React.CSSProperties = { height: '26px', padding: '0 8px', fontSize: '11px', backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-strong)', borderRadius: '4px', cursor: 'pointer', fontWeight: 600 };
+  const rowStyle: React.CSSProperties = {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: '8px',
+    padding: '8px 10px',
+    borderRadius: 'var(--radius-input)',
+    backgroundColor: 'var(--bg-canvas)',
+    border: '1px solid var(--border-soft)',
+  };
+  const copyBtn: React.CSSProperties = {
+    height: '26px',
+    padding: '0 8px',
+    fontSize: '11px',
+    backgroundColor: 'var(--bg-surface)',
+    border: '1px solid var(--border-strong)',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    fontWeight: 600,
+  };
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-      <div style={{ padding: '10px 12px', borderRadius: 'var(--radius-input)', backgroundColor: 'rgba(16, 185, 129, 0.12)', color: 'rgb(5, 150, 105)', fontSize: '12px', fontWeight: 600 }}>
+      <div
+        style={{
+          padding: '10px 12px',
+          borderRadius: 'var(--radius-input)',
+          backgroundColor: 'rgba(16, 185, 129, 0.12)',
+          color: 'rgb(5, 150, 105)',
+          fontSize: '12px',
+          fontWeight: 600,
+        }}
+      >
         ✓ Login ready. Copy and hand these over — the password is shown only once.
       </div>
       <div style={rowStyle}>
         <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <span style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)' }}>Login</span>
-          <span style={{ fontSize: '13px', fontFamily: 'var(--font-mono)', color: 'var(--text-strong)' }}>{credentials.login}</span>
+          <span
+            style={{
+              fontSize: '10px',
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+              color: 'var(--text-muted)',
+            }}
+          >
+            Login
+          </span>
+          <span
+            style={{
+              fontSize: '13px',
+              fontFamily: 'var(--font-mono)',
+              color: 'var(--text-strong)',
+            }}
+          >
+            {credentials.login}
+          </span>
         </div>
-        <button type="button" style={copyBtn} onClick={async () => (await onCopy(credentials.login)) ? toast.success('Login copied.') : toast.error('Copy failed.')}>Copy</button>
+        <button
+          type="button"
+          style={copyBtn}
+          onClick={() => copyWithFeedback(onCopy, credentials.login, 'Login', toast)}
+        >
+          Copy
+        </button>
       </div>
       <div style={rowStyle}>
         <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <span style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)' }}>Password</span>
-          <span style={{ fontSize: '13px', fontFamily: 'var(--font-mono)', color: 'var(--text-strong)' }}>{credentials.password}</span>
+          <span
+            style={{
+              fontSize: '10px',
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+              color: 'var(--text-muted)',
+            }}
+          >
+            Password
+          </span>
+          <span
+            style={{
+              fontSize: '13px',
+              fontFamily: 'var(--font-mono)',
+              color: 'var(--text-strong)',
+            }}
+          >
+            {credentials.password}
+          </span>
         </div>
-        <button type="button" style={copyBtn} onClick={async () => (await onCopy(credentials.password)) ? toast.success('Password copied.') : toast.error('Copy failed.')}>Copy</button>
+        <button
+          type="button"
+          style={copyBtn}
+          onClick={() => copyWithFeedback(onCopy, credentials.password, 'Password', toast)}
+        >
+          Copy
+        </button>
       </div>
       <button
         type="button"
-        onClick={async () => { await onCopy(`Login: ${credentials.login}\nPassword: ${credentials.password}`); toast.success('Credentials copied.'); }}
-        style={{ height: '32px', backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-strong)', color: 'var(--text-default)', borderRadius: 'var(--radius-button)', fontWeight: 600, cursor: 'pointer', fontSize: '12px' }}
+        onClick={() =>
+          copyWithFeedback(
+            onCopy,
+            `Login: ${credentials.login}\nPassword: ${credentials.password}`,
+            'Credentials',
+            toast,
+          )
+        }
+        style={{
+          height: '32px',
+          backgroundColor: 'var(--bg-surface)',
+          border: '1px solid var(--border-strong)',
+          color: 'var(--text-default)',
+          borderRadius: 'var(--radius-button)',
+          fontWeight: 600,
+          cursor: 'pointer',
+          fontSize: '12px',
+        }}
       >
         Copy both
       </button>
       <button
         type="button"
         onClick={onDone}
-        style={{ height: '36px', backgroundColor: 'var(--brand-primary)', border: 'none', color: '#fff', borderRadius: 'var(--radius-button)', fontWeight: 600, cursor: 'pointer' }}
+        style={{
+          height: '36px',
+          backgroundColor: 'var(--brand-primary)',
+          border: 'none',
+          color: '#fff',
+          borderRadius: 'var(--radius-button)',
+          fontWeight: 600,
+          cursor: 'pointer',
+        }}
       >
         Done
       </button>

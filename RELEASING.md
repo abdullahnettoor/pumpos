@@ -5,24 +5,47 @@ custom preview domains.
 
 - `git tag vX.Y.Z` (via `npm run release`) → **production** deploy of web/API.
 - `git push origin dev` → **preview** deploy to `*.abdullahnettoor.com` for only
-      the apps/packages that changed.
+  the apps/packages that changed.
 - `git tag desktop-vX.Y.Z` → desktop installers on a GitHub Release.
 - **Actions → Deploy → Run workflow** → targeted **preview** deploy (manual,
-      pick an app).
+  pick an app).
 
 Workflows: [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) (web),
 [`.github/workflows/desktop-release.yml`](.github/workflows/desktop-release.yml)
 (desktop), [`.github/workflows/migrate.yml`](.github/workflows/migrate.yml) (DB).
 
+> **A release went wrong?** → **[Rollback runbook](docs/rollback-runbook.md)**.
+> Read its first section before touching anything: whether a code rollback is
+> safe depends entirely on whether a migration has already run.
+
+Two guardrails sit on the production path:
+
+- Production deploys run in the `production` GitHub Environment, which has a
+  **required reviewer**. A production release pauses until a human approves it.
+- Every deploy ends with a **smoke check** ([`scripts/smoke-deploy.mjs`](scripts/smoke-deploy.mjs))
+  that asserts the surface actually answers. Upload success is not health.
+
 ## Trigger matrix
 
-| Trigger | What deploys | Target |
-|---|---|---|
-| `git push origin dev` | Only changed web/API apps (path-filtered) | Preview custom domains (`*.abdullahnettoor.com`) |
-| `workflow_dispatch` on **Deploy** | Selected app (`all`, `console`, `marketing`, `mobile`, `api`) | Preview custom domains |
-| `vX.Y.Z` tag | Web/API production | `*.pumpos.app` |
-| `desktop-vX.Y.Z` tag | Desktop installers only | Draft GitHub Release |
-| Push to any non-`dev` branch | Nothing | No CI deploy |
+| Trigger                           | What deploys                                                  | Target                                           |
+| --------------------------------- | ------------------------------------------------------------- | ------------------------------------------------ |
+| Open / push to a **pull request** | Only the frontends that PR changes                            | Per-PR `*.workers.dev` URL, posted on the PR     |
+| `git push origin dev`             | Only changed web/API apps (path-filtered)                     | Preview custom domains (`*.abdullahnettoor.com`) |
+| `workflow_dispatch` on **Deploy** | Selected app (`all`, `console`, `marketing`, `mobile`, `api`) | Preview custom domains                           |
+| `vX.Y.Z` tag                      | Web/API production                                            | `*.pumpos.app`                                   |
+| `desktop-vX.Y.Z` tag              | Desktop installers only                                       | Draft GitHub Release                             |
+| Push to any non-`dev` branch      | Nothing                                                       | No CI deploy                                     |
+
+### Pull-request previews
+
+Every PR gets its own Worker per frontend it touches, named `pr-<n>-pumpos-<app>`,
+on a `workers.dev` URL posted as a sticky comment on the PR. Two PRs in flight no
+longer overwrite each other. The Workers are deleted when the PR closes.
+
+Previews use a route-free [`wrangler.pr.toml`](apps/console/wrangler.pr.toml) per
+app, so a preview can never claim a production hostname. The API is deliberately
+excluded — a per-PR API Worker would need its own Hyperdrive binding and Supabase
+secrets, so PR previews talk to the shared preview API instead.
 
 Path-filter behavior on `dev`:
 
@@ -38,35 +61,119 @@ package-lock.json or deploy.yml                       → affected deploy jobs
 
 ## Cut a release
 
+**You do not pick the version.** Open a PR from `dev` into `main` and the
+[Release version](.github/workflows/release-version.yml) workflow derives it
+from what the PR contains, then pushes the bump onto the PR branch. Merge, and
+`tag-release.yml` tags it, publishes the GitHub Release, and runs the production
+deploy — which then waits for approval.
+
+The bump is read off commit subjects (Conventional Commits):
+
+| Commit                                              | Bump                  |
+| --------------------------------------------------- | --------------------- |
+| `feat!:` … or `BREAKING CHANGE:` in the body        | major                 |
+| `feat:`                                             | minor                 |
+| `fix:` / `perf:`                                    | patch                 |
+| `docs:` `ci:` `test:` `chore:` `style:` `refactor:` | **none — no release** |
+
+"None" is a supported answer, not a failure. A docs-or-CI-only PR should not put
+a build in front of the production gate.
+
+Check what any change set would produce, at any time:
+
 ```bash
-# 1. Commit any pending work (the release script requires a clean tree)
-git add -A && git commit -m "…"
+node scripts/next-version.mjs                    # current -> bump -> version
+node scripts/next-version.mjs --range v1.0.8..HEAD
+```
 
-# 2. Bump the unified version everywhere + create the web/API release tag
-npm run release -- patch      # 1.0.1 -> 1.0.2   (or: minor | major | 1.5.0)
-#   updates all package.json + tauri.conf.json + Cargo.toml, commits, tags
+Desktop installers stay opt-in and are **not** produced by an ordinary release:
 
-# 3. Push the tag → triggers prod web/API deploy
-git push --follow-tags
-
-# 4. Optional: build desktop installers only when you intentionally need them
+```bash
 git tag -a desktop-v1.0.2 -m "PumpOS desktop v1.0.2"
 git push origin desktop-v1.0.2
 ```
 
-Preview a bump without writing anything: `npm run release -- patch --dry`.
+### Manual releases (deprecated)
+
+Still works for the rare case where CI cannot, but it is no longer the normal
+route — it was the source of both quiet failure modes this replaced (forget to
+bump → silent no-op; push tags early → the workflow skips for the opposite
+reason).
+
+```bash
+npm run release -- auto      # derive the bump, then commit + tag
+npm run release -- patch     # or force a specific bump
+git push --follow-tags
+```
+
+Preview without writing anything: `npm run release -- auto --dry`.
 
 > Cost note: desktop CI uses macOS (**10×** minutes) + Windows (**2×**) runners.
 > It only runs on `desktop-v*.*.*` tags now, not normal `v*.*.*` releases.
 
 ---
 
+## Guardrails on the production path
+
+These live in **repository settings**, not in this repo, so they are recorded
+here — settings have no diff and no review.
+
+### The production approval gate
+
+Production deploy jobs declare `environment: production`. That declaration only
+does something if the environment exists **and** carries a protection rule:
+
+- **Settings → Environments → `production` → Required reviewers** — at least one
+  person. Without this the declaration is decoration and a version bump deploys
+  to live fuel stations unattended.
+
+Verified by observation rather than by reading the setting: a job claiming the
+`production` environment parks in `waiting` with a pending deployment until a
+named reviewer approves.
+
+### Branch protection
+
+`main` and `dev` both require a pull request and these three status checks:
+
+```text
+verify      typecheck + tests + builds   (ci.yml)
+lint        Prettier + ESLint ratchet    (ci.yml)
+marketing   standalone install + build   (ci.yml)
+```
+
+Force pushes and deletions are off; conversation resolution is required. Set via
+the API, so to re-apply after a settings mishap:
+
+```bash
+gh api -X PUT repos/<owner>/<repo>/branches/main/protection --input - <<'JSON'
+{
+  "required_status_checks": {
+    "strict": true,
+    "checks": [{ "context": "verify" }, { "context": "lint" }, { "context": "marketing" }]
+  },
+  "enforce_admins": false,
+  "required_pull_request_reviews": {
+    "dismiss_stale_reviews": false,
+    "require_code_owner_reviews": false,
+    "required_approving_review_count": 0
+  },
+  "restrictions": null,
+  "allow_force_pushes": false,
+  "allow_deletions": false,
+  "required_conversation_resolution": true
+}
+JSON
+```
+
+---
+
 ## One-time setup checklist
 
 ### Now (to make releases work)
+
 - [ ] Repo secret `CLOUDFLARE_API_TOKEN` (permission: **Edit Cloudflare Workers**).
 - [ ] Repo secret `CLOUDFLARE_ACCOUNT_ID`.
-- [ ] Repo → Settings → Actions → **Workflow permissions** = *Read and write*
+- [ ] Repo → Settings → Actions → **Workflow permissions** = _Read and write_
       (desktop release creates a GitHub Release). The workflow also requests it
       explicitly, but this is the backup.
 - [ ] **Disconnect** the old Cloudflare-managed console build (Workers & Pages →
@@ -74,9 +181,15 @@ Preview a bump without writing anything: `npm run release -- patch --dry`.
 - [ ] Commit `package-lock.json` if it ever changes (CI uses `npm ci`).
 
 ### Optional now (explicit dev config; otherwise baked-in fallbacks are used)
+
 - [ ] `DEV_SUPABASE_URL`, `DEV_SUPABASE_PUBLISHABLE_KEY`.
 - [ ] Repo variable `PREVIEW_API_URL=https://api.pumpos.abdullahnettoor.com`
       (optional; this is the default).
+- [ ] Smoke-check targets, all optional — the defaults match the wrangler
+      configs: `CONSOLE_URL`, `MOBILE_URL`, `MARKETING_SITE`,
+      `PREVIEW_CONSOLE_URL`, `PREVIEW_MOBILE_URL`, `PREVIEW_MARKETING_SITE`.
+- [ ] **workers.dev enabled** on the Cloudflare account — per-PR previews get
+      their URL from it (`pr-<n>-pumpos-<app>.<subdomain>.workers.dev`).
 
 ---
 
@@ -200,8 +313,7 @@ warnings.
 - [ ] Windows: code-signing cert.
 - [ ] Auto-updater (free Tauri keypair, separate from OS signing):
   - [ ] `npx @tauri-apps/cli signer generate -w ~/.tauri/pumpos.key`.
-  - [ ] Add the **public** key to `tauri.conf.json` → `plugins.updater.pubkey`
-        + an updater endpoint.
+  - [ ] Add the **public** key to `tauri.conf.json` → `plugins.updater.pubkey` + an updater endpoint.
   - [ ] Repo secrets `TAURI_SIGNING_PRIVATE_KEY` (+ `_PASSWORD`).
 
 ---

@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { 
-  AppShell, 
-  Login, 
+import {
+  AppShell,
+  Login,
   AcceptInvite,
-  OnboardingWizard, 
-  StationOverview, 
+  OnboardingWizard,
+  StationOverview,
   DashboardOverview,
   OrganizationOverview,
   ShiftsManagement,
@@ -22,10 +22,14 @@ import {
   CloudStationService,
   queryKeys,
   setApiBaseUrl,
-  setAuthToken, 
+  setAuthToken,
   clearClientSessionData,
   clearStoredOnboardingDraft,
-  supabase 
+  supabase,
+  startSession,
+  useRunTask,
+  publishNavIntent,
+  clearNavIntent,
 } from '@pump/ui';
 import type { NavIntent } from '@pump/ui';
 import { Station } from '@pump/shared';
@@ -36,8 +40,10 @@ const resolveApiUrl = (): string | undefined => {
   if (typeof window !== 'undefined') {
     const { hostname } = window.location;
     if (hostname === 'console.pumpos.app') return 'https://api.pumpos.app';
-    if (hostname === 'console.pumpos.abdullahnettoor.com') return 'https://api.pumpos.abdullahnettoor.com';
-    if (hostname === 'dev-pumpos-console.abdullahnettoor.workers.dev') return 'https://pumpos-api.abdullahnettoor.workers.dev';
+    if (hostname === 'console.pumpos.abdullahnettoor.com')
+      return 'https://api.pumpos.abdullahnettoor.com';
+    if (hostname === 'dev-pumpos-console.abdullahnettoor.workers.dev')
+      return 'https://pumpos-api.abdullahnettoor.workers.dev';
   }
   return undefined;
 };
@@ -51,7 +57,7 @@ const environmentTag = (() => {
   if (explicitEnv === 'preview') return 'Preview';
   if (explicitEnv === 'dev' || explicitEnv === 'development') return 'Dev';
   if (import.meta.env.DEV) return 'Dev';
-  
+
   if (typeof window !== 'undefined') {
     const hostname = window.location.hostname;
     // Dev domain or localhost
@@ -77,17 +83,16 @@ const isLocalDev = (() => {
 
 export const App: React.FC = () => {
   const [currentPath, setCurrentPath] = useState('/dashboard');
-  // Optional deep-link intent carried alongside a navigation (e.g. open a
-  // customer's statement from global search / quick-create). Consumed once by
-  // the destination screen, then cleared.
-  const [navIntent, setNavIntent] = useState<NavIntent | null>(null);
+  // A deep-link intent (e.g. open a customer's statement from global search)
+  // travels through the nav-intent store rather than as a prop, so the
+  // destination can derive from it instead of reacting to it in an effect.
   const navigate = useCallback((path: string, intent?: NavIntent) => {
     setCurrentPath(path);
-    setNavIntent(intent ?? null);
+    publishNavIntent(intent);
   }, []);
-  const [syncStatus, setSyncStatus] = useState<'online' | 'offline' | 'synced' | 'pending' | 'failed'>(
-    typeof navigator !== 'undefined' && navigator.onLine === false ? 'offline' : 'online',
-  );
+  const [syncStatus, setSyncStatus] = useState<
+    'online' | 'offline' | 'synced' | 'pending' | 'failed'
+  >(typeof navigator !== 'undefined' && navigator.onLine === false ? 'offline' : 'online');
 
   // Reflect real browser network status in the top-bar indicator.
   useEffect(() => {
@@ -107,36 +112,20 @@ export const App: React.FC = () => {
 
   // Supabase Auth and Backend user context states
   const [session, setSession] = useState<any>(null);
-  const [userRole, setUserRole] = useState<'Owner' | 'Manager' | 'Accountant' | 'Staff' | null>(null);
+  const [userRole, setUserRole] = useState<'Owner' | 'Manager' | 'Accountant' | 'Staff' | null>(
+    null,
+  );
   const [userName, setUserName] = useState<string>('');
-  const [profileError, setProfileError] = useState<{ message: string; code?: string; status?: number } | null>(null);
+  const [profileError, setProfileError] = useState<{
+    message: string;
+    code?: string;
+    status?: number;
+  } | null>(null);
   const lastUserIdRef = useRef<string | null>(null);
   const resolvedRef = useRef(false);
   const qc = useQueryClient();
+  const runTask = useRunTask();
   const isUnsupportedMobile = useIsUnsupportedMobile();
-
-  useEffect(() => {
-    // 1. Check current active session
-    supabase.auth
-      .getSession()
-      .then(({ data: { session } }) => handleSession(session))
-      // If we cannot read the stored session (network drop mid-refresh, or a
-      // corrupted token) the promise rejects. Without this the `.then` never
-      // runs, `loading` stays true and the operator is stuck on a spinner
-      // forever. Treat "cannot determine session" as signed out: handleSession
-      // (null) clears the token, stops loading and routes to /login.
-      .catch((err: unknown) => {
-        console.error('Failed to read auth session:', err);
-        return handleSession(null);
-      });
-
-    // 2. Subscribe to auth changes (sign in, sign out, token refresh)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      void handleSession(session);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
 
   const handleSession = async (currentSession: any) => {
     const isSameUser = lastUserIdRef.current === (currentSession?.user?.id || null);
@@ -163,7 +152,7 @@ export const App: React.FC = () => {
       lastUserIdRef.current = currentSession.user.id;
       setSelectedStation(null);
       setStations([]);
-      
+
       try {
         setLoading(true);
         // Fetch session context from our backend (verifies JWT, gets user role & name)
@@ -181,13 +170,16 @@ export const App: React.FC = () => {
         });
         setStations(list);
         if (list.length > 0) {
-          const active = list.find((station) => station.onboardingStatus === 'READY_FOR_OPERATIONS') || list[0];
+          const active =
+            list.find((station) => station.onboardingStatus === 'READY_FOR_OPERATIONS') || list[0];
           setSelectedStation(active);
           if (active.onboardingStatus !== 'READY_FOR_OPERATIONS') {
             setCurrentPath('/dashboard');
           } else {
             // Only direct to dashboard if currently on onboarding or login
-            setCurrentPath((prev) => (prev === '/onboarding' || prev === '/login') ? '/dashboard' : prev);
+            setCurrentPath((prev) =>
+              prev === '/onboarding' || prev === '/login' ? '/dashboard' : prev,
+            );
           }
         } else {
           // No stations yet — land on the dashboard (getting-started hero).
@@ -224,7 +216,26 @@ export const App: React.FC = () => {
     }
   };
 
+  // handleSession is re-created on every render (it closes over most of this
+  // component's state), so the subscription reads it through a ref rather than
+  // depending on it. Depending on it would tear down and re-establish the auth
+  // listener — and re-read the stored session — on every single render.
+  const handleSessionRef = useRef(handleSession);
+  useEffect(() => {
+    handleSessionRef.current = handleSession;
+  });
+
+  useEffect(() => {
+    // Reads the stored session, then keeps listening. A failed read falls back
+    // to the signed-out path rather than leaving the operator on a spinner —
+    // see startSession in @pump/ui, which is covered by its own tests.
+    const { stop } = startSession((session) => handleSessionRef.current(session));
+    return stop;
+  }, []);
+
   const handleStationChange = (station: Station) => {
+    // A pending deep link points at the previous station's entities.
+    clearNavIntent();
     setSelectedStation(station);
     // Dashboard is home for both ready and pre-ready stations (the dashboard
     // shows a getting-started hero until the station is operational).
@@ -237,7 +248,9 @@ export const App: React.FC = () => {
       const list = await stationService.getStations();
       qc.setQueryData(queryKeys.stations(), list);
       setStations(list);
-      setSelectedStation(list.find((station) => station.id === completedStation.id) || completedStation);
+      setSelectedStation(
+        list.find((station) => station.id === completedStation.id) || completedStation,
+      );
     } catch (err) {
       console.error(err);
     }
@@ -248,7 +261,8 @@ export const App: React.FC = () => {
     await supabase.auth.signOut();
   };
 
-  const isStationReady = selectedStation && selectedStation.onboardingStatus === 'READY_FOR_OPERATIONS';
+  const isStationReady =
+    selectedStation && selectedStation.onboardingStatus === 'READY_FOR_OPERATIONS';
 
   // Dynamic Navigation items based on onboarding status
   const navItems = isStationReady
@@ -301,29 +315,33 @@ export const App: React.FC = () => {
           msg.includes('profile not found'));
 
       return (
-        <div style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          minHeight: '80vh',
-          backgroundColor: 'var(--bg-canvas)',
-          padding: '20px',
-          fontFamily: 'var(--font-sans)'
-        }}>
-          <div style={{
-            width: '100%',
-            maxWidth: '460px',
-            backgroundColor: 'var(--bg-surface)',
-            border: '1px solid var(--border-soft)',
-            borderRadius: 'var(--radius-card)',
-            padding: '32px 24px',
+        <div
+          style={{
             display: 'flex',
             flexDirection: 'column',
-            gap: '16px',
-            boxShadow: 'var(--shadow-1)',
-            textAlign: 'center'
-          }}>
+            alignItems: 'center',
+            justifyContent: 'center',
+            minHeight: '80vh',
+            backgroundColor: 'var(--bg-canvas)',
+            padding: '20px',
+            fontFamily: 'var(--font-sans)',
+          }}
+        >
+          <div
+            style={{
+              width: '100%',
+              maxWidth: '460px',
+              backgroundColor: 'var(--bg-surface)',
+              border: '1px solid var(--border-soft)',
+              borderRadius: 'var(--radius-card)',
+              padding: '32px 24px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '16px',
+              boxShadow: 'var(--shadow-1)',
+              textAlign: 'center',
+            }}
+          >
             <h2 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-strong)' }}>
               {isNetworkError
                 ? 'API Server Connection Failed'
@@ -331,37 +349,45 @@ export const App: React.FC = () => {
                   ? 'User Profile Connection Error'
                   : 'Sign-in Failed'}
             </h2>
-            <div style={{ 
-              backgroundColor: 'var(--state-danger-bg)', 
-              color: 'var(--state-danger-fg)', 
-              padding: '12px', 
-              borderRadius: 'var(--radius-input)', 
-              fontSize: '12px',
-              textAlign: 'left',
-              lineHeight: '1.4',
-              fontFamily: 'var(--font-mono)'
-            }}>
+            <div
+              style={{
+                backgroundColor: 'var(--state-danger-bg)',
+                color: 'var(--state-danger-fg)',
+                padding: '12px',
+                borderRadius: 'var(--radius-input)',
+                fontSize: '12px',
+                textAlign: 'left',
+                lineHeight: '1.4',
+                fontFamily: 'var(--font-mono)',
+              }}
+            >
               {profileError.message}
             </div>
             {isNetworkError ? (
               <p style={{ color: 'var(--text-muted)', fontSize: '13px', lineHeight: '1.5' }}>
-                The frontend app is unable to connect to the backend API at <strong>{import.meta.env.VITE_API_URL ?? 'http://localhost:8787'}</strong>. Please verify the API server is reachable.
+                The frontend app is unable to connect to the backend API at{' '}
+                <strong>{import.meta.env.VITE_API_URL ?? 'http://localhost:8787'}</strong>. Please
+                verify the API server is reachable.
               </p>
             ) : isProfileMissing ? (
               <>
                 <p style={{ color: 'var(--text-muted)', fontSize: '13px', lineHeight: '1.5' }}>
-                  Your Supabase Auth account is active, but your profile has not been linked to the public schema database yet. Please provide your administrator with the UID below to map your roles:
+                  Your Supabase Auth account is active, but your profile has not been linked to the
+                  public schema database yet. Please provide your administrator with the UID below
+                  to map your roles:
                 </p>
-                <div style={{
-                  padding: '10px',
-                  backgroundColor: 'var(--bg-surface-alt)',
-                  border: '1px solid var(--border-strong)',
-                  borderRadius: 'var(--radius-input)',
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: '12px',
-                  color: 'var(--text-strong)',
-                  wordBreak: 'break-all'
-                }}>
+                <div
+                  style={{
+                    padding: '10px',
+                    backgroundColor: 'var(--bg-surface-alt)',
+                    border: '1px solid var(--border-strong)',
+                    borderRadius: 'var(--radius-input)',
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '12px',
+                    color: 'var(--text-strong)',
+                    wordBreak: 'break-all',
+                  }}
+                >
                   {session?.user?.id}
                 </div>
               </>
@@ -371,7 +397,7 @@ export const App: React.FC = () => {
               </p>
             )}
             <button
-              onClick={handleLogout}
+              onClick={() => runTask(handleLogout(), 'Could not sign out.')}
               style={{
                 height: '32px',
                 border: '1px solid var(--border-strong)',
@@ -380,7 +406,7 @@ export const App: React.FC = () => {
                 fontWeight: 600,
                 fontSize: '13px',
                 cursor: 'pointer',
-                color: 'var(--text-default)'
+                color: 'var(--text-default)',
               }}
             >
               Sign Out & Try Again
@@ -393,39 +419,50 @@ export const App: React.FC = () => {
     // 3. Loading user context / roles
     if (loading || !userRole) {
       return (
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          minHeight: '60vh',
-          color: 'var(--text-muted)',
-          fontFamily: 'var(--font-mono)'
-        }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            minHeight: '60vh',
+            color: 'var(--text-muted)',
+            fontFamily: 'var(--font-mono)',
+          }}
+        >
           Resolving operational permissions...
         </div>
       );
     }
 
     // 4. Gating check: Block operators/staff if station setup is not completed
-    if (!isStationReady && ((userRole as string) === 'Staff' || (userRole as string) === 'Accountant')) {
+    if (
+      !isStationReady &&
+      ((userRole as string) === 'Staff' || (userRole as string) === 'Accountant')
+    ) {
       return (
-        <div style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          minHeight: '60vh',
-          textAlign: 'center',
-          padding: '24px',
-          backgroundColor: 'var(--bg-surface)',
-          border: '1px solid var(--border-soft)',
-          borderRadius: 'var(--radius-card)',
-          maxWidth: '500px',
-          margin: '40px auto'
-        }} className="animate-fade-in">
-          <h2 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-strong)' }}>Station Onboarding In Progress</h2>
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            minHeight: '60vh',
+            textAlign: 'center',
+            padding: '24px',
+            backgroundColor: 'var(--bg-surface)',
+            border: '1px solid var(--border-soft)',
+            borderRadius: 'var(--radius-card)',
+            maxWidth: '500px',
+            margin: '40px auto',
+          }}
+          className="animate-fade-in"
+        >
+          <h2 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-strong)' }}>
+            Station Onboarding In Progress
+          </h2>
           <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '8px' }}>
-            The fuel station configuration is currently being finalized by the Owner or Manager. Operations will be unlocked automatically once complete.
+            The fuel station configuration is currently being finalized by the Owner or Manager.
+            Operations will be unlocked automatically once complete.
           </p>
         </div>
       );
@@ -434,7 +471,12 @@ export const App: React.FC = () => {
     // 5. Pre-ready: Dashboard is home (it renders a getting-started hero until a
     // station is READY). The Organization hub and the onboarding wizard are also
     // reachable; any other (operational) destination falls back to the Dashboard.
-    if (!isStationReady && currentPath !== '/onboarding' && currentPath !== '/organization' && currentPath !== '/dashboard') {
+    if (
+      !isStationReady &&
+      currentPath !== '/onboarding' &&
+      currentPath !== '/organization' &&
+      currentPath !== '/dashboard'
+    ) {
       return (
         <DashboardOverview
           selectedStation={selectedStation}
@@ -463,7 +505,7 @@ export const App: React.FC = () => {
             onNavigate={navigate}
           />
         );
-      
+
       case '/setup/station':
         return (
           <StationOverview
@@ -479,65 +521,24 @@ export const App: React.FC = () => {
             userRole={userRole || 'Staff'}
             userName={userName}
             onNavigate={navigate}
-            intent={navIntent}
-            onIntentConsumed={() => setNavIntent(null)}
           />
         );
       case '/expenses':
-        return (
-          <ExpensesList
-            selectedStation={selectedStation}
-            userRole={userRole || 'Staff'}
-            intent={navIntent}
-            onIntentConsumed={() => setNavIntent(null)}
-          />
-        );
+        return <ExpensesList selectedStation={selectedStation} userRole={userRole || 'Staff'} />;
       case '/income':
-        return (
-          <IncomeList
-            selectedStation={selectedStation}
-            userRole={userRole || 'Staff'}
-            intent={navIntent}
-            onIntentConsumed={() => setNavIntent(null)}
-          />
-        );
+        return <IncomeList selectedStation={selectedStation} userRole={userRole || 'Staff'} />;
       case '/purchases':
-        return (
-          <PurchasesList
-            selectedStation={selectedStation}
-            intent={navIntent}
-            onIntentConsumed={() => setNavIntent(null)}
-          />
-        );
+        return <PurchasesList selectedStation={selectedStation} />;
       case '/inventory':
-        return (
-          <InventoryList
-            selectedStation={selectedStation}
-            intent={navIntent}
-            onIntentConsumed={() => setNavIntent(null)}
-          />
-        );
+        return <InventoryList selectedStation={selectedStation} />;
       case '/pricing':
         return <FuelPricingPanel selectedStation={selectedStation} />;
       case '/accounts':
         return <AccountsPanel selectedStation={selectedStation} />;
       case '/customers':
-        return (
-          <CustomersList
-            selectedStation={selectedStation}
-            intent={navIntent}
-            onIntentConsumed={() => setNavIntent(null)}
-          />
-        );
+        return <CustomersList selectedStation={selectedStation} />;
       case '/reports':
-        return (
-          <ReportsOverview
-            selectedStation={selectedStation}
-            userRole={userRole || 'Staff'}
-            intent={navIntent}
-            onIntentConsumed={() => setNavIntent(null)}
-          />
-        );
+        return <ReportsOverview selectedStation={selectedStation} userRole={userRole || 'Staff'} />;
       case '/organization':
         return (
           <OrganizationOverview
@@ -560,7 +561,8 @@ export const App: React.FC = () => {
   // the normal session bootstrap routes them (Organization hub / desktop notice
   // when no station is ready yet).
   const isAcceptInvite =
-    typeof window !== 'undefined' && window.location.pathname.replace(/\/+$/, '') === '/accept-invite';
+    typeof window !== 'undefined' &&
+    window.location.pathname.replace(/\/+$/, '') === '/accept-invite';
   if (isAcceptInvite) {
     return <AcceptInvite onDone={() => window.location.assign('/')} />;
   }
@@ -571,15 +573,17 @@ export const App: React.FC = () => {
   }
   if (loading && !session) {
     return (
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        minHeight: '100vh',
-        backgroundColor: 'var(--bg-canvas)',
-        color: 'var(--text-muted)',
-        fontFamily: 'var(--font-mono)'
-      }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          minHeight: '100vh',
+          backgroundColor: 'var(--bg-canvas)',
+          color: 'var(--text-muted)',
+          fontFamily: 'var(--font-mono)',
+        }}
+      >
         Initializing connection to Supabase Auth...
       </div>
     );

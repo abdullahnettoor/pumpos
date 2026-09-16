@@ -35,16 +35,29 @@ const FILL: Record<DotTone, string> = {
 };
 
 export const MeterRow = forwardRef<HTMLDivElement, MeterRowProps>(function MeterRow(
-  { className, label, sublabel, value, max, valueLabel, tone = 'auto', lowThreshold = 15, criticalThreshold = 5, ...rest },
-  ref
+  {
+    className,
+    label,
+    sublabel,
+    value,
+    max,
+    valueLabel,
+    tone = 'auto',
+    lowThreshold = 15,
+    criticalThreshold = 5,
+    ...rest
+  },
+  ref,
 ) {
   const pct = max > 0 ? Math.min(100, Math.max(0, (value / max) * 100)) : 0;
   const resolved: DotTone =
     tone !== 'auto'
       ? tone
-      : pct <= criticalThreshold ? 'danger'
-      : pct <= lowThreshold ? 'warning'
-      : 'brand';
+      : pct <= criticalThreshold
+        ? 'danger'
+        : pct <= lowThreshold
+          ? 'warning'
+          : 'brand';
 
   return (
     <div ref={ref} className={cn('min-w-0', className)} {...rest}>
@@ -53,12 +66,30 @@ export const MeterRow = forwardRef<HTMLDivElement, MeterRowProps>(function Meter
           <span className="font-medium text-ink-strong">{label}</span>
           {sublabel && <span className="text-ink-faint"> · {sublabel}</span>}
         </span>
-        <span className={cn('shrink-0 font-mono', resolved === 'danger' ? 'text-danger-fg' : resolved === 'warning' ? 'text-warning-fg' : 'text-ink-muted')}>
+        <span
+          className={cn(
+            'shrink-0 font-mono',
+            resolved === 'danger'
+              ? 'text-danger-fg'
+              : resolved === 'warning'
+                ? 'text-warning-fg'
+                : 'text-ink-muted',
+          )}
+        >
           {valueLabel ?? `${value} / ${max}`}
         </span>
       </div>
-      <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-alt" role="progressbar" aria-valuenow={Math.round(pct)} aria-valuemin={0} aria-valuemax={100}>
-        <div className={cn('h-full rounded-full transition-[width] duration-300', FILL[resolved])} style={{ width: `${pct}%` }} />
+      <div
+        className="h-1.5 w-full overflow-hidden rounded-full bg-surface-alt"
+        role="progressbar"
+        aria-valuenow={Math.round(pct)}
+        aria-valuemin={0}
+        aria-valuemax={100}
+      >
+        <div
+          className={cn('h-full rounded-full transition-[width] duration-300', FILL[resolved])}
+          style={{ width: `${pct}%` }}
+        />
       </div>
     </div>
   );

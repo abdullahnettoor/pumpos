@@ -29,7 +29,7 @@ export const Step2BusinessRules: React.FC<Step2BusinessRulesProps> = ({
         operatingSchedule: {
           ...prev.businessRules.operatingSchedule,
           days: prev.businessRules.operatingSchedule.days.map((item) =>
-            item.day === dayName ? { ...item, isOpen } : item
+            item.day === dayName ? { ...item, isOpen } : item,
           ),
         },
       },
@@ -39,7 +39,7 @@ export const Step2BusinessRules: React.FC<Step2BusinessRulesProps> = ({
   const handleDayTimeChange = (
     dayName: OperatingDaySchedule['day'],
     field: 'openTime' | 'closeTime',
-    val: string
+    val: string,
   ) => {
     updateDraft((prev) => ({
       ...prev,
@@ -48,7 +48,7 @@ export const Step2BusinessRules: React.FC<Step2BusinessRulesProps> = ({
         operatingSchedule: {
           ...prev.businessRules.operatingSchedule,
           days: prev.businessRules.operatingSchedule.days.map((item) =>
-            item.day === dayName ? { ...item, [field]: val } : item
+            item.day === dayName ? { ...item, [field]: val } : item,
           ),
         },
       },
@@ -59,7 +59,9 @@ export const Step2BusinessRules: React.FC<Step2BusinessRulesProps> = ({
     <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr', gap: '20px' }}>
       <div style={panelStyle}>
         <div>
-          <h2 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-strong)' }}>Business Rules</h2>
+          <h2 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-strong)' }}>
+            Business Rules
+          </h2>
           <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px' }}>
             Define when the station operates and where one business day begins.
           </p>
@@ -68,7 +70,14 @@ export const Step2BusinessRules: React.FC<Step2BusinessRulesProps> = ({
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
             <label style={fieldLabelStyle}>Timezone</label>
-            <div style={{ ...inputStyle, display: 'flex', alignItems: 'center', backgroundColor: 'var(--bg-surface-alt)' }}>
+            <div
+              style={{
+                ...inputStyle,
+                display: 'flex',
+                alignItems: 'center',
+                backgroundColor: 'var(--bg-surface-alt)',
+              }}
+            >
               {draft.station.timezone}
             </div>
           </div>
@@ -77,10 +86,12 @@ export const Step2BusinessRules: React.FC<Step2BusinessRulesProps> = ({
             <input
               type="time"
               value={draft.businessRules.businessDayStartsAt}
-              onChange={(e) => updateDraft((prev) => ({
-                ...prev,
-                businessRules: { ...prev.businessRules, businessDayStartsAt: e.target.value },
-              }))}
+              onChange={(e) =>
+                updateDraft((prev) => ({
+                  ...prev,
+                  businessRules: { ...prev.businessRules, businessDayStartsAt: e.target.value },
+                }))
+              }
               style={inputStyle}
             />
           </div>
@@ -93,8 +104,16 @@ export const Step2BusinessRules: React.FC<Step2BusinessRulesProps> = ({
         />
 
         <div>
-          <span style={{ ...fieldLabelStyle, display: 'block', marginBottom: '8px' }}>Weekly Operating Schedule</span>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '12px' }}>
+          <span style={{ ...fieldLabelStyle, display: 'block', marginBottom: '8px' }}>
+            Weekly Operating Schedule
+          </span>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
+              gap: '12px',
+            }}
+          >
             {draft.businessRules.operatingSchedule.days.map((day) => (
               <div
                 key={day.day}
@@ -105,10 +124,12 @@ export const Step2BusinessRules: React.FC<Step2BusinessRulesProps> = ({
                   padding: '12px',
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: '8px'
+                  gap: '8px',
                 }}
               >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div
+                  style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                >
                   <span style={{ fontWeight: 600, fontSize: '12px', color: 'var(--text-strong)' }}>
                     {formatWeekday(day.day)}
                   </span>
@@ -125,9 +146,17 @@ export const Step2BusinessRules: React.FC<Step2BusinessRulesProps> = ({
                     <input
                       type="time"
                       value={day.openTime}
-                      disabled={!day.isOpen || draft.businessRules.operatingSchedule.isTwentyFourSeven}
+                      disabled={
+                        !day.isOpen || draft.businessRules.operatingSchedule.isTwentyFourSeven
+                      }
                       onChange={(e) => handleDayTimeChange(day.day, 'openTime', e.target.value)}
-                      style={{ ...inputStyle, width: '100%', height: '26px', fontSize: '11px', padding: '0 4px' }}
+                      style={{
+                        ...inputStyle,
+                        width: '100%',
+                        height: '26px',
+                        fontSize: '11px',
+                        padding: '0 4px',
+                      }}
                     />
                   </div>
                   <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '2px' }}>
@@ -135,9 +164,17 @@ export const Step2BusinessRules: React.FC<Step2BusinessRulesProps> = ({
                     <input
                       type="time"
                       value={day.closeTime}
-                      disabled={!day.isOpen || draft.businessRules.operatingSchedule.isTwentyFourSeven}
+                      disabled={
+                        !day.isOpen || draft.businessRules.operatingSchedule.isTwentyFourSeven
+                      }
                       onChange={(e) => handleDayTimeChange(day.day, 'closeTime', e.target.value)}
-                      style={{ ...inputStyle, width: '100%', height: '26px', fontSize: '11px', padding: '0 4px' }}
+                      style={{
+                        ...inputStyle,
+                        width: '100%',
+                        height: '26px',
+                        fontSize: '11px',
+                        padding: '0 4px',
+                      }}
                     />
                   </div>
                 </div>
@@ -149,7 +186,9 @@ export const Step2BusinessRules: React.FC<Step2BusinessRulesProps> = ({
 
       <div style={panelStyle}>
         <div>
-          <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)' }}>Policy Summary</h3>
+          <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)' }}>
+            Policy Summary
+          </h3>
           <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
             These rules will drive reporting boundaries and future shift automation.
           </p>
@@ -157,14 +196,24 @@ export const Step2BusinessRules: React.FC<Step2BusinessRulesProps> = ({
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           <div>
             <span style={fieldLabelStyle}>Business Day</span>
-            <div style={{ marginTop: '4px', fontSize: '14px', fontWeight: 600, color: 'var(--text-strong)' }}>
+            <div
+              style={{
+                marginTop: '4px',
+                fontSize: '14px',
+                fontWeight: 600,
+                color: 'var(--text-strong)',
+              }}
+            >
               Starts at {draft.businessRules.businessDayStartsAt}
             </div>
           </div>
           <div>
             <span style={fieldLabelStyle}>Operating Mode</span>
             <div style={{ marginTop: '4px' }}>
-              <Chip tone={draft.businessRules.operatingSchedule.isTwentyFourSeven ? 'success' : 'info'} size="sm">
+              <Chip
+                tone={draft.businessRules.operatingSchedule.isTwentyFourSeven ? 'success' : 'info'}
+                size="sm"
+              >
                 {draft.businessRules.operatingSchedule.isTwentyFourSeven ? '24/7' : 'Scheduled'}
               </Chip>
             </div>
@@ -172,9 +221,17 @@ export const Step2BusinessRules: React.FC<Step2BusinessRulesProps> = ({
           {!draft.businessRules.operatingSchedule.isTwentyFourSeven && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
               {draft.businessRules.operatingSchedule.days.map((day) => (
-                <div key={day.day} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
+                <div
+                  key={day.day}
+                  style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}
+                >
                   <span style={{ color: 'var(--text-default)' }}>{formatWeekday(day.day)}</span>
-                  <span style={{ color: day.isOpen ? 'var(--text-strong)' : 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+                  <span
+                    style={{
+                      color: day.isOpen ? 'var(--text-strong)' : 'var(--text-muted)',
+                      fontFamily: 'var(--font-mono)',
+                    }}
+                  >
                     {day.isOpen ? `${day.openTime} - ${day.closeTime}` : 'Closed'}
                   </span>
                 </div>

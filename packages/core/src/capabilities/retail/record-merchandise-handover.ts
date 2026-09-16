@@ -1,6 +1,20 @@
 import { z } from 'zod';
-import { BusinessEvents, err, eventFromContext, invariantViolation, notFoundError, ok, validationError } from '../../kernel/index.js';
-import type { EventPublisher, ExecutionContext, DocumentNumberGenerator, Result, UseCase } from '../../kernel/index.js';
+import {
+  BusinessEvents,
+  err,
+  eventFromContext,
+  invariantViolation,
+  notFoundError,
+  ok,
+  validationError,
+} from '../../kernel/index.js';
+import type {
+  EventPublisher,
+  ExecutionContext,
+  DocumentNumberGenerator,
+  Result,
+  UseCase,
+} from '../../kernel/index.js';
 import { resolveShiftBusinessDayWrite, type ShiftRepository } from '../station-ops/shifts/index.js';
 import type { BusinessDayWriteRepository } from '../station-ops/business-days/index.js';
 import type { StockMovement, StockMovementRepository } from '../inventory/index.js';
@@ -61,18 +75,36 @@ const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
  * Editable before shift close: re-recording deletes the prior handover sale
  * (and its stock movements) and writes a fresh one. Run inside runInTransaction.
  */
-export class RecordMerchandiseHandover implements UseCase<RecordMerchandiseHandoverCommand, RecordMerchandiseHandoverResult> {
+export class RecordMerchandiseHandover implements UseCase<
+  RecordMerchandiseHandoverCommand,
+  RecordMerchandiseHandoverResult
+> {
   constructor(private readonly deps: RecordMerchandiseHandoverDeps) {}
 
-  async execute(input: RecordMerchandiseHandoverCommand, ctx: ExecutionContext): Promise<Result<RecordMerchandiseHandoverResult>> {
+  async execute(
+    input: RecordMerchandiseHandoverCommand,
+    ctx: ExecutionContext,
+  ): Promise<Result<RecordMerchandiseHandoverResult>> {
     const p = schema.safeParse(input);
-    if (!p.success) return err(validationError('Invalid RecordMerchandiseHandover command', { issues: p.error.flatten() }));
+    if (!p.success)
+      return err(
+        validationError('Invalid RecordMerchandiseHandover command', { issues: p.error.flatten() }),
+      );
     const cmd = p.data;
 
-    const eligibility = await resolveShiftBusinessDayWrite(this.deps.shifts, this.deps.businessDays, ctx, cmd.shiftId, 'STOCK');
-    if (!eligibility.success) return eligibility as unknown as Result<RecordMerchandiseHandoverResult>;
+    const eligibility = await resolveShiftBusinessDayWrite(
+      this.deps.shifts,
+      this.deps.businessDays,
+      ctx,
+      cmd.shiftId,
+      'STOCK',
+    );
+    if (!eligibility.success) return eligibility;
     const shift = eligibility.data.shift;
-    if (shift.status !== 'OPEN') return err(invariantViolation('Shift is not open', { shiftId: shift.id, status: shift.status }));
+    if (shift.status !== 'OPEN')
+      return err(
+        invariantViolation('Shift is not open', { shiftId: shift.id, status: shift.status }),
+      );
 
     // Replace any prior handover for this employee (pre-close edit).
     const existingId = await this.deps.handovers.findHandoverSaleId(cmd.shiftId, cmd.attendantId);
@@ -88,14 +120,25 @@ export class RecordMerchandiseHandover implements UseCase<RecordMerchandiseHando
 
     for (const line of cmd.lines) {
       const product = await this.deps.products.findById(line.productId);
-      if (!product || product.organizationId !== ctx.organizationId) return err(notFoundError('Product', line.productId));
-      if (product.productType === 'FUEL') return err(validationError('Fuel cannot be sold as merchandise', { productId: line.productId }));
+      if (!product || product.organizationId !== ctx.organizationId)
+        return err(notFoundError('Product', line.productId));
+      if (product.productType === 'FUEL')
+        return err(
+          validationError('Fuel cannot be sold as merchandise', { productId: line.productId }),
+        );
 
       const unitPrice = product.sellingPrice != null ? Number(product.sellingPrice) : 0;
-      if (!(unitPrice > 0)) return err(validationError('Product has no selling price set', { productId: line.productId, name: product.name }));
+      if (!(unitPrice > 0))
+        return err(
+          validationError('Product has no selling price set', {
+            productId: line.productId,
+            name: product.name,
+          }),
+        );
 
       const qty = Number(line.quantity);
-      const inclusive = product.taxCategory === 'GST' ? product.taxConfig?.price_inclusive !== false : false;
+      const inclusive =
+        product.taxCategory === 'GST' ? product.taxConfig?.price_inclusive !== false : false;
       const tax = computeLineTax(
         {
           taxCategory: product.taxCategory,
@@ -174,7 +217,14 @@ export class RecordMerchandiseHandover implements UseCase<RecordMerchandiseHando
         aggregateId: saleId,
         stationId: shift.stationId,
         businessDayId: shift.businessDayId,
-        payload: { saleId, saleType: 'Product', captureMechanism: 'MERCH_HANDOVER', attendantId: cmd.attendantId, totalAmount: sale.totalAmount, replaced: existingId ?? null },
+        payload: {
+          saleId,
+          saleType: 'Product',
+          captureMechanism: 'MERCH_HANDOVER',
+          attendantId: cmd.attendantId,
+          totalAmount: sale.totalAmount,
+          replaced: existingId ?? null,
+        },
       }),
     ]);
 

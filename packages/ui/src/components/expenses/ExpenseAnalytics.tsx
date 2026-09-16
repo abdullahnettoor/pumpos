@@ -5,8 +5,7 @@ import { DataTable } from '../primitives/DataTable.js';
 import { DateRangeField, computeRange } from '../primitives/DateRangeField.js';
 import type { DateRange } from '../primitives/DateRangeField.js';
 import { inr } from '../../utils/format.js';
-import { KpiStrip, KpiTile, Panel, EmptyState } from '../../pump-ds/index.js';
-import { Receipt } from 'lucide-react';
+import { KpiStrip, KpiTile, Panel, EmptyState, Icon } from '../../pump-ds/index.js';
 
 export interface ExpenseAnalyticsProps {
   selectedStation: any | null;
@@ -27,7 +26,7 @@ interface CategoryRow {
  * "By Category" tab and the Reports "Expense Register" tab. VOIDED excluded.
  */
 export const ExpenseAnalytics: React.FC<ExpenseAnalyticsProps> = ({ selectedStation }) => {
-  const s = (selectedStation as any)?.settings || {};
+  const s = selectedStation?.settings || {};
   const clock = { timeZone: s.timezone, dayStartsAt: s.business_day_starts_at };
   const [range, setRange] = useState<DateRange>(() => computeRange('this-month', clock));
 
@@ -61,9 +60,39 @@ export const ExpenseAnalytics: React.FC<ExpenseAnalyticsProps> = ({ selectedStat
 
   const columns = useMemo<ColumnDef<CategoryRow, any>[]>(
     () => [
-      { accessorKey: 'name', header: 'Category', cell: ({ getValue }) => <span style={{ fontWeight: 600, color: 'var(--text-strong)' }}>{getValue() as string}</span> },
-      { accessorKey: 'count', header: 'Entries', cell: ({ getValue }) => <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>{getValue() as number}</span> },
-      { accessorKey: 'total', header: 'Total', cell: ({ getValue }) => <span style={{ fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--brand-danger)' }}>{inr(getValue())}</span> },
+      {
+        accessorKey: 'name',
+        header: 'Category',
+        cell: ({ getValue }) => (
+          <span style={{ fontWeight: 600, color: 'var(--text-strong)' }}>
+            {getValue() as string}
+          </span>
+        ),
+      },
+      {
+        accessorKey: 'count',
+        header: 'Entries',
+        cell: ({ getValue }) => (
+          <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>
+            {getValue() as number}
+          </span>
+        ),
+      },
+      {
+        accessorKey: 'total',
+        header: 'Total',
+        cell: ({ getValue }) => (
+          <span
+            style={{
+              fontWeight: 700,
+              fontFamily: 'var(--font-mono)',
+              color: 'var(--brand-danger)',
+            }}
+          >
+            {inr(getValue())}
+          </span>
+        ),
+      },
       {
         accessorKey: 'share',
         header: 'Share',
@@ -71,10 +100,36 @@ export const ExpenseAnalytics: React.FC<ExpenseAnalyticsProps> = ({ selectedStat
           const pct = getValue() as number;
           return (
             <span style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: '140px' }}>
-              <span style={{ flex: 1, height: '6px', background: 'var(--bg-surface-alt)', borderRadius: '3px', overflow: 'hidden' }}>
-                <span style={{ display: 'block', width: `${pct}%`, height: '100%', background: 'var(--brand-danger)', borderRadius: '3px' }} />
+              <span
+                style={{
+                  flex: 1,
+                  height: '6px',
+                  background: 'var(--bg-surface-alt)',
+                  borderRadius: '3px',
+                  overflow: 'hidden',
+                }}
+              >
+                <span
+                  style={{
+                    display: 'block',
+                    width: `${pct}%`,
+                    height: '100%',
+                    background: 'var(--brand-danger)',
+                    borderRadius: '3px',
+                  }}
+                />
               </span>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--text-muted)', width: '34px', textAlign: 'right' }}>{pct.toFixed(0)}%</span>
+              <span
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '12px',
+                  color: 'var(--text-muted)',
+                  width: '34px',
+                  textAlign: 'right',
+                }}
+              >
+                {pct.toFixed(0)}%
+              </span>
             </span>
           );
         },
@@ -88,17 +143,47 @@ export const ExpenseAnalytics: React.FC<ExpenseAnalyticsProps> = ({ selectedStat
       <DateRangeField value={range} onChange={setRange} clock={clock} size="sm" />
 
       <KpiStrip columns="auto">
-        <KpiTile dot="danger" valueTone="danger" label="Total Expenses" value={inr(total)} hint={`${range.from} → ${range.to}`} />
+        <KpiTile
+          dot="danger"
+          valueTone="danger"
+          label="Total Expenses"
+          value={inr(total)}
+          hint={`${range.from} → ${range.to}`}
+        />
         <KpiTile dot="brand" label="Entries" value={String(active.length)} hint="in range" />
-        <KpiTile dot="neutral" label="Categories" value={String(byCategory.length)} hint="with spend" />
-        <KpiTile dot="warning" label="Largest Category" value={byCategory[0] ? inr(byCategory[0].total) : inr(0)} hint={byCategory[0]?.name ?? '—'} />
+        <KpiTile
+          dot="neutral"
+          label="Categories"
+          value={String(byCategory.length)}
+          hint="with spend"
+        />
+        <KpiTile
+          dot="warning"
+          label="Largest Category"
+          value={byCategory[0] ? inr(byCategory[0].total) : inr(0)}
+          hint={byCategory[0]?.name ?? '—'}
+        />
       </KpiStrip>
 
       <Panel flush title="Spend by category">
         {isLoading ? (
-          <div style={{ padding: '16px' }}><EmptyState compact icon={<Receipt />} title="Loading…" description="Fetching expenses." /></div>
+          <div style={{ padding: '16px' }}>
+            <EmptyState
+              compact
+              icon={<Icon name="receipt" size="md" />}
+              title="Loading…"
+              description="Fetching expenses."
+            />
+          </div>
         ) : byCategory.length === 0 ? (
-          <div style={{ padding: '12px' }}><EmptyState compact icon={<Receipt />} title="No expenses" description="No expenses in this date range." /></div>
+          <div style={{ padding: '12px' }}>
+            <EmptyState
+              compact
+              icon={<Icon name="receipt" size="md" />}
+              title="No expenses"
+              description="No expenses in this date range."
+            />
+          </div>
         ) : (
           <DataTable
             bare

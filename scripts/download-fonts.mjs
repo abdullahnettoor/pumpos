@@ -22,7 +22,11 @@ const files = {
   'GeistMono-Regular.ttf': `${geist}/GeistMono-Regular.ttf`,
   'GeistMono-Medium.ttf': `${geist}/GeistMono-Medium.ttf`,
 };
-const targets = ['apps/console/public/fonts', 'apps/mobile/public/fonts', 'apps/desktop/public/fonts'];
+const targets = [
+  'apps/console/public/fonts',
+  'apps/mobile/public/fonts',
+  'apps/desktop/public/fonts',
+];
 
 for (const t of targets) await mkdir(join(root, t), { recursive: true });
 for (const [name, url] of Object.entries(files)) {

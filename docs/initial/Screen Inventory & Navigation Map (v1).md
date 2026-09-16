@@ -1,31 +1,28 @@
-
 ## Purpose
 
 This document defines:
 
 - Available screens
-    
+
 - User workflows
-    
+
 - Navigation structure
-    
+
 - Desktop experience
-    
+
 - Mobile experience
-    
+
 - MVP boundaries
-    
 
 This serves as the foundation for:
 
 - Wireframes
-    
+
 - UI Design
-    
+
 - Frontend Routing
-    
+
 - Permission Enforcement
-    
 
 ---
 
@@ -97,6 +94,7 @@ Operational entry remains desktop-centric.
 Depending on the station onboarding lifecycle state, the primary navigation adapts:
 
 ### 1. Pre-Setup State (Onboarding)
+
 For stations in `NOT_STARTED` or `IN_PROGRESS` status, primary operational navigation is blocked. Eligible users (Owners/Managers) are routed into the onboarding flow, and operators are shown an onboarding progress screen.
 
 ```text
@@ -110,6 +108,7 @@ Onboarding Setup (Wizard Flow)
 ```
 
 ### 2. Post-Setup State (Operations)
+
 Once onboarding is marked complete (`READY_FOR_OPERATIONS`), the full operational dashboard is active, and Administration setup items are collapsed into a single, unified Station Overview.
 
 ```text
@@ -789,20 +788,19 @@ Shift Templates
 # Navigation Principles Summary
 
 1. Shift Management is a dedicated module.
-    
+
 2. Nozzle entry is grouped by DU.
-    
+
 3. Expenses, Purchases, Collections, and Sales remain separate modules.
-    
+
 4. Station Overview acts as the operational configuration hub.
-    
+
 5. Desktop is the primary operational platform.
-    
+
 6. Mobile is monitoring-focused for MVP.
-    
+
 7. Every operational workflow has a dedicated screen.
-    
+
 8. Navigation follows real fuel-station operations rather than generic ERP structures.
-    
 
 ---

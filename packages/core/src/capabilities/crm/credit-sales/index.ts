@@ -1,5 +1,13 @@
 import { z } from 'zod';
-import { BusinessEvents, err, eventFromContext, invariantViolation, notFoundError, ok, validationError } from '../../../kernel/index.js';
+import {
+  BusinessEvents,
+  err,
+  eventFromContext,
+  invariantViolation,
+  notFoundError,
+  ok,
+  validationError,
+} from '../../../kernel/index.js';
 import type { EventPublisher, ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
 import { resolveFinancialAnchor, type ShiftRepository } from '../../station-ops/shifts/index.js';
 import type { BusinessDayWriteRepository } from '../../station-ops/business-days/index.js';
@@ -35,7 +43,10 @@ const schema = z.object({
   attendantId: z.string().nullish(),
   duId: z.string().nullish(),
   notes: z.string().max(500).optional(),
-  transactionDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'transactionDate must be YYYY-MM-DD').optional(),
+  transactionDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'transactionDate must be YYYY-MM-DD')
+    .optional(),
 });
 
 export interface RecordCreditSaleDeps {
@@ -59,21 +70,26 @@ export interface RecordCreditSaleDeps {
 export class RecordCreditSale implements UseCase<RecordCreditSaleCommand, CustomerLedgerEntry> {
   constructor(private readonly deps: RecordCreditSaleDeps) {}
 
-  async execute(input: RecordCreditSaleCommand, ctx: ExecutionContext): Promise<Result<CustomerLedgerEntry>> {
+  async execute(
+    input: RecordCreditSaleCommand,
+    ctx: ExecutionContext,
+  ): Promise<Result<CustomerLedgerEntry>> {
     const p = schema.safeParse(input);
-    if (!p.success) return err(validationError('Invalid RecordCreditSale command', { issues: p.error.flatten() }));
+    if (!p.success)
+      return err(
+        validationError('Invalid RecordCreditSale command', { issues: p.error.flatten() }),
+      );
     const cmd = p.data;
 
     const customer = await this.deps.customers.findById(cmd.customerId);
-    if (!customer || customer.organizationId !== ctx.organizationId) return err(notFoundError('Customer', cmd.customerId));
+    if (!customer || customer.organizationId !== ctx.organizationId)
+      return err(notFoundError('Customer', cmd.customerId));
 
-    let businessDayId: string;
-    let shiftId: string | null = null;
-    let stationId: string;
-    if (!cmd.shiftId && !cmd.stationId) return err(validationError('Either shiftId or stationId is required'));
+    if (!cmd.shiftId && !cmd.stationId)
+      return err(validationError('Either shiftId or stationId is required'));
     const anchor = await resolveFinancialAnchor(this.deps, ctx, cmd, {});
     if (!anchor.success) return anchor;
-    ({ businessDayId, shiftId, stationId } = anchor.data);
+    const { businessDayId, shiftId, stationId } = anchor.data;
 
     const now = ctx.clock.now().toISOString();
     // Attendant attribution applies only to shift-anchored credit sales; a
@@ -141,7 +157,10 @@ export interface VoidCreditSaleDeps {
 export class VoidCreditSale implements UseCase<VoidCreditSaleCommand, { id: string }> {
   constructor(private readonly deps: VoidCreditSaleDeps) {}
 
-  async execute(input: VoidCreditSaleCommand, ctx: ExecutionContext): Promise<Result<{ id: string }>> {
+  async execute(
+    input: VoidCreditSaleCommand,
+    ctx: ExecutionContext,
+  ): Promise<Result<{ id: string }>> {
     if (!input?.id) return err(validationError('id is required'));
     if (!this.deps.ledger.findById || !this.deps.ledger.delete) {
       return err(invariantViolation('Ledger repository does not support void'));
@@ -149,12 +168,24 @@ export class VoidCreditSale implements UseCase<VoidCreditSaleCommand, { id: stri
     const entry = await this.deps.ledger.findById(input.id, ctx.organizationId);
     if (!entry) return err(notFoundError('CreditSale', input.id));
     if (entry.transactionType !== 'Credit Sale' || entry.referenceType !== 'CREDIT_SALE') {
-      return err(invariantViolation('Only a credit sale can be voided', { id: input.id, type: entry.transactionType }));
+      return err(
+        invariantViolation('Only a credit sale can be voided', {
+          id: input.id,
+          type: entry.transactionType,
+        }),
+      );
     }
     if (entry.shiftId) {
       const shift = await this.deps.shifts.findById(entry.shiftId);
-      if (!shift || shift.organizationId !== ctx.organizationId) return err(notFoundError('Shift', entry.shiftId));
-      if (shift.status !== 'OPEN') return err(invariantViolation('Cannot void a credit sale after its shift is closed', { shiftId: shift.id, status: shift.status }));
+      if (!shift || shift.organizationId !== ctx.organizationId)
+        return err(notFoundError('Shift', entry.shiftId));
+      if (shift.status !== 'OPEN')
+        return err(
+          invariantViolation('Cannot void a credit sale after its shift is closed', {
+            shiftId: shift.id,
+            status: shift.status,
+          }),
+        );
     }
 
     await this.deps.ledger.delete(input.id, ctx.organizationId);
@@ -165,7 +196,12 @@ export class VoidCreditSale implements UseCase<VoidCreditSaleCommand, { id: stri
         aggregateType: 'Customer',
         aggregateId: entry.customerId ?? entry.id,
         businessDayId: entry.businessDayId,
-        payload: { creditSaleId: input.id, customerId: entry.customerId, amount: entry.amount, duId: entry.duId ?? null },
+        payload: {
+          creditSaleId: input.id,
+          customerId: entry.customerId,
+          amount: entry.amount,
+          duId: entry.duId ?? null,
+        },
       }),
     ]);
 
@@ -205,7 +241,10 @@ const omcSchema = z.object({
   attendantId: z.string().nullish(),
   duId: z.string().nullish(),
   notes: z.string().max(500).optional(),
-  transactionDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'transactionDate must be YYYY-MM-DD').optional(),
+  transactionDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'transactionDate must be YYYY-MM-DD')
+    .optional(),
 });
 
 export interface RecordOmcCardSaleDeps {
@@ -228,25 +267,30 @@ export interface RecordOmcCardSaleDeps {
 export class RecordOmcCardSale implements UseCase<RecordOmcCardSaleCommand, CustomerLedgerEntry> {
   constructor(private readonly deps: RecordOmcCardSaleDeps) {}
 
-  async execute(input: RecordOmcCardSaleCommand, ctx: ExecutionContext): Promise<Result<CustomerLedgerEntry>> {
+  async execute(
+    input: RecordOmcCardSaleCommand,
+    ctx: ExecutionContext,
+  ): Promise<Result<CustomerLedgerEntry>> {
     const p = omcSchema.safeParse(input);
-    if (!p.success) return err(validationError('Invalid RecordOmcCardSale command', { issues: p.error.flatten() }));
+    if (!p.success)
+      return err(
+        validationError('Invalid RecordOmcCardSale command', { issues: p.error.flatten() }),
+      );
     const cmd = p.data;
 
     let customerId: string | null = null;
     if (cmd.customerId) {
       const customer = await this.deps.customers.findById(cmd.customerId);
-      if (!customer || customer.organizationId !== ctx.organizationId) return err(notFoundError('Customer', cmd.customerId));
+      if (!customer || customer.organizationId !== ctx.organizationId)
+        return err(notFoundError('Customer', cmd.customerId));
       customerId = customer.id;
     }
 
-    let businessDayId: string;
-    let shiftId: string | null = null;
-    let stationId: string;
-    if (!cmd.shiftId && !cmd.stationId) return err(validationError('Either shiftId or stationId is required'));
+    if (!cmd.shiftId && !cmd.stationId)
+      return err(validationError('Either shiftId or stationId is required'));
     const anchor = await resolveFinancialAnchor(this.deps, ctx, cmd, {});
     if (!anchor.success) return anchor;
-    ({ businessDayId, shiftId, stationId } = anchor.data);
+    const { businessDayId, shiftId, stationId } = anchor.data;
 
     const now = ctx.clock.now().toISOString();
     const attendantId = shiftId ? (cmd.attendantId ?? ctx.actorId ?? null) : null;
@@ -279,7 +323,13 @@ export class RecordOmcCardSale implements UseCase<RecordOmcCardSaleCommand, Cust
         stationId,
         businessDayId,
         metadata: anchor.data.eventMetadata,
-        payload: { omcSaleId: entry.id, customerId, vehicleId: entry.vehicleId, amount: entry.amount, duId: entry.duId ?? null },
+        payload: {
+          omcSaleId: entry.id,
+          customerId,
+          vehicleId: entry.vehicleId,
+          amount: entry.amount,
+          duId: entry.duId ?? null,
+        },
       }),
     ]);
 
@@ -306,7 +356,10 @@ export interface VoidOmcCardSaleDeps {
 export class VoidOmcCardSale implements UseCase<VoidOmcCardSaleCommand, { id: string }> {
   constructor(private readonly deps: VoidOmcCardSaleDeps) {}
 
-  async execute(input: VoidOmcCardSaleCommand, ctx: ExecutionContext): Promise<Result<{ id: string }>> {
+  async execute(
+    input: VoidOmcCardSaleCommand,
+    ctx: ExecutionContext,
+  ): Promise<Result<{ id: string }>> {
     if (!input?.id) return err(validationError('id is required'));
     if (!this.deps.ledger.findById || !this.deps.ledger.delete) {
       return err(invariantViolation('Ledger repository does not support void'));
@@ -314,12 +367,24 @@ export class VoidOmcCardSale implements UseCase<VoidOmcCardSaleCommand, { id: st
     const entry = await this.deps.ledger.findById(input.id, ctx.organizationId);
     if (!entry) return err(notFoundError('OmcCardSale', input.id));
     if (entry.transactionType !== 'OMC Sale' || entry.referenceType !== 'OMC_CARD_SALE') {
-      return err(invariantViolation('Only an OMC card sale can be voided', { id: input.id, type: entry.transactionType }));
+      return err(
+        invariantViolation('Only an OMC card sale can be voided', {
+          id: input.id,
+          type: entry.transactionType,
+        }),
+      );
     }
     if (entry.shiftId) {
       const shift = await this.deps.shifts.findById(entry.shiftId);
-      if (!shift || shift.organizationId !== ctx.organizationId) return err(notFoundError('Shift', entry.shiftId));
-      if (shift.status !== 'OPEN') return err(invariantViolation('Cannot void an OMC card sale after its shift is closed', { shiftId: shift.id, status: shift.status }));
+      if (!shift || shift.organizationId !== ctx.organizationId)
+        return err(notFoundError('Shift', entry.shiftId));
+      if (shift.status !== 'OPEN')
+        return err(
+          invariantViolation('Cannot void an OMC card sale after its shift is closed', {
+            shiftId: shift.id,
+            status: shift.status,
+          }),
+        );
     }
 
     await this.deps.ledger.delete(input.id, ctx.organizationId);
@@ -330,7 +395,12 @@ export class VoidOmcCardSale implements UseCase<VoidOmcCardSaleCommand, { id: st
         aggregateType: 'Customer',
         aggregateId: entry.customerId ?? entry.id,
         businessDayId: entry.businessDayId,
-        payload: { omcSaleId: input.id, customerId: entry.customerId, amount: entry.amount, duId: entry.duId ?? null },
+        payload: {
+          omcSaleId: input.id,
+          customerId: entry.customerId,
+          amount: entry.amount,
+          duId: entry.duId ?? null,
+        },
       }),
     ]);
 

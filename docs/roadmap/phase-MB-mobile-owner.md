@@ -15,6 +15,7 @@ a **mobile-only attendant experience** so pump attendants self-record their
 handover during the shift.
 
 > Scope notes (per user):
+>
 > - **Single-station first.** We have no multi-station owners/customers yet, so
 >   the owner app targets the **active station**. Multi-station rollup is kept as
 >   a clearly-marked **`TODO(multi-station)`** in code and revisited later — see
@@ -32,6 +33,7 @@ handover during the shift.
 >   screens; Attendant gets its own minimal surface.
 
 Depends on / complements:
+
 - **Phase M** — the `m.pumpos.app` host + shared `.pumpos.app` cookie session.
 - **Phase R (R4)** — server PDF endpoints make report download reliable on phones.
 - **Phase F** — real COGS/P&L; until then "margin" is revenue-minus-costs proxy only.
@@ -45,6 +47,7 @@ Nothing here changes the domain model, API contracts, or schema beyond a few
 ## What exists today (MVP baseline)
 
 Four read-only tabs, single station, single day:
+
 - **Home** — today's KPIs (fuel sales, collections, expenses, purchases,
   receivables, payables, cash variance) via `useShiftSummaries`, `useCollections`,
   `useExpenses`, `usePurchases`, `useCustomers`, `useSuppliers`, `useShiftStatus`.
@@ -57,20 +60,22 @@ Four read-only tabs, single station, single day:
 Role gating already exists (`TABS_BY_ROLE`); `Staff` is locked out.
 
 ### Reusable data already available (no new API needed)
-| Capability | Existing hooks / endpoints |
-|---|---|
-| Stations / org / users | `useStations`, `useOrganization`, `useUsers` (`GET /users`) |
-| Live shift + who's on it | `useShiftStatus` (opener, template, readings), `GET /shifts/handovers` (attendants) |
-| Shift history | `useShiftSummaries`, `GET /shift-summaries` |
-| Sales / money | `useSales`, `useCollections`, `useExpenses`, `usePurchases`, `useCreditSales`, `useMoneyMovements` |
-| Ledgers | `useCustomers`, `useSuppliers`, `useCustomerLedger`, `useSupplierLedger` |
-| Inventory / tanks | `useInventoryStatus`, `useTanks`, `useInventoryItems`, `useInventoryVariances` |
-| DSSR (single + range) | `useDailyDssr`, `useDailyDssrPreview`, **`useDailyDssrRange`** (trends!) |
-| Alerts (stock) | `useStationAlerts` (tanks low/critical, oversold) |
-| Finance accounts | `useFinancialAccounts`, `useFinanceMovements`, `useAccountLedger` |
-| Pricing | `usePricing`, `GET /pricing/history` |
+
+| Capability               | Existing hooks / endpoints                                                                         |
+| ------------------------ | -------------------------------------------------------------------------------------------------- |
+| Stations / org / users   | `useStations`, `useOrganization`, `useUsers` (`GET /users`)                                        |
+| Live shift + who's on it | `useShiftStatus` (opener, template, readings), `GET /shifts/handovers` (attendants)                |
+| Shift history            | `useShiftSummaries`, `GET /shift-summaries`                                                        |
+| Sales / money            | `useSales`, `useCollections`, `useExpenses`, `usePurchases`, `useCreditSales`, `useMoneyMovements` |
+| Ledgers                  | `useCustomers`, `useSuppliers`, `useCustomerLedger`, `useSupplierLedger`                           |
+| Inventory / tanks        | `useInventoryStatus`, `useTanks`, `useInventoryItems`, `useInventoryVariances`                     |
+| DSSR (single + range)    | `useDailyDssr`, `useDailyDssrPreview`, **`useDailyDssrRange`** (trends!)                           |
+| Alerts (stock)           | `useStationAlerts` (tanks low/critical, oversold)                                                  |
+| Finance accounts         | `useFinancialAccounts`, `useFinanceMovements`, `useAccountLedger`                                  |
+| Pricing                  | `usePricing`, `GET /pricing/history`                                                               |
 
 ### Gaps that need new work
+
 - **Global business-day navigation** — the app defaults to today; screens need a
   shared date pill that re-scopes every tab to any past business day
   (`useDailyDssr` for snapshots, `useShiftSummaries`/`useSales` filtered by date).
@@ -111,10 +116,11 @@ their assigned dispenser unit(s) + a short history of their own past handovers.
 No reports, no financials, no other stations.
 
 **Global controls in the top bar** (owner shell):
+
 - A **business-day pill** (`◀ 18 Jul ▶` + calendar) that re-scopes every tab to
   the chosen day; defaults to the current business day.
 - A **station selector** — single station today. `TODO(multi-station)`: extend to
-  an *All stations ↔ station* switch once multiple stations exist. Keep every
+  an _All stations ↔ station_ switch once multiple stations exist. Keep every
   screen station-scoped so the switch is additive.
 
 ---
@@ -122,6 +128,7 @@ No reports, no financials, no other stations.
 ## Milestones
 
 ### MB1 — Station Overview cockpit (any business day)
+
 The owner's landing screen: one glance answers "how is this station doing on the
 selected day, and is anything wrong." Scoped to the **active station** and the
 **globally-selected business day** (defaults to today).
@@ -146,6 +153,7 @@ selected day, and is anything wrong." Scoped to the **active station** and the
 > station selector and Overview so this is easy to find.
 
 ### MB2 — Shifts & staff accountability
+
 "Who is running my station and are the drawers honest?"
 
 - **Live board:** per open shift — template, **assigned operator(s)/attendants**
@@ -160,6 +168,7 @@ selected day, and is anything wrong." Scoped to the **active station** and the
 - Reuses `useShiftStatus`, `useShiftSummaries`; adds an attendants join in the UI.
 
 ### MB3 — Reports browser + download/share
+
 Owners want to **read and forward** reports, not generate them.
 
 - **DSSR viewer:** the global **business-day pill** drives the date; live preview
@@ -175,6 +184,7 @@ Owners want to **read and forward** reports, not generate them.
 - **Range export (later):** month-to-date DSSR bundle via `useDailyDssrRange`.
 
 ### MB4 — Money health
+
 Consolidates the owner's financial pulse (extends today's Ledger tab).
 
 - **Collections mix:** cash / card / UPI / bank split for the day and period
@@ -188,6 +198,7 @@ Consolidates the owner's financial pulse (extends today's Ledger tab).
 - Ledger drill-down retained from MVP; add search + sort by exposure.
 
 ### MB5 — Trends & analytics ("More")
+
 Turns raw daily data into direction.
 
 - **Sales & volume trend:** last 7/30 days for the station, day-over-day and
@@ -196,13 +207,14 @@ Turns raw daily data into direction.
 - **Product mix:** volume/value share by fuel product over the period.
 - **Expense ratio & net:** expenses as % of sales; net cash movement trend.
 - **Margin proxy → real margin:** show revenue − (purchases + expenses) as a
-  clearly-labelled *proxy* now; swap to true COGS/P&L once **Phase F** lands.
+  clearly-labelled _proxy_ now; swap to true COGS/P&L once **Phase F** lands.
 - **Inventory & tank levels:** per-tank % full, **days-of-cover** (volume ÷ avg
   daily sales), low-fuel flags (`useInventoryStatus`, `useTanks`), merchandise
   variance summary (`useInventoryVariances`).
 - Lightweight charts only (sparklines/bars) — keep the bundle small.
 
 ### MB6 — Alerts & notifications
+
 Owner gets pinged for exceptions instead of hunting for them.
 
 - **Unified alert model:** extend `useStationAlerts` beyond stock to cover:
@@ -220,6 +232,7 @@ Owner gets pinged for exceptions instead of hunting for them.
   the same alert rules. Ship in-app feed first, push second.
 
 ### MB7 — Team & organization awareness
+
 Org-level visibility the owner asked for (read-first).
 
 - **Team roster:** list users with role, assigned station(s), active/inactive
@@ -230,6 +243,7 @@ Org-level visibility the owner asked for (read-first).
   Owner-only. No other operational writes in this phase.
 
 ### MB8 — Attendant login & self-service handover (mobile-only)
+
 Let pump attendants **record their own handover during the shift** so that at
 close time only the physical **cash** needs to change hands — everything else
 (closing readings, digital collections, credit slips, testing, and **merchandise
@@ -237,8 +251,9 @@ closing**) is already saved. This is a **mobile-only** capability; attendants
 never touch the SPA.
 
 **Domain / roles (decided)**
+
 - Introduce a **first-class `Attendant`** role (`Owner | Manager | Accountant |
-  Staff | Attendant`). It is the most restricted role: mobile-only, sees only the
+Staff | Attendant`). It is the most restricted role: mobile-only, sees only the
   active shift it is assigned to at its own station, and can write only **its
   own** handover. Requires updating `Role` (`packages/shared`), the user role
   enum (create/update schemas), and `guards.ts`.
@@ -249,9 +264,10 @@ never touch the SPA.
     app to self-record.
   - **no email** → **offline staff**: exists only as a name on shift assignments
     and handovers; cannot log in. Someone else records their handover.
-  So "enabling" a staff member = adding their email. No separate flag needed.
+    So "enabling" a staff member = adding their email. No separate flag needed.
 
 **Assignment (decided) — drives what the attendant sees**
+
 - Staff/attendants are **assigned when the shift starts**. This already exists:
   `OpenShift` accepts `staffAssignments: [{ userId, duId }]` and writes
   `shift_staff_assignments`; `shift_terminal_links` maps terminals (optionally to
@@ -259,6 +275,7 @@ never touch the SPA.
   **dispenser unit(s), nozzles, and terminals** — no manual picking.
 
 **Attendant flow (mobile)**
+
 1. Log in → lands directly on "My shift" (the open shift + DU they're assigned to).
 2. Enter/adjust **closing nozzle readings** for their nozzles (volume derives).
 3. Enter **card/UPI per terminal** (with batch refs), **credit** slips, and
@@ -272,6 +289,7 @@ never touch the SPA.
    desktop see the pre-filled handover and only reconcile physical cash.
 
 **Backend to build**
+
 - Add `Attendant` role + guards; make the role selectable in user create/update.
 - **Read endpoint** `GET /shifts/my-assignment` (or extend `/shifts/status`):
   returns the caller's active shift, assigned DU(s), those DUs' nozzles + opening
@@ -288,6 +306,7 @@ accountability is preserved.
 **Non-attendant roles who man a pump.** Assignment is role-agnostic (any user can
 be assigned to a DU at shift open). The self-service handover UI is a single
 shared `HandoverPanel`:
+
 - **Attendant** role → a dedicated full-screen shell (no owner tabs).
 - **Any other role** (Owner/Manager/Accountant/Staff) who is assigned to a DU on
   an open shift → an extra **"My handover"** tab appears alongside their normal
@@ -302,22 +321,22 @@ to have mobile data. No offline/queued handover in scope.
 
 ## Cross-cutting concerns
 
-- **Caching (Phase P tiers):** rollup/shift/DSSR = *operational* (15s, not
-  persisted); stations/users/org = *static* (persisted). Never bypass the query
+- **Caching (Phase P tiers):** rollup/shift/DSSR = _operational_ (15s, not
+  persisted); stations/users/org = _static_ (persisted). Never bypass the query
   hooks; mutations (if any land) call `useInvalidateOperational`.
 - **Station scope:** single active station today; a top-bar **business-day pill**
-  drives every tab's date. `TODO(multi-station)`: add an *All ↔ station* switch
+  drives every tab's date. `TODO(multi-station)`: add an _All ↔ station_ switch
   and persist the last choice per session once multiple stations exist.
 - **Performance:** the single-station path is a handful of reads. For the future
   rollup, cap client fan-out concurrency and introduce `GET /rollup` when N
   stations makes latency bite. Charts stay dependency-light.
 - **Role gating:** extend `TABS_BY_ROLE` — Owner full; Manager `Shifts/Reports/
-  Money`; Accountant `Reports/Money`; **Attendant** → the MB8 handover shell only;
+Money`; Accountant `Reports/Money`; **Attendant** → the MB8 handover shell only;
   Staff still none.
 - **Design system:** compact, light-first, information-dense per
   `pump-erp-design-system`; reuse `Kpi`, tokens, and the existing shell.
 - **PWA/offline:** read screens may cache last-good responses for a graceful
-  offline *view* (not writes); mobile remains online-authoritative.
+  offline _view_ (not writes); mobile remains online-authoritative.
 
 ---
 
@@ -338,6 +357,7 @@ current `apps/mobile` shell.
 ---
 
 ## Open questions
+
 - **Business-day default & range:** default to today and let owners page back
   arbitrarily far, or cap history (e.g. last 90 days) for performance?
 - Web Push for owners in this phase, or defer push and ship the in-app feed only?
@@ -347,6 +367,7 @@ current `apps/mobile` shell.
   stations", or do we build it speculatively behind a flag?
 
 ## Decided
+
 - **Attendant** is a first-class role; email present ⇒ can log in, no email ⇒
   offline staff (no login). Shift assignment (at open) drives the DU/nozzles/
   terminals the attendant sees. Merchandise closing is part of the attendant

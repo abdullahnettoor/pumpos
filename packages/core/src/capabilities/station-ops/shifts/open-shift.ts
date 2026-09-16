@@ -1,7 +1,21 @@
 import { z } from 'zod';
 import { isValidBusinessDate, resolveBusinessDate } from '@pump/shared';
-import { BusinessEvents, conflictError, err, eventFromContext, invariantViolation, ok, validationError } from '../../../kernel/index.js';
-import type { DomainEvent, EventPublisher, ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
+import {
+  BusinessEvents,
+  conflictError,
+  err,
+  eventFromContext,
+  invariantViolation,
+  ok,
+  validationError,
+} from '../../../kernel/index.js';
+import type {
+  DomainEvent,
+  EventPublisher,
+  ExecutionContext,
+  Result,
+  UseCase,
+} from '../../../kernel/index.js';
 import type { BusinessDay, BusinessDayWriteRepository } from '../business-days/index.js';
 import type { NozzleRepository } from '../../station-setup/nozzles/index.js';
 import type { FuelPriceRepository } from '../../station-setup/pricing/index.js';
@@ -29,10 +43,19 @@ const schema = z.object({
   stationId: z.string().min(1, 'stationId is required'),
   shiftTemplateId: z.string().min(1, 'shiftTemplateId is required'),
   openingCash: z.coerce.number().min(0, 'openingCash must be >= 0'),
-  businessDate: z.string().refine(isValidBusinessDate, 'businessDate must be a valid YYYY-MM-DD date').optional(),
-  staffAssignments: z.array(z.object({ userId: z.string().min(1), duId: z.string().min(1) })).optional(),
-  terminalLinks: z.array(z.object({ terminalId: z.string().min(1), duId: z.string().nullish() })).optional(),
-  initialReadings: z.array(z.object({ nozzleId: z.string().min(1), openingReading: z.coerce.number().min(0) })).optional(),
+  businessDate: z
+    .string()
+    .refine(isValidBusinessDate, 'businessDate must be a valid YYYY-MM-DD date')
+    .optional(),
+  staffAssignments: z
+    .array(z.object({ userId: z.string().min(1), duId: z.string().min(1) }))
+    .optional(),
+  terminalLinks: z
+    .array(z.object({ terminalId: z.string().min(1), duId: z.string().nullish() }))
+    .optional(),
+  initialReadings: z
+    .array(z.object({ nozzleId: z.string().min(1), openingReading: z.coerce.number().min(0) }))
+    .optional(),
 });
 
 export interface OpenShiftDeps {
@@ -62,13 +85,19 @@ export class OpenShift implements UseCase<OpenShiftCommand, OpenShiftResult> {
 
   async execute(input: OpenShiftCommand, ctx: ExecutionContext): Promise<Result<OpenShiftResult>> {
     const p = schema.safeParse(input);
-    if (!p.success) return err(validationError('Invalid OpenShift command', { issues: p.error.flatten() }));
+    if (!p.success)
+      return err(validationError('Invalid OpenShift command', { issues: p.error.flatten() }));
     const cmd = p.data;
 
     await this.deps.businessDays.lockStation(ctx.organizationId, cmd.stationId);
-    const existingOpen = await this.deps.shifts.findOpenByStation(ctx.organizationId, cmd.stationId);
+    const existingOpen = await this.deps.shifts.findOpenByStation(
+      ctx.organizationId,
+      cmd.stationId,
+    );
     if (existingOpen) {
-      return err(conflictError('A shift is already open at this station', { shiftId: existingOpen.id }));
+      return err(
+        conflictError('A shift is already open at this station', { shiftId: existingOpen.id }),
+      );
     }
 
     const events: DomainEvent[] = [];
@@ -81,18 +110,36 @@ export class OpenShift implements UseCase<OpenShiftCommand, OpenShiftResult> {
     // day 1 while on day 5) without blocking today's day from being opened.
     // The operator may back-date (e.g. forgot to open yesterday); future dates
     // are rejected.
-    const today = resolveBusinessDate({ now, timeZone: ctx.timeZone, dayStartsAt: ctx.businessDayStartsAt });
+    const today = resolveBusinessDate({
+      now,
+      timeZone: ctx.timeZone,
+      dayStartsAt: ctx.businessDayStartsAt,
+    });
     if (cmd.businessDate && cmd.businessDate > today) {
-      return err(validationError('Business date cannot be in the future', { businessDate: cmd.businessDate }));
+      return err(
+        validationError('Business date cannot be in the future', {
+          businessDate: cmd.businessDate,
+        }),
+      );
     }
     const businessDate = cmd.businessDate ?? today;
-    await this.deps.businessDays.lockByStationAndDate(ctx.organizationId, cmd.stationId, businessDate);
-    let businessDay = await this.deps.businessDays.findByStationAndDate(ctx.organizationId, cmd.stationId, businessDate);
+    await this.deps.businessDays.lockByStationAndDate(
+      ctx.organizationId,
+      cmd.stationId,
+      businessDate,
+    );
+    let businessDay = await this.deps.businessDays.findByStationAndDate(
+      ctx.organizationId,
+      cmd.stationId,
+      businessDate,
+    );
     if (businessDay?.status === 'CLOSED') {
-      return err(invariantViolation(
-        `Cannot open a Shift for ${businessDate} because that Business Day is closed. Choose the Current Business Date, a Past Open Business Day, or a Business Date that has not yet been created.`,
-        { businessDayId: businessDay.id, businessDate, status: businessDay.status },
-      ));
+      return err(
+        invariantViolation(
+          `Cannot open a Shift for ${businessDate} because that Business Day is closed. Choose the Current Business Date, a Past Open Business Day, or a Business Date that has not yet been created.`,
+          { businessDayId: businessDay.id, businessDate, status: businessDay.status },
+        ),
+      );
     }
     if (!businessDay) {
       businessDay = {
@@ -152,20 +199,22 @@ export class OpenShift implements UseCase<OpenShiftCommand, OpenShiftResult> {
     // Seed nozzle opening readings.
     const nozzles = await this.deps.nozzles.listByStation(ctx.organizationId, cmd.stationId);
     if (nozzles.length > 0) {
-      const lastClosing = await this.deps.nozzleReadings.lastClosingByNozzleIds(nozzles.map((n) => n.id));
+      const lastClosing = await this.deps.nozzleReadings.lastClosingByNozzleIds(
+        nozzles.map((n) => n.id),
+      );
       const prices = await this.deps.fuelPrices.listByStation(ctx.organizationId, cmd.stationId);
       const latestPriceByProduct = new Map<string, string>();
       for (const pr of prices) {
-        if (!latestPriceByProduct.has(pr.productId)) latestPriceByProduct.set(pr.productId, pr.price);
+        if (!latestPriceByProduct.has(pr.productId))
+          latestPriceByProduct.set(pr.productId, pr.price);
       }
       const initialByNozzle = new Map<string, number>();
-      for (const ir of cmd.initialReadings ?? []) initialByNozzle.set(ir.nozzleId, ir.openingReading);
+      for (const ir of cmd.initialReadings ?? [])
+        initialByNozzle.set(ir.nozzleId, ir.openingReading);
 
       const readings: NozzleReading[] = nozzles.map((n) => {
         const opening =
-          lastClosing.get(n.id) ??
-          initialByNozzle.get(n.id) ??
-          Number(n.currentReading);
+          lastClosing.get(n.id) ?? initialByNozzle.get(n.id) ?? Number(n.currentReading);
         return {
           id: ctx.ids.newId(),
           shiftId: shift.id,

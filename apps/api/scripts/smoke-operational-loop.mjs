@@ -34,12 +34,21 @@ import {
   DrizzleStockMovementWriter,
   DrizzleShiftSummaryWriter,
 } from '../dist/infra/repositories/station-ops-repositories.js';
-import { DrizzleNozzleRepository, DrizzleFuelPriceRepository } from '../dist/infra/repositories/setup-repositories.js';
+import {
+  DrizzleNozzleRepository,
+  DrizzleFuelPriceRepository,
+} from '../dist/infra/repositories/setup-repositories.js';
 import { DrizzleStockMovementRepository } from '../dist/infra/repositories/inventory-repositories.js';
 import { DrizzleSaleRepository } from '../dist/infra/repositories/retail-repositories.js';
 import { DrizzleExpenseRepository } from '../dist/infra/repositories/finance-repositories.js';
-import { DrizzleCustomerRepository, DrizzleCustomerLedgerRepository } from '../dist/infra/repositories/crm-repositories.js';
-import { DrizzleDssrSnapshotRepository, DrizzleDssrDataReader } from '../dist/infra/repositories/reporting-repositories.js';
+import {
+  DrizzleCustomerRepository,
+  DrizzleCustomerLedgerRepository,
+} from '../dist/infra/repositories/crm-repositories.js';
+import {
+  DrizzleDssrSnapshotRepository,
+  DrizzleDssrDataReader,
+} from '../dist/infra/repositories/reporting-repositories.js';
 
 const url = process.env.DATABASE_URL || process.env.DIRECT_URL;
 const client = postgres(url, { ssl: 'require', max: 1 });
@@ -49,8 +58,13 @@ const ids = new UuidGenerator();
 let pass = 0;
 let fail = 0;
 function check(label, cond) {
-  if (cond) { pass++; console.log(`  ✓ ${label}`); }
-  else { fail++; console.log(`  ✗ ${label}`); }
+  if (cond) {
+    pass++;
+    console.log(`  ✓ ${label}`);
+  } else {
+    fail++;
+    console.log(`  ✗ ${label}`);
+  }
 }
 function unwrap(label, r) {
   check(label, r?.success === true);
@@ -61,7 +75,8 @@ function unwrap(label, r) {
 class RollbackSignal extends Error {}
 
 const [org] = await client`select id from organizations limit 1`;
-const [owner] = await client`select id from users where organization_id=${org.id} order by created_at limit 1`;
+const [owner] =
+  await client`select id from users where organization_id=${org.id} order by created_at limit 1`;
 const organizationId = org.id;
 const actorId = owner.id;
 
@@ -72,42 +87,108 @@ try {
 
     // --- Setup: minimal station + fuel product + tank + DU + nozzle + price + item product ---
     const suffix = Date.now().toString().slice(-6);
-    const [station] = await tx.insert(schema.stations).values({
-      organizationId, name: `Smoke ${suffix}`, code: `SMK${suffix}`,
-      settings: { business_day_starts_at: '06:00', shift_grace_minutes: 15, shift_lock_grace_days: 3 },
-      onboardingStatus: 'READY_FOR_OPERATIONS', isActive: true,
-    }).returning();
-    const [fuel] = await tx.insert(schema.products).values({
-      organizationId, name: 'Petrol', code: `MS${suffix}`, productType: 'FUEL', inventoryType: 'BULK',
-      stockTracked: true, isTaxable: false, unit: 'Liters', isActive: true,
-    }).returning();
-    const [item] = await tx.insert(schema.products).values({
-      organizationId, name: 'Engine Oil', code: `OIL${suffix}`, productType: 'LUBRICANT', inventoryType: 'ITEM',
-      stockTracked: true, isTaxable: true, unit: 'Piece', isActive: true,
-    }).returning();
-    const [tank] = await tx.insert(schema.tanks).values({
-      organizationId, stationId: station.id, name: 'T1', productId: fuel.id, capacity: '20000',
-    }).returning();
-    const [du] = await tx.insert(schema.dispenserUnits).values({
-      organizationId, stationId: station.id, name: 'DU1', code: `DU1${suffix}`, status: 'ACTIVE',
-    }).returning();
-    const [nozzle] = await tx.insert(schema.nozzles).values({
-      organizationId, stationId: station.id, duId: du.id, tankId: tank.id, productId: fuel.id, name: 'N1', currentReading: '1000',
-    }).returning();
+    const [station] = await tx
+      .insert(schema.stations)
+      .values({
+        organizationId,
+        name: `Smoke ${suffix}`,
+        code: `SMK${suffix}`,
+        settings: {
+          business_day_starts_at: '06:00',
+          shift_grace_minutes: 15,
+          shift_lock_grace_days: 3,
+        },
+        onboardingStatus: 'READY_FOR_OPERATIONS',
+        isActive: true,
+      })
+      .returning();
+    const [fuel] = await tx
+      .insert(schema.products)
+      .values({
+        organizationId,
+        name: 'Petrol',
+        code: `MS${suffix}`,
+        productType: 'FUEL',
+        inventoryType: 'BULK',
+        stockTracked: true,
+        isTaxable: false,
+        unit: 'Liters',
+        isActive: true,
+      })
+      .returning();
+    const [item] = await tx
+      .insert(schema.products)
+      .values({
+        organizationId,
+        name: 'Engine Oil',
+        code: `OIL${suffix}`,
+        productType: 'LUBRICANT',
+        inventoryType: 'ITEM',
+        stockTracked: true,
+        isTaxable: true,
+        unit: 'Piece',
+        isActive: true,
+      })
+      .returning();
+    const [tank] = await tx
+      .insert(schema.tanks)
+      .values({
+        organizationId,
+        stationId: station.id,
+        name: 'T1',
+        productId: fuel.id,
+        capacity: '20000',
+      })
+      .returning();
+    const [du] = await tx
+      .insert(schema.dispenserUnits)
+      .values({
+        organizationId,
+        stationId: station.id,
+        name: 'DU1',
+        code: `DU1${suffix}`,
+        status: 'ACTIVE',
+      })
+      .returning();
+    const [nozzle] = await tx
+      .insert(schema.nozzles)
+      .values({
+        organizationId,
+        stationId: station.id,
+        duId: du.id,
+        tankId: tank.id,
+        productId: fuel.id,
+        name: 'N1',
+        currentReading: '1000',
+      })
+      .returning();
     await tx.insert(schema.fuelPrices).values({
-      organizationId, stationId: station.id, productId: fuel.id, price: '100', effectiveFrom: new Date(),
+      organizationId,
+      stationId: station.id,
+      productId: fuel.id,
+      price: '100',
+      effectiveFrom: new Date(),
     });
-    const [template] = await tx.insert(schema.shiftTemplates).values({
-      organizationId, name: `Day ${suffix}`, startTime: '06:00', endTime: '18:00', isActive: true,
-    }).returning();
+    const [template] = await tx
+      .insert(schema.shiftTemplates)
+      .values({
+        organizationId,
+        name: `Day ${suffix}`,
+        startTime: '06:00',
+        endTime: '18:00',
+        isActive: true,
+      })
+      .returning();
     console.log('Setup OK: station', station.code);
 
     const ctx = { ...ctxBase, stationId: station.id, businessDayId: null };
 
     // --- Open business day ---
-    const bdRes = await new OpenBusinessDay({ repository: new DrizzleBusinessDayRepository(tx), events })
-      .execute({ stationId: station.id }, ctx);
-    const bd = unwrap('OpenBusinessDay', bdRes);
+    const bdRes = await new OpenBusinessDay({
+      repository: new DrizzleBusinessDayRepository(tx),
+      events,
+    }).execute({ stationId: station.id }, ctx);
+    unwrap('OpenBusinessDay', bdRes);
 
     // --- Open shift ---
     const shiftRes = await new OpenShift({
@@ -123,8 +204,16 @@ try {
 
     // Seed opening stock for the item product (Purchase movement) so the sale can decrement.
     await new DrizzleStockMovementRepository(tx).save({
-      id: ids.newId(), shiftId: null, businessDayId: opened.shift.businessDayId, productId: item.id, tankId: null,
-      movementType: 'OpeningBalance', quantity: '10', referenceType: 'SEED', referenceId: null, notes: null,
+      id: ids.newId(),
+      shiftId: null,
+      businessDayId: opened.shift.businessDayId,
+      productId: item.id,
+      tankId: null,
+      movementType: 'OpeningBalance',
+      quantity: '10',
+      referenceType: 'SEED',
+      referenceId: null,
+      notes: null,
       createdAt: new Date().toISOString(),
     });
 
@@ -137,7 +226,14 @@ try {
       shifts: new DrizzleShiftRepository(tx),
       docNumbers: new TimestampDocumentNumberGenerator(),
       events,
-    }).execute({ shiftId, paymentMethod: 'Cash', lines: [{ productId: item.id, quantity: 2, unitPrice: 250 }] }, ctx);
+    }).execute(
+      {
+        shiftId,
+        paymentMethod: 'Cash',
+        lines: [{ productId: item.id, quantity: 2, unitPrice: 250 }],
+      },
+      ctx,
+    );
     const sale = unwrap('CreateSale (cash merchandise)', saleRes);
     check('  sale total = 500', sale?.sale?.totalAmount === '500');
 
@@ -147,7 +243,16 @@ try {
       shifts: new DrizzleShiftRepository(tx),
       businessDays: new DrizzleBusinessDayRepository(tx),
       events,
-    }).execute({ shiftId, categoryId: await seedCategory(tx, organizationId, ids), amount: 300, description: 'Tea', paidFrom: 'SHIFT_CASH' }, ctx);
+    }).execute(
+      {
+        shiftId,
+        categoryId: await seedCategory(tx, organizationId),
+        amount: 300,
+        description: 'Tea',
+        paidFrom: 'SHIFT_CASH',
+      },
+      ctx,
+    );
     unwrap('RecordExpense (drawer)', expRes);
 
     // --- Close shift: expectedDrawerCash = 5000 + cashSales(500) - drawerExpenses(300) = 5200 ---
@@ -159,7 +264,14 @@ try {
       stockMovements: new DrizzleStockMovementWriter(tx),
       summaries: new DrizzleShiftSummaryWriter(tx),
       events,
-    }).execute({ shiftId, closingCash: 5200, nozzleReadings: [{ nozzleId: nozzle.id, closingReading: 1500 }] }, ctx);
+    }).execute(
+      {
+        shiftId,
+        closingCash: 5200,
+        nozzleReadings: [{ nozzleId: nozzle.id, closingReading: 1500 }],
+      },
+      ctx,
+    );
     const closed = unwrap('CloseShift', closeRes);
     check('  expectedDrawerCash = 5200', Number(closed?.snapshot?.expectedDrawerCash) === 5200);
     check('  cashVariance = 0', Number(closed?.snapshot?.cashVariance) === 0);
@@ -175,7 +287,10 @@ try {
     const dssr = unwrap('GenerateDssr', dssrRes);
     check('  DSSR shiftsIncluded = 1', dssr?.snapshotData?.shiftsIncluded === 1);
     check('  DSSR fuel volume = 500', dssr?.snapshotData?.fuel?.totalVolume === 500);
-    check('  DSSR merchandise cash = 500', dssr?.snapshotData?.merchandise?.byPaymentMethod?.Cash === 500);
+    check(
+      '  DSSR merchandise cash = 500',
+      dssr?.snapshotData?.merchandise?.byPaymentMethod?.Cash === 500,
+    );
     check('  DSSR drawer expenses = 300', dssr?.snapshotData?.expenses?.drawer === 300);
 
     throw new RollbackSignal('rollback (smoke complete)');
@@ -187,8 +302,11 @@ try {
   }
 }
 
-async function seedCategory(tx, organizationId, ids) {
-  const [cat] = await tx.insert(schema.expenseCategories).values({ organizationId, name: `Smoke Cat ${Date.now()}`, isSystem: false }).returning();
+async function seedCategory(tx, organizationId) {
+  const [cat] = await tx
+    .insert(schema.expenseCategories)
+    .values({ organizationId, name: `Smoke Cat ${Date.now()}`, isSystem: false })
+    .returning();
   return cat.id;
 }
 

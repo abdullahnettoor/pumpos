@@ -105,7 +105,9 @@ describe('UpdatePaymentTerminal', () => {
       expect(result.data.label).toBe('Forecourt PoS');
       expect(result.data.isActive).toBe(false);
     }
-    const updatedEvent = store.events.find((e) => e.eventType === BusinessEvents.PAYMENT_TERMINAL_UPDATED);
+    const updatedEvent = store.events.find(
+      (e) => e.eventType === BusinessEvents.PAYMENT_TERMINAL_UPDATED,
+    );
     expect(updatedEvent).toBeTruthy();
   });
 

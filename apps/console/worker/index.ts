@@ -17,8 +17,7 @@ interface Env {
   ASSETS: { fetch: (request: Request) => Promise<Response> };
 }
 
-const MOBILE_UA =
-  /Android|webOS|iPhone|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|Silk/i;
+const MOBILE_UA = /Android|webOS|iPhone|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|Silk/i;
 
 const BYPASS_COOKIE = 'pumpos_force_desktop=1';
 
@@ -82,14 +81,16 @@ export default {
       const mobileHost = mobileHostFor(url.hostname);
       if (mobileHost !== url.hostname) {
         const target = `https://${mobileHost}/`;
-        return withSecurityHeaders(new Response(null, {
-          status: 302,
-          headers: {
-            Location: target,
-            'Cache-Control': 'no-store',
-            Vary: 'Sec-CH-UA-Mobile, User-Agent',
-          },
-        }));
+        return withSecurityHeaders(
+          new Response(null, {
+            status: 302,
+            headers: {
+              Location: target,
+              'Cache-Control': 'no-store',
+              Vary: 'Sec-CH-UA-Mobile, User-Agent',
+            },
+          }),
+        );
       }
       // No sibling mobile host configured (dev/workers.dev): fall through and
       // let the in-app gate handle it.
@@ -100,10 +101,7 @@ export default {
     if (url.searchParams.get('desktop') === '1') {
       const assetResponse = await env.ASSETS.fetch(request);
       const res = withSecurityHeaders(new Response(assetResponse.body, assetResponse));
-      res.headers.append(
-        'Set-Cookie',
-        `${BYPASS_COOKIE}; Path=/; Max-Age=86400; SameSite=Lax`,
-      );
+      res.headers.append('Set-Cookie', `${BYPASS_COOKIE}; Path=/; Max-Age=86400; SameSite=Lax`);
       return res;
     }
 

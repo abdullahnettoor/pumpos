@@ -37,9 +37,11 @@ export const DateText = forwardRef<HTMLSpanElement, DateTextProps>(function Date
   ref,
 ) {
   const text =
-    variant === 'datetime' ? formatDateTime(value, { fallback: placeholder })
-    : variant === 'time' ? formatTime(value, { fallback: placeholder })
-    : formatDate(value, { compact: variant === 'compact', fallback: placeholder });
+    variant === 'datetime'
+      ? formatDateTime(value, { fallback: placeholder })
+      : variant === 'time'
+        ? formatTime(value, { fallback: placeholder })
+        : formatDate(value, { compact: variant === 'compact', fallback: placeholder });
 
   return (
     <span

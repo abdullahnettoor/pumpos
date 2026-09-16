@@ -1,14 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { CloudShiftTemplateService } from '../../services/cloud.js';
 import { ShiftTemplate } from '@pump/shared';
-import { Chip } from '../../pump-ds/index.js';
+import { Button, Chip, Form, Icon } from '../../pump-ds/index.js';
 import { Drawer } from '../Drawer.js';
 import { useToast } from '../primitives/ToastProvider.js';
+import { useRunTask } from '../../utils/runTask.js';
 
 const templateService = new CloudShiftTemplateService();
 
 export const ShiftTemplates: React.FC = () => {
   const toast = useToast();
+  const runTask = useRunTask();
   const [templates, setTemplates] = useState<ShiftTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -18,16 +20,14 @@ export const ShiftTemplates: React.FC = () => {
   const [startTime, setStartTime] = useState('06:00');
   const [endTime, setEndTime] = useState('14:00');
 
-  useEffect(() => {
-    loadTemplates();
-  }, []);
-
-  const loadTemplates = async () => {
+  // useCallback so the effect below can list it honestly: its identity only
+  // changes if something it closes over does, and it closes over nothing.
+  const loadTemplates = useCallback(async () => {
     try {
       setLoading(true);
       const data = await templateService.listTemplates();
       setTemplates(data);
-      
+
       // Default name for next shift
       setName(`Shift ${data.length + 1}`);
       if (data.length === 0) {
@@ -43,12 +43,14 @@ export const ShiftTemplates: React.FC = () => {
         setStartTime('08:00');
         setEndTime('16:00');
       }
-    } catch (err) {
-      console.error('Failed to load shift templates:', err);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    runTask(loadTemplates(), 'Could not load shift templates.');
+  }, [runTask, loadTemplates]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -60,7 +62,7 @@ export const ShiftTemplates: React.FC = () => {
         isActive: true,
       });
       setIsFormOpen(false);
-      loadTemplates();
+      runTask(loadTemplates(), 'Saved, but the template list could not be refreshed.');
       toast.success('Shift template created.');
     } catch (err: any) {
       toast.error(err.message || 'Failed to create shift template');
@@ -88,7 +90,7 @@ export const ShiftTemplates: React.FC = () => {
         endTime: '06:00',
         isActive: true,
       });
-      await loadTemplates();
+      runTask(loadTemplates(), 'Saved, but the template list could not be refreshed.');
       toast.success('Default shifts created.');
     } catch (err: any) {
       toast.error(err.message || 'Failed to pre-fill default shifts');
@@ -114,59 +116,67 @@ export const ShiftTemplates: React.FC = () => {
     }
   };
 
-  if (loading) return <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>Loading shift templates...</div>;
+  if (loading)
+    return (
+      <div style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+        Loading shift templates...
+      </div>
+    );
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }} className="animate-fade-in">
-      
+    <div
+      style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
+      className="animate-fade-in"
+    >
       {/* Header & Add Button */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h2 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-strong)' }}>Shift Schedules</h2>
-          <p style={{ color: 'var(--text-muted)', fontSize: '12px' }}>Configure standard timing templates for station operators.</p>
+          <h2 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-strong)' }}>
+            Shift Schedules
+          </h2>
+          <p style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
+            Configure standard timing templates for station operators.
+          </p>
         </div>
         {!isFormOpen && (
-          <button
+          <Button
+            variant="primary"
+            size="sm"
+            leftIcon={<Icon name="plus" size="sm" />}
             onClick={() => {
               resetForm();
               setIsFormOpen(true);
             }}
-            style={{
-              height: '32px',
-              padding: '0 12px',
-              backgroundColor: 'var(--brand-primary)',
-              color: '#ffffff',
-              border: 'none',
-              borderRadius: 'var(--radius-button)',
-              fontWeight: 600,
-              fontSize: '13px',
-              cursor: 'pointer',
-            }}
           >
-            + Add Shift
-          </button>
+            Add Shift
+          </Button>
         )}
       </div>
 
       {templates.length === 0 && (
-        <div style={{
-          backgroundColor: 'var(--bg-surface-alt)',
-          padding: '16px 20px',
-          borderRadius: 'var(--radius-card)',
-          border: '1px solid var(--border-soft)',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          gap: '16px'
-        }}>
+        <div
+          style={{
+            backgroundColor: 'var(--bg-surface-alt)',
+            padding: '16px 20px',
+            borderRadius: 'var(--radius-card)',
+            border: '1px solid var(--border-soft)',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            gap: '16px',
+          }}
+        >
           <div>
-            <span style={{ fontWeight: 600, fontSize: '13px', color: 'var(--text-strong)' }}>Recommended Shifts Setup</span>
+            <span style={{ fontWeight: 600, fontSize: '13px', color: 'var(--text-strong)' }}>
+              Recommended Shifts Setup
+            </span>
             <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
-              Create standard 8-hour operational shifts with a single click: Morning (06:00 - 14:00), Evening (14:00 - 22:00), and Night (22:00 - 06:00).
+              Create standard 8-hour operational shifts with a single click: Morning (06:00 -
+              14:00), Evening (14:00 - 22:00), and Night (22:00 - 06:00).
             </p>
           </div>
           <button
-            onClick={prefillDefaultShifts}
+            onClick={() => runTask(prefillDefaultShifts(), 'Could not add the default shifts.')}
             style={{
               height: '30px',
               padding: '0 12px',
@@ -177,7 +187,7 @@ export const ShiftTemplates: React.FC = () => {
               fontWeight: 600,
               fontSize: '12px',
               cursor: 'pointer',
-              whiteSpace: 'nowrap'
+              whiteSpace: 'nowrap',
             }}
           >
             Pre-fill Default Shifts
@@ -194,9 +204,14 @@ export const ShiftTemplates: React.FC = () => {
         }}
         title="Add Shift Template"
       >
-        <form onSubmit={handleCreate} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <Form
+          onSubmit={handleCreate}
+          style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
+        >
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Shift Name *</label>
+            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
+              Shift Name *
+            </label>
             <input
               type="text"
               style={{
@@ -214,7 +229,9 @@ export const ShiftTemplates: React.FC = () => {
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Start Time *</label>
+            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
+              Start Time *
+            </label>
             <input
               type="time"
               style={{
@@ -231,7 +248,9 @@ export const ShiftTemplates: React.FC = () => {
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>End Time *</label>
+            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
+              End Time *
+            </label>
             <input
               type="time"
               style={{
@@ -285,11 +304,17 @@ export const ShiftTemplates: React.FC = () => {
               Cancel
             </button>
           </div>
-        </form>
+        </Form>
       </Drawer>
 
       {/* Shifts Grid View */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '16px' }}>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
+          gap: '16px',
+        }}
+      >
         {templates.map((t) => (
           <div
             key={t.id}
@@ -301,16 +326,38 @@ export const ShiftTemplates: React.FC = () => {
               display: 'flex',
               flexDirection: 'column',
               gap: '12px',
-              boxShadow: '0 2px 4px rgba(0, 0, 0, 0.01)'
+              boxShadow: '0 2px 4px rgba(0, 0, 0, 0.01)',
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text-strong)' }}>{t.name}</span>
-              <Chip tone={t.isActive ? 'success' : 'neutral'} size="sm">{t.isActive ? 'ACTIVE' : 'INACTIVE'}</Chip>
+              <span style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text-strong)' }}>
+                {t.name}
+              </span>
+              <Chip tone={t.isActive ? 'success' : 'neutral'} size="sm">
+                {t.isActive ? 'ACTIVE' : 'INACTIVE'}
+              </Chip>
             </div>
             <div>
-              <span style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>OPERATING HOURS</span>
-              <p style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-strong)', fontFamily: 'var(--font-mono)', marginTop: '2px' }}>
+              <span
+                style={{
+                  fontSize: '10px',
+                  color: 'var(--text-muted)',
+                  fontWeight: 600,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                }}
+              >
+                OPERATING HOURS
+              </span>
+              <p
+                style={{
+                  fontSize: '16px',
+                  fontWeight: 600,
+                  color: 'var(--text-strong)',
+                  fontFamily: 'var(--font-mono)',
+                  marginTop: '2px',
+                }}
+              >
                 {t.startTime} - {t.endTime}
               </p>
             </div>

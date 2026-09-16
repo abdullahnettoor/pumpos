@@ -1,7 +1,7 @@
 import React from 'react';
 import { inr } from '../../utils/format.js';
 import { Clock3, FileText, Fuel, Receipt, ShoppingBag, ShoppingCart, Wallet } from 'lucide-react';
-import { Button, Chip } from '../../pump-ds/index.js';
+import { Button, Chip, Icon } from '../../pump-ds/index.js';
 import { ShiftBusinessDateContext } from './ShiftBusinessDateContext.js';
 
 type QuickAction = {
@@ -74,8 +74,7 @@ export const ShiftControlBar: React.FC<ShiftControlBarProps> = ({
   timeZone,
 }) => {
   const elapsed = formatElapsed(activeShift.openedAt);
-  const allHandoversDone =
-    handoversAssigned > 0 && handoversCompleted >= handoversAssigned;
+  const allHandoversDone = handoversAssigned > 0 && handoversCompleted >= handoversAssigned;
   const closePromoted = allHandoversDone || isPreparingClose;
 
   return (
@@ -93,16 +92,19 @@ export const ShiftControlBar: React.FC<ShiftControlBarProps> = ({
       </div>
       <div className="shift-control-bar__inline">
         <div className="shift-control-bar__cluster shift-control-bar__identity">
-          {isPreparingClose && <Chip tone="warning" size="sm">Closing</Chip>}
+          {isPreparingClose && (
+            <Chip tone="warning" size="sm">
+              Closing
+            </Chip>
+          )}
           <strong style={{ fontSize: '13px', color: 'var(--text-strong)' }}>
             {activeShift.templateName}
           </strong>
-          <span className="shift-control-bar__meta"><Clock3 size={11} /> Active for {elapsed}</span>
           <span className="shift-control-bar__meta">
-            Float{' '}
-            <strong className="font-mono">
-              {inr(activeShift.openingCash)}
-            </strong>
+            <Clock3 size={11} /> Active for {elapsed}
+          </span>
+          <span className="shift-control-bar__meta">
+            Float <strong className="font-mono">{inr(activeShift.openingCash)}</strong>
           </span>
         </div>
 
@@ -118,19 +120,31 @@ export const ShiftControlBar: React.FC<ShiftControlBarProps> = ({
               title={action.hotkey ? `${action.label} (press ${action.hotkey})` : action.label}
             >
               {action.label}
-              {action.hotkey && (
-                <kbd className="shift-control-bar__hotkey">{action.hotkey}</kbd>
-              )}
+              {action.hotkey && <kbd className="shift-control-bar__hotkey">{action.hotkey}</kbd>}
             </Button>
           ))}
         </div>
 
         <div className="shift-control-bar__cluster shift-control-bar__close">
           {onViewLastShiftSummary && (
-            <Button variant="ghost" size="sm" iconOnly leftIcon={<FileText />} onClick={onViewLastShiftSummary} title="Last shift summary" aria-label="Last shift summary" />
+            <Button
+              variant="ghost"
+              size="sm"
+              iconOnly
+              leftIcon={<FileText />}
+              onClick={onViewLastShiftSummary}
+              title="Last shift summary"
+              aria-label="Last shift summary"
+            />
           )}
-          <Button variant={closePromoted ? 'primary' : 'secondary'} size="sm" onClick={onCloseShiftClick} title={closePromoted ? 'Ready to close' : 'Begin close review'}>
-            {isPreparingClose ? 'Continue Close' : 'Begin Close →'}
+          <Button
+            variant={closePromoted ? 'primary' : 'secondary'}
+            size="sm"
+            onClick={onCloseShiftClick}
+            title={closePromoted ? 'Ready to close' : 'Begin close review'}
+            rightIcon={!isPreparingClose ? <Icon name="arrow-right" size="xs" /> : undefined}
+          >
+            {isPreparingClose ? 'Continue Close' : 'Begin Close'}
           </Button>
         </div>
       </div>

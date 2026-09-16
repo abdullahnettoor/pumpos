@@ -35,10 +35,11 @@ is no plan/billing gating yet.
 - **Login:** `packages/ui/src/components/Auth/Login.tsx` is **email + password only**.
 - **API:** has **no Supabase service-role key**; no password/reset/deactivate endpoints.
 - **Schema:** `users` = `authUserId, organizationId, fullName, email, phone, role
-  (Owner/Manager/Accountant/Staff/Attendant), status (ACTIVE/INACTIVE)`;
+(Owner/Manager/Accountant/Staff/Attendant), status (ACTIVE/INACTIVE)`;
   `user_station_assignments` scopes station access. `userSchema` already has `phone`.
 
 ### Verified Supabase capabilities (from current docs)
+
 - `admin.createUser({ email|phone, password, email_confirm|phone_confirm: true })`
   creates a **verified** user and **sends nothing**. (service-role, server-side only)
 - `signInWithPassword({ email | phone, password })` — login by **email _or_ phone**.
@@ -65,16 +66,16 @@ is no plan/billing gating yet.
 
 ## 2. Key decisions (defaults — override before we build)
 
-| # | Decision | Default |
-|---|---|---|
-| D1 | Owner accounts | **Invite-only**, platform-provisioned (no open self-signup) |
-| D2 | Public Supabase sign-ups | **Disabled**; self-signup trigger branch **gated** by `raw_user_meta_data.signup_intent='owner'` |
-| D3 | Staff identity | **Email _or_ phone** (owner picks per user). Phone is implemented as a **synthetic email handle** (native phone auth blocked by dashboard — needs Twilio). |
-| D4 | Staff password | **Owner-set** for both email and phone (default). Email-invite link is **optional** (later toggle). |
-| D5 | Password reset | **Admin/direct** (`updateUserById`), owner/manager sets a new one, no email/SMS |
-| D6 | Who can manage users | **Owner + Manager** (Manager may add/reset **Staff+Attendant** on own stations, `canManageStaff`); Owner = full |
-| D7 | Deactivate | Sets `status=INACTIVE` **and** bans the auth user (token dies immediately, not just 60s cache) |
-| D8 | Phone handling | Store **normalized E.164 digits** (no `+`/spaces) on `users.phone`; auth identifier = deterministic synthetic email `<phone>@users.pumpos.app`; login derives it from the typed phone |
+| #   | Decision                 | Default                                                                                                                                                                               |
+| --- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| D1  | Owner accounts           | **Invite-only**, platform-provisioned (no open self-signup)                                                                                                                           |
+| D2  | Public Supabase sign-ups | **Disabled**; self-signup trigger branch **gated** by `raw_user_meta_data.signup_intent='owner'`                                                                                      |
+| D3  | Staff identity           | **Email _or_ phone** (owner picks per user). Phone is implemented as a **synthetic email handle** (native phone auth blocked by dashboard — needs Twilio).                            |
+| D4  | Staff password           | **Owner-set** for both email and phone (default). Email-invite link is **optional** (later toggle).                                                                                   |
+| D5  | Password reset           | **Admin/direct** (`updateUserById`), owner/manager sets a new one, no email/SMS                                                                                                       |
+| D6  | Who can manage users     | **Owner + Manager** (Manager may add/reset **Staff+Attendant** on own stations, `canManageStaff`); Owner = full                                                                       |
+| D7  | Deactivate               | Sets `status=INACTIVE` **and** bans the auth user (token dies immediately, not just 60s cache)                                                                                        |
+| D8  | Phone handling           | Store **normalized E.164 digits** (no `+`/spaces) on `users.phone`; auth identifier = deterministic synthetic email `<phone>@users.pumpos.app`; login derives it from the typed phone |
 
 ---
 
@@ -94,14 +95,16 @@ Web-only onboarding wizard (existing) → Organization ▸ Team
 ```
 
 **Backend**
+
 - Supabase: disable public sign-ups; gate self-signup branch behind `signup_intent='owner'`.
 - Worker secret `SUPABASE_SECRET_KEY` (modern `sb_secret_...`) + `SUPABASE_URL`.
 - `SupabaseAdmin` adapter (`apps/api/src/infra/supabase-admin.ts`).
 - Platform route `POST /platform/owners/invite` (platform-admin allowlist, **not** tenant
   `canManageUsers`): create org + Owner row, then `inviteUserByEmail(email, { data:
-  { organization_name, role: 'Owner', signup_intent: 'owner' }})`.
+{ organization_name, role: 'Owner', signup_intent: 'owner' }})`.
 
 **UI / operator surface**
+
 - **Phase 1:** trigger via a repo **admin script** (like `packages/db/seed.mjs`) or the
   **Supabase Dashboard → Invite user** (paste metadata JSON).
 - **Phase 2:** a small **internal back-office** app/screen ("Invite owner": org name +
@@ -133,6 +136,7 @@ Reset password: `Team ▸ row ▸ Reset password` → `admin.updateUserById(id,{
 UI shows the new password to copy. Deactivate: `status=INACTIVE` + ban.
 
 ### 4a. Backend changes
+
 - **Core** (`packages/core/.../station-setup/users/index.ts`): `CreateUser` accepts
   `password` + identity (email or phone → synthetic handle); sets `authUserId` from the
   admin-create result; add `ResetUserPassword`; emit `USER_INVITED` / `USER_PASSWORD_RESET`
@@ -155,8 +159,9 @@ UI shows the new password to copy. Deactivate: `status=INACTIVE` + ban.
   identity (email **or** phone) when app access is on; phone-normalization helper in `@pump/shared`.
 
 ### 4b. Frontend / UI changes
+
 - **Login** (`packages/ui/src/components/Auth/Login.tsx`): single field **"Email or phone"**
-  + password; detect the input and call `signInWithPassword({ email })` or `({ phone })`.
+  - password; detect the input and call `signInWithPassword({ email })` or `({ phone })`.
 - **Team screen** (`packages/ui/src/components/StationSetup/UserRolesAssignment.tsx`):
   - Add/Edit drawer: **App access** toggle → **identity radio (Email | Phone)** → matching
     input → **password** field with **Generate** + show/**Copy**; role; station(s); status.
@@ -168,6 +173,7 @@ UI shows the new password to copy. Deactivate: `status=INACTIVE` + ban.
   and pass `password`/identity in `createUser`.
 
 ### 4c. What each user sees
+
 - **Owner/Manager:** name → pick Email/Phone → set password → Create → copyable
   "login + password" card. "Reset password" any time.
 - **Staff with email:** owner gives `email + password` (email-invite link optional later).
@@ -178,14 +184,14 @@ UI shows the new password to copy. Deactivate: `status=INACTIVE` + ban.
 
 ## 5. Permissions matrix (target)
 
-| Capability | Owner | Manager | Accountant | Staff |
-|---|---|---|---|---|
-| Create user (any role) | ✅ | ❌ | ❌ | ❌ |
-| Create Staff/Attendant (own stations) | ✅ | ✅ | ❌ | ❌ |
-| Reset password | ✅ anyone | ✅ Staff/Attendant | ❌ | ❌ |
-| Change role | ✅ | ❌ | ❌ | ❌ |
-| Deactivate / reactivate | ✅ | ✅ Staff/Attendant | ❌ | ❌ |
-| Invite owner (platform) | platform-admin only | — | — | — |
+| Capability                            | Owner               | Manager            | Accountant | Staff |
+| ------------------------------------- | ------------------- | ------------------ | ---------- | ----- |
+| Create user (any role)                | ✅                  | ❌                 | ❌         | ❌    |
+| Create Staff/Attendant (own stations) | ✅                  | ✅                 | ❌         | ❌    |
+| Reset password                        | ✅ anyone           | ✅ Staff/Attendant | ❌         | ❌    |
+| Change role                           | ✅                  | ❌                 | ❌         | ❌    |
+| Deactivate / reactivate               | ✅                  | ✅ Staff/Attendant | ❌         | ❌    |
+| Invite owner (platform)               | platform-admin only | —                  | —          | —     |
 
 Guardrail: a Manager can never act on a role **≥ their own**, and is scoped to assigned
 stations. All auth-account operations run **server-side with the service-role key** (never
@@ -194,6 +200,7 @@ in the client) and emit audit events; routes are rate-limited.
 ---
 
 ## 6. Security requirements
+
 - Service-role key is a **Worker secret**, never shipped to any client bundle.
 - All auth-account operations (create/reset/ban) are **server-only**, behind role guards.
 - Disable public sign-ups; gate the self-signup trigger branch → no open Owner creation.
@@ -208,20 +215,20 @@ in the client) and emit audit events; routes are rate-limited.
 
 ## 7. File-by-file change list
 
-| Area | File(s) | Change |
-|---|---|---|
-| Supabase config | dashboard | Disable public sign-ups (Phone provider **not** used — dashboard requires Twilio) |
-| Secret | `apps/api` wrangler + `Bindings` (`src/index.ts`) + `worker-configuration.d.ts` | `SUPABASE_SECRET_KEY` (secret), `SUPABASE_URL` (var) |
-| DB | `supabase/migrations/<new>.sql` | `handle_new_user()`: gate self-signup branch by `signup_intent='owner'` (A0; no phone match) |
-| Admin adapter | `apps/api/src/infra/supabase-admin.ts` (new) | createUser / updateUserById / inviteUserByEmail |
-| API routes | `apps/api/src/routes/station-setup.ts` | `POST /users` (provision + set auth_user_id), `/users/:id/reset-password`, `/users/:id/deactivate`; `POST /platform/owners/invite` |
-| Core | `packages/core/.../station-setup/users/index.ts`, `kernel/event-catalog.ts` | password + identity in CreateUser, ResetUserPassword, new events |
-| Permissions | `packages/shared/src/permissions/guards.ts` | `canManageStaff(role)` |
-| Shared helpers | `packages/shared/src` | `normalizePhone`, `phoneToAuthEmail`; `userSchema` optional `password` + identity rule |
-| Login UI | `packages/ui/src/components/Auth/Login.tsx` | email **or** phone + password (phone → derive handle) |
-| Team UI | `packages/ui/src/components/StationSetup/UserRolesAssignment.tsx` | identity radio, password+generate/copy, credentials card, reset/deactivate, status badges |
-| Services | `packages/ui/src/services/cloud.ts` | `resetUserPassword`, `deactivateUser`, password in `createUser` |
-| Back-office | `packages/db/platform.mjs` CLI over `/platform/*` | owner invite (email or no-SMTP password), list, resend, revoke, (de/re)activate (A4, done) |
+| Area            | File(s)                                                                         | Change                                                                                                                             |
+| --------------- | ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Supabase config | dashboard                                                                       | Disable public sign-ups (Phone provider **not** used — dashboard requires Twilio)                                                  |
+| Secret          | `apps/api` wrangler + `Bindings` (`src/index.ts`) + `worker-configuration.d.ts` | `SUPABASE_SECRET_KEY` (secret), `SUPABASE_URL` (var)                                                                               |
+| DB              | `supabase/migrations/<new>.sql`                                                 | `handle_new_user()`: gate self-signup branch by `signup_intent='owner'` (A0; no phone match)                                       |
+| Admin adapter   | `apps/api/src/infra/supabase-admin.ts` (new)                                    | createUser / updateUserById / inviteUserByEmail                                                                                    |
+| API routes      | `apps/api/src/routes/station-setup.ts`                                          | `POST /users` (provision + set auth_user_id), `/users/:id/reset-password`, `/users/:id/deactivate`; `POST /platform/owners/invite` |
+| Core            | `packages/core/.../station-setup/users/index.ts`, `kernel/event-catalog.ts`     | password + identity in CreateUser, ResetUserPassword, new events                                                                   |
+| Permissions     | `packages/shared/src/permissions/guards.ts`                                     | `canManageStaff(role)`                                                                                                             |
+| Shared helpers  | `packages/shared/src`                                                           | `normalizePhone`, `phoneToAuthEmail`; `userSchema` optional `password` + identity rule                                             |
+| Login UI        | `packages/ui/src/components/Auth/Login.tsx`                                     | email **or** phone + password (phone → derive handle)                                                                              |
+| Team UI         | `packages/ui/src/components/StationSetup/UserRolesAssignment.tsx`               | identity radio, password+generate/copy, credentials card, reset/deactivate, status badges                                          |
+| Services        | `packages/ui/src/services/cloud.ts`                                             | `resetUserPassword`, `deactivateUser`, password in `createUser`                                                                    |
+| Back-office     | `packages/db/platform.mjs` CLI over `/platform/*`                               | owner invite (email or no-SMTP password), list, resend, revoke, (de/re)activate (A4, done)                                         |
 
 ---
 
@@ -229,23 +236,26 @@ in the client) and emit audit events; routes are rate-limited.
 
 > **Status:** A0 + A1 **implemented** (code committed). Two manual, out-of-band
 > steps remain before A1 works in an environment:
+>
 > 1. In Supabase dashboard → **disable public sign-ups** (leave the Phone provider OFF).
 > 2. Config: `SUPABASE_URL` is a plaintext `[vars]` entry in `apps/api/wrangler.toml`
 >    (per env — safe to commit, it's the public project URL). The **secret**
 >    `SUPABASE_SECRET_KEY` (modern `sb_secret_...`) goes in `.dev.vars` for local dev and, per deployed
 >    env, `wrangler secret put SUPABASE_SECRET_KEY` (add `--env preview` for the
 >    preview worker). Never commit the service-role key. Redeploy the API after setting it.
-> The A0 trigger gate lives in `supabase/migrations/20260719000001_rls.sql` (`handle_new_user()`
-> self-signup branch fires only when `raw_user_meta_data.signup_intent = 'owner'`); the same file
-> also adds a partial unique index on `users(auth_user_id)` (section 2b) so one auth user can never
-> map to two profile rows.
+>    The A0 trigger gate lives in `supabase/migrations/20260719000001_rls.sql` (`handle_new_user()`
+>    self-signup branch fires only when `raw_user_meta_data.signup_intent = 'owner'`); the same file
+>    also adds a partial unique index on `users(auth_user_id)` (section 2b) so one auth user can never
+>    map to two profile rows.
 
 ### A0 — Safety (tiny, do first) — **done**
+
 - Disable public Supabase sign-ups; gate the self-signup trigger branch behind
   `signup_intent='owner'`; lowercase-normalize emails in `CreateUser`.
 - **Done when:** a stray `auth.users` insert (no `signup_intent`) does **not** create an org.
 
 ### A1 — Team management (highest value) — **done**
+
 - Service-role secret + `SupabaseAdmin` adapter.
 - Phone→handle + phone-normalization helpers in `@pump/shared` (no DB migration needed).
 - `POST /users` provisions email/phone (synthetic handle) + owner-set password, sets
@@ -258,6 +268,7 @@ in the client) and emit audit events; routes are rate-limited.
   login immediately.
 
 ### A2 — Owner provisioning
+
 - **Phase 1 (done, since folded into A4):** owner provisioning without manual DB edits — the
   gated `handle_new_user()` trigger creates the org + Owner row and links `auth_user_id` from
   `signup_intent='owner'` metadata. The original standalone `packages/db/invite-owner.mjs`
@@ -274,6 +285,7 @@ in the client) and emit audit events; routes are rate-limited.
 ---
 
 ## 9. Confirmed decisions (ready to build)
+
 - **D3/D8:** phone identity is implemented as a **synthetic email handle** (`<phone>@users.pumpos.app`)
   because the hosted dashboard blocks native phone auth without Twilio. Operator UX is unchanged
   (log in with phone + password).
@@ -286,14 +298,16 @@ in the client) and emit audit events; routes are rate-limited.
   client calls Supabase directly).
 
 ## 10. Future: migrating to a real phone provider (no user disruption)
+
 Because the **real phone is persisted (normalized E.164) from day one**, switching to native phone
 auth later is a one-time server-side batch, **not** per-user re-onboarding:
+
 - **Path 1 (recommended):** for each phone-staff, `admin.updateUserById(id, { phone, phone_confirm: true })`
   — attaches the native phone identity to the **same** `auth.users` row → same user id, **password,
   sessions, and station assignments preserved**. Then flip login from phone→handle to native
   `signInWithPassword({ phone })`. Users notice nothing.
 - **Path 2:** keep synthetic handles indefinitely (only needed to change if you want SMS/OTP features).
-- **Path 3:** dual identity — add phone identity *and* keep the synthetic email (Supabase allows
+- **Path 3:** dual identity — add phone identity _and_ keep the synthetic email (Supabase allows
   multiple identities per user).
 
 Prerequisites we lock in A1 so this stays painless: normalized-E.164 phone storage, the single shared
@@ -308,16 +322,18 @@ Revised, agreed direction for the productized owner flow + the post-onboarding h
 supersedes the A2 "pending" bullet in section 8.
 
 ### 11.1 Decisions locked
-| # | Decision |
-|---|---|
-| E1 | **Email transport = Resend** (Supabase Auth → custom SMTP). Config only, no app code beyond the `redirectTo` URL + `/accept-invite` page. Requires domain verification (SPF/DKIM/DMARC) + verified sender + customized **Invite** email template. |
-| E2 | **Owner provisioning = `admin.inviteUserByEmail(email, { data, redirectTo })`** — the owner receives an email and **sets their own password**. The no-SMTP fallback (owner-set/generated password via `admin.createUser`) is retained as `mode: 'password'` on the same `/platform/owners/invite` route (A4). Metadata (`signup_intent='owner'`, `organization_name`, `full_name`, `role='Owner'`) drives the gated `handle_new_user()` self-signup branch → creates org + Owner row + links `auth_user_id`. |
-| E3 | **Platform admins = env-var allowlist** (`PLATFORM_ADMIN_EMAILS`, comma-separated, in `apps/api` `[vars]`). No DB table, no new tenant role. Small team → good enough. |
-| E4 | **No new API deployment.** Add a **`/platform/*` route group to the existing Worker**, mounted **before/outside** the tenant-resolution middleware (platform admins have **no `public.users` row**, so the normal middleware would 403 them). Its own guard: verify the Supabase JWT → check email ∈ `PLATFORM_ADMIN_EMAILS` → skip org/role lookup. |
-| E5 | **Back-office = owner-invite only for now.** Manager/staff invites stay in the **in-org Team UI** (already shipped in A1). Manager-invite-from-back-office is deferred. |
-| E6 | **Back-office UI:** the **`packages/db/platform.mjs` CLI** (A4) is the interim zero-UI surface. A small **separate static deploy** later if a screen is wanted — **never** embedded in the customer console. || E7 | **Invite lands on mobile too.** The `/accept-invite` set-password page is responsive; after setting the password, if the user is Owner/Manager and no station is `READY_FOR_OPERATIONS`, show the **"finish setup on desktop"** notice (reuse `WebOnboardingNotice` copy). No native deep-link from email in v1 — the link always opens the web page. |
+
+| #   | Decision                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| E1  | **Email transport = Resend** (Supabase Auth → custom SMTP). Config only, no app code beyond the `redirectTo` URL + `/accept-invite` page. Requires domain verification (SPF/DKIM/DMARC) + verified sender + customized **Invite** email template.                                                                                                                                                                                                                                                            |
+| E2  | **Owner provisioning = `admin.inviteUserByEmail(email, { data, redirectTo })`** — the owner receives an email and **sets their own password**. The no-SMTP fallback (owner-set/generated password via `admin.createUser`) is retained as `mode: 'password'` on the same `/platform/owners/invite` route (A4). Metadata (`signup_intent='owner'`, `organization_name`, `full_name`, `role='Owner'`) drives the gated `handle_new_user()` self-signup branch → creates org + Owner row + links `auth_user_id`. |
+| E3  | **Platform admins = env-var allowlist** (`PLATFORM_ADMIN_EMAILS`, comma-separated, in `apps/api` `[vars]`). No DB table, no new tenant role. Small team → good enough.                                                                                                                                                                                                                                                                                                                                       |
+| E4  | **No new API deployment.** Add a **`/platform/*` route group to the existing Worker**, mounted **before/outside** the tenant-resolution middleware (platform admins have **no `public.users` row**, so the normal middleware would 403 them). Its own guard: verify the Supabase JWT → check email ∈ `PLATFORM_ADMIN_EMAILS` → skip org/role lookup.                                                                                                                                                         |
+| E5  | **Back-office = owner-invite only for now.** Manager/staff invites stay in the **in-org Team UI** (already shipped in A1). Manager-invite-from-back-office is deferred.                                                                                                                                                                                                                                                                                                                                      |
+| E6  | **Back-office UI:** the **`packages/db/platform.mjs` CLI** (A4) is the interim zero-UI surface. A small **separate static deploy** later if a screen is wanted — **never** embedded in the customer console.                                                                                                                                                                                                                                                                                                 |     | E7  | **Invite lands on mobile too.** The `/accept-invite` set-password page is responsive; after setting the password, if the user is Owner/Manager and no station is `READY_FOR_OPERATIONS`, show the **"finish setup on desktop"** notice (reuse `WebOnboardingNotice` copy). No native deep-link from email in v1 — the link always opens the web page. |
 
 ### 11.2 The onboarding hub (replaces the wizard-takeover app mode)
+
 **Today:** when no station is `READY_FOR_OPERATIONS`, the console renders the **bare
 `OnboardingWizard` with no `AppShell`** (`apps/console/src/App.tsx` ~L565 `if (!session ||
 !isStationReady) return renderContent()`), and the nav collapses to a single "Onboarding
@@ -326,6 +342,7 @@ station is READY — so an owner **cannot add team members until onboarding is f
 accidental gate we want to remove).
 
 **Target hub model:**
+
 - After login: `≥1 READY station` → Dashboard; else → the **Dashboard home** with a getting-started
   **hero + checklist** (rendered **inside the `AppShell`**, not a bare wizard). The **Organization**
   tab is the station/team management hub.
@@ -339,6 +356,7 @@ accidental gate we want to remove).
 
 **Top bar becomes readiness-aware** (`AppTopBar` gains a `stationReady` signal). In the hub
 (no READY station) state:
+
 - **Quick-create:** hide operational items (expense/income/collection/purchase/credit…); show
   only org actions (Onboard station, Add member) or hide entirely.
 - **Command palette / search:** Actions → org-level only; Customers/Suppliers/Products groups
@@ -348,10 +366,11 @@ accidental gate we want to remove).
   / add). User menu + sync: unchanged.
 
 ### 11.3 Who onboards a station
+
 - **Known gap:** `POST /onboarding/finalize` is **Owner-only** (`station-setup.ts` ~L723) while
   the UI (`WebOnboardingNotice`) offers it to **Owner + Manager**, and per-entity infra POSTs
   already allow `canManageInfrastructure` (Owner+Manager). Mismatch to resolve.
-- **Onboarding *creates* the station** (the draft carries station basics →
+- **Onboarding _creates_ the station** (the draft carries station basics →
   `DrizzleOnboardingProvisioner` provisions station + infra atomically). "No station" is the
   normal starting state — the wizard **is** how the first station is born.
 - **Provisioner does NOT assign the actor** to the new station today. Owners bypass station
@@ -360,11 +379,12 @@ accidental gate we want to remove).
   finalize (harmless for Owners, unblocks Manager/multisite onboarding).
 - **Chicken-and-egg (invite a manager before a station exists):** avoided by keeping the
   **first** station **owner-driven** (the org bootstraps with only an Owner). Invite managers
-  **after** the first station exists → station assignment is trivial. Inviting a *Manager* stays
+  **after** the first station exists → station assignment is trivial. Inviting a _Manager_ stays
   **Owner-only** (`canManageUsers`); Staff/Attendant stay Owner+Manager. **Manager onboarding is
   enabled only for _additional_ stations** (multisite), with the auto-assign fix.
 
 ### 11.4 Build order (A3)
+
 1. **Resend SMTP** + Supabase Invite template + redirect allow-list (config only). — ✅ done
    (Resend SMTP + verified sender + Invite template configured; `PLATFORM_ADMIN_EMAILS` +
    `INVITE_REDIRECT_URL` set for preview + prod in `wrangler.toml`). ⬜ verify the **prod**
@@ -398,6 +418,7 @@ accidental gate we want to remove).
 > and `INVITE_REDIRECT_URL` in `apps/api/wrangler.toml` `[vars]` per env; redeploy the API.
 
 ### 11.5 Acceptance criteria (A3)
+
 - Inviting an owner sends a Resend email; the owner clicks it (desktop **or** mobile), sets their
   own password, and lands in the **Organization hub** with operational tabs hidden.
 - From the hub the owner onboards the first station and adds team members **before** any station
@@ -416,6 +437,7 @@ authenticates (platform-admin password grant → JWT) and calls it. A richer sta
 (`platform.pumpos.app`) can reuse the exact same endpoints later.
 
 ### 12.1 New API surface (all under the existing platform group, allowlist-guarded)
+
 - `GET /platform/owners` — one row per org: org + its Owner `public.users` row + station
   counts, enriched with Supabase auth state (`email_confirmed_at`, `invited_at`,
   `last_sign_in_at`, `banned_until`) and a derived **status**
@@ -437,17 +459,18 @@ authenticates (platform-admin password grant → JWT) and calls it. A richer sta
   absorbed the deleted `invite-owner.mjs` script.
 
 ### 12.2 Other changes
+
 - `SupabaseAdmin` gains `getUserById` (invite/ban/sign-in state) and `deleteUser` (revoke only).
 - New audit events: `OWNER_INVITE_RESENT`, `OWNER_INVITE_REVOKED`,
   `ORGANIZATION_DEACTIVATED`, `ORGANIZATION_REACTIVATED` (carry the acting platform-admin email
   in metadata). The platform middleware stashes that email on the context.
 - **CLI:** `packages/db/platform.mjs` — `owners list | invite | resend | revoke | deactivate |
-  reactivate`. `invite` supports `--no-email [--password …]` (no-SMTP fallback that prints the
+reactivate`. `invite` supports `--no-email [--password …]` (no-SMTP fallback that prints the
   credentials to hand over). Auth via `SUPABASE_URL` + `SUPABASE_ANON_KEY` +
   `PLATFORM_ADMIN_EMAIL/PASSWORD`; target API via `PUMP_API_URL`. Replaces the removed
   `invite-owner.mjs`.
 
 ### 12.3 Deliberately out of scope (future static UI)
+
 Billing/plans, feature flags, impersonation, audit-log viewer, manager-invite from back-office
 (stays in the in-org Team UI). The endpoints above are UI-ready when a screen is wanted.
-

@@ -25,7 +25,7 @@ function mapRow(r: typeof schema.invoices.$inferSelect): Invoice {
     roundOff: r.roundOff,
     totalAmount: r.totalAmount,
     snapshotData: r.snapshotData as Invoice['snapshotData'],
-    createdAt: (r.createdAt instanceof Date ? r.createdAt.toISOString() : String(r.createdAt)),
+    createdAt: r.createdAt instanceof Date ? r.createdAt.toISOString() : String(r.createdAt),
   };
 }
 
@@ -33,7 +33,11 @@ export class DrizzleInvoiceRepository implements InvoiceRepository {
   constructor(private readonly db: DbClient) {}
 
   async findBySaleId(saleId: string): Promise<Invoice | null> {
-    const rows = await this.db.select().from(schema.invoices).where(eq(schema.invoices.saleId, saleId)).limit(1);
+    const rows = await this.db
+      .select()
+      .from(schema.invoices)
+      .where(eq(schema.invoices.saleId, saleId))
+      .limit(1);
     return rows.length ? mapRow(rows[0]) : null;
   }
 
@@ -59,7 +63,7 @@ export class DrizzleInvoiceRepository implements InvoiceRepository {
       cessTotal: inv.cessTotal,
       roundOff: inv.roundOff,
       totalAmount: inv.totalAmount,
-      snapshotData: inv.snapshotData as Record<string, unknown>,
+      snapshotData: inv.snapshotData,
       createdAt: new Date(inv.createdAt),
     });
   }
@@ -69,7 +73,12 @@ export class DrizzleDocumentSequenceRepository implements DocumentSequenceReposi
   constructor(private readonly db: DbClient) {}
 
   /** Atomic gapless increment via upsert (safe within the request transaction). */
-  async nextNumber(organizationId: string, docType: string, scope: string, financialYear: string): Promise<number> {
+  async nextNumber(
+    organizationId: string,
+    docType: string,
+    scope: string,
+    financialYear: string,
+  ): Promise<number> {
     const rows = await this.db
       .insert(schema.documentSequences)
       .values({ organizationId, docType, scope, financialYear, lastNumber: 1 })

@@ -54,29 +54,42 @@ async function buildLiveDssrPreview(
   return { businessDate: businessDay.businessDate, generatedAt, live: true, snapshotData };
 }
 
-async function loadPersistedDssr(db: DbClient, organizationId: string, stationId: string, date: string) {
+async function loadPersistedDssr(
+  db: DbClient,
+  organizationId: string,
+  stationId: string,
+  date: string,
+) {
   const [businessDay] = await db
     .select({ status: schema.businessDays.status })
     .from(schema.businessDays)
-    .where(and(
-      eq(schema.businessDays.organizationId, organizationId),
-      eq(schema.businessDays.stationId, stationId),
-      eq(schema.businessDays.businessDate, date),
-    ))
+    .where(
+      and(
+        eq(schema.businessDays.organizationId, organizationId),
+        eq(schema.businessDays.stationId, stationId),
+        eq(schema.businessDays.businessDate, date),
+      ),
+    )
     .limit(1);
   if (businessDay?.status !== 'CLOSED') return null;
-  const snapshot = await new DrizzleDssrSnapshotRepository(db).findByStationDate(organizationId, stationId, date);
+  const snapshot = await new DrizzleDssrSnapshotRepository(db).findByStationDate(
+    organizationId,
+    stationId,
+    date,
+  );
   if (!snapshot) return null;
   const [lateEntries] = await db
     .select({ count: sql<number>`count(*)::int` })
     .from(schema.events)
     .innerJoin(schema.businessDays, eq(schema.events.businessDayId, schema.businessDays.id))
-    .where(and(
-      eq(schema.businessDays.organizationId, organizationId),
-      eq(schema.businessDays.stationId, stationId),
-      eq(schema.businessDays.businessDate, date),
-      sql`${schema.events.metadata} ->> 'lateEntryPrimary' = 'true'`,
-    ));
+    .where(
+      and(
+        eq(schema.businessDays.organizationId, organizationId),
+        eq(schema.businessDays.stationId, stationId),
+        eq(schema.businessDays.businessDate, date),
+        sql`${schema.events.metadata} ->> 'lateEntryPrimary' = 'true'`,
+      ),
+    );
   return { ...snapshot, lateEntryCount: Number(lateEntries?.count ?? 0) };
 }
 
@@ -85,7 +98,13 @@ dssrRouter.post('/daily/generate', async (c) => {
   const db = c.var.db;
   const user = c.var.user;
   if (!canExportReports(user.role)) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Insufficient permissions to generate DSSR' } }, 403);
+    return c.json(
+      {
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'Insufficient permissions to generate DSSR' },
+      },
+      403,
+    );
   }
   const body = await c.req.json().catch(() => ({}));
   let businessDayId: string | undefined = body?.businessDayId;
@@ -95,13 +114,30 @@ dssrRouter.post('/daily/generate', async (c) => {
 
   if (!businessDayId) {
     if (!stationId || !businessDate) {
-      return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Provide businessDayId, or stationId + businessDate' } }, 400);
+      return c.json(
+        {
+          success: false,
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: 'Provide businessDayId, or stationId + businessDate',
+          },
+        },
+        400,
+      );
     }
     if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId })) {
-      return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+      return c.json(
+        { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
+        403,
+      );
     }
     const [bd] = await db
-      .select({ id: schema.businessDays.id, stationId: schema.businessDays.stationId, businessDate: schema.businessDays.businessDate, status: schema.businessDays.status })
+      .select({
+        id: schema.businessDays.id,
+        stationId: schema.businessDays.stationId,
+        businessDate: schema.businessDays.businessDate,
+        status: schema.businessDays.status,
+      })
       .from(schema.businessDays)
       .where(
         and(
@@ -112,22 +148,44 @@ dssrRouter.post('/daily/generate', async (c) => {
       )
       .limit(1);
     if (!bd) {
-      return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'No business day found for that station and date' } }, 404);
+      return c.json(
+        {
+          success: false,
+          error: { code: 'NOT_FOUND', message: 'No business day found for that station and date' },
+        },
+        404,
+      );
     }
     businessDayId = bd.id;
     businessDay = bd;
   } else {
     const [bd] = await db
-      .select({ id: schema.businessDays.id, stationId: schema.businessDays.stationId, businessDate: schema.businessDays.businessDate, status: schema.businessDays.status })
+      .select({
+        id: schema.businessDays.id,
+        stationId: schema.businessDays.stationId,
+        businessDate: schema.businessDays.businessDate,
+        status: schema.businessDays.status,
+      })
       .from(schema.businessDays)
-      .where(and(eq(schema.businessDays.id, businessDayId), eq(schema.businessDays.organizationId, user.organizationId)))
+      .where(
+        and(
+          eq(schema.businessDays.id, businessDayId),
+          eq(schema.businessDays.organizationId, user.organizationId),
+        ),
+      )
       .limit(1);
     if (!bd) {
-      return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'Business day not found' } }, 404);
+      return c.json(
+        { success: false, error: { code: 'NOT_FOUND', message: 'Business day not found' } },
+        404,
+      );
     }
     stationId = bd.stationId;
     if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId })) {
-      return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+      return c.json(
+        { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
+        403,
+      );
     }
     businessDay = bd;
   }
@@ -142,7 +200,10 @@ dssrRouter.post('/daily/generate', async (c) => {
       snapshots: new DrizzleDssrSnapshotRepository(tx),
       reader: new DrizzleDssrDataReader(tx),
       events,
-    }).execute({ businessDayId: businessDayId!, force: Boolean(body?.force) }, buildContext(user, { stationId, businessDayId })),
+    }).execute(
+      { businessDayId: businessDayId, force: Boolean(body?.force) },
+      buildContext(user, { stationId, businessDayId }),
+    ),
   );
   return sendResult(c, result);
 });
@@ -154,12 +215,21 @@ dssrRouter.get('/daily', async (c) => {
   const stationId = c.req.query('stationId');
   const date = c.req.query('date');
   if (!stationId || !date) {
-    return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Missing stationId or date' } }, 400);
+    return c.json(
+      { success: false, error: { code: 'VALIDATION_ERROR', message: 'Missing stationId or date' } },
+      400,
+    );
   }
   if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId })) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+    return c.json(
+      { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
+      403,
+    );
   }
-  return c.json({ success: true, data: await loadPersistedDssr(db, user.organizationId, stationId, date) });
+  return c.json({
+    success: true,
+    data: await loadPersistedDssr(db, user.organizationId, stationId, date),
+  });
 });
 
 // GET /api/dssr/daily/preview?stationId=&date= returns live data for an OPEN
@@ -170,13 +240,24 @@ dssrRouter.get('/daily/preview', async (c) => {
   const stationId = c.req.query('stationId');
   const date = c.req.query('date');
   if (!stationId || !date) {
-    return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Missing stationId or date' } }, 400);
+    return c.json(
+      { success: false, error: { code: 'VALIDATION_ERROR', message: 'Missing stationId or date' } },
+      400,
+    );
   }
   if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId })) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+    return c.json(
+      { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
+      403,
+    );
   }
   const [bd] = await db
-    .select({ id: schema.businessDays.id, stationId: schema.businessDays.stationId, businessDate: schema.businessDays.businessDate, status: schema.businessDays.status })
+    .select({
+      id: schema.businessDays.id,
+      stationId: schema.businessDays.stationId,
+      businessDate: schema.businessDays.businessDate,
+      status: schema.businessDays.status,
+    })
     .from(schema.businessDays)
     .where(
       and(
@@ -191,7 +272,16 @@ dssrRouter.get('/daily/preview', async (c) => {
   if (bd.status === 'CLOSED') {
     const snapshot = await loadPersistedDssr(db, user.organizationId, stationId, date);
     if (!snapshot) {
-      return c.json({ success: false, error: { code: 'CONFLICT', message: 'Closed business day has no persisted DSSR snapshot' } }, 409);
+      return c.json(
+        {
+          success: false,
+          error: {
+            code: 'CONFLICT',
+            message: 'Closed business day has no persisted DSSR snapshot',
+          },
+        },
+        409,
+      );
     }
     return c.json({ success: true, data: snapshot });
   }
@@ -206,10 +296,19 @@ dssrRouter.get('/daily/range', async (c) => {
   const from = c.req.query('from');
   const to = c.req.query('to');
   if (!stationId || !from || !to) {
-    return c.json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Missing stationId, from, or to' } }, 400);
+    return c.json(
+      {
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: 'Missing stationId, from, or to' },
+      },
+      400,
+    );
   }
   if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId })) {
-    return c.json({ success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } }, 403);
+    return c.json(
+      { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
+      403,
+    );
   }
   const list = await db
     .select()

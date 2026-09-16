@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Eye } from 'lucide-react';
 import { Panel, Button, StatusChip, DateText } from '../../pump-ds/index.js';
@@ -7,6 +7,7 @@ import { inr } from '../../utils/format.js';
 import { formatStationDateTime } from '@pump/shared';
 import { useShiftSummaries } from '../../query/hooks.js';
 import { ShiftSummaryView } from './ShiftSummaryView.js';
+import { useRunTask } from '../../utils/runTask.js';
 
 interface ShiftHistoryTabProps {
   selectedStation: any | null;
@@ -29,18 +30,29 @@ export const ShiftHistoryTab: React.FC<ShiftHistoryTabProps> = ({
   const stationId = selectedStation?.id ?? null;
   const timeZone = (selectedStation?.settings as { timezone?: string } | undefined)?.timezone;
   const summariesQ = useShiftSummaries(stationId);
-  const summaries = summariesQ.data ?? [];
-  const [activeSummary, setActiveSummary] = useState<any | null>(null);
+  const runTask = useRunTask();
+  const summaries = useMemo(() => summariesQ.data ?? [], [summariesQ.data]);
+  const [pickedSummary, setPickedSummary] = useState<any | null>(null);
 
-  useEffect(() => {
-    if (viewShiftId && summaries.length > 0) {
-      const match = summaries.find((d: any) => d.shiftId === viewShiftId);
-      if (match) setActiveSummary(match);
-    }
-  }, [viewShiftId, summaries]);
+  // A shift requested by id (deep link from the shifts workspace) is derived
+  // rather than copied into state by an effect. The old version waited for
+  // `summaries` to arrive and re-ran when it did; deriving simply resolves once
+  // the list lands, and a row the operator picks takes precedence.
+  const activeSummary =
+    pickedSummary ??
+    (viewShiftId ? (summaries.find((d: any) => d.shiftId === viewShiftId) ?? null) : null);
+
+  // Stable so the column definitions below keep memoising.
+  const setActiveSummary = useCallback(
+    (row: any) => {
+      onClearViewShiftId?.();
+      setPickedSummary(row);
+    },
+    [onClearViewShiftId],
+  );
 
   const handleBack = () => {
-    setActiveSummary(null);
+    setPickedSummary(null);
     onClearViewShiftId?.();
   };
 
@@ -82,21 +94,27 @@ export const ShiftHistoryTab: React.FC<ShiftHistoryTabProps> = ({
         id: 'closedBy',
         header: 'Reconciled By',
         cell: ({ row }) => (
-          <span style={{ color: 'var(--text-default)' }}>{row.original.snapshotData?.closedByName || 'Unknown'}</span>
+          <span style={{ color: 'var(--text-default)' }}>
+            {row.original.snapshotData?.closedByName || 'Unknown'}
+          </span>
         ),
       },
       {
         id: 'expected',
         header: 'Expected',
         cell: ({ row }) => (
-          <span style={{ fontFamily: 'var(--font-mono)' }}>{inr(row.original.snapshotData?.expectedCash || 0)}</span>
+          <span style={{ fontFamily: 'var(--font-mono)' }}>
+            {inr(row.original.snapshotData?.expectedCash || 0)}
+          </span>
         ),
       },
       {
         id: 'actual',
         header: 'Actual',
         cell: ({ row }) => (
-          <span style={{ fontFamily: 'var(--font-mono)' }}>{inr(row.original.snapshotData?.closingCash || 0)}</span>
+          <span style={{ fontFamily: 'var(--font-mono)' }}>
+            {inr(row.original.snapshotData?.closingCash || 0)}
+          </span>
         ),
       },
       {
@@ -104,7 +122,12 @@ export const ShiftHistoryTab: React.FC<ShiftHistoryTabProps> = ({
         header: 'Variance',
         cell: ({ row }) => {
           const v = Number(row.original.snapshotData?.cashVariance || 0);
-          const color = v < 0 ? 'var(--brand-danger)' : v > 0 ? 'var(--brand-warning)' : 'var(--state-success-fg)';
+          const color =
+            v < 0
+              ? 'var(--brand-danger)'
+              : v > 0
+                ? 'var(--brand-warning)'
+                : 'var(--state-success-fg)';
           return (
             <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, color }}>
               {v > 0 ? '+' : ''}
@@ -117,13 +140,18 @@ export const ShiftHistoryTab: React.FC<ShiftHistoryTabProps> = ({
         id: 'actions',
         header: '',
         cell: ({ row }) => (
-          <Button variant="secondary" size="xs" leftIcon={<Eye size={12} />} onClick={() => setActiveSummary(row.original)}>
+          <Button
+            variant="secondary"
+            size="xs"
+            leftIcon={<Eye size={12} />}
+            onClick={() => setActiveSummary(row.original)}
+          >
             View
           </Button>
         ),
       },
     ],
-    [timeZone],
+    [timeZone, setActiveSummary],
   );
 
   if (!selectedStation) {
@@ -147,7 +175,10 @@ export const ShiftHistoryTab: React.FC<ShiftHistoryTabProps> = ({
           shiftStatus={activeSummary.shiftStatus}
           station={selectedStation}
           onReopenSuccess={() => {
-            summariesQ.refetch();
+            runTask(
+              summariesQ.refetch(),
+              'Shift reopened, but the history could not be refreshed.',
+            );
             handleBack();
           }}
           onBack={handleBack}
@@ -157,13 +188,16 @@ export const ShiftHistoryTab: React.FC<ShiftHistoryTabProps> = ({
   }
 
   return (
-    <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+    <div
+      className="animate-fade-in"
+      style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}
+    >
       <Panel flush title="Closed & locked shifts">
         <DataTable
           columns={columns}
           data={summaries}
           isLoading={summariesQ.isLoading}
-          error={summariesQ.error as Error | null}
+          error={summariesQ.error}
           bare
           getRowId={(d: any) => d.id}
           emptyMessage="No closed shifts yet. Close an active shift to generate your first summary."

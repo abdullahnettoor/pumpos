@@ -80,7 +80,11 @@ export const Banner: React.FC<BannerProps> = ({
       }}
     >
       <span style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
-        {showIcon && <span style={{ flexShrink: 0, display: 'inline-flex' }}>{icon ?? DEFAULT_ICON[severity]}</span>}
+        {showIcon && (
+          <span style={{ flexShrink: 0, display: 'inline-flex' }}>
+            {icon ?? DEFAULT_ICON[severity]}
+          </span>
+        )}
         <span>
           {title && <strong style={{ marginRight: '6px' }}>{title}</strong>}
           {children}
@@ -88,14 +92,26 @@ export const Banner: React.FC<BannerProps> = ({
       </span>
       <span style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
         {actionLabel && onAction && (
-          <Button variant="secondary" size="sm" onClick={onAction}>{actionLabel}</Button>
+          <Button variant="secondary" size="sm" onClick={onAction}>
+            {actionLabel}
+          </Button>
         )}
         {dismissible && (
           <button
             type="button"
             aria-label="Dismiss"
-            onClick={() => { setDismissed(true); onDismiss?.(); }}
-            style={{ display: 'inline-flex', background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', padding: '2px' }}
+            onClick={() => {
+              setDismissed(true);
+              onDismiss?.();
+            }}
+            style={{
+              display: 'inline-flex',
+              background: 'transparent',
+              border: 'none',
+              color: 'inherit',
+              cursor: 'pointer',
+              padding: '2px',
+            }}
           >
             <X size={15} />
           </button>

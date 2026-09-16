@@ -5,15 +5,14 @@ This document defines the core business entities, relationships, ownership rules
 The domain model serves as the foundation for:
 
 - Database design
-    
+
 - API design
-    
+
 - User interface design
-    
+
 - Event architecture
-    
+
 - Reporting architecture
-    
 
 This document is technology-agnostic and focuses solely on business concepts.
 
@@ -57,13 +56,12 @@ XYZ Petroleum
 ### Responsibilities
 
 - Owns stations
-    
+
 - Owns users
-    
+
 - Owns business data
-    
+
 - Owns subscriptions
-    
 
 ### Relationships
 
@@ -86,13 +84,12 @@ Represents a physical fuel station.
 ### Responsibilities
 
 - Operates shifts
-    
+
 - Manages stock
-    
+
 - Records sales
-    
+
 - Tracks expenses
-    
 
 ### Relationships
 
@@ -126,11 +123,10 @@ Staff
 ### Responsibilities
 
 - Perform operational actions
-    
+
 - Approve actions
-    
+
 - Access reports
-    
 
 ### Future Support
 
@@ -182,26 +178,24 @@ CLOSED
 ### Responsibilities
 
 - Capture operational activity
-    
+
 - Record readings
-    
+
 - Record expenses
-    
+
 - Record collections
-    
+
 - Generate DSSR
-    
 
 ---
 
 ### Rules
 
 - Only one active shift per station
-    
+
 - Closed shifts are immutable
-    
+
 - Corrections require adjustments
-    
 
 ---
 
@@ -221,13 +215,12 @@ Diesel Tank
 ### Responsibilities
 
 - Store fuel inventory
-    
+
 - Support stock calculations
-    
+
 - Support variance calculations
-    
+
 - Support decantation tracking
-    
 
 ---
 
@@ -254,11 +247,10 @@ DU-02
 ### Responsibilities
 
 - Deliver fuel
-    
+
 - Group nozzles
-    
+
 - Support staff assignments
-    
 
 ---
 
@@ -295,9 +287,8 @@ Diesel Nozzle 1
 ### Responsibilities
 
 - Record readings
-    
+
 - Calculate fuel sales
-    
 
 ---
 
@@ -394,28 +385,26 @@ Represents a completed commercial transaction.
 Sales may originate from:
 
 - Fuel Sales
-    
+
 - Lubricant Sales
-    
+
 - Accessory Sales
-    
+
 - Mixed Sales
-    
 
 A Sale represents the financial transaction itself, while fuel quantities continue to be derived from nozzle readings.
 
 ### Responsibilities
 
 - Record monetary value of sales
-    
+
 - Support customer invoicing
-    
+
 - Support GST reporting
-    
+
 - Support product-wise reporting
-    
+
 - Support fleet customer billing
-    
 
 ### Sale Types
 
@@ -455,13 +444,12 @@ Accessory
 ### Responsibilities
 
 - Product-wise reporting
-    
+
 - GST calculations
-    
+
 - Inventory reduction
-    
+
 - Invoice generation
-    
 
 ### Relationships
 
@@ -480,16 +468,17 @@ Fuel sales continue to be derived from nozzle readings.
 The Sale entity exists primarily for:
 
 - Non-fuel products
-    
+
 - Mixed transactions
-    
+
 - Customer billing
-    
+
 - Future invoice generation
-    
+
 - Future GST reporting
 
 ---
+
 # Customer Context
 
 ## Customer
@@ -521,11 +510,10 @@ Credit
 ### Responsibilities
 
 - Credit tracking
-    
+
 - Collection tracking
-    
+
 - Statement generation
-    
 
 ---
 
@@ -548,11 +536,10 @@ Maintenance Vendor
 ### Responsibilities
 
 - Purchase tracking
-    
+
 - Outstanding balances
-    
+
 - Payment tracking
-    
 
 ---
 
@@ -660,11 +647,10 @@ Variance is a first-class business concept.
 It directly supports:
 
 - Shortage tracking
-    
+
 - Evaporation tracking
-    
+
 - Audit processes
-    
 
 ---
 
@@ -741,21 +727,21 @@ Attendance Devices
 # Domain Principles
 
 1. Shift is the primary operational unit.
-    
+
 2. Fuel sales are derived from nozzle readings.
-    
+
 3. Tanks, DUs, and Nozzles are independent entities.
-    
+
 4. Closed shifts are immutable.
-    
+
 5. DSSR snapshots are permanent records.
-    
+
 6. Variance is a first-class business concept.
-    
+
 7. Customers and suppliers are separate domains.
-    
+
 8. Product behavior is controlled through product types and flags.
-    
+
 9. Staff may belong to multiple stations.
-    
+
 10. Future accounting and integration features must extend the domain without requiring redesign.

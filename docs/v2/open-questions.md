@@ -9,6 +9,7 @@ In Indian fuel retail, prepaid and fleet wallets are frequently owned by the **O
 dealer**. A dealer-side "top-up" may be meaningless or conflict with the OMC system.
 
 Decisions required:
+
 - **Ownership:** dealer-managed prepaid (our ledger authoritative) vs OMC-CMS-managed
   (we mirror / only record a charge against an external balance)?
 - **Integration mode:** manual entry, file/CSV reconciliation, or live OMC API? (Most
@@ -34,6 +35,7 @@ PostgreSQL is authoritative; the local store is a durable **write outbox + warm 
 cache** (desktop = Tauri SQLite, web = IndexedDB), never the source of truth (mobile
 stays online-only). The event backbone + idempotency keys are designed so this slots
 in later with **no domain change**:
+
 - Optimistic write → durable local outbox → retry/backoff → cloud confirmation.
 - Core actions (incl. shift / business-day **close**) **queue and reconcile** — never
   blocked on the network.

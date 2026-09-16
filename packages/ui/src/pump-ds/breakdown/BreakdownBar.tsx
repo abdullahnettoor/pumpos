@@ -36,15 +36,28 @@ const SEG_BG: Record<DotTone, string> = {
 };
 
 export const BreakdownBar = forwardRef<HTMLDivElement, BreakdownBarProps>(function BreakdownBar(
-  { className, segments, total, formatValue = (n) => String(n), showLegend = true, size = 'md', ...rest },
-  ref
+  {
+    className,
+    segments,
+    total,
+    formatValue = (n) => String(n),
+    showLegend = true,
+    size = 'md',
+    ...rest
+  },
+  ref,
 ) {
   const sum = total ?? segments.reduce((s, x) => s + Math.max(0, x.value), 0);
   const safeTotal = sum > 0 ? sum : 1;
 
   return (
     <div ref={ref} className={cn('min-w-0', className)} {...rest}>
-      <div className={cn('flex w-full gap-0.5 overflow-hidden rounded-full bg-surface-alt', size === 'sm' ? 'h-1.5' : 'h-2.5')}>
+      <div
+        className={cn(
+          'flex w-full gap-0.5 overflow-hidden rounded-full bg-surface-alt',
+          size === 'sm' ? 'h-1.5' : 'h-2.5',
+        )}
+      >
         {segments.map((seg, i) =>
           seg.value > 0 ? (
             <div
@@ -61,10 +74,15 @@ export const BreakdownBar = forwardRef<HTMLDivElement, BreakdownBarProps>(functi
           {segments.map((seg, i) => {
             const pct = Math.round((Math.max(0, seg.value) / safeTotal) * 100);
             return (
-              <span key={`${seg.label}-${i}`} className="inline-flex items-center gap-1.5 text-[11.5px]">
+              <span
+                key={`${seg.label}-${i}`}
+                className="inline-flex items-center gap-1.5 text-[11.5px]"
+              >
                 <Dot tone={seg.tone} size="sm" />
                 <span className="text-ink-muted">{seg.label}</span>
-                <span className="font-mono font-medium text-ink-strong">{formatValue(seg.value)}</span>
+                <span className="font-mono font-medium text-ink-strong">
+                  {formatValue(seg.value)}
+                </span>
                 <span className="font-mono text-ink-faint">{pct}%</span>
               </span>
             );

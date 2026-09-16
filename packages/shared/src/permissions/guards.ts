@@ -14,10 +14,7 @@ export interface ResourceContext {
  * Checks if the user belongs to the same organization and is assigned to the station.
  * Owners bypass station-level scoping.
  */
-export function isAuthorizedForStation(
-  user: UserContext,
-  resource: ResourceContext
-): boolean {
+export function isAuthorizedForStation(user: UserContext, resource: ResourceContext): boolean {
   if (user.role === 'Owner') {
     return true;
   }

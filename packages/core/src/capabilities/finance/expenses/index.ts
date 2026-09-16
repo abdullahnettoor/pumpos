@@ -1,5 +1,13 @@
 import { z } from 'zod';
-import { BusinessEvents, err, eventFromContext, invariantViolation, notFoundError, ok, validationError } from '../../../kernel/index.js';
+import {
+  BusinessEvents,
+  err,
+  eventFromContext,
+  invariantViolation,
+  notFoundError,
+  ok,
+  validationError,
+} from '../../../kernel/index.js';
 import type { EventPublisher, ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
 import { resolveFinancialAnchor, type ShiftRepository } from '../../station-ops/shifts/index.js';
 import type { BusinessDayWriteRepository } from '../../station-ops/business-days/index.js';
@@ -55,7 +63,10 @@ const schema = z.object({
   description: z.string().max(255).optional(),
   paidFrom: z.enum(['SHIFT_CASH', 'BANK', 'OWNER']).optional(),
   affectsDrawer: z.boolean().optional(),
-  transactionDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'transactionDate must be YYYY-MM-DD').optional(),
+  transactionDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'transactionDate must be YYYY-MM-DD')
+    .optional(),
 });
 
 export interface RecordExpenseDeps {
@@ -76,21 +87,21 @@ export class RecordExpense implements UseCase<RecordExpenseCommand, Expense> {
 
   async execute(input: RecordExpenseCommand, ctx: ExecutionContext): Promise<Result<Expense>> {
     const p = schema.safeParse(input);
-    if (!p.success) return err(validationError('Invalid RecordExpense command', { issues: p.error.flatten() }));
+    if (!p.success)
+      return err(validationError('Invalid RecordExpense command', { issues: p.error.flatten() }));
     const cmd = p.data;
 
     const paidFrom: PaidFrom = cmd.paidFrom ?? 'SHIFT_CASH';
     const affectsDrawer = cmd.affectsDrawer ?? paidFrom === 'SHIFT_CASH';
 
-    let businessDayId: string;
-    let shiftId: string | null;
-    let stationId: string;
-    let lateEntry: boolean;
-
-    if (!cmd.shiftId && !cmd.stationId) return err(validationError('Either shiftId or stationId is required'));
-    const anchor = await resolveFinancialAnchor(this.deps, ctx, cmd, { affectsDrawer, drawerLabel: 'Drawer expenses' });
+    if (!cmd.shiftId && !cmd.stationId)
+      return err(validationError('Either shiftId or stationId is required'));
+    const anchor = await resolveFinancialAnchor(this.deps, ctx, cmd, {
+      affectsDrawer,
+      drawerLabel: 'Drawer expenses',
+    });
     if (!anchor.success) return anchor;
-    ({ businessDayId, shiftId, stationId, lateEntry } = anchor.data);
+    const { businessDayId, shiftId, stationId } = anchor.data;
 
     const now = ctx.clock.now().toISOString();
     const expense: Expense = {
@@ -117,7 +128,13 @@ export class RecordExpense implements UseCase<RecordExpenseCommand, Expense> {
         stationId,
         businessDayId,
         metadata: anchor.data.eventMetadata,
-        payload: { expenseId: expense.id, amount: expense.amount, paidFrom, affectsDrawer, shiftId },
+        payload: {
+          expenseId: expense.id,
+          amount: expense.amount,
+          paidFrom,
+          affectsDrawer,
+          shiftId,
+        },
         presentation: {
           templateId: 'expense.v1',
           values: { amount: Number(expense.amount), accountName: accountLabel(paidFrom) },
@@ -134,7 +151,10 @@ export interface VoidExpenseCommand {
   reason?: string;
 }
 
-const voidSchema = z.object({ id: z.string().min(1, 'id is required'), reason: z.string().max(255).optional() });
+const voidSchema = z.object({
+  id: z.string().min(1, 'id is required'),
+  reason: z.string().max(255).optional(),
+});
 
 export interface VoidExpenseDeps {
   expenses: ExpenseRepository;
@@ -149,14 +169,16 @@ export class VoidExpense implements UseCase<VoidExpenseCommand, Expense> {
 
   async execute(input: VoidExpenseCommand, ctx: ExecutionContext): Promise<Result<Expense>> {
     const p = voidSchema.safeParse(input);
-    if (!p.success) return err(validationError('Invalid VoidExpense command', { issues: p.error.flatten() }));
+    if (!p.success)
+      return err(validationError('Invalid VoidExpense command', { issues: p.error.flatten() }));
 
     const existing = await this.deps.expenses.findById(p.data.id);
     if (!existing) return err(notFoundError('Expense', p.data.id));
-    if (existing.status === 'VOIDED') return err(invariantViolation('Expense already voided', { id: existing.id }));
+    if (existing.status === 'VOIDED')
+      return err(invariantViolation('Expense already voided', { id: existing.id }));
 
     const guard = await assertDrawerEntryVoidable(existing, this.deps.shifts, 'This expense');
-    if (!guard.success) return guard as unknown as Result<Expense>;
+    if (!guard.success) return guard;
 
     const now = ctx.clock.now().toISOString();
     const voided: Expense = { ...existing, status: 'VOIDED', updatedAt: now };
@@ -168,7 +190,12 @@ export class VoidExpense implements UseCase<VoidExpenseCommand, Expense> {
         aggregateType: 'Expense',
         aggregateId: voided.id,
         businessDayId: voided.businessDayId,
-        payload: { expenseId: voided.id, amount: voided.amount, paidFrom: voided.paidFrom, reason: p.data.reason ?? null },
+        payload: {
+          expenseId: voided.id,
+          amount: voided.amount,
+          paidFrom: voided.paidFrom,
+          reason: p.data.reason ?? null,
+        },
       }),
     ]);
 

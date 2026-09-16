@@ -7,15 +7,14 @@ Events represent meaningful business actions that occur within the system.
 This specification serves as the foundation for:
 
 - Offline synchronization
-    
+
 - Audit trails
-    
+
 - Reporting
-    
+
 - Notifications
-    
+
 - Future accounting capabilities
-    
 
 This document is independent of database implementation details.
 
@@ -64,13 +63,12 @@ PURCHASE_RECORDED
 Business events:
 
 - Affect reports
-    
+
 - Affect calculations
-    
+
 - Affect DSSR
-    
+
 - Participate in synchronization
-    
 
 ---
 
@@ -89,11 +87,10 @@ PRODUCT_UPDATED
 Audit events:
 
 - Preserve accountability
-    
+
 - Do not affect calculations directly
-    
+
 - Do not participate in reporting
-    
 
 ---
 
@@ -158,7 +155,6 @@ closed_at
 
 ---
 
-
 ## SHIFT_REOPENED
 
 Triggered when an authorized user reopens a recently closed shift.
@@ -191,6 +187,7 @@ reopened_by
 ```
 
 ---
+
 ## SHIFT_LOCKED
 
 Triggered when grace period expires.
@@ -371,6 +368,7 @@ reason
 ```
 
 ---
+
 # Expense Event Group
 
 ## EXPENSE_RECORDED
@@ -608,6 +606,7 @@ Future versions may introduce:
 DSSR_APPROVED
 DSSR_REJECTED
 ```
+
 # Financial Record Lifecycle
 
 ## Stage 1: Editable
@@ -653,6 +652,7 @@ Historical records remain preserved.
 No direct modification of locked records is permitted.
 
 ---
+
 # Synchronization Rules
 
 Every business event:
@@ -698,11 +698,10 @@ user_id
 This guarantees:
 
 - Multi-tenancy
-    
+
 - Traceability
-    
+
 - Auditing
-    
 
 ---
 
@@ -761,21 +760,21 @@ without changing the core event architecture.
 # Event Model Principles
 
 1. Every operational transaction belongs to a shift.
-    
+
 2. Business events represent facts.
-    
+
 3. Audit events represent modifications.
-    
+
 4. Closed shifts are immutable.
-    
+
 5. Post-lock corrections use adjustment events.
-    
+
 6. DSSR is generated from shift events.
-    
+
 7. Events are the foundation of synchronization.
-    
+
 8. Events are idempotent.
-    
+
 9. Every event is attributable to a user.
-    
+
 10. Future modules must extend the event model rather than bypass it.

@@ -27,7 +27,10 @@ export const Step8PaymentTerminals: React.FC<Step8PaymentTerminalsProps> = ({
   const addTerminal = () => {
     const next = createPaymentTerminalDraft();
     next.label = `Terminal ${terminals.length + 1}`;
-    updateDraft((prev) => ({ ...prev, paymentTerminals: [...(prev.paymentTerminals ?? []), next] }));
+    updateDraft((prev) => ({
+      ...prev,
+      paymentTerminals: [...(prev.paymentTerminals ?? []), next],
+    }));
   };
 
   // Bulk-create several machines from the same provider in one go — labelled
@@ -46,7 +49,9 @@ export const Step8PaymentTerminals: React.FC<Step8PaymentTerminalsProps> = ({
         const n = sameProviderCount + i + 1;
         const draftTerminal = createPaymentTerminalDraft();
         draftTerminal.provider = provider;
-        draftTerminal.label = provider ? `${provider} POS ${n}` : `Terminal ${existing.length + i + 1}`;
+        draftTerminal.label = provider
+          ? `${provider} POS ${n}`
+          : `Terminal ${existing.length + i + 1}`;
         additions.push(draftTerminal);
       }
       return { ...prev, paymentTerminals: [...existing, ...additions] };
@@ -56,7 +61,9 @@ export const Step8PaymentTerminals: React.FC<Step8PaymentTerminalsProps> = ({
   const updateTerminal = (draftId: string, patch: Partial<OnboardingPaymentTerminalDraft>) => {
     updateDraft((prev) => ({
       ...prev,
-      paymentTerminals: (prev.paymentTerminals ?? []).map((t) => (t.draftId === draftId ? { ...t, ...patch } : t)),
+      paymentTerminals: (prev.paymentTerminals ?? []).map((t) =>
+        t.draftId === draftId ? { ...t, ...patch } : t,
+      ),
     }));
   };
 
@@ -69,12 +76,22 @@ export const Step8PaymentTerminals: React.FC<Step8PaymentTerminalsProps> = ({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-      <div style={{ ...panelStyle, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div
+        style={{
+          ...panelStyle,
+          flexDirection: 'row',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+        }}
+      >
         <div>
-          <h2 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-strong)' }}>Payment Terminals</h2>
+          <h2 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-strong)' }}>
+            Payment Terminals
+          </h2>
           <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px' }}>
-            Add the card/UPI machines (POS devices) at this station. These are linked to dispensers when a shift
-            is opened. Optional — you can run cash-only and add terminals later from Station Setup.
+            Add the card/UPI machines (POS devices) at this station. These are linked to dispensers
+            when a shift is opened. Optional — you can run cash-only and add terminals later from
+            Station Setup.
           </p>
         </div>
         <Button type="button" variant="primary" size="sm" onClick={addTerminal}>
@@ -84,11 +101,27 @@ export const Step8PaymentTerminals: React.FC<Step8PaymentTerminalsProps> = ({
 
       {/* Quick fill: create N identical machines from one provider at once. */}
       <div style={{ ...panelStyle, gap: '12px' }}>
-        <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+        <span
+          style={{
+            fontSize: '12px',
+            fontWeight: 600,
+            color: 'var(--text-muted)',
+            textTransform: 'uppercase',
+            letterSpacing: '0.05em',
+          }}
+        >
           Quick add
         </span>
         <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: '220px', flex: 1 }}>
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '4px',
+              minWidth: '220px',
+              flex: 1,
+            }}
+          >
             <label style={fieldLabelStyle}>Provider / Acquirer</label>
             <ProviderField value={quickProvider} onChange={setQuickProvider} style={inputStyle} />
           </div>
@@ -111,24 +144,44 @@ export const Step8PaymentTerminals: React.FC<Step8PaymentTerminalsProps> = ({
             disabled={!quickProvider.trim() || quickCount < 1}
             style={{ height: '32px' }}
           >
-            Add {Math.max(1, Math.min(50, Math.floor(quickCount) || 1))} machine{Math.max(1, Math.min(50, Math.floor(quickCount) || 1)) > 1 ? 's' : ''}
+            Add {Math.max(1, Math.min(50, Math.floor(quickCount) || 1))} machine
+            {Math.max(1, Math.min(50, Math.floor(quickCount) || 1)) > 1 ? 's' : ''}
           </Button>
         </div>
         <span style={{ fontSize: '11px', color: 'var(--text-faint)' }}>
-          Creates machines labelled "{quickProvider.trim() || 'Provider'} POS 1", "…POS 2" — you can rename or set each TID below.
+          Creates machines labelled "{quickProvider.trim() || 'Provider'} POS 1", "…POS 2" — you can
+          rename or set each TID below.
         </span>
       </div>
 
       {terminals.length === 0 ? (
-        <div style={{ ...panelStyle, padding: '40px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>
+        <div
+          style={{
+            ...panelStyle,
+            padding: '40px',
+            textAlign: 'center',
+            color: 'var(--text-muted)',
+            fontSize: '13px',
+          }}
+        >
           No payment terminals configured. You can still finish onboarding and add them later.
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {terminals.map((terminal, idx) => (
             <div key={terminal.draftId} style={{ ...panelStyle, gap: '12px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              <div
+                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+              >
+                <span
+                  style={{
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    color: 'var(--text-muted)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                  }}
+                >
                   Terminal {idx + 1}
                 </span>
                 <Button
@@ -165,7 +218,9 @@ export const Step8PaymentTerminals: React.FC<Step8PaymentTerminalsProps> = ({
                   <input
                     style={inputStyle}
                     value={terminal.terminalCode}
-                    onChange={(e) => updateTerminal(terminal.draftId, { terminalCode: e.target.value })}
+                    onChange={(e) =>
+                      updateTerminal(terminal.draftId, { terminalCode: e.target.value })
+                    }
                     placeholder="Device TID"
                   />
                 </div>
@@ -175,12 +230,16 @@ export const Step8PaymentTerminals: React.FC<Step8PaymentTerminalsProps> = ({
                 <Checkbox
                   label="Accepts Card"
                   checked={terminal.supportsCard}
-                  onChange={(e) => updateTerminal(terminal.draftId, { supportsCard: e.target.checked })}
+                  onChange={(e) =>
+                    updateTerminal(terminal.draftId, { supportsCard: e.target.checked })
+                  }
                 />
                 <Checkbox
                   label="Accepts UPI"
                   checked={terminal.supportsUpi}
-                  onChange={(e) => updateTerminal(terminal.draftId, { supportsUpi: e.target.checked })}
+                  onChange={(e) =>
+                    updateTerminal(terminal.draftId, { supportsUpi: e.target.checked })
+                  }
                 />
               </div>
             </div>

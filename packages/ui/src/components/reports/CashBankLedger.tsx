@@ -40,12 +40,16 @@ const SOURCE_LABEL: Record<string, string> = {
  * subset. Per-account statements + true opening balances live on the Accounts page.
  */
 export const CashBankLedger: React.FC<CashBankLedgerProps> = ({ selectedStation }) => {
-  const s = (selectedStation as any)?.settings || {};
+  const s = selectedStation?.settings || {};
   const clock = { timeZone: s.timezone, dayStartsAt: s.business_day_starts_at };
   const [range, setRange] = useState<DateRange>(() => computeRange('this-month', clock));
   const [account, setAccount] = useState<'Cash' | 'Bank'>('Cash');
 
-  const { data, isLoading, error } = useFinanceMovements({ stationId: selectedStation?.id, from: range.from, to: range.to });
+  const { data, isLoading, error } = useFinanceMovements({
+    stationId: selectedStation?.id,
+    from: range.from,
+    to: range.to,
+  });
   const movements = data?.movements;
 
   // Opening balance carried from before the range: Σ(in − out) for the selected
@@ -80,7 +84,12 @@ export const CashBankLedger: React.FC<CashBankLedgerProps> = ({ selectedStation 
       if (m.direction === 'in') moneyIn += Number(m.amount || 0);
       else moneyOut += Number(m.amount || 0);
     }
-    return { moneyIn, moneyOut, net: moneyIn - moneyOut, closing: openingBalance + moneyIn - moneyOut };
+    return {
+      moneyIn,
+      moneyOut,
+      net: moneyIn - moneyOut,
+      closing: openingBalance + moneyIn - moneyOut,
+    };
   }, [rows, openingBalance]);
 
   // Running balance computed oldest→newest starting from the carried opening,
@@ -93,11 +102,13 @@ export const CashBankLedger: React.FC<CashBankLedgerProps> = ({ selectedStation 
       bal += m.direction === 'in' ? Number(m.amount || 0) : -Number(m.amount || 0);
       map.set(`${m.id}-${i}`, bal);
     });
-    let idx = asc.length;
-    return rows.map((m: any) => {
-      idx -= 1;
-      return { ...m, runningBalance: map.get(`${m.id}-${idx}`) ?? 0 };
-    });
+    // `rows` is the descending view of `asc`, so the matching ascending index
+    // is a function of position. Derived from the map callback's own index
+    // rather than a counter decremented as a side effect of rendering.
+    return rows.map((m: any, i: number) => ({
+      ...m,
+      runningBalance: map.get(`${m.id}-${asc.length - 1 - i}`) ?? 0,
+    }));
   }, [rows, openingBalance]);
 
   return (
@@ -109,9 +120,12 @@ export const CashBankLedger: React.FC<CashBankLedgerProps> = ({ selectedStation 
         actions={
           <div style={{ minWidth: 200 }}>
             <Segmented
-              options={[{ value: 'Cash', label: 'Cash' }, { value: 'Bank', label: 'Bank' }]}
+              options={[
+                { value: 'Cash', label: 'Cash' },
+                { value: 'Bank', label: 'Bank' },
+              ]}
               value={account}
-              onChange={(v) => setAccount(v as 'Cash' | 'Bank')}
+              onChange={(v) => setAccount(v)}
               aria-label="Account"
             />
           </div>
@@ -119,14 +133,26 @@ export const CashBankLedger: React.FC<CashBankLedgerProps> = ({ selectedStation 
       />
 
       <KpiStrip columns="auto">
-        <KpiTile dot={openingBalance < 0 ? 'danger' : 'brand'} valueTone={openingBalance < 0 ? 'danger' : undefined} label="Opening Balance" value={inr(openingBalance)} />
+        <KpiTile
+          dot={openingBalance < 0 ? 'danger' : 'brand'}
+          valueTone={openingBalance < 0 ? 'danger' : undefined}
+          label="Opening Balance"
+          value={inr(openingBalance)}
+        />
         <KpiTile dot="success" valueTone="success" label="Money In" value={inr(totals.moneyIn)} />
         <KpiTile dot="danger" valueTone="danger" label="Money Out" value={inr(totals.moneyOut)} />
-        <KpiTile dot={totals.closing < 0 ? 'danger' : 'brand'} valueTone={totals.closing < 0 ? 'danger' : undefined} label="Closing Balance" value={inr(totals.closing)} />
+        <KpiTile
+          dot={totals.closing < 0 ? 'danger' : 'brand'}
+          valueTone={totals.closing < 0 ? 'danger' : undefined}
+          label="Closing Balance"
+          value={inr(totals.closing)}
+        />
       </KpiStrip>
 
       <div style={{ fontSize: '11px', color: 'var(--text-faint)' }}>
-        Live {account.toLowerCase()} movements from the money ledger (shift sales, collections, expenses, transfers &amp; settlements). Opening balance carries the closing position from before the selected range; closing = opening + in − out.
+        Live {account.toLowerCase()} movements from the money ledger (shift sales, collections,
+        expenses, transfers &amp; settlements). Opening balance carries the closing position from
+        before the selected range; closing = opening + in − out.
       </div>
 
       <Panel flush title={`${account} ledger`}>
@@ -134,33 +160,136 @@ export const CashBankLedger: React.FC<CashBankLedgerProps> = ({ selectedStation 
           <thead>
             <tr style={{ backgroundColor: 'var(--bg-surface-alt)', textAlign: 'left' }}>
               {['Date', 'Description', 'Source', 'In', 'Out', 'Balance'].map((h, i) => (
-                <th key={h} style={{ padding: '8px 12px', fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', textAlign: i >= 3 ? 'right' : 'left' }}>{h}</th>
+                <th
+                  key={h}
+                  style={{
+                    padding: '8px 12px',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    color: 'var(--text-muted)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.04em',
+                    textAlign: i >= 3 ? 'right' : 'left',
+                  }}
+                >
+                  {h}
+                </th>
               ))}
             </tr>
           </thead>
           <tbody>
             {isLoading ? (
-              <tr><td colSpan={6} style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)' }}>Loading…</td></tr>
+              <tr>
+                <td
+                  colSpan={6}
+                  style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)' }}
+                >
+                  Loading…
+                </td>
+              </tr>
             ) : error ? (
-              <tr><td colSpan={6} style={{ padding: '24px', textAlign: 'center', color: 'var(--state-danger-fg)' }}>Failed to load movements.</td></tr>
+              <tr>
+                <td
+                  colSpan={6}
+                  style={{ padding: '24px', textAlign: 'center', color: 'var(--state-danger-fg)' }}
+                >
+                  Failed to load movements.
+                </td>
+              </tr>
             ) : withBalance.length === 0 ? (
-              <tr><td colSpan={6} style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)' }}>No {account.toLowerCase()} movements in this range.</td></tr>
+              <tr>
+                <td
+                  colSpan={6}
+                  style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)' }}
+                >
+                  No {account.toLowerCase()} movements in this range.
+                </td>
+              </tr>
             ) : (
               <>
                 {withBalance.map((m: any) => (
                   <tr key={m.id} style={{ borderTop: '1px solid var(--border-soft)' }}>
-                    <td style={{ padding: '8px 12px', whiteSpace: 'nowrap', color: 'var(--text-default)' }}><DateText value={m.date} tone="muted" /></td>
+                    <td
+                      style={{
+                        padding: '8px 12px',
+                        whiteSpace: 'nowrap',
+                        color: 'var(--text-default)',
+                      }}
+                    >
+                      <DateText value={m.date} tone="muted" />
+                    </td>
                     <td style={{ padding: '8px 12px', color: 'var(--text-strong)' }}>{m.label}</td>
-                    <td style={{ padding: '8px 12px', fontSize: '12px', color: 'var(--text-muted)' }}>{m.source}</td>
-                    <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--state-success-fg)' }}>{m.direction === 'in' ? inr(m.amount) : ''}</td>
-                    <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--state-danger-fg)' }}>{m.direction === 'out' ? inr(m.amount) : ''}</td>
-                    <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--text-strong)' }}>{inr(m.runningBalance)}</td>
+                    <td
+                      style={{ padding: '8px 12px', fontSize: '12px', color: 'var(--text-muted)' }}
+                    >
+                      {m.source}
+                    </td>
+                    <td
+                      style={{
+                        padding: '8px 12px',
+                        textAlign: 'right',
+                        fontFamily: 'var(--font-mono)',
+                        color: 'var(--state-success-fg)',
+                      }}
+                    >
+                      {m.direction === 'in' ? inr(m.amount) : ''}
+                    </td>
+                    <td
+                      style={{
+                        padding: '8px 12px',
+                        textAlign: 'right',
+                        fontFamily: 'var(--font-mono)',
+                        color: 'var(--state-danger-fg)',
+                      }}
+                    >
+                      {m.direction === 'out' ? inr(m.amount) : ''}
+                    </td>
+                    <td
+                      style={{
+                        padding: '8px 12px',
+                        textAlign: 'right',
+                        fontFamily: 'var(--font-mono)',
+                        fontWeight: 600,
+                        color: 'var(--text-strong)',
+                      }}
+                    >
+                      {inr(m.runningBalance)}
+                    </td>
                   </tr>
                 ))}
-                <tr style={{ borderTop: '1px solid var(--border-soft)', backgroundColor: 'var(--bg-surface-alt)' }}>
-                  <td style={{ padding: '8px 12px', whiteSpace: 'nowrap', color: 'var(--text-muted)', fontStyle: 'italic' }}>—</td>
-                  <td style={{ padding: '8px 12px', color: 'var(--text-muted)', fontStyle: 'italic' }} colSpan={4}>Opening balance (carried from before {range.from})</td>
-                  <td style={{ padding: '8px 12px', textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--text-muted)' }}>{inr(openingBalance)}</td>
+                <tr
+                  style={{
+                    borderTop: '1px solid var(--border-soft)',
+                    backgroundColor: 'var(--bg-surface-alt)',
+                  }}
+                >
+                  <td
+                    style={{
+                      padding: '8px 12px',
+                      whiteSpace: 'nowrap',
+                      color: 'var(--text-muted)',
+                      fontStyle: 'italic',
+                    }}
+                  >
+                    —
+                  </td>
+                  <td
+                    style={{ padding: '8px 12px', color: 'var(--text-muted)', fontStyle: 'italic' }}
+                    colSpan={4}
+                  >
+                    Opening balance (carried from before {range.from})
+                  </td>
+                  <td
+                    style={{
+                      padding: '8px 12px',
+                      textAlign: 'right',
+                      fontFamily: 'var(--font-mono)',
+                      fontWeight: 600,
+                      color: 'var(--text-muted)',
+                    }}
+                  >
+                    {inr(openingBalance)}
+                  </td>
                 </tr>
               </>
             )}

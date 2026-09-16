@@ -1,5 +1,11 @@
 import { z } from 'zod';
-import { BusinessEvents, err, eventFromContext, ok, validationError } from '../../../kernel/index.js';
+import {
+  BusinessEvents,
+  err,
+  eventFromContext,
+  ok,
+  validationError,
+} from '../../../kernel/index.js';
 import type { EventPublisher, ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
 
 export interface FuelPrice {
@@ -41,7 +47,8 @@ export class RecordFuelPrice implements UseCase<RecordFuelPriceCommand, FuelPric
   constructor(private readonly deps: FuelPriceDeps) {}
   async execute(input: RecordFuelPriceCommand, ctx: ExecutionContext): Promise<Result<FuelPrice>> {
     const p = schema.safeParse(input);
-    if (!p.success) return err(validationError('Invalid RecordFuelPrice command', { issues: p.error.flatten() }));
+    if (!p.success)
+      return err(validationError('Invalid RecordFuelPrice command', { issues: p.error.flatten() }));
     const now = ctx.clock.now().toISOString();
     const price: FuelPrice = {
       id: ctx.ids.newId(),
@@ -59,7 +66,11 @@ export class RecordFuelPrice implements UseCase<RecordFuelPriceCommand, FuelPric
         aggregateType: 'FuelPrice',
         aggregateId: price.id,
         stationId: price.stationId,
-        payload: { productId: price.productId, price: price.price, effectiveFrom: price.effectiveFrom },
+        payload: {
+          productId: price.productId,
+          price: price.price,
+          effectiveFrom: price.effectiveFrom,
+        },
       }),
     ]);
     return ok(price);

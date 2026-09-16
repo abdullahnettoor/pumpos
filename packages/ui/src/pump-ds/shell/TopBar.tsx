@@ -1,11 +1,16 @@
 import React, { forwardRef, type ReactNode } from 'react';
-import { Menu as MenuIcon, Search, Bell, ChevronDown, Command as CommandIcon, Fuel } from 'lucide-react';
 import { cn } from '../lib/cn.js';
 import { Button } from '../button/index.js';
+import { Icon } from '../icon/index.js';
 import { SyncPulse, type SyncStatus } from '../sync-pulse/index.js';
 import { BusinessDayChip } from '../business-day/index.js';
 import {
-  Menu, MenuTrigger, MenuContent, MenuItem, MenuSeparator, MenuLabel,
+  Menu,
+  MenuTrigger,
+  MenuContent,
+  MenuItem,
+  MenuSeparator,
+  MenuLabel,
 } from '../menu/index.js';
 
 /**
@@ -56,71 +61,80 @@ export interface BusinessDayOption {
   lastActivityAt?: string;
 }
 
-/** True on macOS/iPadOS — render the ⌘ glyph instead of the "Ctrl" text. */
-const IS_MAC =
-  typeof navigator !== 'undefined' &&
-  /Mac|iP(hone|ad|od)/i.test(navigator.platform || navigator.userAgent || '');
-
 export interface TopBarProps {
+  /** Callback to toggle sidebar collapse. Omit if shell is not collapsible. */
   onToggleSidebar?: () => void;
-
-  /** Brand mark rendered at the far left (next to the sidebar toggle). */
+  /** Brand wordmark or logo. Defaults to "PumpOS". */
   brand?: ReactNode;
-
+  /** Current business date string (e.g. "09 Jul 2026"). */
   businessDate: string;
+  /** Status of current business day. */
   businessDayStatus: 'open' | 'closed' | 'not-created' | 'unknown' | 'unavailable';
-  /** Hide the business-day anchor entirely (e.g. pre-onboarding hub). */
+  /** When false, business-day affordances are hidden (pre-onboarding hub). */
   showBusinessDay?: boolean;
-  /** Navigate to today's live view (dashboard). */
+  /** Callback when user clicks the business day chip (e.g. opens day-close drawer). */
   onBusinessDay?: () => void;
-  /** Recent past business days shown in the anchor dropdown. */
+  /** Past business days that remain open and need attention. */
   businessDays?: BusinessDayOption[];
-  businessDaysState?: 'loading' | 'ready' | 'unavailable';
-  /** Open a past day's summary. */
+  /** State of the past business days query. */
+  businessDaysState?: 'ready' | 'loading' | 'unavailable';
+  /** Callback when user selects a past business day from the menu. */
   onSelectBusinessDay?: (date: string) => void;
-  /** Notified when the business-day dropdown opens/closes (for lazy loading). */
+  /** Callback when the business day menu opens or closes. */
   onBusinessDayMenuOpenChange?: (open: boolean) => void;
-
-  /** Single-station label (switcher deferred). Omit to hide. */
+  /** Active station name (shown when app is scoped to one station). */
   stationLabel?: string;
-
-  /** Opens the command palette. */
-  onOpenSearch: () => void;
+  /** Global search click/shortcut handler. Opens command palette. */
+  onOpenSearch?: () => void;
+  /** Search button placeholder text. Defaults to "Search customers, invoices, shifts…". */
   searchPlaceholder?: string;
-
+  /** Quick-create actions shown in the "+ New" menu. */
   quickCreate?: QuickCreateAction[];
-
+  /** Notification items. Empty array hides the badge. */
   notifications?: NotificationItem[];
-
+  /** Sync status for the local-first engine. */
   syncStatus: SyncStatus;
+  /** Pending mutations waiting to sync. */
   pendingSyncCount?: number;
-
-  userInitials: string;
-  userName: string;
-  userRole: string;
-  userMenu: UserMenuAction[];
-
+  /** User initials for the avatar button. */
+  userInitials?: string;
+  /** User display name. */
+  userName?: string;
+  /** User role name (e.g. "Owner", "Manager"). */
+  userRole?: string;
+  /** User menu actions (Profile, Settings, Log out). */
+  userMenu?: UserMenuAction[];
   className?: string;
 }
 
-const IconBtn = forwardRef<HTMLButtonElement, React.ButtonHTMLAttributes<HTMLButtonElement> & { badge?: number }>(
-  function IconBtn({ className, children, badge, ...props }, ref) {
-    return (
-      <button
-        ref={ref}
-        className={cn('relative inline-flex size-8 items-center justify-center rounded-button text-ink-muted transition-colors hover:bg-surface-alt hover:text-ink-strong', className)}
-        {...props}
-      >
-        {children}
-        {badge != null && badge > 0 && (
-          <span className="absolute right-1 top-1 inline-flex min-w-[14px] items-center justify-center rounded-full bg-danger-fg px-1 text-[9px] font-bold leading-[14px] text-white">
-            {badge > 9 ? '9+' : badge}
-          </span>
-        )}
-      </button>
-    );
-  },
-);
+const IS_MAC =
+  typeof window !== 'undefined' &&
+  typeof navigator !== 'undefined' &&
+  /Mac|iPod|iPhone|iPad/.test(navigator.platform);
+
+const IconBtn = forwardRef<
+  HTMLButtonElement,
+  React.ButtonHTMLAttributes<HTMLButtonElement> & { badge?: number }
+>(function IconBtn({ className, children, badge, ...props }, ref) {
+  return (
+    <button
+      ref={ref}
+      type="button"
+      className={cn(
+        'relative inline-flex size-8 items-center justify-center rounded-button text-ink-muted transition-colors hover:bg-surface-alt hover:text-ink-strong',
+        className,
+      )}
+      {...props}
+    >
+      {children}
+      {badge != null && badge > 0 && (
+        <span className="absolute right-1 top-1 inline-flex min-w-[14px] items-center justify-center rounded-full bg-danger-fg px-1 text-[9px] font-bold leading-[14px] text-white">
+          {badge > 9 ? '9+' : badge}
+        </span>
+      )}
+    </button>
+  );
+});
 
 export const TopBar: React.FC<TopBarProps> = ({
   onToggleSidebar,
@@ -135,7 +149,7 @@ export const TopBar: React.FC<TopBarProps> = ({
   onBusinessDayMenuOpenChange,
   stationLabel,
   onOpenSearch,
-  searchPlaceholder = 'Search customers, invoices, shifts…',
+  searchPlaceholder = 'Search customers, invoices, shifts\u2026',
   quickCreate = [],
   notifications = [],
   syncStatus,
@@ -143,68 +157,107 @@ export const TopBar: React.FC<TopBarProps> = ({
   userInitials,
   userName,
   userRole,
-  userMenu,
+  userMenu = [],
   className,
 }) => {
   const notifCount = notifications.length;
 
   return (
-    <div className={cn('flex h-14 items-center gap-3 border-b border-border-soft bg-surface px-3', className)}>
+    <div
+      className={cn(
+        'flex h-14 items-center gap-3 border-b border-border-soft bg-surface px-3',
+        className,
+      )}
+    >
       {onToggleSidebar && (
         <IconBtn onClick={onToggleSidebar} aria-label="Toggle sidebar">
-          <MenuIcon className="size-[18px]" />
+          <Icon name="menu" size="md" />
         </IconBtn>
       )}
 
       {brand && (
-        <div className="select-none pl-0.5 pr-1 text-[15px] font-bold tracking-[-0.01em] text-brand">{brand}</div>
+        <div className="select-none pl-0.5 pr-1 text-[15px] font-bold tracking-[-0.01em] text-brand">
+          {brand}
+        </div>
       )}
 
       {showBusinessDay && (
         <Menu onOpenChange={onBusinessDayMenuOpenChange}>
           <MenuTrigger asChild>
-            <BusinessDayChip date={businessDate} status={businessDayStatus} pastOpenCount={businessDays.length} />
+            <BusinessDayChip
+              date={businessDate}
+              status={businessDayStatus}
+              pastOpenCount={businessDays.length}
+            />
           </MenuTrigger>
           <MenuContent align="start">
             <MenuLabel>Business Day</MenuLabel>
             <MenuItem onSelect={onBusinessDay}>
               <span className="flex flex-1 items-center justify-between gap-3">
                 <span>Current Business Date · {businessDate}</span>
-                <span className={cn('text-[11px] font-medium', businessDayStatus === 'open' ? 'text-brand' : 'text-ink-muted')}>
-                  {businessDayStatus === 'open' ? 'Open' : businessDayStatus === 'closed' ? 'Closed' : businessDayStatus === 'not-created' ? 'Not started' : businessDayStatus === 'unavailable' ? 'Unavailable' : 'Checking'}
+                <span
+                  className={cn(
+                    'text-[11px] font-medium',
+                    businessDayStatus === 'open' ? 'text-brand' : 'text-ink-muted',
+                  )}
+                >
+                  {businessDayStatus === 'open'
+                    ? 'Open'
+                    : businessDayStatus === 'closed'
+                      ? 'Closed'
+                      : businessDayStatus === 'not-created'
+                        ? 'Not started'
+                        : businessDayStatus === 'unavailable'
+                          ? 'Unavailable'
+                          : 'Checking'}
                 </span>
               </span>
             </MenuItem>
-            {businessDaysState === 'ready' && businessDays.length > 0 && <><MenuSeparator /><MenuLabel>Past Open Business Days</MenuLabel></>}
+            {businessDaysState === 'ready' && businessDays.length > 0 && (
+              <>
+                <MenuSeparator />
+                <MenuLabel>Past Open Business Days</MenuLabel>
+              </>
+            )}
             {businessDaysState === 'loading' && (
-              <div className="px-2 py-1.5 text-[11px] text-ink-faint">Checking Past Open Business Days</div>
+              <div className="px-2 py-1.5 text-[11px] text-ink-faint">
+                Checking Past Open Business Days
+              </div>
             )}
             {businessDaysState === 'unavailable' && (
-              <div className="px-2 py-1.5 text-[11px] text-danger-fg">Past Open Business Days unavailable</div>
+              <div className="px-2 py-1.5 text-[11px] text-danger-fg">
+                Past Open Business Days unavailable
+              </div>
             )}
             {businessDays.length === 0 && businessDaysState === 'ready' && (
-              <div className="px-2 py-1.5 text-[11px] text-ink-faint">No Past Open Business Days</div>
+              <div className="px-2 py-1.5 text-[11px] text-ink-faint">
+                No Past Open Business Days
+              </div>
             )}
-            {businessDaysState === 'ready' && businessDays.map((d) => (
-              <MenuItem key={d.date} onSelect={() => onSelectBusinessDay?.(d.date)}>
-                <span className="flex flex-1 items-center justify-between gap-4">
-                  <span className="flex flex-col">
-                    <span>{d.label}</span>
-                    <span className="text-[10px] text-ink-faint">
-                      {d.closedShiftCount ?? 0} closed · {d.openShiftCount ?? 0} open
+            {businessDaysState === 'ready' &&
+              businessDays.map((d) => (
+                <MenuItem key={d.date} onSelect={() => onSelectBusinessDay?.(d.date)}>
+                  <span className="flex flex-1 items-center justify-between gap-4">
+                    <span className="flex flex-col">
+                      <span>{d.label}</span>
+                      <span className="text-[10px] text-ink-faint">
+                        {d.closedShiftCount ?? 0} closed · {d.openShiftCount ?? 0} open
+                      </span>
                     </span>
+                    <span className="text-[11px] text-brand">Open</span>
                   </span>
-                  <span className="text-[11px] text-brand">Open</span>
-                </span>
-              </MenuItem>
-            ))}
+                </MenuItem>
+              ))}
           </MenuContent>
         </Menu>
       )}
 
       {stationLabel && (
-        <div className="hidden items-center gap-1.5 rounded-button px-2 text-[12px] text-ink-muted lg:inline-flex" title="Single station">
-          <Fuel className="size-3.5" />
+        <div
+          className="hidden items-center gap-1.5 rounded-button px-2 text-[12px] text-ink-muted lg:inline-flex"
+          title="Single station"
+        >
+          <Icon name="fuel" size="xs" />
           <span>{stationLabel}</span>
         </div>
       )}
@@ -214,13 +267,15 @@ export const TopBar: React.FC<TopBarProps> = ({
         onClick={onOpenSearch}
         className="group flex h-9 max-w-[420px] flex-1 items-center gap-2 rounded-button border border-border-soft bg-canvas px-3 text-[12.5px] text-ink-muted transition-colors hover:border-border-strong focus:outline-none focus-visible:outline-none focus-visible:border-border-strong"
       >
-        <Search className="size-4" />
+        <Icon name="search" size="sm" />
         <span className="flex-1 truncate text-left">{searchPlaceholder}</span>
         <span className="flex items-center gap-0.5">
           <kbd className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded border border-border-strong border-b-2 bg-surface px-1 font-mono text-[10px] font-medium text-ink-strong">
-            {IS_MAC ? <CommandIcon className="size-2.5" /> : 'Ctrl'}
+            {IS_MAC ? <Icon name="command" size="xs" className="size-2.5" /> : 'Ctrl'}
           </kbd>
-          <kbd className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded border border-border-strong border-b-2 bg-surface px-1 font-mono text-[10px] font-medium text-ink-strong">K</kbd>
+          <kbd className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded border border-border-strong border-b-2 bg-surface px-1 font-mono text-[10px] font-medium text-ink-strong">
+            K
+          </kbd>
         </span>
       </button>
 
@@ -228,12 +283,16 @@ export const TopBar: React.FC<TopBarProps> = ({
         {quickCreate.length > 0 && (
           <Menu>
             <MenuTrigger asChild>
-              <Button variant="primary" size="sm" leftIcon={<span className="text-[15px] leading-none">+</span>}>New</Button>
+              <Button variant="primary" size="sm" leftIcon={<Icon name="plus" size="xs" />}>
+                New
+              </Button>
             </MenuTrigger>
             <MenuContent align="end">
               <MenuLabel>Create</MenuLabel>
               {quickCreate.map((a) => (
-                <MenuItem key={a.id} icon={a.icon} shortcut={a.shortcut} onSelect={a.onSelect}>{a.label}</MenuItem>
+                <MenuItem key={a.id} icon={a.icon} shortcut={a.shortcut} onSelect={a.onSelect}>
+                  {a.label}
+                </MenuItem>
               ))}
             </MenuContent>
           </Menu>
@@ -243,16 +302,22 @@ export const TopBar: React.FC<TopBarProps> = ({
         <Menu>
           <MenuTrigger asChild>
             <IconBtn aria-label={`Notifications (${notifCount})`} badge={notifCount}>
-              <Bell className="size-[18px]" />
+              <Icon name="bell" size="md" />
             </IconBtn>
           </MenuTrigger>
           <MenuContent align="end" className="w-[320px] py-0">
             <div className="flex items-center justify-between border-b border-border-soft px-3 py-2.5">
               <span className="text-[12px] font-semibold text-ink-strong">Notifications</span>
-              {notifCount > 0 && <span className="inline-flex items-center rounded-chip bg-danger-bg px-1.5 py-0.5 text-[10px] font-medium text-danger-fg">{notifCount} new</span>}
+              {notifCount > 0 && (
+                <span className="inline-flex items-center rounded-chip bg-danger-bg px-1.5 py-0.5 text-[10px] font-medium text-danger-fg">
+                  {notifCount} new
+                </span>
+              )}
             </div>
             {notifCount === 0 ? (
-              <div className="px-3 py-8 text-center text-[12px] text-ink-muted">Nothing needs attention.</div>
+              <div className="px-3 py-8 text-center text-[12px] text-ink-muted">
+                Nothing needs attention.
+              </div>
             ) : (
               <div className="divide-y divide-border-soft">
                 {notifications.map((n) => (
@@ -261,16 +326,29 @@ export const TopBar: React.FC<TopBarProps> = ({
                     onClick={n.onAction}
                     className="flex w-full items-start gap-2.5 px-3 py-2.5 text-left transition-colors hover:bg-surface-alt"
                   >
-                    <span className={cn('mt-0.5 inline-flex size-6 shrink-0 items-center justify-center rounded-md [&_svg]:size-3.5',
-                      n.tone === 'danger' ? 'bg-danger-bg text-danger-fg' : n.tone === 'warning' ? 'bg-warning-bg text-warning-fg' : 'bg-info-bg text-info-fg')}
+                    <span
+                      className={cn(
+                        'mt-0.5 inline-flex size-6 shrink-0 items-center justify-center rounded-md [&_svg]:size-3.5',
+                        n.tone === 'danger'
+                          ? 'bg-danger-bg text-danger-fg'
+                          : n.tone === 'warning'
+                            ? 'bg-warning-bg text-warning-fg'
+                            : 'bg-info-bg text-info-fg',
+                      )}
                     >
                       {n.icon}
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block text-[12.5px] font-medium text-ink-strong">{n.title}</span>
+                      <span className="block text-[12.5px] font-medium text-ink-strong">
+                        {n.title}
+                      </span>
                       {n.meta && <span className="block text-[11px] text-ink-muted">{n.meta}</span>}
                     </span>
-                    {n.actionLabel && <span className="shrink-0 self-center font-mono text-[10px] uppercase tracking-wide text-brand">{n.actionLabel}</span>}
+                    {n.actionLabel && (
+                      <span className="shrink-0 self-center font-mono text-[10px] uppercase tracking-wide text-brand">
+                        {n.actionLabel}
+                      </span>
+                    )}
                   </button>
                 ))}
               </div>
@@ -286,22 +364,38 @@ export const TopBar: React.FC<TopBarProps> = ({
         <Menu>
           <MenuTrigger asChild>
             <button className="inline-flex h-8 items-center gap-1.5 rounded-button pl-1 pr-1.5 transition-colors hover:bg-surface-alt">
-              <span className="inline-flex size-6 items-center justify-center rounded-full bg-brand/12 text-[11px] font-semibold text-brand">{userInitials}</span>
-              <span className="hidden text-[12px] font-medium text-ink-strong sm:inline">{userName}</span>
-              <ChevronDown className="size-3.5 text-ink-faint" />
+              <span className="inline-flex size-6 items-center justify-center rounded-full bg-brand/12 text-[11px] font-semibold text-brand">
+                {userInitials}
+              </span>
+              <span className="hidden text-[12px] font-medium text-ink-strong sm:inline">
+                {userName}
+              </span>
+              <Icon name="chevron-down" size="xs" className="text-ink-faint" />
             </button>
           </MenuTrigger>
           <MenuContent align="end">
             <div className="flex items-center gap-2.5 px-3 py-2.5">
-              <span className="inline-flex size-8 items-center justify-center rounded-full bg-brand/12 text-[12px] font-semibold text-brand">{userInitials}</span>
+              <span className="inline-flex size-8 items-center justify-center rounded-full bg-brand/12 text-[12px] font-semibold text-brand">
+                {userInitials}
+              </span>
               <div className="min-w-0">
                 <div className="truncate text-[13px] font-semibold text-ink-strong">{userName}</div>
-                <div className="font-mono text-[10px] uppercase tracking-wide text-ink-muted">{userRole}</div>
+                <div className="font-mono text-[10px] uppercase tracking-wide text-ink-muted">
+                  {userRole}
+                </div>
               </div>
             </div>
             <MenuSeparator />
             {userMenu.map((a) => (
-              <MenuItem key={a.id} icon={a.icon} shortcut={a.shortcut} tone={a.tone} onSelect={a.onSelect}>{a.label}</MenuItem>
+              <MenuItem
+                key={a.id}
+                icon={a.icon}
+                shortcut={a.shortcut}
+                tone={a.tone}
+                onSelect={a.onSelect}
+              >
+                {a.label}
+              </MenuItem>
             ))}
           </MenuContent>
         </Menu>

@@ -20,7 +20,7 @@ function toEntity(row: Row): Product {
     category: row.category ?? null,
     sellingPrice: row.sellingPrice ?? null,
     costBasis: row.costBasis ?? null,
-    taxConfig: (row.taxConfig ?? {}) as Product['taxConfig'],
+    taxConfig: row.taxConfig ?? {},
     isActive: row.isActive,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -87,7 +87,9 @@ export class DrizzleProductRepository implements ProductRepository {
     const rows = await this.db
       .select({ id: schema.products.id })
       .from(schema.products)
-      .where(and(eq(schema.products.organizationId, organizationId), eq(schema.products.code, code)));
+      .where(
+        and(eq(schema.products.organizationId, organizationId), eq(schema.products.code, code)),
+      );
     return rows.some((r) => r.id !== excludeId);
   }
 

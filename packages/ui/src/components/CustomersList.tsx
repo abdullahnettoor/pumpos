@@ -1,8 +1,16 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { useNavIntent, clearNavIntent } from '../nav-intent/store.js';
 import { CloudTransactionService } from '../services/cloud.js';
-import { useCustomers, useShiftStatus, useProducts, useInvalidateOperational, useCollections, useCreditSales, useAllVehicles } from '../query/hooks.js';
-import { Users, CreditCard, Plus, Truck, Search, Wallet, HelpCircle } from 'lucide-react';
+import {
+  useCustomers,
+  useShiftStatus,
+  useProducts,
+  useInvalidateOperational,
+  useCollections,
+  useCreditSales,
+  useAllVehicles,
+} from '../query/hooks.js';
 import { LoadingSpinner } from './LoadingSpinner.js';
 import { Drawer } from './Drawer.js';
 import { CollectionEntryForm } from './transactions/CollectionEntryForm.js';
@@ -12,29 +20,33 @@ import { Tabs } from './primitives/Tabs.js';
 import { PageLayout } from './primitives/PageLayout.js';
 import { useConfirm } from './primitives/ConfirmDialog.js';
 import { useToast } from './primitives/ToastProvider.js';
-import { Panel, Button, Chip, KpiStrip, KpiTile, EmptyState } from '../pump-ds/index.js';
-import type { NavIntent } from './AppShell.js';
+import { Panel, Button, Chip, KpiStrip, KpiTile, EmptyState, Icon } from '../pump-ds/index.js';
 import { resolveBusinessDate, type CollectionEntryFormValues } from '@pump/shared';
-import { buildCustomerColumns, buildCollectionColumns, buildCreditSaleColumns, buildVehicleColumns } from './customers/columns.js';
+import {
+  buildCustomerColumns,
+  buildCollectionColumns,
+  buildCreditSaleColumns,
+  buildVehicleColumns,
+} from './customers/columns.js';
 import { CustomerFormDrawer } from './customers/CustomerFormDrawer.js';
 import { VehicleDrawer } from './customers/VehicleDrawer.js';
 import { StatementDrawer } from './customers/StatementDrawer.js';
+import { useRunTask } from '../utils/runTask.js';
 
 const transactionService = new CloudTransactionService();
 
 interface CustomersListProps {
   selectedStation: any | null;
   defaultShiftId?: string;
-  /** Optional deep-link intent (focus a customer, open a drawer). */
-  intent?: NavIntent | null;
-  /** Called once the intent has been handled so the parent can clear it. */
-  onIntentConsumed?: () => void;
 }
 
 type TabType = 'transactions' | 'sales' | 'registry' | 'vehicles';
 
-export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, defaultShiftId, intent, onIntentConsumed }) => {
-  const [activeTab, setActiveTab] = useState<TabType>('transactions');
+export const CustomersList: React.FC<CustomersListProps> = ({
+  selectedStation,
+  defaultShiftId,
+}) => {
+  const [selectedTab, setSelectedTab] = useState<TabType>('transactions');
 
   const stationId = selectedStation?.id ?? null;
   const customersActiveQ = useCustomers(true);
@@ -48,18 +60,24 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
   const qc = useQueryClient();
   const confirm = useConfirm();
   const toast = useToast();
+  const runTask = useRunTask();
 
   const customers = customersActiveQ.data ?? [];
-  const allCustomers = customersAllQ.data ?? [];
-  const allCollections = collectionsQ.data ?? [];
+  const allCustomers = useMemo(() => customersAllQ.data ?? [], [customersAllQ.data]);
+  const allCollections = useMemo(() => collectionsQ.data ?? [], [collectionsQ.data]);
   const anyPrepaid = allCustomers.some((c: any) => c.isPrepaid);
   const activeShift = statusQ.data?.activeShift ?? null;
   const recentClosedShifts: any[] = statusQ.data?.recentClosedShifts ?? [];
-  const fuelProducts = (productsQ.data ?? []).filter((p: any) => p.productType === 'FUEL' && p.isActive);
+  const fuelProducts = (productsQ.data ?? []).filter(
+    (p: any) => p.productType === 'FUEL' && p.isActive,
+  );
 
   // Business date (station-timezone aware) used to bucket "today" collections.
-  const stationSettings: any = (selectedStation as any)?.settings || {};
-  const todayIso = resolveBusinessDate({ timeZone: stationSettings.timezone, dayStartsAt: stationSettings.business_day_starts_at });
+  const stationSettings: any = selectedStation?.settings || {};
+  const todayIso = resolveBusinessDate({
+    timeZone: stationSettings.timezone,
+    dayStartsAt: stationSettings.business_day_starts_at,
+  });
   const monthPrefix = todayIso.slice(0, 7);
 
   // Collections ledger filters
@@ -67,12 +85,18 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
   const [collectionMethod, setCollectionMethod] = useState<string>('all');
 
   const collectionKpis = useMemo(() => {
-    let today = 0, month = 0, todayCount = 0;
+    let today = 0,
+      month = 0,
+      todayCount = 0;
     const todayCustomers = new Set<string>();
     for (const c of allCollections) {
       const amt = Number(c.amount || 0);
       const bd: string = c.businessDate || '';
-      if (bd === todayIso) { today += amt; todayCount += 1; if (c.customerId) todayCustomers.add(c.customerId); }
+      if (bd === todayIso) {
+        today += amt;
+        todayCount += 1;
+        if (c.customerId) todayCustomers.add(c.customerId);
+      }
       if (bd.startsWith(monthPrefix)) month += amt;
     }
     return { today, month, todayCount, todayCustomers: todayCustomers.size };
@@ -82,21 +106,33 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
     const q = collectionSearch.trim().toLowerCase();
     return allCollections.filter((c: any) => {
       if (collectionMethod !== 'all' && c.paymentMethod !== collectionMethod) return false;
-      if (q && !((c.customerName || '').toLowerCase().includes(q) || (c.notes || '').toLowerCase().includes(q))) return false;
+      if (
+        q &&
+        !(
+          (c.customerName || '').toLowerCase().includes(q) ||
+          (c.notes || '').toLowerCase().includes(q)
+        )
+      )
+        return false;
       return true;
     });
   }, [allCollections, collectionSearch, collectionMethod]);
 
   // Credit-sales ledger
-  const allCreditSales = creditSalesQ.data ?? [];
+  const allCreditSales = useMemo(() => creditSalesQ.data ?? [], [creditSalesQ.data]);
   const [salesSearch, setSalesSearch] = useState('');
   const salesKpis = useMemo(() => {
-    let today = 0, month = 0, todayCount = 0;
+    let today = 0,
+      month = 0,
+      todayCount = 0;
     const custs = new Set<string>();
     for (const s of allCreditSales) {
       const amt = Number(s.amount || 0);
       const bd: string = s.businessDate || '';
-      if (bd === todayIso) { today += amt; todayCount += 1; }
+      if (bd === todayIso) {
+        today += amt;
+        todayCount += 1;
+      }
       if (bd.startsWith(monthPrefix)) month += amt;
       if (s.customerId) custs.add(s.customerId);
     }
@@ -105,77 +141,114 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
   const filteredCreditSales = useMemo(() => {
     const q = salesSearch.trim().toLowerCase();
     if (!q) return allCreditSales;
-    return allCreditSales.filter((s: any) =>
-      (s.customerName || '').toLowerCase().includes(q) ||
-      (s.vehicleReg || '').toLowerCase().includes(q) ||
-      (s.productName || '').toLowerCase().includes(q) ||
-      (s.notes || '').toLowerCase().includes(q));
+    return allCreditSales.filter(
+      (s: any) =>
+        (s.customerName || '').toLowerCase().includes(q) ||
+        (s.vehicleReg || '').toLowerCase().includes(q) ||
+        (s.productName || '').toLowerCase().includes(q) ||
+        (s.notes || '').toLowerCase().includes(q),
+    );
   }, [allCreditSales, salesSearch]);
 
   const loading = customersActiveQ.isLoading || statusQ.isLoading;
-  const error = (customersActiveQ.error || statusQ.error) as Error | null;
+  const error = customersActiveQ.error || statusQ.error;
 
-  const eligibleCustomers = allCustomers.filter((c: any) => c.customerType === 'Credit' || c.customerType === 'Fleet');
+  const eligibleCustomers = allCustomers.filter(
+    (c: any) => c.customerType === 'Credit' || c.customerType === 'Fleet',
+  );
 
   // --- Registry (list + EOD-due filter) ---
   const [registryEodOnly, setRegistryEodOnly] = useState(false);
   const eodDueCount = useMemo(
-    () => allCustomers.filter((c: any) => c.settlementCycle === 'EOD' && Number(c.currentBalance || 0) > 0).length,
+    () =>
+      allCustomers.filter(
+        (c: any) => c.settlementCycle === 'EOD' && Number(c.currentBalance || 0) > 0,
+      ).length,
     [allCustomers],
   );
   const registryCustomers = useMemo(
-    () => (registryEodOnly ? allCustomers.filter((c: any) => c.settlementCycle === 'EOD' && Number(c.currentBalance || 0) > 0) : allCustomers),
+    () =>
+      registryEodOnly
+        ? allCustomers.filter(
+            (c: any) => c.settlementCycle === 'EOD' && Number(c.currentBalance || 0) > 0,
+          )
+        : allCustomers,
     [allCustomers, registryEodOnly],
   );
 
   // --- Vehicles (list + filter) ---
-  const allVehicles = vehiclesQ.data ?? [];
+  const allVehicles = useMemo(() => vehiclesQ.data ?? [], [vehiclesQ.data]);
   const loadingVehicles = vehiclesQ.isLoading;
   const [vehicleSearch, setVehicleSearch] = useState('');
   const filteredVehicles = useMemo(() => {
     const q = vehicleSearch.trim().toLowerCase();
     if (!q) return allVehicles;
-    return allVehicles.filter((v: any) =>
-      (v.registrationNumber || '').toLowerCase().includes(q) ||
-      (v.customerName || '').toLowerCase().includes(q) ||
-      (v.vehicleType || '').toLowerCase().includes(q));
+    return allVehicles.filter(
+      (v: any) =>
+        (v.registrationNumber || '').toLowerCase().includes(q) ||
+        (v.customerName || '').toLowerCase().includes(q) ||
+        (v.vehicleType || '').toLowerCase().includes(q),
+    );
   }, [allVehicles, vehicleSearch]);
 
   // --- Customer form drawer ---
-  const [isCustomerDrawerOpen, setIsCustomerDrawerOpen] = useState(false);
+  const [customerDrawerOpen, setCustomerDrawerOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<any | null>(null);
-  const openCreateCustomer = () => { setEditingCustomer(null); setIsCustomerDrawerOpen(true); };
-  const openEditCustomer = (cust: any) => { setEditingCustomer(cust); setIsCustomerDrawerOpen(true); };
+  const openCreateCustomer = () => {
+    clearNavIntent();
+    setEditingCustomer(null);
+    setCustomerDrawerOpen(true);
+  };
+  const openEditCustomer = (cust: any) => {
+    clearNavIntent();
+    setEditingCustomer(cust);
+    setCustomerDrawerOpen(true);
+  };
 
   // --- Statement drawer ---
-  const [statementCustomer, setStatementCustomer] = useState<any | null>(null);
+  const [statementCustomerId, setStatementCustomerId] = useState<string | null>(null);
 
   // --- Vehicle drawer ---
   const [isVehicleDrawerOpen, setIsVehicleDrawerOpen] = useState(false);
   const [editingVehicle, setEditingVehicle] = useState<any | null>(null);
-  const [vehicleCustomerId, setVehicleCustomerId] = useState('');
-  const openCreateVehicle = () => { setEditingVehicle(null); setIsVehicleDrawerOpen(true); };
-  const openEditVehicle = (v: any) => { setEditingVehicle(v); setIsVehicleDrawerOpen(true); };
+
+  const openCreateVehicle = () => {
+    setEditingVehicle(null);
+    setIsVehicleDrawerOpen(true);
+  };
+  const openEditVehicle = (v: any) => {
+    setEditingVehicle(v);
+    setIsVehicleDrawerOpen(true);
+  };
   const onDeleteVehicle = async (vehicle: any) => {
-    if (!(await confirm({ title: 'Delete vehicle?', message: `This will remove vehicle ${vehicle.registrationNumber}.`, confirmLabel: 'Delete', danger: true }))) return;
+    if (
+      !(await confirm({
+        title: 'Delete vehicle?',
+        message: `This will remove vehicle ${vehicle.registrationNumber}.`,
+        confirmLabel: 'Delete',
+        danger: true,
+      }))
+    )
+      return;
     try {
       await transactionService.deleteCustomerVehicle(vehicle.id);
-      qc.invalidateQueries({ queryKey: ['vehicles'] });
       toast.success('Vehicle deleted.');
+      await qc.invalidateQueries({ queryKey: ['vehicles'] });
     } catch (err: any) {
       toast.error(err.message || 'Failed to delete vehicle');
     }
   };
 
-  // Default the "add vehicle" customer to the first eligible one.
-  useEffect(() => {
-    setVehicleCustomerId((prev) => prev || eligibleCustomers[0]?.id || '');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [customersAllQ.data]);
+  // The "add vehicle" drawer defaults to the first eligible customer. Nothing
+  // else ever set this, so it was only ever a derived value held in state and
+  // filled in one render late.
+  const vehicleCustomerId = eligibleCustomers[0]?.id ?? '';
 
   // --- Collection drawer ---
-  const [isCollectionDrawerOpen, setIsCollectionDrawerOpen] = useState(false);
-  const [collectionDefaults, setCollectionDefaults] = useState<Partial<CollectionEntryFormValues>>({});
+  const [collectionDrawerOpen, setCollectionDrawerOpen] = useState(false);
+  const [collectionDefaults, setCollectionDefaults] = useState<Partial<CollectionEntryFormValues>>(
+    {},
+  );
   const [collectionSubmitting, setCollectionSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -204,12 +277,22 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
     setFormError(null);
   };
 
-  const openCollectionDrawer = (customerId?: string) => { resetCollectionForm(customerId); setIsCollectionDrawerOpen(true); };
-  const closeCollectionDrawer = () => { setIsCollectionDrawerOpen(false); resetCollectionForm(); };
+  const openCollectionDrawer = (customerId?: string) => {
+    clearNavIntent();
+    resetCollectionForm(customerId);
+    setCollectionDrawerOpen(true);
+  };
+  const closeCollectionDrawer = () => {
+    setCollectionDrawerOpen(false);
+    resetCollectionForm();
+  };
 
   const onAddCollection = async (values: CollectionEntryFormValues) => {
     setFormError(null);
-    if (!values.targetShiftId) { setFormError('A shift is required to record this entry.'); return; }
+    if (!values.targetShiftId) {
+      setFormError('A shift is required to record this entry.');
+      return;
+    }
     try {
       setCollectionSubmitting(true);
       await transactionService.recordCollection({
@@ -221,8 +304,8 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
         accountId: values.accountId || undefined,
       });
       closeCollectionDrawer();
-      invalidateOperational(stationId);
       toast.success('Collection recorded.');
+      await invalidateOperational(stationId);
     } catch (err: any) {
       setFormError(err.message || 'Failed to record entry');
     } finally {
@@ -231,21 +314,40 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
   };
 
   // --- deep-link intent (from global search / quick-create) ---
-  const handledIntentRef = useRef<NavIntent | null>(null);
-  useEffect(() => {
-    if (!intent || handledIntentRef.current === intent) return;
-    // For a focus intent, wait until the customer list has loaded.
-    if (intent.focusCustomerId && customersAllQ.isLoading) return;
-    handledIntentRef.current = intent;
-    if (intent.open === 'new-customer') openCreateCustomer();
-    else if (intent.open === 'new-collection') openCollectionDrawer();
-    if (intent.focusCustomerId) {
-      const cust = allCustomers.find((c: any) => c.id === intent.focusCustomerId);
-      if (cust) { setActiveTab('registry'); setStatementCustomer(cust); }
-    }
-    onIntentConsumed?.();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [intent, allCustomers, customersAllQ.isLoading]);
+  // Everything below is derived from the pending intent rather than copied into
+  // state by an effect. That removes the old race: the effect bailed out while
+  // `customersAllQ` was loading and relied on re-running once the data landed,
+  // so a deep link could be swallowed. A derivation simply resolves later.
+  const intent = useNavIntent();
+  const focusCustomerId = intent?.focusCustomerId ?? null;
+  const activeTab: TabType = focusCustomerId ? 'registry' : selectedTab;
+  const statementCustomer = focusCustomerId
+    ? (allCustomers.find((c: any) => c.id === focusCustomerId) ?? null)
+    : (allCustomers.find((c: any) => c.id === statementCustomerId) ?? null);
+
+  // `open: 'new-customer'` arrives from the quick-create menu and the command
+  // palette. `CustomerFormDrawer` seeds its own defaults, so opening it by
+  // derivation is safe here in a way it would not be for an entry drawer.
+  const isCustomerDrawerOpen = intent?.open === 'new-customer' || customerDrawerOpen;
+  const closeCustomerDrawer = () => {
+    clearNavIntent();
+    setCustomerDrawerOpen(false);
+  };
+
+  const setActiveTab = (tab: TabType) => {
+    clearNavIntent();
+    setSelectedTab(tab);
+  };
+  /**
+   * Any setter that competes with a derived intent value must also drop the
+   * intent, or the deep link silently out-votes the operator — clicking a row
+   * while a focus intent is pending would otherwise do nothing on screen.
+   */
+  const showStatementFor = (id: string | null) => {
+    clearNavIntent();
+    setStatementCustomerId(id);
+  };
+  const closeStatement = () => showStatementFor(null);
 
   if (!selectedStation) {
     return (
@@ -261,7 +363,15 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
 
   if (error) {
     return (
-      <div style={{ padding: '24px', backgroundColor: 'var(--state-danger-bg)', color: 'var(--state-danger-fg)', borderRadius: 'var(--radius-card)', fontFamily: 'var(--font-sans)' }}>
+      <div
+        style={{
+          padding: '24px',
+          backgroundColor: 'var(--state-danger-bg)',
+          color: 'var(--state-danger-fg)',
+          borderRadius: 'var(--radius-card)',
+          fontFamily: 'var(--font-sans)',
+        }}
+      >
         <strong>Error:</strong> {error.message || 'Failed to load customers data'}
       </div>
     );
@@ -274,13 +384,35 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
       actions={
         <>
           {activeTab === 'transactions' && (
-            <Button variant="primary" size="sm" leftIcon={<Plus />} onClick={() => openCollectionDrawer()}>Add Collection</Button>
+            <Button
+              variant="primary"
+              size="sm"
+              leftIcon={<Icon name="plus" size="sm" />}
+              onClick={() => openCollectionDrawer()}
+            >
+              Add Collection
+            </Button>
           )}
           {activeTab === 'registry' && (
-            <Button variant="primary" size="sm" leftIcon={<Plus />} onClick={openCreateCustomer}>Add Customer</Button>
+            <Button
+              variant="primary"
+              size="sm"
+              leftIcon={<Icon name="plus" size="sm" />}
+              onClick={openCreateCustomer}
+            >
+              Add Customer
+            </Button>
           )}
           {activeTab === 'vehicles' && (
-            <Button variant="primary" size="sm" leftIcon={<Plus />} disabled={eligibleCustomers.length === 0} onClick={openCreateVehicle}>Add Vehicle</Button>
+            <Button
+              variant="primary"
+              size="sm"
+              leftIcon={<Icon name="plus" size="sm" />}
+              disabled={eligibleCustomers.length === 0}
+              onClick={openCreateVehicle}
+            >
+              Add Vehicle
+            </Button>
           )}
         </>
       }
@@ -291,10 +423,10 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
           activeId={activeTab}
           onChange={(id) => setActiveTab(id as TabType)}
           tabs={[
-            { id: 'transactions', label: 'Collections', icon: <Wallet size={15} /> },
-            { id: 'sales', label: 'Credit Sales', icon: <CreditCard size={15} /> },
-            { id: 'registry', label: 'Customer Registry', icon: <Users size={15} /> },
-            { id: 'vehicles', label: 'Vehicles', icon: <Truck size={15} /> },
+            { id: 'transactions', label: 'Collections', icon: <Icon name="wallet" size="xs" /> },
+            { id: 'sales', label: 'Credit Sales', icon: <Icon name="card" size="xs" /> },
+            { id: 'registry', label: 'Customer Registry', icon: <Icon name="users" size="xs" /> },
+            { id: 'vehicles', label: 'Vehicles', icon: <Icon name="truck" size="xs" /> },
           ]}
         />
       }
@@ -305,10 +437,32 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             {/* KPI strip — today & month collections at a glance */}
             <KpiStrip columns={4}>
-              <KpiTile dot="brand" label="Collected Today" value={inr(collectionKpis.today)} hint={`${collectionKpis.todayCount} ${collectionKpis.todayCount === 1 ? 'entry' : 'entries'}`} />
-              <KpiTile dot="success" valueTone="success" label="Collected This Month" value={inr(collectionKpis.month)} />
-              <KpiTile dot="info" label="Customers Paid Today" value={String(collectionKpis.todayCustomers)} />
-              <KpiTile dot="warning" valueTone="warning" label="Total Receivables" value={inr(customers.reduce((s: number, c: any) => s + Number(c.currentBalance || 0), 0))} hint="Outstanding dues" />
+              <KpiTile
+                dot="brand"
+                label="Collected Today"
+                value={inr(collectionKpis.today)}
+                hint={`${collectionKpis.todayCount} ${collectionKpis.todayCount === 1 ? 'entry' : 'entries'}`}
+              />
+              <KpiTile
+                dot="success"
+                valueTone="success"
+                label="Collected This Month"
+                value={inr(collectionKpis.month)}
+              />
+              <KpiTile
+                dot="info"
+                label="Customers Paid Today"
+                value={String(collectionKpis.todayCustomers)}
+              />
+              <KpiTile
+                dot="warning"
+                valueTone="warning"
+                label="Total Receivables"
+                value={inr(
+                  customers.reduce((s: number, c: any) => s + Number(c.currentBalance || 0), 0),
+                )}
+                hint="Outstanding dues"
+              />
             </KpiStrip>
 
             {/* Collections ledger */}
@@ -318,18 +472,43 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
               action={
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <div style={{ position: 'relative' }}>
-                    <Search size={13} style={{ position: 'absolute', left: '8px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                    <Icon
+                      name="search"
+                      size="xs"
+                      style={{
+                        position: 'absolute',
+                        left: '8px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        color: 'var(--text-muted)',
+                      }}
+                    />
                     <input
                       value={collectionSearch}
                       onChange={(e) => setCollectionSearch(e.target.value)}
                       placeholder="Search customer / note…"
-                      style={{ height: '28px', padding: '0 8px 0 26px', width: '200px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', fontSize: '12px', background: 'var(--bg-surface)' }}
+                      style={{
+                        height: '28px',
+                        padding: '0 8px 0 26px',
+                        width: '200px',
+                        borderRadius: 'var(--radius-input)',
+                        border: '1px solid var(--border-strong)',
+                        fontSize: '12px',
+                        background: 'var(--bg-surface)',
+                      }}
                     />
                   </div>
                   <select
                     value={collectionMethod}
                     onChange={(e) => setCollectionMethod(e.target.value)}
-                    style={{ height: '28px', padding: '0 6px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', fontSize: '12px', background: 'var(--bg-surface)' }}
+                    style={{
+                      height: '28px',
+                      padding: '0 6px',
+                      borderRadius: 'var(--radius-input)',
+                      border: '1px solid var(--border-strong)',
+                      fontSize: '12px',
+                      background: 'var(--bg-surface)',
+                    }}
                   >
                     <option value="all">All methods</option>
                     <option value="Cash">Cash</option>
@@ -343,28 +522,52 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
                     title={
                       activeShift || recentClosedShifts.length > 0
                         ? `New collections post to ${
-                            resolvePreferredShiftId(activeShift, recentClosedShifts) === activeShift?.id
+                            resolvePreferredShiftId(activeShift, recentClosedShifts) ===
+                            activeShift?.id
                               ? `${activeShift?.templateName} (active shift)`
-                              : recentClosedShifts.find((s) => s.id === resolvePreferredShiftId(activeShift, recentClosedShifts))?.templateName ?? 'the selected shift'
+                              : (recentClosedShifts.find(
+                                  (s) =>
+                                    s.id ===
+                                    resolvePreferredShiftId(activeShift, recentClosedShifts),
+                                )?.templateName ?? 'the selected shift')
                           }. Cash collections touch the drawer; card / UPI / bank do not.`
                         : 'Open a shift to record collections — cash collections are reconciled against the drawer.'
                     }
-                    style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', height: '28px', width: '22px', marginLeft: '2px', border: 'none', background: 'transparent', color: 'var(--text-faint)', cursor: 'help' }}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      height: '28px',
+                      width: '22px',
+                      marginLeft: '2px',
+                      border: 'none',
+                      background: 'transparent',
+                      color: 'var(--text-faint)',
+                      cursor: 'help',
+                    }}
                   >
-                    <HelpCircle size={15} />
+                    <Icon name="help" size="xs" />
                   </button>
                 </div>
               }
             >
               {collectionsQ.isLoading ? (
-                <div style={{ padding: '16px' }}><LoadingSpinner text="Loading collections…" /></div>
+                <div style={{ padding: '16px' }}>
+                  <LoadingSpinner text="Loading collections…" />
+                </div>
               ) : filteredCollections.length === 0 ? (
                 <div style={{ padding: '12px' }}>
                   <EmptyState
                     compact
-                    icon={<Wallet />}
-                    title={allCollections.length === 0 ? 'No collections yet' : 'No matching collections'}
-                    description={allCollections.length === 0 ? 'Record a collection to see it here.' : 'Try clearing the search or method filter.'}
+                    icon={<Icon name="wallet" size="md" />}
+                    title={
+                      allCollections.length === 0 ? 'No collections yet' : 'No matching collections'
+                    }
+                    description={
+                      allCollections.length === 0
+                        ? 'Record a collection to see it here.'
+                        : 'Try clearing the search or method filter.'
+                    }
                   />
                 </div>
               ) : (
@@ -383,10 +586,24 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
         {activeTab === 'sales' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <KpiStrip columns={4}>
-              <KpiTile dot="warning" valueTone="warning" label="Credit Issued Today" value={inr(salesKpis.today)} hint={`${salesKpis.todayCount} ${salesKpis.todayCount === 1 ? 'sale' : 'sales'}`} />
+              <KpiTile
+                dot="warning"
+                valueTone="warning"
+                label="Credit Issued Today"
+                value={inr(salesKpis.today)}
+                hint={`${salesKpis.todayCount} ${salesKpis.todayCount === 1 ? 'sale' : 'sales'}`}
+              />
               <KpiTile dot="brand" label="Credit This Month" value={inr(salesKpis.month)} />
               <KpiTile dot="info" label="Customers on Credit" value={String(salesKpis.customers)} />
-              <KpiTile dot="warning" valueTone="warning" label="Total Receivables" value={inr(customers.reduce((s: number, c: any) => s + Number(c.currentBalance || 0), 0))} hint="Outstanding dues" />
+              <KpiTile
+                dot="warning"
+                valueTone="warning"
+                label="Total Receivables"
+                value={inr(
+                  customers.reduce((s: number, c: any) => s + Number(c.currentBalance || 0), 0),
+                )}
+                hint="Outstanding dues"
+              />
             </KpiStrip>
 
             <Panel
@@ -395,29 +612,73 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
               action={
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <div style={{ position: 'relative' }}>
-                    <Search size={13} style={{ position: 'absolute', left: '8px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                    <Icon
+                      name="search"
+                      size="xs"
+                      style={{
+                        position: 'absolute',
+                        left: '8px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        color: 'var(--text-muted)',
+                      }}
+                    />
                     <input
                       value={salesSearch}
                       onChange={(e) => setSalesSearch(e.target.value)}
                       placeholder="Search customer / vehicle / product…"
-                      style={{ height: '28px', padding: '0 8px 0 26px', width: '260px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', fontSize: '12px', background: 'var(--bg-surface)' }}
+                      style={{
+                        height: '28px',
+                        padding: '0 8px 0 26px',
+                        width: '260px',
+                        borderRadius: 'var(--radius-input)',
+                        border: '1px solid var(--border-strong)',
+                        fontSize: '12px',
+                        background: 'var(--bg-surface)',
+                      }}
                     />
                   </div>
-                  <button type="button" aria-label="About credit sales" title="Credit sales are receivables — fuel-on-credit and merchandise on credit. They never touch the drawer; record them from the shift handover." style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', height: '28px', width: '22px', marginLeft: '2px', border: 'none', background: 'transparent', color: 'var(--text-faint)', cursor: 'help' }}>
-                    <HelpCircle size={15} />
+                  <button
+                    type="button"
+                    aria-label="About credit sales"
+                    title="Credit sales are receivables — fuel-on-credit and merchandise on credit. They never touch the drawer; record them from the shift handover."
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      height: '28px',
+                      width: '22px',
+                      marginLeft: '2px',
+                      border: 'none',
+                      background: 'transparent',
+                      color: 'var(--text-faint)',
+                      cursor: 'help',
+                    }}
+                  >
+                    <Icon name="help" size="xs" />
                   </button>
                 </div>
               }
             >
               {creditSalesQ.isLoading ? (
-                <div style={{ padding: '16px' }}><LoadingSpinner text="Loading credit sales…" /></div>
+                <div style={{ padding: '16px' }}>
+                  <LoadingSpinner text="Loading credit sales…" />
+                </div>
               ) : filteredCreditSales.length === 0 ? (
                 <div style={{ padding: '12px' }}>
                   <EmptyState
                     compact
-                    icon={<CreditCard />}
-                    title={allCreditSales.length === 0 ? 'No credit sales yet' : 'No matching credit sales'}
-                    description={allCreditSales.length === 0 ? 'Fuel-on-credit and merchandise-on-credit sales appear here.' : 'Try a different search term.'}
+                    icon={<Icon name="card" size="md" />}
+                    title={
+                      allCreditSales.length === 0
+                        ? 'No credit sales yet'
+                        : 'No matching credit sales'
+                    }
+                    description={
+                      allCreditSales.length === 0
+                        ? 'Fuel-on-credit and merchandise-on-credit sales appear here.'
+                        : 'Try a different search term.'
+                    }
                   />
                 </div>
               ) : (
@@ -443,10 +704,16 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
                   type="button"
                   onClick={() => setRegistryEodOnly((v) => !v)}
                   title="Show only end-of-day customers with an outstanding balance"
-                  style={{ border: 'none', background: 'transparent', padding: 0, cursor: 'pointer' }}
+                  style={{
+                    border: 'none',
+                    background: 'transparent',
+                    padding: 0,
+                    cursor: 'pointer',
+                  }}
                 >
                   <Chip tone={registryEodOnly ? 'danger' : 'neutral'} size="xs">
-                    EOD due · {eodDueCount}{registryEodOnly ? ' ✕' : ''}
+                    EOD due · {eodDueCount}
+                    {registryEodOnly ? ' ✕' : ''}
                   </Chip>
                 </button>
               ) : undefined
@@ -454,9 +721,17 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
           >
             <DataTable
               bare
-              columns={buildCustomerColumns(setStatementCustomer, openEditCustomer, anyPrepaid)}
+              columns={buildCustomerColumns(
+                (c: any) => showStatementFor(c.id),
+                openEditCustomer,
+                anyPrepaid,
+              )}
               data={registryCustomers}
-              emptyMessage={registryEodOnly ? 'No EOD customers with outstanding dues.' : 'No customers registered.'}
+              emptyMessage={
+                registryEodOnly
+                  ? 'No EOD customers with outstanding dues.'
+                  : 'No customers registered.'
+              }
               getRowId={(r: any) => r.id}
             />
           </Panel>
@@ -473,15 +748,35 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
                 action={
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <div style={{ position: 'relative' }}>
-                      <Search size={13} style={{ position: 'absolute', left: '8px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                      <Icon
+                        name="search"
+                        size="xs"
+                        style={{
+                          position: 'absolute',
+                          left: '8px',
+                          top: '50%',
+                          transform: 'translateY(-50%)',
+                          color: 'var(--text-muted)',
+                        }}
+                      />
                       <input
                         value={vehicleSearch}
                         onChange={(e) => setVehicleSearch(e.target.value)}
                         placeholder="Search registration / customer…"
-                        style={{ height: '28px', padding: '0 8px 0 26px', width: '240px', borderRadius: 'var(--radius-input)', border: '1px solid var(--border-strong)', fontSize: '12px', background: 'var(--bg-surface)' }}
+                        style={{
+                          height: '28px',
+                          padding: '0 8px 0 26px',
+                          width: '240px',
+                          borderRadius: 'var(--radius-input)',
+                          border: '1px solid var(--border-strong)',
+                          fontSize: '12px',
+                          background: 'var(--bg-surface)',
+                        }}
                       />
                     </div>
-                    <Chip tone="neutral" size="xs">{filteredVehicles.length}</Chip>
+                    <Chip tone="neutral" size="xs">
+                      {filteredVehicles.length}
+                    </Chip>
                   </div>
                 }
               >
@@ -489,15 +784,21 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
                   <div style={{ padding: '12px' }}>
                     <EmptyState
                       compact
-                      icon={<Truck />}
+                      icon={<Icon name="truck" size="md" />}
                       title={allVehicles.length === 0 ? 'No vehicles' : 'No matching vehicles'}
-                      description={allVehicles.length === 0 ? 'Register a vehicle against a Credit or Fleet customer to see it here.' : 'Try a different search term.'}
+                      description={
+                        allVehicles.length === 0
+                          ? 'Register a vehicle against a Credit or Fleet customer to see it here.'
+                          : 'Try a different search term.'
+                      }
                     />
                   </div>
                 ) : (
                   <DataTable
                     bare
-                    columns={buildVehicleColumns(openEditVehicle, onDeleteVehicle)}
+                    columns={buildVehicleColumns(openEditVehicle, (v) =>
+                      runTask(onDeleteVehicle(v), 'Could not delete the vehicle.'),
+                    )}
                     data={filteredVehicles}
                     emptyMessage="No vehicles registered."
                     getRowId={(r: any) => r.id}
@@ -513,46 +814,52 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
         isOpen={isCustomerDrawerOpen}
         editingCustomer={editingCustomer}
         stationId={stationId}
-        onClose={() => setIsCustomerDrawerOpen(false)}
+        onClose={closeCustomerDrawer}
       />
 
       {/* Collections Drawer */}
       <Drawer
-        isOpen={isCollectionDrawerOpen}
+        isOpen={collectionDrawerOpen}
         onClose={closeCollectionDrawer}
         title="Log Customer Collection"
       >
         <CollectionEntryForm
-            shiftOptions={[]}
-            showShiftHintWhenSingle={false}
-            showDateField
-            dateLabel="Collection Date"
-            stationId={selectedStation?.id}
-            defaultValues={collectionDefaults}
-            customers={customers}
-            submitting={collectionSubmitting}
-            error={formError}
-            onCancel={closeCollectionDrawer}
-            onSubmit={onAddCollection}
-            submitLabel={'Log Collection'}
-            submittingLabel="Recording..."
-            amountLabel="Amount (₹)"
-            amountPlaceholder="0.00"
-            notesLabel="Notes / Fleet Slip ID"
-            notesPlaceholder="Slip code, transaction ref..."
-            paymentMethodLabel="Entry Type / Payment Method"
-            usePaymentMethodButtons={true}
-            walkInOptionLabel="-- Walk-in / Cash Customer --"
-            customerOptionLabel={(cust) => `${cust.name} (${cust.customerType})`}
-          />
+          shiftOptions={[]}
+          showShiftHintWhenSingle={false}
+          showDateField
+          dateLabel="Collection Date"
+          stationId={selectedStation?.id}
+          defaultValues={collectionDefaults}
+          customers={customers}
+          submitting={collectionSubmitting}
+          error={formError}
+          onCancel={closeCollectionDrawer}
+          onSubmit={onAddCollection}
+          submitLabel={'Log Collection'}
+          submittingLabel="Recording..."
+          amountLabel="Amount (₹)"
+          amountPlaceholder="0.00"
+          notesLabel="Notes / Fleet Slip ID"
+          notesPlaceholder="Slip code, transaction ref..."
+          paymentMethodLabel="Entry Type / Payment Method"
+          usePaymentMethodButtons={true}
+          walkInOptionLabel="-- Walk-in / Cash Customer --"
+          customerOptionLabel={(cust) => `${cust.name} (${cust.customerType})`}
+        />
       </Drawer>
 
       <StatementDrawer
         customer={statementCustomer}
         stationId={stationId}
-        onClose={() => setStatementCustomer(null)}
-        onEdit={(c) => { setStatementCustomer(null); openEditCustomer(c); }}
-        onRecordCollection={(c) => { setStatementCustomer(null); openCollectionDrawer(c.id); }}
+        onClose={closeStatement}
+        onEdit={(c) => {
+          closeStatement();
+          openEditCustomer(c);
+        }}
+        onRecordCollection={(c) => {
+          closeStatement();
+          openCollectionDrawer(c.id);
+        }}
       />
 
       <VehicleDrawer
@@ -566,4 +873,3 @@ export const CustomersList: React.FC<CustomersListProps> = ({ selectedStation, d
     </PageLayout>
   );
 };
-

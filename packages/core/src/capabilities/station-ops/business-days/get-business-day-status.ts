@@ -16,9 +16,17 @@ export interface BusinessDayStatusItem {
 }
 
 export interface BusinessDayStatusReader {
-  findByDate(organizationId: string, stationId: string, businessDate: string): Promise<BusinessDayStatusItem | null>;
+  findByDate(
+    organizationId: string,
+    stationId: string,
+    businessDate: string,
+  ): Promise<BusinessDayStatusItem | null>;
   listOpen(organizationId: string, stationId: string): Promise<BusinessDayStatusItem[]>;
-  listPastOpen(organizationId: string, stationId: string, currentBusinessDate: string): Promise<BusinessDayStatusItem[]>;
+  listPastOpen(
+    organizationId: string,
+    stationId: string,
+    currentBusinessDate: string,
+  ): Promise<BusinessDayStatusItem[]>;
 }
 
 export interface GetBusinessDayStatusResult {
@@ -30,12 +38,24 @@ export interface GetBusinessDayStatusResult {
   pastOpenBusinessDays: BusinessDayStatusItem[];
 }
 
-export class GetBusinessDayStatus implements UseCase<{ stationId: string; requestedBusinessDate: string; currentBusinessDate: string }, GetBusinessDayStatusResult> {
+export class GetBusinessDayStatus implements UseCase<
+  { stationId: string; requestedBusinessDate: string; currentBusinessDate: string },
+  GetBusinessDayStatusResult
+> {
   constructor(private readonly reader: BusinessDayStatusReader) {}
 
-  async execute(input: { stationId: string; requestedBusinessDate: string; currentBusinessDate: string }, ctx: ExecutionContext): Promise<Result<GetBusinessDayStatusResult>> {
-    if (!input.stationId || !isValidBusinessDate(input.requestedBusinessDate) || !isValidBusinessDate(input.currentBusinessDate)) {
-      return err(validationError('Business Day status requires a Station and valid Business Dates'));
+  async execute(
+    input: { stationId: string; requestedBusinessDate: string; currentBusinessDate: string },
+    ctx: ExecutionContext,
+  ): Promise<Result<GetBusinessDayStatusResult>> {
+    if (
+      !input.stationId ||
+      !isValidBusinessDate(input.requestedBusinessDate) ||
+      !isValidBusinessDate(input.currentBusinessDate)
+    ) {
+      return err(
+        validationError('Business Day status requires a Station and valid Business Dates'),
+      );
     }
     const [requestedBusinessDay, openBusinessDays, pastOpenBusinessDays] = await Promise.all([
       this.reader.findByDate(ctx.organizationId, input.stationId, input.requestedBusinessDate),

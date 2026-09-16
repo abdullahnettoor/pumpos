@@ -7,6 +7,7 @@ import {
   type ColumnDef,
   type SortingState,
 } from '@tanstack/react-table';
+import { useRunTask } from '../../utils/runTask.js';
 
 export interface DataTableProps<T> {
   columns: ColumnDef<T, any>[];
@@ -15,7 +16,7 @@ export interface DataTableProps<T> {
   error?: Error | null;
   /** Message shown when there is no data (and no error/loading). */
   emptyMessage?: string;
-  onRowClick?: (row: T) => void;
+  onRowClick?: (row: T) => void | Promise<unknown>;
   /** Stable row key extractor; defaults to the row index. */
   getRowId?: (row: T, index: number) => string;
   initialSorting?: SortingState;
@@ -42,6 +43,7 @@ export function DataTable<T>({
   bare = false,
   highlightRowId,
 }: DataTableProps<T>) {
+  const runTask = useRunTask();
   const [sorting, setSorting] = React.useState<SortingState>(initialSorting ?? []);
   const scrolledToRef = React.useRef<string | null>(null);
 
@@ -73,7 +75,9 @@ export function DataTable<T>({
   if (error) {
     return (
       <div style={wrap}>
-        <div style={{ ...stateBox, color: 'var(--state-danger-fg)' }}>{error.message || 'Failed to load data.'}</div>
+        <div style={{ ...stateBox, color: 'var(--state-danger-fg)' }}>
+          {error.message || 'Failed to load data.'}
+        </div>
       </div>
     );
   }
@@ -97,7 +101,10 @@ export function DataTable<T>({
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
         <thead>
           {table.getHeaderGroups().map((hg) => (
-            <tr key={hg.id} style={{ borderBottom: '1px solid var(--border-strong)', textAlign: 'left' }}>
+            <tr
+              key={hg.id}
+              style={{ borderBottom: '1px solid var(--border-strong)', textAlign: 'left' }}
+            >
               {hg.headers.map((header) => {
                 const canSort = header.column.getCanSort();
                 const sorted = header.column.getIsSorted();
@@ -131,7 +138,11 @@ export function DataTable<T>({
             return (
               <tr
                 key={row.id}
-                onClick={onRowClick ? () => onRowClick(row.original) : undefined}
+                onClick={
+                  onRowClick
+                    ? () => runTask(onRowClick(row.original), 'Could not open that row.')
+                    : undefined
+                }
                 ref={(el) => {
                   if (el && isHighlighted && scrolledToRef.current !== row.id) {
                     scrolledToRef.current = row.id;
@@ -147,7 +158,14 @@ export function DataTable<T>({
                 }}
               >
                 {row.getVisibleCells().map((cell) => (
-                  <td key={cell.id} style={{ padding: '9px 12px', color: 'var(--text-default)', verticalAlign: 'middle' }}>
+                  <td
+                    key={cell.id}
+                    style={{
+                      padding: '9px 12px',
+                      color: 'var(--text-default)',
+                      verticalAlign: 'middle',
+                    }}
+                  >
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                   </td>
                 ))}

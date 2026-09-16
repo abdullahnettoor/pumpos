@@ -43,6 +43,12 @@ jobs:
       - name: Test
         run: npm run test --workspaces --if-present
 
+      # `scripts/` is not a workspace, so the line above skips it. These are the
+      # lint-ratchet guards; an untested guard that quietly stops working puts
+      # the count back to meaning nothing, which is the whole point of #75/#78.
+      - name: Test guard scripts
+        run: npm run test:scripts
+
       # Catches breakage the typechecker misses (Vite resolution, bad imports
       # in non-TS assets) before it reaches a deploy.
       - name: Build
@@ -51,30 +57,74 @@ jobs:
   # Separate job so a lint failure is instantly distinguishable from a broken
   # test, and so lint problems never mask a real regression.
   #
-  # This is a RATCHET, not a wall. The 392 pre-existing violations are recorded
+  # Formatting is Prettier's, and it is absolute: `format:check` fails on any
+  # unformatted file. Run `npm run format` to fix. The lint config carries no
+  # stylistic rules, so the two tools never disagree.
+  #
+  # ESLint is a RATCHET, not a wall. The pre-existing violations are recorded
   # in eslint-suppressions.json, so today's code passes. Only NEW violations of
   # the error-level rules fail. Warnings (currently ~7.2k, mostly `any`-related)
   # never fail the build — run `npm run lint:warnings` to see them.
+  #
+  # Two guards keep that number honest, because a ratchet is only worth having
+  # if the count cannot be quietly edited:
+  #
+  #   scripts/check-no-hook-disables.mjs      (run by `npm run lint`)
+  #     Inline `eslint-disable` comments for react-hooks rules are invisible to
+  #     `--prune-suppressions`, so the file could read `{}` while violations
+  #     remained in the source. That is what happened in #75.
+  #
+  #   scripts/check-suppressions-not-grown.mjs   (the step below)
+  #     Nothing stopped the file itself growing: `npm run lint:baseline` plus a
+  #     commit took the build green again (#78). Totals are compared against the
+  #     merge base, so moving a suppression is fine and only a net increase
+  #     fails. Put [ratchet] in the PR title when an increase is deliberate.
   lint:
     name: lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          # Need the base branch to diff the suppression baseline against.
+          fetch-depth: 0
       - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
       - run: npm ci
 
+      # Cheap and needs no build output, so it runs first and fails fast.
+      - name: Prettier
+        run: npm run format:check
+
       # Type-aware rules need the declaration output of the workspace packages.
       - name: Build types
         run: npx tsc -b
 
+      # Runs the inline-disable check first; see the note above.
       - name: ESLint
         run: npm run lint
 
+      # Only meaningful on a pull request: on a push to dev/main the merge has
+      # already happened and there is nothing to compare against.
+      - name: Suppression baseline has not grown
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          git show "$BASE_SHA:eslint-suppressions.json" > /tmp/base-suppressions.json 2>/dev/null \
+            || echo '{}' > /tmp/base-suppressions.json
+          allow=""
+          case "$PR_TITLE" in
+            *'[ratchet]'*|*'[RATCHET]'*) allow="--allow-growth" ;;
+          esac
+          node scripts/check-suppressions-not-grown.mjs \
+            /tmp/base-suppressions.json eslint-suppressions.json $allow
+
   # Marketing is a standalone install with its own lockfile (Astro 7 / Vite 8),
-  # so it cannot share the workspace install above.
+  # so it cannot share the workspace install above. It carries its own ESLint
+  # config and suppression baseline for the same reason.
   marketing:
     name: marketing
     runs-on: ubuntu-latest
@@ -86,6 +136,8 @@ jobs:
           cache: npm
           cache-dependency-path: apps/marketing/package-lock.json
       - run: npm ci
+        working-directory: apps/marketing
+      - run: npm run lint
         working-directory: apps/marketing
       - run: npm run build
         working-directory: apps/marketing

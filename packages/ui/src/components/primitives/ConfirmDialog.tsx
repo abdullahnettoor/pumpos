@@ -70,8 +70,10 @@ export const ConfirmProvider: React.FC<{ children: React.ReactNode }> = ({ child
   useEffect(() => {
     if (!state.open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { e.preventDefault(); close(false); }
-      else if (e.key === 'Enter') {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        close(false);
+      } else if (e.key === 'Enter') {
         if (state.input?.required && valueRef.current.trim() === '') return;
         e.preventDefault();
         close(true);
@@ -118,24 +120,48 @@ export const ConfirmProvider: React.FC<{ children: React.ReactNode }> = ({ child
               fontFamily: 'var(--font-sans)',
             }}
           >
-            <h2 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-strong)' }}>{state.title}</h2>
+            <h2 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-strong)' }}>
+              {state.title}
+            </h2>
             {state.message != null && (
-              <div style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.5 }}>{state.message}</div>
+              <div style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                {state.message}
+              </div>
             )}
             {state.input && (
-              <label style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '12px', fontWeight: 600, color: 'var(--text-strong)' }}>
+              <label
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '6px',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  color: 'var(--text-strong)',
+                }}
+              >
                 {state.input.label}
                 <Input
                   inputSize="sm"
                   autoFocus
                   value={inputValue}
                   placeholder={state.input.placeholder}
-                  onChange={(e) => { setInputValue(e.target.value); valueRef.current = e.target.value; }}
+                  onChange={(e) => {
+                    setInputValue(e.target.value);
+                    valueRef.current = e.target.value;
+                  }}
                 />
               </label>
             )}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '4px' }}>
-              <Button type="button" variant="secondary" size="md" onClick={() => close(false)} autoFocus={!state.input}>
+            <div
+              style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '4px' }}
+            >
+              <Button
+                type="button"
+                variant="secondary"
+                size="md"
+                onClick={() => close(false)}
+                autoFocus={!state.input}
+              >
                 {state.cancelLabel || 'Cancel'}
               </Button>
               <Button

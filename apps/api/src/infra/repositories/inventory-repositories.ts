@@ -83,7 +83,11 @@ export class DrizzleStockVarianceRepository implements StockVarianceRepository {
   }
 
   async existsForShift(shiftId: string): Promise<boolean> {
-    const [row] = await this.db.select({ id: schema.stockVariances.id }).from(schema.stockVariances).where(eq(schema.stockVariances.shiftId, shiftId)).limit(1);
+    const [row] = await this.db
+      .select({ id: schema.stockVariances.id })
+      .from(schema.stockVariances)
+      .where(eq(schema.stockVariances.shiftId, shiftId))
+      .limit(1);
     return Boolean(row);
   }
 }
@@ -97,7 +101,13 @@ export async function readInventoryLevels(db: DbClient, organizationId: string, 
   const tanks = await db
     .select()
     .from(schema.tanks)
-    .where(and(eq(schema.tanks.organizationId, organizationId), eq(schema.tanks.stationId, stationId), eq(schema.tanks.status, 'ACTIVE')));
+    .where(
+      and(
+        eq(schema.tanks.organizationId, organizationId),
+        eq(schema.tanks.stationId, stationId),
+        eq(schema.tanks.status, 'ACTIVE'),
+      ),
+    );
 
   const bulk = [];
   for (const t of tanks) {
@@ -105,7 +115,13 @@ export async function readInventoryLevels(db: DbClient, organizationId: string, 
       .select({ total: sql<string>`coalesce(sum(${schema.stockMovements.quantity}), 0)` })
       .from(schema.stockMovements)
       .where(eq(schema.stockMovements.tankId, t.id));
-    bulk.push({ tankId: t.id, tankName: t.name, productId: t.productId, capacity: Number(t.capacity), quantity: Number(r?.total ?? 0) });
+    bulk.push({
+      tankId: t.id,
+      tankName: t.name,
+      productId: t.productId,
+      capacity: Number(t.capacity),
+      quantity: Number(r?.total ?? 0),
+    });
   }
 
   const items = await db
@@ -126,6 +142,11 @@ export async function readInventoryLevels(db: DbClient, organizationId: string, 
 
   return {
     bulk,
-    items: items.map((i) => ({ productId: i.productId, name: i.name, code: i.code, quantity: Number(i.quantity) })),
+    items: items.map((i) => ({
+      productId: i.productId,
+      name: i.name,
+      code: i.code,
+      quantity: Number(i.quantity),
+    })),
   };
 }

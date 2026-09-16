@@ -27,7 +27,11 @@ export interface RecordHandoverCommand {
   cashHandedOver: number | string;
   cardHandedOver?: number | string;
   upiHandedOver?: number | string;
-  nozzleReadings: Array<{ nozzleId: string; closingReading: number | string; testingVolume?: number | string }>;
+  nozzleReadings: Array<{
+    nozzleId: string;
+    closingReading: number | string;
+    testingVolume?: number | string;
+  }>;
   terminalEntries?: Array<{
     terminalId: string;
     duId?: string | null;
@@ -61,26 +65,36 @@ export interface RecordHandoverResult {
 }
 
 const amount = z.coerce.number().finite().min(0);
-const commandSchema = z.object({
-  shiftId: z.string().min(1),
-  attendantId: z.string().min(1),
-  duId: z.string().min(1),
-  cashHandedOver: amount,
-  cardHandedOver: amount.optional(),
-  upiHandedOver: amount.optional(),
-  nozzleReadings: z.array(z.object({
-    nozzleId: z.string().min(1),
-    closingReading: z.coerce.number().finite().min(0),
-    testingVolume: z.coerce.number().finite().min(0).optional(),
-  })).min(1),
-  terminalEntries: z.array(z.object({
-    terminalId: z.string().min(1),
-    duId: z.string().min(1).nullish(),
-    cardAmount: amount,
-    upiAmount: amount,
-    batchRef: z.string().max(100).nullish(),
-  })).optional(),
-}).strict();
+const commandSchema = z
+  .object({
+    shiftId: z.string().min(1),
+    attendantId: z.string().min(1),
+    duId: z.string().min(1),
+    cashHandedOver: amount,
+    cardHandedOver: amount.optional(),
+    upiHandedOver: amount.optional(),
+    nozzleReadings: z
+      .array(
+        z.object({
+          nozzleId: z.string().min(1),
+          closingReading: z.coerce.number().finite().min(0),
+          testingVolume: z.coerce.number().finite().min(0).optional(),
+        }),
+      )
+      .min(1),
+    terminalEntries: z
+      .array(
+        z.object({
+          terminalId: z.string().min(1),
+          duId: z.string().min(1).nullish(),
+          cardAmount: amount,
+          upiAmount: amount,
+          batchRef: z.string().max(100).nullish(),
+        }),
+      )
+      .optional(),
+  })
+  .strict();
 
 const roundPaise = (value: number) => Math.round(value * 100) / 100 || 0;
 
@@ -91,9 +105,15 @@ function hasDuplicates(values: string[]): boolean {
 export class RecordHandover implements UseCase<RecordHandoverCommand, RecordHandoverResult> {
   constructor(private readonly deps: RecordHandoverDeps) {}
 
-  async execute(input: RecordHandoverCommand, ctx: ExecutionContext): Promise<Result<RecordHandoverResult>> {
+  async execute(
+    input: RecordHandoverCommand,
+    ctx: ExecutionContext,
+  ): Promise<Result<RecordHandoverResult>> {
     const parsed = commandSchema.safeParse(input);
-    if (!parsed.success) return err(validationError('Invalid RecordHandover command', { issues: parsed.error.flatten() }));
+    if (!parsed.success)
+      return err(
+        validationError('Invalid RecordHandover command', { issues: parsed.error.flatten() }),
+      );
     const cmd = parsed.data;
 
     if (hasDuplicates(cmd.nozzleReadings.map((reading) => reading.nozzleId))) {
@@ -103,47 +123,86 @@ export class RecordHandover implements UseCase<RecordHandoverCommand, RecordHand
       return err(validationError('Duplicate Payment Terminal IDs are not allowed'));
     }
 
-    const eligibility = await resolveShiftBusinessDayWrite(this.deps.shifts, this.deps.businessDays, ctx, cmd.shiftId, 'STOCK');
+    const eligibility = await resolveShiftBusinessDayWrite(
+      this.deps.shifts,
+      this.deps.businessDays,
+      ctx,
+      cmd.shiftId,
+      'STOCK',
+    );
     if (!eligibility.success) return eligibility;
     const shift = eligibility.data.shift;
     if (shift.status !== 'OPEN') {
-      return err(invariantViolation('Shift is not open', { shiftId: shift.id, status: shift.status }));
+      return err(
+        invariantViolation('Shift is not open', { shiftId: shift.id, status: shift.status }),
+      );
     }
 
-    const source = await this.deps.context.load(ctx.organizationId, shift.stationId, shift.id, cmd.attendantId, cmd.duId);
-    if (!source.attendant || source.attendant.organizationId !== ctx.organizationId) return err(notFoundError('Attendant', cmd.attendantId));
-    if (source.attendant.role !== 'Attendant') return err(validationError('Assigned user is not an Attendant', { attendantId: cmd.attendantId }));
-    if (source.attendant.status !== 'ACTIVE') return err(invariantViolation('Attendant is not active', { attendantId: cmd.attendantId }));
-    if (!source.dispenser || source.dispenser.organizationId !== ctx.organizationId || source.dispenser.stationId !== shift.stationId) {
+    const source = await this.deps.context.load(
+      ctx.organizationId,
+      shift.stationId,
+      shift.id,
+      cmd.attendantId,
+      cmd.duId,
+    );
+    if (!source.attendant || source.attendant.organizationId !== ctx.organizationId)
+      return err(notFoundError('Attendant', cmd.attendantId));
+    if (source.attendant.role !== 'Attendant')
+      return err(
+        validationError('Assigned user is not an Attendant', { attendantId: cmd.attendantId }),
+      );
+    if (source.attendant.status !== 'ACTIVE')
+      return err(invariantViolation('Attendant is not active', { attendantId: cmd.attendantId }));
+    if (
+      !source.dispenser ||
+      source.dispenser.organizationId !== ctx.organizationId ||
+      source.dispenser.stationId !== shift.stationId
+    ) {
       return err(notFoundError('Dispenser', cmd.duId));
     }
-    if (source.dispenser.status !== 'ACTIVE') return err(invariantViolation('Dispenser is not active', { duId: cmd.duId }));
+    if (source.dispenser.status !== 'ACTIVE')
+      return err(invariantViolation('Dispenser is not active', { duId: cmd.duId }));
     if (!source.assigned) {
-      return err(invariantViolation('Attendant is not assigned to this Dispenser for the Shift', {
-        shiftId: shift.id,
-        attendantId: cmd.attendantId,
-        duId: cmd.duId,
-      }));
+      return err(
+        invariantViolation('Attendant is not assigned to this Dispenser for the Shift', {
+          shiftId: shift.id,
+          attendantId: cmd.attendantId,
+          duId: cmd.duId,
+        }),
+      );
     }
 
     if (source.missingReadingNozzleIds.length > 0) {
-      return err(invariantViolation('Shift is missing Opening Readings for this Dispenser', {
-        shiftId: shift.id,
-        nozzleIds: source.missingReadingNozzleIds,
-      }));
+      return err(
+        invariantViolation('Shift is missing Opening Readings for this Dispenser', {
+          shiftId: shift.id,
+          nozzleIds: source.missingReadingNozzleIds,
+        }),
+      );
     }
-    const expectedNozzles = source.nozzleReadings.filter((reading) =>
-      reading.organizationId === ctx.organizationId && reading.stationId === shift.stationId && reading.duId === cmd.duId);
+    const expectedNozzles = source.nozzleReadings.filter(
+      (reading) =>
+        reading.organizationId === ctx.organizationId &&
+        reading.stationId === shift.stationId &&
+        reading.duId === cmd.duId,
+    );
     const expectedIds = new Set(expectedNozzles.map((reading) => reading.nozzleId));
     const submittedIds = new Set(cmd.nozzleReadings.map((reading) => reading.nozzleId));
-    if (expectedIds.size !== submittedIds.size || [...expectedIds].some((id) => !submittedIds.has(id))) {
-      return err(validationError('Nozzle Readings must include every Nozzle assigned to this Dispenser', {
-        expectedNozzleIds: [...expectedIds],
-        submittedNozzleIds: [...submittedIds],
-      }));
+    if (
+      expectedIds.size !== submittedIds.size ||
+      [...expectedIds].some((id) => !submittedIds.has(id))
+    ) {
+      return err(
+        validationError('Nozzle Readings must include every Nozzle assigned to this Dispenser', {
+          expectedNozzleIds: [...expectedIds],
+          submittedNozzleIds: [...submittedIds],
+        }),
+      );
     }
 
-    const submittedByNozzle = new Map(cmd.nozzleReadings.map((reading) => [reading.nozzleId, reading]));
+    const submittedByNozzle = new Map(
+      cmd.nozzleReadings.map((reading) => [reading.nozzleId, reading]),
+    );
     const acceptedReadings: AcceptedHandoverReading[] = [];
     let expectedFuelSales = 0;
     let testingVolume = 0;
@@ -152,20 +211,27 @@ export class RecordHandover implements UseCase<RecordHandoverCommand, RecordHand
       const openingReading = Number(persisted.openingReading);
       const closingReading = Number(submitted.closingReading);
       if (closingReading < openingReading) {
-        return err(validationError('Closing Reading cannot be below Opening Reading', {
-          nozzleId: persisted.nozzleId,
-          openingReading,
-          closingReading,
-        }));
+        return err(
+          validationError('Closing Reading cannot be below Opening Reading', {
+            nozzleId: persisted.nozzleId,
+            openingReading,
+            closingReading,
+          }),
+        );
       }
       const grossVolume = closingReading - openingReading;
-      const acceptedTesting = submitted.testingVolume === undefined ? Number(persisted.testingVolume ?? 0) : Number(submitted.testingVolume);
+      const acceptedTesting =
+        submitted.testingVolume === undefined
+          ? Number(persisted.testingVolume ?? 0)
+          : Number(submitted.testingVolume);
       if (acceptedTesting > grossVolume) {
-        return err(validationError('Testing volume cannot exceed gross metered volume', {
-          nozzleId: persisted.nozzleId,
-          grossVolume,
-          testingVolume: acceptedTesting,
-        }));
+        return err(
+          validationError('Testing volume cannot exceed gross metered volume', {
+            nozzleId: persisted.nozzleId,
+            grossVolume,
+            testingVolume: acceptedTesting,
+          }),
+        );
       }
       const unitPrice = Number(persisted.unitPrice ?? 0);
       const netVolume = grossVolume - acceptedTesting;
@@ -188,22 +254,54 @@ export class RecordHandover implements UseCase<RecordHandoverCommand, RecordHand
     const activeTerminals = source.terminals.filter((terminal) => terminal.isActive);
     const submittedTerminals = cmd.terminalEntries ?? [];
     const terminalById = new Map(
-      activeTerminals.filter((terminal) => terminal.linkedDuId === null || terminal.linkedDuId === cmd.duId).map((terminal) => [terminal.id, terminal]),
+      activeTerminals
+        .filter((terminal) => terminal.linkedDuId === null || terminal.linkedDuId === cmd.duId)
+        .map((terminal) => [terminal.id, terminal]),
     );
     for (const entry of submittedTerminals) {
       const terminal = terminalById.get(entry.terminalId);
-      if (!terminal || terminal.organizationId !== ctx.organizationId || terminal.stationId !== shift.stationId) {
-        return err(validationError('Payment Terminal is not assigned to this Dispenser for the Shift', { terminalId: entry.terminalId }));
+      if (
+        !terminal ||
+        terminal.organizationId !== ctx.organizationId ||
+        terminal.stationId !== shift.stationId
+      ) {
+        return err(
+          validationError('Payment Terminal is not assigned to this Dispenser for the Shift', {
+            terminalId: entry.terminalId,
+          }),
+        );
       }
-      if (entry.duId && entry.duId !== cmd.duId) return err(validationError('Payment Terminal entry has the wrong Dispenser', { terminalId: entry.terminalId }));
-      if (entry.cardAmount > 0 && !terminal.supportsCard) return err(validationError('Payment Terminal does not support card payments', { terminalId: entry.terminalId }));
-      if (entry.upiAmount > 0 && !terminal.supportsUpi) return err(validationError('Payment Terminal does not support UPI payments', { terminalId: entry.terminalId }));
+      if (entry.duId && entry.duId !== cmd.duId)
+        return err(
+          validationError('Payment Terminal entry has the wrong Dispenser', {
+            terminalId: entry.terminalId,
+          }),
+        );
+      if (entry.cardAmount > 0 && !terminal.supportsCard)
+        return err(
+          validationError('Payment Terminal does not support card payments', {
+            terminalId: entry.terminalId,
+          }),
+        );
+      if (entry.upiAmount > 0 && !terminal.supportsUpi)
+        return err(
+          validationError('Payment Terminal does not support UPI payments', {
+            terminalId: entry.terminalId,
+          }),
+        );
     }
 
     const hasTerminalDetails = submittedTerminals.length > 0;
     const hasConfiguredTerminals = activeTerminals.length > 0;
-    if (hasConfiguredTerminals && (cmd.cardHandedOver !== undefined || cmd.upiHandedOver !== undefined)) {
-      return err(validationError('Aggregate card or UPI declarations are allowed only when the Station has no configured Payment Terminals'));
+    if (
+      hasConfiguredTerminals &&
+      (cmd.cardHandedOver !== undefined || cmd.upiHandedOver !== undefined)
+    ) {
+      return err(
+        validationError(
+          'Aggregate card or UPI declarations are allowed only when the Station has no configured Payment Terminals',
+        ),
+      );
     }
     const cardHandedOver = hasTerminalDetails
       ? submittedTerminals.reduce((sum, entry) => sum + entry.cardAmount, 0)
@@ -214,7 +312,8 @@ export class RecordHandover implements UseCase<RecordHandoverCommand, RecordHand
 
     const cashHandedOver = Number(cmd.cashHandedOver);
     const expectedTotal = expectedFuelSales + source.merchandiseCash;
-    const declaredTotal = cashHandedOver + cardHandedOver + upiHandedOver + source.creditSales + source.omcCardSales;
+    const declaredTotal =
+      cashHandedOver + cardHandedOver + upiHandedOver + source.creditSales + source.omcCardSales;
     const varianceAmount = roundPaise(declaredTotal - expectedTotal);
     const now = ctx.clock.now().toISOString();
     const handover: AttendantHandover = {

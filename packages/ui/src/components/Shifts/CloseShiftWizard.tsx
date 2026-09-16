@@ -5,7 +5,16 @@ import { CashCountPopover, type CashBreakdown } from '../primitives/CashCountPop
 import { Button } from '../../pump-ds/index.js';
 import { inr } from '../../utils/format.js';
 import { useConfirm } from '../primitives/ConfirmDialog.js';
-import { AlertTriangle, Check, ChevronLeft, ChevronRight, Lock, Wallet, Droplet, FileText } from 'lucide-react';
+import {
+  AlertTriangle,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Lock,
+  Wallet,
+  Droplet,
+  FileText,
+} from 'lucide-react';
 import { ShiftBusinessDateContext } from './ShiftBusinessDateContext.js';
 
 export interface CloseShiftWizardProps {
@@ -60,7 +69,7 @@ export interface CloseShiftWizardProps {
 
   // Submission
   isClosing: boolean;
-  onConfirmClose: () => void;
+  onConfirmClose: () => void | Promise<unknown>;
 }
 
 type Step = 1 | 2 | 3 | 4;
@@ -79,8 +88,18 @@ const STEP_ICONS: Record<Step, React.ReactNode> = {
   4: <FileText size={13} />,
 };
 
-export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
-  isOpen,
+export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = (props) =>
+  props.isOpen ? <CloseShiftWizardBody {...props} /> : null;
+
+/**
+ * The wizard body only exists while the drawer is open, so every piece of
+ * progress it holds — the step, the denomination count, the dip toggle — is
+ * discarded on close by unmounting rather than by effects reaching back in.
+ * That also removes a stale-state hazard the old reset only half covered: the
+ * step and the dip acknowledgement survived a close, so reopening for the next
+ * shift could land the operator on step 4 with a previous acknowledgement.
+ */
+const CloseShiftWizardBody: React.FC<CloseShiftWizardProps> = ({
   onClose,
   shiftTemplateName,
   openedAt,
@@ -112,25 +131,18 @@ export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
   const [recordDip, setRecordDip] = useState(false);
   const [confirmPostCloseDip, setConfirmPostCloseDip] = useState(false);
   const [showVarianceWhy, setShowVarianceWhy] = useState(false);
-  // Denomination counts for the counted safe cash (held here so re-opening the
-  // popover / navigating steps preserves them). Reset when the drawer closes.
+  // Denomination counts for the counted safe cash, held here so re-opening the
+  // popover / navigating steps preserves them.
   const [cashBreakdown, setCashBreakdown] = useState<CashBreakdown>({});
-  React.useEffect(() => { if (!isOpen) setCashBreakdown({}); }, [isOpen]);
 
   const cashVariance = closingCash - expectedCash;
   const hasWarnings = warnings.length > 0;
   const hasEnteredDip = Object.values(dipReadings).some((value) => value !== '');
-  const canSubmit = (!hasWarnings || confirmWarningsChecked) && (!hasEnteredDip || confirmPostCloseDip);
+  const canSubmit =
+    (!hasWarnings || confirmWarningsChecked) && (!hasEnteredDip || confirmPostCloseDip);
 
   const goNext = () => setStep((s) => (s < 4 ? ((s + 1) as Step) : s));
   const goBack = () => setStep((s) => (s > 1 ? ((s - 1) as Step) : s));
-
-  // Reset to step 1 when drawer is freshly opened
-  React.useEffect(() => {
-    if (isOpen && step !== 1 && !confirmWarningsChecked && closingCash === 0) {
-      // Drawer reopened from scratch — keep current step (preserve progress)
-    }
-  }, [isOpen]);
 
   const stepper = (
     <div className="close-wizard-stepper">
@@ -138,7 +150,11 @@ export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
         const isActive = s === step;
         const isDone = s < step;
         return (
-          <div key={s} className="close-wizard-step-pill" data-state={isActive ? 'active' : isDone ? 'done' : 'pending'}>
+          <div
+            key={s}
+            className="close-wizard-step-pill"
+            data-state={isActive ? 'active' : isDone ? 'done' : 'pending'}
+          >
             <span className="close-wizard-step-num">{isDone ? <Check size={11} /> : s}</span>
             <span className="close-wizard-step-label">
               {STEP_ICONS[s]} {STEP_TITLES[s]}
@@ -150,7 +166,15 @@ export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
   );
 
   const footer = (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', width: '100%' }}>
+    <div
+      style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        gap: '8px',
+        width: '100%',
+      }}
+    >
       <Button
         variant="secondary"
         size="sm"
@@ -161,12 +185,7 @@ export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
       </Button>
 
       {step < 4 ? (
-        <Button
-          variant="primary"
-          size="sm"
-          rightIcon={<ChevronRight size={13} />}
-          onClick={goNext}
-        >
+        <Button variant="primary" size="sm" rightIcon={<ChevronRight size={13} />} onClick={goNext}>
           Next
         </Button>
       ) : (
@@ -186,7 +205,7 @@ export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
 
   return (
     <Drawer
-      isOpen={isOpen}
+      isOpen
       onClose={onClose}
       title={`Close Shift · ${shiftTemplateName}`}
       widthVariant="wide"
@@ -221,7 +240,10 @@ export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
                     <span className="font-mono">+ {inr(cashSummary.cashSales)}</span>
                   </div>
                   {cashSummary.merchCashOutsideHandover > 0 && (
-                    <div className="close-wizard-row" style={{ paddingLeft: 14, fontSize: 12, color: 'var(--text-muted)' }}>
+                    <div
+                      className="close-wizard-row"
+                      style={{ paddingLeft: 14, fontSize: 12, color: 'var(--text-muted)' }}
+                    >
                       <span>· incl. non-attendant merchandise cash</span>
                       <span className="font-mono">{inr(cashSummary.merchCashOutsideHandover)}</span>
                     </div>
@@ -229,7 +251,16 @@ export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
                   {cashSummary.merchCashBreakdown.length > 0 && (
                     <div style={{ paddingLeft: 24, paddingRight: 2 }}>
                       {cashSummary.merchCashBreakdown.map((b, i) => (
-                        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text-faint)', padding: '1px 0' }}>
+                        <div
+                          key={i}
+                          style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            fontSize: 11,
+                            color: 'var(--text-faint)',
+                            padding: '1px 0',
+                          }}
+                        >
                           <span>– {b.sellerName}</span>
                           <span className="font-mono">{inr(b.amount)}</span>
                         </div>
@@ -291,24 +322,82 @@ export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
                 net total on the right of the header. Separate from the drawer
                 count variance below; nets out cross-attendant settlements. */}
             {cashSummary?.hasHandovers && cashSummary.attendantVariances.length > 0 && (
-              <div style={{ border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-input)', overflow: 'hidden', marginTop: 12 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 12px', backgroundColor: 'var(--bg-surface-alt)' }}>
-                  <span style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--text-muted)' }}>
+              <div
+                style={{
+                  border: '1px solid var(--border-soft)',
+                  borderRadius: 'var(--radius-input)',
+                  overflow: 'hidden',
+                  marginTop: 12,
+                }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    padding: '7px 12px',
+                    backgroundColor: 'var(--bg-surface-alt)',
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 600,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.04em',
+                      color: 'var(--text-muted)',
+                    }}
+                  >
                     Attendant sales variance
                   </span>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700, color: Math.abs(cashSummary.attendantVariance) < 0.005 ? 'var(--text-muted)' : cashSummary.attendantVariance > 0 ? 'var(--brand-warning)' : 'var(--brand-danger)' }}>
-                    {cashSummary.attendantVariance > 0 ? '+' : ''}{inr(cashSummary.attendantVariance)}
-                    {Math.abs(cashSummary.attendantVariance) < 0.005 ? ' (balanced)' : cashSummary.attendantVariance > 0 ? ' (surplus)' : ' (short)'}
+                  <span
+                    style={{
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: 12,
+                      fontWeight: 700,
+                      color:
+                        Math.abs(cashSummary.attendantVariance) < 0.005
+                          ? 'var(--text-muted)'
+                          : cashSummary.attendantVariance > 0
+                            ? 'var(--brand-warning)'
+                            : 'var(--brand-danger)',
+                    }}
+                  >
+                    {cashSummary.attendantVariance > 0 ? '+' : ''}
+                    {inr(cashSummary.attendantVariance)}
+                    {Math.abs(cashSummary.attendantVariance) < 0.005
+                      ? ' (balanced)'
+                      : cashSummary.attendantVariance > 0
+                        ? ' (surplus)'
+                        : ' (short)'}
                   </span>
                 </div>
                 {cashSummary.attendantVariances.map((v, i) => {
                   const bal = Math.abs(v.variance) < 0.005;
-                  const color = bal ? 'var(--text-muted)' : v.variance > 0 ? 'var(--brand-warning)' : 'var(--brand-danger)';
+                  const color = bal
+                    ? 'var(--text-muted)'
+                    : v.variance > 0
+                      ? 'var(--brand-warning)'
+                      : 'var(--brand-danger)';
                   return (
-                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 12px', fontSize: 12, borderTop: '1px solid var(--border-soft)' }}>
-                      <span style={{ color: 'var(--text-strong)' }}>{v.name}{v.du ? ` · ${v.du}` : ''}</span>
+                    <div
+                      key={i}
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        padding: '6px 12px',
+                        fontSize: 12,
+                        borderTop: '1px solid var(--border-soft)',
+                      }}
+                    >
+                      <span style={{ color: 'var(--text-strong)' }}>
+                        {v.name}
+                        {v.du ? ` · ${v.du}` : ''}
+                      </span>
                       <span style={{ fontFamily: 'var(--font-mono)', color }}>
-                        {v.variance > 0 ? '+' : ''}{inr(v.variance)}{bal ? '' : v.variance > 0 ? ' (surplus)' : ' (short)'}
+                        {v.variance > 0 ? '+' : ''}
+                        {inr(v.variance)}
+                        {bal ? '' : v.variance > 0 ? ' (surplus)' : ' (short)'}
                       </span>
                     </div>
                   );
@@ -322,7 +411,8 @@ export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <input
-                type="number" min="0"
+                type="number"
+                min="0"
                 value={closingCash || ''}
                 onChange={(e) => onClosingCashChange(Number(e.target.value))}
                 className="close-wizard-input close-wizard-input--num"
@@ -343,7 +433,8 @@ export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
               className="close-wizard-variance"
               data-state={cashVariance === 0 ? 'match' : cashVariance > 0 ? 'surplus' : 'shortage'}
             >
-              Drawer cash variance: {cashVariance > 0 ? '+' : ''}{inr(cashVariance)}
+              Drawer cash variance: {cashVariance > 0 ? '+' : ''}
+              {inr(cashVariance)}
               {cashVariance === 0
                 ? ' (Perfect Match)'
                 : cashVariance > 0
@@ -365,18 +456,39 @@ export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
                   <ul className="close-wizard-why__list">
                     {cashVariance < 0 ? (
                       <>
-                        <li>Cash-paid petty expense not yet logged — close this drawer and use <strong>+ Expense</strong> (shortcut <kbd>E</kbd>) on the shift bar.</li>
-                        <li>Attendant handed over less cash than declared on the chit. Re-check the handover row in the attendants panel.</li>
-                        <li>Cash was used to settle a supplier purchase — record it via <strong>+ Purchase</strong> (shortcut <kbd>P</kbd>).</li>
+                        <li>
+                          Cash-paid petty expense not yet logged — close this drawer and use{' '}
+                          <strong>+ Expense</strong> (shortcut <kbd>E</kbd>) on the shift bar.
+                        </li>
+                        <li>
+                          Attendant handed over less cash than declared on the chit. Re-check the
+                          handover row in the attendants panel.
+                        </li>
+                        <li>
+                          Cash was used to settle a supplier purchase — record it via{' '}
+                          <strong>+ Purchase</strong> (shortcut <kbd>P</kbd>).
+                        </li>
                       </>
                     ) : (
                       <>
-                        <li>Customer collection received in cash but not yet logged — use <strong>+ Collection</strong> (shortcut <kbd>C</kbd>) on the shift bar.</li>
-                        <li>Counted safe cash includes the next-shift float that hasn't been removed yet.</li>
-                        <li>Cash receipt against a credit chit recorded as Credit instead of Cash — verify the latest collections.</li>
+                        <li>
+                          Customer collection received in cash but not yet logged — use{' '}
+                          <strong>+ Collection</strong> (shortcut <kbd>C</kbd>) on the shift bar.
+                        </li>
+                        <li>
+                          Counted safe cash includes the next-shift float that hasn't been removed
+                          yet.
+                        </li>
+                        <li>
+                          Cash receipt against a credit chit recorded as Credit instead of Cash —
+                          verify the latest collections.
+                        </li>
                       </>
                     )}
-                    <li>An attendant handover is still pending — check the Handovers panel for missing rows.</li>
+                    <li>
+                      An attendant handover is still pending — check the Handovers panel for missing
+                      rows.
+                    </li>
                   </ul>
                 )}
               </div>
@@ -401,7 +513,8 @@ export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
                   if (!next && Object.values(dipReadings).some((value) => value !== '')) {
                     const confirmed = await confirm({
                       title: 'Close without recording Tank Dips?',
-                      message: 'The entered Tank Dip values will be discarded. The Shift can still be closed without recording a dip.',
+                      message:
+                        'The entered Tank Dip values will be discarded. The Shift can still be closed without recording a dip.',
                       confirmLabel: 'Discard Tank Dips',
                       danger: true,
                     });
@@ -424,17 +537,29 @@ export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
             {recordDip && stationTanks.length > 0 && (
               <div className="close-wizard-tank-list">
                 {stationTanks.map((tank) => (
-                  <div key={tank.id} className="close-wizard-tank-row" style={{ alignItems: 'flex-start' }}>
+                  <div
+                    key={tank.id}
+                    className="close-wizard-tank-row"
+                    style={{ alignItems: 'flex-start' }}
+                  >
                     <div>
                       <div className="close-wizard-tank-name">{tank.name}</div>
                       <div className="close-wizard-tank-meta">
                         {tank.productName} · Actual quantity is reconciled after Shift close
                       </div>
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', alignItems: 'flex-end' }}>
+                    <div
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '6px',
+                        alignItems: 'flex-end',
+                      }}
+                    >
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <input
-                          type="number" min="0"
+                          type="number"
+                          min="0"
                           step="0.1"
                           placeholder="Actual"
                           value={dipReadings[tank.id] ?? ''}
@@ -454,7 +579,9 @@ export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
                         maxLength={255}
                         placeholder="Reason (optional)"
                         value={dipReasons[tank.id] ?? ''}
-                        onChange={(e) => onDipReasonsChange({ ...dipReasons, [tank.id]: e.target.value })}
+                        onChange={(e) =>
+                          onDipReasonsChange({ ...dipReasons, [tank.id]: e.target.value })
+                        }
                         className="close-wizard-input"
                         style={{ width: 190 }}
                       />
@@ -477,7 +604,8 @@ export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
             {hasWarnings && (
               <>
                 <div className="close-wizard-banner close-wizard-banner--warning">
-                  <AlertTriangle size={14} /> {warnings.length} warning{warnings.length === 1 ? '' : 's'} require acknowledgement.
+                  <AlertTriangle size={14} /> {warnings.length} warning
+                  {warnings.length === 1 ? '' : 's'} require acknowledgement.
                 </div>
                 <ul className="close-wizard-warning-list">
                   {warnings.map((w, idx) => (
@@ -511,24 +639,28 @@ export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
               <div
                 className="close-wizard-row close-wizard-row--total"
                 style={{
-                  color:
-                    cashVariance === 0 ? 'var(--state-success-fg)' : 'var(--brand-danger)',
+                  color: cashVariance === 0 ? 'var(--state-success-fg)' : 'var(--brand-danger)',
                 }}
               >
                 <span>Cash Variance</span>
                 <span className="font-mono">
-                  {cashVariance > 0 ? '+' : ''}{inr(cashVariance)}
+                  {cashVariance > 0 ? '+' : ''}
+                  {inr(cashVariance)}
                 </span>
               </div>
               <div className="close-wizard-row">
                 <span>Dip Readings Captured</span>
-                <span>{Object.keys(dipReadings).filter((k) => dipReadings[k] !== '' && dipReadings[k] !== undefined).length}</span>
+                <span>
+                  {
+                    Object.keys(dipReadings).filter(
+                      (k) => dipReadings[k] !== '' && dipReadings[k] !== undefined,
+                    ).length
+                  }
+                </span>
               </div>
               <div className="close-wizard-row">
                 <span>Warnings Acknowledged</span>
-                <span>
-                  {hasWarnings ? (confirmWarningsChecked ? 'Yes' : 'Pending') : 'None'}
-                </span>
+                <span>{hasWarnings ? (confirmWarningsChecked ? 'Yes' : 'Pending') : 'None'}</span>
               </div>
             </div>
             {hasEnteredDip && (
@@ -541,7 +673,9 @@ export const CloseShiftWizard: React.FC<CloseShiftWizardProps> = ({
               </div>
             )}
             <p className="close-wizard-helper" style={{ marginTop: '8px' }}>
-              On confirm, the Shift status moves to <strong>CLOSED</strong> and an immutable Shift Summary is generated and stored permanently. The Business Day remains open until it is closed explicitly.
+              On confirm, the Shift status moves to <strong>CLOSED</strong> and an immutable Shift
+              Summary is generated and stored permanently. The Business Day remains open until it is
+              closed explicitly.
             </p>
           </section>
         )}

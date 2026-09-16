@@ -78,7 +78,8 @@ const EVENT_LABELS: Record<string, string> = {
 export function eventTone(type: string): EventTone {
   if (/VOIDED|DELETED|REMOVED|LOCKED/.test(type)) return 'danger';
   if (/VARIANCE|REOPENED/.test(type)) return 'warning';
-  if (/SALE|PAYMENT_RECEIVED|CREDIT_PAYMENT|RECEIVED|CLOSED|GENERATED|COMPLETED/.test(type)) return 'success';
+  if (/SALE|PAYMENT_RECEIVED|CREDIT_PAYMENT|RECEIVED|CLOSED|GENERATED|COMPLETED/.test(type))
+    return 'success';
   if (/EXPENSE|PURCHASE|SUPPLIER_PAID|PAYMENT_MADE|PRICE/.test(type)) return 'warning';
   if (/SHIFT|BUSINESS_DAY|DSSR|HANDOVER|READING|CASH/.test(type)) return 'info';
   return 'default';
@@ -86,7 +87,13 @@ export function eventTone(type: string): EventTone {
 
 /** Readable label; falls back to a Title-cased version of the raw type. */
 export function eventLabel(type: string): string {
-  return EVENT_LABELS[type] ?? type.toLowerCase().replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
+  return (
+    EVENT_LABELS[type] ??
+    type
+      .toLowerCase()
+      .replace(/_/g, ' ')
+      .replace(/^\w/, (c) => c.toUpperCase())
+  );
 }
 
 /** Short human detail derived from the event payload (amounts, variance, etc.). */

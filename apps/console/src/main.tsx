@@ -1,7 +1,13 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App.js';
-import { QueryProvider, createQueryClient, ErrorBoundary, ConfirmProvider, ToastProvider } from '@pump/ui';
+import {
+  QueryProvider,
+  createQueryClient,
+  ErrorBoundary,
+  ConfirmProvider,
+  ToastProvider,
+} from '@pump/ui';
 import '@pump/ui/src/index.css';
 import '@pump/ui/src/pump-ds/tailwind.css';
 
