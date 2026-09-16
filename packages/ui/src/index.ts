@@ -3,6 +3,8 @@ export * from './components/AppShell.js';
 export { QuickEntryHost } from './quick-entry/QuickEntryHost.js';
 export { openQuickEntry, closeQuickEntry, useQuickEntry } from './quick-entry/store.js';
 export type { QuickEntryType, QuickEntryState } from './quick-entry/store.js';
+export { publishNavIntent, clearNavIntent, useNavIntent } from './nav-intent/store.js';
+export type { NavIntent } from './nav-intent/store.js';
 export * from './components/Drawer.js';
 export { ErrorBoundary } from './components/ErrorBoundary.js';
 export { Login } from './components/Auth/Login.js';

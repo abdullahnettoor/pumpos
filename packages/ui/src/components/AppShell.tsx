@@ -10,34 +10,8 @@ export interface NavItem {
   roles?: string[];
 }
 
-/**
- * Optional intent passed alongside a navigation. Lets one screen (or the
- * command palette / quick-create) deep-link into another and have it open a
- * specific drawer or focus an entity on arrival. Screens consume the intent
- * once on mount/update and are expected to ignore stale intents.
- */
-export interface NavIntent {
-  /** Focus a specific customer (opens their statement drawer). */
-  focusCustomerId?: string;
-  /** Focus a specific supplier (opens their statement drawer). */
-  focusSupplierId?: string;
-  /** Focus a specific inventory tab + entity (tank card / merchandise row). */
-  focusInventoryTab?: 'tanks' | 'items';
-  focusInventoryId?: string;
-  /** Open a drawer immediately on arrival at the destination page. */
-  open?:
-    | 'customer-statement'
-    | 'new-customer'
-    | 'new-collection'
-    | 'supplier-statement'
-    | 'supplier-payment'
-    | 'new-expense'
-    | 'new-income';
-  /** Open a specific past business day's DSSR summary (Reports page). */
-  openDssrDate?: string;
-  /** Open a specific Business Day in the Shifts workspace. */
-  openBusinessDayDate?: string;
-}
+export type { NavIntent } from '../nav-intent/store.js';
+import type { NavIntent } from '../nav-intent/store.js';
 
 export interface AppShellProps {
   children: React.ReactNode;
