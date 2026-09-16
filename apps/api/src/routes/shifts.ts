@@ -884,7 +884,7 @@ shiftsRouter.get('/status', async (c) => {
     .limit(1);
 
   let lastShift: any = null;
-  let lastDssr: any = null;
+  let lastShiftSummary: any = null;
   let canReopenLastShift = false;
   let gracePeriodExpiresAt: string | null = null;
 
@@ -939,7 +939,7 @@ shiftsRouter.get('/status', async (c) => {
       templateName: template?.name ?? 'Custom',
       closedByName,
     };
-    lastDssr = summary
+    lastShiftSummary = summary
       ? {
           ...summary,
           snapshotData: await projectShiftSummary(db, dbLastShift, summary.snapshotData),
@@ -972,7 +972,7 @@ shiftsRouter.get('/status', async (c) => {
     readings: activeShift?.nozzleReadings ?? [],
     activeShift,
     lastShift,
-    lastDssr,
+    lastShiftSummary,
     canReopenLastShift,
     gracePeriodExpiresAt,
     recentClosedShifts,
