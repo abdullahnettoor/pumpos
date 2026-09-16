@@ -230,6 +230,7 @@ export const buildCustomerColumns = (
         <button
           onClick={() => openEdit(row.original)}
           title="Edit customer"
+          aria-label="Edit customer"
           style={{
             border: 'none',
             background: 'none',
@@ -449,6 +450,7 @@ export const buildVehicleColumns = (
             padding: '4px',
           }}
           title="Edit vehicle"
+          aria-label="Edit vehicle"
         >
           <Icon name="edit" size="xs" />
         </button>
@@ -462,6 +464,7 @@ export const buildVehicleColumns = (
             padding: '4px',
           }}
           title="Delete vehicle"
+          aria-label="Delete vehicle"
         >
           <Icon name="trash" size="xs" />
         </button>

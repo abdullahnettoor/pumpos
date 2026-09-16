@@ -114,7 +114,9 @@ const IS_MAC =
 
 const IconBtn = forwardRef<
   HTMLButtonElement,
-  React.ButtonHTMLAttributes<HTMLButtonElement> & { badge?: number }
+  // `aria-label` is required, not optional: this control never renders text, so
+  // without one it reaches a screen reader as an anonymous "button".
+  React.ButtonHTMLAttributes<HTMLButtonElement> & { badge?: number; 'aria-label': string }
 >(function IconBtn({ className, children, badge, ...props }, ref) {
   return (
     <button
