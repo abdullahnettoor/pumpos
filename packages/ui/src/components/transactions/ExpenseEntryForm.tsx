@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { expenseEntryFormSchema, type ExpenseEntryFormValues } from '@pump/shared';
 import { useZodForm } from '../../forms/useZodForm.js';
 import { Field, TextInput, NumberInput, Select, DateField } from '../primitives/Field.js';
@@ -44,7 +44,16 @@ const EMPTY_DEFAULTS: ExpenseEntryFormValues = {
   accountId: '',
 };
 
-export const ExpenseEntryForm: React.FC<ExpenseEntryFormProps> = ({
+/**
+ * Remounted when the defaults change rather than reset by an effect — the same
+ * treatment as PurchaseEntryForm. The defaults are the form's *initial* values,
+ * so mounting fresh says that directly, and there is no effect to keep honest.
+ */
+export const ExpenseEntryForm: React.FC<ExpenseEntryFormProps> = (props) => (
+  <ExpenseEntryFormBody key={JSON.stringify(props.defaultValues ?? {})} {...props} />
+);
+
+const ExpenseEntryFormBody: React.FC<ExpenseEntryFormProps> = ({
   shiftOptions,
   categories,
   stationId,
@@ -70,19 +79,12 @@ export const ExpenseEntryForm: React.FC<ExpenseEntryFormProps> = ({
   const {
     register,
     handleSubmit,
-    reset,
     watch,
     setValue,
     formState: { errors },
   } = useZodForm<ExpenseEntryFormValues>(expenseEntryFormSchema, {
     defaultValues: { ...EMPTY_DEFAULTS, ...defaultValues },
   });
-
-  const serializedDefaults = JSON.stringify(defaultValues ?? {});
-  useEffect(() => {
-    reset({ ...EMPTY_DEFAULTS, ...defaultValues });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [serializedDefaults]);
 
   return (
     <Form

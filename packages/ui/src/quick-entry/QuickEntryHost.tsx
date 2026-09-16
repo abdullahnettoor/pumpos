@@ -177,8 +177,10 @@ export const QuickEntryHost: React.FC<QuickEntryHostProps> = ({ selectedStation 
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [qe.token, qe.open, qe.type, stationId]);
+    // `qc` and `runTask` are both referentially stable (useQueryClient, and a
+    // memoised toast context), so listing them costs nothing and the loader no
+    // longer re-runs on an identity change it cannot see.
+  }, [qe.token, qe.open, qe.type, stationId, qc, runTask]);
 
   const businessDate = useMemo(
     () => resolveBusinessDate({ timeZone: clock.timeZone, dayStartsAt: clock.dayStartsAt }),
