@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useCallback, useState, useMemo } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
 import { CloudPricingService, CloudProductService } from '../../services/cloud.js';
 import { Station } from '@pump/shared';
@@ -174,10 +174,12 @@ export const FuelPricingPanel: React.FC<FuelPricingPanelProps> = ({ selectedStat
   const [mrpValue, setMrpValue] = useState('');
   const [savingMrp, setSavingMrp] = useState(false);
 
-  const openMrp = (p: any) => {
+  // Stable so the column definitions below keep memoising with an honest
+  // dependency list; the setters it closes over are stable already.
+  const openMrp = useCallback((p: any) => {
     setPriceProd(p);
     setMrpValue(p.sellingPrice != null ? String(p.sellingPrice) : '');
-  };
+  }, []);
   const saveMrp = async () => {
     if (!priceProd) return;
     try {
@@ -272,9 +274,8 @@ export const FuelPricingPanel: React.FC<FuelPricingPanelProps> = ({ selectedStat
           </Button>
         ),
       },
-      // eslint-disable-next-line react-hooks/exhaustive-deps
     ],
-    [],
+    [openMrp],
   );
 
   if (!selectedStation) {

@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { useFieldArray } from 'react-hook-form';
 import { merchandiseSaleEntryFormSchema, type MerchandiseSaleEntryFormValues } from '@pump/shared';
 import { useZodForm } from '../../forms/useZodForm.js';
@@ -74,7 +74,16 @@ function lineTax(product: any, qty: number, price: number) {
  * coolant, accessories). Anchored to the active shift (operator accountability);
  * decrements product stock via CreateSale. Credit requires a customer account.
  */
-export const MerchandiseSaleEntryForm: React.FC<MerchandiseSaleEntryFormProps> = ({
+/**
+ * Remounted when the defaults change rather than reset by an effect — the same
+ * treatment as PurchaseEntryForm. The defaults are the form's *initial* values,
+ * so mounting fresh says that directly, and there is no effect to keep honest.
+ */
+export const MerchandiseSaleEntryForm: React.FC<MerchandiseSaleEntryFormProps> = (props) => (
+  <MerchandiseSaleEntryFormBody key={JSON.stringify(props.defaultValues ?? {})} {...props} />
+);
+
+const MerchandiseSaleEntryFormBody: React.FC<MerchandiseSaleEntryFormProps> = ({
   shiftOptions,
   products,
   customers,
@@ -91,7 +100,6 @@ export const MerchandiseSaleEntryForm: React.FC<MerchandiseSaleEntryFormProps> =
   const {
     register,
     handleSubmit,
-    reset,
     watch,
     control,
     setValue,
@@ -100,12 +108,6 @@ export const MerchandiseSaleEntryForm: React.FC<MerchandiseSaleEntryFormProps> =
     defaultValues: { ...EMPTY_DEFAULTS, ...defaultValues },
   });
   const { fields, append, remove } = useFieldArray({ control, name: 'lines' });
-
-  const serializedDefaults = JSON.stringify(defaultValues ?? {});
-  useEffect(() => {
-    reset({ ...EMPTY_DEFAULTS, ...defaultValues });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [serializedDefaults]);
 
   const paymentMethod = watch('paymentMethod');
   const customerId = watch('customerId');

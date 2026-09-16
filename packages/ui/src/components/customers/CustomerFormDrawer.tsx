@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { customerCreateSchema } from '@pump/shared';
@@ -28,8 +28,15 @@ interface CustomerFormDrawerProps {
  * cache invalidation + toast itself. The container only toggles `isOpen` and
  * passes the customer to edit (or null to create).
  */
-export const CustomerFormDrawer: React.FC<CustomerFormDrawerProps> = ({
-  isOpen,
+export const CustomerFormDrawer: React.FC<CustomerFormDrawerProps> = (props) =>
+  props.isOpen ? <CustomerFormDrawerBody {...props} /> : null;
+
+/**
+ * Exists only while the drawer is open, so the customer being edited supplies
+ * the form's *initial* values rather than being synced in by an effect. The key
+ * covers what unmounting does not: switching record while the drawer stays open.
+ */
+const CustomerFormDrawerBody: React.FC<CustomerFormDrawerProps> = ({
   editingCustomer,
   stationId,
   onClose,
@@ -48,69 +55,38 @@ export const CustomerFormDrawer: React.FC<CustomerFormDrawerProps> = ({
     handleSubmit,
     setValue,
     watch,
-    reset,
     formState: { errors, isSubmitting },
   } = useForm({
     resolver: zodResolver(customerCreateSchema),
+    // The customer being edited supplies the initial values; a blank create
+    // falls back per field, so the inferred form shape stays a single literal.
     defaultValues: {
-      name: '',
-      phone: '',
-      customerType: 'Regular' as const,
-      creditLimit: 50000 as any,
-      fleetCode: '',
-      isPrepaid: false,
-      settlementCycle: 'OPEN' as const,
-      isActive: true,
-      metadata: { gstin: '', pan: '', tradeName: '', billingAddress: '' },
+      name: editingCustomer?.name ?? '',
+      phone: editingCustomer?.phone || '',
+      customerType: (editingCustomer?.customerType ?? 'Regular') as 'Regular',
+      creditLimit: (editingCustomer
+        ? editingCustomer.creditLimit
+          ? Number(editingCustomer.creditLimit)
+          : editingCustomer.customerType === 'Regular'
+            ? null
+            : 50000
+        : 50000) as any,
+      fleetCode: editingCustomer?.fleetCode || '',
+      isPrepaid: Boolean(editingCustomer?.isPrepaid),
+      settlementCycle: (editingCustomer?.settlementCycle === 'EOD' ? 'EOD' : 'OPEN') as 'OPEN',
+      isActive: editingCustomer ? editingCustomer.isActive : true,
+      metadata: {
+        gstin: editingCustomer?.metadata?.gstin || '',
+        pan: editingCustomer?.metadata?.pan || '',
+        tradeName: editingCustomer?.metadata?.tradeName || '',
+        billingAddress: editingCustomer?.metadata?.billingAddress || '',
+        stateCode: editingCustomer?.metadata?.stateCode || '',
+      },
     },
   });
 
   const custType = watch('customerType');
   const isPrepaid = watch('isPrepaid');
-
-  useEffect(() => {
-    if (!isOpen) return;
-    setDrawerError(null);
-    if (editingCustomer) {
-      const meta = editingCustomer.metadata || {};
-      reset({
-        name: editingCustomer.name,
-        phone: editingCustomer.phone || '',
-        customerType: editingCustomer.customerType,
-        creditLimit: editingCustomer.creditLimit
-          ? Number(editingCustomer.creditLimit)
-          : editingCustomer.customerType === 'Regular'
-            ? null
-            : 50000,
-        fleetCode: editingCustomer.fleetCode || '',
-        isPrepaid: Boolean(editingCustomer.isPrepaid),
-        settlementCycle: editingCustomer.settlementCycle === 'EOD' ? 'EOD' : 'OPEN',
-        isActive: editingCustomer.isActive,
-        metadata: {
-          gstin: meta.gstin || '',
-          stateCode: meta.stateCode || '',
-          pan: meta.pan || '',
-          tradeName: meta.tradeName || '',
-          billingAddress: meta.billingAddress || '',
-        },
-      });
-    } else {
-      reset({
-        name: '',
-        phone: '',
-        customerType: 'Regular',
-        creditLimit: 50000,
-        fleetCode: '',
-        isPrepaid: false,
-        settlementCycle: 'OPEN',
-        isActive: true,
-        metadata: { gstin: '', pan: '', tradeName: '', billingAddress: '' },
-      });
-    }
-    setOpeningDue('');
-    setOpeningAsOf('');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, editingCustomer]);
 
   const onSubmit = async (data: any) => {
     setDrawerError(null);
@@ -164,7 +140,7 @@ export const CustomerFormDrawer: React.FC<CustomerFormDrawerProps> = ({
 
   return (
     <Drawer
-      isOpen={isOpen}
+      isOpen
       onClose={onClose}
       title={editingCustomer ? 'Edit Customer Profile' : 'Register New Customer'}
     >
