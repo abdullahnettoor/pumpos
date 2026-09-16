@@ -108,9 +108,14 @@ if (existsSync(tauriConf)) {
   edits.push({
     file: tauriConf,
     apply: () => {
-      const conf = JSON.parse(readFileSync(tauriConf, 'utf8'));
-      conf.version = version;
-      writeFileSync(tauriConf, JSON.stringify(conf, null, 2) + '\n');
+      // Replace only the version line: a JSON.parse → stringify round-trip
+      // reflows the whole file and breaks Prettier's formatting.
+      const raw = readFileSync(tauriConf, 'utf8');
+      const next = raw.replace(/^(\s*"version":\s*")[^"]+(")/m, `$1${version}$2`);
+      if (next === raw && JSON.parse(raw).version !== version) {
+        throw new Error(`could not find "version" in ${tauriConf}`);
+      }
+      writeFileSync(tauriConf, next);
     },
   });
 }

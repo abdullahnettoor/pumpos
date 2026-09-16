@@ -78,12 +78,32 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
           git commit -m "release: v$VERSION" -m "Derived from a '$BUMP' change set by scripts/next-version.mjs."
-          git push origin "HEAD:${{ github.head_ref }}"
-          {
-            echo "### Version bumped to \`$VERSION\` ($BUMP)"
-            echo
-            echo "Pushed to this PR so the bump is reviewed like any other change."
-          } >> "$GITHUB_STEP_SUMMARY"
+          if git push origin "HEAD:${{ github.head_ref }}"; then
+            {
+              echo "### Version bumped to \`$VERSION\` ($BUMP)"
+              echo
+              echo "Pushed to this PR so the bump is reviewed like any other change."
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            # The head branch is protected (e.g. the dev → main promotion PR),
+            # so CI cannot push the bump there — by design. The bump must land
+            # on the head branch through a reviewed PR instead.
+            {
+              echo "### Version bump required: \`$VERSION\` ($BUMP)"
+              echo
+              echo "\`${{ github.head_ref }}\` is protected, so this bump cannot be pushed by CI."
+              echo "Land it manually before merging:"
+              echo
+              echo '```sh'
+              echo "git checkout -b release/v$VERSION ${{ github.head_ref }}"
+              echo "node scripts/release.mjs $VERSION --no-git"
+              echo "git commit -am \"release: v$VERSION\""
+              echo "gh pr create --base ${{ github.head_ref }}"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::Version must be bumped to $VERSION, but ${{ github.head_ref }} is protected. See the job summary."
+            exit 1
+          fi
 
       - name: Version already correct
         if: steps.derive.outputs.bump != 'none' && steps.derive.outputs.version == steps.derive.outputs.current
