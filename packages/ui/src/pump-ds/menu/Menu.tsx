@@ -26,13 +26,49 @@ export const Menu = RadixMenu.Root;
 export const MenuTrigger = RadixMenu.Trigger;
 export const MenuGroup = RadixMenu.Group;
 
+/**
+ * How long after the menu opens a *pointer* click is treated as the tail of the
+ * click that opened it rather than a selection.
+ *
+ * A menu can render directly under the cursor (the top bar's business-day pill
+ * is the worst case: `align="start"` puts the first item a few pixels below the
+ * trigger). A normal-speed click is pointerdown → open → pointerup on whatever
+ * is now beneath the cursor, so the first item fires and the operator is
+ * navigated away having never seen the menu. Radix guards Select this way; its
+ * DropdownMenu does not.
+ */
+const POINTER_SELECT_GRACE_MS = 250;
+
+/**
+ * Is this pointer click the tail of the one that opened the menu?
+ *
+ * Exported as a pure function because the behaviour it guards is a timing rule,
+ * not a rendering one — and Radix's menu content cannot be driven open under
+ * jsdom, so this is the seam the regression test uses.
+ */
+export function isMenuOpeningClick(
+  openedAtMs: number,
+  nowMs: number = Date.now(),
+  graceMs: number = POINTER_SELECT_GRACE_MS,
+): boolean {
+  return nowMs >= openedAtMs && nowMs - openedAtMs < graceMs;
+}
+
+/** Timestamp of the current content's mount; null outside a MenuContent. */
+const MenuOpenedAtContext = React.createContext<React.MutableRefObject<number> | null>(null);
+
 export interface MenuContentProps extends React.ComponentPropsWithoutRef<typeof RadixMenu.Content> {
   /** Portal container; defaults to document.body. */
   container?: HTMLElement | null;
 }
 
 export const MenuContent = forwardRef<React.ElementRef<typeof RadixMenu.Content>, MenuContentProps>(
-  function MenuContent({ className, sideOffset = 6, align = 'start', container, ...props }, ref) {
+  function MenuContent(
+    { className, sideOffset = 6, align = 'start', container, children, ...props },
+    ref,
+  ) {
+    // Mount == open, so the first render of the content is the open instant.
+    const openedAt = React.useRef(Date.now());
     return (
       <RadixMenu.Portal container={container ?? undefined}>
         <RadixMenu.Content
@@ -45,7 +81,9 @@ export const MenuContent = forwardRef<React.ElementRef<typeof RadixMenu.Content>
             className,
           )}
           {...props}
-        />
+        >
+          <MenuOpenedAtContext.Provider value={openedAt}>{children}</MenuOpenedAtContext.Provider>
+        </RadixMenu.Content>
       </RadixMenu.Portal>
     );
   },
@@ -63,10 +101,28 @@ export interface MenuItemProps extends Omit<
 }
 
 export const MenuItem = forwardRef<React.ElementRef<typeof RadixMenu.Item>, MenuItemProps>(
-  function MenuItem({ className, icon, shortcut, tone = 'default', children, ...props }, ref) {
+  function MenuItem(
+    { className, icon, shortcut, tone = 'default', children, onClick, ...props },
+    ref,
+  ) {
+    const openedAt = React.useContext(MenuOpenedAtContext);
+    /**
+     * Swallow the click that merely finished opening the menu. Radix composes
+     * the consumer handler ahead of its own and skips its select when the event
+     * is default-prevented, so this suppresses the selection while leaving the
+     * menu open. Keyboard selection goes through `onSelect` and is untouched.
+     */
+    const handleClick = (event: React.MouseEvent<HTMLDivElement>) => {
+      onClick?.(event);
+      if (event.defaultPrevented) return;
+      if (openedAt && isMenuOpeningClick(openedAt.current)) {
+        event.preventDefault();
+      }
+    };
     return (
       <RadixMenu.Item
         ref={ref}
+        onClick={handleClick}
         className={cn(
           'flex cursor-pointer select-none items-center gap-2.5 px-3 py-1.5 text-[13px] outline-none',
           'data-[highlighted]:bg-surface-alt data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
