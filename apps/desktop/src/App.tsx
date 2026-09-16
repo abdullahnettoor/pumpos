@@ -27,6 +27,7 @@ import {
   supabase,
   startSession,
   useRunTask,
+  publishNavIntent,
 } from '@pump/ui';
 import { Station } from '@pump/shared';
 
@@ -70,10 +71,10 @@ const isLocalDev = (() => {
 
 const App: React.FC = () => {
   const [currentPath, setCurrentPath] = useState('/dashboard');
-  const [navIntent, setNavIntent] = useState<import('@pump/ui').NavIntent | null>(null);
+  // Deep-link intents travel through the nav-intent store; see console/App.tsx.
   const navigate = useCallback((path: string, intent?: import('@pump/ui').NavIntent) => {
     setCurrentPath(path);
-    setNavIntent(intent ?? null);
+    publishNavIntent(intent);
   }, []);
   const [syncStatus, setSyncStatus] = useState<
     'online' | 'offline' | 'synced' | 'pending' | 'failed'
@@ -426,65 +427,24 @@ const App: React.FC = () => {
             userRole={userRole || 'Staff'}
             userName={userName}
             onNavigate={navigate}
-            intent={navIntent}
-            onIntentConsumed={() => setNavIntent(null)}
           />
         );
       case '/expenses':
-        return (
-          <ExpensesList
-            selectedStation={selectedStation}
-            userRole={userRole || 'Staff'}
-            intent={navIntent}
-            onIntentConsumed={() => setNavIntent(null)}
-          />
-        );
+        return <ExpensesList selectedStation={selectedStation} userRole={userRole || 'Staff'} />;
       case '/income':
-        return (
-          <IncomeList
-            selectedStation={selectedStation}
-            userRole={userRole || 'Staff'}
-            intent={navIntent}
-            onIntentConsumed={() => setNavIntent(null)}
-          />
-        );
+        return <IncomeList selectedStation={selectedStation} userRole={userRole || 'Staff'} />;
       case '/purchases':
-        return (
-          <PurchasesList
-            selectedStation={selectedStation}
-            intent={navIntent}
-            onIntentConsumed={() => setNavIntent(null)}
-          />
-        );
+        return <PurchasesList selectedStation={selectedStation} />;
       case '/inventory':
-        return (
-          <InventoryList
-            selectedStation={selectedStation}
-            intent={navIntent}
-            onIntentConsumed={() => setNavIntent(null)}
-          />
-        );
+        return <InventoryList selectedStation={selectedStation} />;
       case '/pricing':
         return <FuelPricingPanel selectedStation={selectedStation} />;
       case '/accounts':
         return <AccountsPanel selectedStation={selectedStation} />;
       case '/customers':
-        return (
-          <CustomersList
-            selectedStation={selectedStation}
-            intent={navIntent}
-            onIntentConsumed={() => setNavIntent(null)}
-          />
-        );
+        return <CustomersList selectedStation={selectedStation} />;
       case '/reports':
-        return (
-          <ReportsOverview
-            selectedStation={selectedStation}
-            userRole={userRole || 'Staff'}
-            intent={navIntent}
-            onIntentConsumed={() => setNavIntent(null)}
-          />
-        );
+        return <ReportsOverview selectedStation={selectedStation} userRole={userRole || 'Staff'} />;
       case '/organization':
         return (
           <OrganizationOverview

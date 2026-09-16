@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
+import { useNavIntent, clearNavIntent } from '../nav-intent/store.js';
 import {
   Database,
   ArrowUpRight,
@@ -36,7 +37,6 @@ import {
   Form,
 } from '../pump-ds/index.js';
 import { tankPct, classifyTank } from '../utils/stock.js';
-import type { NavIntent } from './AppShell.js';
 import {
   isAmbiguousMutationError,
   loadPendingStockCountRequest,
@@ -49,8 +49,6 @@ const transactionService = new CloudTransactionService();
 
 interface InventoryListProps {
   selectedStation: any | null;
-  intent?: NavIntent | null;
-  onIntentConsumed?: () => void;
 }
 
 type TabType = 'tanks' | 'items' | 'movements' | 'variances';
@@ -323,12 +321,8 @@ const itemColumns: ColumnDef<any, any>[] = [
   },
 ];
 
-export const InventoryList: React.FC<InventoryListProps> = ({
-  selectedStation,
-  intent,
-  onIntentConsumed,
-}) => {
-  const [activeTab, setActiveTab] = useState<TabType>('tanks');
+export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation }) => {
+  const [selectedTab, setSelectedTab] = useState<TabType>('tanks');
   const stationId = selectedStation?.id ?? null;
   const invalidateOperational = useInvalidateOperational();
 
@@ -338,24 +332,31 @@ export const InventoryList: React.FC<InventoryListProps> = ({
   const variancesQ = useInventoryVariances(stationId);
 
   // Deep-link focus (from a dashboard/bell stock alert): switch to the target
-  // tab and highlight the offending tank card / merchandise row.
-  const [highlightId, setHighlightId] = useState<string | null>(null);
-  const handledIntentRef = useRef<NavIntent | null>(null);
+  // tab and highlight the offending tank card / merchandise row. Derived from
+  // the intent rather than copied into state by an effect, so the deep link
+  // wins until the operator picks a different tab, which clears it.
+  const intent = useNavIntent();
+  const focusTab = intent?.focusInventoryTab ?? null;
+  const activeTab = focusTab ?? selectedTab;
+  const highlightId = focusTab ? (intent?.focusInventoryId ?? null) : null;
+
+  const setActiveTab = (tab: TabType) => {
+    clearNavIntent();
+    setSelectedTab(tab);
+  };
+
+  // Fade the highlight after a few seconds. The intent carries two different
+  // lifetimes — the highlight is transient, the tab selection is not — so the
+  // durable half is committed to local state before the intent is dropped.
+  // Clearing alone would snap the operator back to the previous tab mid-use.
   useEffect(() => {
-    if (!intent || handledIntentRef.current === intent) return;
-    if (intent.focusInventoryTab) {
-      handledIntentRef.current = intent;
-      setActiveTab(intent.focusInventoryTab);
-      setHighlightId(intent.focusInventoryId ?? null);
-      onIntentConsumed?.();
-    }
-  }, [intent, onIntentConsumed]);
-  // Fade the highlight out after a few seconds so it doesn't linger.
-  useEffect(() => {
-    if (!highlightId) return;
-    const t = setTimeout(() => setHighlightId(null), 4000);
+    if (!focusTab) return;
+    const t = setTimeout(() => {
+      setSelectedTab(focusTab);
+      clearNavIntent();
+    }, 4000);
     return () => clearTimeout(t);
-  }, [highlightId]);
+  }, [focusTab]);
 
   // Stock count / opening balance / adjustment
   const [countOpen, setCountOpen] = useState(false);
@@ -367,8 +368,8 @@ export const InventoryList: React.FC<InventoryListProps> = ({
   const [countError, setCountError] = useState<string | null>(null);
   const countRequestRef = useRef<StockCountRequestIdentity | null>(loadPendingStockCountRequest());
 
-  const items = itemsQ.data ?? [];
-  const tanksData = tanksQ.data ?? [];
+  const items = useMemo(() => itemsQ.data ?? [], [itemsQ.data]);
+  const tanksData = useMemo(() => tanksQ.data ?? [], [tanksQ.data]);
 
   const kpis = useMemo(() => {
     const fuelByUnit: Record<string, number> = {};

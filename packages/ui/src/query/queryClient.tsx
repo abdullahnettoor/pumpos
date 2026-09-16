@@ -1,4 +1,5 @@
 import React from 'react';
+import { clearNavIntent } from '../nav-intent/store.js';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { persistQueryClient } from '@tanstack/query-persist-client-core';
 import { runTask } from '../utils/runTask.js';
@@ -70,6 +71,9 @@ export function clearClientSessionData(qc: QueryClient) {
   qc.clear();
   clearPersistedQueryCache();
   clearPendingWorkflowKeys();
+  // The nav-intent store is module-global, so an unconsumed deep link would
+  // otherwise outlive the session and fire for the next user who signs in.
+  clearNavIntent();
 }
 
 /**

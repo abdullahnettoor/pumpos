@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect, useRef } from 'react';
+import React, { useMemo, useState } from 'react';
 import type { ExpenseEntryFormValues } from '@pump/shared';
 import { canManageExpenseCategory, canVoidExpense } from '@pump/shared';
 import { CloudTransactionService } from '../services/cloud.js';
@@ -29,7 +29,6 @@ import {
   SearchInput,
   Select,
 } from '../pump-ds/index.js';
-import type { NavIntent } from './AppShell.js';
 import { buildExpenseColumns } from './expenses/columns.js';
 import { ExpenseAnalytics } from './expenses/ExpenseAnalytics.js';
 import { CategoryManagerDrawer } from './expenses/CategoryManagerDrawer.js';
@@ -43,16 +42,12 @@ interface ExpensesListProps {
   selectedStation: any | null;
   defaultShiftId?: string;
   userRole?: string;
-  intent?: NavIntent | null;
-  onIntentConsumed?: () => void;
 }
 
 export const ExpensesList: React.FC<ExpensesListProps> = ({
   selectedStation,
   defaultShiftId,
   userRole,
-  intent,
-  onIntentConsumed,
 }) => {
   const stationId = selectedStation?.id ?? null;
   const expensesQ = useExpenses();
@@ -67,7 +62,7 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
   const s = selectedStation?.settings || {};
   const clock = { timeZone: s.timezone, dayStartsAt: s.business_day_starts_at };
 
-  const expenses = expensesQ.data ?? [];
+  const expenses = useMemo(() => expensesQ.data ?? [], [expensesQ.data]);
   const categories = categoriesQ.data ?? [];
   const activeShift = statusQ.data?.activeShift ?? null;
   const recentClosedShifts: any[] = statusQ.data?.recentClosedShifts ?? [];
@@ -81,6 +76,7 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
 
   // Drawers
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+
   const [categoryManagerOpen, setCategoryManagerOpen] = useState(false);
   const [formDefaults, setFormDefaults] = useState<Partial<ExpenseEntryFormValues>>({});
   const [submitting, setSubmitting] = useState(false);
@@ -110,18 +106,6 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
     setIsDrawerOpen(true);
   };
   const closeDrawer = () => setIsDrawerOpen(false);
-
-  // Command-palette deep-link: open the entry drawer on arrival.
-  const handledIntentRef = useRef<NavIntent | null>(null);
-  useEffect(() => {
-    if (!intent || handledIntentRef.current === intent) return;
-    if (intent.open === 'new-expense') {
-      handledIntentRef.current = intent;
-      openDrawer();
-      onIntentConsumed?.();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [intent]);
 
   const handleAddExpense = async (values: ExpenseEntryFormValues) => {
     try {

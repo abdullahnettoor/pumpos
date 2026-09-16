@@ -28,6 +28,8 @@ import {
   supabase,
   startSession,
   useRunTask,
+  publishNavIntent,
+  clearNavIntent,
 } from '@pump/ui';
 import type { NavIntent } from '@pump/ui';
 import { Station } from '@pump/shared';
@@ -81,13 +83,12 @@ const isLocalDev = (() => {
 
 export const App: React.FC = () => {
   const [currentPath, setCurrentPath] = useState('/dashboard');
-  // Optional deep-link intent carried alongside a navigation (e.g. open a
-  // customer's statement from global search / quick-create). Consumed once by
-  // the destination screen, then cleared.
-  const [navIntent, setNavIntent] = useState<NavIntent | null>(null);
+  // A deep-link intent (e.g. open a customer's statement from global search)
+  // travels through the nav-intent store rather than as a prop, so the
+  // destination can derive from it instead of reacting to it in an effect.
   const navigate = useCallback((path: string, intent?: NavIntent) => {
     setCurrentPath(path);
-    setNavIntent(intent ?? null);
+    publishNavIntent(intent);
   }, []);
   const [syncStatus, setSyncStatus] = useState<
     'online' | 'offline' | 'synced' | 'pending' | 'failed'
@@ -233,6 +234,8 @@ export const App: React.FC = () => {
   }, []);
 
   const handleStationChange = (station: Station) => {
+    // A pending deep link points at the previous station's entities.
+    clearNavIntent();
     setSelectedStation(station);
     // Dashboard is home for both ready and pre-ready stations (the dashboard
     // shows a getting-started hero until the station is operational).
@@ -518,65 +521,24 @@ export const App: React.FC = () => {
             userRole={userRole || 'Staff'}
             userName={userName}
             onNavigate={navigate}
-            intent={navIntent}
-            onIntentConsumed={() => setNavIntent(null)}
           />
         );
       case '/expenses':
-        return (
-          <ExpensesList
-            selectedStation={selectedStation}
-            userRole={userRole || 'Staff'}
-            intent={navIntent}
-            onIntentConsumed={() => setNavIntent(null)}
-          />
-        );
+        return <ExpensesList selectedStation={selectedStation} userRole={userRole || 'Staff'} />;
       case '/income':
-        return (
-          <IncomeList
-            selectedStation={selectedStation}
-            userRole={userRole || 'Staff'}
-            intent={navIntent}
-            onIntentConsumed={() => setNavIntent(null)}
-          />
-        );
+        return <IncomeList selectedStation={selectedStation} userRole={userRole || 'Staff'} />;
       case '/purchases':
-        return (
-          <PurchasesList
-            selectedStation={selectedStation}
-            intent={navIntent}
-            onIntentConsumed={() => setNavIntent(null)}
-          />
-        );
+        return <PurchasesList selectedStation={selectedStation} />;
       case '/inventory':
-        return (
-          <InventoryList
-            selectedStation={selectedStation}
-            intent={navIntent}
-            onIntentConsumed={() => setNavIntent(null)}
-          />
-        );
+        return <InventoryList selectedStation={selectedStation} />;
       case '/pricing':
         return <FuelPricingPanel selectedStation={selectedStation} />;
       case '/accounts':
         return <AccountsPanel selectedStation={selectedStation} />;
       case '/customers':
-        return (
-          <CustomersList
-            selectedStation={selectedStation}
-            intent={navIntent}
-            onIntentConsumed={() => setNavIntent(null)}
-          />
-        );
+        return <CustomersList selectedStation={selectedStation} />;
       case '/reports':
-        return (
-          <ReportsOverview
-            selectedStation={selectedStation}
-            userRole={userRole || 'Staff'}
-            intent={navIntent}
-            onIntentConsumed={() => setNavIntent(null)}
-          />
-        );
+        return <ReportsOverview selectedStation={selectedStation} userRole={userRole || 'Staff'} />;
       case '/organization':
         return (
           <OrganizationOverview

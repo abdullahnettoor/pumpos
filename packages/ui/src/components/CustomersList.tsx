@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { useNavIntent, clearNavIntent } from '../nav-intent/store.js';
 import { CloudTransactionService } from '../services/cloud.js';
 import {
   useCustomers,
@@ -21,7 +22,6 @@ import { PageLayout } from './primitives/PageLayout.js';
 import { useConfirm } from './primitives/ConfirmDialog.js';
 import { useToast } from './primitives/ToastProvider.js';
 import { Panel, Button, Chip, KpiStrip, KpiTile, EmptyState } from '../pump-ds/index.js';
-import type { NavIntent } from './AppShell.js';
 import { resolveBusinessDate, type CollectionEntryFormValues } from '@pump/shared';
 import {
   buildCustomerColumns,
@@ -39,10 +39,6 @@ const transactionService = new CloudTransactionService();
 interface CustomersListProps {
   selectedStation: any | null;
   defaultShiftId?: string;
-  /** Optional deep-link intent (focus a customer, open a drawer). */
-  intent?: NavIntent | null;
-  /** Called once the intent has been handled so the parent can clear it. */
-  onIntentConsumed?: () => void;
 }
 
 type TabType = 'transactions' | 'sales' | 'registry' | 'vehicles';
@@ -50,10 +46,8 @@ type TabType = 'transactions' | 'sales' | 'registry' | 'vehicles';
 export const CustomersList: React.FC<CustomersListProps> = ({
   selectedStation,
   defaultShiftId,
-  intent,
-  onIntentConsumed,
 }) => {
-  const [activeTab, setActiveTab] = useState<TabType>('transactions');
+  const [selectedTab, setSelectedTab] = useState<TabType>('transactions');
 
   const stationId = selectedStation?.id ?? null;
   const customersActiveQ = useCustomers(true);
@@ -70,8 +64,8 @@ export const CustomersList: React.FC<CustomersListProps> = ({
   const runTask = useRunTask();
 
   const customers = customersActiveQ.data ?? [];
-  const allCustomers = customersAllQ.data ?? [];
-  const allCollections = collectionsQ.data ?? [];
+  const allCustomers = useMemo(() => customersAllQ.data ?? [], [customersAllQ.data]);
+  const allCollections = useMemo(() => collectionsQ.data ?? [], [collectionsQ.data]);
   const anyPrepaid = allCustomers.some((c: any) => c.isPrepaid);
   const activeShift = statusQ.data?.activeShift ?? null;
   const recentClosedShifts: any[] = statusQ.data?.recentClosedShifts ?? [];
@@ -126,7 +120,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({
   }, [allCollections, collectionSearch, collectionMethod]);
 
   // Credit-sales ledger
-  const allCreditSales = creditSalesQ.data ?? [];
+  const allCreditSales = useMemo(() => creditSalesQ.data ?? [], [creditSalesQ.data]);
   const [salesSearch, setSalesSearch] = useState('');
   const salesKpis = useMemo(() => {
     let today = 0,
@@ -184,7 +178,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({
   );
 
   // --- Vehicles (list + filter) ---
-  const allVehicles = vehiclesQ.data ?? [];
+  const allVehicles = useMemo(() => vehiclesQ.data ?? [], [vehiclesQ.data]);
   const loadingVehicles = vehiclesQ.isLoading;
   const [vehicleSearch, setVehicleSearch] = useState('');
   const filteredVehicles = useMemo(() => {
@@ -199,19 +193,21 @@ export const CustomersList: React.FC<CustomersListProps> = ({
   }, [allVehicles, vehicleSearch]);
 
   // --- Customer form drawer ---
-  const [isCustomerDrawerOpen, setIsCustomerDrawerOpen] = useState(false);
+  const [customerDrawerOpen, setCustomerDrawerOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<any | null>(null);
   const openCreateCustomer = () => {
+    clearNavIntent();
     setEditingCustomer(null);
-    setIsCustomerDrawerOpen(true);
+    setCustomerDrawerOpen(true);
   };
   const openEditCustomer = (cust: any) => {
+    clearNavIntent();
     setEditingCustomer(cust);
-    setIsCustomerDrawerOpen(true);
+    setCustomerDrawerOpen(true);
   };
 
   // --- Statement drawer ---
-  const [statementCustomer, setStatementCustomer] = useState<any | null>(null);
+  const [statementCustomerId, setStatementCustomerId] = useState<string | null>(null);
 
   // --- Vehicle drawer ---
   const [isVehicleDrawerOpen, setIsVehicleDrawerOpen] = useState(false);
@@ -251,7 +247,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({
   }, [customersAllQ.data]);
 
   // --- Collection drawer ---
-  const [isCollectionDrawerOpen, setIsCollectionDrawerOpen] = useState(false);
+  const [collectionDrawerOpen, setCollectionDrawerOpen] = useState(false);
   const [collectionDefaults, setCollectionDefaults] = useState<Partial<CollectionEntryFormValues>>(
     {},
   );
@@ -284,11 +280,12 @@ export const CustomersList: React.FC<CustomersListProps> = ({
   };
 
   const openCollectionDrawer = (customerId?: string) => {
+    clearNavIntent();
     resetCollectionForm(customerId);
-    setIsCollectionDrawerOpen(true);
+    setCollectionDrawerOpen(true);
   };
   const closeCollectionDrawer = () => {
-    setIsCollectionDrawerOpen(false);
+    setCollectionDrawerOpen(false);
     resetCollectionForm();
   };
 
@@ -319,24 +316,40 @@ export const CustomersList: React.FC<CustomersListProps> = ({
   };
 
   // --- deep-link intent (from global search / quick-create) ---
-  const handledIntentRef = useRef<NavIntent | null>(null);
-  useEffect(() => {
-    if (!intent || handledIntentRef.current === intent) return;
-    // For a focus intent, wait until the customer list has loaded.
-    if (intent.focusCustomerId && customersAllQ.isLoading) return;
-    handledIntentRef.current = intent;
-    if (intent.open === 'new-customer') openCreateCustomer();
-    else if (intent.open === 'new-collection') openCollectionDrawer();
-    if (intent.focusCustomerId) {
-      const cust = allCustomers.find((c: any) => c.id === intent.focusCustomerId);
-      if (cust) {
-        setActiveTab('registry');
-        setStatementCustomer(cust);
-      }
-    }
-    onIntentConsumed?.();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [intent, allCustomers, customersAllQ.isLoading]);
+  // Everything below is derived from the pending intent rather than copied into
+  // state by an effect. That removes the old race: the effect bailed out while
+  // `customersAllQ` was loading and relied on re-running once the data landed,
+  // so a deep link could be swallowed. A derivation simply resolves later.
+  const intent = useNavIntent();
+  const focusCustomerId = intent?.focusCustomerId ?? null;
+  const activeTab: TabType = focusCustomerId ? 'registry' : selectedTab;
+  const statementCustomer = focusCustomerId
+    ? (allCustomers.find((c: any) => c.id === focusCustomerId) ?? null)
+    : (allCustomers.find((c: any) => c.id === statementCustomerId) ?? null);
+
+  // `open: 'new-customer'` arrives from the quick-create menu and the command
+  // palette. `CustomerFormDrawer` seeds its own defaults, so opening it by
+  // derivation is safe here in a way it would not be for an entry drawer.
+  const isCustomerDrawerOpen = intent?.open === 'new-customer' || customerDrawerOpen;
+  const closeCustomerDrawer = () => {
+    clearNavIntent();
+    setCustomerDrawerOpen(false);
+  };
+
+  const setActiveTab = (tab: TabType) => {
+    clearNavIntent();
+    setSelectedTab(tab);
+  };
+  /**
+   * Any setter that competes with a derived intent value must also drop the
+   * intent, or the deep link silently out-votes the operator — clicking a row
+   * while a focus intent is pending would otherwise do nothing on screen.
+   */
+  const showStatementFor = (id: string | null) => {
+    clearNavIntent();
+    setStatementCustomerId(id);
+  };
+  const closeStatement = () => showStatementFor(null);
 
   if (!selectedStation) {
     return (
@@ -703,7 +716,11 @@ export const CustomersList: React.FC<CustomersListProps> = ({
           >
             <DataTable
               bare
-              columns={buildCustomerColumns(setStatementCustomer, openEditCustomer, anyPrepaid)}
+              columns={buildCustomerColumns(
+                (c: any) => showStatementFor(c.id),
+                openEditCustomer,
+                anyPrepaid,
+              )}
               data={registryCustomers}
               emptyMessage={
                 registryEodOnly
@@ -791,12 +808,12 @@ export const CustomersList: React.FC<CustomersListProps> = ({
         isOpen={isCustomerDrawerOpen}
         editingCustomer={editingCustomer}
         stationId={stationId}
-        onClose={() => setIsCustomerDrawerOpen(false)}
+        onClose={closeCustomerDrawer}
       />
 
       {/* Collections Drawer */}
       <Drawer
-        isOpen={isCollectionDrawerOpen}
+        isOpen={collectionDrawerOpen}
         onClose={closeCollectionDrawer}
         title="Log Customer Collection"
       >
@@ -828,13 +845,13 @@ export const CustomersList: React.FC<CustomersListProps> = ({
       <StatementDrawer
         customer={statementCustomer}
         stationId={stationId}
-        onClose={() => setStatementCustomer(null)}
+        onClose={closeStatement}
         onEdit={(c) => {
-          setStatementCustomer(null);
+          closeStatement();
           openEditCustomer(c);
         }}
         onRecordCollection={(c) => {
-          setStatementCustomer(null);
+          closeStatement();
           openCollectionDrawer(c.id);
         }}
       />

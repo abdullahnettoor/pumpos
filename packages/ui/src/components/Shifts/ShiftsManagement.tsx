@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useNavIntent, clearNavIntent } from '../../nav-intent/store.js';
 import { useQueryClient } from '@tanstack/react-query';
 import { inr } from '../../utils/format.js';
 import { CloudShiftService, CloudTransactionService } from '../../services/cloud.js';
@@ -51,7 +52,6 @@ import {
   CalendarRange,
 } from 'lucide-react';
 import { LoadingSpinner } from '../LoadingSpinner.js';
-import type { NavIntent } from '../AppShell.js';
 import { useStationBusinessDate } from '../../hooks/useStationBusinessDate.js';
 import { refreshShiftStatus } from './refreshShiftStatus.js';
 
@@ -98,8 +98,6 @@ interface ShiftsManagementProps {
   userRole: 'Owner' | 'Manager' | 'Accountant' | 'Staff';
   userName: string;
   onNavigate?: (path: string) => void;
-  intent?: NavIntent | null;
-  onIntentConsumed?: () => void;
 }
 
 export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
@@ -107,8 +105,6 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   userRole,
   userName,
   onNavigate,
-  intent,
-  onIntentConsumed,
 }) => {
   const stationId = selectedStation?.id ?? null;
   const statusQ = useShiftStatus(stationId, false, { refetchOnWindowFocus: false });
@@ -123,10 +119,32 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   const [viewingShiftSummary, setViewingShiftSummary] = useState(false);
 
   // Shift Tab Sub-Navigation
-  const [shiftSubTab, setShiftSubTab] = useState<'today' | 'business-day' | 'history'>(
+  const [selectedSubTab, setSelectedSubTab] = useState<'today' | 'business-day' | 'history'>(
     userRole === 'Accountant' ? 'business-day' : 'today',
   );
-  const [requestedBusinessDayDate, setRequestedBusinessDayDate] = useState<string | null>(null);
+  const [selectedBusinessDayDate, setSelectedBusinessDayDate] = useState<string | null>(null);
+  // Deep link from the top-bar business-day pill. Derived rather than synced by
+  // an effect; this consumer had no re-fire guard at all and relied purely on
+  // the parent nulling the prop in time.
+  const intent = useNavIntent();
+  const intentBusinessDay = intent?.openBusinessDayDate ?? null;
+  const shiftSubTab = intentBusinessDay ? 'business-day' : selectedSubTab;
+  const requestedBusinessDayDate = intentBusinessDay ?? selectedBusinessDayDate;
+  const setShiftSubTab = (tab: 'today' | 'business-day' | 'history') => {
+    clearNavIntent();
+    setSelectedSubTab(tab);
+  };
+  /**
+   * BusinessDayTab reports the requested date as consumed on mount. Commit the
+   * durable half — that we are on the business-day sub-tab — into local state
+   * first: clearing the intent alone would drop the tab derivation and bounce
+   * the operator straight back to Active Shift.
+   */
+  const setRequestedBusinessDayDate = (date: string | null) => {
+    setSelectedSubTab('business-day');
+    setSelectedBusinessDayDate(date);
+    clearNavIntent();
+  };
   const [viewHistoryShiftId, setViewHistoryShiftId] = useState<string | null>(null);
 
   // Open Shift Form States
@@ -165,13 +183,6 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   useEffect(() => {
     if (!data?.activeShift && !preserveNextShiftDate) setBusinessDate(currentBusinessDate);
   }, [currentBusinessDate, data?.activeShift, preserveNextShiftDate]);
-
-  useEffect(() => {
-    if (!intent?.openBusinessDayDate) return;
-    setRequestedBusinessDayDate(intent.openBusinessDayDate);
-    setShiftSubTab('business-day');
-    onIntentConsumed?.();
-  }, [intent?.openBusinessDayDate, onIntentConsumed]);
 
   // Active Shift Workspace States
   const [closingReadings, setClosingReadings] = useState<Record<string, number>>({});

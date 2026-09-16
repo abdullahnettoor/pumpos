@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { CloudTransactionService } from '../../services/cloud.js';
 import { inr } from '../../utils/format.js';
 import { useQueryClient } from '@tanstack/react-query';
