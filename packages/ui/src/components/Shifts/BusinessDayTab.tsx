@@ -86,7 +86,9 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
     settings.timezone,
     settings.business_day_starts_at,
   );
-  const [businessDate, setBusinessDate] = useState(currentBusinessDate);
+  const [pickedBusinessDate, setPickedBusinessDate] = useState<string | null>(null);
+  const businessDate = requestedBusinessDate ?? pickedBusinessDate ?? currentBusinessDate;
+
   const initializedStationId = useRef<string | null>(null);
 
   const toast = useToast();
@@ -151,7 +153,7 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
       return;
     const resolvedActiveBusinessDayId = activeShift?.businessDayId ?? activeBusinessDayId;
     const activeDay = openBusinessDays.find((day: any) => day.id === resolvedActiveBusinessDayId);
-    setBusinessDate(requestedBusinessDate || activeDay?.businessDate || currentBusinessDate);
+    setPickedBusinessDate(requestedBusinessDate || activeDay?.businessDate || currentBusinessDate);
     initializedStationId.current = stationId;
     if (requestedBusinessDate) onBusinessDateSelected?.();
   }, [
@@ -166,12 +168,15 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
     onBusinessDateSelected,
   ]);
 
+  // A date requested by the shifts workspace wins until it is released. Derived
+  // rather than copied into state, so it applies on the render it arrives on
+  // instead of one frame later; releasing it is the only side effect left, and
+  // it updates nothing here.
   useEffect(() => {
     if (!requestedBusinessDate) return;
-    if (requestedBusinessDate !== businessDate) setBusinessDate(requestedBusinessDate);
     initializedStationId.current = stationId;
     onBusinessDateSelected?.();
-  }, [requestedBusinessDate, businessDate, stationId, onBusinessDateSelected]);
+  }, [requestedBusinessDate, stationId, onBusinessDateSelected]);
   const shiftColumns = useMemo<ColumnDef<any, any>[]>(
     () => [
       {
@@ -423,7 +428,7 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
                   key={day.id}
                   type="button"
                   aria-pressed={selected}
-                  onClick={() => setBusinessDate(day.businessDate)}
+                  onClick={() => setPickedBusinessDate(day.businessDate)}
                   style={{
                     ...rowStyle,
                     width: '100%',

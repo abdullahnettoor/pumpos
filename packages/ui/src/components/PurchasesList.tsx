@@ -8,6 +8,7 @@ import {
   useProducts,
   useTanks,
   useInvalidateOperational,
+  usePurchaseGstRegister,
 } from '../query/hooks.js';
 import {
   Plus,
@@ -153,30 +154,14 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({
   monthStart.setDate(1);
   const [gstFrom, setGstFrom] = useState(monthStart.toISOString().slice(0, 10));
   const [gstTo, setGstTo] = useState(new Date().toISOString().slice(0, 10));
-  const [gstRows, setGstRows] = useState<any[]>([]);
-  const [gstLoading, setGstLoading] = useState(false);
-  const [gstError, setGstError] = useState<string | null>(null);
-
-  const loadGstRegister = async () => {
-    setGstLoading(true);
-    setGstError(null);
-    try {
-      const rows = await transactionService.getPurchaseGstRegister(
-        gstFrom || undefined,
-        gstTo || undefined,
-      );
-      setGstRows(rows || []);
-    } catch (e: any) {
-      setGstError(e.message || 'Failed to load GST register');
-    } finally {
-      setGstLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (activeTab === 'gst') runTask(loadGstRegister(), 'Could not load the GST register.');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab]);
+  // See IncomeList: a tab-gated query replaces the load-from-effect.
+  const gstQ = usePurchaseGstRegister(
+    { from: gstFrom, to: gstTo },
+    { enabled: activeTab === 'gst' },
+  );
+  const gstRows = useMemo(() => gstQ.data ?? [], [gstQ.data]);
+  const gstLoading = gstQ.isFetching;
+  const gstError = gstQ.error ? gstQ.error.message : null;
 
   const gstTotals = gstRows.reduce(
     (acc, r) => ({
@@ -269,31 +254,10 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({
     setIsSupplierDrawerOpen(true);
   };
 
-  // Initialise form defaults from query data once it loads (preserves prior
-  // load-time behaviour now that data comes from the query cache).
-  useEffect(() => {
-    if (isPurchaseDrawerOpen) return;
-    setPurchaseDefaults((prev) => {
-      const lines =
-        prev.lines && prev.lines.length > 0
-          ? prev.lines
-          : [
-              {
-                productId: products[0]?.id ?? '',
-                quantity: undefined as unknown as number,
-                unitPrice: undefined as unknown as number,
-              },
-            ];
-      return {
-        ...prev,
-        targetShiftId:
-          prev.targetShiftId || resolvePreferredShiftId(activeShift, recentClosedShifts),
-        supplierId: prev.supplierId || suppliers[0]?.id || '',
-        lines,
-      };
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusQ.data, suppliersActiveQ.data, productsQ.data]);
+  // Note: there is no pre-seeding effect here. Every path that opens the
+  // purchase drawer calls `resetPurchaseForm` first, which rebuilds the defaults
+  // from whatever the queries hold at that moment — so seeding them in advance
+  // was duplicated work that could only ever be more stale than the reset.
 
   const handleAddPurchase = async (
     values: PurchaseEntryFormValues,
@@ -592,7 +556,12 @@ export const PurchasesList: React.FC<PurchasesListProps> = ({
                   className="input input-compact"
                 />
               </div>
-              <Button variant="secondary" size="md" onClick={loadGstRegister} loading={gstLoading}>
+              <Button
+                variant="secondary"
+                size="md"
+                onClick={() => void gstQ.refetch()}
+                loading={gstLoading}
+              >
                 Apply
               </Button>
             </div>

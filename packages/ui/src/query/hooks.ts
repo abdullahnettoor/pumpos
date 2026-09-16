@@ -98,6 +98,7 @@ export const queryKeys = {
   sales: (stationId: string, from: string, to: string) => ['sales', stationId, from, to] as const,
   salesTaxRegister: (stationId: string, from: string, to: string) =>
     ['sales-tax-register', stationId, from, to] as const,
+  purchaseGstRegister: (from: string, to: string) => ['purchase-gst-register', from, to] as const,
   incomeGstRegister: (stationId: string, from: string, to: string) =>
     ['income-gst-register', stationId, from, to] as const,
   financialAccounts: (stationId: string) => ['financial-accounts', stationId] as const,
@@ -354,6 +355,20 @@ export function useSalesTaxRegister(
         to: params.to,
       }),
     enabled: !!params.stationId,
+    ...TIER.operational,
+    ...options,
+  });
+}
+
+/** Input GST on purchases for a period. */
+export function usePurchaseGstRegister(
+  params: { from?: string; to?: string },
+  options?: Options<any[]>,
+) {
+  return useQuery({
+    queryKey: queryKeys.purchaseGstRegister(params.from ?? '', params.to ?? ''),
+    queryFn: () =>
+      txService.getPurchaseGstRegister(params.from || undefined, params.to || undefined),
     ...TIER.operational,
     ...options,
   });

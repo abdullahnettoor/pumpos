@@ -70,7 +70,12 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
   onViewLastShiftSummary,
 }) => {
   const [customDateMode, setCustomDateMode] = useState(false);
-  const [queryBusinessDate, setQueryBusinessDate] = useState(businessDate);
+  // The date the business-day query follows: whatever the operator picked, else
+  // the prop. Derived rather than synced, so a new prop reaches the query
+  // without an effect and a picked date is not overwritten by one.
+  const [pickedBusinessDate, setPickedBusinessDate] = useState<string | null>(null);
+  const queryBusinessDate = pickedBusinessDate ?? businessDate;
+
   const businessDayStatusQ = useBusinessDayStatus(stationId, queryBusinessDate);
   const businessDayState = businessDayStatusQ.isError
     ? 'UNAVAILABLE'
@@ -85,25 +90,18 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
     formState: { errors },
   } = useZodForm<OpenShiftFormValues>(schema, {
     defaultValues: { shiftTemplateId: selectedTemplateId, businessDate, openingCash },
+    // React Hook Form syncs these from props, replacing three hand-rolled
+    // setValue effects. `keepDirtyValues` leaves a field the operator has
+    // already edited alone — which those effects could not express, so an
+    // unrelated parent re-render used to overwrite a half-filled form.
+    values: { shiftTemplateId: selectedTemplateId, businessDate, openingCash },
+    resetOptions: { keepDirtyValues: true },
   });
   const formTemplateId = watch('shiftTemplateId');
   const formBusinessDate = watch('businessDate');
   const selectedTemplate = templates.find((template: any) => template.id === formTemplateId);
   const knownOpenDate = openBusinessDays.some((day) => day.businessDate === formBusinessDate);
   const dateChoice = !customDateMode && knownOpenDate ? formBusinessDate : 'custom';
-
-  useEffect(() => {
-    if (selectedTemplateId)
-      setValue('shiftTemplateId', selectedTemplateId, { shouldValidate: true });
-  }, [selectedTemplateId, setValue]);
-  useEffect(() => {
-    setValue('businessDate', businessDate, { shouldValidate: true });
-    setQueryBusinessDate(businessDate);
-  }, [businessDate, setValue]);
-  useEffect(
-    () => setValue('openingCash', openingCash, { shouldValidate: true }),
-    [openingCash, setValue],
-  );
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
       {/* Header */}
@@ -216,8 +214,8 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
                     setCustomDateMode(true);
                   } else {
                     setCustomDateMode(false);
+                    setPickedBusinessDate(e.target.value);
                     setValue('businessDate', e.target.value, { shouldValidate: true });
-                    setQueryBusinessDate(e.target.value);
                   }
                 }}
               >
@@ -252,7 +250,7 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
               >
                 <DateField
                   {...register('businessDate', {
-                    onChange: (e) => setQueryBusinessDate(e.target.value),
+                    onChange: (e) => setPickedBusinessDate(e.target.value),
                   })}
                   invalid={!!errors.businessDate}
                   required

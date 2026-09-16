@@ -367,12 +367,7 @@ describe('PurchaseEntryForm', () => {
       expect((screen.getAllByPlaceholderText('0.00')[0] as HTMLInputElement).value).toBe('3000');
     });
 
-    it('auto-allocates a single-tank line once the quantity is edited', async () => {
-      // NOTE: this deliberately edits the quantity rather than relying on mount.
-      // With `defaultValues` supplied, the reset effect regenerates the field
-      // ids *after* the auto-allocation effect has keyed its entry to the old
-      // ones, so the mount-time allocation is silently dropped. Filed
-      // separately; this pins the path that does work.
+    it('auto-allocates a single-tank line on open, with no interaction', async () => {
       const onSubmit = vi.fn();
       render(
         <PurchaseEntryForm
@@ -386,17 +381,17 @@ describe('PurchaseEntryForm', () => {
           })}
         />,
       );
-      fireEvent.change(inputUnder('Total Amount (₹)'), { target: { value: '396900' } });
-      fireEvent.change(inputUnder(/Quantity/), { target: { value: '4200' } });
-
+      // The whole delivery lands in the only tank that takes it; the operator
+      // should not have to retype the quantity to make that happen.
       await waitFor(() =>
-        expect((screen.getAllByPlaceholderText('0.00')[0] as HTMLInputElement).value).toBe('4200'),
+        expect((screen.getAllByPlaceholderText('0.00')[0] as HTMLInputElement).value).toBe('5000'),
       );
+      fireEvent.change(inputUnder('Total Amount (₹)'), { target: { value: '472500' } });
 
       submitForm();
       await waitFor(() => expect(onSubmit).toHaveBeenCalled());
       expect(onSubmit.mock.calls[0][0].lines[0].tankAllocations).toEqual([
-        { tankId: 't1', quantity: 4200 },
+        { tankId: 't1', quantity: 5000 },
       ]);
     });
   });

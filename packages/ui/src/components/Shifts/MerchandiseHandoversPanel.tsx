@@ -84,8 +84,10 @@ export const MerchandiseHandoversPanel: React.FC<MerchandiseHandoversPanelProps>
     shiftId,
     initialSales ? ({ initialData: initialSales } as any) : undefined,
   );
-  const handovers = handoversQ.data ?? [];
-  const billed = billedQ.data ?? [];
+  // Memoised so the totals below actually memoise: a bare `?? []` hands the
+  // dependency list a new array on every render while the query is loading.
+  const handovers = useMemo(() => handoversQ.data ?? [], [handoversQ.data]);
+  const billed = useMemo(() => billedQ.data ?? [], [billedQ.data]);
   const loading = handoversQ.isLoading || billedQ.isLoading;
   const [products, setProducts] = useState<any[]>([]);
   const [sellers, setSellers] = useState<{ userId: string; userName: string }[]>([]);

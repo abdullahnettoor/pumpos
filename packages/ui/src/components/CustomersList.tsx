@@ -212,7 +212,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({
   // --- Vehicle drawer ---
   const [isVehicleDrawerOpen, setIsVehicleDrawerOpen] = useState(false);
   const [editingVehicle, setEditingVehicle] = useState<any | null>(null);
-  const [vehicleCustomerId, setVehicleCustomerId] = useState('');
+
   const openCreateVehicle = () => {
     setEditingVehicle(null);
     setIsVehicleDrawerOpen(true);
@@ -240,11 +240,10 @@ export const CustomersList: React.FC<CustomersListProps> = ({
     }
   };
 
-  // Default the "add vehicle" customer to the first eligible one.
-  useEffect(() => {
-    setVehicleCustomerId((prev) => prev || eligibleCustomers[0]?.id || '');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [customersAllQ.data]);
+  // The "add vehicle" drawer defaults to the first eligible customer. Nothing
+  // else ever set this, so it was only ever a derived value held in state and
+  // filled in one render late.
+  const vehicleCustomerId = eligibleCustomers[0]?.id ?? '';
 
   // --- Collection drawer ---
   const [collectionDrawerOpen, setCollectionDrawerOpen] = useState(false);
