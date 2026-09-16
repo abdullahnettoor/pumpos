@@ -221,11 +221,21 @@ const buildUserColumns = (
         <div
           style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', alignItems: 'center' }}
         >
-          <button onClick={() => startEdit(u)} title="Edit member" style={iconBtn}>
+          <button
+            onClick={() => startEdit(u)}
+            title="Edit member"
+            aria-label="Edit member"
+            style={iconBtn}
+          >
             <Edit size={14} />
           </button>
           {u.hasLogin && (
-            <button onClick={() => onReset(u)} title="Reset password" style={iconBtn}>
+            <button
+              onClick={() => onReset(u)}
+              title="Reset password"
+              aria-label="Reset password"
+              style={iconBtn}
+            >
               <KeyRound size={14} />
             </button>
           )}
