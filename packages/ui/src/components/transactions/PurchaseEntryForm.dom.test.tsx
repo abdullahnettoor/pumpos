@@ -2,6 +2,7 @@
 import React from 'react';
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { muteExpectedConsoleErrors } from '../../test/renderWithProviders.js';
 import { PurchaseEntryForm, type PurchaseEntryFormProps } from './PurchaseEntryForm.js';
 
 /**
@@ -49,13 +50,18 @@ const submitForm = () => {
 };
 
 describe('PurchaseEntryForm', () => {
-  let consoleError: ReturnType<typeof vi.spyOn>;
+  let restoreConsole: () => void;
   beforeEach(() => {
-    consoleError = vi.spyOn(console, 'error').mockImplementation(() => {}) as never;
+    // Only the noise these tests provoke on purpose; React's act() and
+    // unmounted-update warnings must still reach the console.
+    restoreConsole = muteExpectedConsoleErrors([
+      /not wrapped in act/,
+      /Warning: validateDOMNesting/,
+    ]);
   });
   afterEach(() => {
     cleanup();
-    consoleError.mockRestore();
+    restoreConsole();
   });
 
   describe('fuel rate derivation', () => {
@@ -288,6 +294,110 @@ describe('PurchaseEntryForm', () => {
       submitForm();
       await waitFor(() => expect(onSubmit).toHaveBeenCalled());
       expect(onSubmit.mock.calls[0][1]).toBeUndefined();
+    });
+  });
+
+  describe('reopening for a different purchase', () => {
+    // Guards the effect that resets the form when `defaultValues` changes. A
+    // "fix" that runs it only on mount would show the previous purchase's
+    // quantities against the new supplier — invisible without this.
+    const tanks = [{ id: 't1', name: 'Tank 1', productId: PETROL.id, capacity: 10000 }];
+
+    it('shows the new purchase, not the previous one', async () => {
+      const { rerender } = render(
+        <PurchaseEntryForm
+          {...baseProps({
+            defaultValues: {
+              supplierId: 's1',
+              invoiceNumber: 'INV-001',
+              lines: [{ productId: OIL.id, quantity: 10, unitPrice: 450 } as never],
+            },
+          })}
+        />,
+      );
+      expect((inputUnder(/Quantity/) as HTMLInputElement).value).toBe('10');
+
+      rerender(
+        <PurchaseEntryForm
+          {...baseProps({
+            defaultValues: {
+              supplierId: 's1',
+              invoiceNumber: 'INV-002',
+              lines: [{ productId: OIL.id, quantity: 25, unitPrice: 500 } as never],
+            },
+          })}
+        />,
+      );
+      await waitFor(() => expect((inputUnder(/Quantity/) as HTMLInputElement).value).toBe('25'));
+    });
+
+    it('discards what was typed against the previous purchase', async () => {
+      const { rerender } = render(
+        <PurchaseEntryForm
+          {...baseProps({
+            tanks,
+            defaultValues: {
+              supplierId: 's1',
+              lines: [{ productId: PETROL.id, quantity: 5000 } as never],
+            },
+          })}
+        />,
+      );
+      fireEvent.change(inputUnder('Total Amount (₹)'), { target: { value: '472500' } });
+      fireEvent.change(screen.getAllByPlaceholderText('0.00')[0], { target: { value: '5000' } });
+
+      rerender(
+        <PurchaseEntryForm
+          {...baseProps({
+            tanks,
+            defaultValues: {
+              supplierId: 's1',
+              lines: [{ productId: PETROL.id, quantity: 3000 } as never],
+            },
+          })}
+        />,
+      );
+
+      // Carrying either figure over would book the wrong litres into the tank.
+      await waitFor(() =>
+        expect((inputUnder('Total Amount (₹)') as HTMLInputElement).value).toBe(''),
+      );
+      expect((inputUnder(/Quantity/) as HTMLInputElement).value).toBe('3000');
+      // The split now reflects the new delivery, not the old 5,000 L.
+      expect((screen.getAllByPlaceholderText('0.00')[0] as HTMLInputElement).value).toBe('3000');
+    });
+
+    it('auto-allocates a single-tank line once the quantity is edited', async () => {
+      // NOTE: this deliberately edits the quantity rather than relying on mount.
+      // With `defaultValues` supplied, the reset effect regenerates the field
+      // ids *after* the auto-allocation effect has keyed its entry to the old
+      // ones, so the mount-time allocation is silently dropped. Filed
+      // separately; this pins the path that does work.
+      const onSubmit = vi.fn();
+      render(
+        <PurchaseEntryForm
+          {...baseProps({
+            onSubmit,
+            tanks,
+            defaultValues: {
+              supplierId: 's1',
+              lines: [{ productId: PETROL.id, quantity: 5000 } as never],
+            },
+          })}
+        />,
+      );
+      fireEvent.change(inputUnder('Total Amount (₹)'), { target: { value: '396900' } });
+      fireEvent.change(inputUnder(/Quantity/), { target: { value: '4200' } });
+
+      await waitFor(() =>
+        expect((screen.getAllByPlaceholderText('0.00')[0] as HTMLInputElement).value).toBe('4200'),
+      );
+
+      submitForm();
+      await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+      expect(onSubmit.mock.calls[0][0].lines[0].tankAllocations).toEqual([
+        { tankId: 't1', quantity: 4200 },
+      ]);
     });
   });
 });

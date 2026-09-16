@@ -2,7 +2,7 @@
 import React from 'react';
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
-import { renderWithProviders } from '../../test/renderWithProviders.js';
+import { renderWithProviders, muteExpectedConsoleErrors } from '../../test/renderWithProviders.js';
 import { CloseShiftWizard, type CloseShiftWizardProps } from './CloseShiftWizard.js';
 
 /**
@@ -43,20 +43,29 @@ const baseProps = (over: Partial<CloseShiftWizardProps> = {}): CloseShiftWizardP
 });
 
 const step = () => screen.getByText(/^Step \d of 4$/).textContent;
-const varianceLine = () => document.querySelector('.close-wizard-variance');
+/** Anchored on the visible label, so a styling change cannot silently break it. */
+const varianceLine = () => screen.getByText(/Drawer cash variance/i).closest('[data-state]');
 const closeButton = () => screen.getByRole('button', { name: /^Close Shift$/ });
+/** Reads the value cell of a step-4 summary row by its label. */
+const summaryValue = (label: string) =>
+  screen.getByText(label).parentElement?.querySelector('span:last-child')?.textContent ?? '';
 const goToStep = (n: number) => {
   for (let i = 1; i < n; i++) fireEvent.click(screen.getByRole('button', { name: 'Next' }));
 };
 
 describe('CloseShiftWizard', () => {
-  let consoleError: ReturnType<typeof vi.spyOn>;
+  let restoreConsole: () => void;
   beforeEach(() => {
-    consoleError = vi.spyOn(console, 'error').mockImplementation(() => {}) as never;
+    // Only the noise these tests provoke on purpose; React's act() and
+    // unmounted-update warnings must still reach the console.
+    restoreConsole = muteExpectedConsoleErrors([
+      /not wrapped in act/,
+      /Warning: validateDOMNesting/,
+    ]);
   });
   afterEach(() => {
     cleanup();
-    consoleError.mockRestore();
+    restoreConsole();
   });
 
   describe('drawer cash variance', () => {
@@ -119,6 +128,23 @@ describe('CloseShiftWizard', () => {
 
       expect(screen.getByText(/Close Shift · Evening/)).toBeDefined();
       expect(varianceLine()?.getAttribute('data-state')).toBe('match');
+    });
+
+    it('clears the counted denominations when the drawer closes', () => {
+      // The only state in this component copied from a prop. If the reset is
+      // lost, the next shift's close opens showing the previous shift's cash
+      // count — and the variance derived from props would look consistent
+      // with it, so nothing else would give it away.
+      const { rerender } = renderWithProviders(<CloseShiftWizard {...baseProps()} />);
+      fireEvent.click(screen.getByRole('button', { name: 'Count safe cash by denomination' }));
+      fireEvent.change(screen.getByLabelText('Count of ₹500'), { target: { value: '3' } });
+      expect((screen.getByLabelText('Count of ₹500') as HTMLInputElement).value).toBe('3');
+
+      rerender(<CloseShiftWizard {...baseProps({ isOpen: false })} />);
+      rerender(<CloseShiftWizard {...baseProps({ shiftTemplateName: 'Evening' })} />);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Count safe cash by denomination' }));
+      expect((screen.getByLabelText('Count of ₹500') as HTMLInputElement).value).toBe('');
     });
 
     it('renders nothing at all while closed', () => {
@@ -188,7 +214,6 @@ describe('CloseShiftWizard', () => {
       renderWithProviders(<CloseShiftWizard {...baseProps({ closingCash: 10000 })} />);
       goToStep(4);
       expect((closeButton() as HTMLButtonElement).disabled).toBe(false);
-      fireEvent.click(closeButton());
     });
 
     it('calls onConfirmClose when the operator commits', () => {
@@ -217,7 +242,7 @@ describe('CloseShiftWizard', () => {
         />,
       );
       goToStep(4);
-      expect(screen.getByText('Pending')).toBeDefined();
+      expect(summaryValue('Warnings Acknowledged')).toBe('Pending');
     });
   });
 
@@ -232,7 +257,7 @@ describe('CloseShiftWizard', () => {
       );
       goToStep(4);
       // t2 was left blank, so one reading was captured, not two.
-      expect(screen.getByText('1')).toBeDefined();
+      expect(summaryValue('Dip Readings Captured')).toBe('1');
     });
 
     it('requires the post-close dip acknowledgement once a reading is entered', () => {
@@ -323,7 +348,8 @@ describe('CloseShiftWizard', () => {
           })}
         />,
       );
-      expect(screen.getAllByText(/balanced/).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(/\(balanced\)/).length).toBeGreaterThan(0);
+      expect(screen.queryByText(/\(short\)/)).toBeNull();
     });
 
     it('flags an attendant who handed over short', () => {
@@ -348,7 +374,9 @@ describe('CloseShiftWizard', () => {
           })}
         />,
       );
-      expect(screen.getAllByText(/short/).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(/\(short\)/).length).toBeGreaterThan(0);
+      // The ₹500 gap must be shown, not just its direction.
+      expect(screen.getAllByText(/500/).length).toBeGreaterThan(0);
     });
   });
 });

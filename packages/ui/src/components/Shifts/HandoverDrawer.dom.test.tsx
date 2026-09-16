@@ -2,7 +2,8 @@
 import React from 'react';
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
-import { renderWithProviders } from '../../test/renderWithProviders.js';
+import { renderWithProviders, muteExpectedConsoleErrors } from '../../test/renderWithProviders.js';
+import { handoverResultFor } from '../../test/handoverResult.js';
 
 /**
  * The attendant handover is the point where metered fuel is reconciled against
@@ -91,17 +92,27 @@ const saveButton = () =>
   screen.getByRole('button', { name: /Save Handover & Readings/ }) as HTMLButtonElement;
 
 describe('HandoverDrawer', () => {
-  let consoleError: ReturnType<typeof vi.spyOn>;
+  let restoreConsole: () => void;
   beforeEach(() => {
+    // A faithful echo: the drawer reseeds its form from result.nozzleReadings
+    // after a save, so a partial stub throws and the operator sees an error
+    // banner while a payload-only assertion still passes.
     mutateAsync
       .mockReset()
-      .mockResolvedValue({ expectedTotal: 0, declaredTotal: 0, varianceAmount: 0 });
+      .mockImplementation(({ payload }: { payload: never }) =>
+        Promise.resolve(handoverResultFor(payload)),
+      );
     recordCollection.mockReset();
-    consoleError = vi.spyOn(console, 'error').mockImplementation(() => {}) as never;
+    // Only the noise these tests provoke on purpose; React's act() and
+    // unmounted-update warnings must still reach the console.
+    restoreConsole = muteExpectedConsoleErrors([
+      /not wrapped in act/,
+      /Warning: validateDOMNesting/,
+    ]);
   });
   afterEach(() => {
     cleanup();
-    consoleError.mockRestore();
+    restoreConsole();
   });
 
   it('renders nothing while closed', () => {
@@ -194,14 +205,17 @@ describe('HandoverDrawer', () => {
   });
 
   describe('submitted payload', () => {
-    it('sends each nozzle reading with its testing volume', async () => {
-      renderWithProviders(<HandoverDrawer {...baseProps()} />);
+    it('sends each nozzle reading with its testing volume, and completes the save', async () => {
+      const onSaveSuccess = vi.fn();
+      renderWithProviders(<HandoverDrawer {...baseProps({ onSaveSuccess })} />);
       setReading(NOZZLE_A, '1050');
       setField(`nozzleTesting.${NOZZLE_A}`, '5');
       setField('cashHandedOver', '4500');
       fireEvent.click(saveButton());
 
       await waitFor(() => expect(mutateAsync).toHaveBeenCalled());
+      // Without this the payload could be right while the save visibly errors.
+      await waitFor(() => expect(onSaveSuccess).toHaveBeenCalled());
       const { payload } = mutateAsync.mock.calls[0][0];
       expect(payload.nozzleReadings).toEqual([
         { nozzleId: NOZZLE_A, closingReading: 1050, testingVolume: 5 },
@@ -252,6 +266,79 @@ describe('HandoverDrawer', () => {
 
       await waitFor(() => expect(mutateAsync).toHaveBeenCalled());
       expect(mutateAsync.mock.calls[0][0].payload.terminalEntries).toBeUndefined();
+    });
+  });
+
+  describe('reopening for an existing handover', () => {
+    // Guards the prefill effect and its `prefilledRef` latch. Both are the
+    // effects #63 will touch, and they are the reason a re-save cannot silently
+    // zero a calibration volume or clobber credit chits already entered.
+    const existing = { cashHandedOver: '4200', cardHandedOver: '800', upiHandedOver: '300' };
+
+    it('prefills the previously saved amounts', async () => {
+      renderWithProviders(<HandoverDrawer {...baseProps({ existingHandover: existing })} />);
+      await waitFor(() => expect(input('cashHandedOver').value).toBe('4200'));
+      expect(input('cardHandedOver').value).toBe('800');
+      expect(input('upiHandedOver').value).toBe('300');
+    });
+
+    it('prefills the previously saved calibration volume rather than zeroing it', async () => {
+      renderWithProviders(
+        <HandoverDrawer
+          {...baseProps({
+            existingHandover: existing,
+            nozzles: [nozzle(NOZZLE_A, { closingReading: 1080, testingVolume: 7 })],
+          })}
+        />,
+      );
+      await waitFor(() => expect(input(`nozzleReadings.${NOZZLE_A}`).value).toBe('1080'));
+      expect(input(`nozzleTesting.${NOZZLE_A}`).value).toBe('7');
+    });
+
+    it('does not clobber what the operator has typed while the drawer stays open', async () => {
+      // The latch exists because onCreditChanged triggers a parent refetch; a
+      // re-run mid-entry would wipe the figures being counted.
+      const { rerender } = renderWithProviders(
+        <HandoverDrawer {...baseProps({ existingHandover: existing })} />,
+      );
+      await waitFor(() => expect(input('cashHandedOver').value).toBe('4200'));
+      setField('cashHandedOver', '4900');
+
+      rerender(<HandoverDrawer {...baseProps({ existingHandover: { ...existing } })} />);
+      expect(input('cashHandedOver').value).toBe('4900');
+    });
+
+    it('prefills again after the drawer is closed and reopened', async () => {
+      const { rerender } = renderWithProviders(
+        <HandoverDrawer {...baseProps({ existingHandover: existing })} />,
+      );
+      await waitFor(() => expect(input('cashHandedOver').value).toBe('4200'));
+      setField('cashHandedOver', '4900');
+
+      rerender(<HandoverDrawer {...baseProps({ isOpen: false, existingHandover: existing })} />);
+      rerender(
+        <HandoverDrawer
+          {...baseProps({ existingHandover: { ...existing, cashHandedOver: '5100' } })}
+        />,
+      );
+      await waitFor(() => expect(input('cashHandedOver').value).toBe('5100'));
+    });
+
+    it('shows the credit chits already recorded for this attendant', async () => {
+      renderWithProviders(
+        <HandoverDrawer
+          {...baseProps({
+            creditSales: [
+              { id: 'c1', amount: 1200, customerName: 'Acme Transport' },
+              { id: 'c2', amount: 800, customerName: 'Beta Logistics' },
+            ],
+          })}
+        />,
+      );
+      await waitFor(() => expect(screen.getAllByText(/Acme Transport/).length).toBeGreaterThan(0));
+      setReading(NOZZLE_A, '1050');
+      // 2,000 of credit counts toward the 5,000 expected.
+      expect(rowValue('Declared Deposit Sum:')).toContain('2,000');
     });
   });
 

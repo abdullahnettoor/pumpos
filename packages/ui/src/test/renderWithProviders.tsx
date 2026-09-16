@@ -31,9 +31,7 @@ export function createTestQueryClient() {
       queries: { retry: false, gcTime: Infinity, staleTime: Infinity, refetchOnWindowFocus: false },
       mutations: { retry: false },
     },
-    // Swallow the expected console noise from deliberate error fixtures.
-    logger: { log: () => {}, warn: () => {}, error: () => {} },
-  } as never);
+  });
 }
 
 export function renderWithProviders(
@@ -51,7 +49,20 @@ export function renderWithProviders(
   return { ...render(ui, { wrapper: Wrapper, ...options }), queryClient: client };
 }
 
-/** Seed a query key so a component's hook resolves synchronously on first render. */
-export function seedQuery(client: QueryClient, key: readonly unknown[], data: unknown) {
-  client.setQueryData(key, data);
+/**
+ * Silence only the console.error messages a test deliberately provokes, and let
+ * everything else through. A blanket spy would mute React's act() and
+ * "update on unmounted component" warnings — exactly the signals these tests
+ * exist to surface during the hook refactor they protect.
+ */
+export function muteExpectedConsoleErrors(patterns: RegExp[]) {
+  const original = console.error;
+  console.error = (...args: unknown[]) => {
+    const text = args.map(String).join(' ');
+    if (patterns.some((p) => p.test(text))) return;
+    original(...(args as []));
+  };
+  return () => {
+    console.error = original;
+  };
 }

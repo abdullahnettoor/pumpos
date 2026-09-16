@@ -2,7 +2,11 @@
 import React from 'react';
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
-import { renderWithProviders, createTestQueryClient } from '../../test/renderWithProviders.js';
+import {
+  renderWithProviders,
+  createTestQueryClient,
+  muteExpectedConsoleErrors,
+} from '../../test/renderWithProviders.js';
 import { queryKeys } from '../../query/hooks.js';
 import { OpenShiftForm } from './OpenShiftForm.js';
 
@@ -65,13 +69,18 @@ const renderForm = (
 };
 
 describe('OpenShiftForm', () => {
-  let consoleError: ReturnType<typeof vi.spyOn>;
+  let restoreConsole: () => void;
   beforeEach(() => {
-    consoleError = vi.spyOn(console, 'error').mockImplementation(() => {}) as never;
+    // Only the noise these tests provoke on purpose; React's act() and
+    // unmounted-update warnings must still reach the console.
+    restoreConsole = muteExpectedConsoleErrors([
+      /not wrapped in act/,
+      /Warning: validateDOMNesting/,
+    ]);
   });
   afterEach(() => {
     cleanup();
-    consoleError.mockRestore();
+    restoreConsole();
   });
 
   it('renders the no-active-shift state', () => {
@@ -151,30 +160,79 @@ describe('OpenShiftForm', () => {
       expect(values.openingCash).toBe(5000);
     });
 
-    it('reports opening readings through the parent, not the submit payload', async () => {
-      // Readings are pushed up as they are typed so a half-filled form is not
-      // lost; the shift-open payload deliberately carries none of them.
-      const onInitialReadingChange = vi.fn();
+    it('re-derives the submitted business date when the prop changes', async () => {
+      // Guards the effect that syncs `businessDate` into the form. A fix that
+      // ran it only on mount would open the shift against the date the screen
+      // first rendered with, not the one shown.
       const onSubmit = vi.fn();
-      renderForm(
-        {
-          onSubmit,
-          onInitialReadingChange,
-          nozzles: [
-            { id: 'n1', nozzleId: 'n1', name: 'N1', duCode: 'DU-1', productName: 'Petrol' },
-          ],
-          initialReadings: [],
-        },
-        { requestedState: 'OPEN', openBusinessDays: [{ businessDate: TODAY }] },
+      const client = createTestQueryClient();
+      seedStatus(client, TODAY, {
+        requestedState: 'OPEN',
+        openBusinessDays: [{ businessDate: TODAY }],
+      });
+      seedStatus(client, '2026-02-27', {
+        requestedState: 'OPEN',
+        openBusinessDays: [{ businessDate: '2026-02-27' }],
+      });
+
+      const { rerender } = renderWithProviders(
+        <OpenShiftForm {...baseProps({ onSubmit, businessDate: TODAY })} />,
+        { queryClient: client },
       );
       await waitFor(() => expect(openButton().disabled).toBe(false));
 
-      const reading = document.querySelector('input[type="number"]');
-      if (reading) fireEvent.change(reading, { target: { value: '12345' } });
+      rerender(<OpenShiftForm {...baseProps({ onSubmit, businessDate: '2026-02-27' })} />);
+      await waitFor(() => expect(openButton().disabled).toBe(false));
 
       fireEvent.submit(openButton().closest('form')!);
       await waitFor(() => expect(onSubmit).toHaveBeenCalled());
-      expect(onSubmit.mock.calls[0][0].initialReadings).toBeUndefined();
+      expect(onSubmit.mock.calls[0][0].businessDate).toBe('2026-02-27');
+    });
+
+    it('re-derives the submitted opening cash when the prop changes', async () => {
+      const onSubmit = vi.fn();
+      const client = createTestQueryClient();
+      seedStatus(client, TODAY, {
+        requestedState: 'OPEN',
+        openBusinessDays: [{ businessDate: TODAY }],
+      });
+
+      const { rerender } = renderWithProviders(
+        <OpenShiftForm {...baseProps({ onSubmit, openingCash: 5000 })} />,
+        { queryClient: client },
+      );
+      await waitFor(() => expect(openButton().disabled).toBe(false));
+
+      rerender(<OpenShiftForm {...baseProps({ onSubmit, openingCash: 7250 })} />);
+      fireEvent.submit(openButton().closest('form')!);
+      await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+      expect(onSubmit.mock.calls[0][0].openingCash).toBe(7250);
+    });
+
+    it('re-derives the submitted template when the selection changes', async () => {
+      const onSubmit = vi.fn();
+      const client = createTestQueryClient();
+      seedStatus(client, TODAY, {
+        requestedState: 'OPEN',
+        openBusinessDays: [{ businessDate: TODAY }],
+      });
+      const templates = [
+        { id: 'tpl-1', name: 'Morning', startTime: '06:00', endTime: '14:00' },
+        { id: 'tpl-2', name: 'Evening', startTime: '14:00', endTime: '22:00' },
+      ];
+
+      const { rerender } = renderWithProviders(
+        <OpenShiftForm {...baseProps({ onSubmit, templates, selectedTemplateId: 'tpl-1' })} />,
+        { queryClient: client },
+      );
+      await waitFor(() => expect(openButton().disabled).toBe(false));
+
+      rerender(
+        <OpenShiftForm {...baseProps({ onSubmit, templates, selectedTemplateId: 'tpl-2' })} />,
+      );
+      fireEvent.submit(openButton().closest('form')!);
+      await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+      expect(onSubmit.mock.calls[0][0].shiftTemplateId).toBe('tpl-2');
     });
 
     it('blocks re-entry while the shift is being opened', async () => {

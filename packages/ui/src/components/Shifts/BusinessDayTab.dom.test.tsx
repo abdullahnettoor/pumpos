@@ -2,7 +2,11 @@
 import React from 'react';
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
-import { renderWithProviders, createTestQueryClient } from '../../test/renderWithProviders.js';
+import {
+  renderWithProviders,
+  createTestQueryClient,
+  muteExpectedConsoleErrors,
+} from '../../test/renderWithProviders.js';
 
 /**
  * Closing a business day generates the immutable DSSR snapshot and seals sales
@@ -80,14 +84,19 @@ const closeDayButton = () =>
   screen.queryByRole('button', { name: /Close business day/i }) as HTMLButtonElement | null;
 
 describe('BusinessDayTab', () => {
-  let consoleError: ReturnType<typeof vi.spyOn>;
+  let restoreConsole: () => void;
   beforeEach(() => {
     closeBusinessDay.mockReset().mockResolvedValue(undefined);
-    consoleError = vi.spyOn(console, 'error').mockImplementation(() => {}) as never;
+    // Only the noise these tests provoke on purpose; React's act() and
+    // unmounted-update warnings must still reach the console.
+    restoreConsole = muteExpectedConsoleErrors([
+      /not wrapped in act/,
+      /Warning: validateDOMNesting/,
+    ]);
   });
   afterEach(() => {
     cleanup();
-    consoleError.mockRestore();
+    restoreConsole();
   });
 
   it('asks for a station before showing anything', () => {
@@ -146,6 +155,35 @@ describe('BusinessDayTab', () => {
       );
       await waitFor(() => expect(closeDayButton()).not.toBeNull());
       expect(closeDayButton()!.disabled).toBe(false);
+    });
+  });
+
+  describe('following a requested business date', () => {
+    // Guards the effect that adopts `requestedBusinessDate` — the deep link
+    // from the top-bar business-day pill. A fix that ran it only on mount would
+    // leave the operator looking at the wrong day's figures while the close
+    // button seals the one behind it.
+    it('reports the requested date as consumed so the deep link is released', async () => {
+      const onBusinessDateSelected = vi.fn();
+      renderTab({ requestedBusinessDate: TODAY, onBusinessDateSelected });
+      await waitFor(() => expect(onBusinessDateSelected).toHaveBeenCalled());
+    });
+
+    it('adopts a date requested after mount, not only the one it started with', async () => {
+      const onBusinessDateSelected = vi.fn();
+      const { rerender } = renderTab({ onBusinessDateSelected });
+      await waitFor(() => expect(closeDayButton()).not.toBeNull());
+      expect(onBusinessDateSelected).not.toHaveBeenCalled();
+
+      rerender(
+        <BusinessDayTab
+          selectedStation={STATION}
+          userRole="Owner"
+          requestedBusinessDate={TODAY}
+          onBusinessDateSelected={onBusinessDateSelected}
+        />,
+      );
+      await waitFor(() => expect(onBusinessDateSelected).toHaveBeenCalled());
     });
   });
 
