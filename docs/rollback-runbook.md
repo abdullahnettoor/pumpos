@@ -105,8 +105,8 @@ node scripts/smoke-deploy.mjs marketing https://pumpos.app
 Slower (a full build) but it makes the repo and production agree, which
 Option A does not.
 
-1. **Actions → Release → Run workflow** is _not_ what you want. A rerun retries
-   the current release; it does not roll code back.
+1. Re-running an existing **Release** workflow retries that release; it does not
+   roll code back.
 2. Revert the bad merge from `main` and let the normal path create a new release:
 
 ```bash
@@ -116,9 +116,9 @@ git revert -m 1 <merge-commit-of-the-bad-release>
 git push -u origin revert/v<bad>
 ```
 
-Open this branch as a PR into `main`, then sync `main` back into `dev`. The
-release workflow ships the previous code as a **new, higher version**. That is
-deliberate. See the next section for why you must not reuse the old number.
+Open this branch as a PR into `dev`, then promote `dev` to `main`. The release
+workflow ships the previous code as a **new, higher version**. That is deliberate.
+See the next section for why you must not reuse the old number.
 
 The release will **pause for approval before creating the new tag** because the
 `production` environment has a required reviewer. Approve it. That pause is not

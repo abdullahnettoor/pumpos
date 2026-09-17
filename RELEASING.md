@@ -3,11 +3,12 @@
 PumpOS releases through one reviewed action: merge `dev` into `main`. The
 release workflow waits for production approval, then derives the version, tags
 the merge commit, publishes the GitHub Release, deploys production, and builds
-desktop installers.
+desktop installers when desktop code changed.
 
 - `git push origin dev` → **preview** deploy to `*.abdullahnettoor.com` for only
   the apps/packages that changed.
-- merge `dev` into `main` → one `vX.Y.Z` release for web, API, and desktop.
+- merge `dev` into `main` → start one approval-gated `vX.Y.Z` release for web
+  and API, with desktop installers when desktop build inputs changed.
 - **Actions → Deploy → Run workflow** → targeted **preview** deploy (manual,
   pick an app).
 
@@ -29,13 +30,13 @@ Two guardrails sit on the production path:
 
 ## Trigger matrix
 
-| Trigger                           | What deploys                                                  | Target                                           |
-| --------------------------------- | ------------------------------------------------------------- | ------------------------------------------------ |
-| Open / push to a **pull request** | Only the frontends that PR changes                            | Per-PR `*.workers.dev` URL, posted on the PR     |
-| `git push origin dev`             | Only changed web/API apps (path-filtered)                     | Preview custom domains (`*.abdullahnettoor.com`) |
-| `workflow_dispatch` on **Deploy** | Selected app (`all`, `console`, `marketing`, `mobile`, `api`) | Preview custom domains                           |
-| Merge `dev` into `main`           | Web/API production and desktop installers                     | `*.pumpos.app` and the GitHub Release            |
-| Push to any non-`dev` branch      | Nothing                                                       | No CI deploy                                     |
+| Trigger                           | Result after required gates                                        | Target                                           |
+| --------------------------------- | ------------------------------------------------------------------ | ------------------------------------------------ |
+| Open / push to a **pull request** | Deploy only the frontends that PR changes                          | Per-PR `*.workers.dev` URL, posted on the PR     |
+| `git push origin dev`             | Deploy only changed web/API apps                                   | Preview custom domains (`*.abdullahnettoor.com`) |
+| `workflow_dispatch` on **Deploy** | Deploy selected app (`all`, `console`, `marketing`, `mobile`, API) | Preview custom domains                           |
+| Merged `dev` to `main` PR         | Start approval-gated release; deploy web/API and affected desktop  | `*.pumpos.app` and the GitHub Release            |
+| Push to another branch            | No deployment; an open PR still runs its checks                    | No deployment                                    |
 
 ### Pull-request previews
 
@@ -68,6 +69,16 @@ for production approval, derives the next version from commits since the latest
 release tag, tags the merge commit, publishes the GitHub Release, and starts
 production deployment and desktop builds.
 
+Web and API surfaces deploy for every release. Desktop installers build only
+when the release changes the desktop app, a shared package, TypeScript build
+configuration, root package or lockfile, desktop release workflow, version
+stamper, or download-manifest generator. This decision is automatic.
+
+Only a merged `dev` to `main` PR can release. A direct push or a PR from another
+branch fails release validation. If a newer `main` commit arrives while an older
+release waits for approval, the older run exits before tagging and the newest
+queued run becomes the release candidate.
+
 If the repository has no `vX.Y.Z` tags, the first release is `v1.0.0`. After
 that, every version increments from the latest release tag.
 
@@ -93,8 +104,8 @@ node scripts/next-version.mjs --range v1.0.8..HEAD
 `node scripts/release.mjs X.Y.Z` is an internal build-stamping command. Release
 workflows call it in disposable runners. It does not commit, tag, or push.
 
-> Cost note: every release builds desktop installers. Desktop CI uses macOS
-> (**10×** minutes) and Windows (**2×**) runners.
+> Cost note: desktop CI uses macOS (**10×** minutes) and Windows (**2×**) runners,
+> so releases that cannot affect the desktop app skip those builds automatically.
 
 ---
 
@@ -125,6 +136,10 @@ verify      typecheck + tests + builds   (ci.yml)
 lint        Prettier + ESLint ratchet    (ci.yml)
 marketing   standalone install + build   (ci.yml)
 ```
+
+The `marketing` check always reports a result so branch protection remains
+stable, but it installs and builds the standalone marketing project only when
+`apps/marketing` or its CI definition changed.
 
 Force pushes and deletions are off; conversation resolution is required. Set via
 the API, so to re-apply after a settings mishap:

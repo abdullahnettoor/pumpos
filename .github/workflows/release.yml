@@ -3,9 +3,9 @@ name: Release
 # A merge to main is the entire release operation.
 #
 #   feature/fix PR -> dev         -> preview deployment
-#   dev PR -> main                -> derive version, tag the merge commit,
-#                                    publish a GitHub Release, deploy production,
-#                                    and build desktop installers
+#   dev PR -> main                -> approval, version + tag, GitHub Release,
+#                                    production deploy, and desktop installers
+#                                    when desktop code changed
 #
 # The latest vX.Y.Z tag is the released version. Conventional commit subjects
 # since that tag select the next version. Package/Tauri manifests are stamped in
@@ -18,18 +18,38 @@ on:
   push:
     branches:
       - main
-  workflow_dispatch:
 
 permissions:
   contents: write
+  pull-requests: read
 
 concurrency:
+  # Keep one production candidate. If main advances while an older run waits
+  # for approval, GitHub retains the newest pending run; the stale check below
+  # prevents the older one from tagging after approval.
   group: release-main
   cancel-in-progress: false
 
 jobs:
+  validate:
+    name: Validate dev promotion
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require a merged dev to main PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SHA: ${{ github.sha }}
+        run: |
+          match="$(gh api "repos/${{ github.repository }}/commits/$SHA/pulls" \
+            --jq '[.[] | select(.merged_at != null and .base.ref == "main" and .head.ref == "dev")] | length')"
+          if [ "$match" -eq 0 ]; then
+            echo "::error::Production releases must come from a merged dev to main pull request."
+            exit 1
+          fi
+
   approve:
     name: Approve production release
+    needs: validate
     runs-on: ubuntu-latest
     environment: production
     steps:
@@ -43,36 +63,63 @@ jobs:
       version: ${{ steps.version.outputs.version }}
       tag: ${{ steps.version.outputs.tag }}
       tag_exists: ${{ steps.version.outputs.tag_exists }}
+      desktop: ${{ steps.version.outputs.desktop }}
+      release: ${{ steps.current.outputs.release }}
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
+      - name: Confirm this is still the latest main commit
+        id: current
+        run: |
+          git fetch origin main
+          if [ "$(git rev-parse origin/main)" = "$GITHUB_SHA" ]; then
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::A newer main commit superseded this release before approval."
+          fi
+
       - uses: actions/setup-node@v7
+        if: steps.current.outputs.release == 'true'
         with:
           node-version: 22
 
       - name: Derive version from merged commits
+        if: steps.current.outputs.release == 'true'
         id: version
         run: |
           existing="$(git tag --points-at HEAD --list 'v*.*.*' --sort=-version:refname | head -n 1)"
           if [ -n "$existing" ]; then
             tag="$existing"
             version="${existing#v}"
+            previous="$(git describe --tags --abbrev=0 --match 'v*.*.*' "$existing^" 2>/dev/null || true)"
             echo "::notice::Reusing $tag already attached to this commit."
             echo "tag_exists=true" >> "$GITHUB_OUTPUT"
           else
             derived="$(node scripts/next-version.mjs --json --initial 1.0.0)"
             echo "$derived"
             version="$(echo "$derived" | node -p 'JSON.parse(require("fs").readFileSync(0,"utf8")).version')"
+            previous="$(git describe --tags --abbrev=0 --match 'v*.*.*' 2>/dev/null || true)"
             tag="v$version"
             echo "tag_exists=false" >> "$GITHUB_OUTPUT"
           fi
+          if [ -z "$previous" ]; then
+            desktop=true
+          elif git diff --quiet "$previous"..HEAD -- apps/desktop packages tsconfig*.json \
+            package.json package-lock.json .github/workflows/desktop-release.yml \
+            .github/workflows/release.yml scripts/gen-download-manifest.mjs scripts/release.mjs; then
+            desktop=false
+          else
+            desktop=true
+          fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "desktop=$desktop" >> "$GITHUB_OUTPUT"
 
       - name: Create and push tag
-        if: steps.version.outputs.tag_exists != 'true'
+        if: steps.current.outputs.release == 'true' && steps.version.outputs.tag_exists != 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -80,6 +127,7 @@ jobs:
           git push origin "${{ steps.version.outputs.tag }}"
 
       - name: Publish GitHub Release
+        if: steps.current.outputs.release == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -93,6 +141,7 @@ jobs:
   # version into their disposable workspaces.
   deploy:
     needs: tag
+    if: needs.tag.outputs.release == 'true'
     uses: ./.github/workflows/deploy.yml
     secrets: inherit
     with:
@@ -101,6 +150,7 @@ jobs:
 
   desktop:
     needs: tag
+    if: needs.tag.outputs.release == 'true' && needs.tag.outputs.desktop == 'true'
     uses: ./.github/workflows/desktop-release.yml
     secrets: inherit
     with:
