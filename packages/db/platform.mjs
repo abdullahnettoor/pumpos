@@ -28,8 +28,20 @@
  *   node packages/db/platform.mjs owners deactivate  --org-id <uuid>
  *   node packages/db/platform.mjs owners reactivate  --org-id <uuid>
  *
- * Tip: source the API secrets first:
- *   set -a; . apps/api/.dev.vars; set +a; node packages/db/platform.mjs owners list
+ * Tip: Run below script to source the API secrets first:
+set -a
+. apps/mobile/.env
+set +a
+
+export SUPABASE_URL="$VITE_SUPABASE_URL"
+export SUPABASE_ANON_KEY="$VITE_SUPABASE_PUBLISHABLE_KEY"
+export PUMP_API_URL="https://api.pumpos.abdullahnettoor.com"
+export PLATFORM_ADMIN_EMAIL="abdullahnettoor@gmail.com"
+
+printf "Platform admin password: "
+read -s PLATFORM_ADMIN_PASSWORD
+printf "\n"
+export PLATFORM_ADMIN_PASSWORD
  */
 
 const argv = process.argv.slice(2);

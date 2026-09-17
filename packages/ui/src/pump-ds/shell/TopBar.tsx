@@ -86,7 +86,7 @@ export interface TopBarProps {
   stationLabel?: string;
   /** Global search click/shortcut handler. Opens command palette. */
   onOpenSearch?: () => void;
-  /** Search button placeholder text. Defaults to "Search customers, invoices, shifts…". */
+  /** Search button placeholder text. Defaults to "Search customers, suppliers, products…". */
   searchPlaceholder?: string;
   /** Quick-create actions shown in the "+ New" menu. */
   quickCreate?: QuickCreateAction[];
@@ -151,7 +151,7 @@ export const TopBar: React.FC<TopBarProps> = ({
   onBusinessDayMenuOpenChange,
   stationLabel,
   onOpenSearch,
-  searchPlaceholder = 'Search customers, invoices, shifts\u2026',
+  searchPlaceholder = 'Search customers, suppliers, products\u2026',
   quickCreate = [],
   notifications = [],
   syncStatus,
