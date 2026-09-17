@@ -1,14 +1,8 @@
 name: Desktop release
 
 # Builds the Tauri desktop app for macOS + Windows and attaches the installers
-# to a GitHub Release. Runs ONLY on desktop version tags — desktop CI is expensive on
-# private repos (GitHub runner minute multipliers: macOS = 10x, Windows = 2x),
-# so never trigger it on push.
-#
-# Cut a normal release with `npm run release` first (so app versions are bumped),
-# then intentionally trigger desktop installers with:
-#   git tag -a desktop-vX.Y.Z -m "PumpOS desktop vX.Y.Z"
-#   git push origin desktop-vX.Y.Z
+# to the GitHub Release created for the same vX.Y.Z version. The main Release
+# workflow calls this after deriving and tagging a release.
 #
 # Signing / notarization: this first cut ships UNSIGNED — users will see an
 # "unverified publisher" (Windows SmartScreen) / Gatekeeper warning. To sign:
@@ -36,9 +30,12 @@ name: Desktop release
 #   Until R2_BUCKET is set, the R2 steps are skipped (GitHub Release still made).
 
 on:
-  push:
-    tags:
-      - 'desktop-v*.*.*'
+  workflow_call:
+    inputs:
+      version:
+        description: Release version without the v prefix
+        required: true
+        type: string
 
 # The release step needs write access to create/update the GitHub Release and
 # upload the installers. GITHUB_TOKEN is read-only by default.
@@ -46,8 +43,8 @@ permissions:
   contents: write
 
 concurrency:
-  group: desktop-${{ github.ref }}
-  cancel-in-progress: true
+  group: desktop-release
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -75,6 +72,8 @@ jobs:
         with:
           workspaces: apps/desktop/src-tauri
       - run: npm ci
+      - name: Stamp release version
+        run: node scripts/release.mjs "${{ inputs.version }}"
       - name: Build shared UI
         # The desktop frontend imports @pump/ui (and @pump/shared) from dist/;
         # tauri-action's beforeBuildCommand then runs the desktop vite build.
@@ -89,10 +88,10 @@ jobs:
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.PROD_SUPABASE_PUBLISHABLE_KEY }}
         with:
           projectPath: apps/desktop
-          tagName: ${{ github.ref_name }}
-          releaseName: 'PumpOS ${{ github.ref_name }}'
+          tagName: v${{ inputs.version }}
+          releaseName: 'PumpOS v${{ inputs.version }}'
           releaseBody: 'PumpOS desktop installers. Download the file for your OS below.'
-          releaseDraft: true
+          releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
 
@@ -106,7 +105,7 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
-          version="${GITHUB_REF_NAME#desktop-v}"
+          version="${{ inputs.version }}"
           shopt -s nullglob
           files=(
             apps/desktop/src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
@@ -137,7 +136,7 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
-          version="${GITHUB_REF_NAME#desktop-v}"
+          version="${{ inputs.version }}"
           node scripts/gen-download-manifest.mjs "$version" "${{ vars.R2_PUBLIC_BASE }}" > manifest.json
           cat manifest.json
           npx wrangler r2 object put "${{ vars.R2_BUCKET }}/downloads/manifest.json" --file manifest.json --content-type application/json --remote

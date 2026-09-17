@@ -100,24 +100,25 @@ node scripts/smoke-deploy.mjs mobile https://m.pumpos.app
 node scripts/smoke-deploy.mjs marketing https://pumpos.app
 ```
 
-### Option B — redeploy the previous tag from CI
+### Option B — revert through the release flow
 
 Slower (a full build) but it makes the repo and production agree, which
 Option A does not.
 
-1. **Actions → Tag release → Run workflow** is _not_ what you want — it reads
-   the version from `package.json` on `main`.
-2. Instead, revert the bad merge on `main` and let the normal path run:
+1. **Actions → Release → Run workflow** is _not_ what you want. A rerun retries
+   the current release; it does not roll code back.
+2. Revert the bad merge from `main` and let the normal path create a new release:
 
 ```bash
 git checkout main && git pull
+git switch -c revert/v<bad> origin/main
 git revert -m 1 <merge-commit-of-the-bad-release>
-npm run release -- patch          # bumps to a NEW version, e.g. 1.0.9
-git push --follow-tags
+git push -u origin revert/v<bad>
 ```
 
-This ships the previous code as a **new, higher version**. That is deliberate —
-see the next section for why you must not reuse the old number.
+Open this branch as a PR into `main`, then sync `main` back into `dev`. The
+release workflow ships the previous code as a **new, higher version**. That is
+deliberate. See the next section for why you must not reuse the old number.
 
 The production deploy will **pause for approval** (the `production` environment
 has a required reviewer). Approve it. That pause is not in your way; it is the
@@ -151,16 +152,9 @@ gh release edit v<bad> --prerelease \
   --notes "WITHDRAWN — regression in <what broke>. Superseded by v<next>. Do not install."
 ```
 
-If the release carried **desktop installers**, this matters more: those are
-files people have already downloaded. Alongside the note above, cut the
-replacement desktop build promptly:
-
-```bash
-git tag -a desktop-v<next> -m "PumpOS desktop v<next>" && git push origin desktop-v<next>
-```
-
-Desktop releases are opt-in and are **not** produced by an ordinary release, so
-a web rollback does not fix an installer. You must tag one explicitly.
+If the release carried **desktop installers**, this matters more because people
+may have downloaded them. The superseding release rebuilds both web and desktop
+artifacts automatically.
 
 ---
 

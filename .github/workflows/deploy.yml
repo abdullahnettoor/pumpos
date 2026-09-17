@@ -2,9 +2,8 @@ name: Deploy
 
 # Deploys the web surfaces (console, marketing, mobile, api).
 #
-#   merge a PR to main    -> Tag release workflow tags vX.Y.Z and calls this
-#                            workflow with mode=production (see tag-release.yml)
-#   git tag vX.Y.Z + push -> PRODUCTION release (top-level wrangler config)
+#   merge a PR to main    -> Release workflow tags vX.Y.Z and calls this
+#                            workflow with mode=production (see release.yml)
 #   push to dev           -> PREVIEW release (env.preview custom domains)
 #   Actions -> Deploy     -> PREVIEW deploy on demand (choose app)
 #
@@ -41,8 +40,6 @@ on:
   push:
     branches:
       - dev
-    tags:
-      - 'v*.*.*'
   workflow_dispatch:
     inputs:
       app:
@@ -50,9 +47,7 @@ on:
         type: choice
         default: all
         options: [all, console, marketing, mobile, api]
-  # Called by tag-release.yml after it creates the vX.Y.Z tag. A tag pushed with
-  # the default GITHUB_TOKEN does NOT re-trigger workflows, so production
-  # deploys are invoked directly instead of relying on the tag push above.
+  # Called by the Release workflow after it creates the vX.Y.Z tag.
   workflow_call:
     inputs:
       mode:
@@ -66,7 +61,7 @@ on:
 
 concurrency:
   group: deploy-${{ github.ref }}-${{ inputs.mode || 'auto' }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ inputs.mode != 'production' }}
 
 jobs:
   changes:
@@ -153,6 +148,9 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Stamp release version
+        if: needs.changes.outputs.mode == 'production'
+        run: node scripts/release.mjs "${{ inputs.version }}"
       - name: Select environment config
         run: |
           if [ "${{ needs.changes.outputs.mode }}" = "production" ]; then
@@ -206,6 +204,9 @@ jobs:
           cache-dependency-path: apps/marketing/package-lock.json
       - run: npm ci
         working-directory: apps/marketing
+      - name: Stamp release version
+        if: needs.changes.outputs.mode == 'production'
+        run: node scripts/release.mjs "${{ inputs.version }}"
       - name: Build marketing
         run: npm run build
         working-directory: apps/marketing
@@ -249,6 +250,9 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Stamp release version
+        if: needs.changes.outputs.mode == 'production'
+        run: node scripts/release.mjs "${{ inputs.version }}"
       - name: Select environment config
         run: |
           if [ "${{ needs.changes.outputs.mode }}" = "production" ]; then
@@ -297,6 +301,9 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Stamp release version
+        if: needs.changes.outputs.mode == 'production'
+        run: node scripts/release.mjs "${{ inputs.version }}"
       - name: Build workspace deps
         run: npm run build:api
       - name: Deploy API

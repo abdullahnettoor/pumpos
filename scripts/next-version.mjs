@@ -25,40 +25,41 @@
  *   node scripts/next-version.mjs --json          # { current, bump, version }
  *   node scripts/next-version.mjs --range a..b    # explicit commit range
  *   node scripts/next-version.mjs --base 1.2.0    # version to bump from
+ *   node scripts/next-version.mjs --initial 1.0.0 # first version when no tag exists
  *
- * `--base` is the version the bump applies on top of (e.g. what `main`
- * currently ships). Without it, the committed version is the base — which is
- * only correct when the range's commits are not already reflected in that
- * version. If the committed version is already at or above the required one,
- * it is reported unchanged: versions never move backwards, and re-deriving
- * the same range must not ratchet the version forever.
+ * `--base` is the version the bump applies on top of. Without it, the latest
+ * vX.Y.Z tag is the base. The committed package version is only a development
+ * fallback for repositories that do not have a release tag yet.
  */
 import { execSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { incrementVersion, releaseBump } from './release-version.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const args = process.argv.slice(2);
 const asJson = args.includes('--json');
 const rangeArg = args.includes('--range') ? args[args.indexOf('--range') + 1] : null;
 const baseArg = args.includes('--base') ? args[args.indexOf('--base') + 1] : null;
+const initialArg = args.includes('--initial') ? args[args.indexOf('--initial') + 1] : null;
 
 const git = (cmd) => execSync(`git ${cmd}`, { cwd: root }).toString().trim();
 
 const current = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version;
 
-/** The last release tag, or the empty tree if this repo has never released. */
-function defaultRange() {
+/** The last release tag, or HEAD when this repo has never released. */
+function latestReleaseTag() {
   try {
-    const lastTag = git('describe --tags --abbrev=0 --match "v*.*.*"');
-    return `${lastTag}..HEAD`;
+    return git('describe --tags --abbrev=0 --match "v*.*.*"');
   } catch {
-    return 'HEAD';
+    return null;
   }
 }
 
-const range = rangeArg || defaultRange();
+const latestTag = latestReleaseTag();
+const range = rangeArg || (latestTag ? `${latestTag}..HEAD` : 'HEAD');
+const base = baseArg || latestTag?.slice(1) || current;
 
 // %s subject, %b body, separated by a record marker so multi-line bodies
 // cannot be mistaken for new commits. (A literal NUL cannot be passed through
@@ -70,53 +71,16 @@ const commits = raw
   .map((c) => c.trim())
   .filter(Boolean);
 
-const RANK = { none: 0, patch: 1, minor: 2, major: 3 };
-
-function classify(commit) {
-  const [subject, ...bodyLines] = commit.split('\n');
-  const body = bodyLines.join('\n');
-  // `type(scope)!: summary` — the `!` is the breaking-change marker.
-  const match = /^(\w+)(\([^)]*\))?(!)?:/.exec(subject);
-  if (match?.[3] || /^BREAKING[ -]CHANGE:/m.test(body)) return 'major';
-  const type = match?.[1];
-  if (type === 'feat') return 'minor';
-  if (type === 'fix' || type === 'perf') return 'patch';
-  return 'none';
-}
-
-const bump = commits.reduce((highest, commit) => {
-  const kind = classify(commit);
-  return RANK[kind] > RANK[highest] ? kind : highest;
-}, 'none');
-
-function nextVersion(cur, kind) {
-  const [maj, min, pat] = cur.split('.').map(Number);
-  if (kind === 'major') return `${maj + 1}.0.0`;
-  if (kind === 'minor') return `${maj}.${min + 1}.0`;
-  if (kind === 'patch') return `${maj}.${min}.${pat + 1}`;
-  return cur;
-}
-
-const version = nextVersion(baseArg || current, bump);
-
-/** Semver comparison: negative when a < b. */
-function compare(a, b) {
-  const [amaj, amin, apat] = a.split('.').map(Number);
-  const [bmaj, bmin, bpat] = b.split('.').map(Number);
-  return amaj - bmaj || amin - bmin || apat - bpat;
-}
-
-// The committed version may already cover this range (a bump landed via a
-// reviewed PR). Never derive a version below it.
-const required = compare(current, version) >= 0 ? current : version;
+const bump = releaseBump(commits);
+const version = !latestTag && !baseArg && initialArg ? initialArg : incrementVersion(base, bump);
 
 if (asJson) {
-  console.log(JSON.stringify({ current, bump, version: required, range, commits: commits.length }));
+  console.log(JSON.stringify({ current, base, bump, version, range, commits: commits.length }));
 } else {
   console.log(`range    ${range}`);
   console.log(`commits  ${commits.length}`);
-  console.log(`base     ${baseArg || current}`);
+  console.log(`base     ${base}`);
   console.log(`current  ${current}`);
   console.log(`bump     ${bump}`);
-  console.log(`version  ${bump === 'none' ? '(no release)' : required}`);
+  console.log(`version  ${version}`);
 }

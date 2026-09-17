@@ -1,0 +1,99 @@
+name: Release
+
+# A merge to main is the entire release operation.
+#
+#   feature/fix PR -> dev         -> preview deployment
+#   dev PR -> main                -> derive version, tag the merge commit,
+#                                    publish a GitHub Release, deploy production,
+#                                    and build desktop installers
+#
+# The latest vX.Y.Z tag is the released version. Conventional commit subjects
+# since that tag select the next version. Package/Tauri manifests are stamped in
+# the release workspace, so release-only commits never pollute main or dev.
+#
+# Database migrations stay manual and deliberate (Actions -> "DB migrate" ->
+# prod). Run them BEFORE merging a release that depends on new schema.
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+      tag_exists: ${{ steps.version.outputs.tag_exists }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Derive version from merged commits
+        id: version
+        run: |
+          existing="$(git tag --points-at HEAD --list 'v*.*.*' --sort=-version:refname | head -n 1)"
+          if [ -n "$existing" ]; then
+            tag="$existing"
+            version="${existing#v}"
+            echo "::notice::Reusing $tag already attached to this commit."
+            echo "tag_exists=true" >> "$GITHUB_OUTPUT"
+          else
+            derived="$(node scripts/next-version.mjs --json --initial 1.0.0)"
+            echo "$derived"
+            version="$(echo "$derived" | node -p 'JSON.parse(require("fs").readFileSync(0,"utf8")).version')"
+            tag="v$version"
+            echo "tag_exists=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Create and push tag
+        if: steps.version.outputs.tag_exists != 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "${{ steps.version.outputs.tag }}" -m "PumpOS ${{ steps.version.outputs.tag }}"
+          git push origin "${{ steps.version.outputs.tag }}"
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view "${{ steps.version.outputs.tag }}" >/dev/null 2>&1 || \
+            gh release create "${{ steps.version.outputs.tag }}" \
+              --title "PumpOS ${{ steps.version.outputs.tag }}" \
+              --generate-notes \
+              --latest
+
+  # Reusable workflows build from this merge commit and stamp the derived
+  # version into their disposable workspaces.
+  deploy:
+    needs: tag
+    uses: ./.github/workflows/deploy.yml
+    secrets: inherit
+    with:
+      mode: production
+      version: ${{ needs.tag.outputs.version }}
+
+  desktop:
+    needs: tag
+    uses: ./.github/workflows/desktop-release.yml
+    secrets: inherit
+    with:
+      version: ${{ needs.tag.outputs.version }}

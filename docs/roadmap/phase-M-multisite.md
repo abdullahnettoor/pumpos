@@ -34,14 +34,15 @@ and mobile share the session.
 the desktop app from `.github/workflows/desktop-release.yml`. Plain branch pushes
 never build — so syncing WIP between machines costs no CI minutes.
 
-- **`git tag vX.Y.Z` + push** → production release: all web apps deploy to their
+- **merge `dev` into `main`** → production release: CI derives and creates the
+  `vX.Y.Z` tag, and all web apps deploy to their
   top-level (custom-domain) config; desktop builds macOS + Windows installers
-  and attaches them to a **draft GitHub Release**.
+  and attaches them to the published GitHub Release.
 - **Actions → Deploy → Run** (`workflow_dispatch`, pick an app) → **preview**
   deploy to workers.dev (`--env preview`). Manual, on demand.
-- Cut releases with **`npm run release -- patch|minor|major|X.Y.Z`** — one
-  unified version bumps every workspace `package.json` + `tauri.conf.json` +
-  `Cargo.toml`, commits, and creates the tag. Then `git push --follow-tags`.
+- Release versions derive from Conventional Commit subjects since the latest
+  `vX.Y.Z` tag. CI stamps workspace and Tauri manifests in build runners; no
+  version commit or manual tag push is required.
 - The **API** job builds workspace deps (`npm run build:api`) before
   `wrangler deploy` — wrangler bundles `apps/api` from source and needs
   `@pump/{db,core,shared}/dist`.
