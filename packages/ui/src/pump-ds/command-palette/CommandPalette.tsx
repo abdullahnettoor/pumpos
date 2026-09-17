@@ -55,7 +55,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   groups,
   placeholder = 'Search or run a command…',
   emptyMessage = 'No matches found.',
-  footerHint = 'Search across customers, invoices, shifts & more',
+  footerHint = 'Search across customers, suppliers, products & more',
 }) => {
   const run = (fn: () => void) => {
     onOpenChange(false);
