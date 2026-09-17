@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Panel } from '../../pump-ds/index.js';
+import { inr } from '../../utils/format.js';
 
 interface NozzleReadingsGridProps {
   nozzleReadings: any[];
@@ -215,7 +216,7 @@ export const NozzleReadingsGrid: React.FC<NozzleReadingsGridProps> = ({
                           fontFamily: 'var(--font-mono)',
                         }}
                       >
-                        ₹{price.toFixed(2)}
+                        {inr(price)}
                       </td>
                       <td
                         style={{
@@ -257,7 +258,7 @@ export const NozzleReadingsGrid: React.FC<NozzleReadingsGridProps> = ({
                           fontFamily: 'var(--font-mono)',
                         }}
                       >
-                        ₹{value.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        {inr(value)}
                       </td>
                     </tr>
                   );

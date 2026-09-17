@@ -9,6 +9,7 @@ import { CashCountPopover, type CashBreakdown } from '../primitives/CashCountPop
 import { CustomerFormDrawer } from '../customers/CustomerFormDrawer.js';
 import { VehicleDrawer } from '../customers/VehicleDrawer.js';
 import { useAllVehicles } from '../../query/hooks.js';
+import { useToast } from '../primitives/ToastProvider.js';
 import {
   CloudTransactionService,
   type RecordHandoverPayload,
@@ -120,6 +121,7 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
   // declared needs one explicit confirmation before submit.
   const [zeroTerminalsConfirmed, setZeroTerminalsConfirmed] = useState(false);
   const [acceptedResult, setAcceptedResult] = useState<RecordHandoverResult | null>(null);
+  const toast = useToast();
   // Lazily, once per open: a bare useRef argument is evaluated on every render,
   // which would re-read localStorage on every keystroke in this drawer.
   const [initialHandoverRequest] = useState(() =>
@@ -723,7 +725,9 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
       if (stationId) saveHandoverRequestIdentity(stationId, shiftId, userId, duId, null);
       onSaveSuccess();
     } catch (err: any) {
-      setError(err.message || 'Failed to save attendant handover');
+      const message = err.message || 'Failed to save attendant handover';
+      setError(message);
+      toast.error(message);
     } finally {
       setSubmitting(false);
     }
@@ -738,6 +742,7 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
         >
           {error && (
             <div
+              role="alert"
               style={{
                 backgroundColor: 'var(--state-danger-bg)',
                 border: '1px solid var(--border-soft)',
@@ -1035,8 +1040,7 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
                 >
                   <span>POS totals (derived)</span>
                   <strong style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-default)' }}>
-                    Card ₹{terminalCardTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}{' '}
-                    · UPI ₹{terminalUpiTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    Card {inr(terminalCardTotal)} · UPI {inr(terminalUpiTotal)}
                   </strong>
                 </div>
               </div>
@@ -1144,7 +1148,7 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
               <span>3. Customer Sales</span>
               {creditTotal + omcTotal > 0 && (
                 <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-strong)' }}>
-                  ₹{(creditTotal + omcTotal).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  {inr(creditTotal + omcTotal)}
                 </span>
               )}
             </h3>
@@ -1205,7 +1209,7 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
                     >
                       <span>{g.label}</span>
                       <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-strong)' }}>
-                        ₹{g.subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        {inr(g.subtotal)}
                       </span>
                     </div>
                     {g.lines.map((l, idx) => (
@@ -1251,8 +1255,7 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
                           }}
                         >
                           <strong style={{ fontFamily: 'var(--font-mono)', fontSize: '13px' }}>
-                            ₹
-                            {Number(l.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                            {inr(l.amount)}
                           </strong>
                           <button
                             type="button"
@@ -1306,7 +1309,7 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
                 >
                   <span>OMC card · CMS</span>
                   <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-strong)' }}>
-                    ₹{omcTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    {inr(omcTotal)}
                   </span>
                 </div>
                 {omcLines.map((l, idx) => (
@@ -1347,7 +1350,7 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
                       style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}
                     >
                       <strong style={{ fontFamily: 'var(--font-mono)', fontSize: '13px' }}>
-                        ₹{Number(l.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        {inr(l.amount)}
                       </strong>
                       <button
                         type="button"
@@ -1707,7 +1710,7 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
                   }}
                   title="Auto-derived from the fuel-on-credit sales above"
                 >
-                  ₹{creditTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  {inr(creditTotal)}
                 </div>
                 <span style={{ fontSize: '10px', color: 'var(--text-faint)' }}>
                   Auto from credit sales above
@@ -1772,10 +1775,7 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
               <span>Expected Fuel Sales Value:</span>
               <strong style={{ fontFamily: 'var(--font-mono)' }}>
-                ₹
-                {(acceptedResult?.expectedSales ?? expectedSales).toLocaleString('en-IN', {
-                  minimumFractionDigits: 2,
-                })}
+                {inr(acceptedResult?.expectedSales ?? expectedSales)}
               </strong>
             </div>
             {(merchandiseCashNum > 0 || merchandiseNonCashNum > 0) && (
@@ -1791,7 +1791,7 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
                   >
                     <span>+ Merchandise sold (cash):</span>
                     <strong style={{ fontFamily: 'var(--font-mono)' }}>
-                      ₹{merchandiseCashNum.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      {inr(merchandiseCashNum)}
                     </strong>
                   </div>
                 )}
@@ -1806,7 +1806,7 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
                   >
                     <span>Merchandise (card/UPI, on terminal):</span>
                     <span style={{ fontFamily: 'var(--font-mono)' }}>
-                      ₹{merchandiseNonCashNum.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      {inr(merchandiseNonCashNum)}
                     </span>
                   </div>
                 )}
@@ -1820,10 +1820,7 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
                 >
                   <span>Total Expected:</span>
                   <strong style={{ fontFamily: 'var(--font-mono)' }}>
-                    ₹
-                    {(acceptedResult?.expectedTotal ?? expectedTotal).toLocaleString('en-IN', {
-                      minimumFractionDigits: 2,
-                    })}
+                    {inr(acceptedResult?.expectedTotal ?? expectedTotal)}
                   </strong>
                 </div>
               </>
@@ -1838,9 +1835,7 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
                 }}
               >
                 <span>of which on credit (chits):</span>
-                <strong style={{ fontFamily: 'var(--font-mono)' }}>
-                  ₹{creditTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                </strong>
+                <strong style={{ fontFamily: 'var(--font-mono)' }}>{inr(creditTotal)}</strong>
               </div>
             )}
             {omcTotal > 0 && (
@@ -1853,18 +1848,13 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
                 }}
               >
                 <span>of which OMC card (→ CMS):</span>
-                <strong style={{ fontFamily: 'var(--font-mono)' }}>
-                  ₹{omcTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                </strong>
+                <strong style={{ fontFamily: 'var(--font-mono)' }}>{inr(omcTotal)}</strong>
               </div>
             )}
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
               <span>Declared Deposit Sum:</span>
               <strong style={{ fontFamily: 'var(--font-mono)' }}>
-                ₹
-                {(acceptedResult?.declaredTotal ?? totalDeclared).toLocaleString('en-IN', {
-                  minimumFractionDigits: 2,
-                })}
+                {inr(acceptedResult?.declaredTotal ?? totalDeclared)}
               </strong>
             </div>
             <div
@@ -1886,10 +1876,8 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
             >
               <span>Handover Variance:</span>
               <span style={{ fontFamily: 'var(--font-mono)' }}>
-                {(acceptedResult?.varianceAmount ?? variance) > 0 ? '+' : ''}₹
-                {(acceptedResult?.varianceAmount ?? variance).toLocaleString('en-IN', {
-                  minimumFractionDigits: 2,
-                })}
+                {(acceptedResult?.varianceAmount ?? variance) > 0 ? '+' : ''}
+                {inr(acceptedResult?.varianceAmount ?? variance)}
                 {(acceptedResult?.varianceAmount ?? variance) === 0
                   ? ' (Balanced)'
                   : (acceptedResult?.varianceAmount ?? variance) > 0

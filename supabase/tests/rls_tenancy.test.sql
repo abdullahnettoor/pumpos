@@ -10,7 +10,8 @@
 --      INSERT station assignments via the Data API role.
 --   3. handle_new_user() ignores caller-supplied signup_intent unless the
 --      account was server-invited or carries server-set app metadata,
---      and always pins the bootstrap role to Owner.
+--      handles GoTrue's follow-up invited_at update idempotently, and always
+--      pins the bootstrap role to Owner.
 -- =====================================================================
 BEGIN;
 
@@ -68,7 +69,9 @@ RESET ROLE;
 
 -- === Signup trigger gating ===
 DO $$
-DECLARE v_count int;
+DECLARE
+  v_count int;
+  v_invited_user_id uuid := gen_random_uuid();
 BEGIN
   -- 3a. Public signup with self-supplied signup_intent creates nothing.
   INSERT INTO auth.users (id, email, raw_user_meta_data)
@@ -77,17 +80,41 @@ BEGIN
   SELECT count(*) INTO v_count FROM organizations WHERE name = 'Evil Org';
   ASSERT v_count = 0, 'self-signup metadata created an organization';
 
-  -- 3b. Server-invited owner bootstraps an org, role pinned to Owner.
+  -- 3b. GoTrue inserts an invite with invited_at NULL, then sets invited_at.
   INSERT INTO auth.users (id, email, raw_user_meta_data, invited_at)
-  VALUES (gen_random_uuid(), 'invited@owner.test',
+  VALUES (v_invited_user_id, 'invited@owner.test',
           '{"signup_intent":"owner","organization_name":"Invited Org","role":"PlatformAdmin"}'::jsonb,
-          now());
+          NULL);
   SELECT count(*) INTO v_count FROM organizations WHERE name = 'Invited Org';
-  ASSERT v_count = 1, 'invited owner did not bootstrap an organization';
+  ASSERT v_count = 0, 'owner invite bootstrapped before invited_at was set';
+
+  UPDATE auth.users SET invited_at = now() WHERE id = v_invited_user_id;
+  SELECT count(*) INTO v_count FROM organizations WHERE name = 'Invited Org';
+  ASSERT v_count = 1, 'invited_at update did not bootstrap an organization';
   ASSERT (SELECT role FROM users WHERE email = 'invited@owner.test') = 'Owner',
     'bootstrap role was not pinned to Owner';
 
-  -- 3c. Server-set app metadata also authorizes the bootstrap.
+  -- Repeating the column update invokes the trigger but must not duplicate
+  -- either the organization or profile.
+  UPDATE auth.users SET invited_at = invited_at + interval '1 second' WHERE id = v_invited_user_id;
+  ASSERT (SELECT count(*) FROM organizations WHERE name = 'Invited Org') = 1,
+    'repeated invited_at update duplicated the organization';
+  ASSERT (SELECT count(*) FROM users WHERE auth_user_id = v_invited_user_id) = 1,
+    'repeated invited_at update duplicated the user profile';
+
+  -- 3c. If invited_at arrives before metadata, a later server-controlled app
+  -- metadata update must also self-heal the account.
+  INSERT INTO auth.users (id, email, invited_at)
+  VALUES (gen_random_uuid(), 'late-metadata@owner.test', now());
+  ASSERT (SELECT count(*) FROM organizations WHERE name = 'Late Metadata Org') = 0,
+    'invite without owner metadata created an organization';
+  UPDATE auth.users
+  SET raw_app_meta_data = '{"signup_intent":"owner","organization_name":"Late Metadata Org"}'::jsonb
+  WHERE email = 'late-metadata@owner.test';
+  ASSERT (SELECT count(*) FROM organizations WHERE name = 'Late Metadata Org') = 1,
+    'server app metadata update did not bootstrap an invited owner';
+
+  -- 3d. Server-set app metadata also authorizes the bootstrap.
   INSERT INTO auth.users (id, email, raw_user_meta_data, raw_app_meta_data)
   VALUES (gen_random_uuid(), 'appmeta@owner.test',
           '{"organization_name":"AppMeta Org"}'::jsonb,

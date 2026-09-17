@@ -382,7 +382,11 @@ export const UserRolesAssignment: React.FC = () => {
       }
 
       const rowId = editingUser?.id ?? (saved as any)?.id;
-      if (rowId) {
+      if (!editingUser) {
+        // The list response supplies server-derived fields such as `hasLogin`.
+        // Refetch after provisioning instead of constructing a stale local row.
+        await qc.invalidateQueries({ queryKey: queryKeys.users() });
+      } else if (rowId) {
         await mergeUser({ ...(editingUser || {}), id: rowId, ...(saved as any), ...payload });
       } else {
         runTask(reloadData(), 'Saved, but the team list could not be refreshed.');
