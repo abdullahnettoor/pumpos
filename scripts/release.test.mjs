@@ -52,4 +52,22 @@ describe('release manifest stamping', () => {
       'Version must be X.Y.Z',
     );
   });
+
+  it('accepts a Cargo lock that already has the release version', () => {
+    const root = mkdtempSync(join(tmpdir(), 'pumpos-release-'));
+    const cargoLock = '[[package]]\nname = "pumpos"\nversion = "1.0.0"\n';
+    write(root, 'apps/desktop/src-tauri/Cargo.lock', cargoLock);
+
+    expect(() => stampReleaseVersion(root, '1.0.0', () => {})).not.toThrow();
+    expect(readFileSync(join(root, 'apps/desktop/src-tauri/Cargo.lock'), 'utf8')).toBe(cargoLock);
+  });
+
+  it('rejects a Cargo lock without the PumpOS package', () => {
+    const root = mkdtempSync(join(tmpdir(), 'pumpos-release-'));
+    write(root, 'apps/desktop/src-tauri/Cargo.lock', '[[package]]\nname = "dependency"\n');
+
+    expect(() => stampReleaseVersion(root, '1.0.0', () => {})).toThrow(
+      'could not find pumpos package',
+    );
+  });
 });

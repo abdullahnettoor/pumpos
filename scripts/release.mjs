@@ -80,11 +80,11 @@ export function stampReleaseVersion(root, version, log = console.log) {
   const cargoLock = join(root, 'apps/desktop/src-tauri/Cargo.lock');
   if (existsSync(cargoLock)) {
     const raw = readFileSync(cargoLock, 'utf8');
-    const next = raw.replace(
-      /(\[\[package\]\]\nname = "pumpos"\nversion = ")[^"]+("\n)/,
-      `$1${version}$2`,
-    );
-    if (next === raw) throw new Error(`could not find pumpos package in ${cargoLock}`);
+    const packagePattern = /(\[\[package\]\]\nname = "pumpos"\nversion = ")[^"]+("\n)/;
+    if (!packagePattern.test(raw)) {
+      throw new Error(`could not find pumpos package in ${cargoLock}`);
+    }
+    const next = raw.replace(packagePattern, `$1${version}$2`);
     writeFileSync(cargoLock, next);
     log(`  updated  ${cargoLock.replace(root + '/', '')}`);
   }
