@@ -1,8 +1,9 @@
 # Releasing and deployment
 
 PumpOS releases through one reviewed action: merge `dev` into `main`. The
-release workflow derives the version, tags the merge commit, publishes the
-GitHub Release, deploys production, and builds desktop installers.
+release workflow waits for production approval, then derives the version, tags
+the merge commit, publishes the GitHub Release, deploys production, and builds
+desktop installers.
 
 - `git push origin dev` → **preview** deploy to `*.abdullahnettoor.com` for only
   the apps/packages that changed.
@@ -20,8 +21,9 @@ Workflows: [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) (web),
 
 Two guardrails sit on the production path:
 
-- Production deploys run in the `production` GitHub Environment, which has a
-  **required reviewer**. A production release pauses until a human approves it.
+- The release gate uses the `production` GitHub Environment, which has a
+  **required reviewer**. No tag, GitHub Release, desktop installer, or production
+  deployment exists until a human approves the release.
 - Every deploy ends with a **smoke check** ([`scripts/smoke-deploy.mjs`](scripts/smoke-deploy.mjs))
   that asserts the surface actually answers. Upload success is not health.
 
@@ -61,10 +63,10 @@ package-lock.json or deploy.yml                       → affected deploy jobs
 ## Cut a release
 
 **You do not pick or commit the version.** Open a PR from `dev` into `main` and
-merge it after CI passes. [`release.yml`](.github/workflows/release.yml) derives
-the next version from commits since the latest release tag, tags the merge
-commit, publishes the GitHub Release, and starts production deployment and
-desktop builds.
+merge it after CI passes. [`release.yml`](.github/workflows/release.yml) waits
+for production approval, derives the next version from commits since the latest
+release tag, tags the merge commit, publishes the GitHub Release, and starts
+production deployment and desktop builds.
 
 If the repository has no `vX.Y.Z` tags, the first release is `v1.0.0`. After
 that, every version increments from the latest release tag.
@@ -103,12 +105,12 @@ here — settings have no diff and no review.
 
 ### The production approval gate
 
-Production deploy jobs declare `environment: production`. That declaration only
+The first release job declares `environment: production`. That declaration only
 does something if the environment exists **and** carries a protection rule:
 
 - **Settings → Environments → `production` → Required reviewers** — at least one
-  person. Without this the declaration is decoration and a version bump deploys
-  to live fuel stations unattended.
+  person. Without this the declaration is decoration and a merge to `main`
+  releases to live fuel stations unattended.
 
 Verified by observation rather than by reading the setting: a job claiming the
 `production` environment parks in `waiting` with a pending deployment until a

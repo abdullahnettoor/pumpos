@@ -28,7 +28,15 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  approve:
+    name: Approve production release
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - run: echo "Production release approved"
+
   tag:
+    needs: approve
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     outputs:

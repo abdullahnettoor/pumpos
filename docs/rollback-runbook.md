@@ -120,9 +120,9 @@ Open this branch as a PR into `main`, then sync `main` back into `dev`. The
 release workflow ships the previous code as a **new, higher version**. That is
 deliberate. See the next section for why you must not reuse the old number.
 
-The production deploy will **pause for approval** (the `production` environment
-has a required reviewer). Approve it. That pause is not in your way; it is the
-thing that stops a panicked second mistake.
+The release will **pause for approval before creating the new tag** because the
+`production` environment has a required reviewer. Approve it. That pause is not
+in your way; it is the thing that stops a panicked second mistake.
 
 ### Emergency stop (when serving nothing beats serving wrong)
 
