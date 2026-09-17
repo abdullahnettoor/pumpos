@@ -1,12 +1,14 @@
-# Releasing & Deployment
+# Releasing and deployment
 
-How PumpOS ships. Production is **tag-driven**; the `dev` branch deploys to the
-custom preview domains.
+PumpOS releases through one reviewed action: merge `dev` into `main`. The
+release workflow waits for production approval, then derives the version, tags
+the merge commit, publishes the GitHub Release, deploys production, and builds
+desktop installers when desktop code changed.
 
-- `git tag vX.Y.Z` (via `npm run release`) → **production** deploy of web/API.
 - `git push origin dev` → **preview** deploy to `*.abdullahnettoor.com` for only
   the apps/packages that changed.
-- `git tag desktop-vX.Y.Z` → desktop installers on a GitHub Release.
+- merge `dev` into `main` → start one approval-gated `vX.Y.Z` release for web
+  and API, with desktop installers when desktop build inputs changed.
 - **Actions → Deploy → Run workflow** → targeted **preview** deploy (manual,
   pick an app).
 
@@ -20,21 +22,21 @@ Workflows: [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) (web),
 
 Two guardrails sit on the production path:
 
-- Production deploys run in the `production` GitHub Environment, which has a
-  **required reviewer**. A production release pauses until a human approves it.
+- The release gate uses the `production` GitHub Environment, which has a
+  **required reviewer**. No tag, GitHub Release, desktop installer, or production
+  deployment exists until a human approves the release.
 - Every deploy ends with a **smoke check** ([`scripts/smoke-deploy.mjs`](scripts/smoke-deploy.mjs))
   that asserts the surface actually answers. Upload success is not health.
 
 ## Trigger matrix
 
-| Trigger                           | What deploys                                                  | Target                                           |
-| --------------------------------- | ------------------------------------------------------------- | ------------------------------------------------ |
-| Open / push to a **pull request** | Only the frontends that PR changes                            | Per-PR `*.workers.dev` URL, posted on the PR     |
-| `git push origin dev`             | Only changed web/API apps (path-filtered)                     | Preview custom domains (`*.abdullahnettoor.com`) |
-| `workflow_dispatch` on **Deploy** | Selected app (`all`, `console`, `marketing`, `mobile`, `api`) | Preview custom domains                           |
-| `vX.Y.Z` tag                      | Web/API production                                            | `*.pumpos.app`                                   |
-| `desktop-vX.Y.Z` tag              | Desktop installers only                                       | Draft GitHub Release                             |
-| Push to any non-`dev` branch      | Nothing                                                       | No CI deploy                                     |
+| Trigger                           | Result after required gates                                        | Target                                           |
+| --------------------------------- | ------------------------------------------------------------------ | ------------------------------------------------ |
+| Open / push to a **pull request** | Deploy only the frontends that PR changes                          | Per-PR `*.workers.dev` URL, posted on the PR     |
+| `git push origin dev`             | Deploy only changed web/API apps                                   | Preview custom domains (`*.abdullahnettoor.com`) |
+| `workflow_dispatch` on **Deploy** | Deploy selected app (`all`, `console`, `marketing`, `mobile`, API) | Preview custom domains                           |
+| Merged `dev` to `main` PR         | Start approval-gated release; deploy web/API and affected desktop  | `*.pumpos.app` and the GitHub Release            |
+| Push to another branch            | No deployment; an open PR still runs its checks                    | No deployment                                    |
 
 ### Pull-request previews
 
@@ -61,23 +63,36 @@ package-lock.json or deploy.yml                       → affected deploy jobs
 
 ## Cut a release
 
-**You do not pick the version.** Open a PR from `dev` into `main` and the
-[Release version](.github/workflows/release-version.yml) workflow derives it
-from what the PR contains, then pushes the bump onto the PR branch. Merge, and
-`tag-release.yml` tags it, publishes the GitHub Release, and runs the production
-deploy — which then waits for approval.
+**You do not pick or commit the version.** Open a PR from `dev` into `main` and
+merge it after CI passes. [`release.yml`](.github/workflows/release.yml) waits
+for production approval, derives the next version from commits since the latest
+release tag, tags the merge commit, publishes the GitHub Release, and starts
+production deployment and desktop builds.
+
+Web and API surfaces deploy for every release. Desktop installers build only
+when the release changes the desktop app, a shared package, TypeScript build
+configuration, root package or lockfile, desktop release workflow, version
+stamper, or download-manifest generator. This decision is automatic.
+
+Only a merged `dev` to `main` PR can release. A direct push or a PR from another
+branch fails release validation. If a newer `main` commit arrives while an older
+release waits for approval, the older run exits before tagging and the newest
+queued run becomes the release candidate.
+
+If the repository has no `vX.Y.Z` tags, the first release is `v1.0.0`. After
+that, every version increments from the latest release tag.
 
 The bump is read off commit subjects (Conventional Commits):
 
-| Commit                                              | Bump                  |
-| --------------------------------------------------- | --------------------- |
-| `feat!:` … or `BREAKING CHANGE:` in the body        | major                 |
-| `feat:`                                             | minor                 |
-| `fix:` / `perf:`                                    | patch                 |
-| `docs:` `ci:` `test:` `chore:` `style:` `refactor:` | **none — no release** |
+| Commit                                              | Bump  |
+| --------------------------------------------------- | ----- |
+| `feat!:` … or `BREAKING CHANGE:` in the body        | major |
+| `feat:`                                             | minor |
+| `fix:` / `perf:`                                    | patch |
+| `docs:` `ci:` `test:` `chore:` `style:` `refactor:` | patch |
 
-"None" is a supported answer, not a failure. A docs-or-CI-only PR should not put
-a build in front of the production gate.
+Every merge to `main` is an intentional production promotion, so a change set
+without `feat`, `fix`, or `perf` still receives a patch version.
 
 Check what any change set would produce, at any time:
 
@@ -86,30 +101,11 @@ node scripts/next-version.mjs                    # current -> bump -> version
 node scripts/next-version.mjs --range v1.0.8..HEAD
 ```
 
-Desktop installers stay opt-in and are **not** produced by an ordinary release:
+`node scripts/release.mjs X.Y.Z` is an internal build-stamping command. Release
+workflows call it in disposable runners. It does not commit, tag, or push.
 
-```bash
-git tag -a desktop-v1.0.2 -m "PumpOS desktop v1.0.2"
-git push origin desktop-v1.0.2
-```
-
-### Manual releases (deprecated)
-
-Still works for the rare case where CI cannot, but it is no longer the normal
-route — it was the source of both quiet failure modes this replaced (forget to
-bump → silent no-op; push tags early → the workflow skips for the opposite
-reason).
-
-```bash
-npm run release -- auto      # derive the bump, then commit + tag
-npm run release -- patch     # or force a specific bump
-git push --follow-tags
-```
-
-Preview without writing anything: `npm run release -- auto --dry`.
-
-> Cost note: desktop CI uses macOS (**10×** minutes) + Windows (**2×**) runners.
-> It only runs on `desktop-v*.*.*` tags now, not normal `v*.*.*` releases.
+> Cost note: desktop CI uses macOS (**10×** minutes) and Windows (**2×**) runners,
+> so releases that cannot affect the desktop app skip those builds automatically.
 
 ---
 
@@ -120,12 +116,12 @@ here — settings have no diff and no review.
 
 ### The production approval gate
 
-Production deploy jobs declare `environment: production`. That declaration only
+The first release job declares `environment: production`. That declaration only
 does something if the environment exists **and** carries a protection rule:
 
 - **Settings → Environments → `production` → Required reviewers** — at least one
-  person. Without this the declaration is decoration and a version bump deploys
-  to live fuel stations unattended.
+  person. Without this the declaration is decoration and a merge to `main`
+  releases to live fuel stations unattended.
 
 Verified by observation rather than by reading the setting: a job claiming the
 `production` environment parks in `waiting` with a pending deployment until a
@@ -141,6 +137,10 @@ lint        Prettier + ESLint ratchet    (ci.yml)
 marketing   standalone install + build   (ci.yml)
 ```
 
+The `marketing` check always reports a result so branch protection remains
+stable, but it installs and builds the standalone marketing project only when
+`apps/marketing` or its CI definition changed.
+
 Force pushes and deletions are off; conversation resolution is required. Set via
 the API, so to re-apply after a settings mishap:
 
@@ -151,7 +151,7 @@ gh api -X PUT repos/<owner>/<repo>/branches/main/protection --input - <<'JSON'
     "strict": true,
     "checks": [{ "context": "verify" }, { "context": "lint" }, { "context": "marketing" }]
   },
-  "enforce_admins": false,
+  "enforce_admins": true,
   "required_pull_request_reviews": {
     "dismiss_stale_reviews": false,
     "require_code_owner_reviews": false,
@@ -174,7 +174,7 @@ JSON
 - [ ] Repo secret `CLOUDFLARE_API_TOKEN` (permission: **Edit Cloudflare Workers**).
 - [ ] Repo secret `CLOUDFLARE_ACCOUNT_ID`.
 - [ ] Repo → Settings → Actions → **Workflow permissions** = _Read and write_
-      (desktop release creates a GitHub Release). The workflow also requests it
+      (the release workflow creates a GitHub Release). The workflow also requests it
       explicitly, but this is the backup.
 - [ ] **Disconnect** the old Cloudflare-managed console build (Workers & Pages →
       console project → Settings → Builds) so it doesn't double-deploy.
@@ -297,7 +297,7 @@ steps already exist and are **skipped until `R2_BUCKET` is set**.
 - [ ] Repo variables: `R2_BUCKET`, `R2_PUBLIC_BASE`,
       `DOWNLOAD_MANIFEST_URL=<R2_PUBLIC_BASE>/downloads/manifest.json`.
 
-Then every tagged release uploads installers + refreshes the public manifest the
+Then every release uploads installers + refreshes the public manifest the
 download page reads. (While the repo is **public**, GitHub Release assets are
 already publicly downloadable, so R2 isn't urgent.)
 
