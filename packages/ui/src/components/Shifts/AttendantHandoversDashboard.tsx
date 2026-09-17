@@ -204,8 +204,20 @@ export const AttendantHandoversDashboard: React.FC<AttendantHandoversDashboardPr
                           fontFamily: 'var(--font-mono)',
                         }}
                       >
+                        {isRecorded ? inr(handoverRecord.cashHandedOver) : '—'}
+                      </td>
+                      <td
+                        style={{
+                          padding: '12px 20px',
+                          textAlign: 'right',
+                          fontFamily: 'var(--font-mono)',
+                        }}
+                      >
                         {isRecorded
-                          ? `₹${Number(handoverRecord.cashHandedOver).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
+                          ? inr(
+                              Number(handoverRecord.cardHandedOver) +
+                                Number(handoverRecord.upiHandedOver),
+                            )
                           : '—'}
                       </td>
                       <td
@@ -216,20 +228,9 @@ export const AttendantHandoversDashboard: React.FC<AttendantHandoversDashboardPr
                         }}
                       >
                         {isRecorded
-                          ? `₹${(Number(handoverRecord.cardHandedOver) + Number(handoverRecord.upiHandedOver)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
-                          : '—'}
-                      </td>
-                      <td
-                        style={{
-                          padding: '12px 20px',
-                          textAlign: 'right',
-                          fontFamily: 'var(--font-mono)',
-                        }}
-                      >
-                        {isRecorded
-                          ? `₹${Number(handoverRecord.creditHandedOver).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
+                          ? inr(handoverRecord.creditHandedOver)
                           : Number(sa.creditTotal ?? 0) > 0
-                            ? `₹${Number(sa.creditTotal).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
+                            ? inr(sa.creditTotal)
                             : '—'}
                       </td>
                       <td
@@ -241,7 +242,7 @@ export const AttendantHandoversDashboard: React.FC<AttendantHandoversDashboardPr
                         }}
                       >
                         {isRecorded
-                          ? `₹${Number(handoverRecord.expectedSales).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
+                          ? inr(handoverRecord.expectedSales)
                           : (() => {
                               const merch = Number(sa.attributed?.merchandiseTotal ?? 0);
                               if (merch <= 0) return '—';
@@ -250,8 +251,7 @@ export const AttendantHandoversDashboard: React.FC<AttendantHandoversDashboardPr
                                   title={`Merchandise sold by this attendant (reconciles at shift close): ${inr(merch)}`}
                                   style={{ color: 'var(--brand-warning)', fontWeight: 500 }}
                                 >
-                                  +₹{merch.toLocaleString('en-IN', { minimumFractionDigits: 2 })}{' '}
-                                  merchandise
+                                  +{inr(merch)} merchandise
                                 </span>
                               );
                             })()}
@@ -273,10 +273,8 @@ export const AttendantHandoversDashboard: React.FC<AttendantHandoversDashboardPr
                       >
                         {isRecorded ? (
                           <>
-                            {Number(handoverRecord.varianceAmount) > 0 ? '+' : ''}₹
-                            {Number(handoverRecord.varianceAmount).toLocaleString('en-IN', {
-                              minimumFractionDigits: 2,
-                            })}
+                            {Number(handoverRecord.varianceAmount) > 0 ? '+' : ''}
+                            {inr(handoverRecord.varianceAmount)}
                           </>
                         ) : (
                           '—'

@@ -27,6 +27,7 @@ import {
   queryKeys,
 } from '../../query/hooks.js';
 import {
+  applyPendingTankDips,
   createStockCountIdempotencyKey,
   discardUnrecordedTankDips,
   isAmbiguousMutationError,
@@ -36,7 +37,7 @@ import {
   type PendingTankDipWorkflow,
 } from '../../query/stockCountMutation.js';
 import { openQuickEntry, useQuickEntry, type QuickEntryType } from '../../quick-entry/store.js';
-import { Station, resolveBusinessDate } from '@pump/shared';
+import { Station } from '@pump/shared';
 import type { OpenShiftFormValues } from '@pump/shared';
 import {
   FileText,
@@ -107,6 +108,14 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
   onNavigate,
 }) => {
   const stationId = selectedStation?.id ?? null;
+  const stationSettings = (selectedStation?.settings ?? {}) as {
+    timezone?: string;
+    business_day_starts_at?: string;
+  };
+  const currentBusinessDate = useStationBusinessDate(
+    stationSettings.timezone,
+    stationSettings.business_day_starts_at,
+  );
   const statusQ = useShiftStatus(stationId, false, { refetchOnWindowFocus: false });
   const invalidateOperational = useInvalidateOperational();
   const runTask = useRunTask();
@@ -166,7 +175,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
 
   // Open Shift Form States
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
-  const [businessDate, setBusinessDate] = useState(() => resolveBusinessDate());
+  const [businessDate, setBusinessDate] = useState(currentBusinessDate);
   const [openingCash, setOpeningCash] = useState(0);
   const [preserveNextShiftDate, setPreserveNextShiftDate] = useState(false);
   const [staffAssignments, setStaffAssignments] = useState<{ userId: string; duId: string }[]>([]);
@@ -178,15 +187,6 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     { nozzleId: string; openingReading: number }[]
   >([]);
   const [isOpening, setIsOpening] = useState(false);
-  const stationSettings = (selectedStation?.settings ?? {}) as {
-    timezone?: string;
-    business_day_starts_at?: string;
-  };
-  const currentBusinessDate = useStationBusinessDate(
-    stationSettings.timezone,
-    stationSettings.business_day_starts_at,
-  );
-
   // A Station change always starts from that Station's Current Business Date.
   // Adjusted during render rather than in an effect: an effect would have to
   // depend on `currentBusinessDate` to be honest, and would then also fire at
@@ -240,6 +240,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     const confirmed = { ...uncertain, closeStatus: 'closed' as const };
     savePendingTankDipWorkflow(stationId, confirmed);
     setClosedShiftSuccess(confirmed);
+    void saveTankDips(confirmed);
   }, [stationId, statusQ.data]);
 
   useEffect(() => {
@@ -247,7 +248,9 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
       skipPendingTankDipPersistRef.current = false;
       return;
     }
-    if (stationId) savePendingTankDipWorkflow(stationId, closedShiftSuccess);
+    if (stationId && closedShiftSuccess) {
+      savePendingTankDipWorkflow(stationId, closedShiftSuccess);
+    }
   }, [stationId, closedShiftSuccess]);
 
   // Handover Drawer states
@@ -706,12 +709,18 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
       };
       savePendingTankDipWorkflow(stationId!, closedWorkflow);
       setClosedShiftSuccess(closedWorkflow);
+      await saveTankDips(closedWorkflow).catch(() => undefined);
     } catch (err: any) {
       if (stationId && isAmbiguousMutationError(err)) {
         const status = await shiftService.getShiftStatus(stationId).catch(() => null);
         if (status && status.activeShift?.id !== data.activeShift.id) {
           const workflow = loadPendingTankDipWorkflow(stationId);
-          if (workflow) setClosedShiftSuccess({ ...workflow, closeStatus: 'closed' });
+          if (workflow) {
+            const confirmed = { ...workflow, closeStatus: 'closed' as const };
+            savePendingTankDipWorkflow(stationId, confirmed);
+            setClosedShiftSuccess(confirmed);
+            await saveTankDips(confirmed).catch(() => undefined);
+          }
         }
       } else if (stationId) {
         savePendingTankDipWorkflow(stationId, null);
@@ -722,72 +731,14 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
     }
   };
 
-  const saveTankDips = async () => {
-    if (!closedShiftSuccess || !stationId) return;
-    for (const dip of closedShiftSuccess.tankDips) {
-      if (dip.status === 'saved') continue;
-      setClosedShiftSuccess((current) =>
-        current
-          ? {
-              ...current,
-              tankDips: current.tankDips.map((item) =>
-                item.tankId === dip.tankId ? { ...item, status: 'saving', error: undefined } : item,
-              ),
-            }
-          : current,
-      );
-      try {
-        const accepted = await transactionService.recordStockCount(
-          {
-            stationId,
-            shiftId: closedShiftSuccess.lastClosedShiftId,
-            tankId: dip.tankId,
-            actualQuantity: dip.actualQuantity,
-            reason: dip.reason,
-          },
-          { idempotencyKey: dip.idempotencyKey },
-        );
-        setClosedShiftSuccess((current) =>
-          current
-            ? {
-                ...current,
-                tankDips: current.tankDips.map((item) =>
-                  item.tankId === dip.tankId
-                    ? {
-                        ...item,
-                        status: 'saved',
-                        error: undefined,
-                        expectedQuantity: Number(accepted.expectedQuantity),
-                        varianceQuantity: Number(accepted.varianceQuantity),
-                      }
-                    : item,
-                ),
-              }
-            : current,
-        );
-      } catch (err: any) {
-        const retryWithSameKey = isAmbiguousMutationError(err);
-        setClosedShiftSuccess((current) =>
-          current
-            ? {
-                ...current,
-                tankDips: current.tankDips.map((item) =>
-                  item.tankId === dip.tankId
-                    ? {
-                        ...item,
-                        status: 'failed',
-                        error: err.message || 'Failed to save Tank Dip',
-                        idempotencyKey: retryWithSameKey
-                          ? item.idempotencyKey
-                          : createStockCountIdempotencyKey(),
-                      }
-                    : item,
-                ),
-              }
-            : current,
-        );
-      }
-    }
+  const saveTankDips = async (workflow = closedShiftSuccess) => {
+    if (!workflow || !stationId) return;
+    await applyPendingTankDips({
+      stationId,
+      workflow,
+      recordStockCount: (payload, options) => transactionService.recordStockCount(payload, options),
+      onWorkflowChange: setClosedShiftSuccess,
+    });
     await invalidateOperational(stationId);
   };
 
@@ -947,7 +898,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
       <ShiftCloseSuccess
         result={closedShiftSuccess}
         tankDips={closedShiftSuccess.tankDips}
-        onSaveTankDips={saveTankDips}
+        onSaveTankDips={() => saveTankDips()}
         onDiscardTankDips={discardTankDips}
         onStartNext={() => {
           setOpeningCash(closedShiftSuccess.closingCash);

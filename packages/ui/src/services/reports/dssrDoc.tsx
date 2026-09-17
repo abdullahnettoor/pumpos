@@ -7,7 +7,6 @@ import {
   Kpi,
   varColor,
   inr,
-  inr0,
   vol3,
   vol3u,
   unitTotals,
@@ -81,7 +80,7 @@ const builders: Record<DssrSection, (d: any, cfg: DssrReportConfig) => React.Rea
         </View>
         <View style={s.metaCell}>
           <Text style={s.label}>FUEL SALES</Text>
-          <Text style={s.valMono}>{inr0(f.totalSalesValue)}</Text>
+          <Text style={s.valMono}>{inr(f.totalSalesValue)}</Text>
         </View>
       </View>
     );
@@ -91,11 +90,11 @@ const builders: Record<DssrSection, (d: any, cfg: DssrReportConfig) => React.Rea
     const credit = d.credit || {};
     return (
       <View key="kpis" style={s.kpiRow}>
-        <Kpi l="Total Collections" v={inr0(col.total)} c={C.success} />
-        <Kpi l="Cash Collections" v={inr0(col.Cash)} c={C.ink} />
+        <Kpi l="Total Collections" v={inr(col.total)} c={C.success} />
+        <Kpi l="Cash Collections" v={inr(col.Cash)} c={C.ink} />
         <Kpi
           l="Credit (Normal + Fleet)"
-          v={inr0(Number(credit.normalCredit || 0) + Number(credit.fleetCredit || 0))}
+          v={inr(Number(credit.normalCredit || 0) + Number(credit.fleetCredit || 0))}
           c={C.amber}
         />
       </View>

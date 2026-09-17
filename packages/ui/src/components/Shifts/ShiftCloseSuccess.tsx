@@ -51,9 +51,9 @@ export const ShiftCloseSuccess: React.FC<ShiftCloseSuccessProps> = ({
   onSaveTankDips,
   onDiscardTankDips,
 }) => {
-  const hasPendingDips = tankDips.some(
-    (dip) => dip.status === 'pending' || dip.status === 'failed',
-  );
+  const hasPendingDips = tankDips.some((dip) => dip.status === 'pending');
+  const hasFailedDips = tankDips.some((dip) => dip.status === 'failed');
+  const needsDipRetry = hasPendingDips || hasFailedDips;
   const isSavingDips = tankDips.some((dip) => dip.status === 'saving');
   return (
     <div
@@ -182,7 +182,8 @@ export const ShiftCloseSuccess: React.FC<ShiftCloseSuccessProps> = ({
               Optional Tank Dip
             </div>
             <div style={{ marginTop: 2, fontSize: 11, color: 'var(--text-muted)' }}>
-              Fuel sales are posted. Save these readings now as a separate Business Day action.
+              Fuel sales were posted first, then these readings were recorded as separate Business
+              Day actions.
             </div>
           </div>
           {tankDips.map((dip) => (
@@ -246,7 +247,7 @@ export const ShiftCloseSuccess: React.FC<ShiftCloseSuccessProps> = ({
               </div>
             </div>
           ))}
-          {hasPendingDips && onSaveTankDips && (
+          {needsDipRetry && onSaveTankDips && (
             <div
               style={{
                 padding: '10px 14px',
@@ -266,7 +267,7 @@ export const ShiftCloseSuccess: React.FC<ShiftCloseSuccessProps> = ({
                   color: 'var(--state-warning-fg)',
                 }}
               >
-                <AlertTriangle size={13} /> Shift is closed; unsaved dips remain retryable.
+                <AlertTriangle size={13} /> Some Tank Dips could not be recorded automatically.
               </span>
               <div style={{ display: 'flex', gap: 6 }}>
                 {onDiscardTankDips && (
@@ -285,7 +286,7 @@ export const ShiftCloseSuccess: React.FC<ShiftCloseSuccessProps> = ({
                   onClick={onSaveTankDips}
                   loading={isSavingDips}
                 >
-                  Save Tank Dips
+                  Retry Tank Dips
                 </Button>
               </div>
             </div>
@@ -299,7 +300,7 @@ export const ShiftCloseSuccess: React.FC<ShiftCloseSuccessProps> = ({
           size="md"
           leftIcon={<Play size={13} style={{ fill: 'currentColor' }} />}
           onClick={onStartNext}
-          disabled={hasPendingDips || isSavingDips}
+          disabled={needsDipRetry || isSavingDips}
         >
           Open next Shift
         </Button>
@@ -308,7 +309,7 @@ export const ShiftCloseSuccess: React.FC<ShiftCloseSuccessProps> = ({
           size="md"
           leftIcon={<FileText size={13} />}
           onClick={onViewSummary}
-          disabled={hasPendingDips || isSavingDips}
+          disabled={needsDipRetry || isSavingDips}
         >
           View Compiled Shift Summary
         </Button>
@@ -316,7 +317,7 @@ export const ShiftCloseSuccess: React.FC<ShiftCloseSuccessProps> = ({
           variant="secondary"
           size="md"
           onClick={onBack}
-          disabled={hasPendingDips || isSavingDips}
+          disabled={needsDipRetry || isSavingDips}
         >
           Back to Workspace
         </Button>

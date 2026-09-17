@@ -129,7 +129,14 @@ describe('HandoverDrawer', () => {
     it('values the metered volume at the pump price', () => {
       renderWithProviders(<HandoverDrawer {...baseProps()} />);
       setReading(NOZZLE_A, '1050'); // 50 L × ₹100
-      expect(rowValue('Expected Fuel Sales Value:')).toContain('5,000');
+      expect(rowValue('Expected Fuel Sales Value:')).toBe('₹5,000.00');
+    });
+
+    it('rounds fractional-paise expected sales to two decimals', () => {
+      renderWithProviders(<HandoverDrawer {...baseProps()} />);
+      setReading(NOZZLE_A, '2020.78132');
+
+      expect(rowValue('Expected Fuel Sales Value:')).toBe('₹1,02,078.13');
     });
 
     it('deducts calibration testing volume from the expected sales', () => {
@@ -266,6 +273,29 @@ describe('HandoverDrawer', () => {
 
       await waitFor(() => expect(mutateAsync).toHaveBeenCalled());
       expect(mutateAsync.mock.calls[0][0].payload.terminalEntries).toBeUndefined();
+    });
+
+    it('shows failed saves inline and in a toast while keeping the retry idempotent', async () => {
+      mutateAsync.mockRejectedValue(new Error('Assigned user cannot record this handover'));
+      renderWithProviders(<HandoverDrawer {...baseProps()} />);
+      setReading(NOZZLE_A, '1050');
+      setField('cashHandedOver', '5000');
+
+      fireEvent.click(saveButton());
+
+      await waitFor(() =>
+        expect(screen.getByRole('alert').textContent).toContain(
+          'Assigned user cannot record this handover',
+        ),
+      );
+      expect(screen.getByRole('status').textContent).toBe(
+        'Assigned user cannot record this handover',
+      );
+      const firstKey = mutateAsync.mock.calls[0][0].idempotencyKey;
+      fireEvent.click(saveButton());
+      await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(2));
+
+      expect(mutateAsync.mock.calls[1][0].idempotencyKey).toBe(firstKey);
     });
   });
 

@@ -31,6 +31,7 @@ import {
 } from '../../pump-ds/index.js';
 import { cn } from '../../pump-ds/lib/cn.js';
 import { inr, formatQty } from '../../utils/format.js';
+import { classifyTank, tankPct, OVER_CAPACITY_EXPLANATION } from '../../utils/stock.js';
 import { useConfirm } from '../primitives/ConfirmDialog.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import { Station, resolveBusinessDate } from '@pump/shared';
@@ -694,15 +695,24 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
               {tankRows.map((tank) => {
                 const cap = Number(tank.capacity) || 0;
                 const vol = Number(tank.currentVolume) || 0;
+                const pct = tankPct(vol, cap);
+                const isOver = classifyTank(pct) === 'over';
                 return (
-                  <MeterRow
-                    key={tank.id}
-                    label={tank.name}
-                    sublabel={tank.productName}
-                    value={vol}
-                    max={cap}
-                    valueLabel={`${formatQty(vol, 0)} / ${formatQty(cap, 0)} ${tank.productUnit || 'L'}`}
-                  />
+                  <div key={tank.id} className="space-y-1">
+                    <MeterRow
+                      label={tank.name}
+                      sublabel={tank.productName}
+                      value={Math.min(vol, cap)}
+                      max={cap}
+                      tone={isOver ? 'info' : 'auto'}
+                      valueLabel={`${formatQty(vol, 0)} / ${formatQty(cap, 0)} ${tank.productUnit || 'L'}${isOver ? ` · ${pct.toFixed(0)}%` : ''}`}
+                    />
+                    {isOver && (
+                      <p className="m-0 text-[11px] leading-[1.45] text-info-fg">
+                        Book stock over capacity. {OVER_CAPACITY_EXPLANATION}
+                      </p>
+                    )}
+                  </div>
                 );
               })}
             </div>

@@ -623,10 +623,7 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
                       fontFamily: 'var(--font-mono)',
                     }}
                   >
-                    ₹
-                    {Number(p.salesValue || 0).toLocaleString('en-IN', {
-                      minimumFractionDigits: 2,
-                    })}
+                    {inr(p.salesValue)}
                   </td>
                 </tr>
               ))}
@@ -694,7 +691,7 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
                         fontSize: '14px',
                       }}
                     >
-                      ₹{sv.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      {inr(sv)}
                     </td>
                   </tr>
                 );
@@ -782,7 +779,7 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
                         fontFamily: 'var(--font-mono)',
                       }}
                     >
-                      ₹{cash.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      {inr(cash)}
                     </td>
                     <td
                       style={{
@@ -791,7 +788,7 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
                         fontFamily: 'var(--font-mono)',
                       }}
                     >
-                      ₹{cardUpi.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      {inr(cardUpi)}
                     </td>
                     <td
                       style={{
@@ -800,7 +797,7 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
                         fontFamily: 'var(--font-mono)',
                       }}
                     >
-                      ₹{credit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      {inr(credit)}
                     </td>
                     <td
                       style={{
@@ -810,7 +807,7 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
                         fontWeight: 600,
                       }}
                     >
-                      ₹{expected.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      {inr(expected)}
                     </td>
                     <td
                       style={{
@@ -821,8 +818,8 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
                         fontFamily: 'var(--font-mono)',
                       }}
                     >
-                      {variance > 0 ? '+' : ''}₹
-                      {variance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      {variance > 0 ? '+' : ''}
+                      {inr(variance)}
                     </td>
                   </tr>
                 );
@@ -877,7 +874,7 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
                         color: 'var(--text-strong)',
                       }}
                     >
-                      ₹{tCash.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      {inr(tCash)}
                     </td>
                     <td
                       style={{
@@ -887,7 +884,7 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
                         color: 'var(--text-strong)',
                       }}
                     >
-                      ₹{tCardUpi.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      {inr(tCardUpi)}
                     </td>
                     <td
                       style={{
@@ -897,7 +894,7 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
                         color: 'var(--text-strong)',
                       }}
                     >
-                      ₹{tCredit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      {inr(tCredit)}
                     </td>
                     <td
                       style={{
@@ -907,7 +904,7 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
                         color: 'var(--text-strong)',
                       }}
                     >
-                      ₹{tExpected.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      {inr(tExpected)}
                     </td>
                     <td
                       style={{
@@ -918,8 +915,8 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
                         fontSize: '14px',
                       }}
                     >
-                      {tVariance > 0 ? '+' : ''}₹
-                      {tVariance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      {tVariance > 0 ? '+' : ''}
+                      {inr(tVariance)}
                     </td>
                   </tr>
                 );
@@ -1032,7 +1029,7 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
                         fontFamily: 'var(--font-mono)',
                       }}
                     >
-                      ₹{card.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      {inr(card)}
                     </td>
                     <td
                       style={{
@@ -1041,7 +1038,7 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
                         fontFamily: 'var(--font-mono)',
                       }}
                     >
-                      ₹{upi.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      {inr(upi)}
                     </td>
                     <td
                       style={{
@@ -1052,7 +1049,7 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
                         fontFamily: 'var(--font-mono)',
                       }}
                     >
-                      ₹{(card + upi).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      {inr(card + upi)}
                     </td>
                   </tr>
                 );
@@ -1083,10 +1080,7 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
                     color: 'var(--text-strong)',
                   }}
                 >
-                  ₹
-                  {terminalBreakdown
-                    .reduce((s: number, t: any) => s + Number(t.card || 0), 0)
-                    .toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  {inr(terminalBreakdown.reduce((s: number, t: any) => s + Number(t.card || 0), 0))}
                 </td>
                 <td
                   style={{
@@ -1096,10 +1090,7 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
                     color: 'var(--text-strong)',
                   }}
                 >
-                  ₹
-                  {terminalBreakdown
-                    .reduce((s: number, t: any) => s + Number(t.upi || 0), 0)
-                    .toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  {inr(terminalBreakdown.reduce((s: number, t: any) => s + Number(t.upi || 0), 0))}
                 </td>
                 <td
                   style={{
@@ -1110,10 +1101,12 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
                     fontSize: '14px',
                   }}
                 >
-                  ₹
-                  {terminalBreakdown
-                    .reduce((s: number, t: any) => s + Number(t.card || 0) + Number(t.upi || 0), 0)
-                    .toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  {inr(
+                    terminalBreakdown.reduce(
+                      (s: number, t: any) => s + Number(t.card || 0) + Number(t.upi || 0),
+                      0,
+                    ),
+                  )}
                 </td>
               </tr>
             </tbody>
@@ -1208,7 +1201,7 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
                       fontFamily: 'var(--font-mono)',
                     }}
                   >
-                    ₹{Number(r.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    {inr(r.amount)}
                   </td>
                 </tr>
               ))}
@@ -1239,11 +1232,10 @@ export const ShiftSummaryView: React.FC<ShiftSummaryViewProps> = ({
                     fontSize: '14px',
                   }}
                 >
-                  ₹
-                  {(
+                  {inr(
                     Number(creditSalesTotal) ||
-                    creditSales.reduce((s: number, r: any) => s + Number(r.amount || 0), 0)
-                  ).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      creditSales.reduce((s: number, r: any) => s + Number(r.amount || 0), 0),
+                  )}
                 </td>
               </tr>
             </tbody>

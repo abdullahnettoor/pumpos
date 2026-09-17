@@ -27,7 +27,7 @@ import {
   Form,
   Icon,
 } from '../pump-ds/index.js';
-import { tankPct, classifyTank } from '../utils/stock.js';
+import { tankPct, classifyTank, OVER_CAPACITY_EXPLANATION } from '../utils/stock.js';
 import {
   isAmbiguousMutationError,
   loadPendingStockCountRequest,
@@ -387,13 +387,15 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation })
     const totalFuelHint = [...entries.slice(1).map(([u, v]) => `${fmtV(v)} ${u}`), tankCount].join(
       ' · ',
     );
-    const lowTanks = tanksData.filter(
-      (t: any) => classifyTank(tankPct(t.currentVolume, t.capacity)) !== 'ok',
-    ).length;
+    const tankLevels = tanksData.map((t: any) =>
+      classifyTank(tankPct(t.currentVolume, t.capacity)),
+    );
+    const lowTanks = tankLevels.filter((level) => level === 'low' || level === 'critical').length;
+    const overTanks = tankLevels.filter((level) => level === 'over').length;
     const oversold = items.filter((i: any) => Number(i.quantity) < 0).length;
     const outOfStock = items.filter((i: any) => Number(i.quantity) === 0).length;
     const variances = (variancesQ.data ?? []).length;
-    return { totalFuelValue, totalFuelHint, lowTanks, oversold, outOfStock, variances };
+    return { totalFuelValue, totalFuelHint, lowTanks, overTanks, oversold, outOfStock, variances };
   }, [tanksData, items, variancesQ.data]);
 
   const [movementSearch, setMovementSearch] = useState('');
@@ -527,6 +529,13 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation })
               hint="below 35% capacity"
             />
             <KpiTile
+              dot={kpis.overTanks > 0 ? 'info' : 'neutral'}
+              valueTone={kpis.overTanks > 0 ? 'info' : undefined}
+              label="Book Stock Over Capacity"
+              value={String(kpis.overTanks)}
+              hint="may reconcile at shift close"
+            />
+            <KpiTile
               dot={kpis.outOfStock > 0 ? 'warning' : 'success'}
               valueTone={kpis.outOfStock > 0 ? 'warning' : undefined}
               label="Out of Stock"
@@ -579,8 +588,21 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation })
                   const pct = tankPct(vol, cap);
                   const level = classifyTank(pct);
                   const tone =
-                    level === 'critical' ? 'danger' : level === 'low' ? 'warning' : 'success';
-                  const label = level === 'critical' ? 'Critical' : level === 'low' ? 'Low' : 'OK';
+                    level === 'critical'
+                      ? 'danger'
+                      : level === 'low'
+                        ? 'warning'
+                        : level === 'over'
+                          ? 'info'
+                          : 'success';
+                  const label =
+                    level === 'critical'
+                      ? 'Critical'
+                      : level === 'low'
+                        ? 'Low'
+                        : level === 'over'
+                          ? 'Over capacity'
+                          : 'OK';
                   const highlighted = highlightId === tank.id;
                   return (
                     <div
@@ -666,11 +688,23 @@ export const InventoryList: React.FC<InventoryListProps> = ({ selectedStation })
                       </div>
                       <MeterRow
                         label=""
-                        value={vol}
+                        value={Math.min(vol, cap)}
                         max={cap || 1}
-                        tone="auto"
+                        tone={level === 'over' ? 'info' : 'auto'}
                         valueLabel={`${pct.toFixed(0)}% capacity`}
                       />
+                      {level === 'over' && (
+                        <p
+                          style={{
+                            margin: 0,
+                            fontSize: '11px',
+                            lineHeight: 1.45,
+                            color: 'var(--state-info-fg)',
+                          }}
+                        >
+                          {OVER_CAPACITY_EXPLANATION}
+                        </p>
+                      )}
                     </div>
                   );
                 })}

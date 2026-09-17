@@ -112,6 +112,11 @@ export class SupabaseAdmin {
     await this.request('PUT', `/admin/users/${authUserId}`, { password });
   }
 
+  /** Update server-controlled metadata that end users cannot modify. */
+  async updateAppMetadata(authUserId: string, appMetadata: Record<string, unknown>): Promise<void> {
+    await this.request('PUT', `/admin/users/${authUserId}`, { app_metadata: appMetadata });
+  }
+
   /**
    * Send an invite email so the recipient sets their own password. Carries
    * `data` into the auth user's metadata (read by the gated `handle_new_user()`

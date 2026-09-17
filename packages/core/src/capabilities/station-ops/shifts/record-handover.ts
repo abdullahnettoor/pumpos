@@ -147,10 +147,6 @@ export class RecordHandover implements UseCase<RecordHandoverCommand, RecordHand
     );
     if (!source.attendant || source.attendant.organizationId !== ctx.organizationId)
       return err(notFoundError('Attendant', cmd.attendantId));
-    if (source.attendant.role !== 'Attendant')
-      return err(
-        validationError('Assigned user is not an Attendant', { attendantId: cmd.attendantId }),
-      );
     if (source.attendant.status !== 'ACTIVE')
       return err(invariantViolation('Attendant is not active', { attendantId: cmd.attendantId }));
     if (

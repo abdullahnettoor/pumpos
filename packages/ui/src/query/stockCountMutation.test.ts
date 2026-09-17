@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { RecordStockCountPayload } from '../services/cloud.js';
 import {
+  applyPendingTankDips,
   discardUnrecordedTankDips,
   isAmbiguousMutationError,
   loadPendingStockCountRequest,
@@ -114,6 +115,59 @@ describe('Stock Count mutation identity', () => {
       status: 'pending',
       idempotencyKey: 'key-1',
     });
+    vi.unstubAllGlobals();
+  });
+
+  it('records every pending dip and persists a partial failure for retry', async () => {
+    const values = new Map<string, string>();
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => values.set(key, value),
+      removeItem: (key: string) => values.delete(key),
+    });
+    const workflow = {
+      expectedCash: 100,
+      closingCash: 100,
+      variance: 0,
+      lastClosedShiftId: 'shift-1',
+      nextTemplateId: 'template-2',
+      businessDate: '2026-09-12',
+      currentBusinessDate: '2026-09-12',
+      openedAt: '2026-09-12T06:00:00.000Z',
+      closedAt: '2026-09-12T14:00:00.000Z',
+      closeStatus: 'closed' as const,
+      tankDips: [
+        {
+          tankId: 'tank-1',
+          tankName: 'MS Tank',
+          actualQuantity: 4900,
+          status: 'pending' as const,
+          idempotencyKey: 'key-1',
+        },
+        {
+          tankId: 'tank-2',
+          tankName: 'HSD Tank',
+          actualQuantity: 8000,
+          status: 'pending' as const,
+          idempotencyKey: 'key-2',
+        },
+      ],
+    };
+    const recordStockCount = vi
+      .fn()
+      .mockResolvedValueOnce({ expectedQuantity: 5000, varianceQuantity: -100 })
+      .mockRejectedValueOnce(Object.assign(new Error('Offline'), { code: 'NETWORK' }));
+
+    const result = await applyPendingTankDips({
+      stationId: 'station-1',
+      workflow,
+      recordStockCount,
+    });
+
+    expect(recordStockCount).toHaveBeenCalledTimes(2);
+    expect(result.tankDips.map((dip) => dip.status)).toEqual(['saved', 'failed']);
+    expect(result.tankDips[1].idempotencyKey).toBe('key-2');
+    expect(loadPendingTankDipWorkflow('station-1')?.tankDips).toEqual(result.tankDips);
     vi.unstubAllGlobals();
   });
 

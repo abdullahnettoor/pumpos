@@ -1,5 +1,6 @@
 import React from 'react';
 import { Document, Page, View, Text, StyleSheet, Font, Image } from '@react-pdf/renderer';
+import { formatMoney } from '../../utils/format.js';
 
 // Embed Plus Jakarta Sans + Geist Mono (matches the app type; Mono is used
 // for all numeric/currency cells and MUST carry the rupee glyph ₹ — Noto Sans
@@ -43,8 +44,7 @@ export const C = {
   white: '#FFFFFF',
 };
 
-export const inr = (n: any) =>
-  `\u20b9${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+export const inr = (n: any) => formatMoney(n);
 export const inr0 = (n: any) => `\u20b9${Number(n || 0).toLocaleString('en-IN')}`;
 export const vol3 = (n: any) =>
   `${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} L`;
@@ -647,16 +647,16 @@ const builders: Record<ShiftSummarySection, (d: any, cfg: ReportConfig) => React
       <Text style={s.h2}>CASH RECONCILIATION &amp; VARIANCES</Text>
       <View style={s.reconBox}>
         {[
-          { l: 'Opening Cash Float', v: inr0(d.openingCash), c: C.ink },
+          { l: 'Opening Cash Float', v: inr(d.openingCash), c: C.ink },
           {
             l: '(+) Cash Sales (Attendant Handovers)',
-            v: `+ ${inr0(d.cashSalesSum)}`,
+            v: `+ ${inr(d.cashSalesSum)}`,
             c: C.success,
           },
-          { l: '(+) Cash Collections', v: `+ ${inr0(d.cashCollectionsSum)}`, c: C.success },
-          { l: '(-) Petty Cash Expenses', v: `- ${inr0(d.cashExpensesSum)}`, c: C.danger },
-          { l: 'Expected Cash in Drawer', v: inr0(d.expectedCash), c: C.ink },
-          { l: 'Actual Closing Cash (Entered)', v: inr0(d.closingCash), c: C.ink },
+          { l: '(+) Cash Collections', v: `+ ${inr(d.cashCollectionsSum)}`, c: C.success },
+          { l: '(-) Petty Cash Expenses', v: `- ${inr(d.cashExpensesSum)}`, c: C.danger },
+          { l: 'Expected Cash in Drawer', v: inr(d.expectedCash), c: C.ink },
+          { l: 'Actual Closing Cash (Entered)', v: inr(d.closingCash), c: C.ink },
         ].map((r, i) => (
           <View key={i} style={s.reconRow}>
             <Text style={{ fontSize: 9, color: r.c }}>{r.l}</Text>
@@ -693,7 +693,7 @@ const builders: Record<ShiftSummarySection, (d: any, cfg: ReportConfig) => React
             }}
           >
             {Number(d.cashVariance || 0) > 0 ? '+' : ''}
-            {inr0(d.cashVariance)}
+            {inr(d.cashVariance)}
             {Number(d.cashVariance || 0) === 0
               ? ' (Perfect Match)'
               : Math.abs(Number(d.cashVariance || 0)) > 100
@@ -708,9 +708,9 @@ const builders: Record<ShiftSummarySection, (d: any, cfg: ReportConfig) => React
     <View key="nonCash">
       <Text style={s.h2}>NON-CASH COLLECTIONS</Text>
       <View style={s.kpiRow}>
-        <Kpi l="Card Collections" v={inr0(d.cardCollectionsSum)} />
-        <Kpi l="UPI/QR Collections" v={inr0(d.upiCollectionsSum)} />
-        <Kpi l="Bank Transfer Collections" v={inr0(d.bankCollectionsSum)} />
+        <Kpi l="Card Collections" v={inr(d.cardCollectionsSum)} />
+        <Kpi l="UPI/QR Collections" v={inr(d.upiCollectionsSum)} />
+        <Kpi l="Bank Transfer Collections" v={inr(d.bankCollectionsSum)} />
       </View>
     </View>
   ),
@@ -727,7 +727,7 @@ const builders: Record<ShiftSummarySection, (d: any, cfg: ReportConfig) => React
           rows={(d.expenses || []).map((e: any) => [
             { text: e.categoryName || 'General' },
             { text: e.description || '—' },
-            { text: `- ${inr0(e.amount)}`, color: C.danger },
+            { text: `- ${inr(e.amount)}`, color: C.danger },
           ])}
         />
       </View>
@@ -747,7 +747,7 @@ const builders: Record<ShiftSummarySection, (d: any, cfg: ReportConfig) => React
             { text: p.supplierName || 'Unknown Supplier' },
             { text: `${p.documentNumber || ''}${p.invoiceNumber ? ` (${p.invoiceNumber})` : ''}` },
             { text: p.notes || '—' },
-            { text: inr0(p.amount) },
+            { text: inr(p.amount) },
           ])}
         />
       </View>
@@ -767,7 +767,7 @@ const builders: Record<ShiftSummarySection, (d: any, cfg: ReportConfig) => React
             { text: c.customerName || 'Walk-in Customer' },
             { text: c.paymentMethod || '' },
             { text: c.notes || '—' },
-            { text: inr0(c.amount), color: c.paymentMethod === 'Credit' ? C.muted : C.success },
+            { text: inr(c.amount), color: c.paymentMethod === 'Credit' ? C.muted : C.success },
           ])}
         />
       </View>

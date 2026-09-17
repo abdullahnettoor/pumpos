@@ -34,6 +34,22 @@ export interface PendingTankDipWorkflow {
   closeStatus?: 'submitting' | 'closed';
 }
 
+interface StockCountResult {
+  expectedQuantity: number;
+  varianceQuantity: number;
+}
+
+interface ApplyPendingTankDipsOptions {
+  stationId: string;
+  workflow: PendingTankDipWorkflow;
+  recordStockCount: (
+    payload: RecordStockCountPayload,
+    options: { idempotencyKey: string },
+  ) => Promise<StockCountResult>;
+  onWorkflowChange?: (workflow: PendingTankDipWorkflow) => void;
+  createKey?: () => string;
+}
+
 export function shouldResetTankDipDraft(
   previousShiftId: string | null,
   activeShiftId: string | null,
@@ -100,6 +116,61 @@ export function savePendingTankDipWorkflow(
       ),
     }),
   );
+}
+
+export async function applyPendingTankDips({
+  stationId,
+  workflow,
+  recordStockCount,
+  onWorkflowChange,
+  createKey = createStockCountIdempotencyKey,
+}: ApplyPendingTankDipsOptions): Promise<PendingTankDipWorkflow> {
+  let current = workflow;
+  const updateDip = (tankId: string, update: Partial<PendingTankDip>) => {
+    current = {
+      ...current,
+      tankDips: current.tankDips.map((dip) =>
+        dip.tankId === tankId ? { ...dip, ...update } : dip,
+      ),
+    };
+    savePendingTankDipWorkflow(stationId, current);
+    onWorkflowChange?.(current);
+  };
+
+  for (const dip of workflow.tankDips) {
+    if (dip.status === 'saved') continue;
+    updateDip(dip.tankId, { status: 'saving', error: undefined });
+    try {
+      const accepted = await recordStockCount(
+        {
+          stationId,
+          shiftId: workflow.lastClosedShiftId,
+          tankId: dip.tankId,
+          actualQuantity: dip.actualQuantity,
+          reason: dip.reason,
+        },
+        { idempotencyKey: dip.idempotencyKey },
+      );
+      updateDip(dip.tankId, {
+        status: 'saved',
+        error: undefined,
+        expectedQuantity: Number(accepted.expectedQuantity),
+        varianceQuantity: Number(accepted.varianceQuantity),
+      });
+    } catch (error: unknown) {
+      const mutationError =
+        typeof error === 'object' && error !== null
+          ? (error as { code?: string; message?: string })
+          : undefined;
+      updateDip(dip.tankId, {
+        status: 'failed',
+        error: mutationError?.message || 'Failed to save Tank Dip',
+        idempotencyKey: isAmbiguousMutationError(mutationError) ? dip.idempotencyKey : createKey(),
+      });
+    }
+  }
+
+  return current;
 }
 
 export function isAmbiguousMutationError(error: { code?: string } | null | undefined): boolean {

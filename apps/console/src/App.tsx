@@ -20,7 +20,8 @@ import {
   DesignSystem,
   QuickEntryHost,
   CloudStationService,
-  queryKeys,
+  onboardingProvisionedQueryKeys,
+  stationsQueryOptions,
   setApiBaseUrl,
   setAuthToken,
   clearClientSessionData,
@@ -163,11 +164,7 @@ export const App: React.FC = () => {
 
         // Stations rarely change — serve from the shared cache (+ localStorage) on
         // repeat session resolves instead of re-hitting /setup/stations every time.
-        const list = await qc.fetchQuery({
-          queryKey: queryKeys.stations(),
-          queryFn: () => stationService.getStations(),
-          staleTime: 24 * 60 * 60_000,
-        });
+        const list = await qc.fetchQuery(stationsQueryOptions());
         setStations(list);
         if (list.length > 0) {
           const active =
@@ -244,9 +241,12 @@ export const App: React.FC = () => {
 
   const handleOnboardingComplete = async (completedStation: Station) => {
     try {
-      await qc.invalidateQueries({ queryKey: queryKeys.stations() });
-      const list = await stationService.getStations();
-      qc.setQueryData(queryKeys.stations(), list);
+      await Promise.all(
+        onboardingProvisionedQueryKeys(completedStation.id).map((queryKey) =>
+          qc.invalidateQueries({ queryKey }),
+        ),
+      );
+      const list = await qc.fetchQuery(stationsQueryOptions());
       setStations(list);
       setSelectedStation(
         list.find((station) => station.id === completedStation.id) || completedStation,
