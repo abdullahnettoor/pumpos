@@ -38,6 +38,7 @@ permissions:
 
 jobs:
   changes:
+    name: Detect preview changes
     if: github.event.action != 'closed'
     runs-on: ubuntu-latest
     outputs:
@@ -71,6 +72,7 @@ jobs:
               - '.github/workflows/pr-preview.yml'
 
   console:
+    name: Console preview
     needs: changes
     if: github.event.action != 'closed' && needs.changes.outputs.console == 'true'
     runs-on: ubuntu-latest
@@ -98,6 +100,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
   mobile:
+    name: Mobile preview
     needs: changes
     if: github.event.action != 'closed' && needs.changes.outputs.mobile == 'true'
     runs-on: ubuntu-latest
@@ -125,6 +128,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
   marketing:
+    name: Marketing preview
     needs: changes
     if: github.event.action != 'closed' && needs.changes.outputs.marketing == 'true'
     runs-on: ubuntu-latest
@@ -156,6 +160,7 @@ jobs:
   # One sticky comment listing every preview this PR has, so the URLs are
   # discoverable from the PR itself rather than buried in a job log.
   comment:
+    name: Publish preview links
     needs: [changes, console, mobile, marketing]
     if: always() && github.event.action != 'closed' && needs.changes.result == 'success'
     runs-on: ubuntu-latest
@@ -173,6 +178,7 @@ jobs:
   # Previews are cheap but not free, and a Worker per merged PR accumulates
   # forever. Tear them down when the PR closes, merged or not.
   cleanup:
+    name: Remove preview workers
     if: github.event.action == 'closed'
     runs-on: ubuntu-latest
     steps:

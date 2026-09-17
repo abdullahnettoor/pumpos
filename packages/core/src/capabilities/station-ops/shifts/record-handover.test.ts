@@ -270,6 +270,18 @@ describe('RecordHandover', () => {
     });
   });
 
+  it.each(['Owner', 'Manager', 'Accountant', 'Staff'])(
+    'allows an active assigned %s to record a handover',
+    async (role) => {
+      const base = handoverContext();
+      const result = await setup(
+        handoverContext({ attendant: { ...base.attendant!, role } }),
+      ).useCase.execute(command(), context());
+
+      expect(result.success).toBe(true);
+    },
+  );
+
   it.each([
     'expectedSales',
     'varianceAmount',

@@ -58,9 +58,9 @@ export interface CloseShiftWizardProps {
   // Physical dip
   stationTanks: any[];
   dipReadings: Record<string, number | string>;
-  onDipReadingsChange: (next: Record<string, number | string>) => void;
+  onDipReadingsChange: React.Dispatch<React.SetStateAction<Record<string, number | string>>>;
   dipReasons: Record<string, string>;
-  onDipReasonsChange: (next: Record<string, string>) => void;
+  onDipReasonsChange: React.Dispatch<React.SetStateAction<Record<string, string>>>;
 
   // Warnings
   warnings: string[];
@@ -129,7 +129,6 @@ const CloseShiftWizardBody: React.FC<CloseShiftWizardProps> = ({
   const confirm = useConfirm();
   const [step, setStep] = useState<Step>(1);
   const [recordDip, setRecordDip] = useState(false);
-  const [confirmPostCloseDip, setConfirmPostCloseDip] = useState(false);
   const [showVarianceWhy, setShowVarianceWhy] = useState(false);
   // Denomination counts for the counted safe cash, held here so re-opening the
   // popover / navigating steps preserves them.
@@ -137,9 +136,7 @@ const CloseShiftWizardBody: React.FC<CloseShiftWizardProps> = ({
 
   const cashVariance = closingCash - expectedCash;
   const hasWarnings = warnings.length > 0;
-  const hasEnteredDip = Object.values(dipReadings).some((value) => value !== '');
-  const canSubmit =
-    (!hasWarnings || confirmWarningsChecked) && (!hasEnteredDip || confirmPostCloseDip);
+  const canSubmit = !hasWarnings || confirmWarningsChecked;
 
   const goNext = () => setStep((s) => (s < 4 ? ((s + 1) as Step) : s));
   const goBack = () => setStep((s) => (s > 1 ? ((s - 1) as Step) : s));
@@ -521,7 +518,6 @@ const CloseShiftWizardBody: React.FC<CloseShiftWizardProps> = ({
                     if (!confirmed) return;
                     onDipReadingsChange({});
                     onDipReasonsChange({});
-                    setConfirmPostCloseDip(false);
                   }
                   setRecordDip(next);
                 }}
@@ -565,10 +561,10 @@ const CloseShiftWizardBody: React.FC<CloseShiftWizardProps> = ({
                           value={dipReadings[tank.id] ?? ''}
                           onChange={(e) => {
                             const val = e.target.value;
-                            onDipReadingsChange({
-                              ...dipReadings,
+                            onDipReadingsChange((current) => ({
+                              ...current,
                               [tank.id]: val === '' ? '' : Number(val),
-                            });
+                            }));
                           }}
                           className="close-wizard-input close-wizard-input--small"
                         />
@@ -579,9 +575,10 @@ const CloseShiftWizardBody: React.FC<CloseShiftWizardProps> = ({
                         maxLength={255}
                         placeholder="Reason (optional)"
                         value={dipReasons[tank.id] ?? ''}
-                        onChange={(e) =>
-                          onDipReasonsChange({ ...dipReasons, [tank.id]: e.target.value })
-                        }
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          onDipReasonsChange((current) => ({ ...current, [tank.id]: value }));
+                        }}
                         className="close-wizard-input"
                         style={{ width: 190 }}
                       />
@@ -663,15 +660,6 @@ const CloseShiftWizardBody: React.FC<CloseShiftWizardProps> = ({
                 <span>{hasWarnings ? (confirmWarningsChecked ? 'Yes' : 'Pending') : 'None'}</span>
               </div>
             </div>
-            {hasEnteredDip && (
-              <div className="close-wizard-toggle" style={{ marginTop: '12px' }}>
-                <Checkbox
-                  label="I understand these Tank Dips are not saved by Shift close and must be recorded separately afterward."
-                  checked={confirmPostCloseDip}
-                  onChange={(e) => setConfirmPostCloseDip(e.target.checked)}
-                />
-              </div>
-            )}
             <p className="close-wizard-helper" style={{ marginTop: '8px' }}>
               On confirm, the Shift status moves to <strong>CLOSED</strong> and an immutable Shift
               Summary is generated and stored permanently. The Business Day remains open until it is

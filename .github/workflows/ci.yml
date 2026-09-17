@@ -130,14 +130,31 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+
+      - uses: dorny/paths-filter@v4
+        id: changes
+        with:
+          base: ${{ github.event_name == 'push' && github.event.before || '' }}
+          filters: |
+            affected:
+              - 'apps/marketing/**'
+              - '.github/workflows/ci.yml'
+
       - uses: actions/setup-node@v7
+        if: steps.changes.outputs.affected == 'true'
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: apps/marketing/package-lock.json
       - run: npm ci
+        if: steps.changes.outputs.affected == 'true'
         working-directory: apps/marketing
       - run: npm run lint
+        if: steps.changes.outputs.affected == 'true'
         working-directory: apps/marketing
       - run: npm run build
+        if: steps.changes.outputs.affected == 'true'
         working-directory: apps/marketing
+      - name: Not affected
+        if: steps.changes.outputs.affected != 'true'
+        run: echo "Marketing files did not change; required check passes without rebuilding."

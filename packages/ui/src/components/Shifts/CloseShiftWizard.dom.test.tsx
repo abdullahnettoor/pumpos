@@ -260,15 +260,53 @@ describe('CloseShiftWizard', () => {
       expect(summaryValue('Dip Readings Captured')).toBe('1');
     });
 
-    it('requires the post-close dip acknowledgement once a reading is entered', () => {
+    it('does not require a separate acknowledgement once a reading is entered', () => {
       renderWithProviders(
         <CloseShiftWizard
           {...baseProps({ stationTanks: tanks, dipReadings: { t1: 4200 }, closingCash: 10000 })}
         />,
       );
       goToStep(4);
-      // A dip was entered, so the close is gated on confirming it post-close.
-      expect((closeButton() as HTMLButtonElement).disabled).toBe(true);
+      expect((closeButton() as HTMLButtonElement).disabled).toBe(false);
+      expect(screen.queryByText(/Tank Dips are not saved by Shift close/i)).toBeNull();
+    });
+
+    it('retains rapid readings and reasons for multiple tanks', () => {
+      const twoTanks = [...tanks, { id: 't2', tankName: 'Tank 2', productName: 'Diesel' }];
+
+      const ControlledWizard = () => {
+        const [readings, setReadings] = React.useState<Record<string, number | string>>({});
+        const [reasons, setReasons] = React.useState<Record<string, string>>({});
+        return (
+          <CloseShiftWizard
+            {...baseProps({
+              stationTanks: twoTanks,
+              dipReadings: readings,
+              dipReasons: reasons,
+              onDipReadingsChange: setReadings,
+              onDipReasonsChange: setReasons,
+            })}
+          />
+        );
+      };
+
+      renderWithProviders(<ControlledWizard />);
+      goToStep(2);
+      fireEvent.click(screen.getByLabelText('I recorded physical dip readings this shift'));
+      const actualInputs = screen.getAllByPlaceholderText('Actual');
+      const reasonInputs = screen.getAllByPlaceholderText('Reason (optional)');
+      fireEvent.change(actualInputs[0], { target: { value: '11925' } });
+      fireEvent.change(actualInputs[1], { target: { value: '23020' } });
+      fireEvent.change(reasonInputs[0], { target: { value: 'Morning dip' } });
+      fireEvent.change(reasonInputs[1], { target: { value: 'Evening dip' } });
+
+      expect((actualInputs[0] as HTMLInputElement).value).toBe('11925');
+      expect((actualInputs[1] as HTMLInputElement).value).toBe('23020');
+      expect((reasonInputs[0] as HTMLInputElement).value).toBe('Morning dip');
+      expect((reasonInputs[1] as HTMLInputElement).value).toBe('Evening dip');
+      fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+      expect(summaryValue('Dip Readings Captured')).toBe('2');
     });
 
     it('discards entered dips when the operator turns recording off and confirms', async () => {

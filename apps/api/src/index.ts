@@ -958,6 +958,12 @@ platform.post('/owners/invite', async (c) => {
       redirectTo: c.env.INVITE_REDIRECT_URL,
       data: ownerMetadata,
     });
+    // GoTrue may write invited_at and user metadata in either order. App metadata
+    // is server-controlled and gives the provisioning trigger a safe retry signal.
+    await admin.updateAppMetadata(invited.id, {
+      signup_intent: 'owner',
+      organization_name: organizationName,
+    });
     return c.json({ success: true, data: { authUserId: invited.id, email } });
   } catch (e: any) {
     const status = e?.status === 422 ? 409 : 400;

@@ -52,6 +52,7 @@ export const queryKeys = {
   activityGroupsPrefix: (stationId: string) => ['activity-groups', stationId] as const,
   businessDayStatus: (stationId: string, businessDate = '') =>
     ['business-day-status', stationId, businessDate] as const,
+  businessDayStatusPrefix: (stationId: string) => ['business-day-status', stationId] as const,
   myAssignment: () => ['my-assignment'] as const,
   shiftSummaries: (stationId: string) => ['shift-summaries', stationId] as const,
   shiftTransactions: (shiftId: string) => ['shift-transactions', shiftId] as const,
@@ -127,6 +128,29 @@ export const TIER = {
   operational: { staleTime: 15_000, gcTime: 5 * 60_000, refetchOnWindowFocus: true } as const,
 };
 
+export const stationsQueryOptions = () => ({
+  queryKey: queryKeys.stations(),
+  queryFn: () => stationSvc.getStations(),
+  ...TIER.static,
+});
+
+export const onboardingProvisionedQueryKeys = (stationId: string) => [
+  queryKeys.stations(),
+  queryKeys.users(),
+  queryKeys.products(),
+  queryKeys.tanks(stationId),
+  queryKeys.dispensers(stationId),
+  queryKeys.nozzles(stationId),
+  queryKeys.shiftTemplates(),
+  queryKeys.paymentTerminals(stationId),
+  queryKeys.pricing(stationId),
+  queryKeys.financialAccounts(stationId),
+  queryKeys.businessDayStatusPrefix(stationId),
+  queryKeys.inventoryStatus(stationId),
+  queryKeys.inventoryItems(stationId),
+  queryKeys.inventoryMovements(stationId),
+];
+
 export function useProducts(options?: Options<any[]>) {
   return useQuery({
     queryKey: queryKeys.products(),
@@ -138,9 +162,7 @@ export function useProducts(options?: Options<any[]>) {
 
 export function useStations(options?: Options<any[]>) {
   return useQuery({
-    queryKey: queryKeys.stations(),
-    queryFn: () => stationSvc.getStations(),
-    ...TIER.static,
+    ...stationsQueryOptions(),
     ...options,
   });
 }

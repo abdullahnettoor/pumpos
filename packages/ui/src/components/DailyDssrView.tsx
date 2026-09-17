@@ -3,7 +3,7 @@ import { ArrowLeft, Printer, Download, AlertTriangle, Info } from 'lucide-react'
 import { DEFAULT_DSSR_CONFIG, paperFromStation } from '../services/reports/reportConfig.js';
 import { letterheadFromStation } from '../services/reports/letterhead.js';
 import { Button } from '../pump-ds/index.js';
-import { formatDateTime } from '../utils/format.js';
+import { formatDateTime, formatMoney, inr } from '../utils/format.js';
 import { isDesktopApp } from '../utils/platform.js';
 
 interface DailyDssrViewProps {
@@ -72,8 +72,6 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
   const salesGstTotal = Number(salesTax.gst?.total || 0);
   const salesVatTotal = Number(salesTax.vat?.vat || 0);
   const pnl = snapshot.pnl || {};
-  const inr = (n: number) => `₹${n.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
-
   return (
     <div
       ref={printRef}
@@ -1137,7 +1135,7 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
                     }}
                   >
                     {variance > 0 ? '+' : ''}
-                    {variance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    {formatMoney(variance, { symbol: false })}
                   </td>
                 </tr>
               );

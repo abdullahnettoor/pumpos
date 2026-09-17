@@ -42,6 +42,18 @@ interface CustomersListProps {
 
 type TabType = 'transactions' | 'sales' | 'registry' | 'vehicles';
 
+export function summarizeCustomerBalances(customers: any[]) {
+  return customers.reduce(
+    (totals, customer) => {
+      const balance = Number(customer.currentBalance || 0);
+      if (balance > 0) totals.receivables += balance;
+      if (balance < 0) totals.advances += Math.abs(balance);
+      return totals;
+    },
+    { receivables: 0, advances: 0 },
+  );
+}
+
 export const CustomersList: React.FC<CustomersListProps> = ({
   selectedStation,
   defaultShiftId,
@@ -63,6 +75,7 @@ export const CustomersList: React.FC<CustomersListProps> = ({
   const runTask = useRunTask();
 
   const customers = customersActiveQ.data ?? [];
+  const customerBalances = summarizeCustomerBalances(customers);
   const allCustomers = useMemo(() => customersAllQ.data ?? [], [customersAllQ.data]);
   const allCollections = useMemo(() => collectionsQ.data ?? [], [collectionsQ.data]);
   const anyPrepaid = allCustomers.some((c: any) => c.isPrepaid);
@@ -458,10 +471,8 @@ export const CustomersList: React.FC<CustomersListProps> = ({
                 dot="warning"
                 valueTone="warning"
                 label="Total Receivables"
-                value={inr(
-                  customers.reduce((s: number, c: any) => s + Number(c.currentBalance || 0), 0),
-                )}
-                hint="Outstanding dues"
+                value={inr(customerBalances.receivables)}
+                hint={`${inr(customerBalances.advances)} customer advances`}
               />
             </KpiStrip>
 
@@ -599,10 +610,8 @@ export const CustomersList: React.FC<CustomersListProps> = ({
                 dot="warning"
                 valueTone="warning"
                 label="Total Receivables"
-                value={inr(
-                  customers.reduce((s: number, c: any) => s + Number(c.currentBalance || 0), 0),
-                )}
-                hint="Outstanding dues"
+                value={inr(customerBalances.receivables)}
+                hint={`${inr(customerBalances.advances)} customer advances`}
               />
             </KpiStrip>
 
