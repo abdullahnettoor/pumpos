@@ -19,6 +19,7 @@ export function highestBump(commits) {
 }
 
 export function releaseBump(commits) {
+  if (commits.length === 0) return 'none';
   const bump = highestBump(commits);
   return bump === 'none' ? 'patch' : bump;
 }

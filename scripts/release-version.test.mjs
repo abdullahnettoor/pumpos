@@ -22,6 +22,10 @@ describe('release version derivation', () => {
     expect(releaseBump(['docs: explain releases', 'chore: update tooling'])).toBe('patch');
   });
 
+  it('does not invent a release for an empty range', () => {
+    expect(releaseBump([])).toBe('none');
+  });
+
   it('increments from the latest tag rather than a manifest version', () => {
     expect(incrementVersion('1.4.9', 'patch')).toBe('1.4.10');
     expect(incrementVersion('1.4.9', 'minor')).toBe('1.5.0');

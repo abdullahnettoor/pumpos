@@ -72,7 +72,12 @@ const commits = raw
   .filter(Boolean);
 
 const bump = releaseBump(commits);
-const version = !latestTag && !baseArg && initialArg ? initialArg : incrementVersion(base, bump);
+const version =
+  bump === 'none'
+    ? base
+    : !latestTag && !baseArg && initialArg
+      ? initialArg
+      : incrementVersion(base, bump);
 
 if (asJson) {
   console.log(JSON.stringify({ current, base, bump, version, range, commits: commits.length }));
@@ -82,5 +87,5 @@ if (asJson) {
   console.log(`base     ${base}`);
   console.log(`current  ${current}`);
   console.log(`bump     ${bump}`);
-  console.log(`version  ${version}`);
+  console.log(`version  ${bump === 'none' ? '(no release)' : version}`);
 }
