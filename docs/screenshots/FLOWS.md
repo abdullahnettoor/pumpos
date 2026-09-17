@@ -84,7 +84,7 @@ Screenshots: `docs/screenshots/` (numbers referenced below).
   (price auto from catalog), payment Cash/Card/UPI/Credit, optional customer account,
   walk-in buyer details + "save as returning customer" `[69–71]`
 - Credit merch sale requires a customer account; billed immediately as receivable
-- Shifts → Active Shift → Merchandise Handovers → **Record Closing**: employee's *unbilled*
+- Shifts → Active Shift → Merchandise Handovers → **Record Closing**: employee's _unbilled_
   bulk items at shift end (billed collectively; card/UPI portion split out; billed quick-sales
   shown read-only alongside) `[73]`
 - Cash-reconciliation step includes "non-attendant merchandise cash" line at close `[74]`
