@@ -698,6 +698,7 @@ Issues live in GitHub Issues for `abdullahnettoor/pumpos`; long-range planning r
 Single-context: one `CONTEXT.md` at the repo root plus `docs/adr/`. See `docs/agents/domain.md`.
 
 <!-- graft:start -->
+
 ## Graft — repo context graph
 
 This repo is indexed in `graft/`: small linked markdown nodes that explain each
