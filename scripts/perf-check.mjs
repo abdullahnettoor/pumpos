@@ -193,8 +193,8 @@ function parseTailEvent(evt) {
   } catch {
     return null;
   }
-  const cpuMs = w?.cpuTimeMs ?? (evt.cpuTime != null ? evt.cpuTime / 1000 : undefined);
-  const wallMs = w?.wallTimeMs ?? (evt.wallTime != null ? evt.wallTime / 1000 : undefined);
+  const cpuMs = w?.cpuTimeMs ?? evt.cpuTime; // tail JSON reports cpuTime in ms
+  const wallMs = w?.wallTimeMs ?? evt.wallTime;
   return { pathname, cpuMs, wallMs, outcome: w?.outcome ?? evt.outcome };
 }
 
@@ -236,19 +236,24 @@ async function main() {
 
   const tail = startTail();
   if (tail) {
-    console.log('Attaching wrangler tail…');
-    // npx + wrangler auth can take a while; wait for the "Successfully created
-    // tail" confirmation (up to 30 s) before generating traffic.
-    const deadline = Date.now() + 30_000;
-    while (!tail.state.connected && Date.now() < deadline) await sleep(500);
-    if (!tail.state.connected) {
+    // `--format json` prints no attach banner, so confirm the tail by traffic:
+    // give the websocket a moment, then fire unmeasured probe requests until
+    // their events appear in the stream (up to ~30 s).
+    console.log('Attaching wrangler tail (probing with unmeasured requests)…');
+    await sleep(8000);
+    const probeDeadline = Date.now() + 30_000;
+    while (tail.events.length === 0 && Date.now() < probeDeadline) {
+      await hit(ROUTES[0]);
+      await sleep(3000);
+    }
+    if (tail.events.length === 0) {
       console.error(
-        '[tail] no attach confirmation after 30s — continuing, but CPU capture may be empty. ' +
-          'Check `npx wrangler whoami` and the worker name in --tail-cmd.',
+        '[tail] no events captured from probe traffic — continuing, but CPU capture may be ' +
+          'empty. Check `npx wrangler whoami` and the worker name in --tail-cmd.',
       );
     } else {
-      console.log('[tail] attached.');
-      await sleep(2000); // small settle so the first request is captured
+      console.log('[tail] attached (probe event captured).');
+      tail.events.length = 0; // discard probe events; measure only the runs
     }
   }
 
