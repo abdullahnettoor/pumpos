@@ -18,6 +18,7 @@ import {
   Fuel,
 } from 'lucide-react';
 import { type Station } from '@pump/shared';
+import { preReadyQuickCreateIds, type PreReadyQuickCreateId } from './quickCreateActions.js';
 import type { NavIntent } from './AppShell.js';
 import { openQuickEntry } from '../quick-entry/store.js';
 import {
@@ -148,22 +149,25 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
   // --- quick create ---
   const quickCreate: QuickCreateAction[] = useMemo(() => {
     // Pre-ready (Organization hub): the only meaningful “create” is getting the
-    // station operational and inviting the team.
+    // station operational and inviting the team. Which of those a role may see
+    // is decided by `preReadyQuickCreateIds`, not here — see the note there on
+    // why the rule lives outside this component.
     if (!stationReady) {
-      return [
-        {
+      const preReady: Record<PreReadyQuickCreateId, QuickCreateAction> = {
+        'onboard-station': {
           id: 'onboard-station',
           label: 'Onboard station',
           icon: <Fuel />,
           onSelect: () => onNavigate('/onboarding'),
         },
-        {
+        'team-member': {
           id: 'team-member',
           label: 'Team member',
           icon: <Users />,
           onSelect: () => onNavigate('/organization'),
         },
-      ];
+      };
+      return preReadyQuickCreateIds(userRole).map((id) => preReady[id]);
     }
     const items: QuickCreateAction[] = [
       {

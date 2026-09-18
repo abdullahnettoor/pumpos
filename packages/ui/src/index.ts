@@ -152,3 +152,6 @@ export * from './pump-ds/boot/index.js';
 export * from './boot/sessionBoot.js';
 export * from './boot/bootGate.js';
 export * from './boot/useSelectedStation.js';
+export { StationOnboardingLockout } from './components/StationSetup/StationOnboardingLockout.js';
+export type { StationOnboardingLockoutProps } from './components/StationSetup/StationOnboardingLockout.js';
+export { STATION_SETUP_IN_PROGRESS } from './components/StationSetup/StationOnboardingLockout.js';

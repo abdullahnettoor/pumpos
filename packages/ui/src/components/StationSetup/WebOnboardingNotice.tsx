@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { canOnboardStation, type Role } from '@pump/shared';
 import { Globe, ExternalLink, Copy, Check, RefreshCw, LogOut } from 'lucide-react';
 import { Button } from '../../pump-ds/index.js';
 import { openExternal } from '../../utils/platform.js';
@@ -19,7 +20,10 @@ import { useRunTask } from '../../utils/runTask.js';
 export interface WebOnboardingNoticeProps {
   /** Public web console URL, e.g. https://console.pumpos.app */
   webUrl: string;
-  role: 'Owner' | 'Manager' | 'Accountant' | 'Staff' | string;
+  /** Typed as `Role`, not a widened string: the union collapsed to `string`,
+   *  which meant this could not call the shared onboarding guard without a
+   *  cast that would have defeated the point. */
+  role: Role;
   userName?: string;
   /** Re-check whether the station has become ready (e.g. reload / refetch). */
   onRecheck?: () => void | Promise<unknown>;
@@ -37,7 +41,7 @@ export const WebOnboardingNotice: React.FC<WebOnboardingNoticeProps> = ({
 }) => {
   const runTask = useRunTask();
   const [copied, setCopied] = useState(false);
-  const canOnboard = role === 'Owner' || role === 'Manager';
+  const canOnboard = canOnboardStation(role);
 
   const copyLink = async () => {
     try {
