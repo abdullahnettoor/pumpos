@@ -1604,12 +1604,14 @@ transactionsRouter.post('/supplier-payments', async (c) => {
       businessDays: new DrizzleBusinessDayRepository(tx),
       events,
     }).execute(body, buildContext(user, { stationId: body?.stationId, ...clock }));
-    if (r.success)
+    if (r.success) {
       await new LedgerPostingService(tx).postSupplierPayment(
         user.organizationId,
         r.data,
         body?.accountId,
       );
+      await refreshShiftSummaryForShift(tx, events, user, (r.data as any)?.shiftId);
+    }
     return r;
   });
   return sendResult(c, result);

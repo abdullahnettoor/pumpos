@@ -178,6 +178,7 @@ shiftsRouter.get('/status', async (c) => {
       .leftJoin(schema.shiftTemplates, eq(schema.shifts.shiftTemplateId, schema.shiftTemplates.id))
       .where(
         and(
+          eq(schema.shifts.organizationId, orgId),
           eq(schema.shifts.stationId, stationId),
           eq(schema.shifts.status, 'CLOSED'),
           gt(schema.shifts.closedAt, graceCutoff),
