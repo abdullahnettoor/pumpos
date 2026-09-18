@@ -89,6 +89,7 @@ describe('Handover mutation state', () => {
   it('invalidates only Handover-owned operational projections', () => {
     expect(handoverInvalidationKeys('station-1')).toEqual([
       ['shift-status', 'station-1'],
+      ['dashboard-summary', 'station-1'],
       ['my-assignment'],
       ['dssr-preview', 'station-1'],
       ['activity-groups', 'station-1'],

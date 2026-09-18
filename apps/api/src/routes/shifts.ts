@@ -3,6 +3,7 @@ import { and, desc, eq, gt, inArray, lt, ne, sql } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
 import {
   attendantHandoverSchema,
+  businessDateSettings,
   canOpenShift,
   canCloseShift,
   canReopenShift,
@@ -150,9 +151,12 @@ shiftsRouter.get('/dashboard-summary', async (c) => {
   }
   const settings = (station.settings as any) ?? {};
   const graceMinutes = settings.shift_grace_minutes ?? 15;
+  // Same timezone/day-start resolution as the rest of the API (loadStationClock
+  // defaults), so the rollup's business date can never disagree with use-cases.
+  const clockDefaults = businessDateSettings(station.settings ?? null);
   const todayBusinessDate = resolveBusinessDate({
-    timeZone: settings.timezone,
-    dayStartsAt: settings.business_day_starts_at,
+    timeZone: clockDefaults.timeZone,
+    dayStartsAt: clockDefaults.dayStartsAt,
   });
   const now = Date.now();
 
@@ -213,7 +217,9 @@ shiftsRouter.get('/dashboard-summary', async (c) => {
       db
         .select({ fullName: schema.users.fullName })
         .from(schema.users)
-        .where(eq(schema.users.id, openRow.shift.openedBy))
+        .where(
+          and(eq(schema.users.id, openRow.shift.openedBy), eq(schema.users.organizationId, orgId)),
+        )
         .limit(1),
       db
         .select({ businessDate: schema.businessDays.businessDate })
@@ -255,7 +261,14 @@ shiftsRouter.get('/dashboard-summary', async (c) => {
           fuelByProduct: sql<unknown>`COALESCE(${schema.shiftSummaries.snapshotData} -> 'fuelByProduct', '[]'::jsonb)`,
         })
         .from(schema.shiftSummaries)
-        .where(eq(schema.shiftSummaries.shiftId, lastRow.shift.id))
+        .innerJoin(schema.shifts, eq(schema.shifts.id, schema.shiftSummaries.shiftId))
+        .where(
+          and(
+            eq(schema.shiftSummaries.shiftId, lastRow.shift.id),
+            eq(schema.shifts.organizationId, orgId),
+            eq(schema.shifts.stationId, stationId),
+          ),
+        )
         .limit(1),
       db
         .select({ status: schema.businessDays.status })

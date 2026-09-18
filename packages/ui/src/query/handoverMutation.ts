@@ -93,6 +93,7 @@ export interface RecordHandoverMutationInput {
 export function handoverInvalidationKeys(stationId: string): readonly (readonly unknown[])[] {
   return [
     queryKeys.shiftStatusPrefix(stationId),
+    queryKeys.dashboardSummary(stationId),
     queryKeys.myAssignment(),
     queryKeys.dssrPreviewPrefix(stationId),
     queryKeys.activityGroupsPrefix(stationId),
