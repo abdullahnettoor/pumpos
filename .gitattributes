@@ -1,0 +1,52 @@
+# Every checkout gets byte-identical text files, on every platform.
+#
+# Without this, git falls back to per-machine config and Windows converts text
+# files to CRLF on checkout. That difference is invisible in an editor but real
+# to any tool reading a file as bytes — it broke the Windows release build once
+# already (#141).
+
+# Default: detect text, normalise to LF in the repo and in the working tree.
+* text=auto eol=lf
+
+# Byte-sensitive text that must stay LF even if the detection heuristic wavers.
+*.sh            text eol=lf
+*.mjs           text eol=lf
+*.js            text eol=lf
+*.ts            text eol=lf
+*.tsx           text eol=lf
+*.rs            text eol=lf
+*.toml          text eol=lf
+*.sql           text eol=lf
+*.json          text eol=lf
+*.lock          text eol=lf
+Cargo.lock      text eol=lf
+package-lock.json text eol=lf
+
+# Spreadsheet exports arrive CRLF and are round-tripped by tools that expect it;
+# leave their bytes exactly as committed.
+*.csv           -text
+
+# Windows-only scripts genuinely need CRLF.
+*.bat           text eol=crlf
+*.cmd           text eol=crlf
+*.ps1           text eol=crlf
+
+# Binary assets: never line-ending normalised, never diffed as text.
+*.png           binary
+*.webp          binary
+*.jpg           binary
+*.jpeg          binary
+*.gif           binary
+*.ico           binary
+*.icns          binary
+*.pdf           binary
+*.ttf           binary
+*.otf           binary
+*.woff          binary
+*.woff2         binary
+*.eot           binary
+*.mp4           binary
+*.webm          binary
+*.wasm          binary
+*.zip           binary
+*.gz            binary
