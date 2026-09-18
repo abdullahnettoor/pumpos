@@ -1,8 +1,20 @@
 // Minimal service worker — makes the mobile app installable and gives an
 // offline app-shell. Data is never cached here (owner reports must be live);
 // TanStack Query handles in-session data caching per the pump-data-caching tiers.
-const SHELL_CACHE = 'pumpos-mobile-shell-v1';
-const SHELL_ASSETS = ['/', '/index.html', '/manifest.webmanifest', '/favicon.svg'];
+//
+// Bump SHELL_CACHE whenever SHELL_ASSETS changes: `activate` deletes every
+// cache but this one, so a new name is what actually evicts a returning user's
+// stale copies. Without the bump they keep the old icons indefinitely.
+const SHELL_CACHE = 'pumpos-mobile-shell-v2';
+const SHELL_ASSETS = [
+  '/',
+  '/index.html',
+  '/manifest.webmanifest',
+  '/favicon.svg',
+  '/icon-192.svg',
+  '/icon-512.svg',
+  '/apple-touch-icon.png',
+];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(SHELL_CACHE).then((c) => c.addAll(SHELL_ASSETS)));

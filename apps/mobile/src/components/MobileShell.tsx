@@ -1,5 +1,6 @@
 import React from 'react';
 import type { Station } from '@pump/shared';
+import { PumpOSMark } from '@pump/ui';
 import { BottomNav, type TabKey } from './BottomNav.js';
 import { StationPicker } from './StationPicker.js';
 import { BusinessDayPill } from './BusinessDayPill.js';
@@ -47,12 +48,12 @@ export const MobileShell: React.FC<MobileShellProps> = ({
     >
       <div className="flex items-center justify-between px-4 py-2">
         <div className="flex min-w-0 items-center gap-2">
-          <span
-            className="grid h-7 w-7 flex-shrink-0 place-items-center rounded-lg text-sm font-bold text-white"
-            style={{ backgroundColor: 'var(--brand-primary)' }}
-          >
-            P
-          </span>
+          {/* Decorative: the station name sits right beside it, so a screen
+              reader gains nothing from announcing the brand again. */}
+          <PumpOSMark
+            className="h-7 w-auto flex-shrink-0"
+            style={{ color: 'var(--brand-primary)' }}
+          />
           <div className="min-w-0 leading-tight">
             <p className="truncate text-sm font-semibold" style={{ color: 'var(--text-strong)' }}>
               {stations.find((s) => s.id === selectedStationId)?.name ?? 'PumpOS'}
