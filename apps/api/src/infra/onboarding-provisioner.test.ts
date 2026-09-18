@@ -39,8 +39,7 @@ const makeChainable = (result: unknown): unknown => {
   // chains, while `returning()` and awaiting both resolve to the stub result.
   const target: Record<string, unknown> = {
     returning: () => Promise.resolve(result),
-    then: (onFulfilled: (v: unknown) => unknown) =>
-      Promise.resolve(result).then(onFulfilled),
+    then: (onFulfilled: (v: unknown) => unknown) => Promise.resolve(result).then(onFulfilled),
   };
   const proxy: unknown = new Proxy(target, {
     get(obj, prop: string) {
@@ -130,7 +129,9 @@ describe('DrizzleOnboardingProvisioner persists fuel under Fuel VAT (#133)', () 
   });
 
   it('persists a VAT-shaped tax config and no gst_rate', async () => {
-    const row = await provisionProductRow(fuelDraft({ taxConfig: createFuelVatConfig({ vat_rate: 20 }) }));
+    const row = await provisionProductRow(
+      fuelDraft({ taxConfig: createFuelVatConfig({ vat_rate: 20 }) }),
+    );
     const cfg = row.taxConfig as Record<string, unknown>;
     expect(cfg.vat_rate).toBe(20);
     expect(cfg).not.toHaveProperty('gst_rate');

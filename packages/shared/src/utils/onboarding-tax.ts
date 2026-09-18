@@ -13,7 +13,9 @@ export const DEFAULT_FUEL_HSN = '2710';
  * config (all fuel fields required), not a separate shape — there is no
  * `gst_rate`/`cess` on fuel.
  */
-export type FuelVatConfig = Required<Pick<ProductTaxConfig, 'vat_rate' | 'hsn_code' | 'price_inclusive'>>;
+export type FuelVatConfig = Required<
+  Pick<ProductTaxConfig, 'vat_rate' | 'hsn_code' | 'price_inclusive'>
+>;
 
 /**
  * Canonical VAT-shaped tax config for a freshly created onboarding fuel draft.
@@ -42,9 +44,10 @@ export function createFuelVatConfig(overrides: Partial<FuelVatConfig> = {}): Fue
  * VAT rate falls back to 0 for an operator to set explicitly rather than
  * silently inheriting a stale GST figure.
  */
-export function normalizeFuelTaxDraft(
-  draft: OnboardingProductDraft,
-): { taxCategory: TaxCategory; taxConfig: FuelVatConfig } {
+export function normalizeFuelTaxDraft(draft: OnboardingProductDraft): {
+  taxCategory: TaxCategory;
+  taxConfig: FuelVatConfig;
+} {
   const cfg = draft.taxConfig ?? {};
   return {
     taxCategory: 'FUEL_VAT',

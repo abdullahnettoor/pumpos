@@ -110,8 +110,7 @@ export class DrizzleOnboardingProvisioner implements OnboardingProvisioner {
           // a VAT-shaped config and persist the category explicitly, so we never
           // fall through to the products table's GST default and create a 0% GST
           // fuel product (#133).
-          const fuelTax =
-            product.productType === 'FUEL' ? normalizeFuelTaxDraft(product) : null;
+          const fuelTax = product.productType === 'FUEL' ? normalizeFuelTaxDraft(product) : null;
           const [createdProduct] = await tx
             .insert(schema.products)
             .values({
