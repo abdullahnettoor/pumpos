@@ -61,7 +61,8 @@ export const QuickEntryHost: React.FC<QuickEntryHostProps> = ({ selectedStation 
   };
   const clock = { timeZone: settings.timezone, dayStartsAt: settings.business_day_starts_at };
 
-  const statusQ = useShiftStatus(stationId, false, { enabled: !!stationId } as any);
+  // Lite mode: only the open shift's identity is needed for attribution.
+  const statusQ = useShiftStatus(stationId, true, { enabled: !!stationId } as any);
   const activeShift = statusQ.data?.activeShift ?? null;
   const activeShiftId: string | undefined = activeShift?.id;
 

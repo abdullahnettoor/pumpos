@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { persistQueryClient } from '@tanstack/query-persist-client-core';
 import { runTask } from '../utils/runTask.js';
 import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister';
+import { isResourceLimitError } from '../services/cloud.js';
 
 // Query-key prefixes whose data is safe to persist across reloads (static +
 // semi-static tiers). Operational/live data and anything auth-related are never
@@ -77,18 +78,30 @@ export function clearClientSessionData(qc: QueryClient) {
 }
 
 /**
+ * Query retry policy: one retry for transient failures (network blips, 5xx
+ * from infra), but NEVER for Cloudflare resource-limit terminations — retrying
+ * those re-runs the same over-budget work and amplifies load (#148 / #113).
+ * Exported for tests.
+ */
+export function shouldRetryQuery(failureCount: number, error: unknown): boolean {
+  if (isResourceLimitError(error)) return false;
+  return failureCount < 1;
+}
+
+/**
  * Shared QueryClient factory. App shells (web, desktop) create one client and
  * wrap their tree in {@link QueryProvider}; all data hooks in @pump/ui read from
  * this single cache. Defaults favour operator workflows: short stale time,
  * refetch on focus (a shift screen left open should catch new transactions),
- * and a single retry (the API is on a low-latency edge).
+ * and a single retry (the API is on a low-latency edge) — except resource-limit
+ * failures, which are never retried.
  */
 export function createQueryClient(): QueryClient {
   return new QueryClient({
     defaultOptions: {
       queries: {
         staleTime: 15_000,
-        retry: 1,
+        retry: shouldRetryQuery,
         refetchOnWindowFocus: true,
       },
       mutations: {

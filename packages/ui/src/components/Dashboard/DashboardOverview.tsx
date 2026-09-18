@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { CloudShiftService } from '../../services/cloud.js';
 import {
-  useShiftStatus,
+  useDashboardSummary,
   useInvalidateOperational,
   useInventoryStatus,
   usePricing,
@@ -11,7 +11,6 @@ import {
   useCollections,
   useCustomers,
   useSuppliers,
-  useShiftSummaries,
   useDailyDssrPreview,
   useUsers,
 } from '../../query/hooks.js';
@@ -69,7 +68,13 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   userName,
   onNavigate,
 }) => {
-  const { data: summary, isLoading: loading, error, refetch } = useShiftStatus(selectedStation?.id);
+  // One bounded dashboard read (#147): shift identities + today's rollup.
+  const {
+    data: summary,
+    isLoading: loading,
+    error,
+    refetch,
+  } = useDashboardSummary(selectedStation?.id);
   const canSeeFinancials = userRole !== 'Staff';
   const { data: tanks } = useInventoryStatus(selectedStation?.id);
   const { data: prices } = usePricing(selectedStation?.id);
@@ -81,9 +86,6 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   const { data: customers } = useCustomers(true, { enabled: canSeeFinancials });
   const { data: suppliers } = useSuppliers(true, { enabled: canSeeFinancials });
   const { data: users } = useUsers();
-  const { data: shiftSummaries } = useShiftSummaries(selectedStation?.id, {
-    enabled: canSeeFinancials,
-  });
   const isOwner = userRole === 'Owner';
   // Live "Today's P&L" for the owner — recomputed on demand (no snapshot written).
   const pnlSettings: any = (selectedStation as any)?.settings || {};
@@ -363,24 +365,13 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
     0,
   );
 
-  // Fuel sales today come from the immutable closed-shift summary snapshots
-  // (each shift's business day is resolved from its open instant).
-  const todayShifts = (shiftSummaries || []).filter(
-    (s: any) =>
-      resolveBusinessDate({ now: new Date(s.openedAt), timeZone, dayStartsAt }) === todayBiz,
-  );
-  const todayFuelSales = todayShifts.reduce(
-    (sum: number, s: any) => sum + Number(s.snapshotData?.totalFuelSalesValue || 0),
-    0,
-  );
-  const todayVolume = todayShifts.reduce(
-    (sum: number, s: any) => sum + Number(s.snapshotData?.totalVolume || 0),
-    0,
-  );
-  const todayCashVariance = todayShifts.reduce(
-    (sum: number, s: any) => sum + Number(s.snapshotData?.cashVariance || 0),
-    0,
-  );
+  // Fuel sales today come from the immutable closed-shift summary snapshots,
+  // aggregated server-side by business day (the dashboard-summary rollup).
+  const today = summary?.today || {};
+  const todayShiftsClosed = Number(today.shiftsClosed || 0);
+  const todayFuelSales = Number(today.fuelSalesValue || 0);
+  const todayVolume = Number(today.volume || 0);
+  const todayCashVariance = Number(today.cashVariance || 0);
 
   const tankRows: any[] = tanks || [];
   // Only fuel products carry a per-litre pump price; exclude merchandise.
@@ -422,7 +413,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
             id: 'variance',
             tone: 'danger' as const,
             title: 'Cash variance today',
-            meta: `${inr(todayCashVariance)} across ${todayShifts.length} shift${todayShifts.length === 1 ? '' : 's'}`,
+            meta: `${inr(todayCashVariance)} across ${todayShiftsClosed} shift${todayShiftsClosed === 1 ? '' : 's'}`,
             onAction: () => onNavigate('/shifts'),
           },
         ]
@@ -655,21 +646,16 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                       Fuel sold
                       <span className="mt-0.5 block font-mono font-semibold text-ink-strong">
                         {(() => {
-                          const snap = lastShiftSummary.snapshotData || {};
-                          const units = Array.from(
-                            new Set<string>(
-                              (snap.fuelByProduct || []).map((p: any) => String(p.unit || 'L')),
-                            ),
-                          );
+                          const units: string[] = lastShiftSummary.fuelUnits || [];
                           const label = units.length === 1 ? units[0] : units.length > 1 ? '' : 'L';
-                          return `${Number(snap.totalVolumeSold || 0).toFixed(2)}${label ? ` ${label}` : ''}`;
+                          return `${Number(lastShiftSummary.totalVolumeSold || 0).toFixed(2)}${label ? ` ${label}` : ''}`;
                         })()}
                       </span>
                     </div>
                     <div className="text-ink-muted">
                       Closing cash
                       <span className="mt-0.5 block font-mono font-semibold text-ink-strong">
-                        {inr(lastShiftSummary.snapshotData.closingCash)}
+                        {inr(lastShiftSummary.closingCash)}
                       </span>
                     </div>
                   </div>
@@ -849,9 +835,8 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
             <KpiTile dot="neutral" label="Payables" value={inr(payables)} hint="Supplier dues" />
           </KpiStrip>
           <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-            Today ({todayBiz}): {todayShifts.length} shift{todayShifts.length === 1 ? '' : 's'}{' '}
-            closed
-            {todayShifts.length > 0 && (
+            Today ({todayBiz}): {todayShiftsClosed} shift{todayShiftsClosed === 1 ? '' : 's'} closed
+            {todayShiftsClosed > 0 && (
               <>
                 {' '}
                 · net cash variance{' '}

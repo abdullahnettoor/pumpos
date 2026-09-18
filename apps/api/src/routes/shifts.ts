@@ -3,6 +3,7 @@ import { and, desc, eq, gt, inArray, lt, ne, sql } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
 import {
   attendantHandoverSchema,
+  businessDateSettings,
   canOpenShift,
   canCloseShift,
   canReopenShift,
@@ -111,6 +112,220 @@ shiftsRouter.get('/business-days/status', async (c) => {
     buildContext(user, { stationId, ...clock }),
   );
   return sendResult(c, result);
+});
+
+// GET /api/shifts/dashboard-summary?stationId=...
+// The dashboard's single shift read (#147 / #113): open-shift identity,
+// last-shift identity + a few stored-snapshot scalars, reopen/grace state, and
+// the current business day's rollup aggregated in SQL over stored snapshots.
+// Returns only what the dashboard renders — never full enrichment. Bounded
+// query count regardless of shift history size.
+shiftsRouter.get('/dashboard-summary', async (c) => {
+  const user = c.var.user;
+  const stationId = c.req.query('stationId');
+  if (!stationId) {
+    return c.json(
+      { success: false, error: { code: 'VALIDATION_ERROR', message: 'stationId is required' } },
+      400,
+    );
+  }
+  if (!isAuthorizedForStation(user, { organizationId: user.organizationId, stationId })) {
+    return c.json(
+      { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
+      403,
+    );
+  }
+  const db = c.var.db;
+  const orgId = user.organizationId;
+
+  const [station] = await db
+    .select()
+    .from(schema.stations)
+    .where(and(eq(schema.stations.id, stationId), eq(schema.stations.organizationId, orgId)))
+    .limit(1);
+  if (!station) {
+    return c.json(
+      { success: false, error: { code: 'NOT_FOUND', message: 'Station not found' } },
+      404,
+    );
+  }
+  const settings = (station.settings as any) ?? {};
+  const graceMinutes = settings.shift_grace_minutes ?? 15;
+  // Same timezone/day-start resolution as the rest of the API (loadStationClock
+  // defaults), so the rollup's business date can never disagree with use-cases.
+  const clockDefaults = businessDateSettings(station.settings ?? null);
+  const todayBusinessDate = resolveBusinessDate({
+    timeZone: clockDefaults.timeZone,
+    dayStartsAt: clockDefaults.dayStartsAt,
+  });
+  const now = Date.now();
+
+  const [openShiftRows, lastShiftRows, todayRollupRows] = await Promise.all([
+    db
+      .select({ shift: schema.shifts, templateName: schema.shiftTemplates.name })
+      .from(schema.shifts)
+      .leftJoin(schema.shiftTemplates, eq(schema.shiftTemplates.id, schema.shifts.shiftTemplateId))
+      .where(
+        and(
+          eq(schema.shifts.organizationId, orgId),
+          eq(schema.shifts.stationId, stationId),
+          eq(schema.shifts.status, 'OPEN'),
+        ),
+      )
+      .limit(1),
+    db
+      .select({ shift: schema.shifts, templateName: schema.shiftTemplates.name })
+      .from(schema.shifts)
+      .leftJoin(schema.shiftTemplates, eq(schema.shiftTemplates.id, schema.shifts.shiftTemplateId))
+      .where(
+        and(
+          eq(schema.shifts.organizationId, orgId),
+          eq(schema.shifts.stationId, stationId),
+          ne(schema.shifts.status, 'OPEN'),
+        ),
+      )
+      .orderBy(desc(schema.shifts.closedAt), desc(schema.shifts.createdAt))
+      .limit(1),
+    // Today's closed-shift totals aggregated in SQL from the stored snapshots —
+    // no rows or snapshots travel to the Worker, only the sums.
+    db
+      .select({
+        shiftsClosed: sql<number>`COUNT(*)::int`,
+        fuelSalesValue: sql<string>`COALESCE(SUM((${schema.shiftSummaries.snapshotData} ->> 'totalFuelSalesValue')::numeric), 0)`,
+        volume: sql<string>`COALESCE(SUM((${schema.shiftSummaries.snapshotData} ->> 'totalVolume')::numeric), 0)`,
+        cashVariance: sql<string>`COALESCE(SUM((${schema.shiftSummaries.snapshotData} ->> 'cashVariance')::numeric), 0)`,
+      })
+      .from(schema.shiftSummaries)
+      .innerJoin(schema.shifts, eq(schema.shifts.id, schema.shiftSummaries.shiftId))
+      .innerJoin(schema.businessDays, eq(schema.businessDays.id, schema.shifts.businessDayId))
+      .where(
+        and(
+          eq(schema.shifts.organizationId, orgId),
+          eq(schema.shifts.stationId, stationId),
+          eq(schema.businessDays.businessDate, todayBusinessDate),
+        ),
+      ),
+  ]);
+
+  const openRow = openShiftRows[0];
+  const lastRow = lastShiftRows[0];
+
+  // Active-shift identity enrichment (opened-by name + business date).
+  let activeShift: any = null;
+  if (openRow) {
+    const [openedByRows, dayRows] = await Promise.all([
+      db
+        .select({ fullName: schema.users.fullName })
+        .from(schema.users)
+        .where(
+          and(eq(schema.users.id, openRow.shift.openedBy), eq(schema.users.organizationId, orgId)),
+        )
+        .limit(1),
+      db
+        .select({ businessDate: schema.businessDays.businessDate })
+        .from(schema.businessDays)
+        .where(
+          and(
+            eq(schema.businessDays.id, openRow.shift.businessDayId),
+            eq(schema.businessDays.organizationId, orgId),
+          ),
+        )
+        .limit(1),
+    ]);
+    activeShift = {
+      id: openRow.shift.id,
+      businessDayId: openRow.shift.businessDayId,
+      templateName: openRow.templateName ?? 'Custom',
+      businessDate: dayRows[0]?.businessDate ?? null,
+      openedByName: openedByRows[0]?.fullName ?? 'System',
+      openedAt: openRow.shift.openedAt,
+      openingCash: openRow.shift.openingCash,
+    };
+  }
+
+  // Last-shift identity + the stored-snapshot scalars the dashboard renders.
+  let lastShift: any = null;
+  let lastShiftSummary: any = null;
+  let canReopenLastShift = false;
+  let gracePeriodExpiresAt: string | null = null;
+  if (lastRow) {
+    if (lastRow.shift.status === 'CLOSED' && lastRow.shift.closedAt) {
+      const reopenExpiry = new Date(lastRow.shift.closedAt).getTime() + graceMinutes * 60 * 1000;
+      if (now <= reopenExpiry) gracePeriodExpiresAt = new Date(reopenExpiry).toISOString();
+    }
+    const [summaryScalarRows, parentDayRows] = await Promise.all([
+      db
+        .select({
+          totalVolumeSold: sql<string>`COALESCE((${schema.shiftSummaries.snapshotData} ->> 'totalVolumeSold')::numeric, (${schema.shiftSummaries.snapshotData} ->> 'totalVolume')::numeric, 0)`,
+          closingCash: sql<string>`COALESCE((${schema.shiftSummaries.snapshotData} ->> 'closingCash')::numeric, 0)`,
+          fuelByProduct: sql<unknown>`COALESCE(${schema.shiftSummaries.snapshotData} -> 'fuelByProduct', '[]'::jsonb)`,
+        })
+        .from(schema.shiftSummaries)
+        .innerJoin(schema.shifts, eq(schema.shifts.id, schema.shiftSummaries.shiftId))
+        .where(
+          and(
+            eq(schema.shiftSummaries.shiftId, lastRow.shift.id),
+            eq(schema.shifts.organizationId, orgId),
+            eq(schema.shifts.stationId, stationId),
+          ),
+        )
+        .limit(1),
+      db
+        .select({ status: schema.businessDays.status })
+        .from(schema.businessDays)
+        .where(
+          and(
+            eq(schema.businessDays.id, lastRow.shift.businessDayId),
+            eq(schema.businessDays.organizationId, orgId),
+          ),
+        )
+        .limit(1),
+    ]);
+    if (
+      lastRow.shift.status === 'CLOSED' &&
+      parentDayRows[0]?.status === 'OPEN' &&
+      canReopenShift(user.role) &&
+      !openRow
+    )
+      canReopenLastShift = true;
+    lastShift = {
+      id: lastRow.shift.id,
+      status: lastRow.shift.status,
+      templateName: lastRow.templateName ?? 'Custom',
+      closedAt: lastRow.shift.closedAt,
+    };
+    const scalars = summaryScalarRows[0];
+    lastShiftSummary = scalars
+      ? {
+          totalVolumeSold: Number(scalars.totalVolumeSold),
+          closingCash: Number(scalars.closingCash),
+          fuelUnits: Array.from(
+            new Set(
+              ((scalars.fuelByProduct as any[]) ?? []).map((p: any) => String(p?.unit ?? 'L')),
+            ),
+          ),
+        }
+      : null;
+  }
+
+  const rollup = todayRollupRows[0];
+  return c.json({
+    success: true,
+    data: {
+      activeShift,
+      lastShift,
+      lastShiftSummary,
+      canReopenLastShift,
+      gracePeriodExpiresAt,
+      today: {
+        businessDate: todayBusinessDate,
+        shiftsClosed: Number(rollup?.shiftsClosed ?? 0),
+        fuelSalesValue: Number(rollup?.fuelSalesValue ?? 0),
+        volume: Number(rollup?.volume ?? 0),
+        cashVariance: Number(rollup?.cashVariance ?? 0),
+      },
+    },
+  });
 });
 
 // GET /api/shifts/status?stationId=...
