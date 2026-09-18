@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import {
   AppShell,
   BootScreen,
+  StationOnboardingLockout,
   SkeletonGrid,
   Login,
   AcceptInvite,
@@ -453,38 +454,22 @@ export const App: React.FC = () => {
       return <SkeletonGrid count={6} />;
     }
 
-    // 4. Gating check: Block operators/staff if station setup is not completed
+    // 4. Gating: the roles that cannot finish setup themselves. This screen
+    //    carries its own sign-out because it does not always render inside the
+    //    shell — /onboarding renders bare, and a Staff user who got there had
+    //    no way out but a page reload (#132).
     if (
       !stationsLoading &&
       !isStationReady &&
       ((userRole as string) === 'Staff' || (userRole as string) === 'Accountant')
     ) {
       return (
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            minHeight: '60vh',
-            textAlign: 'center',
-            padding: '24px',
-            backgroundColor: 'var(--bg-surface)',
-            border: '1px solid var(--border-soft)',
-            borderRadius: 'var(--radius-card)',
-            maxWidth: '500px',
-            margin: '40px auto',
-          }}
-          className="animate-fade-in"
-        >
-          <h2 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-strong)' }}>
-            Station Onboarding In Progress
-          </h2>
-          <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '8px' }}>
-            The fuel station configuration is currently being finalized by the Owner or Manager.
-            Operations will be unlocked automatically once complete.
-          </p>
-        </div>
+        <StationOnboardingLockout
+          // Layout only — the sign-out is unconditional, so getting this
+          // wrong costs padding, never the way out.
+          inShell={currentPath !== '/onboarding'}
+          onSignOut={() => runTask(handleLogout(), 'Could not sign out.')}
+        />
       );
     }
 
