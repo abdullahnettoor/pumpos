@@ -4,8 +4,20 @@ import * as schema from './schema.js';
 
 export function createDb(connectionString: string) {
   const queryClient = postgres(connectionString, {
+    // ONE connection per request-scoped client (#155): every additional
+    // connection pays a full Postgres auth handshake — SCRAM-SHA-256 runs
+    // PBKDF2 (4096 iterations) in Worker CPU per connection. With max > 1 a
+    // Promise.all query batch could open several connections and burn the
+    // whole 10 ms Workers CPU budget on handshakes alone (observed 17–50 ms →
+    // exceededCpu). Hyperdrive holds the real server-side pool, so a single
+    // client connection only serializes the Worker↔Hyperdrive hop; queries
+    // still hit warm pooled connections behind it.
+    max: 1,
+    // No array types in the schema, so skip the pg_types startup query —
+    // one fewer round-trip AND less result parsing on the request path.
+    fetch_types: false,
     // Keep prepared statements enabled for Hyperdrive query caching.
-    max: 5,
+    prepare: true,
     idle_timeout: 20,
     connect_timeout: 10,
   });
@@ -18,7 +30,8 @@ export function createDbWithOptions(
 ) {
   const queryClient = postgres(connectionString, {
     prepare: options?.prepare,
-    max: options?.max ?? 5,
+    max: options?.max ?? 1,
+    fetch_types: false,
     idle_timeout: 20,
     connect_timeout: 10,
   });
