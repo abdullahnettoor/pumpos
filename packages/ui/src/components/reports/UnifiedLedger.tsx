@@ -13,6 +13,7 @@ import { Combobox } from '../primitives/Combobox.js';
 import { DateRangeField, computeRange } from '../primitives/DateRangeField.js';
 import type { DateRange } from '../primitives/DateRangeField.js';
 import { inr, formatDate } from '../../utils/format.js';
+import { paperFromStation } from '../../services/reports/reportConfig.js';
 import { KpiStrip, KpiTile, Panel, Button, EmptyState, Icon } from '../../pump-ds/index.js';
 
 /** Tone for the closing-balance KPI (kept local; the old KpiCard primitive is retired). */
@@ -358,9 +359,8 @@ export const UnifiedLedger: React.FC<UnifiedLedgerProps> = ({ selectedStation })
         totals: { debit: totals.debit, credit: totals.credit, balance: totals.net },
         stationName: selectedStation?.name,
         letterhead: letterheadFromStation(selectedStation),
-        showLogo: selectedStation?.settings?.report_config?.showLogo !== false,
         generatedAt: new Date().toISOString(),
-        paper: selectedStation?.settings?.report_config?.paper === 'LETTER' ? 'LETTER' : 'A4',
+        paper: paperFromStation(selectedStation),
       });
       const slug = (entityName || committed.type).replace(/[^a-z0-9]+/gi, '_');
       await exportReactPdf(element, `Ledger_${slug}_${committed.from}_${committed.to}`);

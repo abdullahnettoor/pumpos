@@ -1,5 +1,15 @@
 import React from 'react';
-import { Document, Page, View, Text, StyleSheet, Font, Image, Svg, Path } from '@react-pdf/renderer';
+import {
+  Document,
+  Page,
+  View,
+  Text,
+  StyleSheet,
+  Font,
+  Image,
+  Svg,
+  Path,
+} from '@react-pdf/renderer';
 import { MARK_VIEWBOX, MARK_PATH } from '../../pump-ds/brand/Brand.js';
 import { formatMoney } from '../../utils/format.js';
 
@@ -95,14 +105,6 @@ export const s = StyleSheet.create({
     fontFamily: 'Plus Jakarta Sans',
   },
   band: { backgroundColor: C.green, paddingVertical: 12, paddingHorizontal: 16, borderRadius: 6 },
-  markTile: {
-    width: 30,
-    height: 30,
-    backgroundColor: C.white,
-    borderRadius: 4,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   brand: { fontSize: 15, color: C.white, fontWeight: 700 },
   title: { fontSize: 11, color: C.white, marginTop: 3, letterSpacing: 1.5, fontWeight: 700 },
   sub: { fontSize: 8.5, color: C.muted, marginTop: 6 },
@@ -311,7 +313,7 @@ export const LetterheadBand = ({
   title,
   stationName,
   letterhead,
-  showLogo = true,
+  showLogo: showLogoProp,
 }: {
   title: string;
   stationName?: string;
@@ -319,6 +321,7 @@ export const LetterheadBand = ({
   showLogo?: boolean;
 }) => {
   const lh = letterhead || {};
+  const showLogo = showLogoProp ?? lh.showLogo ?? true;
   const heading = lh.legalName || stationName || 'PumpOS';
   const legalBits = [
     lh.gstin ? `GSTIN: ${lh.gstin}` : '',
@@ -336,11 +339,9 @@ export const LetterheadBand = ({
           style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}
         >
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            <View style={s.markTile}>
-              <Svg viewBox={MARK_VIEWBOX} width={18} height={20}>
-                <Path d={MARK_PATH} fill={C.green} fillRule="evenodd" />
-              </Svg>
-            </View>
+            <Svg viewBox={MARK_VIEWBOX} width={21.3} height={24}>
+              <Path d={MARK_PATH} fill={C.white} fillRule="evenodd" />
+            </Svg>
             <View>
               <Text style={s.brand}>{heading}</Text>
               <Text style={s.title}>{title}</Text>

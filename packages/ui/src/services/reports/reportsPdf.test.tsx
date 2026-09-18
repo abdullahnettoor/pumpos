@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import React from 'react';
 import path from 'node:path';
+import fs from 'node:fs';
+import zlib from 'node:zlib';
 import { Font, pdf } from '@react-pdf/renderer';
 import { ShiftSummaryDoc, LetterheadBand, C } from './shiftSummaryDoc.js';
 import { DssrDoc } from './dssrDoc.js';
@@ -17,9 +19,58 @@ async function streamToBuffer(stream: any): Promise<Buffer> {
   return Buffer.concat(chunks);
 }
 
+/**
+ * Extracts and decompresses all PDF content streams from a compiled PDF binary buffer.
+ */
+function extractDecompressedStreams(pdfBuffer: Buffer): string[] {
+  const raw = pdfBuffer.toString('latin1');
+  const matches = raw.matchAll(/stream[\r\n]+([\s\S]*?)[\r\n]+endstream/g);
+  const streams: string[] = [];
+  for (const m of matches) {
+    try {
+      const decomp = zlib.inflateSync(Buffer.from(m[1], 'latin1')).toString('utf8');
+      streams.push(decomp);
+    } catch {
+      // Stream is uncompressed or raw binary
+      streams.push(m[1]);
+    }
+  }
+  return streams;
+}
+
+/**
+ * Asserts that the compiled PDF binary contains the vector PumpOS mark.
+ * The canonical mark is drawn with fillRule="evenodd" (which maps to the PDF
+ * 'f*' operator) and contains numerous cubic bezier curves ('c' operator)
+ * rendering the pump nozzle knockout inside the lettermark.
+ */
+function assertPdfContainsVectorMark(pdfBuffer: Buffer) {
+  const streams = extractDecompressedStreams(pdfBuffer);
+  // Find page drawing streams (containing coordinate transforms 'cm' and path fills)
+  const pageStream = streams.find((s) => s.includes('cm') && s.includes('f*'));
+  expect(
+    pageStream,
+    'Generated PDF stream must contain even-odd vector fill operator (f*) for the mark',
+  ).toBeDefined();
+
+  const curves = pageStream!.match(/ c[\r\n]/g) || [];
+  expect(
+    curves.length,
+    'Generated PDF stream must contain cubic bezier curves for the mark artwork',
+  ).toBeGreaterThan(20);
+}
+
 describe('Reports PDF with PumpOS Mark in Letterhead', () => {
   beforeAll(() => {
-    // Clear top-level font registrations that used web-relative paths (/fonts/...)
+    /*
+     * Font Registration Environment Diagnosis:
+     * In web browser and Tauri webview runtime, TTF files are fetched over HTTP from /fonts/...
+     * In Node.js environments (vitest, CLI generators, SSR), @react-pdf/renderer's font loader
+     * treats paths not beginning with http(s):// as absolute filesystem paths (/fonts/...)
+     * which causes ENOENT: no such file or directory, open '/fonts/PlusJakartaSans-Regular.ttf'.
+     * Clearing the top-level relative registrations and registering resolved local filesystem
+     * paths allows real PDF buffers to compile cleanly in Node.
+     */
     Font.clear();
     const fontsDir = path.resolve(__dirname, '../../../../../apps/desktop/public/fonts');
     Font.register({
@@ -50,9 +101,10 @@ describe('Reports PDF with PumpOS Mark in Letterhead', () => {
     pincode: '560001',
     contact: '+91 98765 43210',
     logoDataUrl: dummyLogo,
+    showLogo: true,
   };
 
-  it('LetterheadBand includes the vector mark and uses brand primary color', () => {
+  it('LetterheadBand renders vector mark in white directly on brand-green band with exact aspect ratio', () => {
     const element = React.createElement(LetterheadBand, {
       title: 'TEST REPORT',
       stationName: 'Station One',
@@ -60,28 +112,25 @@ describe('Reports PDF with PumpOS Mark in Letterhead', () => {
       showLogo: true,
     });
 
-    // Inspect the React tree
     expect(element).toBeDefined();
     const rendered = (element.type as any)(element.props);
     expect(rendered).toBeDefined();
 
-    // Check letterhead band properties
     const band = rendered.props.children[0];
     const row = band.props.children;
     const [leftBox, rightLogo] = row.props.children;
 
-    // Left box contains markTile and titles
-    const [markTile, textGroup] = leftBox.props.children;
-    expect(markTile.props.style.backgroundColor).toBe(C.white);
-
-    const svg = markTile.props.children;
+    // Left box contains vector Svg mark and titles
+    const [svg, textGroup] = leftBox.props.children;
     expect(svg.props.viewBox).toBe(MARK_VIEWBOX);
-    expect(svg.props.width).toBe(18);
-    expect(svg.props.height).toBe(20);
+    // Aspect ratio 21.3 / 24 = 0.8875 closely matches MARK_VIEWBOX 676.7 / 762.3 = 0.8877
+    expect(svg.props.width).toBe(21.3);
+    expect(svg.props.height).toBe(24);
 
     const pathEl = svg.props.children;
     expect(pathEl.props.d).toBe(MARK_PATH);
-    expect(pathEl.props.fill).toBe(C.green);
+    // Directly respects currentColor / white on brand-colored surface contract
+    expect(pathEl.props.fill).toBe(C.white);
     expect(pathEl.props.fillRule).toBe('evenodd');
 
     // Right side has station logo
@@ -103,10 +152,9 @@ describe('Reports PDF with PumpOS Mark in Letterhead', () => {
     const [leftBox, rightLogo] = row.props.children;
 
     // Mark remains present
-    const [markTile] = leftBox.props.children;
-    const svg = markTile.props.children;
+    const [svg] = leftBox.props.children;
     expect(svg.props.viewBox).toBe(MARK_VIEWBOX);
-    expect(svg.props.children.props.fill).toBe(C.green);
+    expect(svg.props.children.props.fill).toBe(C.white);
 
     // Station logo is omitted
     expect(rightLogo).toBeNull();
@@ -123,8 +171,8 @@ describe('Reports PDF with PumpOS Mark in Letterhead', () => {
     const [leftBox, rightLogo] = row.props.children;
 
     // Mark still rendered
-    const [markTile, textGroup] = leftBox.props.children;
-    expect(markTile.props.children.props.viewBox).toBe(MARK_VIEWBOX);
+    const [svg, textGroup] = leftBox.props.children;
+    expect(svg.props.viewBox).toBe(MARK_VIEWBOX);
 
     // Heading falls back to "PumpOS"
     const headingText = textGroup.props.children[0];
@@ -134,7 +182,7 @@ describe('Reports PDF with PumpOS Mark in Letterhead', () => {
     expect(rightLogo).toBeNull();
   });
 
-  it('generates real PDF buffer for Shift Summary Report with mark', async () => {
+  it('generates real PDF buffer for Shift Summary Report with verified vector mark in PDF stream', async () => {
     const snapshot = {
       shiftId: 'shift-12345678',
       openedAt: new Date().toISOString(),
@@ -148,20 +196,19 @@ describe('Reports PDF with PumpOS Mark in Letterhead', () => {
       sections: ['header', 'meta'] as any[],
       paper: 'A4' as const,
       letterhead: mockLetterhead,
-      showLogo: true,
     };
 
     const doc = React.createElement(ShiftSummaryDoc, { snapshot, config });
     const stream = await pdf(doc as any).toBuffer();
     const buffer = await streamToBuffer(stream);
     expect(buffer).toBeDefined();
-    expect(buffer.length).toBeGreaterThan(100);
-    // Standard PDF header magic bytes %PDF-
-    const header = buffer.subarray(0, 5).toString('ascii');
-    expect(header).toBe('%PDF-');
+    expect(buffer.subarray(0, 5).toString('ascii')).toBe('%PDF-');
+
+    // Deep verification: inspect decompressed PDF page stream
+    assertPdfContainsVectorMark(buffer);
   });
 
-  it('generates real PDF buffer for DSSR Report with mark and showLogo=false', async () => {
+  it('generates real PDF buffer for DSSR Report with verified vector mark and showLogo=false', async () => {
     const dssr = {
       businessDate: '2026-09-18',
       generatedAt: new Date().toISOString(),
@@ -171,19 +218,19 @@ describe('Reports PDF with PumpOS Mark in Letterhead', () => {
     const config = {
       sections: ['header', 'meta'] as any[],
       paper: 'A4' as const,
-      letterhead: mockLetterhead,
-      showLogo: false,
+      letterhead: { ...mockLetterhead, showLogo: false },
     };
 
     const doc = React.createElement(DssrDoc, { dssr, config });
     const stream = await pdf(doc as any).toBuffer();
     const buffer = await streamToBuffer(stream);
     expect(buffer).toBeDefined();
-    expect(buffer.length).toBeGreaterThan(100);
     expect(buffer.subarray(0, 5).toString('ascii')).toBe('%PDF-');
+
+    assertPdfContainsVectorMark(buffer);
   });
 
-  it('generates real PDF buffer for Tax Invoice with mark', async () => {
+  it('generates real PDF buffer for Tax Invoice with verified vector mark in PDF stream', async () => {
     const invoice = {
       invoiceNumber: 'INV-2026-001',
       issuedDate: '2026-09-18',
@@ -191,7 +238,14 @@ describe('Reports PDF with PumpOS Mark in Letterhead', () => {
       buyerGstin: '29AAACA0000A1Z5',
       buyerStateCode: '29',
       interState: false,
-      totalAmount: 5000,
+      taxableAmount: 4500,
+      cgstTotal: 0,
+      sgstTotal: 0,
+      igstTotal: 0,
+      vatTotal: 900,
+      cessTotal: 0,
+      roundOff: 0,
+      totalAmount: 5400,
       snapshotData: {
         lines: [
           {
@@ -221,16 +275,16 @@ describe('Reports PDF with PumpOS Mark in Letterhead', () => {
       invoice: invoice as any,
       stationName: 'Apex Station',
       letterhead: mockLetterhead,
-      showLogo: true,
     });
     const stream = await pdf(doc as any).toBuffer();
     const buffer = await streamToBuffer(stream);
     expect(buffer).toBeDefined();
-    expect(buffer.length).toBeGreaterThan(100);
     expect(buffer.subarray(0, 5).toString('ascii')).toBe('%PDF-');
+
+    assertPdfContainsVectorMark(buffer);
   });
 
-  it('generates real PDF buffer for Ledger Report with mark', async () => {
+  it('generates real PDF buffer for Ledger Report with verified vector mark in PDF stream', async () => {
     const doc = React.createElement(LedgerDoc, {
       title: 'CUSTOMER LEDGER',
       entityName: 'Acme Transport',
@@ -250,12 +304,12 @@ describe('Reports PDF with PumpOS Mark in Letterhead', () => {
       totals: { debit: 12000, credit: 0, balance: 12000 },
       stationName: 'Apex Station',
       letterhead: mockLetterhead,
-      showLogo: true,
     });
     const stream = await pdf(doc as any).toBuffer();
     const buffer = await streamToBuffer(stream);
     expect(buffer).toBeDefined();
-    expect(buffer.length).toBeGreaterThan(100);
     expect(buffer.subarray(0, 5).toString('ascii')).toBe('%PDF-');
+
+    assertPdfContainsVectorMark(buffer);
   });
 });

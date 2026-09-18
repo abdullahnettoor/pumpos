@@ -32,7 +32,7 @@ export type DssrSection =
 
 export interface ReportConfig {
   sections: ShiftSummarySection[];
-  showLogo: boolean;
+  showLogo?: boolean;
   stationName?: string;
   letterhead?: Letterhead;
   paper: 'A4' | 'LETTER';

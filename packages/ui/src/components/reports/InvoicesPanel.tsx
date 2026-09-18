@@ -71,7 +71,6 @@ export const InvoicesPanel: React.FC<InvoicesPanelProps> = ({ selectedStation, u
         invoice,
         stationName: selectedStation?.name,
         letterhead: letterheadFromStation(selectedStation),
-        showLogo: selectedStation?.settings?.report_config?.showLogo !== false,
         paper: paperFromStation(selectedStation),
       });
       await exportReactPdf(

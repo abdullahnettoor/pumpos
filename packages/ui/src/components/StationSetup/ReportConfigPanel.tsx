@@ -12,7 +12,7 @@ import {
   DSSR_SECTION_LABELS,
 } from '../../services/reports/reportConfig.js';
 import { Save, GripVertical } from 'lucide-react';
-import { PumpOSMark } from '../../pump-ds/brand/Brand.js';
+import { showLogoFromStation } from '../../services/reports/letterhead.js';
 
 const stationService = new CloudStationService();
 
@@ -73,9 +73,7 @@ const ReportConfigForm: React.FC<ReportConfigPanelProps> = ({ selectedStation, o
   const [paper, setPaper] = useState<'A4' | 'LETTER'>(() =>
     selectedStation?.settings?.report_config?.paper === 'LETTER' ? 'LETTER' : 'A4',
   );
-  const [showLogo, setShowLogo] = useState<boolean>(
-    () => selectedStation?.settings?.report_config?.showLogo !== false,
-  );
+  const [showLogo, setShowLogo] = useState<boolean>(() => showLogoFromStation(selectedStation));
   const [ss, setSs] = useState<OrderedSection[]>(() =>
     buildOrdered(
       DEFAULT_SHIFT_SUMMARY_CONFIG.sections,
@@ -367,36 +365,20 @@ const ReportConfigForm: React.FC<ReportConfigPanelProps> = ({ selectedStation, o
                 alignItems: 'center',
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div>
+                <div style={{ color: '#fff', fontWeight: 700, fontSize: 13 }}>{heading}</div>
                 <div
                   style={{
-                    width: 26,
-                    height: 26,
-                    borderRadius: 4,
-                    background: '#FFFFFF',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexShrink: 0,
+                    color: '#fff',
+                    fontSize: 8,
+                    letterSpacing: 1.2,
+                    fontWeight: 700,
+                    marginTop: 2,
                   }}
                 >
-                  <PumpOSMark width={16} height={18} style={{ color: '#1F6A53' }} />
-                </div>
-                <div>
-                  <div style={{ color: '#fff', fontWeight: 700, fontSize: 13 }}>{heading}</div>
-                  <div
-                    style={{
-                      color: '#fff',
-                      fontSize: 8,
-                      letterSpacing: 1.2,
-                      fontWeight: 700,
-                      marginTop: 2,
-                    }}
-                  >
-                    {previewDoc === 'shiftSummary'
-                      ? 'SHIFT SUMMARY RECORD'
-                      : 'DAILY SALES SUMMARY RECORD'}
-                  </div>
+                  {previewDoc === 'shiftSummary'
+                    ? 'SHIFT SUMMARY RECORD'
+                    : 'DAILY SALES SUMMARY RECORD'}
                 </div>
               </div>
               {showLogo && logo ? (

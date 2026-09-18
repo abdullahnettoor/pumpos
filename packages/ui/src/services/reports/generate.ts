@@ -23,7 +23,6 @@ export async function generateDssrPdf(station: any, dssr: any): Promise<void> {
   const config = {
     ...DEFAULT_DSSR_CONFIG,
     sections: sections,
-    showLogo: station?.settings?.report_config?.showLogo !== false,
     stationName: station?.name,
     letterhead: letterheadFromStation(station),
     paper: paperFromStation(station),
@@ -48,7 +47,6 @@ export async function generateShiftSummaryPdf(
   const config = {
     ...DEFAULT_SHIFT_SUMMARY_CONFIG,
     sections: sections,
-    showLogo: station?.settings?.report_config?.showLogo !== false,
     stationName: station?.name || templateName,
     letterhead: letterheadFromStation(station),
     paper: paperFromStation(station),

@@ -82,6 +82,7 @@ export interface StationSettings {
     dssr?: string[];
     paper?: 'A4' | 'LETTER';
     showLogo?: boolean;
+    showStationLogo?: boolean;
   } | null;
 }
 
