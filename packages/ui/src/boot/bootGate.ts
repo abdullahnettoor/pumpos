@@ -1,10 +1,12 @@
+import type { Role } from '@pump/shared';
+
 export interface BootGateState {
-  /** The Supabase session, or null when signed out. */
-  session: unknown;
+  /** Whether a Supabase session exists. */
+  hasSession: boolean;
   /** A session check or profile resolve is in flight. */
   loading: boolean;
   /** The backend-resolved role. Null until the session call returns. */
-  userRole: string | null;
+  userRole: Role | null;
   /** The profile lookup failed (bad profile, unreachable API, role lockout). */
   profileError: boolean;
   /** The station list has not settled yet — distinct from "came back empty". */
@@ -43,7 +45,7 @@ export interface BootGateState {
  *    "not onboarded" flashes the onboarding takeover into every sign-in.
  */
 export function selectBootGate({
-  session,
+  hasSession,
   loading,
   userRole,
   profileError,
@@ -54,14 +56,22 @@ export function selectBootGate({
   // Rule 1: never strand a failure behind a spinner.
   if (profileError) return 'takeover';
 
-  if (!session) return loading ? 'boot' : 'takeover';
+  if (!hasSession) return loading ? 'boot' : 'takeover';
 
   // One screen for the whole pre-role phase, rather than one per phase.
   if (!userRole) return 'boot';
 
+  // An app that hands a pre-ready station the whole page cannot draw chrome on
+  // a list it has not got: it would paint a full operational shell and then
+  // destroy it, which is a worse flash than the one this replaced. Keep the
+  // single boot screen up instead. The cost is small — the list is static-tier
+  // and persisted, so a returning operator already has it, and a cold one waits
+  // max(session, stations) where it used to wait the sum.
+  if (stationsLoading) return notReadyTakesOver ? 'boot' : 'shell';
+
   // Rule 2: only a settled list can say the station is not onboarded — and
   // only the apps that hand the page over act on it.
-  if (notReadyTakesOver && !stationsLoading && !stationReady) return 'takeover';
+  if (notReadyTakesOver && !stationReady) return 'takeover';
 
   return 'shell';
 }

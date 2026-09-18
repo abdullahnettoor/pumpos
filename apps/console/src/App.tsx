@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   AppShell,
@@ -25,8 +25,8 @@ import {
   onboardingProvisionedQueryKeys,
   stationsQueryOptions,
   selectBootGate,
+  useSelectedStation,
   startSessionBoot,
-  useStations,
   setApiBaseUrl,
   setAuthToken,
   installSupabaseTokenSource,
@@ -128,23 +128,7 @@ export const App: React.FC = () => {
     code?: string;
     status?: number;
   } | null>(null);
-  // Stations stream in through the query layer rather than being awaited during
-  // sign-in, so the shell can be drawn as soon as we know who the user is.
-  // `enabled` keys off the session, not the resolved role, so this flies
-  // alongside the session call instead of queueing behind it.
-  const stationsQ = useStations({ enabled: !!session });
-  const stations = useMemo<Station[]>(() => stationsQ.data ?? [], [stationsQ.data]);
-
-  // Selection is derived, not effect-synced: an effect would need the list to
-  // have arrived before it could set state, which is a second render and a
-  // second chance to flash. `pickedStationId` holds only an explicit choice.
-  const [pickedStationId, setPickedStationId] = useState<string | null>(null);
-  const selectedStation = useMemo<Station | null>(() => {
-    if (!stations.length) return null;
-    const picked = pickedStationId && stations.find((st) => st.id === pickedStationId);
-    if (picked) return picked;
-    return stations.find((st) => st.onboardingStatus === 'READY_FOR_OPERATIONS') ?? stations[0];
-  }, [stations, pickedStationId]);
+  const { stations, selectedStation, pickStation, stationsLoading } = useSelectedStation(!!session);
 
   const lastUserIdRef = useRef<string | null>(null);
   const resolvedRef = useRef(false);
@@ -175,7 +159,7 @@ export const App: React.FC = () => {
       }
 
       lastUserIdRef.current = currentSession.user.id;
-      setPickedStationId(null);
+      pickStation(null);
 
       try {
         setLoading(true);
@@ -187,6 +171,13 @@ export const App: React.FC = () => {
           loadSession: () => stationService.getCurrentSession(),
           prefetchStations: () => qc.prefetchQuery(stationsQueryOptions()),
         });
+        // A session with no role would otherwise strand the operator: the gate
+        // holds the boot screen while the role is null, and that screen has no
+        // sign-out. Treat it as a failed lookup so they get the error card and
+        // its escape hatch instead of a spinner that never resolves.
+        if (!sessionData.user.role) {
+          throw new Error('Your account has no role assigned. Ask an Owner to grant access.');
+        }
         setUserRole(sessionData.user.role);
         resolvedRef.current = true;
         setUserName(sessionData.user.fullName?.trim() || sessionData.user.email);
@@ -214,7 +205,7 @@ export const App: React.FC = () => {
       lastUserIdRef.current = null;
       resolvedRef.current = false;
       setAuthToken('');
-      setPickedStationId(null);
+      pickStation(null);
       setUserRole(null);
       setUserName('');
       setLoading(false);
@@ -246,7 +237,7 @@ export const App: React.FC = () => {
   const handleStationChange = (station: Station) => {
     // A pending deep link points at the previous station's entities.
     clearNavIntent();
-    setPickedStationId(station.id);
+    pickStation(station.id);
     // Dashboard is home for both ready and pre-ready stations (the dashboard
     // shows a getting-started hero until the station is operational).
     setCurrentPath('/dashboard');
@@ -262,7 +253,7 @@ export const App: React.FC = () => {
       // Refreshed list lands in the query cache that `useStations` reads;
       // selection derives from it, so only the explicit pick is set here.
       await qc.fetchQuery(stationsQueryOptions());
-      setPickedStationId(completedStation.id);
+      pickStation(completedStation.id);
     } catch (err) {
       console.error(err);
     }
@@ -276,9 +267,6 @@ export const App: React.FC = () => {
   const isStationReady =
     selectedStation && selectedStation.onboardingStatus === 'READY_FOR_OPERATIONS';
 
-  /** Station list still in flight — distinct from "came back empty". */
-  const stationsLoading = !!session && !stationsQ.isSuccess && !stationsQ.isError;
-
   /**
    * Chrome-only optimism: while the list is in flight the onboarding status is
    * unknown, and choosing the reduced nav would collapse the sidebar and expand
@@ -288,6 +276,24 @@ export const App: React.FC = () => {
   const navAssumesReady = isStationReady || stationsLoading;
 
   // Dynamic Navigation items based on onboarding status
+  /**
+   * Where the sidebar should show the operator as standing.
+   *
+   * A pre-ready station falls back to the Dashboard for any operational
+   * destination (branch 5 below), so a deep link to /shifts would otherwise
+   * highlight Shifts while the Dashboard is on screen. Derived rather than
+   * pushed through setCurrentPath: this used to be forced once the awaited
+   * station list came back, and re-adding it as an effect would set state
+   * during render and cascade.
+   */
+  const effectivePath =
+    !stationsLoading &&
+    !isStationReady &&
+    currentPath !== '/onboarding' &&
+    currentPath !== '/organization'
+      ? '/dashboard'
+      : currentPath;
+
   const navItems = navAssumesReady
     ? [
         { label: 'Dashboard', path: '/dashboard' },
@@ -525,7 +531,7 @@ export const App: React.FC = () => {
         return (
           <StationOverview
             selectedStation={selectedStation}
-            onStationSelected={(station: Station | null) => setPickedStationId(station?.id ?? null)}
+            onStationSelected={(station: Station | null) => pickStation(station?.id ?? null)}
           />
         );
 
@@ -598,7 +604,7 @@ export const App: React.FC = () => {
    * the role lands, the shell is drawn and stations arrive into it.
    */
   const gate = selectBootGate({
-    session,
+    hasSession: !!session,
     loading,
     userRole,
     profileError: !!profileError,
@@ -624,7 +630,7 @@ export const App: React.FC = () => {
   return (
     <AppShell
       navItems={navItemsWithDev}
-      currentPath={currentPath}
+      currentPath={effectivePath}
       onNavigate={navigate}
       userRole={userRole || 'Staff'}
       userName={userName}

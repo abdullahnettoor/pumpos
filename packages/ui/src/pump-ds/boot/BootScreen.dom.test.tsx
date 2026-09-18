@@ -76,7 +76,9 @@ describe('BootScreen', () => {
   it('fills the viewport, so no half-painted chrome shows behind it', () => {
     const { container } = render(<BootScreen />);
 
+    // dvh rather than vh: on mobile this is the screen behind the browser's
+    // collapsing toolbar, and vh would leave the mark sitting off-centre.
     const root = container.firstElementChild as HTMLElement;
-    expect(root.style.minHeight).toBe('100vh');
+    expect(root.className).toContain('min-h-[100dvh]');
   });
 });

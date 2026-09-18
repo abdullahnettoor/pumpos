@@ -1,6 +1,7 @@
 import React from 'react';
 import { LoadingSpinner } from '../../components/LoadingSpinner.js';
 import { PumpOSMark } from '../brand/index.js';
+import { cn } from '../lib/cn.js';
 
 export interface BootScreenProps {
   /**
@@ -32,19 +33,14 @@ export const BootScreen: React.FC<BootScreenProps> = ({
   className = '',
 }) => (
   <div
-    className={`animate-fade-in ${className}`}
-    style={{
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: 'var(--space-6, 24px)',
-      minHeight: '100vh',
-      backgroundColor: 'var(--bg-canvas)',
-    }}
+    className={cn(
+      'flex min-h-[100dvh] flex-col items-center justify-center gap-6 bg-canvas',
+      'animate-fade-in',
+      className,
+    )}
   >
     <PumpOSMark
-      style={{ height: 48, color: 'var(--brand-primary)' }}
+      className="h-12 w-auto text-brand"
       // Decorative: the copy below already says what is happening, so
       // announcing the logo as well would just be noise.
       aria-hidden="true"

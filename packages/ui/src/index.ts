@@ -151,3 +151,4 @@ export * from './pump-ds/boot/index.js';
 // Post-sign-in boot: the branded wait screen and the parallel resolve behind it.
 export * from './boot/sessionBoot.js';
 export * from './boot/bootGate.js';
+export * from './boot/useSelectedStation.js';
