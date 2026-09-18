@@ -3,7 +3,7 @@ import { schema, type DbClient } from '@pump/db';
 import { conflictError, err, invariantViolation, ok } from '@pump/core';
 import type { OnboardingProvisioner, Result } from '@pump/core';
 import type { FinalizeOnboardingResult, OnboardingDraft } from '@pump/shared';
-import { normalizeProvider, resolveBusinessDate } from '@pump/shared';
+import { normalizeFuelTaxDraft, normalizeProvider, resolveBusinessDate } from '@pump/shared';
 import { AccountProvisioningService } from './account-provisioning.js';
 
 /** Signals a provisioning failure to roll back the transaction with a typed reason. */
@@ -105,6 +105,13 @@ export class DrizzleOnboardingProvisioner implements OnboardingProvisioner {
           const openCost = openingCostByProductDraft.get(product.draftId);
           const costBasis =
             openCost && openCost.qty > 0 ? String(round4(openCost.value / openCost.qty)) : '0';
+          // Fuel is settled under state VAT, not GST. Normalize every fuel draft
+          // (fresh, quick-added, or a legacy GST-shaped draft) onto FUEL_VAT with
+          // a VAT-shaped config and persist the category explicitly, so we never
+          // fall through to the products table's GST default and create a 0% GST
+          // fuel product (#133).
+          const fuelTax =
+            product.productType === 'FUEL' ? normalizeFuelTaxDraft(product) : null;
           const [createdProduct] = await tx
             .insert(schema.products)
             .values({
@@ -119,9 +126,11 @@ export class DrizzleOnboardingProvisioner implements OnboardingProvisioner {
                     ? 'NONE'
                     : 'ITEM',
               stockTracked: product.stockTracked,
-              isTaxable: product.isTaxable,
+              // FUEL_VAT products are not GST-taxable; keep the legacy flag false.
+              isTaxable: fuelTax ? false : product.isTaxable,
+              taxCategory: fuelTax ? fuelTax.taxCategory : undefined,
               unit: product.unit,
-              taxConfig: product.taxConfig,
+              taxConfig: fuelTax ? fuelTax.taxConfig : product.taxConfig,
               costBasis,
               isActive: product.isActive,
               createdAt: new Date(),
