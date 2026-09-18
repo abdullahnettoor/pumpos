@@ -498,7 +498,6 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
       ...createFuelDraft(),
       name: type === 'MS' ? 'Petrol' : 'Diesel',
       code: type,
-      taxConfig: { gst_rate: 0, hsn_code: '2710' },
       currentPrice: 0,
     };
 

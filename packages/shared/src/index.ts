@@ -6,4 +6,5 @@ export * from './services/interfaces.js';
 export * from './utils/business-date.js';
 export * from './utils/phone-auth.js';
 export * from './utils/shift-context.js';
+export * from './utils/onboarding-tax.js';
 export * from './constants/payment.js';

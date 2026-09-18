@@ -25,6 +25,22 @@ export type ProductType =
  */
 export type TaxCategory = 'FUEL_VAT' | 'GST' | 'EXEMPT' | 'NON_TAXABLE';
 
+/**
+ * The persisted tax configuration for a product, shaped to match its
+ * {@link TaxCategory}: `GST` uses `gst_rate`/`cess`, `FUEL_VAT` uses `vat_rate`;
+ * both may carry an `hsn_code`. This is the single canonical shape — the product
+ * entity, the onboarding draft, and core's create/update commands all reference
+ * it rather than re-declaring their own copies.
+ */
+export interface ProductTaxConfig {
+  gst_rate?: number;
+  vat_rate?: number;
+  hsn_code?: string;
+  cess?: number;
+  /** Selling price is tax-inclusive (retail MRP); tax is extracted, not added. */
+  price_inclusive?: boolean;
+}
+
 /** Curated units of measure so the value is system-decided, not free text.
  * Scoped to what a fuel station actually sells: fuels (L / kg), lubricants &
  * additives (L / ml / Bottle / Can), countable merchandise (Nos / Packet), and

@@ -6,6 +6,7 @@ import {
   ProductType,
   InventoryType,
   TaxCategory,
+  ProductTaxConfig,
   CustomerType,
   TransactionType,
   MovementType,
@@ -121,11 +122,19 @@ export interface OnboardingProductDraft {
   productType: 'FUEL';
   stockTracked: boolean;
   isTaxable: boolean;
+  /**
+   * Tax treatment persisted for the provisioned product. Fuel is priced outside
+   * GST and settled under state VAT, so onboarding fuels carry `FUEL_VAT` — not
+   * a 0% GST product (#133).
+   */
+  taxCategory: TaxCategory;
   unit: string;
-  taxConfig: {
-    gst_rate?: number;
-    hsn_code?: string;
-  };
+  /**
+   * Shaped to match {@link taxCategory}: `FUEL_VAT` uses `vat_rate`, GST uses
+   * `gst_rate`/`cess`. Mixing a `gst_rate` into a `FUEL_VAT` draft is a
+   * misclassification that provisioning normalizes away.
+   */
+  taxConfig: ProductTaxConfig;
   isActive: boolean;
   currentPrice: number;
 }
@@ -302,14 +311,7 @@ export interface Product {
   sellingPrice?: string | number | null;
   /** Rolling weighted-average landed cost per unit; drives COGS / margin. */
   costBasis?: string | number | null;
-  taxConfig: {
-    gst_rate?: number;
-    vat_rate?: number;
-    hsn_code?: string;
-    cess?: number;
-    /** Selling price is tax-inclusive (retail MRP); tax is extracted, not added. */
-    price_inclusive?: boolean;
-  };
+  taxConfig: ProductTaxConfig;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
