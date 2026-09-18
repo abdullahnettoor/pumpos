@@ -2687,11 +2687,53 @@ transactionsRouter.get('/shifts/:id/transactions', async (c) => {
       403,
     );
   }
-  const [expenses, purchases, collections, sales, creditSales] = await Promise.all([
-    db.select().from(schema.expenses).where(eq(schema.expenses.shiftId, shiftId)),
-    db.select().from(schema.purchases).where(eq(schema.purchases.shiftId, shiftId)),
-    db.select().from(schema.collections).where(eq(schema.collections.shiftId, shiftId)),
-    db.select().from(schema.sales).where(eq(schema.sales.shiftId, shiftId)),
+  // Project ONLY the columns the shift-transactions panel and close-wizard
+  // totals consume (#149 / #113) — full-row selects made this payload scale
+  // with every column of every table. Names are joined here (category /
+  // supplier / customer) because the raw tables store only ids.
+  const [expenses, purchases, collections, creditSales] = await Promise.all([
+    db
+      .select({
+        id: schema.expenses.id,
+        amount: schema.expenses.amount,
+        description: schema.expenses.description,
+        paidFrom: schema.expenses.paidFrom,
+        affectsDrawer: schema.expenses.affectsDrawer,
+        status: schema.expenses.status,
+        createdAt: schema.expenses.createdAt,
+        categoryName: schema.expenseCategories.name,
+      })
+      .from(schema.expenses)
+      .leftJoin(
+        schema.expenseCategories,
+        eq(schema.expenseCategories.id, schema.expenses.categoryId),
+      )
+      .where(eq(schema.expenses.shiftId, shiftId)),
+    db
+      .select({
+        id: schema.purchases.id,
+        amount: schema.purchases.amount,
+        documentNumber: schema.purchases.documentNumber,
+        invoiceNumber: schema.purchases.invoiceNumber,
+        notes: schema.purchases.notes,
+        createdAt: schema.purchases.createdAt,
+        supplierName: schema.suppliers.name,
+      })
+      .from(schema.purchases)
+      .leftJoin(schema.suppliers, eq(schema.suppliers.id, schema.purchases.supplierId))
+      .where(eq(schema.purchases.shiftId, shiftId)),
+    db
+      .select({
+        id: schema.collections.id,
+        amount: schema.collections.amount,
+        paymentMethod: schema.collections.paymentMethod,
+        notes: schema.collections.notes,
+        createdAt: schema.collections.createdAt,
+        customerName: schema.customers.name,
+      })
+      .from(schema.collections)
+      .leftJoin(schema.customers, eq(schema.customers.id, schema.collections.customerId))
+      .where(eq(schema.collections.shiftId, shiftId)),
     // Stage B fuel-on-credit sales live in customer_transactions (a receivable),
     // not the collections table — surface them so totals/reconciliation/summary see them.
     db
@@ -2729,7 +2771,13 @@ transactionsRouter.get('/shifts/:id/transactions', async (c) => {
         ),
       ),
   ]);
-  return c.json({ success: true, data: { expenses, purchases, collections, sales, creditSales } });
+  // `sales` has no UI consumer on this payload (fuel is metered via readings;
+  // merchandise renders from the status/merch endpoints). Kept as a key for
+  // contract stability, no longer queried.
+  return c.json({
+    success: true,
+    data: { expenses, purchases, collections, sales: [], creditSales },
+  });
 });
 
 // ====================================================
