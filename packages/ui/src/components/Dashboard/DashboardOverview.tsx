@@ -34,7 +34,7 @@ import { inr, formatQty } from '../../utils/format.js';
 import { classifyTank, tankPct, OVER_CAPACITY_EXPLANATION } from '../../utils/stock.js';
 import { useConfirm } from '../primitives/ConfirmDialog.js';
 import { useToast } from '../primitives/ToastProvider.js';
-import { Station, resolveBusinessDate } from '@pump/shared';
+import { Station, canOnboardStation, resolveBusinessDate } from '@pump/shared';
 import type { NavIntent } from '../AppShell.js';
 import {
   Play,
@@ -148,7 +148,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
     !!selectedStation && (selectedStation as any).onboardingStatus === 'READY_FOR_OPERATIONS';
   const stationInProgress =
     !!selectedStation && (selectedStation as any).onboardingStatus === 'IN_PROGRESS';
-  const canManageOnboarding = userRole === 'Owner' || userRole === 'Manager';
+  const canManageOnboarding = canOnboardStation(userRole);
   const gsSteps: ChecklistStep[] = [
     {
       id: 'org',
@@ -318,8 +318,11 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   const isAccountant = userRole === 'Accountant';
 
   // A freshly-onboarded (but ready) station: show the getting-started checklist
-  // until the essentials are done or the user dismisses it.
-  const canManage = userRole === 'Owner' || userRole === 'Manager';
+  // until the essentials are done or the user dismisses it. Gated on the
+  // onboarding guard rather than its own role list because the checklist's
+  // primary step routes into the wizard — showing it to someone the wizard
+  // would refuse is the dead end #132 was about.
+  const canManage = canOnboardStation(userRole);
   const showGettingStarted = canManage && !gsDismissed && gsSteps.some((s) => !s.done);
 
   // Business-day-aware "today so far" rollups (client-summed; timezone honoured).
