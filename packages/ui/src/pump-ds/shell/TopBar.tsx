@@ -104,7 +104,34 @@ export interface TopBarProps {
   userRole?: string;
   /** User menu actions (Profile, Settings, Log out). */
   userMenu?: UserMenuAction[];
+  /**
+   * Desktop only (#117): makes this bar double as the window's title bar —
+   * empty areas drag the window, double-click zooms, and space is reserved on
+   * the platform's control side. `null`/omitted on the web, where the browser
+   * supplies its own chrome and this bar renders exactly as before.
+   */
+  titleBar?: TitleBarIntegration | null;
   className?: string;
+}
+
+/** Native window commands, wired by the desktop shell. */
+export interface WindowControlCommands {
+  minimize: () => void | Promise<void>;
+  toggleMaximize: () => void | Promise<void>;
+  close: () => void | Promise<void>;
+}
+
+/** The subset of the desktop title-bar contract this pure component needs. */
+export interface TitleBarIntegration {
+  controlsSide: 'left' | 'right';
+  /**
+   * Space (px) to reserve on `controlsSide` for controls the OS paints over
+   * this bar. Zero where the app draws its own, which take real layout space.
+   */
+  controlsInset: number;
+  maximized: boolean;
+  /** Non-null on undecorated windows, where the app draws the buttons. */
+  controls: WindowControlCommands | null;
 }
 
 const IS_MAC =
@@ -138,6 +165,73 @@ const IconBtn = forwardRef<
   );
 });
 
+/**
+ * Window buttons for undecorated (Windows/Linux) windows. macOS keeps its
+ * native traffic lights — there `controls` is null and only the inset applies.
+ *
+ * The glyphs are OS window-chrome conventions rather than app iconography, so
+ * they are drawn here instead of going through the product icon registry.
+ *
+ * None of these carry a drag-region attribute, so Tauri never starts a window
+ * drag from them; a click is a click.
+ */
+const WindowControls: React.FC<{
+  controls: WindowControlCommands;
+  maximized: boolean;
+}> = ({ controls, maximized }) => {
+  const btn =
+    'inline-flex h-8 w-11 items-center justify-center text-ink-muted transition-colors hover:bg-surface-alt hover:text-ink-strong';
+  return (
+    <div className="-mr-3 ml-1 flex items-center self-stretch">
+      <button
+        type="button"
+        aria-label="Minimise window"
+        onClick={() => void controls.minimize()}
+        className={btn}
+      >
+        <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
+          <path d="M0 5h10" stroke="currentColor" strokeWidth="1" />
+        </svg>
+      </button>
+      <button
+        type="button"
+        aria-label={maximized ? 'Restore window' : 'Maximise window'}
+        onClick={() => void controls.toggleMaximize()}
+        className={btn}
+      >
+        <svg
+          width="10"
+          height="10"
+          viewBox="0 0 10 10"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1"
+          aria-hidden="true"
+        >
+          {maximized ? (
+            <>
+              <rect x="0.5" y="2.5" width="7" height="7" />
+              <path d="M2.5 2.5V0.5h7v7h-2" />
+            </>
+          ) : (
+            <rect x="0.5" y="0.5" width="9" height="9" />
+          )}
+        </svg>
+      </button>
+      <button
+        type="button"
+        aria-label="Close window"
+        onClick={() => void controls.close()}
+        className={cn(btn, 'hover:bg-danger-fg hover:text-white')}
+      >
+        <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
+          <path d="M0 0l10 10M10 0L0 10" stroke="currentColor" strokeWidth="1" />
+        </svg>
+      </button>
+    </div>
+  );
+};
+
 export const TopBar: React.FC<TopBarProps> = ({
   onToggleSidebar,
   brand,
@@ -160,14 +254,34 @@ export const TopBar: React.FC<TopBarProps> = ({
   userName,
   userRole,
   userMenu = [],
+  titleBar = null,
   className,
 }) => {
   const notifCount = notifications.length;
 
+  // On desktop this bar IS the window title bar. `data-tauri-drag-region` makes
+  // the bar's own surface drag the window (and double-click zoom it); Tauri only
+  // acts when the event target itself carries the attribute, so every control
+  // nested inside stays clickable without opting out one by one.
+  const dragRegion = titleBar ? { 'data-tauri-drag-region': true } : {};
+
+  //
+  // The inset keeps the platform's window controls from ever overlapping the
+  // app's own. It is only needed where the OS paints its controls OVER the bar
+  // (macOS traffic lights, on the left); where the app draws them itself they
+  // occupy real layout space and need no reserved padding. A 0 inset falls back
+  // to the bar's normal horizontal padding rather than collapsing it.
+  const inset = titleBar?.controlsInset || undefined;
+  const leadingInset = titleBar?.controlsSide === 'left' ? inset : undefined;
+  const trailingInset = titleBar?.controlsSide === 'right' ? inset : undefined;
+
   return (
     <div
+      {...dragRegion}
+      style={{ paddingLeft: leadingInset, paddingRight: trailingInset }}
       className={cn(
         'flex h-14 items-center gap-3 border-b border-border-soft bg-surface px-3',
+        titleBar && 'cursor-default select-none',
         className,
       )}
     >
@@ -178,7 +292,10 @@ export const TopBar: React.FC<TopBarProps> = ({
       )}
 
       {brand && (
-        <div className="select-none pl-0.5 pr-1 text-[15px] font-bold tracking-[-0.01em] text-brand">
+        <div
+          {...dragRegion}
+          className="select-none pl-0.5 pr-1 text-[15px] font-bold tracking-[-0.01em] text-brand"
+        >
           {brand}
         </div>
       )}
@@ -402,6 +519,10 @@ export const TopBar: React.FC<TopBarProps> = ({
           </MenuContent>
         </Menu>
       </div>
+
+      {titleBar?.controls && (
+        <WindowControls controls={titleBar.controls} maximized={titleBar.maximized} />
+      )}
     </div>
   );
 };

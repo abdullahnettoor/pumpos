@@ -82,6 +82,11 @@ jobs:
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # The desktop shell resolves its environment from this value alone —
+          # its serving host is `localhost` in every packaged build, so it has
+          # nothing else to go on (#116). The vite config fails the packaged
+          # build if this is unset, so an unbadged app always means production.
+          VITE_APP_ENV: production
           # Bake the backend config into the desktop bundle (falls back to the
           # app's built-in defaults when these prod secrets are unset).
           VITE_API_URL: ${{ secrets.PROD_API_URL }}
