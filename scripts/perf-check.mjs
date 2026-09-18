@@ -121,7 +121,7 @@ async function hit(route) {
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
   });
   const wallMs = Date.now() - started;
-  let ok = false;
+  let ok;
   try {
     const body = await res.json();
     ok = res.ok && body?.success === true;
