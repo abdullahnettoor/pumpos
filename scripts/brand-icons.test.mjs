@@ -39,7 +39,16 @@ describe('reading the canonical artwork', () => {
 
   it('refuses artwork it cannot read rather than emitting a blank icon', () => {
     expect(() => parseMarkArtwork('<svg><path d="M0 0Z"/></svg>')).toThrow(/viewBox/);
-    expect(() => parseMarkArtwork('<svg viewBox="0 0 1 1"></svg>')).toThrow(/path/);
+    expect(() => parseMarkArtwork('<svg viewBox="0 0 1 1"></svg>')).toThrow(/exactly one/);
+  });
+
+  it('refuses a second path rather than silently drawing half the mark', () => {
+    // The mark is one compound path with the nozzle as a knockout. A file with
+    // two paths is not the artwork we think it is, and taking the first would
+    // bake half a mark into fifty-odd committed rasters.
+    const twoPaths = '<svg viewBox="0 0 1 1"><path d="M0 0Z"/><path d="M1 1Z"/></svg>';
+
+    expect(() => parseMarkArtwork(twoPaths)).toThrow(/expected exactly one <path>.*found 2/);
   });
 });
 
@@ -204,7 +213,13 @@ describe('the committed artwork', () => {
     }
   });
 
-  it('paints the brand primary, so no fifth green enters the codebase', () => {
+  it('paints the brand primary token, so no fifth green enters the codebase', () => {
+    // Asserted against the design token itself, not against the constant this
+    // module exports — comparing a module to its own export proves nothing.
+    const css = readFileSync(join(root, 'packages/ui/src/index.css'), 'utf8');
+    const token = /--brand-primary:\s*(#[0-9a-f]{3,8})/i.exec(css);
+
+    expect(token?.[1].toLowerCase()).toBe(BRAND_PRIMARY.toLowerCase());
     expect(derive(CONTAINER_SOURCE)).toContain(BRAND_PRIMARY);
   });
 });

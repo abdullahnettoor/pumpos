@@ -63,8 +63,18 @@ export function parseMarkArtwork(svg) {
   const viewBox = /viewBox="([^"]+)"/.exec(svg);
   if (!viewBox) throw new Error(`${MARK_SOURCE}: no viewBox to size the mark from`);
 
-  const path = /<path[^>]*\sd="([^"]+)"/.exec(svg);
-  if (!path) throw new Error(`${MARK_SOURCE}: no path element to draw`);
+  // Exactly one path, not merely the first: the mark is a single compound path
+  // whose nozzle is a knockout, so a second path means this is not the artwork
+  // we think it is — and taking the first would silently ship half the mark,
+  // baked into fifty-odd committed rasters. The marketing site's
+  // `parseBrandMark` checks the same file the same way, for the same reason.
+  const paths = [...svg.matchAll(/<path[^>]*\sd="([^"]+)"/g)];
+  if (paths.length !== 1) {
+    throw new Error(
+      `${MARK_SOURCE}: expected exactly one <path> to draw, found ${paths.length}. ` +
+        'Run `npm run brand` from the repo root to restore it.',
+    );
+  }
 
   const [minX, minY, width, height] = viewBox[1]
     .trim()
@@ -74,7 +84,7 @@ export function parseMarkArtwork(svg) {
     throw new Error(`${MARK_SOURCE}: unreadable viewBox "${viewBox[1]}"`);
   }
 
-  return { path: path[1], viewBox: { minX, minY, width, height } };
+  return { path: paths[0][1], viewBox: { minX, minY, width, height } };
 }
 
 /** Where the mark lands on the canvas, shared by the composer and the safe-zone check. */
