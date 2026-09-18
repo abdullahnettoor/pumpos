@@ -207,7 +207,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
           <EmptyState
             icon={<TriangleAlert />}
             title="Station setup in progress"
-            description="Operations unlock automatically once the Owner completes onboarding."
+            description="An Owner or Manager is still finishing this station's setup. Your access unlocks automatically once they're done — there's nothing you need to do."
           />
         </div>
       );

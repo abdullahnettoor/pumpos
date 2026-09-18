@@ -1,3 +1,4 @@
+import { canOnboardStation, type Role } from '@pump/shared';
 import { describe, expect, it } from 'vitest';
 import { preReadyQuickCreateIds } from './quickCreateActions.js';
 
@@ -26,5 +27,20 @@ describe('preReadyQuickCreateIds', () => {
     // It is the one thing that actually moves a pre-ready station forward, so
     // it should not sit below the secondary action.
     expect(preReadyQuickCreateIds('Owner')[0]).toBe('onboard-station');
+  });
+});
+
+describe('the lockout and the quick-create agree on who is locked out', () => {
+  it('treats "cannot onboard" as one rule, so no role falls between them', () => {
+    // The console decides whether to show the lockout with the same guard this
+    // list uses. When they were separate, the console listed Staff and
+    // Accountant by hand and missed Attendant, who fell through into a wizard
+    // that would refuse them.
+    const lockedOut: Role[] = ['Staff', 'Accountant', 'Attendant'];
+
+    for (const role of lockedOut) {
+      expect(canOnboardStation(role)).toBe(false);
+      expect(preReadyQuickCreateIds(role)).not.toContain('onboard-station');
+    }
   });
 });

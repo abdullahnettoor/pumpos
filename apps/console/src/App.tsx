@@ -40,7 +40,7 @@ import {
   clearNavIntent,
 } from '@pump/ui';
 import type { NavIntent } from '@pump/ui';
-import { Station } from '@pump/shared';
+import { canOnboardStation, Station } from '@pump/shared';
 import { MobileBlock, useIsUnsupportedMobile } from './MobileBlock.js';
 
 const resolveApiUrl = (): string | undefined => {
@@ -454,15 +454,14 @@ export const App: React.FC = () => {
       return <SkeletonGrid count={6} />;
     }
 
-    // 4. Gating: the roles that cannot finish setup themselves. This screen
-    //    carries its own sign-out because it does not always render inside the
-    //    shell — /onboarding renders bare, and a Staff user who got there had
-    //    no way out but a page reload (#132).
-    if (
-      !stationsLoading &&
-      !isStationReady &&
-      ((userRole as string) === 'Staff' || (userRole as string) === 'Accountant')
-    ) {
+    // 4. Gating: the roles that cannot finish setup themselves. "Locked out"
+    //    is precisely "cannot onboard", so it reads from the same guard the
+    //    quick-create does rather than re-listing roles here — the old
+    //    hand-rolled list had already missed Attendant, who fell through into
+    //    the wizard. The screen carries its own sign-out because it does not
+    //    always render inside the shell: /onboarding renders bare, and a Staff
+    //    user who got there had no way out but a page reload (#132).
+    if (!stationsLoading && !isStationReady && userRole && !canOnboardStation(userRole)) {
       return (
         <StationOnboardingLockout
           // Layout only — the sign-out is unconditional, so getting this
