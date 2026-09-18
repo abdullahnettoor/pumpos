@@ -3,21 +3,18 @@ import { Hono } from 'hono';
 import { shiftsRouter } from './shifts.js';
 
 /**
- * Regression guard for #146 / #113: lite shift status must stay genuinely
- * lite — a small constant number of queries (attribution context only), no
- * unbounded closed-shift scan, no last-shift projection, no per-shift
- * enrichment. It previously exceeded the Cloudflare Workers CPU budget.
- *
- * The fake db resolves each select() from a FIFO queue, so the assertion is
- * on exactly how many queries the route issues.
+ * Regression guard for #146 / #155: lite shift status must answer from ONE
+ * SQL statement (plus the station auth lookup) — attribution context only,
+ * no unbounded closed-shift scan, no last-shift projection, no per-shift
+ * enrichment. Each extra round-trip costs ~2-3 ms of Worker CPU.
  */
 
-function makeQueueDb(results: any[][]) {
-  const counter = { selects: 0 };
+function makeFakeDb(selectResults: any[][], executeResults: any[][]) {
+  const counter = { selects: 0, executes: 0 };
   const db = {
     select: () => {
       counter.selects += 1;
-      const rows = results.shift() ?? [];
+      const rows = selectResults.shift() ?? [];
       const builder: any = {
         from: () => builder,
         innerJoin: () => builder,
@@ -30,6 +27,10 @@ function makeQueueDb(results: any[][]) {
           Promise.resolve(rows).then(resolve, reject),
       };
       return builder;
+    },
+    execute: async () => {
+      counter.executes += 1;
+      return executeResults.shift() ?? [];
     },
   };
   return { db, counter };
@@ -54,7 +55,7 @@ function makeApp(db: unknown) {
 }
 
 const station = { id: 'st-1', organizationId: 'org-1', settings: {} };
-const openShift = {
+const openShiftJson = {
   id: 'sh-open',
   organizationId: 'org-1',
   stationId: 'st-1',
@@ -62,43 +63,53 @@ const openShift = {
   shiftTemplateId: 't-1',
   status: 'OPEN',
   openedBy: 'user-1',
-  openedAt: new Date('2026-03-15T06:00:00Z'),
-  openingCash: '5000',
+  openedAt: '2026-03-15T06:00:00.000Z',
+  openingCash: 5000,
+  templateName: 'Morning',
+  businessDate: '2026-03-15',
+  scheduledStartTime: '06:00',
+  scheduledEndTime: '14:00',
+  openedByName: 'Owner',
 };
-const closedRecent = {
-  shift: {
+const recentClosed = [
+  {
     id: 'sh-closed',
     stationId: 'st-1',
     status: 'CLOSED',
-    closedAt: new Date(Date.now() - 60_000),
+    closedAt: '2026-03-15T05:00:00.000Z',
+    templateName: 'Night',
   },
-  templateName: 'Morning',
-};
+];
 
 describe('GET /status?lite=true query-count regression', () => {
-  it('answers with attribution context in a small constant number of queries', async () => {
-    const { db, counter } = makeQueueDb([
-      [station], // station lookup
-      [{ id: 'bd-1', status: 'OPEN' }], // open business day
-      [openShift], // open shift
-      [{ id: 't-1', name: 'Morning', startTime: '06:00', endTime: '14:00' }], // template
-      [{ id: 'user-1', fullName: 'Owner' }], // openedBy
-      [{ businessDate: '2026-03-15' }], // business date
-      [closedRecent], // grace-window closed shifts (SQL-filtered)
-    ]);
+  it('answers with attribution context in one statement', async () => {
+    const { db, counter } = makeFakeDb(
+      [[station]],
+      [
+        [
+          {
+            business_day: { id: 'bd-1', status: 'OPEN', businessDate: '2026-03-15' },
+            active_shift: openShiftJson,
+            recent_closed: recentClosed,
+          },
+        ],
+      ],
+    );
     const res = await makeApp(db).request('/status?stationId=st-1&lite=true');
     expect(res.status).toBe(200);
     const body = (await res.json()) as any;
 
-    // 7 queries with an open shift — never grows with shift history size.
-    expect(counter.selects).toBe(7);
+    // One auth select + one CTE statement — never grows with history size.
+    expect(counter.selects).toBe(1);
+    expect(counter.executes).toBe(1);
 
     // Attribution context is present…
     expect(body.data.activeShift.id).toBe('sh-open');
     expect(body.data.activeShift.templateName).toBe('Morning');
     expect(body.data.activeShift.businessDate).toBe('2026-03-15');
+    expect(body.data.businessDay.id).toBe('bd-1');
     expect(body.data.recentClosedShifts).toHaveLength(1);
-    expect(body.data.recentClosedShifts[0].templateName).toBe('Morning');
+    expect(body.data.recentClosedShifts[0].templateName).toBe('Night');
 
     // …and the heavy enrichment is not.
     expect(body.data.activeShift.nozzleReadings).toBeUndefined();
@@ -108,18 +119,18 @@ describe('GET /status?lite=true query-count regression', () => {
     expect(body.data.readings).toEqual([]);
   });
 
-  it('uses even fewer queries when no shift is open', async () => {
-    const { db, counter } = makeQueueDb([
-      [station],
-      [], // no open business day
-      [], // no open shift
-      [closedRecent],
-    ]);
+  it('handles no open shift with the same constant work', async () => {
+    const { db, counter } = makeFakeDb(
+      [[station]],
+      [[{ business_day: null, active_shift: null, recent_closed: recentClosed }]],
+    );
     const res = await makeApp(db).request('/status?stationId=st-1&lite=true');
     expect(res.status).toBe(200);
     const body = (await res.json()) as any;
-    expect(counter.selects).toBe(4);
+    expect(counter.selects).toBe(1);
+    expect(counter.executes).toBe(1);
     expect(body.data.activeShift).toBeNull();
+    expect(body.data.shift).toBeNull();
     expect(body.data.recentClosedShifts).toHaveLength(1);
   });
 });
