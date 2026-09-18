@@ -29,6 +29,7 @@
     "build:ui-mobile": "npm run build --workspace=packages/ui && npm run build --workspace=apps/mobile",
     "build:desktop": "npm run build --workspace=apps/desktop",
     "test": "npm run test --workspaces --if-present",
+    "perf:check": "node scripts/perf-check.mjs",
     "fonts": "node scripts/download-fonts.mjs",
     "brand": "node scripts/sync-brand.mjs",
     "brand:icons": "node scripts/brand-icons.mjs",
