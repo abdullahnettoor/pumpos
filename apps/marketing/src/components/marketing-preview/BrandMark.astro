@@ -1,7 +1,24 @@
 ---
-interface Props { class?: string }
+// Inlined by the bundler at build time, not read at runtime: Astro compiles this
+// component into `dist/.prerender/chunks/`, where any module-relative path to
+// `public/` would no longer resolve. `?raw` embeds the artwork's bytes instead,
+// so the mark cannot go missing after the build. The location is spelled out
+// rather than taken from `MARK_FILE` because the bundler has to see a static
+// specifier to inline anything.
+import markSvg from '../../../public/brand/pumpos-mark.svg?raw';
+import { parseBrandMark } from '../../brand-mark.mjs';
+
+interface Props {
+  class?: string;
+}
 const { class: className } = Astro.props;
+const { viewBox, path } = parseBrandMark(markSvg);
 ---
-<svg class={className} viewBox="0 0 64 64" fill="currentColor" aria-hidden="true">
-  <path fill-rule="evenodd" d="M9 8h34l13 13v18L43 52H23v7H9V8Zm14 13v18h15l5-5v-8l-5-5H23Z" clip-rule="evenodd" />
+
+<!-- `currentColor` is load-bearing, not tidiness: the site header inverts onto a
+     brand-green band where the mark has to go white, and the same mark sits in
+     brand green in the footer and on blog cards. One fill serves both because
+     the nozzle is knocked out rather than painted. -->
+<svg class={className} viewBox={viewBox} fill="currentColor" aria-hidden="true">
+  <path fill-rule="evenodd" clip-rule="evenodd" d={path} />
 </svg>
