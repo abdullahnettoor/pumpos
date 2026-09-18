@@ -25,9 +25,7 @@ export interface SessionTokenClient {
  * the auth-state listener and lands the shell on the login screen instead of
  * looping on retries.
  */
-export function createSupabaseTokenSource(
-  client: SessionTokenClient = supabase,
-): TokenSource {
+export function createSupabaseTokenSource(client: SessionTokenClient = supabase): TokenSource {
   return {
     async getToken() {
       const { data } = await client.auth.getSession();
@@ -48,9 +46,7 @@ export function createSupabaseTokenSource(
 }
 
 /** Installs the Supabase-backed token source for the shared API client. */
-export function installSupabaseTokenSource(
-  client: SessionTokenClient = supabase,
-) {
+export function installSupabaseTokenSource(client: SessionTokenClient = supabase) {
   setTokenSource(createSupabaseTokenSource(client));
 }
 
@@ -63,9 +59,7 @@ export function installSupabaseTokenSource(
  *
  * Returns the effect cleanup.
  */
-export function keepSessionFresh(
-  client: SessionTokenClient = supabase,
-): () => void {
+export function keepSessionFresh(client: SessionTokenClient = supabase): () => void {
   if (typeof document === 'undefined' || typeof window === 'undefined') {
     return () => undefined;
   }
