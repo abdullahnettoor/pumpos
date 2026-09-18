@@ -37,6 +37,7 @@ import { useStationAlerts } from '../query/useStationAlerts.js';
 import { inr } from '../utils/format.js';
 import { useStationBusinessDate } from '../hooks/useStationBusinessDate.js';
 import { useRunTask } from '../utils/runTask.js';
+import { useDesktopTitleBar } from '../utils/desktopTitleBar.js';
 
 /**
  * AppTopBar — the data container that wires the pure pump-ds `TopBar` +
@@ -100,6 +101,9 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
 }) => {
   const runTask = useRunTask();
   const { open, setOpen } = useCommandPalette();
+  // Desktop only: makes this bar double as the OS window title bar (#117).
+  // `null` in the browser, where the top bar renders exactly as before.
+  const titleBar = useDesktopTitleBar();
   const canSeeFinancials = userRole !== 'Staff';
   const stationId = selectedStation?.id;
 
@@ -384,6 +388,7 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
   return (
     <>
       <TopBar
+        titleBar={titleBar}
         onToggleSidebar={onToggleSidebar}
         brand="PumpOS"
         businessDate={businessDate}

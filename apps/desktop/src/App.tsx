@@ -34,6 +34,7 @@ import {
   publishNavIntent,
 } from '@pump/ui';
 import { Station } from '@pump/shared';
+import { environmentTag, showDeveloperSurfaces } from './buildEnv.js';
 
 setApiBaseUrl(import.meta.env.VITE_API_URL);
 
@@ -48,33 +49,9 @@ const webConsoleUrl =
 
 const stationService = new CloudStationService();
 
-const environmentTag = (() => {
-  const explicitEnv = (import.meta.env.VITE_APP_ENV as string | undefined)?.toLowerCase();
-  if (explicitEnv === 'preview') return 'Preview';
-  if (explicitEnv === 'dev' || explicitEnv === 'development') return 'Dev';
-  if (import.meta.env.DEV) return 'Dev';
-
-  if (typeof window !== 'undefined') {
-    const hostname = window.location.hostname;
-    // Dev domain or localhost
-    if (hostname === 'localhost') return 'Local';
-    if (hostname === 'dev-pumpos.abdullahnettoor.workers.dev') return 'Dev';
-    // Cloudflare preview env deploys as <worker-name>-preview.<subdomain>.workers.dev
-    if (hostname.includes('-preview.')) return 'Preview';
-  }
-  return null;
-})();
-
-// Local development only: the Design System reference tab is never shown in
-// deployed (dev/preview/prod) builds.
-const isLocalDev = (() => {
-  if (import.meta.env.DEV) return true;
-  if (typeof window !== 'undefined') {
-    const h = window.location.hostname;
-    return h === 'localhost' || h === '127.0.0.1';
-  }
-  return false;
-})();
+// The environment badge and the developer-only Design System page both key off
+// the value baked into the bundle at build time — never off the serving host,
+// which is `localhost` in every packaged desktop build (#116). See buildEnv.ts.
 
 const App: React.FC = () => {
   const [currentPath, setCurrentPath] = useState('/dashboard');
@@ -273,7 +250,7 @@ const App: React.FC = () => {
       ]
     : [{ label: 'Onboarding Setup', path: '/onboarding', roles: ['Owner', 'Manager'] }];
 
-  const navItemsWithDev = isLocalDev
+  const navItemsWithDev = showDeveloperSurfaces
     ? [...navItems, { label: 'Design System', path: '/design-system' }]
     : navItems;
 
@@ -473,7 +450,7 @@ const App: React.FC = () => {
           />
         );
       case '/design-system':
-        return isLocalDev ? <DesignSystem /> : <div>Not found</div>;
+        return showDeveloperSurfaces ? <DesignSystem /> : <div>Not found</div>;
       default:
         return <div>Not found</div>;
     }
