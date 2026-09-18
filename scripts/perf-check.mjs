@@ -128,26 +128,57 @@ function startTail() {
     console.error(`[tail] failed to start (${err.message}) — CPU capture will be empty.`);
   });
   const events = [];
-  let buffer = '';
+  const state = { connected: false };
+
+  // `wrangler tail --format json` pretty-prints each event over MANY lines, so
+  // line-by-line parsing sees nothing. Scan the stream with a brace-depth
+  // counter (string-aware) and parse each balanced top-level {...} block.
+  const scanner = { buf: '', pos: 0, depth: 0, start: -1, inString: false, escaped: false };
   child.stdout.on('data', (chunk) => {
-    buffer += chunk.toString();
-    let nl;
-    while ((nl = buffer.indexOf('\n')) !== -1) {
-      const line = buffer.slice(0, nl).trim();
-      buffer = buffer.slice(nl + 1);
-      if (!line.startsWith('{')) continue;
-      try {
-        events.push(JSON.parse(line));
-      } catch {
-        /* partial / non-event line */
+    const text = chunk.toString();
+    // wrangler prints the attach confirmation as plain text (stdout or stderr
+    // depending on version); the brace scanner below skips non-JSON safely.
+    if (/successfully created tail|connected/i.test(text)) state.connected = true;
+    scanner.buf += text;
+    while (scanner.pos < scanner.buf.length) {
+      const ch = scanner.buf[scanner.pos];
+      if (scanner.inString) {
+        if (scanner.escaped) scanner.escaped = false;
+        else if (ch === '\\') scanner.escaped = true;
+        else if (ch === '"') scanner.inString = false;
+      } else if (ch === '"' && scanner.depth > 0) {
+        scanner.inString = true;
+      } else if (ch === '{') {
+        if (scanner.depth === 0) scanner.start = scanner.pos;
+        scanner.depth += 1;
+      } else if (ch === '}') {
+        scanner.depth -= 1;
+        if (scanner.depth === 0 && scanner.start !== -1) {
+          const block = scanner.buf.slice(scanner.start, scanner.pos + 1);
+          try {
+            events.push(JSON.parse(block));
+            state.connected = true;
+          } catch {
+            /* not an event object */
+          }
+          scanner.buf = scanner.buf.slice(scanner.pos + 1);
+          scanner.pos = -1;
+          scanner.start = -1;
+        }
       }
+      scanner.pos += 1;
+    }
+    if (scanner.depth === 0 && scanner.start === -1) {
+      scanner.buf = '';
+      scanner.pos = 0;
     }
   });
   child.stderr.on('data', (c) => {
     const s = c.toString();
-    if (/error|unauthorized|not found/i.test(s)) console.error(`[tail] ${s.trim()}`);
+    if (/successfully created tail|connected/i.test(s)) state.connected = true;
+    if (/error|unauthorized|not found|failed/i.test(s)) console.error(`[tail] ${s.trim()}`);
   });
-  return { child, events };
+  return { child, events, state };
 }
 
 /** Extract { pathname, cpuMs, wallMs, outcome } from a tail event (raw or logpush shape). */
@@ -206,7 +237,19 @@ async function main() {
   const tail = startTail();
   if (tail) {
     console.log('Attaching wrangler tail…');
-    await sleep(5000); // let the tail session attach before traffic flows
+    // npx + wrangler auth can take a while; wait for the "Successfully created
+    // tail" confirmation (up to 30 s) before generating traffic.
+    const deadline = Date.now() + 30_000;
+    while (!tail.state.connected && Date.now() < deadline) await sleep(500);
+    if (!tail.state.connected) {
+      console.error(
+        '[tail] no attach confirmation after 30s — continuing, but CPU capture may be empty. ' +
+          'Check `npx wrangler whoami` and the worker name in --tail-cmd.',
+      );
+    } else {
+      console.log('[tail] attached.');
+      await sleep(2000); // small settle so the first request is captured
+    }
   }
 
   const httpResults = new Map(); // label -> [{ok,status,wallMs}]
