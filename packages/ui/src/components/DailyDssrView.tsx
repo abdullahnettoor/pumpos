@@ -109,6 +109,7 @@ export const DailyDssrView: React.FC<DailyDssrViewProps> = ({ dailyDssr, onBack,
               const config = {
                 ...DEFAULT_DSSR_CONFIG,
                 sections: sections,
+                showLogo: station?.settings?.report_config?.showLogo !== false,
                 stationName: station?.name,
                 letterhead: letterheadFromStation(station),
                 paper: paperFromStation(station),

@@ -39,6 +39,7 @@ const builders: Record<DssrSection, (d: any, cfg: DssrReportConfig) => React.Rea
         title="DAILY SALES SUMMARY RECORD"
         stationName={cfg.stationName}
         letterhead={cfg.letterhead}
+        showLogo={cfg.showLogo}
       />
       <Text style={s.sub}>
         Business Date {d.businessDate}

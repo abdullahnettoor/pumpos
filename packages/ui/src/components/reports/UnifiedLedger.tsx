@@ -358,6 +358,7 @@ export const UnifiedLedger: React.FC<UnifiedLedgerProps> = ({ selectedStation })
         totals: { debit: totals.debit, credit: totals.credit, balance: totals.net },
         stationName: selectedStation?.name,
         letterhead: letterheadFromStation(selectedStation),
+        showLogo: selectedStation?.settings?.report_config?.showLogo !== false,
         generatedAt: new Date().toISOString(),
         paper: selectedStation?.settings?.report_config?.paper === 'LETTER' ? 'LETTER' : 'A4',
       });

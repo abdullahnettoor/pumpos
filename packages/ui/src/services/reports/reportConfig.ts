@@ -40,6 +40,7 @@ export interface ReportConfig {
 
 export interface DssrReportConfig {
   sections: DssrSection[];
+  showLogo?: boolean;
   stationName?: string;
   letterhead?: Letterhead;
   paper: 'A4' | 'LETTER';
@@ -77,6 +78,7 @@ export const DEFAULT_DSSR_CONFIG: DssrReportConfig = {
     'merchandiseStockVariance',
     'shifts',
   ],
+  showLogo: true,
   paper: 'A4',
 };
 
