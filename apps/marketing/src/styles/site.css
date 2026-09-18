@@ -10,9 +10,15 @@ main { flex: 1; }
 .site-top--green { background: var(--brand); color: white; }
 .site-top-inner { max-width: 1240px; margin: auto; min-height: 92px; display: flex; align-items: center; justify-content: space-between; gap: 32px; border-bottom: 1px solid var(--rule); }
 .site-top--green .site-top-inner { border-color: #ffffff38; }
-.brand-wordmark { font-family: var(--body); font-size: 27px; font-weight: 650; letter-spacing: -.045em; gap: 9px; }
+/* Brand green on light surfaces, matching the lockup in the product's topbar
+   and sign-in. The green header band overrides this back to inherit, so the one
+   `currentColor` mark keeps flipping to white there. */
+.brand-wordmark { font-family: var(--body); font-size: 27px; font-weight: 650; letter-spacing: -.045em; gap: 9px; color: var(--brand); }
+.site-top--green .brand-wordmark { color: inherit; }
 .brand-wordmark .brand-os { font-weight: 450; letter-spacing: -.055em; }
-.brand-wordmark svg { width: 36px; height: 36px; }
+/* Height-driven, never a fixed square: the mark is taller than it is wide,
+   so pinning both axes letterboxes it inside its own box. */
+.brand-wordmark svg { width: auto; height: 36px; }
 .desktop-nav { display: flex; gap: 29px; font-size: 12px; }
 .desktop-nav a { position: relative; padding-block: 12px; }
 .desktop-nav a::after { content: ''; position: absolute; left: 0; right: 0; bottom: 5px; height: 1px; background: currentColor; transform: scaleX(0); transform-origin: left; transition: transform 180ms var(--ease); }
@@ -170,7 +176,7 @@ summary:focus-visible { outline: 3px solid currentColor; outline-offset: 3px; }
 .journal-entry { display: grid; grid-template-columns: .8fr 1.2fr; gap: 60px; border-top: 1px solid var(--rule); padding-top: 35px; }
 .journal-art { background: var(--brand); color: white; padding: 45px; min-height: 300px; display: flex; align-items: flex-end; justify-content: space-between; }
 .journal-art > p { font: 600 47px/1.05 var(--display); letter-spacing: -.02em; }
-.journal-art svg { width: 70px; height: 70px; }
+.journal-art svg { width: auto; height: 70px; }
 .journal-entry-content { padding-block: 20px; }
 .article-meta { font-size: 11px; color: var(--muted); }
 .journal-entry h2 { font: 600 43px/1.1 var(--display); margin-top: 18px; }
@@ -232,11 +238,11 @@ summary:focus-visible { outline: 3px solid currentColor; outline-offset: 3px; }
  .page-heading { padding-block: 50px; } .page-heading--split { grid-template-columns: 1fr; gap: 0; } .page-heading h1 { font-size: 65px; }
  .product-detail { gap: 35px; } .product-detail h2 { font-size: 40px; } .product-detail > div > p { font-size: 12px; } .report-example { padding: 25px; }
  .demo-layout { gap: 35px; } .booking-panel { padding: 25px; } .demo-agenda li { gap: 10px; }
- .journal-entry { gap: 30px; } .journal-art { padding: 25px; } .journal-art > p { font-size: 37px; } .journal-art svg { width: 45px; } .journal-entry h2 { font-size: 35px; }
+ .journal-entry { gap: 30px; } .journal-art { padding: 25px; } .journal-art > p { font-size: 37px; } .journal-art svg { height: 45px; } .journal-entry h2 { font-size: 35px; }
  .docs-shell { grid-template-columns: 1fr; } .docs-sidebar { border: 0; padding: 0; } .docs-sidebar > nav { display: none; } .docs-mobile { display: block; margin-top: 20px; } .docs-mobile summary { font-size: 13px; padding: 14px 0; cursor: pointer; border-block: 1px solid var(--rule); } .docs-mobile nav { margin-top: 16px; } .docs-sidebar .docs-search { max-width: 450px; }
 }
 @media (max-width: 600px) {
- .site-container { width: calc(100% - 44px); } .site-top-inner { margin-inline: 22px; min-height: 76px; } .desktop-nav { display: none; } .mobile-menu { display: block; } .header-actions { gap: 10px; } .nav-demo { padding: 10px 12px; gap: 12px; } .brand-wordmark { font-size: 25px; gap: 7px; } .brand-wordmark svg { width: 31px; height: 31px; }
+ .site-container { width: calc(100% - 44px); } .site-top-inner { margin-inline: 22px; min-height: 76px; } .desktop-nav { display: none; } .mobile-menu { display: block; } .header-actions { gap: 10px; } .nav-demo { padding: 10px 12px; gap: 12px; } .brand-wordmark { font-size: 25px; gap: 7px; } .brand-wordmark svg { width: auto; height: 31px; }
  .owner-thesis { grid-template-columns: 1fr; gap: 22px; padding-block: 38px; } .owner-thesis > p { font-size: 29px; } .owner-thesis > div { max-width: 350px; }
  .operations-story { grid-template-columns: 1fr; gap: 32px; padding-block: 45px; } .operations-intro h2 { font-size: 47px; } .operations-intro > p:not(.section-context) { margin-top: 20px; font-size: 13px; } .operations-sequence { grid-column: 1; flex-direction: column; gap: 18px; padding-top: 5px; } .operations-sequence > div { max-width: none; } .sequence-arrow { transform: rotate(90deg); padding-inline: 6px; } .operations-sequence p { margin-top: 5px; }
  .shift-example dl > div,.shift-example dd { font-size: 11px; } .owner-access { padding-block: 45px; } .owner-access-inner { grid-template-columns: 1fr; gap: 35px; } .owner-access h2 { font-size: 47px; } .access-list > a { grid-template-columns: 75px 1fr 16px; gap: 14px; } .access-list > a > span:first-child { grid-column: 1; } .access-list > a > div { grid-column: 2; } .access-list > a > span:last-child { grid-column: 3; grid-row: 1; } .access-list h3 { font-size: 13px; } .access-list p { font-size: 11px; }
@@ -248,7 +254,7 @@ summary:focus-visible { outline: 3px solid currentColor; outline-offset: 3px; }
  .product-links { gap: 22px; flex-wrap: wrap; font-size: 11px; } .product-detail { grid-template-columns: 1fr; gap: 30px; padding-block: 45px; } .product-detail h2 { font-size: 43px; } .product-detail > div > p { font-size: 13px; }
  .access-explainer { grid-template-columns: 1fr; gap: 38px; padding-block: 45px; } .demo-layout { grid-template-columns: 1fr; gap: 35px; padding-bottom: 50px; } .demo-agenda h2 { font-size: 16px; } .demo-agenda p { font-size: 12px; } .booking-panel { padding: 29px; }
  .download-browser { grid-template-columns: 1fr; gap: 25px; padding: 25px; } .download-browser > a { justify-self: start; } .download-row { grid-template-columns: 32px 1fr auto; gap: 13px; } .download-row [data-meta] { grid-column: 2; grid-row: 2; } .download-row [data-download] { grid-column: 3; grid-row: 1; padding: 10px; font-size: 10px; } .download-row h2 { font-size: 13px; } .download-row p { font-size: 10px; } .os-icon { width: 24px; }
- .journal-entry { grid-template-columns: 1fr; gap: 15px; } .journal-art { min-height: 240px; padding: 30px; } .journal-art > p { font-size: 43px; } .journal-art svg { width: 60px; } .journal-entry-content { padding-block: 15px; } .journal-entry-content > p:not(.article-meta) { font-size: 13px; }
+ .journal-entry { grid-template-columns: 1fr; gap: 15px; } .journal-art { min-height: 240px; padding: 30px; } .journal-art > p { font-size: 43px; } .journal-art svg { height: 60px; } .journal-entry-content { padding-block: 15px; } .journal-entry-content > p:not(.article-meta) { font-size: 13px; }
  .reading-page { width: calc(100% - 44px); padding-block: 40px 55px; } .article-description { font-size: 15px; } .prose-pump { font-size: 14px; } .prose-pump h2 { font-size: 29px; } .prose-pump pre { padding: 17px; } .prose-pump pre code { font-size: 10px; }
  .docs-shell { padding-block: 30px 55px; gap: 32px; } .docs-content h1 { font-size: 44px; } .docs-content > p { font-size: 14px; } .error-page { padding-block: 70px; } .error-page h1 { font-size: 53px; }
 }

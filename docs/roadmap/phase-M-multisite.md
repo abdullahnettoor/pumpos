@@ -286,7 +286,8 @@ apex root removed.
 - Pages: `/` (hero + features + how-it-works + CTA), `/download` (OS-detected
   recommended CTA + per-platform cards driven by a runtime manifest fetch),
   `/legal/privacy`, `/legal/terms`. Shared `BaseLayout.astro` with canonical +
-  OG/Twitter tags, header/footer, `favicon.svg`, `og-default.svg`.
+  OG/Twitter tags, header/footer, and the shared mark (`brand/pumpos-mark.svg`)
+  as both favicon and the source of the generated `og-default.png`.
 - Download data contract: `public/downloads/manifest.json` (placeholder, all
   URLs `null` → cards show "Coming soon"). The page only reads this file, so
   M5 swaps in real artifact URLs without UI changes.
