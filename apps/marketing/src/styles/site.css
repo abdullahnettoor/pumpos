@@ -10,15 +10,16 @@ main { flex: 1; }
 .site-top--green { background: var(--brand); color: white; }
 .site-top-inner { max-width: 1240px; margin: auto; min-height: 92px; display: flex; align-items: center; justify-content: space-between; gap: 32px; border-bottom: 1px solid var(--rule); }
 .site-top--green .site-top-inner { border-color: #ffffff38; }
-/* Brand green on light surfaces, matching the lockup in the product's topbar
-   and sign-in. The green header band overrides this back to inherit, so the one
-   `currentColor` mark keeps flipping to white there. */
-.brand-wordmark { font-family: var(--body); font-size: 27px; font-weight: 650; letter-spacing: -.045em; gap: 9px; color: var(--brand); }
-.site-top--green .brand-wordmark { color: inherit; }
+.brand-wordmark { font-family: var(--body); font-size: 27px; font-weight: 650; letter-spacing: -.045em; gap: 9px; }
 .brand-wordmark .brand-os { font-weight: 450; letter-spacing: -.055em; }
 /* Height-driven, never a fixed square: the mark is taller than it is wide,
-   so pinning both axes letterboxes it inside its own box. */
-.brand-wordmark svg { width: auto; height: 36px; }
+   so pinning both axes letterboxes it inside its own box.
+
+   Brand green on light surfaces, set on the mark alone so the wordmark keeps
+   its ink. The green band overrides it back to inherit, which is how the one
+   `currentColor` mark flips to white there. */
+.brand-wordmark svg { width: auto; height: 36px; color: var(--brand); }
+.site-top--green .brand-wordmark svg { color: inherit; }
 .desktop-nav { display: flex; gap: 29px; font-size: 12px; }
 .desktop-nav a { position: relative; padding-block: 12px; }
 .desktop-nav a::after { content: ''; position: absolute; left: 0; right: 0; bottom: 5px; height: 1px; background: currentColor; transform: scaleX(0); transform-origin: left; transition: transform 180ms var(--ease); }

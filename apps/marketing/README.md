@@ -31,7 +31,11 @@ The confirmed brief and verification record live in
 - `src/components/marketing-preview` contains the selected, shared site components.
 - `src/scripts/collection-tour.ts` owns the sample-data walkthrough state and motion.
 - `src/content` contains the MDX documentation and journal entries.
-- `/design-review/identity` and `/design-review/home` are development-only studies.
+- `src/brand-mark.mjs` parses the canonical mark that `npm run brand` copies into
+  `public/brand/`. It is the only reader of that artwork; nothing restates the path.
+- `/design-review/home` is a development-only study. The identity study that sat
+  beside it is retired: it compared three candidate marks, and the chosen mark
+  now ships from `public/brand/pumpos-mark.svg`.
 
 The customer walkthrough is a labelled product illustration. It does not call
 the API or create transactions. Autoplay begins once on entry into the viewport,

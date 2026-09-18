@@ -2,7 +2,9 @@
 // Inlined by the bundler at build time, not read at runtime: Astro compiles this
 // component into `dist/.prerender/chunks/`, where any module-relative path to
 // `public/` would no longer resolve. `?raw` embeds the artwork's bytes instead,
-// so the mark cannot go missing after the build.
+// so the mark cannot go missing after the build. The location is spelled out
+// rather than taken from `MARK_FILE` because the bundler has to see a static
+// specifier to inline anything.
 import markSvg from '../../../public/brand/pumpos-mark.svg?raw';
 import { parseBrandMark } from '../../brand-mark.mjs';
 
@@ -10,7 +12,7 @@ interface Props {
   class?: string;
 }
 const { class: className } = Astro.props;
-const { viewBox, path } = parseBrandMark(markSvg, 'public/brand/pumpos-mark.svg');
+const { viewBox, path } = parseBrandMark(markSvg);
 ---
 
 <!-- `currentColor` is load-bearing, not tidiness: the site header inverts onto a
