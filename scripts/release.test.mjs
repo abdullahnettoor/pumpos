@@ -62,6 +62,21 @@ describe('release manifest stamping', () => {
     expect(readFileSync(join(root, 'apps/desktop/src-tauri/Cargo.lock'), 'utf8')).toBe(cargoLock);
   });
 
+  it('stamps a CRLF Cargo lock and keeps its line endings', () => {
+    const root = mkdtempSync(join(tmpdir(), 'pumpos-release-'));
+    write(
+      root,
+      'apps/desktop/src-tauri/Cargo.lock',
+      '[[package]]\r\nname = "pumpos"\r\nversion = "0.0.0"\r\n',
+    );
+
+    stampReleaseVersion(root, '2.4.1', () => {});
+
+    expect(readFileSync(join(root, 'apps/desktop/src-tauri/Cargo.lock'), 'utf8')).toBe(
+      '[[package]]\r\nname = "pumpos"\r\nversion = "2.4.1"\r\n',
+    );
+  });
+
   it('rejects a Cargo lock without the PumpOS package', () => {
     const root = mkdtempSync(join(tmpdir(), 'pumpos-release-'));
     write(root, 'apps/desktop/src-tauri/Cargo.lock', '[[package]]\nname = "dependency"\n');

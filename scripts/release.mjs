@@ -10,11 +10,15 @@
  *   node scripts/release.mjs 1.5.0
  */
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export function stampReleaseVersion(root, version, log = console.log) {
   if (!/^\d+\.\d+\.\d+$/.test(version ?? '')) throw new Error('Version must be X.Y.Z');
+
+  // Windows checkouts use backslash separators, so strip the root with `relative`
+  // rather than a hardcoded POSIX prefix.
+  const rel = (file) => relative(root, file);
 
   const packageFiles = [
     join(root, 'package.json'),
@@ -30,7 +34,7 @@ export function stampReleaseVersion(root, version, log = console.log) {
     if (pkg.version === undefined) continue;
     pkg.version = version;
     writeFileSync(file, JSON.stringify(pkg, null, 2) + '\n');
-    log(`  updated  ${file.replace(root + '/', '')}`);
+    log(`  updated  ${rel(file)}`);
   }
 
   const lockfiles = [
@@ -59,7 +63,7 @@ export function stampReleaseVersion(root, version, log = console.log) {
       if (workspaces.has(path) && entry?.version !== undefined) entry.version = version;
     }
     writeFileSync(file, JSON.stringify(lock, null, 2) + '\n');
-    log(`  updated  ${file.replace(root + '/', '')}`);
+    log(`  updated  ${rel(file)}`);
   }
 
   const tauriConf = join(root, 'apps/desktop/src-tauri/tauri.conf.json');
@@ -67,26 +71,28 @@ export function stampReleaseVersion(root, version, log = console.log) {
     const config = JSON.parse(readFileSync(tauriConf, 'utf8'));
     config.version = version;
     writeFileSync(tauriConf, JSON.stringify(config, null, 2) + '\n');
-    log(`  updated  ${tauriConf.replace(root + '/', '')}`);
+    log(`  updated  ${rel(tauriConf)}`);
   }
 
   const cargoToml = join(root, 'apps/desktop/src-tauri/Cargo.toml');
   if (existsSync(cargoToml)) {
     const raw = readFileSync(cargoToml, 'utf8');
     writeFileSync(cargoToml, raw.replace(/^version = ".*"/m, `version = "${version}"`));
-    log(`  updated  ${cargoToml.replace(root + '/', '')}`);
+    log(`  updated  ${rel(cargoToml)}`);
   }
 
   const cargoLock = join(root, 'apps/desktop/src-tauri/Cargo.lock');
   if (existsSync(cargoLock)) {
     const raw = readFileSync(cargoLock, 'utf8');
-    const packagePattern = /(\[\[package\]\]\nname = "pumpos"\nversion = ")[^"]+("\n)/;
+    // Tolerate either line-ending style: Windows checkouts may hold CRLF. The
+    // captured separators are replayed verbatim, so the file keeps its own style.
+    const packagePattern = /(\[\[package\]\]\r?\nname = "pumpos"\r?\nversion = ")[^"]+("\r?\n)/;
     if (!packagePattern.test(raw)) {
       throw new Error(`could not find pumpos package in ${cargoLock}`);
     }
     const next = raw.replace(packagePattern, `$1${version}$2`);
     writeFileSync(cargoLock, next);
-    log(`  updated  ${cargoLock.replace(root + '/', '')}`);
+    log(`  updated  ${rel(cargoLock)}`);
   }
 }
 
