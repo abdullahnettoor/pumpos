@@ -252,9 +252,7 @@ shiftsRouter.get('/dashboard-summary', async (c) => {
         .select({
           totalVolumeSold: sql<string>`COALESCE((${schema.shiftSummaries.snapshotData} ->> 'totalVolumeSold')::numeric, (${schema.shiftSummaries.snapshotData} ->> 'totalVolume')::numeric, 0)`,
           closingCash: sql<string>`COALESCE((${schema.shiftSummaries.snapshotData} ->> 'closingCash')::numeric, 0)`,
-          fuelByProduct: sql<
-            unknown
-          >`COALESCE(${schema.shiftSummaries.snapshotData} -> 'fuelByProduct', '[]'::jsonb)`,
+          fuelByProduct: sql<unknown>`COALESCE(${schema.shiftSummaries.snapshotData} -> 'fuelByProduct', '[]'::jsonb)`,
         })
         .from(schema.shiftSummaries)
         .where(eq(schema.shiftSummaries.shiftId, lastRow.shift.id))

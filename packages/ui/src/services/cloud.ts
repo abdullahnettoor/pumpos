@@ -595,6 +595,10 @@ export class CloudShiftService {
     return request<any[]>(`/shifts/handovers?shiftId=${shiftId}`);
   }
 
+  async getDashboardSummary(stationId: string): Promise<any> {
+    return request<any>(`/shifts/dashboard-summary?stationId=${stationId}`);
+  }
+
   async getShiftSummaries(stationId: string, limit = 200): Promise<any[]> {
     // The route is cursor-paginated (newest first, default 50). Ask for the
     // maximum page so existing history views keep their depth; deeper history
