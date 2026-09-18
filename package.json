@@ -31,6 +31,8 @@
     "test": "npm run test --workspaces --if-present",
     "fonts": "node scripts/download-fonts.mjs",
     "brand": "node scripts/sync-brand.mjs",
+    "brand:icons": "node scripts/brand-icons.mjs",
+    "icons:desktop": "npm exec --workspace=apps/desktop -- tauri icon ../../brand/pumpos-icon-1024.png",
     "version:derive": "node scripts/next-version.mjs",
     "lint": "node scripts/check-no-hook-disables.mjs && node scripts/check-icon-button-labels.mjs && eslint . --pass-on-unpruned-suppressions",
     "lint:no-hook-disables": "node scripts/check-no-hook-disables.mjs",
@@ -52,6 +54,7 @@
     "eslint-plugin-react-refresh": "^0.5.6",
     "globals": "^17.12.0",
     "prettier": "^3.9.6",
+    "sharp": "^0.35.4",
     "typescript": "^5.4.5",
     "typescript-eslint": "^8.70.0"
   },

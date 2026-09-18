@@ -82,6 +82,38 @@ app means adding it to the `targets` list in each script.
 The in-app React mark lives in `packages/ui/src/pump-ds/brand/`; a test keeps it
 in step with `brand/pumpos-mark.svg`.
 
+### App icons
+
+Every icon is **derived** from `brand/pumpos-mark.svg` — none is hand-authored,
+and none contains text. (The set this replaced drew a letter in the brand
+typeface, which does not load in a browser tab, a home-screen install or an app
+switcher, so each icon silently fell back to a system font.) After changing the
+mark:
+
+```bash
+npm run brand:icons    # mark -> container lockup, mobile icons, 1024 master
+npm run icons:desktop  # 1024 master -> the whole Tauri bundle icon set
+```
+
+`brand:icons` writes the container lockup (`brand/pumpos-container.svg`), the
+mobile favicon / 192 / maskable 512 / apple-touch PNG, and the 1024 master. The
+container is the inspectable tile artwork and the seed for the rasters; it is
+deliberately _not_ fanned out by `npm run brand`, because no app requests it by
+URL — the favicons use the bare mark. `icons:desktop` fans the master into every
+raster the bundler references, including the Windows Store tiles, the `.icns`
+and `.ico`, and the Android and iOS variants — so there is a reproducible path
+from the one path in the mark to an installed app icon.
+
+Both are idempotent, so a re-run with nothing changed rewrites nothing. Commit
+the output of both; CI does not regenerate them, and
+`scripts/brand-icons.test.mjs` fails if a committed file drifts from what the
+mark derives.
+
+Two constraints are encoded in `planIcons()` rather than left to judgement: the
+maskable 512 is square and sized so the mark's diagonal stays inside Android's
+central-80% safe circle, and the apple-touch icon is a square PNG because iOS
+ignores an SVG there and applies its own rounding.
+
 ### Database Setup
 
 1. Start your local Supabase instances or link your production Supabase database:
