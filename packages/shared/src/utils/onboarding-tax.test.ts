@@ -52,7 +52,7 @@ describe('normalizeFuelTaxDraft', () => {
 
   it('re-homes a legacy GST-shaped draft onto FUEL_VAT and drops gst_rate', () => {
     const { taxCategory, taxConfig } = normalizeFuelTaxDraft(
-      // @ts-expect-error legacy draft carried a gst_rate and no explicit category
+      // Legacy draft: GST-shaped config, no explicit category.
       draft({ taxCategory: undefined, taxConfig: { gst_rate: 0, hsn_code: '2710' } }),
     );
     expect(taxCategory).toBe('FUEL_VAT');
@@ -61,12 +61,13 @@ describe('normalizeFuelTaxDraft', () => {
     expect(taxConfig.hsn_code).toBe('2710');
   });
 
-  it('carries a legacy rate parked under gst_rate over to vat_rate', () => {
+  it('drops a legacy gst_rate instead of repurposing it as a vat_rate', () => {
     const { taxConfig } = normalizeFuelTaxDraft(
-      // @ts-expect-error legacy draft
       draft({ taxCategory: undefined, taxConfig: { gst_rate: 15, hsn_code: '2710' } }),
     );
-    expect(taxConfig.vat_rate).toBe(15);
+    // A GST rate is not a VAT rate; it must not silently become one.
+    expect(taxConfig.vat_rate).toBe(0);
+    expect(taxConfig).not.toHaveProperty('gst_rate');
   });
 });
 
@@ -76,7 +77,6 @@ describe('isFuelVatDraft', () => {
   });
 
   it('is false when a gst_rate is still present', () => {
-    // @ts-expect-error legacy shape
     expect(isFuelVatDraft(draft({ taxConfig: { gst_rate: 0, vat_rate: 0 } }))).toBe(false);
   });
 

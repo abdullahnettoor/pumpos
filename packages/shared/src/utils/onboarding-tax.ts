@@ -1,5 +1,5 @@
 import type { OnboardingProductDraft } from '../types/entities.js';
-import type { TaxCategory } from '../types/core.js';
+import type { ProductTaxConfig, TaxCategory } from '../types/core.js';
 
 /**
  * Default HSN heading for petroleum fuels (petrol/diesel fall under 2710).
@@ -8,14 +8,12 @@ import type { TaxCategory } from '../types/core.js';
 export const DEFAULT_FUEL_HSN = '2710';
 
 /**
- * The tax config shape persisted for a fuel product under state VAT.
- * `vat_rate` is the only rate that applies; there is no GST/cess on fuel.
+ * The VAT-shaped view of {@link ProductTaxConfig} that a fuel product carries:
+ * a VAT rate and HSN, priced inclusively. It's a narrowing of the canonical
+ * config (all fuel fields required), not a separate shape — there is no
+ * `gst_rate`/`cess` on fuel.
  */
-export interface FuelVatConfig {
-  vat_rate: number;
-  hsn_code: string;
-  price_inclusive: boolean;
-}
+export type FuelVatConfig = Required<Pick<ProductTaxConfig, 'vat_rate' | 'hsn_code' | 'price_inclusive'>>;
 
 /**
  * Canonical VAT-shaped tax config for a freshly created onboarding fuel draft.
@@ -39,26 +37,19 @@ export function createFuelVatConfig(overrides: Partial<FuelVatConfig> = {}): Fue
  * provisioner so a stale draft can never be persisted as a 0% GST product
  * (#133).
  *
- * Any `gst_rate`/`cess` carried by a legacy draft is dropped: fuel does not
- * attract GST, and keeping a `gst_rate: 0` alongside `FUEL_VAT` would leave the
- * misclassification lurking in the persisted config.
+ * Any `gst_rate`/`cess` from a legacy draft is dropped, not repurposed: a GST
+ * rate is not a VAT rate (they're unrelated, state-specific numbers), so the
+ * VAT rate falls back to 0 for an operator to set explicitly rather than
+ * silently inheriting a stale GST figure.
  */
 export function normalizeFuelTaxDraft(
   draft: OnboardingProductDraft,
 ): { taxCategory: TaxCategory; taxConfig: FuelVatConfig } {
   const cfg = draft.taxConfig ?? {};
-  // Prefer an explicit vat_rate; otherwise, a legacy draft may have parked the
-  // rate under gst_rate — carry the number over but re-home it as VAT.
-  const vatRate =
-    typeof cfg.vat_rate === 'number'
-      ? cfg.vat_rate
-      : typeof cfg.gst_rate === 'number'
-        ? cfg.gst_rate
-        : 0;
   return {
     taxCategory: 'FUEL_VAT',
     taxConfig: createFuelVatConfig({
-      vat_rate: vatRate,
+      vat_rate: typeof cfg.vat_rate === 'number' ? cfg.vat_rate : 0,
       hsn_code: cfg.hsn_code || DEFAULT_FUEL_HSN,
       price_inclusive: cfg.price_inclusive,
     }),

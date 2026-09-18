@@ -1,13 +1,8 @@
-import type { ProductType, InventoryType, TaxCategory } from '@pump/shared';
+import type { ProductType, InventoryType, TaxCategory, ProductTaxConfig } from '@pump/shared';
 
-export interface ProductTaxConfig {
-  gst_rate?: number;
-  vat_rate?: number;
-  hsn_code?: string;
-  cess?: number;
-  /** Selling price is tax-inclusive (retail MRP); tax is extracted, not added. */
-  price_inclusive?: boolean;
-}
+// Re-exported for existing call sites; the canonical shape lives in @pump/shared
+// so the product entity, onboarding draft, and these commands share one type.
+export type { ProductTaxConfig };
 
 export interface CreateProductCommand {
   name: string;
