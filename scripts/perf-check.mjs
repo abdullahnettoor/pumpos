@@ -14,16 +14,20 @@
  * Isolate placement and auth caches vary run to run, so the budget is asserted
  * on the per-route minimum across runs; the max is reported for visibility.
  *
- * Usage:
- *   PERF_TOKEN=<supabase access token> \
- *   node scripts/perf-check.mjs \
- *     --base https://api.pumpos.abdullahnettoor.com \
- *     --station <stationId> \
- *     [--runs 3] [--budget-ms 10] [--tail-cmd "npx wrangler tail preview-pumpos-api --format json"] \
- *     [--no-tail]
+ * Usage (token minted for you from credentials):
+ *   PERF_EMAIL=owner@station.com PERF_PASSWORD=... \
+ *   PERF_SUPABASE_URL=https://<ref>.supabase.co PERF_SUPABASE_ANON_KEY=<anon key> \
+ *   node scripts/perf-check.mjs --base <apiBase> --station <stationId> \
+ *     [--runs 3] [--budget-ms 10] \
+ *     [--tail-cmd npx wrangler tail preview-pumpos-api --format json] [--no-tail]
  *
- * With --no-tail (or when wrangler cannot attach) the script still asserts
- * HTTP success and reports wall-clock latency, but skips CPU assertions.
+ * Or with a pre-minted user session JWT (NOT the anon/service key; expires ~1h):
+ *   PERF_TOKEN=<supabase access token> node scripts/perf-check.mjs ...
+ *
+ * --tail-cmd consumes every following token up to the next --flag, so it needs
+ * no quoting (npm run strips quotes). With --no-tail (or when wrangler cannot
+ * attach) the script still asserts HTTP success and reports wall-clock
+ * latency, but skips CPU assertions.
  */
 
 import { spawn } from 'node:child_process';
@@ -35,20 +39,68 @@ function arg(name, fallback = undefined) {
   return v && !v.startsWith('--') ? v : true;
 }
 
+/**
+ * Greedy variant: collect every argv token after --name until one of OUR OWN
+ * flags (or the end). Flags belonging to the embedded command (e.g. wrangler's
+ * --format json) are swallowed, so no shell quoting is needed — npm run strips
+ * quotes anyway.
+ */
+function argMulti(name, fallback = undefined) {
+  const OWN = new Set(['--base', '--station', '--runs', '--budget-ms', '--tail-cmd', '--no-tail']);
+  const i = process.argv.indexOf(`--${name}`);
+  if (i === -1) return fallback;
+  const parts = [];
+  for (let j = i + 1; j < process.argv.length && !OWN.has(process.argv[j]); j += 1) {
+    parts.push(process.argv[j]);
+  }
+  return parts.length ? parts.join(' ') : fallback;
+}
+
 const base = arg('base');
 const stationId = arg('station');
 const runs = Number(arg('runs', '3'));
 const budgetMs = Number(arg('budget-ms', '10'));
 const noTail = process.argv.includes('--no-tail');
-const tailCmd = arg('tail-cmd', 'npx wrangler tail pumpos-api-prod --format json');
-const token = process.env.PERF_TOKEN;
+const tailCmd = argMulti('tail-cmd', 'npx wrangler tail pumpos-api-prod --format json');
 
-if (!base || !stationId || !token) {
+if (!base || !stationId) {
   console.error(
-    'Usage: PERF_TOKEN=<token> node scripts/perf-check.mjs --base <apiBase> --station <stationId> [--runs N] [--budget-ms N] [--tail-cmd "..."] [--no-tail]',
+    'Usage: PERF_TOKEN=<user access token> (or PERF_EMAIL/PERF_PASSWORD + PERF_SUPABASE_URL/PERF_SUPABASE_ANON_KEY)\n' +
+      '  node scripts/perf-check.mjs --base <apiBase> --station <stationId> [--runs N] [--budget-ms N] [--tail-cmd ...] [--no-tail]',
   );
   process.exit(2);
 }
+
+/**
+ * Resolve the bearer token: an explicit PERF_TOKEN wins; otherwise sign in
+ * with PERF_EMAIL/PERF_PASSWORD against Supabase Auth (anon key only used to
+ * reach the sign-in endpoint) and use the fresh session access token — this
+ * sidesteps the ~1 h expiry of copy-pasted tokens.
+ */
+async function resolveToken() {
+  if (process.env.PERF_TOKEN) return process.env.PERF_TOKEN;
+  const { PERF_EMAIL, PERF_PASSWORD, PERF_SUPABASE_URL, PERF_SUPABASE_ANON_KEY } = process.env;
+  if (PERF_EMAIL && PERF_PASSWORD && PERF_SUPABASE_URL && PERF_SUPABASE_ANON_KEY) {
+    const res = await fetch(`${PERF_SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+      method: 'POST',
+      headers: { apikey: PERF_SUPABASE_ANON_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: PERF_EMAIL, password: PERF_PASSWORD }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok || !body.access_token) {
+      console.error(`Sign-in failed (${res.status}): ${body.error_description ?? body.msg ?? ''}`);
+      process.exit(2);
+    }
+    console.log(`Signed in as ${PERF_EMAIL}; using a fresh access token.`);
+    return body.access_token;
+  }
+  console.error(
+    'No credentials: set PERF_TOKEN, or PERF_EMAIL + PERF_PASSWORD + PERF_SUPABASE_URL + PERF_SUPABASE_ANON_KEY.',
+  );
+  process.exit(2);
+}
+
+const token = await resolveToken();
 
 /** The request set a dashboard load produces (post #144–#148). */
 const ROUTES = [
@@ -70,7 +122,11 @@ const ROUTES = [
 function startTail() {
   if (noTail) return null;
   const [cmd, ...args] = tailCmd.split(/\s+/);
+  console.log(`[tail] spawning: ${cmd} ${args.join(' ')}`);
   const child = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+  child.on('error', (err) => {
+    console.error(`[tail] failed to start (${err.message}) — CPU capture will be empty.`);
+  });
   const events = [];
   let buffer = '';
   child.stdout.on('data', (chunk) => {
@@ -134,6 +190,19 @@ async function hit(route) {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function main() {
+  // Fail fast on a bad token before attaching a tail or looping: a 401 here
+  // means the bearer is expired (user access tokens live ~1 h) or is the
+  // anon/service key instead of a user session JWT.
+  const probe = await hit(ROUTES[0]);
+  if (probe.status === 401) {
+    console.error(
+      'Auth probe returned 401. PERF_TOKEN must be a FRESH Supabase user session access token\n' +
+        '(sign-in result, expires ~1h) — not the anon or service key. Tip: set PERF_EMAIL /\n' +
+        'PERF_PASSWORD / PERF_SUPABASE_URL / PERF_SUPABASE_ANON_KEY and the script mints one itself.',
+    );
+    process.exit(2);
+  }
+
   const tail = startTail();
   if (tail) {
     console.log('Attaching wrangler tail…');
