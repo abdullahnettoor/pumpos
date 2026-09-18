@@ -61,6 +61,7 @@ export interface InvoiceDocProps {
   invoice: InvoiceData;
   stationName?: string;
   letterhead?: Letterhead;
+  showLogo?: boolean;
   paper?: 'A4' | 'LETTER';
 }
 
@@ -161,6 +162,7 @@ export const InvoiceDoc: React.FC<InvoiceDocProps> = ({
   invoice,
   stationName,
   letterhead,
+  showLogo = true,
   paper = 'A4',
 }) => {
   const inter = invoice.interState;
@@ -197,7 +199,12 @@ export const InvoiceDoc: React.FC<InvoiceDocProps> = ({
   return (
     <Document>
       <Page size={paper} style={s.page}>
-        <LetterheadBand title="TAX INVOICE" stationName={stationName} letterhead={letterhead} />
+        <LetterheadBand
+          title="TAX INVOICE"
+          stationName={stationName}
+          letterhead={letterhead}
+          showLogo={showLogo}
+        />
 
         {/* Invoice + buyer meta */}
         <View style={[s.metaBox, { justifyContent: 'space-between' }]}>

@@ -1,5 +1,16 @@
 import React from 'react';
-import { Document, Page, View, Text, StyleSheet, Font, Image } from '@react-pdf/renderer';
+import {
+  Document,
+  Page,
+  View,
+  Text,
+  StyleSheet,
+  Font,
+  Image,
+  Svg,
+  Path,
+} from '@react-pdf/renderer';
+import { MARK_VIEWBOX, MARK_PATH } from '../../pump-ds/brand/Brand.js';
 import { formatMoney } from '../../utils/format.js';
 
 // Embed Plus Jakarta Sans + Geist Mono (matches the app type; Mono is used
@@ -294,20 +305,23 @@ export const Kpi = ({ l, v, c = C.ink }: { l: string; v: string; c?: string }) =
 export const varColor = (v: number) => (v < 0 ? C.danger : v > 0 ? C.amber : C.success);
 
 /**
- * Branded report header: green band with legal/station name + a doc title, an
- * optional uploaded logo, and a legal sub-line (GSTIN · RO code · brand · address).
- * Shared by the shift summary and DSSR documents.
+ * Branded report header: green band with legal/station name + a doc title, the
+ * platform's PumpOS mark, an optional uploaded logo, and a legal sub-line
+ * (GSTIN · RO code · brand · address). Shared by all four PDF documents.
  */
 export const LetterheadBand = ({
   title,
   stationName,
   letterhead,
+  showLogo: showLogoProp,
 }: {
   title: string;
   stationName?: string;
   letterhead?: Letterhead;
+  showLogo?: boolean;
 }) => {
   const lh = letterhead || {};
+  const showLogo = showLogoProp ?? lh.showLogo ?? true;
   const heading = lh.legalName || stationName || 'PumpOS';
   const legalBits = [
     lh.gstin ? `GSTIN: ${lh.gstin}` : '',
@@ -324,11 +338,16 @@ export const LetterheadBand = ({
         <View
           style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}
         >
-          <View>
-            <Text style={s.brand}>{heading}</Text>
-            <Text style={s.title}>{title}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <Svg viewBox={MARK_VIEWBOX} width={21.3} height={24}>
+              <Path d={MARK_PATH} fill={C.white} fillRule="evenodd" />
+            </Svg>
+            <View>
+              <Text style={s.brand}>{heading}</Text>
+              <Text style={s.title}>{title}</Text>
+            </View>
           </View>
-          {lh.logoDataUrl ? (
+          {showLogo && lh.logoDataUrl ? (
             <Image src={lh.logoDataUrl} style={{ width: 48, height: 48, objectFit: 'contain' }} />
           ) : null}
         </View>
@@ -345,10 +364,11 @@ const builders: Record<ShiftSummarySection, (d: any, cfg: ReportConfig) => React
         title="SHIFT SUMMARY RECORD"
         stationName={cfg.stationName}
         letterhead={cfg.letterhead}
+        showLogo={cfg.showLogo}
       />
       <Text style={s.sub}>
         Authoritative Operational Snapshot
-        {d.generatedAt ? ` \u2022 Compiled ${fmtDateTime(d.generatedAt)}` : ''}
+        {d.generatedAt ? ` • Compiled ${fmtDateTime(d.generatedAt)}` : ''}
       </Text>
     </View>
   ),
@@ -405,7 +425,7 @@ const builders: Record<ShiftSummarySection, (d: any, cfg: ReportConfig) => React
     const fbp = d.fuelByProduct || [];
     return (
       <View key="nozzles">
-        <Text style={s.h2}>NOZZLE RECONCILIATION &amp; VOLUME SOLD</Text>
+        <Text style={s.h2}>NOZZLE RECONCILIATION & VOLUME SOLD</Text>
         <TableView
           columns={[
             { header: 'Nozzle', flex: 1.2, strong: true },
@@ -430,7 +450,7 @@ const builders: Record<ShiftSummarySection, (d: any, cfg: ReportConfig) => React
               0,
             );
             return [
-              { text: `TOTAL \u2014 ${u}` },
+              { text: `TOTAL — ${u}` },
               { text: '' },
               { text: '' },
               { text: '' },
@@ -475,7 +495,7 @@ const builders: Record<ShiftSummarySection, (d: any, cfg: ReportConfig) => React
                   const n = pu.reduce((a: number, p: any) => a + Number(p.netVolume || 0), 0);
                   const sv = pu.reduce((a: number, p: any) => a + Number(p.salesValue || 0), 0);
                   return [
-                    { text: `TOTAL \u2014 ${u}` },
+                    { text: `TOTAL — ${u}` },
                     { text: vol3u(g, u), color: C.muted },
                     { text: vol3u(t, u), color: C.muted },
                     { text: vol3u(n, u), color: C.green },
@@ -569,7 +589,7 @@ const builders: Record<ShiftSummarySection, (d: any, cfg: ReportConfig) => React
       const handledBy =
         (t.entries || [])
           .filter((e: any) => Number(e.card || 0) > 0 || Number(e.upi || 0) > 0)
-          .map((e: any) => `${e.attendantName}${e.duCode ? ` · ${e.duCode}` : ''}`)
+          .map((e: any) => `${e.attendantName}${e.duCode ? ` \u00b7 ${e.duCode}` : ''}`)
           .join('\n') || '—';
       return [
         { text: `${t.terminalLabel || 'Unknown'}${t.provider ? `\n${t.provider}` : ''}` },
@@ -619,9 +639,9 @@ const builders: Record<ShiftSummarySection, (d: any, cfg: ReportConfig) => React
           ]}
           rows={(d.creditSales || []).map((r: any) => [
             { text: r.customerName || 'Customer' },
-            { text: r.vehicleNumber || '\u2014' },
-            { text: r.productName || '\u2014' },
-            { text: r.quantity != null ? vol3u(r.quantity, r.unit) : '\u2014' },
+            { text: r.vehicleNumber || '—' },
+            { text: r.productName || '—' },
+            { text: r.quantity != null ? vol3u(r.quantity, r.unit) : '—' },
             { text: r.notes || '—' },
             { text: inr(r.amount) },
           ])}
@@ -644,7 +664,7 @@ const builders: Record<ShiftSummarySection, (d: any, cfg: ReportConfig) => React
     ) : null,
   cashRecon: (d) => (
     <View key="cashRecon">
-      <Text style={s.h2}>CASH RECONCILIATION &amp; VARIANCES</Text>
+      <Text style={s.h2}>CASH RECONCILIATION & VARIANCES</Text>
       <View style={s.reconBox}>
         {[
           { l: 'Opening Cash Float', v: inr(d.openingCash), c: C.ink },
@@ -755,7 +775,7 @@ const builders: Record<ShiftSummarySection, (d: any, cfg: ReportConfig) => React
   collections: (d) =>
     d.collections && d.collections.length > 0 ? (
       <View key="collections">
-        <Text style={s.h2}>COLLECTIONS &amp; ACCOUNT SALES LOGS</Text>
+        <Text style={s.h2}>COLLECTIONS & ACCOUNT SALES LOGS</Text>
         <TableView
           columns={[
             { header: 'Customer', flex: 1.8, strong: true },

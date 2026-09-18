@@ -12,6 +12,7 @@ import {
   DSSR_SECTION_LABELS,
 } from '../../services/reports/reportConfig.js';
 import { Save, GripVertical } from 'lucide-react';
+import { showLogoFromStation } from '../../services/reports/letterhead.js';
 
 const stationService = new CloudStationService();
 
@@ -72,6 +73,7 @@ const ReportConfigForm: React.FC<ReportConfigPanelProps> = ({ selectedStation, o
   const [paper, setPaper] = useState<'A4' | 'LETTER'>(() =>
     selectedStation?.settings?.report_config?.paper === 'LETTER' ? 'LETTER' : 'A4',
   );
+  const [showLogo, setShowLogo] = useState<boolean>(() => showLogoFromStation(selectedStation));
   const [ss, setSs] = useState<OrderedSection[]>(() =>
     buildOrdered(
       DEFAULT_SHIFT_SUMMARY_CONFIG.sections,
@@ -122,6 +124,7 @@ const ReportConfigForm: React.FC<ReportConfigPanelProps> = ({ selectedStation, o
             shiftSummary: ss.filter((s) => s.enabled).map((s) => s.key),
             dssr: dssr.filter((s) => s.enabled).map((s) => s.key),
             paper,
+            showLogo,
           },
         },
       });
@@ -274,12 +277,28 @@ const ReportConfigForm: React.FC<ReportConfigPanelProps> = ({ selectedStation, o
       >
         {/* Editor */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <Field label="Paper Size" style={{ maxWidth: '240px' }}>
-            <Select value={paper} onChange={(e) => setPaper(e.target.value as 'A4' | 'LETTER')}>
-              <option value="A4">A4 (210 × 297 mm)</option>
-              <option value="LETTER">US Letter (8.5 × 11 in)</option>
-            </Select>
-          </Field>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <Field label="Paper Size" style={{ maxWidth: '240px' }}>
+              <Select value={paper} onChange={(e) => setPaper(e.target.value as 'A4' | 'LETTER')}>
+                <option value="A4">A4 (210 × 297 mm)</option>
+                <option value="LETTER">US Letter (8.5 × 11 in)</option>
+              </Select>
+            </Field>
+            <label
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                cursor: 'pointer',
+                fontSize: '13px',
+                color: 'var(--text-strong)',
+                marginTop: '4px',
+              }}
+            >
+              <Checkbox checked={showLogo} onChange={(e) => setShowLogo(e.target.checked)} />
+              <span>Show station logo on report letterhead</span>
+            </label>
+          </div>
 
           {renderList('Shift Summary', 'ss', ss, setSs, SHIFT_SUMMARY_SECTION_LABELS)}
           {renderList('Daily DSSR', 'dssr', dssr, setDssr, DSSR_SECTION_LABELS)}
@@ -362,7 +381,7 @@ const ReportConfigForm: React.FC<ReportConfigPanelProps> = ({ selectedStation, o
                     : 'DAILY SALES SUMMARY RECORD'}
                 </div>
               </div>
-              {logo ? (
+              {showLogo && logo ? (
                 <img
                   src={logo}
                   alt="logo"

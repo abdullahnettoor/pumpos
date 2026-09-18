@@ -36,6 +36,7 @@ export interface LedgerDocProps {
   totals: { debit: number; credit: number; balance: number };
   stationName?: string;
   letterhead?: Letterhead;
+  showLogo?: boolean;
   generatedAt?: string;
   paper?: 'A4' | 'LETTER';
 }
@@ -57,6 +58,7 @@ export const LedgerDoc: React.FC<LedgerDocProps> = ({
   totals,
   stationName,
   letterhead,
+  showLogo = true,
   generatedAt,
   paper = 'A4',
 }) => {
@@ -85,7 +87,12 @@ export const LedgerDoc: React.FC<LedgerDocProps> = ({
   return (
     <Document>
       <Page size={paper} style={s.page}>
-        <LetterheadBand title={title} stationName={stationName} letterhead={letterhead} />
+        <LetterheadBand
+          title={title}
+          stationName={stationName}
+          letterhead={letterhead}
+          showLogo={showLogo}
+        />
         <Text style={s.sub}>
           {entityName} {'\u2022'} {periodLabel}
           {generatedAt ? ` \u2022 Generated ${fmtDateTime(generatedAt)}` : ''}
