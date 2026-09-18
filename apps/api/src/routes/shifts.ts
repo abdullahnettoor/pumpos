@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { and, desc, eq, inArray, ne, sql } from 'drizzle-orm';
+import { and, desc, eq, gt, inArray, lt, ne, sql } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
 import {
   attendantHandoverSchema,
@@ -50,10 +50,7 @@ import {
 } from '../infra/repositories/reporting-repositories.js';
 import { LedgerPostingService } from '../infra/ledger-posting.js';
 import { DrizzleStockVarianceRepository } from '../infra/repositories/inventory-repositories.js';
-import {
-  DrizzleShiftSummaryProjector,
-  projectShiftSummary,
-} from '../infra/shift-summary-projection.js';
+import { DrizzleShiftSummaryProjector } from '../infra/shift-summary-projection.js';
 
 type Variables = {
   db: DbClient;
@@ -171,6 +168,79 @@ shiftsRouter.get('/status', async (c) => {
   ]);
   const businessDay = businessDayRows[0];
   const dbActiveShift = activeShiftRows[0];
+
+  // Recent closed shifts still inside the attribution grace window (SQL-filtered
+  // and bounded — never scan the station's full shift history).
+  const loadRecentClosedShifts = async () => {
+    const graceCutoff = new Date(now - lockGraceDays * 24 * 60 * 60 * 1000);
+    const rows = await db
+      .select({ shift: schema.shifts, templateName: schema.shiftTemplates.name })
+      .from(schema.shifts)
+      .leftJoin(schema.shiftTemplates, eq(schema.shifts.shiftTemplateId, schema.shiftTemplates.id))
+      .where(
+        and(
+          eq(schema.shifts.stationId, stationId),
+          eq(schema.shifts.status, 'CLOSED'),
+          gt(schema.shifts.closedAt, graceCutoff),
+        ),
+      )
+      .orderBy(desc(schema.shifts.closedAt))
+      .limit(50);
+    return rows.map((item) => ({ ...item.shift, templateName: item.templateName ?? 'Custom' }));
+  };
+
+  // --- Lite mode: attribution context only ---
+  // Consumers (expense / collection / purchase entry, business-day tab, P&L)
+  // need just the open shift's identity plus the grace-window closed shifts.
+  // No nozzle/handover/staff enrichment, no last-shift block, no reference data.
+  if (lite) {
+    let liteActiveShift: any = null;
+    if (dbActiveShift) {
+      const [templateRows, openedByRows, activeBusinessDayRows] = await Promise.all([
+        db
+          .select()
+          .from(schema.shiftTemplates)
+          .where(eq(schema.shiftTemplates.id, dbActiveShift.shiftTemplateId))
+          .limit(1),
+        db.select().from(schema.users).where(eq(schema.users.id, dbActiveShift.openedBy)).limit(1),
+        db
+          .select({ businessDate: schema.businessDays.businessDate })
+          .from(schema.businessDays)
+          .where(
+            and(
+              eq(schema.businessDays.id, dbActiveShift.businessDayId),
+              eq(schema.businessDays.organizationId, orgId),
+              eq(schema.businessDays.stationId, stationId),
+            ),
+          )
+          .limit(1),
+      ]);
+      const template = templateRows[0];
+      liteActiveShift = {
+        ...dbActiveShift,
+        templateName: template?.name ?? 'Custom',
+        businessDate: activeBusinessDayRows[0]?.businessDate ?? null,
+        scheduledStartTime: template?.startTime ?? null,
+        scheduledEndTime: template?.endTime ?? null,
+        openedByName: openedByRows[0]?.fullName ?? 'System',
+      };
+    }
+    const recentClosedShifts = await loadRecentClosedShifts();
+    return c.json({
+      success: true,
+      data: {
+        businessDay: businessDay ?? null,
+        shift: dbActiveShift ?? null,
+        readings: [],
+        activeShift: liteActiveShift,
+        lastShift: null,
+        lastShiftSummary: null,
+        canReopenLastShift: false,
+        gracePeriodExpiresAt: null,
+        recentClosedShifts,
+      },
+    });
+  }
 
   let activeShift: any = null;
   if (dbActiveShift) {
@@ -488,9 +558,7 @@ shiftsRouter.get('/status', async (c) => {
     // Merchandise tracker data folded into the status payload so the panel
     // renders without a second round-trip (mirrors the /merchandise-handovers
     // and /merchandise-sales endpoints; the panel seeds its queries from these).
-    const [merchHandoverRows, merchandiseSales] = lite
-      ? [[] as any[], [] as any[]]
-      : await Promise.all([
+    const [merchHandoverRows, merchandiseSales] = await Promise.all([
           db
             .select({
               id: schema.sales.id,
@@ -575,10 +643,10 @@ shiftsRouter.get('/status', async (c) => {
       merchandiseSales,
       // Authoritative cash reconciliation (same figures CloseShift will use), so
       // the closing wizard's expected drawer includes non-attendant merch cash
-      // and reads the true station-level short/surplus. Skipped in lite mode.
-      reconciliation: lite
-        ? undefined
-        : await new DrizzleShiftReconciliationReader(db).totalsForShift(dbActiveShift.id),
+      // and reads the true station-level short/surplus.
+      reconciliation: await new DrizzleShiftReconciliationReader(db).totalsForShift(
+        dbActiveShift.id,
+      ),
     };
   }
 
@@ -646,31 +714,12 @@ shiftsRouter.get('/status', async (c) => {
       templateName: template?.name ?? 'Custom',
       closedByName,
     };
-    lastShiftSummary = summary
-      ? {
-          ...summary,
-          snapshotData: await projectShiftSummary(db, dbLastShift, summary.snapshotData),
-        }
-      : null;
+    // The stored snapshot is kept current at write time (close + refresh), so
+    // it is served as-is — no read-time re-projection.
+    lastShiftSummary = summary ?? null;
   }
 
-  // --- Recent closed (not attribution-grace-expired) shifts ---
-  const dbClosedShifts = await db
-    .select({ shift: schema.shifts, templateName: schema.shiftTemplates.name })
-    .from(schema.shifts)
-    .leftJoin(schema.shiftTemplates, eq(schema.shifts.shiftTemplateId, schema.shiftTemplates.id))
-    .where(and(eq(schema.shifts.stationId, stationId), eq(schema.shifts.status, 'CLOSED')))
-    .orderBy(desc(schema.shifts.closedAt));
-  const recentClosedShifts: any[] = [];
-  for (const item of dbClosedShifts) {
-    const s = item.shift;
-    if (s.closedAt) {
-      const attributionExpiryTime =
-        new Date(s.closedAt).getTime() + lockGraceDays * 24 * 60 * 60 * 1000;
-      if (now <= attributionExpiryTime)
-        recentClosedShifts.push({ ...s, templateName: item.templateName ?? 'Custom' });
-    }
-  }
+  const recentClosedShifts = await loadRecentClosedShifts();
 
   // v2 fields (businessDay, readings) kept alongside legacy-compatible fields.
   const base = {
@@ -684,10 +733,6 @@ shiftsRouter.get('/status', async (c) => {
     gracePeriodExpiresAt,
     recentClosedShifts,
   };
-
-  if (lite) {
-    return c.json({ success: true, data: base });
-  }
 
   const templates = await db
     .select()
@@ -1513,7 +1558,11 @@ shiftsRouter.post('/business-day/close', async (c) => {
   return sendResult(c, result);
 });
 
-// GET /api/shifts/shift-summaries?stationId=...
+// GET /api/shifts/shift-summaries?stationId=...&limit=...&before=...
+// Serves the STORED snapshot per summary — the snapshot is kept current at
+// write time (shift close + late-attribution refresh), so no read-time
+// re-projection happens here. Cursor pagination: `before` is the previous
+// page's oldest generatedAt (ISO); pages are newest-first.
 shiftsRouter.get('/shift-summaries', async (c) => {
   const user = c.var.user;
   const stationId = c.req.query('stationId');
@@ -1527,6 +1576,19 @@ shiftsRouter.get('/shift-summaries', async (c) => {
     return c.json(
       { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
       403,
+    );
+  }
+  const limitRaw = Number(c.req.query('limit'));
+  const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(Math.trunc(limitRaw), 1), 200) : 50;
+  const beforeRaw = c.req.query('before');
+  const before = beforeRaw ? new Date(beforeRaw) : null;
+  if (before && Number.isNaN(before.getTime())) {
+    return c.json(
+      {
+        success: false,
+        error: { code: 'VALIDATION_ERROR', message: 'before must be an ISO timestamp' },
+      },
+      400,
     );
   }
   const db = c.var.db;
@@ -1546,22 +1608,22 @@ shiftsRouter.get('/shift-summaries', async (c) => {
       and(
         eq(schema.shifts.stationId, stationId),
         eq(schema.shifts.organizationId, user.organizationId),
+        ...(before ? [lt(schema.shiftSummaries.generatedAt, before)] : []),
       ),
     )
-    .orderBy(desc(schema.shiftSummaries.generatedAt));
+    .orderBy(desc(schema.shiftSummaries.generatedAt))
+    .limit(limit);
 
-  const data = await Promise.all(
-    rows.map(async (r) => ({
-      shiftId: r.shift.id,
-      status: r.shift.status,
-      openedAt: r.shift.openedAt,
-      closedAt: r.shift.closedAt,
-      businessDayId: r.shift.businessDayId,
-      businessDate: r.businessDate,
-      templateName: r.templateName ?? null,
-      generatedAt: r.generatedAt,
-      snapshotData: await projectShiftSummary(db, r.shift, r.snapshotData),
-    })),
-  );
+  const data = rows.map((r) => ({
+    shiftId: r.shift.id,
+    status: r.shift.status,
+    openedAt: r.shift.openedAt,
+    closedAt: r.shift.closedAt,
+    businessDayId: r.shift.businessDayId,
+    businessDate: r.businessDate,
+    templateName: r.templateName ?? null,
+    generatedAt: r.generatedAt,
+    snapshotData: r.snapshotData,
+  }));
   return c.json({ success: true, data });
 });
