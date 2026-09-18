@@ -456,11 +456,12 @@ export const App: React.FC = () => {
 
     // 4. Gating: the roles that cannot finish setup themselves. "Locked out"
     //    is precisely "cannot onboard", so it reads from the same guard the
-    //    quick-create does rather than re-listing roles here — the old
-    //    hand-rolled list had already missed Attendant, who fell through into
-    //    the wizard. The screen carries its own sign-out because it does not
-    //    always render inside the shell: /onboarding renders bare, and a Staff
-    //    user who got there had no way out but a page reload (#132).
+    //    quick-create does rather than keeping a second role list here that
+    //    could drift from it. (Attendant is not in this app's role union, so
+    //    it was never a live hole here — the guard simply covers it.)
+    //    The screen carries its own sign-out because it does not always render
+    //    inside the shell: /onboarding renders bare, and a Staff user who got
+    //    there had no way out but a page reload (#132).
     if (!stationsLoading && !isStationReady && userRole && !canOnboardStation(userRole)) {
       return (
         <StationOnboardingLockout

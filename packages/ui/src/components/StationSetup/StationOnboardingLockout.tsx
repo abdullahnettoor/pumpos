@@ -4,6 +4,17 @@ import { Button } from '../../pump-ds/button/index.js';
 import { EmptyState } from '../../pump-ds/empty-state/index.js';
 import { cn } from '../../pump-ds/lib/cn.js';
 
+/**
+ * What this state says, in one place. The dashboard renders the same state in
+ * its own panel, and when each owned its wording they had already drifted to
+ * different descriptions of an identical situation.
+ */
+export const STATION_SETUP_IN_PROGRESS = {
+  title: 'Station setup in progress',
+  description:
+    "An Owner or Manager is still finishing this station's setup. Your access unlocks automatically once they're done — there's nothing you need to do.",
+} as const;
+
 export interface StationOnboardingLockoutProps {
   onSignOut: () => void | Promise<unknown>;
   /**
@@ -11,7 +22,6 @@ export interface StationOnboardingLockoutProps {
    * the sign-out is unconditional either way, see below.
    */
   inShell?: boolean;
-  className?: string;
 }
 
 /**
@@ -31,19 +41,17 @@ export interface StationOnboardingLockoutProps {
 export const StationOnboardingLockout: React.FC<StationOnboardingLockoutProps> = ({
   onSignOut,
   inShell = false,
-  className = '',
 }) => (
   <div
     className={cn(
       'animate-fade-in flex flex-col justify-center',
       inShell ? '' : 'min-h-[100dvh] bg-canvas',
-      className,
     )}
   >
     <EmptyState
       icon={<TriangleAlert />}
-      title="Station setup in progress"
-      description="An Owner or Manager is still finishing this station's setup. Your access unlocks automatically once they're done — there's nothing you need to do."
+      title={STATION_SETUP_IN_PROGRESS.title}
+      description={STATION_SETUP_IN_PROGRESS.description}
       action={
         // Calls straight through rather than wrapping in runTask: callers
         // already do that, and reaching for it here would make a screen whose

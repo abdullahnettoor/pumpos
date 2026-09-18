@@ -35,6 +35,7 @@ import { classifyTank, tankPct, OVER_CAPACITY_EXPLANATION } from '../../utils/st
 import { useConfirm } from '../primitives/ConfirmDialog.js';
 import { useToast } from '../primitives/ToastProvider.js';
 import { Station, canOnboardStation, resolveBusinessDate } from '@pump/shared';
+import { STATION_SETUP_IN_PROGRESS } from '../StationSetup/StationOnboardingLockout.js';
 import type { NavIntent } from '../AppShell.js';
 import {
   Play,
@@ -206,8 +207,8 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
           <PageHeader title="Dashboard" />
           <EmptyState
             icon={<TriangleAlert />}
-            title="Station setup in progress"
-            description="An Owner or Manager is still finishing this station's setup. Your access unlocks automatically once they're done — there's nothing you need to do."
+            title={STATION_SETUP_IN_PROGRESS.title}
+            description={STATION_SETUP_IN_PROGRESS.description}
           />
         </div>
       );
@@ -318,12 +319,10 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   const isAccountant = userRole === 'Accountant';
 
   // A freshly-onboarded (but ready) station: show the getting-started checklist
-  // until the essentials are done or the user dismisses it. Gated on the
-  // onboarding guard rather than its own role list because the checklist's
-  // primary step routes into the wizard — showing it to someone the wizard
-  // would refuse is the dead end #132 was about.
-  const canManage = canOnboardStation(userRole);
-  const showGettingStarted = canManage && !gsDismissed && gsSteps.some((s) => !s.done);
+  // until the essentials are done or the user dismisses it. Reuses
+  // `canManageOnboarding` rather than recomputing it — the checklist's primary
+  // step routes into the wizard, so it is the same decision, not a similar one.
+  const showGettingStarted = canManageOnboarding && !gsDismissed && gsSteps.some((s) => !s.done);
 
   // Business-day-aware "today so far" rollups (client-summed; timezone honoured).
   const stationSettings: any = (selectedStation as any).settings || {};

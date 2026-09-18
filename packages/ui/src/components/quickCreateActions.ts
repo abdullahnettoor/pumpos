@@ -7,17 +7,13 @@ export type PreReadyQuickCreateId = 'onboard-station' | 'team-member';
 /**
  * Which quick-create actions to offer on a station that isn't operational yet.
  *
- * Separated from the menu that renders it for two reasons. The obvious one is
- * that a Radix menu cannot be opened reliably under jsdom, so the rule would
- * otherwise ship untested. The better one is that "who may onboard a station"
- * is a permission decision, not a rendering detail, and it had already gone
- * wrong precisely because it lived inside a component nobody could test:
- * "Onboard station" was offered to every role, and the roles that cannot
- * onboard were routed to a page that refused them outside the shell, stranding
- * them without a sign-out (#132).
+ * Both the "+ New" menu and the command palette's Actions group build from this
+ * one list, so gating here covers both surfaces and they cannot disagree.
  *
- * The command palette builds its Actions group from the same list the menu
- * uses, so gating here covers both surfaces at once.
+ * Kept out of the component because a Radix menu cannot be opened reliably
+ * under jsdom, and this rule shipped untested once already: "Onboard station"
+ * was offered to every role, routing the ones it would refuse to a page that
+ * dropped them outside the shell without a sign-out (#132).
  */
 export function preReadyQuickCreateIds(role: Role): PreReadyQuickCreateId[] {
   const ids: PreReadyQuickCreateId[] = [];

@@ -36,11 +36,12 @@ describe('the lockout and the quick-create agree on who is locked out', () => {
     // list uses. When they were separate, the console listed Staff and
     // Accountant by hand and missed Attendant, who fell through into a wizard
     // that would refuse them.
-    const lockedOut: Role[] = ['Staff', 'Accountant', 'Attendant'];
+    const allRoles: Role[] = ['Owner', 'Manager', 'Accountant', 'Staff', 'Attendant'];
 
-    for (const role of lockedOut) {
-      expect(canOnboardStation(role)).toBe(false);
-      expect(preReadyQuickCreateIds(role)).not.toContain('onboard-station');
+    for (const role of allRoles) {
+      expect(preReadyQuickCreateIds(role).includes('onboard-station')).toBe(
+        canOnboardStation(role),
+      );
     }
   });
 });
