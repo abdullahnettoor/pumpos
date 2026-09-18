@@ -113,7 +113,6 @@ shiftsRouter.get('/business-days/status', async (c) => {
   return sendResult(c, result);
 });
 
-
 // GET /api/shifts/status?stationId=...
 shiftsRouter.get('/status', async (c) => {
   const user = c.var.user;
@@ -559,51 +558,51 @@ shiftsRouter.get('/status', async (c) => {
     // renders without a second round-trip (mirrors the /merchandise-handovers
     // and /merchandise-sales endpoints; the panel seeds its queries from these).
     const [merchHandoverRows, merchandiseSales] = await Promise.all([
-          db
-            .select({
-              id: schema.sales.id,
-              attendantId: schema.sales.attendantId,
-              attendantName: schema.users.fullName,
-              subtotalAmount: schema.sales.subtotalAmount,
-              taxAmount: schema.sales.taxAmount,
-              totalAmount: schema.sales.totalAmount,
-              nonCashAmount: schema.sales.nonCashAmount,
-              createdAt: schema.sales.createdAt,
-            })
-            .from(schema.sales)
-            .leftJoin(schema.users, eq(schema.users.id, schema.sales.attendantId))
-            .where(
-              and(
-                eq(schema.sales.shiftId, dbActiveShift.id),
-                eq(schema.sales.captureMechanism, 'MERCH_HANDOVER'),
-              ),
-            )
-            .orderBy(desc(schema.sales.createdAt)),
-          db
-            .select({
-              id: schema.sales.id,
-              documentNumber: schema.sales.documentNumber,
-              attendantId: schema.sales.attendantId,
-              attendantName: schema.users.fullName,
-              customerId: schema.sales.customerId,
-              customerName: schema.customers.name,
-              buyerDetails: schema.sales.buyerDetails,
-              paymentMethod: schema.sales.paymentMethod,
-              totalAmount: schema.sales.totalAmount,
-              createdAt: schema.sales.createdAt,
-            })
-            .from(schema.sales)
-            .leftJoin(schema.users, eq(schema.users.id, schema.sales.attendantId))
-            .leftJoin(schema.customers, eq(schema.customers.id, schema.sales.customerId))
-            .where(
-              and(
-                eq(schema.sales.shiftId, dbActiveShift.id),
-                ne(schema.sales.saleType, 'Fuel'),
-                ne(schema.sales.captureMechanism, 'MERCH_HANDOVER'),
-              ),
-            )
-            .orderBy(desc(schema.sales.createdAt)),
-        ]);
+      db
+        .select({
+          id: schema.sales.id,
+          attendantId: schema.sales.attendantId,
+          attendantName: schema.users.fullName,
+          subtotalAmount: schema.sales.subtotalAmount,
+          taxAmount: schema.sales.taxAmount,
+          totalAmount: schema.sales.totalAmount,
+          nonCashAmount: schema.sales.nonCashAmount,
+          createdAt: schema.sales.createdAt,
+        })
+        .from(schema.sales)
+        .leftJoin(schema.users, eq(schema.users.id, schema.sales.attendantId))
+        .where(
+          and(
+            eq(schema.sales.shiftId, dbActiveShift.id),
+            eq(schema.sales.captureMechanism, 'MERCH_HANDOVER'),
+          ),
+        )
+        .orderBy(desc(schema.sales.createdAt)),
+      db
+        .select({
+          id: schema.sales.id,
+          documentNumber: schema.sales.documentNumber,
+          attendantId: schema.sales.attendantId,
+          attendantName: schema.users.fullName,
+          customerId: schema.sales.customerId,
+          customerName: schema.customers.name,
+          buyerDetails: schema.sales.buyerDetails,
+          paymentMethod: schema.sales.paymentMethod,
+          totalAmount: schema.sales.totalAmount,
+          createdAt: schema.sales.createdAt,
+        })
+        .from(schema.sales)
+        .leftJoin(schema.users, eq(schema.users.id, schema.sales.attendantId))
+        .leftJoin(schema.customers, eq(schema.customers.id, schema.sales.customerId))
+        .where(
+          and(
+            eq(schema.sales.shiftId, dbActiveShift.id),
+            ne(schema.sales.saleType, 'Fuel'),
+            ne(schema.sales.captureMechanism, 'MERCH_HANDOVER'),
+          ),
+        )
+        .orderBy(desc(schema.sales.createdAt)),
+    ]);
     const merchSaleIds = merchHandoverRows.map((h) => h.id);
     const merchItemRows = merchSaleIds.length
       ? await db

@@ -35,9 +35,10 @@ export interface RefreshShiftSummaryResult {
  * summary, so callers may invoke it unconditionally after any shift-attributed
  * financial write. Run inside runInTransaction with the write it follows.
  */
-export class RefreshShiftSummary
-  implements UseCase<RefreshShiftSummaryCommand, RefreshShiftSummaryResult>
-{
+export class RefreshShiftSummary implements UseCase<
+  RefreshShiftSummaryCommand,
+  RefreshShiftSummaryResult
+> {
   constructor(private readonly deps: RefreshShiftSummaryDeps) {}
 
   async execute(
