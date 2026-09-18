@@ -31,6 +31,7 @@ import {
   type UserMenuAction,
   type SyncStatus,
   type BusinessDayOption,
+  PumpOSLockup,
 } from '../pump-ds/index.js';
 import { useBusinessDayStatus, useCustomers, useSuppliers, useProducts } from '../query/hooks.js';
 import { useStationAlerts } from '../query/useStationAlerts.js';
@@ -390,7 +391,7 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
       <TopBar
         titleBar={titleBar}
         onToggleSidebar={onToggleSidebar}
-        brand="PumpOS"
+        brand={<PumpOSLockup />}
         businessDate={businessDate}
         businessDayStatus={businessDayStatus}
         showBusinessDay={stationReady}

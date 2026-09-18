@@ -39,6 +39,7 @@ pump-erp/
 │   ├── db/              # Database schema, migrations, Drizzle Client
 │   ├── shared/          # Shared Zod validation schemas and common TypeScript types
 │   └── ui/              # Shared UI components (Shift Management, DSSR, Station Setup)
+├── brand/               # Canonical brand artwork, fanned into each app by `npm run brand`
 ├── supabase/            # Supabase database configurations, seed data, and schema definitions
 ├── AGENTS.md            # Architectural, business, and engineering rules for AI contributors
 └── package.json         # Monorepo workspaces configuration
@@ -61,6 +62,25 @@ Clone the repository and install all workspace dependencies from the root direct
 ```bash
 npm install
 ```
+
+### Vendored assets
+
+Fonts and brand artwork are served from each app's own `public/` directory, so
+the same bytes are copied into every app rather than imported. Both copies are
+committed; re-run the script that owns them after changing a source:
+
+```bash
+npm run fonts   # downloads Plus Jakarta Sans + Geist Mono into apps/*/public/fonts
+npm run brand   # copies brand/ into apps/*/public/brand
+```
+
+Both are idempotent — re-running with nothing changed rewrites nothing.
+`npm run brand` also reaches `apps/marketing`, which is a standalone Astro site
+rather than an npm workspace and so cannot import from `@pump/ui`. Adding a new
+app means adding it to the `targets` list in each script.
+
+The in-app React mark lives in `packages/ui/src/pump-ds/brand/`; a test keeps it
+in step with `brand/pumpos-mark.svg`.
 
 ### Database Setup
 

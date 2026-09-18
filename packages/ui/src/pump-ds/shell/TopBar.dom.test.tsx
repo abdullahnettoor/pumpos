@@ -115,3 +115,34 @@ describe('TopBar on an undecorated (Windows/Linux) window', () => {
     expect(screen.queryByLabelText('Maximise window')).toBeNull();
   });
 });
+
+describe('the brand slot as part of the drag region', () => {
+  const titleBar: TitleBarIntegration = {
+    controlsSide: 'left',
+    controlsInset: 78,
+    maximized: false,
+    controls: null,
+  };
+
+  it('does not let a graphical brand swallow the window drag', () => {
+    // Tauri only drags when the event target ITSELF carries the attribute, so
+    // an <svg> logo sitting in the slot would become the target and kill the
+    // drag over the one element users instinctively grab. The slot is
+    // decorative, so its contents take no pointer events.
+    const { container } = render(
+      <TopBar {...baseProps} titleBar={titleBar} brand={<svg data-testid="logo" />} />,
+    );
+
+    const slot = screen.getByTestId('logo').parentElement as HTMLElement;
+    expect(slot.className).toContain('pointer-events-none');
+    // The pointer falls through to the bar itself, which is the drag region.
+    expect(slot.closest(DRAG)).toBe(container.firstElementChild);
+  });
+
+  it('leaves the brand interactive on the web, where there is no drag to protect', () => {
+    render(<TopBar {...baseProps} brand={<svg data-testid="logo" />} />);
+
+    const slot = screen.getByTestId('logo').parentElement as HTMLElement;
+    expect(slot.className).not.toContain('pointer-events-none');
+  });
+});
