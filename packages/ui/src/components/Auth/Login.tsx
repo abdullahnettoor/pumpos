@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { looksLikePhone, phoneToAuthEmail } from '@pump/shared';
 import { supabase } from '../../services/supabase.js';
-import { Form, Icon } from '../../pump-ds/index.js';
+import { Form, Icon, PumpOSLockup } from '../../pump-ds/index.js';
 
 export const Login: React.FC = () => {
   const [identifier, setIdentifier] = useState('');
@@ -64,16 +64,15 @@ export const Login: React.FC = () => {
       >
         {/* Brand header */}
         <div style={{ textAlign: 'center' }}>
-          <span
+          <PumpOSLockup
+            orientation="stacked"
             style={{
               fontSize: '18px',
               fontWeight: 700,
               color: 'var(--brand-primary)',
               letterSpacing: '-0.01em',
             }}
-          >
-            PumpOS
-          </span>
+          />
           <h1
             style={{
               fontSize: '14px',

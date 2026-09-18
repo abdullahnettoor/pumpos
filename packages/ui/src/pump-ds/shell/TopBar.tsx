@@ -294,7 +294,15 @@ export const TopBar: React.FC<TopBarProps> = ({
       {brand && (
         <div
           {...dragRegion}
-          className="select-none pl-0.5 pr-1 text-[15px] font-bold tracking-[-0.01em] text-brand"
+          className={cn(
+            'select-none pl-0.5 pr-1 text-[15px] font-bold tracking-[-0.01em] text-brand',
+            // The slot is decorative, and Tauri only drags when the event
+            // target itself carries the attribute — so a graphical brand would
+            // otherwise become the target and kill the drag over the very
+            // element people reach for. Let the pointer fall through to the
+            // slot, which has it.
+            titleBar && '[&_*]:pointer-events-none',
+          )}
         >
           {brand}
         </div>
