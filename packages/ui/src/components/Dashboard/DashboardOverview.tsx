@@ -34,7 +34,8 @@ import { inr, formatQty } from '../../utils/format.js';
 import { classifyTank, tankPct, OVER_CAPACITY_EXPLANATION } from '../../utils/stock.js';
 import { useConfirm } from '../primitives/ConfirmDialog.js';
 import { useToast } from '../primitives/ToastProvider.js';
-import { Station, resolveBusinessDate } from '@pump/shared';
+import { Station, canOnboardStation, resolveBusinessDate } from '@pump/shared';
+import { STATION_SETUP_IN_PROGRESS } from '../StationSetup/StationOnboardingLockout.js';
 import type { NavIntent } from '../AppShell.js';
 import {
   Play,
@@ -148,7 +149,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
     !!selectedStation && (selectedStation as any).onboardingStatus === 'READY_FOR_OPERATIONS';
   const stationInProgress =
     !!selectedStation && (selectedStation as any).onboardingStatus === 'IN_PROGRESS';
-  const canManageOnboarding = userRole === 'Owner' || userRole === 'Manager';
+  const canManageOnboarding = canOnboardStation(userRole);
   const gsSteps: ChecklistStep[] = [
     {
       id: 'org',
@@ -206,8 +207,8 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
           <PageHeader title="Dashboard" />
           <EmptyState
             icon={<TriangleAlert />}
-            title="Station setup in progress"
-            description="Operations unlock automatically once the Owner completes onboarding."
+            title={STATION_SETUP_IN_PROGRESS.title}
+            description={STATION_SETUP_IN_PROGRESS.description}
           />
         </div>
       );
@@ -318,9 +319,10 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   const isAccountant = userRole === 'Accountant';
 
   // A freshly-onboarded (but ready) station: show the getting-started checklist
-  // until the essentials are done or the user dismisses it.
-  const canManage = userRole === 'Owner' || userRole === 'Manager';
-  const showGettingStarted = canManage && !gsDismissed && gsSteps.some((s) => !s.done);
+  // until the essentials are done or the user dismisses it. Reuses
+  // `canManageOnboarding` rather than recomputing it — the checklist's primary
+  // step routes into the wizard, so it is the same decision, not a similar one.
+  const showGettingStarted = canManageOnboarding && !gsDismissed && gsSteps.some((s) => !s.done);
 
   // Business-day-aware "today so far" rollups (client-summed; timezone honoured).
   const stationSettings: any = (selectedStation as any).settings || {};

@@ -26,3 +26,5 @@ export * from './meter/index.js';
 export * from './breakdown/index.js';
 export * from './sparkline/index.js';
 export * from './icon/index.js';
+export * from './brand/index.js';
+export * from './boot/index.js';

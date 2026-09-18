@@ -5,4 +5,6 @@ export type {
   NotificationItem,
   UserMenuAction,
   BusinessDayOption,
+  TitleBarIntegration,
+  WindowControlCommands,
 } from './TopBar.js';

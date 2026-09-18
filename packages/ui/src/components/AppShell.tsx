@@ -26,6 +26,9 @@ export interface AppShellProps {
   onLogout: () => void | Promise<unknown>;
   stations?: Station[];
   selectedStation?: Station | null;
+  /** Station list still in flight: the shell renders before it arrives, so
+   *  the top bar holds the station chip open instead of popping it in. */
+  stationsLoading?: boolean;
   onStationChange?: (station: Station) => void;
   environmentTag?: string | null;
   /** When false, the active station isn't operational yet (pre-onboarding hub):
@@ -125,6 +128,7 @@ export const AppShell: React.FC<AppShellProps> = ({
   pendingSyncCount = 0,
   onLogout,
   selectedStation = null,
+  stationsLoading = false,
   environmentTag = null,
   stationReady = true,
 }) => {
@@ -184,6 +188,7 @@ export const AppShell: React.FC<AppShellProps> = ({
       <div className="no-print" style={{ flexShrink: 0 }}>
         <AppTopBar
           selectedStation={selectedStation}
+          stationsLoading={stationsLoading}
           navItems={navItems}
           userRole={(userRole as 'Owner' | 'Manager' | 'Accountant' | 'Staff') || 'Staff'}
           userName={userName}

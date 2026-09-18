@@ -248,3 +248,21 @@ export function canManageFinancialAccounts(role: Role): boolean {
 export function canManageExpenseCategory(role: Role): boolean {
   return role === 'Owner' || role === 'Manager' || role === 'Accountant';
 }
+
+// ----------------------------------------------------
+// Station onboarding (Phase A) — getting a station operational
+// ----------------------------------------------------
+
+/**
+ * Run the station onboarding wizard. Owner and Manager only.
+ *
+ * Staff and Accountants are shown a "setup in progress" screen until the
+ * station is operational, so any affordance that routes them into the wizard is
+ * a dead end — and on the console that dead end renders outside the shell,
+ * taking their sign-out with it (#132). Gate the affordance, not just the page.
+ *
+ * Attendants are mobile-only and never see the console at all.
+ */
+export function canOnboardStation(role: Role): boolean {
+  return role === 'Owner' || role === 'Manager';
+}

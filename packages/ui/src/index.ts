@@ -13,6 +13,12 @@ export { OnboardingWizard } from './components/StationSetup/OnboardingWizard.js'
 export { WebOnboardingNotice } from './components/StationSetup/WebOnboardingNotice.js';
 export type { WebOnboardingNoticeProps } from './components/StationSetup/WebOnboardingNotice.js';
 export { isDesktopApp, openExternal, setExternalOpener } from './utils/platform.js';
+export { setDesktopTitleBar } from './utils/desktopTitleBar.js';
+export type {
+  DesktopTitleBar,
+  DesktopWindowControls,
+  DesktopWindowState,
+} from './utils/desktopTitleBar.js';
 export { clearStoredOnboardingDraft } from './components/StationSetup/onboardingDraft.js';
 export { StationOverview } from './components/StationSetup/StationOverview.js';
 export { OrganizationOverview } from './components/Organization/OrganizationOverview.js';
@@ -36,6 +42,20 @@ export {
   subscribeToSessionChanges,
 } from './services/auth/sessionBootstrap.js';
 export type { SessionReader, StoredSession } from './services/auth/sessionBootstrap.js';
+export {
+  setTokenSource,
+  getAccessToken,
+  refreshAccessToken,
+  resetAuthTokenState,
+} from './services/auth/tokenStore.js';
+export type { TokenSource } from './services/auth/tokenStore.js';
+export {
+  createSupabaseTokenSource,
+  installSupabaseTokenSource,
+  keepSessionFresh,
+} from './services/auth/supabaseTokenSource.js';
+export type { SessionTokenClient } from './services/auth/supabaseTokenSource.js';
+
 export * from './services/cloud.js';
 export { exportReportPdf, exportReactPdf, setPdfSaver } from './services/exportPdf.js';
 export {
@@ -125,3 +145,13 @@ export { useZodForm } from './forms/useZodForm.js';
 export { formatMoney, inr, formatQty } from './utils/format.js';
 export { runTask, useRunTask } from './utils/runTask.js';
 export * from './pump-ds/icon/index.js';
+export * from './pump-ds/brand/index.js';
+export * from './pump-ds/boot/index.js';
+
+// Post-sign-in boot: the branded wait screen and the parallel resolve behind it.
+export * from './boot/sessionBoot.js';
+export * from './boot/bootGate.js';
+export * from './boot/useSelectedStation.js';
+export { StationOnboardingLockout } from './components/StationSetup/StationOnboardingLockout.js';
+export type { StationOnboardingLockoutProps } from './components/StationSetup/StationOnboardingLockout.js';
+export { STATION_SETUP_IN_PROGRESS } from './components/StationSetup/StationOnboardingLockout.js';

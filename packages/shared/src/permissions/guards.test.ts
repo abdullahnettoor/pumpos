@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  canOnboardStation,
   canOpenShift,
   canCloseShift,
   canReopenShift,
@@ -69,5 +70,25 @@ describe('Role and Shift Permissions Guards', () => {
       expect(canCreatePurchase('Manager')).toBe(true);
       expect(canCreatePurchase('Accountant')).toBe(true);
     });
+  });
+});
+
+describe('Station onboarding guard', () => {
+  it('lets Owners and Managers onboard a station', () => {
+    expect(canOnboardStation('Owner')).toBe(true);
+    expect(canOnboardStation('Manager')).toBe(true);
+  });
+
+  it('refuses the roles that are locked out until setup finishes', () => {
+    // Staff and Accountants see a "setup in progress" screen instead. Offering
+    // them the onboarding action anyway is what strands them (#132): it routes
+    // to a focused full page that then refuses them, outside the shell and so
+    // without the top bar's sign-out.
+    expect(canOnboardStation('Staff')).toBe(false);
+    expect(canOnboardStation('Accountant')).toBe(false);
+  });
+
+  it('refuses Attendants, who are mobile-only', () => {
+    expect(canOnboardStation('Attendant')).toBe(false);
   });
 });

@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   AppShell,
+  BootScreen,
+  SkeletonGrid,
   Login,
   WebOnboardingNotice,
   StationOverview,
@@ -22,18 +24,27 @@ import {
   onboardingProvisionedQueryKeys,
   queryKeys,
   stationsQueryOptions,
+  selectBootGate,
+  useSelectedStation,
+  startSessionBoot,
   setApiBaseUrl,
   setAuthToken,
+  installSupabaseTokenSource,
   clearClientSessionData,
   clearStoredOnboardingDraft,
   supabase,
   startSession,
+  keepSessionFresh,
   useRunTask,
   publishNavIntent,
 } from '@pump/ui';
 import { Station } from '@pump/shared';
+import { environmentTag, showDeveloperSurfaces } from './buildEnv.js';
 
 setApiBaseUrl(import.meta.env.VITE_API_URL);
+
+// Requests resolve the live session token per call rather than a stale snapshot.
+installSupabaseTokenSource();
 
 // Onboarding is done on the web console only; the desktop app links users there
 // and unlocks automatically once the station is READY_FOR_OPERATIONS. Override
@@ -43,33 +54,9 @@ const webConsoleUrl =
 
 const stationService = new CloudStationService();
 
-const environmentTag = (() => {
-  const explicitEnv = (import.meta.env.VITE_APP_ENV as string | undefined)?.toLowerCase();
-  if (explicitEnv === 'preview') return 'Preview';
-  if (explicitEnv === 'dev' || explicitEnv === 'development') return 'Dev';
-  if (import.meta.env.DEV) return 'Dev';
-
-  if (typeof window !== 'undefined') {
-    const hostname = window.location.hostname;
-    // Dev domain or localhost
-    if (hostname === 'localhost') return 'Local';
-    if (hostname === 'dev-pumpos.abdullahnettoor.workers.dev') return 'Dev';
-    // Cloudflare preview env deploys as <worker-name>-preview.<subdomain>.workers.dev
-    if (hostname.includes('-preview.')) return 'Preview';
-  }
-  return null;
-})();
-
-// Local development only: the Design System reference tab is never shown in
-// deployed (dev/preview/prod) builds.
-const isLocalDev = (() => {
-  if (import.meta.env.DEV) return true;
-  if (typeof window !== 'undefined') {
-    const h = window.location.hostname;
-    return h === 'localhost' || h === '127.0.0.1';
-  }
-  return false;
-})();
+// The environment badge and the developer-only Design System page both key off
+// the value baked into the bundle at build time — never off the serving host,
+// which is `localhost` in every packaged desktop build (#116). See buildEnv.ts.
 
 const App: React.FC = () => {
   const [currentPath, setCurrentPath] = useState('/dashboard');
@@ -93,9 +80,6 @@ const App: React.FC = () => {
     };
   }, []);
 
-  // Track globally active/selected station for setup context
-  const [stations, setStations] = useState<Station[]>([]);
-  const [selectedStation, setSelectedStation] = useState<Station | null>(null);
   const [loading, setLoading] = useState(true);
   const [rechecking, setRechecking] = useState(false);
 
@@ -106,6 +90,9 @@ const App: React.FC = () => {
   );
   const [userName, setUserName] = useState<string>('');
   const [profileError, setProfileError] = useState<string | null>(null);
+
+  const { stations, selectedStation, pickStation, stationsLoading } = useSelectedStation(!!session);
+
   const lastUserIdRef = useRef<string | null>(null);
   const resolvedRef = useRef(false);
   const qc = useQueryClient();
@@ -134,37 +121,34 @@ const App: React.FC = () => {
       }
 
       lastUserIdRef.current = currentSession.user.id;
-      setSelectedStation(null);
-      setStations([]);
+      pickStation(null);
 
       try {
         setLoading(true);
-        // Fetch session context from our backend (verifies JWT, gets user role & name)
-        const sessionData = await stationService.getCurrentSession();
+        // Both requests go out together. The station list needs the JWT (set
+        // just above), not the resolved role, so there is nothing to wait for —
+        // and only the session is awaited, because only the session gates the
+        // shell. Stations land in the query cache that `useStations` reads.
+        const sessionData = await startSessionBoot({
+          loadSession: () => stationService.getCurrentSession(),
+          prefetchStations: () => qc.prefetchQuery(stationsQueryOptions()),
+        });
+        // A session with no role would otherwise strand the operator: the gate
+        // holds the boot screen while the role is null, and that screen has no
+        // sign-out. Treat it as a failed lookup so they get the error card and
+        // its escape hatch instead of a spinner that never resolves.
+        if (!sessionData.user.role) {
+          throw new Error('Your account has no role assigned. Ask an Owner to grant access.');
+        }
         setUserRole(sessionData.user.role);
         resolvedRef.current = true;
         setUserName(sessionData.user.fullName?.trim() || sessionData.user.email);
 
-        // Stations rarely change — serve from the shared cache (+ localStorage) on
-        // repeat session resolves instead of re-hitting /setup/stations every time.
-        const list = await qc.fetchQuery(stationsQueryOptions());
-        setStations(list);
-        if (list.length > 0) {
-          const active =
-            list.find((station) => station.onboardingStatus === 'READY_FOR_OPERATIONS') || list[0];
-          setSelectedStation(active);
-          if (active.onboardingStatus !== 'READY_FOR_OPERATIONS') {
-            setCurrentPath('/onboarding');
-          } else {
-            // Only direct to dashboard if currently on onboarding or login
-            setCurrentPath((prev) =>
-              prev === '/onboarding' || prev === '/login' ? '/dashboard' : prev,
-            );
-          }
-        } else {
-          // No stations configured yet
-          setCurrentPath('/onboarding');
-        }
+        // Leave the login route as soon as we know who the user is, rather than
+        // waiting on the station list the way this used to. Nothing here needs
+        // stations: an unonboarded station is handled by the render gate, which
+        // owns that decision once the list settles.
+        setCurrentPath((prev) => (prev === '/login' ? '/dashboard' : prev));
       } catch (err: any) {
         console.error('Failed to resolve backend profile:', err);
         setProfileError(err.message || 'Verification failed. Profile not found.');
@@ -179,8 +163,7 @@ const App: React.FC = () => {
       lastUserIdRef.current = null;
       resolvedRef.current = false;
       setAuthToken('');
-      setStations([]);
-      setSelectedStation(null);
+      pickStation(null);
       setUserRole(null);
       setUserName('');
       setLoading(false);
@@ -208,8 +191,16 @@ const App: React.FC = () => {
     return stop;
   }, []);
 
+  useEffect(() => {
+    // A desktop window parked behind another gets its timers throttled, so
+    // Supabase's refresh can miss and the token expires in place. Drive the
+    // refresh from focus/visibility instead, so returning to an idle window
+    // never greets the operator with an auth error.
+    return keepSessionFresh();
+  }, []);
+
   const handleStationChange = (station: Station) => {
-    setSelectedStation(station);
+    pickStation(station.id);
     setCurrentPath('/dashboard');
   };
 
@@ -226,8 +217,8 @@ const App: React.FC = () => {
           ),
         );
       }
-      setStations(list);
-      setSelectedStation((prev) => list.find((s) => s.id === prev?.id) || list[0] || prev);
+      // No setStations/setSelectedStation: the refreshed list is already in the
+      // query cache that `useStations` reads, and selection derives from it.
     } catch (err) {
       console.error(err);
     } finally {
@@ -242,8 +233,21 @@ const App: React.FC = () => {
   const isStationReady =
     selectedStation && selectedStation.onboardingStatus === 'READY_FOR_OPERATIONS';
 
+  /**
+   * Chrome-only optimism: while the list is still in flight we do not know the
+   * onboarding status, and picking the *reduced* nav would collapse the sidebar
+   * and then expand it a round trip later — the shell-pop in its most visible
+   * form. The overwhelmingly common case is a returning operator whose station
+   * is operational, so draw that and stay still.
+   *
+   * Guessing wrong costs nothing visually: an unonboarded station routes to a
+   * full-page onboarding notice that replaces the shell outright, so there is
+   * no half-built sidebar left behind to re-flow.
+   */
+  const navAssumesReady = isStationReady || stationsLoading;
+
   // Dynamic Navigation items based on onboarding status
-  const navItems = isStationReady
+  const navItems = navAssumesReady
     ? [
         { label: 'Dashboard', path: '/dashboard' },
         { label: 'Shifts', path: '/shifts', roles: ['Owner', 'Manager', 'Accountant', 'Staff'] },
@@ -260,7 +264,7 @@ const App: React.FC = () => {
       ]
     : [{ label: 'Onboarding Setup', path: '/onboarding', roles: ['Owner', 'Manager'] }];
 
-  const navItemsWithDev = isLocalDev
+  const navItemsWithDev = showDeveloperSurfaces
     ? [...navItems, { label: 'Design System', path: '/design-system' }]
     : navItems;
 
@@ -372,22 +376,12 @@ const App: React.FC = () => {
       );
     }
 
-    // 3. Loading user context / roles
-    if (loading || !userRole) {
-      return (
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            minHeight: '60vh',
-            color: 'var(--text-muted)',
-            fontFamily: 'var(--font-mono)',
-          }}
-        >
-          Resolving operational permissions...
-        </div>
-      );
+    // 3. Session resolved, station list still arriving. The shell is already
+    //    drawn around this, so fill the content area with skeletons rather
+    //    than a sentence about internals — and never with a spinner, which
+    //    would read as a second, nested wait inside an app that looks ready.
+    if (loading || !userRole || stationsLoading) {
+      return <SkeletonGrid count={6} />;
     }
 
     // 4. Gating: station not onboarded yet. Onboarding is web-console only, so
@@ -421,7 +415,7 @@ const App: React.FC = () => {
         return (
           <StationOverview
             selectedStation={selectedStation}
-            onStationSelected={setSelectedStation}
+            onStationSelected={(station: Station | null) => pickStation(station?.id ?? null)}
           />
         );
 
@@ -460,33 +454,42 @@ const App: React.FC = () => {
           />
         );
       case '/design-system':
-        return isLocalDev ? <DesignSystem /> : <div>Not found</div>;
+        return showDeveloperSurfaces ? <DesignSystem /> : <div>Not found</div>;
       default:
         return <div>Not found</div>;
     }
   };
 
-  // Outer loading spinner before session checks resolve
-  if (loading && !session) {
-    return (
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          minHeight: '100vh',
-          backgroundColor: 'var(--bg-canvas)',
-          color: 'var(--text-muted)',
-          fontFamily: 'var(--font-mono)',
-        }}
-      >
-        Initializing connection to Supabase Auth...
-      </div>
-    );
+  /**
+   * One branded screen for the whole pre-session phase.
+   *
+   * This replaced two bare text divs — a full-page "Initializing connection to
+   * Supabase Auth..." and a "Resolving operational permissions..." — that were
+   * styled differently, so moving between them visibly restyled the page. The
+   * phases were never worth narrating: the operator cannot act on either.
+   *
+   * It now covers only the genuine wait before we know who the user is. Once
+   * the role lands, the shell is drawn and the station list arrives into it.
+   */
+  const gate = selectBootGate({
+    hasSession: !!session,
+    loading,
+    userRole,
+    profileError: !!profileError,
+    stationsLoading,
+    stationReady: !!isStationReady,
+    // Onboarding is web-console only, so a pre-ready station hands the page to
+    // the "finish on the web" notice.
+    notReadyTakesOver: true,
+  });
+
+  if (gate === 'boot') {
+    return <BootScreen />;
   }
 
-  // If not logged in, or if station is not ready (onboarding mode)
-  if (!session || !isStationReady) {
+  // Login, the profile-error card with its sign-out escape hatch, or the
+  // onboarding notice — each owns the viewport, so no shell around it.
+  if (gate === 'takeover') {
     return renderContent();
   }
 
@@ -502,6 +505,7 @@ const App: React.FC = () => {
       onLogout={handleLogout}
       stations={stations}
       selectedStation={selectedStation}
+      stationsLoading={stationsLoading}
       onStationChange={handleStationChange}
       environmentTag={environmentTag}
     >

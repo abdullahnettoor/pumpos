@@ -110,7 +110,7 @@ export const Step2BusinessRules: React.FC<Step2BusinessRulesProps> = ({
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
               gap: '12px',
             }}
           >
@@ -125,6 +125,7 @@ export const Step2BusinessRules: React.FC<Step2BusinessRulesProps> = ({
                   display: 'flex',
                   flexDirection: 'column',
                   gap: '8px',
+                  minWidth: 0,
                 }}
               >
                 <div
@@ -141,7 +142,15 @@ export const Step2BusinessRules: React.FC<Step2BusinessRulesProps> = ({
                   />
                 </div>
                 <div style={{ display: 'flex', gap: '8px' }}>
-                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                  <div
+                    style={{
+                      flex: 1,
+                      minWidth: 0,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '2px',
+                    }}
+                  >
                     <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Open</span>
                     <input
                       type="time"
@@ -153,13 +162,23 @@ export const Step2BusinessRules: React.FC<Step2BusinessRulesProps> = ({
                       style={{
                         ...inputStyle,
                         width: '100%',
+                        minWidth: 0,
+                        boxSizing: 'border-box',
                         height: '26px',
                         fontSize: '11px',
                         padding: '0 4px',
                       }}
                     />
                   </div>
-                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                  <div
+                    style={{
+                      flex: 1,
+                      minWidth: 0,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '2px',
+                    }}
+                  >
                     <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Close</span>
                     <input
                       type="time"
@@ -171,6 +190,8 @@ export const Step2BusinessRules: React.FC<Step2BusinessRulesProps> = ({
                       style={{
                         ...inputStyle,
                         width: '100%',
+                        minWidth: 0,
+                        boxSizing: 'border-box',
                         height: '26px',
                         fontSize: '11px',
                         padding: '0 4px',

@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Login, useStations, useMyAssignment } from '@pump/ui';
+import { BootScreen, Login, useStations, useMyAssignment } from '@pump/ui';
 import type { Station } from '@pump/shared';
 import { resolveBusinessDate } from '@pump/shared';
 import { useSession, signOut, type UserRole } from './lib/session.js';
@@ -96,14 +96,11 @@ export const App: React.FC = () => {
   const businessDate = bizDate ?? todayBiz ?? null;
   const showBusinessDay = tab === 'home' || tab === 'dssr';
 
+  // Same branded screen desktop and console show, so the wait looks like one
+  // product rather than three. It replaced "Connecting…", which named the
+  // network rather than what the operator is waiting for.
   if (status === 'loading') {
-    return (
-      <Centered>
-        <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
-          Connecting…
-        </p>
-      </Centered>
-    );
+    return <BootScreen />;
   }
 
   if (status === 'signed-out') {

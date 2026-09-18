@@ -8,6 +8,9 @@ import {
   OnboardingTankDraft,
   OperatingDaySchedule,
   WeeklyOperatingSchedule,
+  createFuelVatConfig,
+  isFuelVatDraft,
+  normalizeFuelTaxDraft,
 } from '@pump/shared';
 
 export interface OnboardingValidationIssue {
@@ -84,12 +87,12 @@ export function createFuelDraft(): OnboardingProductDraft {
     code: '',
     productType: 'FUEL',
     stockTracked: true,
+    // Fuel is outside GST, so the legacy "GST applies" flag is false, but the
+    // product is still taxed — under state VAT (FUEL_VAT), not exempt.
     isTaxable: false,
+    taxCategory: 'FUEL_VAT',
     unit: 'L',
-    taxConfig: {
-      gst_rate: 0,
-      hsn_code: '2710',
-    },
+    taxConfig: createFuelVatConfig(),
     isActive: true,
     currentPrice: 0,
   };
@@ -164,6 +167,16 @@ export function loadStoredOnboardingDraft(): StoredOnboardingDraft | null {
     if (parsed?.draft && !Array.isArray(parsed.draft.paymentTerminals)) {
       parsed.draft.paymentTerminals = [];
     }
+    // Backward-compat: older drafts stored fuels GST-shaped (gst_rate, no
+    // taxCategory). Re-home them onto FUEL_VAT so a resumed draft cannot be
+    // provisioned as a 0% GST product (#133).
+    if (Array.isArray(parsed?.draft?.products)) {
+      parsed.draft.products = parsed.draft.products.map((product) => {
+        if (product.productType !== 'FUEL' || isFuelVatDraft(product)) return product;
+        const { taxCategory, taxConfig } = normalizeFuelTaxDraft(product);
+        return { ...product, isTaxable: false, taxCategory, taxConfig };
+      });
+    }
     return parsed;
   } catch {
     return null;
@@ -226,6 +239,15 @@ export function validateOnboardingDraft(draft: OnboardingDraft): OnboardingValid
     }
     if (!product.code.trim()) {
       issues.push({ step: 3, message: 'Every fuel product needs a code.' });
+    }
+    // Fuel must be classified under state VAT, not GST/exempt. The UI only ever
+    // builds FUEL_VAT drafts, so a mismatch here means a corrupt or legacy draft
+    // that would otherwise be provisioned as a 0% GST product (#133).
+    if (product.taxCategory !== 'FUEL_VAT') {
+      issues.push({
+        step: 3,
+        message: `${product.name || 'Fuel product'} must be classified under Fuel VAT.`,
+      });
     }
     if (product.currentPrice <= 0) {
       issues.push({

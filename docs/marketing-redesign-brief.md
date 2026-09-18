@@ -189,8 +189,10 @@ creative checkpoint.
 
 ## First creative checkpoint
 
-Local preview: `/design-review/identity` in the Astro development server.
-The review route is excluded from production generation and marked noindex.
+Local preview was `/design-review/identity` in the Astro development server, a
+route excluded from production generation and marked noindex. It has since been
+retired — the checkpoint below is the record of a decision that is now settled,
+and the mark that shipped is none of these three. See `brand/pumpos-mark.svg`.
 
 | Direction        | Monogram                    | Typography                          | Homepage composition                                             |
 | ---------------- | --------------------------- | ----------------------------------- | ---------------------------------------------------------------- |

@@ -125,8 +125,8 @@ export const Step3FuelsCatalog: React.FC<Step3FuelsCatalogProps> = ({
                     {product.code || '—'}
                   </span>
                 </div>
-                <Chip tone="info" size="sm">
-                  Non-GST
+                <Chip tone={product.taxCategory === 'FUEL_VAT' ? 'info' : 'warning'} size="sm">
+                  {product.taxCategory === 'FUEL_VAT' ? 'Fuel VAT' : product.taxCategory}
                 </Chip>
               </div>
 

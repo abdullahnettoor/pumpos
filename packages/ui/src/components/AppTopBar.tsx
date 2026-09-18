@@ -18,6 +18,7 @@ import {
   Fuel,
 } from 'lucide-react';
 import { type Station } from '@pump/shared';
+import { preReadyQuickCreateIds, type PreReadyQuickCreateId } from './quickCreateActions.js';
 import type { NavIntent } from './AppShell.js';
 import { openQuickEntry } from '../quick-entry/store.js';
 import {
@@ -31,12 +32,14 @@ import {
   type UserMenuAction,
   type SyncStatus,
   type BusinessDayOption,
+  PumpOSLockup,
 } from '../pump-ds/index.js';
 import { useBusinessDayStatus, useCustomers, useSuppliers, useProducts } from '../query/hooks.js';
 import { useStationAlerts } from '../query/useStationAlerts.js';
 import { inr } from '../utils/format.js';
 import { useStationBusinessDate } from '../hooks/useStationBusinessDate.js';
 import { useRunTask } from '../utils/runTask.js';
+import { useDesktopTitleBar } from '../utils/desktopTitleBar.js';
 
 /**
  * AppTopBar — the data container that wires the pure pump-ds `TopBar` +
@@ -52,6 +55,8 @@ import { useRunTask } from '../utils/runTask.js';
 
 export interface AppTopBarProps {
   selectedStation: Station | null;
+  /** Station list still in flight — see TopBar.stationsLoading. */
+  stationsLoading?: boolean;
   navItems: { label: string; path: string; roles?: string[] }[];
   userRole: 'Owner' | 'Manager' | 'Accountant' | 'Staff';
   userName: string;
@@ -88,6 +93,7 @@ function formatDayLabel(iso: string): string {
 
 export const AppTopBar: React.FC<AppTopBarProps> = ({
   selectedStation,
+  stationsLoading = false,
   navItems,
   userRole,
   userName,
@@ -100,6 +106,9 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
 }) => {
   const runTask = useRunTask();
   const { open, setOpen } = useCommandPalette();
+  // Desktop only: makes this bar double as the OS window title bar (#117).
+  // `null` in the browser, where the top bar renders exactly as before.
+  const titleBar = useDesktopTitleBar();
   const canSeeFinancials = userRole !== 'Staff';
   const stationId = selectedStation?.id;
 
@@ -140,22 +149,25 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
   // --- quick create ---
   const quickCreate: QuickCreateAction[] = useMemo(() => {
     // Pre-ready (Organization hub): the only meaningful “create” is getting the
-    // station operational and inviting the team.
+    // station operational and inviting the team. Which of those a role may see
+    // is decided by `preReadyQuickCreateIds`, not here — see the note there on
+    // why the rule lives outside this component.
     if (!stationReady) {
-      return [
-        {
+      const preReady: Record<PreReadyQuickCreateId, QuickCreateAction> = {
+        'onboard-station': {
           id: 'onboard-station',
           label: 'Onboard station',
           icon: <Fuel />,
           onSelect: () => onNavigate('/onboarding'),
         },
-        {
+        'team-member': {
           id: 'team-member',
           label: 'Team member',
           icon: <Users />,
           onSelect: () => onNavigate('/organization'),
         },
-      ];
+      };
+      return preReadyQuickCreateIds(userRole).map((id) => preReady[id]);
     }
     const items: QuickCreateAction[] = [
       {
@@ -384,8 +396,9 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
   return (
     <>
       <TopBar
+        titleBar={titleBar}
         onToggleSidebar={onToggleSidebar}
-        brand="PumpOS"
+        brand={<PumpOSLockup />}
         businessDate={businessDate}
         businessDayStatus={businessDayStatus}
         showBusinessDay={stationReady}
@@ -396,6 +409,7 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
         }
         onSelectBusinessDay={(date) => onNavigate('/shifts', { openBusinessDayDate: date })}
         stationLabel={selectedStation?.name}
+        stationsLoading={stationsLoading}
         onOpenSearch={() => setOpen(true)}
         quickCreate={quickCreate}
         notifications={notifications}

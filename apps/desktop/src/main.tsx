@@ -11,10 +11,15 @@ import {
 } from '@pump/ui';
 import '@pump/ui/src/index.css';
 import '@pump/ui/src/pump-ds/tailwind.css';
+import { installDesktopTitleBar } from './titleBar.js';
 
 // Desktop: WKWebView (mac) / WebView2 (win) block browser file downloads, so
 // route generated PDF bytes through Tauri's native save dialog + filesystem.
 if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
+  // The app's own top bar doubles as the window title bar; register the
+  // platform's window-control geometry and commands (#117).
+  void installDesktopTitleBar();
+
   setPdfSaver(async (bytes, filename) => {
     const [{ save }, { writeFile }] = await Promise.all([
       import('@tauri-apps/plugin-dialog'),

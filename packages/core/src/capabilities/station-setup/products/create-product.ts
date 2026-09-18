@@ -6,7 +6,7 @@ import type {
   Result,
   UseCase,
 } from '../../../kernel/index.js';
-import { resolveBusinessDate } from '@pump/shared';
+import { createFuelVatConfig, resolveBusinessDate } from '@pump/shared';
 import type { CreateProductCommand } from './command.js';
 import { validateCreateProduct } from './validator.js';
 import { defaultInventoryType, type Product, type ProductRepository } from './ports.js';
@@ -62,7 +62,10 @@ export class CreateProduct implements UseCase<CreateProductCommand, Product> {
       taxConfig:
         cmd.taxConfig ??
         (taxCategory === 'FUEL_VAT'
-          ? { vat_rate: 0, hsn_code: '' }
+          ? // Share the one VAT-shaped default; HSN stays blank here for the
+            // operator to fill (generic create isn't fuel-HSN-specific). Pump
+            // prices are inclusive, matching createFuelVatConfig's default.
+            createFuelVatConfig({ hsn_code: '' })
           : { gst_rate: 18, hsn_code: '', price_inclusive: true }),
       isActive: true,
       createdAt: now,
