@@ -18,7 +18,7 @@ import type {
   CreditSaleRecord,
   StockMovementInput,
   StockMovementWriter,
-  ShiftSummaryWriter,
+  ShiftSummaryStore,
   AcceptedHandoverReading,
   AttendantHandover,
   HandoverContext,
@@ -886,7 +886,7 @@ export class DrizzleStockMovementWriter implements StockMovementWriter {
 }
 
 // ---------------- Shift Summaries ----------------
-export class DrizzleShiftSummaryWriter implements ShiftSummaryWriter {
+export class DrizzleShiftSummaryWriter implements ShiftSummaryStore {
   constructor(private readonly db: DbClient) {}
   async save(shiftId: string, snapshot: Record<string, unknown>): Promise<void> {
     await this.db.delete(schema.shiftSummaries).where(eq(schema.shiftSummaries.shiftId, shiftId));
@@ -896,6 +896,14 @@ export class DrizzleShiftSummaryWriter implements ShiftSummaryWriter {
   }
   async deleteForShift(shiftId: string): Promise<void> {
     await this.db.delete(schema.shiftSummaries).where(eq(schema.shiftSummaries.shiftId, shiftId));
+  }
+  async findByShift(shiftId: string): Promise<Record<string, unknown> | null> {
+    const [row] = await this.db
+      .select({ snapshotData: schema.shiftSummaries.snapshotData })
+      .from(schema.shiftSummaries)
+      .where(eq(schema.shiftSummaries.shiftId, shiftId))
+      .limit(1);
+    return (row?.snapshotData as Record<string, unknown>) ?? null;
   }
 }
 

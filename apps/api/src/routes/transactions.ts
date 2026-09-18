@@ -49,6 +49,7 @@ import { buildContext, createCommandTrace } from '../infra/context.js';
 import type { AuthenticatedPrincipal } from '../infra/authenticated-principal.js';
 import { loadStationClock } from '../infra/station-clock.js';
 import { lockStationInventory, runInTransaction } from '../infra/transaction.js';
+import { refreshShiftSummaryForShift } from '../infra/shift-summary-projection.js';
 import { TimestampDocumentNumberGenerator } from '../infra/doc-numbers.js';
 import {
   DrizzleCustomerRepository,
@@ -1229,8 +1230,11 @@ transactionsRouter.post('/expenses', async (c) => {
       businessDays: new DrizzleBusinessDayRepository(tx),
       events,
     }).execute(body, buildContext(user, { stationId: body?.stationId, ...clock }));
-    if (r.success)
+    if (r.success) {
       await new LedgerPostingService(tx).postExpense(user.organizationId, r.data, body?.accountId);
+      // Late attribution to a closed shift: keep its stored summary current.
+      await refreshShiftSummaryForShift(tx, events, user, (r.data as any)?.shiftId);
+    }
     return r;
   });
   return sendResult(c, result);
@@ -1261,7 +1265,10 @@ transactionsRouter.post('/expenses/:id/void', async (c) => {
       shifts: new DrizzleShiftRepository(tx),
       events,
     }).execute({ id, reason: body?.reason }, buildContext(user));
-    if (r.success) await new LedgerPostingService(tx).reverseExpense(id);
+    if (r.success) {
+      await new LedgerPostingService(tx).reverseExpense(id);
+      await refreshShiftSummaryForShift(tx, events, user, (r.data as any)?.shiftId);
+    }
     return r;
   });
   return sendResult(c, result);
@@ -1299,15 +1306,17 @@ transactionsRouter.post('/collections', async (c) => {
   // A "Credit" collection is a credit SALE (a receivable), not a payment. It is
   // recorded on the customer ledger with no drawer/stock impact.
   if (body?.paymentMethod === 'Credit') {
-    const result = await runInTransaction(c.var.db, (tx, events) =>
-      new RecordCreditSale({
+    const result = await runInTransaction(c.var.db, async (tx, events) => {
+      const r = await new RecordCreditSale({
         ledger: new DrizzleCustomerLedgerRepository(tx),
         customers: new DrizzleCustomerRepository(tx),
         shifts: new DrizzleShiftRepository(tx),
         businessDays: new DrizzleBusinessDayRepository(tx),
         events,
-      }).execute(body, buildContext(user, { stationId: body?.stationId, ...clock })),
-    );
+      }).execute(body, buildContext(user, { stationId: body?.stationId, ...clock }));
+      if (r.success) await refreshShiftSummaryForShift(tx, events, user, (r.data as any)?.shiftId);
+      return r;
+    });
     return sendResult(c, result);
   }
   // An "OMC" sale is paid by the Oil Company's fleet card and settled to the
@@ -1321,8 +1330,10 @@ transactionsRouter.post('/collections', async (c) => {
         businessDays: new DrizzleBusinessDayRepository(tx),
         events,
       }).execute(body, buildContext(user, { stationId: body?.stationId, ...clock }));
-      if (r.success)
+      if (r.success) {
         await new LedgerPostingService(tx).postOmcCardSale(user.organizationId, r.data);
+        await refreshShiftSummaryForShift(tx, events, user, (r.data as any)?.shiftId);
+      }
       return r;
     });
     return sendResult(c, result);
@@ -1337,12 +1348,14 @@ transactionsRouter.post('/collections', async (c) => {
       docNumbers,
       events,
     }).execute(body, buildContext(user, { stationId: body?.stationId, ...clock }));
-    if (r.success)
+    if (r.success) {
       await new LedgerPostingService(tx).postCollection(
         user.organizationId,
         r.data,
         body?.accountId,
       );
+      await refreshShiftSummaryForShift(tx, events, user, (r.data as any)?.shiftId);
+    }
     return r;
   });
   return sendResult(c, result);
@@ -1532,6 +1545,9 @@ transactionsRouter.post('/purchases', async (c) => {
       );
     }
 
+    if (r.success) {
+      await refreshShiftSummaryForShift(tx, events, user, (r.data.purchase as any)?.shiftId);
+    }
     return r;
   });
   return sendResult(c, result);

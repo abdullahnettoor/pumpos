@@ -209,6 +209,10 @@ export const EventActivityCatalog = {
     }),
   ]),
   [BusinessEvents.DSSR_GENERATED]: success(BusinessEvents.DSSR_GENERATED, 'DSSR generated'),
+  [BusinessEvents.SHIFT_SUMMARY_REFRESHED]: info(
+    BusinessEvents.SHIFT_SUMMARY_REFRESHED,
+    'Shift summary refreshed',
+  ),
   [BusinessEvents.FUEL_SALE_RECORDED]: success(
     BusinessEvents.FUEL_SALE_RECORDED,
     'Fuel sale recorded',

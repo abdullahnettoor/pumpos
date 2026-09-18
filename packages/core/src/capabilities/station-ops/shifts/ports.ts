@@ -228,3 +228,18 @@ export interface ShiftSummaryWriter {
   save(shiftId: string, snapshot: Record<string, unknown>): Promise<void>;
   deleteForShift(shiftId: string): Promise<void>;
 }
+
+/** Read+write access to the stored immutable shift-summary snapshot. */
+export interface ShiftSummaryStore extends ShiftSummaryWriter {
+  findByShift(shiftId: string): Promise<Record<string, unknown> | null>;
+}
+
+/**
+ * Enriches a core snapshot into the full presentation shape (nozzle/handover
+ * names, transaction lists, per-terminal rollups). Implemented by the API's
+ * read-model projection; core stays SQL-free. Must be idempotent: projecting
+ * an already-projected snapshot yields the same result.
+ */
+export interface ShiftSummaryProjector {
+  project(shift: Shift, baseSnapshot: Record<string, unknown>): Promise<Record<string, unknown>>;
+}
