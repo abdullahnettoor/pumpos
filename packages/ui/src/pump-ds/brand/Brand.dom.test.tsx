@@ -45,28 +45,16 @@ describe('PumpOSMark', () => {
     expect(markOf(container).outerHTML).not.toMatch(/#[0-9a-f]{3,8}/i);
   });
 
-  it('renders the same markup on a light surface and a brand surface', () => {
-    // The mark cannot special-case its background: one `currentColor` fill has
-    // to serve both, which is what makes it safe in the topbar and on a
-    // brand-colored panel.
-    const light = render(
-      <div style={{ color: 'var(--brand-primary)' }}>
-        <PumpOSMark />
-      </div>,
-    );
-    const onBrand = render(
-      <div style={{ background: 'var(--brand-primary)', color: '#fff' }}>
-        <PumpOSMark />
-      </div>,
-    );
-
-    expect(markOf(light.container).outerHTML).toBe(markOf(onBrand.container).outerHTML);
-  });
-
-  it('keeps the nozzle knocked out rather than painted, so the surface shows through', () => {
+  it('paints no surface of its own, so it is safe on any background', () => {
+    // What makes one mark work on both a light and a brand-colored surface:
+    // it draws only the glyph, and the nozzle is knocked out by the even-odd
+    // rule rather than painted, so whatever sits behind shows through it.
     const { container } = render(<PumpOSMark />);
+    const svg = markOf(container);
 
-    expect(markOf(container).getAttribute('fill-rule')).toBe('evenodd');
+    expect(svg.getAttribute('fill-rule')).toBe('evenodd');
+    expect(svg.querySelector('rect')).toBeNull();
+    expect(svg.querySelectorAll('path')).toHaveLength(1);
   });
 
   it('is decorative by default', () => {

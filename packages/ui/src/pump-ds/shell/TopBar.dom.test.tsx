@@ -129,11 +129,14 @@ describe('the brand slot as part of the drag region', () => {
     // an <svg> logo sitting in the slot would become the target and kill the
     // drag over the one element users instinctively grab. The slot is
     // decorative, so its contents take no pointer events.
-    render(<TopBar {...baseProps} titleBar={titleBar} brand={<svg data-testid="logo" />} />);
+    const { container } = render(
+      <TopBar {...baseProps} titleBar={titleBar} brand={<svg data-testid="logo" />} />,
+    );
 
     const slot = screen.getByTestId('logo').parentElement as HTMLElement;
-    expect(slot.hasAttribute('data-tauri-drag-region')).toBe(true);
     expect(slot.className).toContain('pointer-events-none');
+    // The pointer falls through to the bar itself, which is the drag region.
+    expect(slot.closest(DRAG)).toBe(container.firstElementChild);
   });
 
   it('leaves the brand interactive on the web, where there is no drag to protect', () => {

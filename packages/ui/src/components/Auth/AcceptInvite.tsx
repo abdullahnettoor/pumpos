@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../../services/supabase.js';
 import { Form, Icon, PumpOSLockup } from '../../pump-ds/index.js';
+import { authBrandHeaderStyle } from './brandHeader.js';
 
 /**
  * AcceptInvite — the landing page for a Supabase invite / recovery link.
@@ -157,15 +158,7 @@ export const AcceptInvite: React.FC<AcceptInviteProps> = ({ onDone }) => {
         className="animate-fade-in"
       >
         <div style={{ textAlign: 'center' }}>
-          <PumpOSLockup
-            orientation="stacked"
-            style={{
-              fontSize: '18px',
-              fontWeight: 700,
-              color: 'var(--brand-primary)',
-              letterSpacing: '-0.01em',
-            }}
-          />
+          <PumpOSLockup orientation="stacked" style={authBrandHeaderStyle} />
           <h1
             style={{
               fontSize: '14px',
