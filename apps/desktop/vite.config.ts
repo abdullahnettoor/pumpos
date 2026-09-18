@@ -5,9 +5,9 @@ import tailwindcss from '@tailwindcss/vite';
 /**
  * A packaged desktop build resolves its environment from `VITE_APP_ENV` alone
  * (see src/buildEnv.ts) — it cannot fall back to the serving host, which is
- * always `localhost`. So a bundle built without that variable would silently
- * ship as "production": right for the real production release, wrong and
- * invisible for every other packaged build.
+ * always `localhost`. So a bundle built without that variable, or with a
+ * misspelled one, would silently ship as "production": right for the real
+ * production release, wrong and invisible for every other packaged build.
  *
  * Refuse to produce one. `TAURI_ENV_PLATFORM` is set by the Tauri CLI when it
  * invokes this build to package an app, so the gate applies exactly to packaged
@@ -15,11 +15,18 @@ import tailwindcss from '@tailwindcss/vite';
  */
 function assertPackagedBuildDeclaresEnvironment() {
   const isPackagedBuild = !!process.env.TAURI_ENV_PLATFORM;
-  if (isPackagedBuild && !process.env.VITE_APP_ENV?.trim()) {
+  if (!isPackagedBuild) return;
+
+  const declared = process.env.VITE_APP_ENV?.trim().toLowerCase();
+  // Mirrors buildEnv.ts's accepted values, including its aliases. Kept here as
+  // a literal because a vite config cannot import the app's TypeScript source.
+  const accepted = ['local', 'development', 'dev', 'preview', 'production', 'prod'];
+  if (!declared || !accepted.includes(declared)) {
     throw new Error(
-      'VITE_APP_ENV is required when packaging the desktop app ' +
-        '(one of: development, dev, preview, production). ' +
-        'Set it in the build environment — see apps/desktop/src/buildEnv.ts.',
+      `VITE_APP_ENV must be one of: ${accepted.join(', ')} when packaging the desktop app ` +
+        `(got ${declared ? `"${process.env.VITE_APP_ENV ?? ''}"` : 'no value'}). ` +
+        'The packaged app has no other way to tell its environment — ' +
+        'see apps/desktop/src/buildEnv.ts.',
     );
   }
 }

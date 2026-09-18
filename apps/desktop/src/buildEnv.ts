@@ -17,13 +17,18 @@
  * than "nobody set the variable".
  */
 
-export type BuildEnvironment = 'development' | 'dev' | 'preview' | 'production';
+/**
+ * `local` is a developer's own machine; `dev` and `preview` are the deployed
+ * non-production environments. They are deliberately distinct: only `local`
+ * exposes developer-only surfaces.
+ */
+export type BuildEnvironment = 'local' | 'dev' | 'preview' | 'production';
 
 /** Badge text for an environment. Production is deliberately unbadged. */
 export type EnvironmentTag = 'Local' | 'Dev' | 'Preview' | null;
 
 const TAGS: Record<BuildEnvironment, EnvironmentTag> = {
-  development: 'Local',
+  local: 'Local',
   dev: 'Dev',
   preview: 'Preview',
   production: null,
@@ -37,18 +42,18 @@ const TAGS: Record<BuildEnvironment, EnvironmentTag> = {
  * value in a packaged build resolves to `production`: the vite config already
  * refused to produce such a bundle, so treating the leftover case as production
  * fails safe (no badge, no developer-only pages) rather than mislabelling a
- * real install.
+ * real install as local.
  */
 export function resolveBuildEnvironment(
   rawAppEnv: string | undefined,
   isDevServer: boolean,
 ): BuildEnvironment {
   const value = rawAppEnv?.trim().toLowerCase();
-  if (value === 'development' || value === 'local') return 'development';
+  if (value === 'local' || value === 'development') return 'local';
   if (value === 'dev') return 'dev';
   if (value === 'preview') return 'preview';
   if (value === 'production' || value === 'prod') return 'production';
-  return isDevServer ? 'development' : 'production';
+  return isDevServer ? 'local' : 'production';
 }
 
 export function environmentTagFor(environment: BuildEnvironment): EnvironmentTag {
@@ -57,7 +62,7 @@ export function environmentTagFor(environment: BuildEnvironment): EnvironmentTag
 
 /** Developer-only surfaces (the Design System reference page) are local-only. */
 export function showsDeveloperSurfaces(environment: BuildEnvironment): boolean {
-  return environment === 'development';
+  return environment === 'local';
 }
 
 export const buildEnvironment = resolveBuildEnvironment(

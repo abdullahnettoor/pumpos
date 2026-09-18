@@ -13,7 +13,7 @@ export { OnboardingWizard } from './components/StationSetup/OnboardingWizard.js'
 export { WebOnboardingNotice } from './components/StationSetup/WebOnboardingNotice.js';
 export type { WebOnboardingNoticeProps } from './components/StationSetup/WebOnboardingNotice.js';
 export { isDesktopApp, openExternal, setExternalOpener } from './utils/platform.js';
-export { setDesktopTitleBar, getDesktopTitleBar } from './utils/desktopTitleBar.js';
+export { setDesktopTitleBar } from './utils/desktopTitleBar.js';
 export type {
   DesktopTitleBar,
   DesktopWindowControls,

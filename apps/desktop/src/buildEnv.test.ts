@@ -6,17 +6,17 @@ describe('resolveBuildEnvironment', () => {
     expect(resolveBuildEnvironment('production', false)).toBe('production');
     expect(resolveBuildEnvironment('preview', false)).toBe('preview');
     expect(resolveBuildEnvironment('dev', false)).toBe('dev');
-    expect(resolveBuildEnvironment('development', false)).toBe('development');
+    expect(resolveBuildEnvironment('local', false)).toBe('local');
   });
 
   it('is tolerant of case and surrounding whitespace', () => {
     expect(resolveBuildEnvironment('  Preview \n', false)).toBe('preview');
     expect(resolveBuildEnvironment('PROD', false)).toBe('production');
-    expect(resolveBuildEnvironment('Local', false)).toBe('development');
+    expect(resolveBuildEnvironment('Development', false)).toBe('local');
   });
 
   it('treats the Vite dev server as local development', () => {
-    expect(resolveBuildEnvironment(undefined, true)).toBe('development');
+    expect(resolveBuildEnvironment(undefined, true)).toBe('local');
   });
 
   it('falls back to production for a packaged build, never to local', () => {
@@ -36,13 +36,13 @@ describe('environmentTagFor', () => {
   it('badges every non-production environment', () => {
     expect(environmentTagFor('dev')).toBe('Dev');
     expect(environmentTagFor('preview')).toBe('Preview');
-    expect(environmentTagFor('development')).toBe('Local');
+    expect(environmentTagFor('local')).toBe('Local');
   });
 });
 
 describe('showsDeveloperSurfaces', () => {
   it('exposes the Design System only during local development', () => {
-    expect(showsDeveloperSurfaces('development')).toBe(true);
+    expect(showsDeveloperSurfaces('local')).toBe(true);
     expect(showsDeveloperSurfaces('dev')).toBe(false);
     expect(showsDeveloperSurfaces('preview')).toBe(false);
     expect(showsDeveloperSurfaces('production')).toBe(false);

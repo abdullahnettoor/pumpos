@@ -6,4 +6,5 @@ export type {
   UserMenuAction,
   BusinessDayOption,
   TitleBarIntegration,
+  WindowControlCommands,
 } from './TopBar.js';

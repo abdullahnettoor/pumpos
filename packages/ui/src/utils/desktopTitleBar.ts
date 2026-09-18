@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react';
+import type { TitleBarIntegration, WindowControlCommands } from '../pump-ds/shell/index.js';
 
 /**
  * Desktop title-bar integration (#117).
@@ -28,11 +29,7 @@ export interface DesktopWindowState {
 }
 
 /** Native window commands, provided only when the app draws its own buttons. */
-export interface DesktopWindowControls {
-  minimize: () => void | Promise<void>;
-  toggleMaximize: () => void | Promise<void>;
-  close: () => void | Promise<void>;
-}
+export type DesktopWindowControls = WindowControlCommands;
 
 export interface DesktopTitleBar {
   /** Side of the top bar the host platform's window controls occupy. */
@@ -45,9 +42,7 @@ export interface DesktopTitleBar {
   subscribe: (onChange: () => void) => () => void;
 }
 
-const NOT_DESKTOP = null;
-
-let titleBar: DesktopTitleBar | null = NOT_DESKTOP;
+let titleBar: DesktopTitleBar | null = null;
 const registryListeners = new Set<() => void>();
 
 /** Called once by the desktop shell at startup. */
@@ -56,31 +51,23 @@ export function setDesktopTitleBar(next: DesktopTitleBar | null): void {
   registryListeners.forEach((listener) => listener());
 }
 
-export function getDesktopTitleBar(): DesktopTitleBar | null {
-  return titleBar;
-}
-
 /**
- * The title bar as the top bar should render it right now: `null` on the web,
- * and on desktop an inset that collapses to 0 in full screen (where the OS
- * hides its controls) — so the app's own controls reclaim that space.
+ * The title bar as the top bar should render it right now: `null` on the web.
+ *
+ * Full screen only collapses the reserved inset — that space exists for
+ * controls the OS paints over the bar, and in full screen the OS hides them.
+ * The app's OWN buttons must survive: an undecorated window in full screen has
+ * no other way back out, since there is no OS chrome to fall back on.
  */
-export interface ResolvedTitleBar {
-  controlsSide: 'left' | 'right';
-  controlsInset: number;
-  controls: DesktopWindowControls | null;
-  maximized: boolean;
-}
-
 export function resolveTitleBar(
   bar: DesktopTitleBar | null,
   state: DesktopWindowState,
-): ResolvedTitleBar | null {
+): TitleBarIntegration | null {
   if (!bar) return null;
   return {
     controlsSide: bar.controlsSide,
     controlsInset: state.fullscreen ? 0 : bar.controlsInset,
-    controls: state.fullscreen ? null : bar.controls,
+    controls: bar.controls,
     maximized: state.maximized,
   };
 }
@@ -101,9 +88,9 @@ function subscribeAll(onChange: () => void): () => void {
  * the returned object differs by reference. Cache the last resolved value and
  * hand back the same object while nothing meaningful changed.
  */
-let cachedSnapshot: ResolvedTitleBar | null = null;
+let cachedSnapshot: TitleBarIntegration | null = null;
 
-function readSnapshot(): ResolvedTitleBar | null {
+function readSnapshot(): TitleBarIntegration | null {
   const next = resolveTitleBar(titleBar, titleBar?.getState() ?? DEFAULT_STATE);
   const prev = cachedSnapshot;
   const unchanged =
@@ -121,12 +108,6 @@ function readSnapshot(): ResolvedTitleBar | null {
 /** Server/SSR snapshot: no window chrome to integrate with. */
 const readServerSnapshot = () => null;
 
-export function useDesktopTitleBar(): ResolvedTitleBar | null {
+export function useDesktopTitleBar(): TitleBarIntegration | null {
   return useSyncExternalStore(subscribeAll, readSnapshot, readServerSnapshot);
-}
-
-/** Test-only: drop any registered title bar and cached snapshot. */
-export function resetDesktopTitleBar(): void {
-  cachedSnapshot = null;
-  setDesktopTitleBar(NOT_DESKTOP);
 }

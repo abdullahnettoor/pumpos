@@ -45,9 +45,11 @@ describe('resolveTitleBar', () => {
     expect(resolved?.controlsInset).toBe(0);
   });
 
-  it('drops the app-drawn controls in full screen too', () => {
+  it('keeps the app-drawn controls in full screen', () => {
+    // An undecorated window in full screen has no OS chrome to fall back on:
+    // hiding our own buttons would leave no way back out.
     const resolved = resolveTitleBar(windowsBar, { fullscreen: true, maximized: true });
-    expect(resolved?.controls).toBeNull();
+    expect(resolved?.controls).toBe(controls);
   });
 
   it('keeps reserving space when merely maximised', () => {

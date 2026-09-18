@@ -114,17 +114,24 @@ export interface TopBarProps {
   className?: string;
 }
 
+/** Native window commands, wired by the desktop shell. */
+export interface WindowControlCommands {
+  minimize: () => void | Promise<void>;
+  toggleMaximize: () => void | Promise<void>;
+  close: () => void | Promise<void>;
+}
+
 /** The subset of the desktop title-bar contract this pure component needs. */
 export interface TitleBarIntegration {
   controlsSide: 'left' | 'right';
+  /**
+   * Space (px) to reserve on `controlsSide` for controls the OS paints over
+   * this bar. Zero where the app draws its own, which take real layout space.
+   */
   controlsInset: number;
   maximized: boolean;
   /** Non-null on undecorated windows, where the app draws the buttons. */
-  controls: {
-    minimize: () => void | Promise<void>;
-    toggleMaximize: () => void | Promise<void>;
-    close: () => void | Promise<void>;
-  } | null;
+  controls: WindowControlCommands | null;
 }
 
 const IS_MAC =
@@ -169,7 +176,7 @@ const IconBtn = forwardRef<
  * drag from them; a click is a click.
  */
 const WindowControls: React.FC<{
-  controls: NonNullable<TitleBarIntegration['controls']>;
+  controls: WindowControlCommands;
   maximized: boolean;
 }> = ({ controls, maximized }) => {
   const btn =
