@@ -21,6 +21,7 @@ import {
   FinalizeOnboardingPayload,
   FinalizeOnboardingResult,
 } from '@pump/shared';
+import { getAccessToken, refreshAccessToken } from './auth/tokenStore.js';
 
 // Base API configuration. App shells should call setApiBaseUrl() at startup.
 let apiBase = 'http://localhost:8787/api';
@@ -37,13 +38,7 @@ export function setApiBaseUrl(url?: string) {
   apiBase = `${normalized}/api`;
 }
 
-// For local testing, we attach a mock token.
-// The app can set this dynamically upon user selection.
-let activeToken = '';
-
-export function setAuthToken(token: string) {
-  activeToken = token;
-}
+export { setAuthToken } from './auth/tokenStore.js';
 
 export type RecordHandoverPayload = AttendantHandoverInput;
 
@@ -120,14 +115,65 @@ export interface RecordStockCountResult {
   varianceQuantity: number;
 }
 
-function getHeaders() {
+function getHeaders(token: string) {
   return {
     'Content-Type': 'application/json',
-    Authorization: `Bearer ${activeToken}`,
+    Authorization: `Bearer ${token}`,
   };
 }
 
 type ApiError = Error & { code?: string; details?: Record<string, any>; status?: number };
+
+/** A 401 that names a dead token — worth one refresh-and-replay. */
+function isExpiredTokenError(error: ApiError) {
+  return error.status === 401 && error.code === 'UNAUTHORIZED';
+}
+
+/**
+ * One round trip. Returns the failure instead of throwing it so `request` can
+ * decide whether it is worth a refresh-and-replay.
+ */
+async function attempt<T>(
+  url: string,
+  options: RequestInit,
+  headers: Record<string, string>,
+): Promise<{ ok: true; data: T } | { ok: false; error: ApiError }> {
+  const fail = (message: string, code: string, status?: number) => {
+    const error = new Error(message) as ApiError;
+    error.code = code;
+    if (status !== undefined) error.status = status;
+    return { ok: false as const, error };
+  };
+
+  let response: Response;
+  try {
+    response = await fetch(url, { ...options, headers });
+  } catch {
+    return fail('Network error — please check your connection and try again.', 'NETWORK');
+  }
+
+  let res: any;
+  try {
+    res = await response.json();
+  } catch {
+    return fail(
+      response.ok
+        ? 'Unexpected empty response from the server.'
+        : `Request failed (${response.status}).`,
+      'BAD_RESPONSE',
+      response.status,
+    );
+  }
+
+  if (!res.success) {
+    const error = new Error(res.error?.message || 'API request failed') as ApiError;
+    error.code = res.error?.code;
+    error.details = res.error?.details;
+    error.status = response.status;
+    return { ok: false, error };
+  }
+  return { ok: true, data: res.data as T };
+}
 
 /**
  * Shared typed API client. Unwraps the `{ success, data }` envelope and throws a
@@ -137,6 +183,11 @@ type ApiError = Error & { code?: string; details?: Record<string, any>; status?:
  * logical action (its idempotency middleware caches the first response). Keys are
  * opt-in — reuse the SAME key across explicit retries of one action, or the
  * server will treat each call as distinct.
+ *
+ * The access token is resolved per call, and a 401 naming an expired/invalid
+ * token buys exactly one session refresh and one replay — with the SAME
+ * `Idempotency-Key`, so a replayed mutation cannot double-apply. Only the second
+ * failure reaches the caller.
  */
 async function request<T>(
   path: string,
@@ -144,47 +195,28 @@ async function request<T>(
   extras: { idempotencyKey?: string } = {},
 ): Promise<T> {
   const url = `${apiBase}${path}`;
-  const headers: Record<string, string> = {
-    ...getHeaders(),
-    ...(options.headers as Record<string, string> | undefined),
+  const overrides = (options.headers as Record<string, string> | undefined) ?? {};
+
+  const buildHeaders = (token: string): Record<string, string> => {
+    const headers: Record<string, string> = { ...getHeaders(token), ...overrides };
+    if (extras.idempotencyKey && !headers['Idempotency-Key'] && !headers['idempotency-key']) {
+      headers['Idempotency-Key'] = extras.idempotencyKey;
+    }
+    return headers;
   };
-  if (extras.idempotencyKey && !headers['Idempotency-Key'] && !headers['idempotency-key']) {
-    headers['Idempotency-Key'] = extras.idempotencyKey;
-  }
 
-  let response: Response;
-  try {
-    response = await fetch(url, { ...options, headers });
-  } catch {
-    const error = new Error(
-      'Network error — please check your connection and try again.',
-    ) as ApiError;
-    error.code = 'NETWORK';
-    throw error;
-  }
+  const token = await getAccessToken();
+  const first = await attempt<T>(url, options, buildHeaders(token));
+  if (first.ok) return first.data;
+  if (!isExpiredTokenError(first.error)) throw first.error;
 
-  let res: any;
-  try {
-    res = await response.json();
-  } catch {
-    const error = new Error(
-      response.ok
-        ? 'Unexpected empty response from the server.'
-        : `Request failed (${response.status}).`,
-    ) as ApiError;
-    error.code = 'BAD_RESPONSE';
-    error.status = response.status;
-    throw error;
-  }
+  // Concurrent requests that hit the same expired token share this one refresh.
+  const refreshed = await refreshAccessToken();
+  if (!refreshed) throw first.error;
 
-  if (!res.success) {
-    const error = new Error(res.error?.message || 'API request failed') as ApiError;
-    error.code = res.error?.code;
-    error.details = res.error?.details;
-    error.status = response.status;
-    throw error;
-  }
-  return res.data;
+  const second = await attempt<T>(url, options, buildHeaders(refreshed));
+  if (second.ok) return second.data;
+  throw second.error;
 }
 
 export class CloudStationService implements IStationService {

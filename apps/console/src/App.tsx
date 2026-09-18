@@ -24,6 +24,7 @@ import {
   stationsQueryOptions,
   setApiBaseUrl,
   setAuthToken,
+  installSupabaseTokenSource,
   clearClientSessionData,
   clearStoredOnboardingDraft,
   supabase,
@@ -50,6 +51,9 @@ const resolveApiUrl = (): string | undefined => {
 };
 
 setApiBaseUrl(resolveApiUrl());
+
+// Requests resolve the live session token per call rather than a stale snapshot.
+installSupabaseTokenSource();
 
 const stationService = new CloudStationService();
 

@@ -24,16 +24,21 @@ import {
   stationsQueryOptions,
   setApiBaseUrl,
   setAuthToken,
+  installSupabaseTokenSource,
   clearClientSessionData,
   clearStoredOnboardingDraft,
   supabase,
   startSession,
+  keepSessionFresh,
   useRunTask,
   publishNavIntent,
 } from '@pump/ui';
 import { Station } from '@pump/shared';
 
 setApiBaseUrl(import.meta.env.VITE_API_URL);
+
+// Requests resolve the live session token per call rather than a stale snapshot.
+installSupabaseTokenSource();
 
 // Onboarding is done on the web console only; the desktop app links users there
 // and unlocks automatically once the station is READY_FOR_OPERATIONS. Override
@@ -206,6 +211,14 @@ const App: React.FC = () => {
     // startSession (@pump/ui) and is covered by its own tests.
     const { stop } = startSession((session) => handleSessionRef.current(session));
     return stop;
+  }, []);
+
+  useEffect(() => {
+    // A desktop window parked behind another gets its timers throttled, so
+    // Supabase's refresh can miss and the token expires in place. Drive the
+    // refresh from focus/visibility instead, so returning to an idle window
+    // never greets the operator with an auth error.
+    return keepSessionFresh();
   }, []);
 
   const handleStationChange = (station: Station) => {

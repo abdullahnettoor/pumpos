@@ -36,6 +36,20 @@ export {
   subscribeToSessionChanges,
 } from './services/auth/sessionBootstrap.js';
 export type { SessionReader, StoredSession } from './services/auth/sessionBootstrap.js';
+export {
+  setTokenSource,
+  getAccessToken,
+  refreshAccessToken,
+  resetAuthTokenState,
+} from './services/auth/tokenStore.js';
+export type { TokenSource } from './services/auth/tokenStore.js';
+export {
+  createSupabaseTokenSource,
+  installSupabaseTokenSource,
+  keepSessionFresh,
+} from './services/auth/supabaseTokenSource.js';
+export type { SessionTokenClient } from './services/auth/supabaseTokenSource.js';
+
 export * from './services/cloud.js';
 export { exportReportPdf, exportReactPdf, setPdfSaver } from './services/exportPdf.js';
 export {
