@@ -1,7 +1,9 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   AppShell,
+  BootScreen,
+  SkeletonGrid,
   Login,
   AcceptInvite,
   OnboardingWizard,
@@ -22,6 +24,9 @@ import {
   CloudStationService,
   onboardingProvisionedQueryKeys,
   stationsQueryOptions,
+  selectBootGate,
+  startSessionBoot,
+  useStations,
   setApiBaseUrl,
   setAuthToken,
   installSupabaseTokenSource,
@@ -110,9 +115,6 @@ export const App: React.FC = () => {
     };
   }, []);
 
-  // Track globally active/selected station for setup context
-  const [stations, setStations] = useState<Station[]>([]);
-  const [selectedStation, setSelectedStation] = useState<Station | null>(null);
   const [loading, setLoading] = useState(true);
 
   // Supabase Auth and Backend user context states
@@ -126,6 +128,24 @@ export const App: React.FC = () => {
     code?: string;
     status?: number;
   } | null>(null);
+  // Stations stream in through the query layer rather than being awaited during
+  // sign-in, so the shell can be drawn as soon as we know who the user is.
+  // `enabled` keys off the session, not the resolved role, so this flies
+  // alongside the session call instead of queueing behind it.
+  const stationsQ = useStations({ enabled: !!session });
+  const stations = useMemo<Station[]>(() => stationsQ.data ?? [], [stationsQ.data]);
+
+  // Selection is derived, not effect-synced: an effect would need the list to
+  // have arrived before it could set state, which is a second render and a
+  // second chance to flash. `pickedStationId` holds only an explicit choice.
+  const [pickedStationId, setPickedStationId] = useState<string | null>(null);
+  const selectedStation = useMemo<Station | null>(() => {
+    if (!stations.length) return null;
+    const picked = pickedStationId && stations.find((st) => st.id === pickedStationId);
+    if (picked) return picked;
+    return stations.find((st) => st.onboardingStatus === 'READY_FOR_OPERATIONS') ?? stations[0];
+  }, [stations, pickedStationId]);
+
   const lastUserIdRef = useRef<string | null>(null);
   const resolvedRef = useRef(false);
   const qc = useQueryClient();
@@ -155,37 +175,27 @@ export const App: React.FC = () => {
       }
 
       lastUserIdRef.current = currentSession.user.id;
-      setSelectedStation(null);
-      setStations([]);
+      setPickedStationId(null);
 
       try {
         setLoading(true);
-        // Fetch session context from our backend (verifies JWT, gets user role & name)
-        const sessionData = await stationService.getCurrentSession();
+        // Both requests go out together. The station list needs the JWT (set
+        // just above), not the resolved role, so there is nothing to wait for —
+        // and only the session is awaited, because only the session gates the
+        // shell. Stations land in the query cache that `useStations` reads.
+        const sessionData = await startSessionBoot({
+          loadSession: () => stationService.getCurrentSession(),
+          prefetchStations: () => qc.prefetchQuery(stationsQueryOptions()),
+        });
         setUserRole(sessionData.user.role);
         resolvedRef.current = true;
         setUserName(sessionData.user.fullName?.trim() || sessionData.user.email);
 
-        // Stations rarely change — serve from the shared cache (+ localStorage) on
-        // repeat session resolves instead of re-hitting /setup/stations every time.
-        const list = await qc.fetchQuery(stationsQueryOptions());
-        setStations(list);
-        if (list.length > 0) {
-          const active =
-            list.find((station) => station.onboardingStatus === 'READY_FOR_OPERATIONS') || list[0];
-          setSelectedStation(active);
-          if (active.onboardingStatus !== 'READY_FOR_OPERATIONS') {
-            setCurrentPath('/dashboard');
-          } else {
-            // Only direct to dashboard if currently on onboarding or login
-            setCurrentPath((prev) =>
-              prev === '/onboarding' || prev === '/login' ? '/dashboard' : prev,
-            );
-          }
-        } else {
-          // No stations yet — land on the dashboard (getting-started hero).
-          setCurrentPath('/dashboard');
-        }
+        // Leave the login route as soon as we know who the user is, rather than
+        // waiting on the station list the way this used to. Nothing here needs
+        // stations: an unonboarded station is handled by the render gate, which
+        // owns that decision once the list settles.
+        setCurrentPath((prev) => (prev === '/login' ? '/dashboard' : prev));
       } catch (err: any) {
         console.error('Failed to resolve backend profile:', err);
         setProfileError({
@@ -204,8 +214,7 @@ export const App: React.FC = () => {
       lastUserIdRef.current = null;
       resolvedRef.current = false;
       setAuthToken('');
-      setStations([]);
-      setSelectedStation(null);
+      setPickedStationId(null);
       setUserRole(null);
       setUserName('');
       setLoading(false);
@@ -237,7 +246,7 @@ export const App: React.FC = () => {
   const handleStationChange = (station: Station) => {
     // A pending deep link points at the previous station's entities.
     clearNavIntent();
-    setSelectedStation(station);
+    setPickedStationId(station.id);
     // Dashboard is home for both ready and pre-ready stations (the dashboard
     // shows a getting-started hero until the station is operational).
     setCurrentPath('/dashboard');
@@ -250,11 +259,10 @@ export const App: React.FC = () => {
           qc.invalidateQueries({ queryKey }),
         ),
       );
-      const list = await qc.fetchQuery(stationsQueryOptions());
-      setStations(list);
-      setSelectedStation(
-        list.find((station) => station.id === completedStation.id) || completedStation,
-      );
+      // Refreshed list lands in the query cache that `useStations` reads;
+      // selection derives from it, so only the explicit pick is set here.
+      await qc.fetchQuery(stationsQueryOptions());
+      setPickedStationId(completedStation.id);
     } catch (err) {
       console.error(err);
     }
@@ -268,8 +276,19 @@ export const App: React.FC = () => {
   const isStationReady =
     selectedStation && selectedStation.onboardingStatus === 'READY_FOR_OPERATIONS';
 
+  /** Station list still in flight — distinct from "came back empty". */
+  const stationsLoading = !!session && !stationsQ.isSuccess && !stationsQ.isError;
+
+  /**
+   * Chrome-only optimism: while the list is in flight the onboarding status is
+   * unknown, and choosing the reduced nav would collapse the sidebar and expand
+   * it a round trip later. Draw the common case (an operational station) and
+   * stay still; a pre-ready station swaps the content area, not the chrome.
+   */
+  const navAssumesReady = isStationReady || stationsLoading;
+
   // Dynamic Navigation items based on onboarding status
-  const navItems = isStationReady
+  const navItems = navAssumesReady
     ? [
         { label: 'Dashboard', path: '/dashboard' },
         { label: 'Shifts', path: '/shifts', roles: ['Owner', 'Manager', 'Accountant', 'Staff'] },
@@ -420,26 +439,17 @@ export const App: React.FC = () => {
       );
     }
 
-    // 3. Loading user context / roles
-    if (loading || !userRole) {
-      return (
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            minHeight: '60vh',
-            color: 'var(--text-muted)',
-            fontFamily: 'var(--font-mono)',
-          }}
-        >
-          Resolving operational permissions...
-        </div>
-      );
+    // 3. Session resolved, station list still arriving. The shell is already
+    //    drawn around this, so fill the content area with skeletons rather than
+    //    a sentence about internals — and never with a spinner, which would
+    //    read as a second, nested wait inside an app that already looks ready.
+    if (loading || !userRole || stationsLoading) {
+      return <SkeletonGrid count={6} />;
     }
 
     // 4. Gating check: Block operators/staff if station setup is not completed
     if (
+      !stationsLoading &&
       !isStationReady &&
       ((userRole as string) === 'Staff' || (userRole as string) === 'Accountant')
     ) {
@@ -476,6 +486,7 @@ export const App: React.FC = () => {
     // station is READY). The Organization hub and the onboarding wizard are also
     // reachable; any other (operational) destination falls back to the Dashboard.
     if (
+      !stationsLoading &&
       !isStationReady &&
       currentPath !== '/onboarding' &&
       currentPath !== '/organization' &&
@@ -514,7 +525,7 @@ export const App: React.FC = () => {
         return (
           <StationOverview
             selectedStation={selectedStation}
-            onStationSelected={setSelectedStation}
+            onStationSelected={(station: Station | null) => setPickedStationId(station?.id ?? null)}
           />
         );
 
@@ -575,28 +586,38 @@ export const App: React.FC = () => {
   if (isUnsupportedMobile) {
     return <MobileBlock />;
   }
-  if (loading && !session) {
-    return (
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          minHeight: '100vh',
-          backgroundColor: 'var(--bg-canvas)',
-          color: 'var(--text-muted)',
-          fontFamily: 'var(--font-mono)',
-        }}
-      >
-        Initializing connection to Supabase Auth...
-      </div>
-    );
+  /**
+   * One branded screen for the whole pre-session phase.
+   *
+   * This replaced two bare text divs — a full-page "Initializing connection to
+   * Supabase Auth..." and a "Resolving operational permissions..." — that were
+   * styled differently, so moving between them visibly restyled the page. The
+   * phases were never worth narrating: the operator cannot act on either.
+   *
+   * It now covers only the genuine wait before we know who the user is; once
+   * the role lands, the shell is drawn and stations arrive into it.
+   */
+  const gate = selectBootGate({
+    session,
+    loading,
+    userRole,
+    profileError: !!profileError,
+    stationsLoading,
+    stationReady: !!isStationReady,
+    // This is where onboarding happens, so a pre-ready station stays in the
+    // shell: the dashboard shows a getting-started hero and the wizard is
+    // reachable, with operational affordances hidden via `stationReady`.
+    notReadyTakesOver: false,
+  });
+
+  if (gate === 'boot') {
+    return <BootScreen />;
   }
 
-  // No session, still resolving the profile, an error, or the focused onboarding
-  // wizard → render bare (no shell chrome). Otherwise render the full shell — the
-  // pre-ready Organization hub lives inside it with operational tabs hidden.
-  if (!session || !userRole || profileError || currentPath === '/onboarding') {
+  // Login, an error card, or the focused wizard → bare. Otherwise the full
+  // shell — the pre-ready Organization hub lives inside it.
+  // The focused onboarding wizard is its own takeover on top of the shared gate.
+  if (gate === 'takeover' || currentPath === '/onboarding') {
     return renderContent();
   }
 
@@ -612,6 +633,7 @@ export const App: React.FC = () => {
       onLogout={handleLogout}
       stations={stations}
       selectedStation={selectedStation}
+      stationsLoading={stationsLoading}
       onStationChange={handleStationChange}
       environmentTag={environmentTag}
       stationReady={!!isStationReady}

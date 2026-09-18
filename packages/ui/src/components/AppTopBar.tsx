@@ -54,6 +54,8 @@ import { useDesktopTitleBar } from '../utils/desktopTitleBar.js';
 
 export interface AppTopBarProps {
   selectedStation: Station | null;
+  /** Station list still in flight — see TopBar.stationsLoading. */
+  stationsLoading?: boolean;
   navItems: { label: string; path: string; roles?: string[] }[];
   userRole: 'Owner' | 'Manager' | 'Accountant' | 'Staff';
   userName: string;
@@ -90,6 +92,7 @@ function formatDayLabel(iso: string): string {
 
 export const AppTopBar: React.FC<AppTopBarProps> = ({
   selectedStation,
+  stationsLoading = false,
   navItems,
   userRole,
   userName,
@@ -402,6 +405,7 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
         }
         onSelectBusinessDay={(date) => onNavigate('/shifts', { openBusinessDayDate: date })}
         stationLabel={selectedStation?.name}
+        stationsLoading={stationsLoading}
         onOpenSearch={() => setOpen(true)}
         quickCreate={quickCreate}
         notifications={notifications}

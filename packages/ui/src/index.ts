@@ -146,3 +146,8 @@ export { formatMoney, inr, formatQty } from './utils/format.js';
 export { runTask, useRunTask } from './utils/runTask.js';
 export * from './pump-ds/icon/index.js';
 export * from './pump-ds/brand/index.js';
+export * from './pump-ds/boot/index.js';
+
+// Post-sign-in boot: the branded wait screen and the parallel resolve behind it.
+export * from './boot/sessionBoot.js';
+export * from './boot/bootGate.js';

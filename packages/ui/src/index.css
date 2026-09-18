@@ -1404,6 +1404,19 @@ select:disabled {
     background-position: 0 50%;
   }
 }
+/* Must sit after .pump-skeleton, not up in the main reduced-motion block: a
+   media query adds no specificity, so an override written earlier in the file
+   would lose the cascade to the rule above and silently do nothing.
+   Skeletons now cover the whole shell during boot, which makes an unslowed
+   shimmer a screenful of motion at the exact moment a motion-sensitive
+   operator has nothing else to look at. Hold a flat tone instead — the
+   skeleton still reads as "not content yet" from its shape. */
+@media (prefers-reduced-motion: reduce) {
+  .pump-skeleton {
+    animation: none;
+    background: var(--bg-surface-alt);
+  }
+}
 .items-center {
   align-items: center;
 }

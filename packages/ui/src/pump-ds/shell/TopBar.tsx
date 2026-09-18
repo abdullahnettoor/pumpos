@@ -4,6 +4,7 @@ import { Button } from '../button/index.js';
 import { Icon } from '../icon/index.js';
 import { SyncPulse, type SyncStatus } from '../sync-pulse/index.js';
 import { BusinessDayChip } from '../business-day/index.js';
+import { Skeleton } from '../../components/primitives/Skeleton.js';
 import {
   Menu,
   MenuTrigger,
@@ -84,6 +85,9 @@ export interface TopBarProps {
   onBusinessDayMenuOpenChange?: (open: boolean) => void;
   /** Active station name (shown when app is scoped to one station). */
   stationLabel?: string;
+  /** Stations are still in flight: hold the station chip open rather than
+   *  letting it appear late and re-flow the bar. */
+  stationsLoading?: boolean;
   /** Global search click/shortcut handler. Opens command palette. */
   onOpenSearch?: () => void;
   /** Search button placeholder text. Defaults to "Search customers, suppliers, products…". */
@@ -244,6 +248,7 @@ export const TopBar: React.FC<TopBarProps> = ({
   onSelectBusinessDay,
   onBusinessDayMenuOpenChange,
   stationLabel,
+  stationsLoading = false,
   onOpenSearch,
   searchPlaceholder = 'Search customers, suppliers, products\u2026',
   quickCreate = [],
@@ -377,13 +382,21 @@ export const TopBar: React.FC<TopBarProps> = ({
         </Menu>
       )}
 
-      {stationLabel && (
+      {(stationLabel || stationsLoading) && (
         <div
+          data-testid="topbar-station"
           className="hidden items-center gap-1.5 rounded-button px-2 text-[12px] text-ink-muted lg:inline-flex"
-          title="Single station"
+          title={stationLabel ? 'Single station' : undefined}
         >
           <Icon name="fuel" size="xs" />
-          <span>{stationLabel}</span>
+          {stationLabel ? (
+            <span>{stationLabel}</span>
+          ) : (
+            // Same wrapper, same icon, same padding — only the text is
+            // swapped — so the chip does not shove the search bar sideways
+            // when the station name lands a round trip later.
+            <Skeleton width={92} height={12} radius="4px" />
+          )}
         </div>
       )}
 
