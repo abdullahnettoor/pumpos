@@ -8,7 +8,8 @@ const MANIFEST = {
   notes: 'Fixes drawer reconciliation rounding.',
   pub_date: '2026-05-01T00:00:00.000Z',
   platforms: {
-    'darwin-universal': { signature: 'bWFj', url: `${BASE}/PumpOS.app.tar.gz` },
+    'darwin-aarch64': { signature: 'bWFj', url: `${BASE}/PumpOS.app.tar.gz` },
+    'darwin-x86_64': { signature: 'bWFj', url: `${BASE}/PumpOS.app.tar.gz` },
     'windows-x86_64': { signature: 'd2lu', url: `${BASE}/PumpOS_1.2.3_x64-setup.exe` },
   },
 };
@@ -49,7 +50,8 @@ describe('stable update channel smoke check', () => {
       log: () => {},
     });
     expect(manifest.version).toBe('1.2.3');
-    // One manifest fetch plus one HEAD per supported target. No Linux request.
+    // One manifest fetch plus one HEAD per distinct artifact — two, not three:
+    // the universal macOS build serves both Mac keys. No Linux request.
     expect(fetchImpl).toHaveBeenCalledTimes(3);
   });
 

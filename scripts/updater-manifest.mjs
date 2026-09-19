@@ -22,11 +22,38 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-/** The only platforms PumpOS ships. Both must be present in every manifest. */
-export const SUPPORTED_TARGETS = ['darwin-universal', 'windows-x86_64'];
+/**
+ * The platform keys installed clients actually look up.
+ *
+ * This is NOT a list of the artifacts PumpOS builds — that distinction cost a
+ * release. The updater plugin resolves an entry by building
+ * `{os}-{arch}-{installer}` then `{os}-{arch}` from the machine it is running
+ * on (tauri-plugin-updater, `Updater::get_urls`), so a manifest key is only
+ * useful if some real machine asks for it. `darwin-universal` is a *build*
+ * flavour; no client ever requests it, which is why v1.3.1 failed on every Mac
+ * with "None of the fallback platforms [darwin-aarch64-app, darwin-aarch64]
+ * were found".
+ *
+ * PumpOS ships one universal macOS artifact that runs on both architectures, so
+ * both Mac keys point at the same file. `scripts/gen-download-manifest.mjs`
+ * already did exactly this for the download page.
+ */
+export const SUPPORTED_TARGETS = ['darwin-aarch64', 'darwin-x86_64', 'windows-x86_64'];
+
+/** Which keys the plugin will try, in order, for a given machine. */
+export function clientLookupKeys({ os, arch, installer }) {
+  const keys = [];
+  if (installer) keys.push(`${os}-${arch}-${installer}`);
+  keys.push(`${os}-${arch}`);
+  return keys;
+}
 
 /**
- * Map a built artifact to its updater target.
+ * Map a built artifact to every client key it can serve.
+ *
+ * The macOS artifact is universal, so it serves both Apple Silicon and Intel —
+ * one file, two keys. Returning a list rather than a single target is what
+ * makes that expressible.
  *
  * Windows deliberately updates through the **NSIS** installer (`-setup.exe`)
  * and not the MSI: a release that listed both would leave the updater picking
@@ -35,9 +62,9 @@ export const SUPPORTED_TARGETS = ['darwin-universal', 'windows-x86_64'];
  */
 export function classifyUpdaterAsset(fileName) {
   const name = basename(fileName).toLowerCase();
-  if (name.endsWith('.app.tar.gz')) return 'darwin-universal';
-  if (name.endsWith('-setup.exe') || name.endsWith('.nsis.zip')) return 'windows-x86_64';
-  return null;
+  if (name.endsWith('.app.tar.gz')) return ['darwin-aarch64', 'darwin-x86_64'];
+  if (name.endsWith('-setup.exe') || name.endsWith('.nsis.zip')) return ['windows-x86_64'];
+  return [];
 }
 
 /**
@@ -58,21 +85,20 @@ export function collectUpdaterAssets(dir, baseUrl) {
 
   for (const name of names) {
     if (name.endsWith('.sig')) continue;
-    if (classifyUpdaterAsset(name) && !signed.has(name)) {
+    if (classifyUpdaterAsset(name).length > 0 && !signed.has(name)) {
       throw new Error(`${name} has no ${name}.sig — the build did not sign it`);
     }
   }
 
   const assets = [];
   for (const name of [...signed].sort()) {
-    const target = classifyUpdaterAsset(name);
-    if (!target) continue;
-    assets.push({
-      target,
-      name,
-      url: `${baseUrl.replace(/\/$/, '')}/${encodeURIComponent(name)}`,
-      signature: readFileSync(join(dir, `${name}.sig`), 'utf8').trim(),
-    });
+    const targets = classifyUpdaterAsset(name);
+    if (targets.length === 0) continue;
+    const signature = readFileSync(join(dir, `${name}.sig`), 'utf8').trim();
+    const url = `${baseUrl.replace(/\/$/, '')}/${encodeURIComponent(name)}`;
+    // One artifact, one entry per key it serves. The universal macOS build
+    // legitimately appears under both Mac architectures.
+    for (const target of targets) assets.push({ target, name, url, signature });
   }
   return assets;
 }
@@ -80,7 +106,7 @@ export function collectUpdaterAssets(dir, baseUrl) {
 export function buildUpdaterManifest({ version, notes = '', pubDate, assets }) {
   const platforms = {};
   for (const asset of assets) {
-    if (platforms[asset.target]) {
+    if (platforms[asset.target] && platforms[asset.target].name !== asset.name) {
       throw new Error(
         `two artifacts claim ${asset.target} (${platforms[asset.target].name} and ${asset.name})`,
       );
@@ -128,9 +154,19 @@ export function validateUpdaterManifest(manifest, { version } = {}) {
   }
   for (const target of targets) {
     if (!SUPPORTED_TARGETS.includes(target)) {
-      problems.push(`unsupported target ${target} (PumpOS ships macOS universal and Windows x64)`);
+      problems.push(
+        `unsupported target ${target} — no PumpOS client asks for it ` +
+          `(expected one of ${SUPPORTED_TARGETS.join(', ')})`,
+      );
     }
     const entry = manifest.platforms[target];
+    // The key must be one this artifact can actually serve. A Windows installer
+    // filed under a Mac key would pass every other check here and fail on the
+    // operator's machine.
+    const name = decodeURIComponent((entry?.url ?? '').split('/').pop() ?? '');
+    if (name && !classifyUpdaterAsset(name).includes(target)) {
+      problems.push(`${target} points at ${name}, which cannot serve that platform`);
+    }
     if (!entry?.url?.startsWith('https://')) {
       problems.push(`${target} url must be HTTPS, got "${entry?.url}"`);
     } else if (manifest.version && !entry.url.includes(manifest.version)) {

@@ -147,6 +147,12 @@ build, from the web console, or from mobile.
 | Installed (macOS) | "installed"                                           | **Restart and update**              |
 | Failed            | a plain-language cause                                | retry the step that failed          |
 
+A **failed automatic check is silent** — it is logged and dropped. The operator
+did not ask, and "the update server did not respond" is not something they can
+act on; a station with a flaky connection would otherwise meet a red banner
+every morning. A failed **manual** check always reports, because the operator
+asked and is owed an answer.
+
 The notice is a compact panel in the corner, never a modal: an update is never
 more important than the shift in front of the operator. Dismissing it puts the
 offer away without losing it — including a finished download — and the menu's
@@ -220,6 +226,31 @@ mirror exists for the marketing download page. If `abdullahnettoor/pumpos` is
 ever made private, every installed client's check and the post-publish smoke
 check start returning 404, and the updater endpoint has to move to the public
 R2 base before that happens.
+
+### Which platform keys `latest.json` must carry
+
+The updater resolves an entry by building `{os}-{arch}-{installer}` and then
+`{os}-{arch}` **from the machine it is running on** (`Updater::get_urls` in
+`tauri-plugin-updater`). So the manifest keys are dictated by the clients, not
+by what CI builds:
+
+| Machine           | Keys tried, in order                    |
+| ----------------- | --------------------------------------- |
+| Apple Silicon Mac | `darwin-aarch64-app`, `darwin-aarch64`  |
+| Intel Mac         | `darwin-x86_64-app`, `darwin-x86_64`    |
+| Windows x64       | `windows-x86_64-nsis`, `windows-x86_64` |
+
+`darwin-universal` is a **build flavour, not a client key** — nothing ever asks
+for it. PumpOS ships one universal macOS artifact, so both Mac keys point at the
+same file, exactly as `scripts/gen-download-manifest.mjs` already does for the
+download page.
+
+This is what broke v1.3.1: the manifest listed `darwin-universal`, and every Mac
+reported _"None of the fallback platforms `["darwin-aarch64-app",
+"darwin-aarch64"]` were found"_. Validation passed because the validator, the
+generator, the tests and the smoke check all read one constant that encoded the
+same wrong assumption. The fix is tested against the client's lookup rule stated
+independently, not against that constant.
 
 ### Which Windows installer updates
 
@@ -301,12 +332,41 @@ both platforms and record what you saw:
 
 ### A bad release
 
-**Never replace assets under a published tag.** Clients cache and compare by
-version; a swapped asset makes two machines running "the same version" different
-software.
+**Never replace an artifact under a published tag.** Clients compare by version;
+a swapped installer or `.app.tar.gz` makes two machines reporting "the same
+version" different software, and its signature no longer matches what the
+manifest promises. Recover by releasing a **higher patch version**. Phase one
+has no downgrade path: an older manifest reads as "up to date" and installs
+nothing.
 
-Recover by releasing a **higher patch version** with the fix. Phase one has no
-downgrade path: an older manifest reads as "up to date" and installs nothing.
+**`latest.json` is the exception, and only when no artifact changes.** The
+manifest is routing metadata, not software: it says which file each machine
+should fetch. Correcting it re-points clients at the _same_ bytes with the
+_same_ signatures, so no installation can diverge. That makes it repairable in
+place when — and only when — every artifact URL, signature, version and note is
+unchanged and the sole fault is which keys carry them.
+
+This was used once, on `v1.3.1`, whose manifest listed `darwin-universal` and
+was unreadable by every Mac (see "Which platform keys"). A rebuild would have
+produced byte-identical artifacts purely to change two keys. Regenerating the
+manifest fixed every client in minutes.
+
+The bar for doing it, all of which must hold:
+
+- No artifact is added, removed, or altered — diff the old and new manifests and
+  confirm only platform keys move.
+- The version, notes and `pub_date` are unchanged, so the release still
+  describes itself identically.
+- The corrected manifest passes `scripts/updater-manifest.mjs` validation and
+  `scripts/check-release-assets.mjs` against the live release.
+- `scripts/smoke-updater.mjs` passes afterwards at the public endpoint.
+
+GitHub's CDN serves the old manifest for a few minutes after the upload; the
+smoke check is what confirms the correction has actually propagated. Keep the
+replaced manifest until it has.
+
+If any of that does not hold, it is a bad release, not a bad manifest — ship a
+higher patch version.
 
 If a release must be pulled before anyone takes it, mark the GitHub Release as a
 draft again — `releases/latest` immediately falls back to the previous published
