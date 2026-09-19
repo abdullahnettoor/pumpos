@@ -31,6 +31,7 @@ import { shiftsRouter } from './routes/shifts.js';
 import { transactionsRouter } from './routes/transactions.js';
 import { dssrRouter } from './routes/dssr.js';
 import { financeRouter } from './routes/finance.js';
+import { accessRouter } from './routes/access.js';
 import { idempotency } from './infra/idempotency.js';
 import { verifySupabaseJwt } from './infra/supabase-jwt.js';
 import { SupabaseAdmin } from './infra/supabase-admin.js';
@@ -797,6 +798,8 @@ api.route('/shifts', shiftsRouter);
 api.route('/transactions', transactionsRouter);
 api.route('/dssr', dssrRouter);
 api.route('/finance', financeRouter);
+// Organization access document (role-filtered, presentation only).
+api.route('/access', accessRouter);
 
 // Mount authenticated group
 app.route('/api', api);
@@ -1056,8 +1059,23 @@ function deriveOwnerStatus(
   return 'invited';
 }
 
+/**
+ * Revocation marker on the Organization. The typed Subscription Status cannot
+ * carry it: a revoked invite and a deactivated Owner are both SUSPENDED, but
+ * only the first is hidden from the platform list by default.
+ */
+function isRevoked(metadata: unknown): boolean {
+  return Boolean((metadata as { revoked_at?: string } | null)?.revoked_at);
+}
+
+function withoutRevocation(metadata: unknown): Record<string, unknown> {
+  const { revoked_at: _revoked, ...rest } = (metadata ?? {}) as Record<string, unknown>;
+  return rest;
+}
+
 // GET /platform/owners — one row per org (its Owner user), enriched with auth
-// state. Revoked orgs are hidden by default; pass ?includeRevoked=1 to show them.
+// state. Suspended orgs (revoked or deactivated) are hidden by default; pass
+// ?includeRevoked=1 to show them.
 platform.get('/owners', async (c) => {
   const db = c.var.db;
   const includeRevoked = ['1', 'true', 'yes'].includes(
@@ -1069,7 +1087,10 @@ platform.get('/owners', async (c) => {
     .select()
     .from(schema.organizations)
     .orderBy(desc(schema.organizations.createdAt));
-  const orgs = includeRevoked ? allOrgs : allOrgs.filter((o) => o.subscriptionStatus !== 'Revoked');
+  // Revoked invites are hidden by default. Deactivation and revocation both
+  // store SUSPENDED now, so revocation is marked on the Organization metadata
+  // — a deactivated org must stay listed, as it always was.
+  const orgs = includeRevoked ? allOrgs : allOrgs.filter((o) => !isRevoked(o.metadata));
   if (orgs.length === 0) {
     return c.json({ success: true, data: [] });
   }
@@ -1345,7 +1366,18 @@ platform.post('/owners/:orgId/revoke', async (c) => {
   }
   await db
     .update(schema.organizations)
-    .set({ subscriptionStatus: 'Revoked', updatedAt: new Date() })
+    // Revoking an invite and deactivating an Owner both mean "PumpOS stopped
+    // this Organization", which is SUSPENDED in the typed model. The two
+    // remain distinguishable through their events (OWNER_INVITE_REVOKED vs
+    // ORGANIZATION_DEACTIVATED), which is where that history belongs.
+    .set({
+      subscriptionStatus: 'SUSPENDED',
+      metadata: {
+        ...(org.metadata as Record<string, unknown>),
+        revoked_at: new Date().toISOString(),
+      },
+      updatedAt: new Date(),
+    })
     .where(eq(schema.organizations.id, org.id));
   await appendPlatformEvent(
     db,
@@ -1397,7 +1429,11 @@ async function setOwnerActive(c: any, active: boolean): Promise<Response> {
     .where(eq(schema.users.id, owner.id));
   await db
     .update(schema.organizations)
-    .set({ subscriptionStatus: active ? 'Active' : 'Deactivated', updatedAt: new Date() })
+    .set({
+      subscriptionStatus: active ? 'ACTIVE' : 'SUSPENDED',
+      ...(active ? { metadata: withoutRevocation(org.metadata) } : {}),
+      updatedAt: new Date(),
+    })
     .where(eq(schema.organizations.id, org.id));
   await appendPlatformEvent(
     db,

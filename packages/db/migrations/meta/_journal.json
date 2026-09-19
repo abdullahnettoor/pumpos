@@ -57,6 +57,13 @@
       "when": 1789321190295,
       "tag": "0007_add_financial_late_entry_metadata",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1789829392181,
+      "tag": "0008_organization_access_fields",
+      "breakpoints": true
     }
   ]
 }

@@ -20,8 +20,13 @@ import { desc, sql } from 'drizzle-orm';
 export const organizations = pgTable('organizations', {
   id: uuid('id').defaultRandom().primaryKey(),
   name: varchar('name', { length: 255 }).notNull(),
-  subscriptionPlan: varchar('subscription_plan', { length: 50 }).default('Core').notNull(),
-  subscriptionStatus: varchar('subscription_status', { length: 50 }).default('Active').notNull(),
+  // Typed access fields (Phase E1). Plan keys and Subscription Statuses are
+  // defined in `@pump/core` (organization-access registry); the column is a
+  // plain varchar so a deploy can add a plan without a schema migration.
+  subscriptionPlan: varchar('subscription_plan', { length: 50 }).default('CORE').notNull(),
+  subscriptionStatus: varchar('subscription_status', { length: 50 }).default('ACTIVE').notNull(),
+  /** Instant access is paid through. Null means no dated grace. Enforced in E2. */
+  accessUntil: timestamp('access_until', { withTimezone: true }),
   metadata: jsonb('metadata').default({}).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),

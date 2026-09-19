@@ -19,7 +19,9 @@ import {
   CloudEventsService,
   CloudFinanceService,
   CloudPaymentTerminalService,
+  CloudAccessService,
 } from '../services/cloud.js';
+import type { AccessDocument } from '@pump/shared';
 
 /**
  * Centralised query hooks. These replace the hand-rolled
@@ -43,6 +45,7 @@ const orgSvc = new CloudOrganizationService();
 const eventsSvc = new CloudEventsService();
 const financeSvc = new CloudFinanceService();
 const terminalSvc = new CloudPaymentTerminalService();
+const accessSvc = new CloudAccessService();
 
 export const queryKeys = {
   shiftStatus: (stationId: string, lite = false) => ['shift-status', stationId, lite] as const,
@@ -90,6 +93,7 @@ export const queryKeys = {
   pricing: (stationId: string) => ['pricing', stationId] as const,
   pricingHistory: (stationId: string) => ['pricing-history', stationId] as const,
   organization: () => ['organization'] as const,
+  access: () => ['access'] as const,
   activityGroups: (stationId: string, type: string, limit: number) =>
     ['activity-groups', stationId, type, limit] as const,
   activityGroup: (groupId: string) => ['activity-group', groupId] as const,
@@ -236,6 +240,26 @@ export function usePricingHistory(stationId: string | null | undefined, options?
     queryFn: () => pricingSvc.getPricingHistory(stationId!),
     enabled: !!stationId,
     ...TIER.semi,
+    ...options,
+  });
+}
+
+/**
+ * The Organization's Access Document: what it may use, filtered for this
+ * user's Role. Semi-static — access changes when PumpOS changes a plan, grant
+ * or Limit, not during a shift — plus a focus refresh so a change made while
+ * the app sat in the background lands on return.
+ *
+ * It is persisted, so a warm client keeps working through a network drop. A
+ * cold start has no document at all: read it with `capabilityEnabled`, which
+ * hides optional capabilities rather than inventing access.
+ */
+export function useAccess(options?: Options<AccessDocument>) {
+  return useQuery({
+    queryKey: queryKeys.access(),
+    queryFn: () => accessSvc.getAccess(),
+    ...TIER.semi,
+    refetchOnWindowFocus: true,
     ...options,
   });
 }

@@ -28,8 +28,12 @@ export interface BaseMetadata {
 export interface Organization {
   id: string;
   name: string;
+  /** Typed Product Plan key; see `ProductPlanKey` in `types/access.ts`. */
   subscriptionPlan: string;
+  /** Typed Subscription Status; see `SubscriptionStatus` in `types/access.ts`. */
   subscriptionStatus: string;
+  /** Instant access is paid through, or null. */
+  accessUntil?: string | null;
   createdAt: string;
   updatedAt: string;
 }
