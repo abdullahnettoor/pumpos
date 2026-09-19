@@ -11,8 +11,10 @@ import type { EventPublisher, ExecutionContext, Result, UseCase } from '../../..
 /**
  * Persistence port for the multi-aggregate onboarding provisioning. The adapter
  * performs all inserts (station, products, tanks, dispensers, nozzles, prices,
- * shift templates, payment terminals) atomically in one transaction and maps the
- * draft-local ids to real ids. Returns a conflict error if the station code is
+ * shift templates, payment terminals) and maps the draft-local ids to real ids.
+ * It does NOT own the unit of work: the caller wraps provisioning and the
+ * ONBOARDING_COMPLETED append in one transaction, so a failure in either rolls
+ * back the whole station setup. Returns a conflict error if the station code is
  * already taken.
  */
 export interface OnboardingProvisioner {
