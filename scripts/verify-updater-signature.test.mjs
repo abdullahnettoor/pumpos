@@ -1,11 +1,14 @@
-import { generateKeyPairSync, randomBytes, sign as signBuffer } from 'node:crypto';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { createHash, generateKeyPairSync, randomBytes, sign as signBuffer } from 'node:crypto';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
+  decodeMinisignBlock,
   findSignedArtifacts,
   parsePublicKey,
+  parseSignature,
   verifyUpdaterSignature,
 } from './verify-updater-signature.mjs';
 
@@ -16,10 +19,12 @@ import {
  * precisely the bug this script exists to catch, so the test builds it by hand
  * rather than trusting the implementation's own encoder.
  */
-function minisignKeyPair(keyId = randomBytes(8)) {
+function minisignKeyPair(keyId = randomBytes(8), algorithm = 'ED') {
   const { publicKey, privateKey } = generateKeyPairSync('ed25519');
   const rawPublic = publicKey.export({ format: 'der', type: 'spki' }).subarray(-32);
 
+  // The public key is always tagged 'Ed' — it is the same Ed25519 key whichever
+  // way a given signature was produced.
   const publicFile = [
     'untrusted comment: minisign public key',
     Buffer.concat([Buffer.from('Ed'), keyId, rawPublic]).toString('base64'),
@@ -30,10 +35,13 @@ function minisignKeyPair(keyId = randomBytes(8)) {
     keyId,
     pubkey: Buffer.from(publicFile).toString('base64'),
     sign(artifact, signingKeyId = keyId) {
-      const signature = signBuffer(null, artifact, privateKey);
+      // 'ED' is prehashed: the signed message is BLAKE2b-512 of the file.
+      const message =
+        algorithm === 'ED' ? createHash('blake2b512').update(artifact).digest() : artifact;
+      const signature = signBuffer(null, message, privateKey);
       const file = [
         'untrusted comment: signature from tauri secret key',
-        Buffer.concat([Buffer.from('Ed'), signingKeyId, signature]).toString('base64'),
+        Buffer.concat([Buffer.from(algorithm), signingKeyId, signature]).toString('base64'),
         'trusted comment: timestamp:1767225600\tfile:PumpOS.app.tar.gz',
         randomBytes(64).toString('base64'),
         '',
@@ -44,8 +52,8 @@ function minisignKeyPair(keyId = randomBytes(8)) {
 }
 
 describe('updater signature verification', () => {
-  it('accepts an artifact signed with the embedded key', () => {
-    const keys = minisignKeyPair();
+  it.each(['ED', 'Ed'])('accepts an artifact signed with the embedded key (%s)', (algorithm) => {
+    const keys = minisignKeyPair(randomBytes(8), algorithm);
     const artifact = Buffer.from('PumpOS.app.tar.gz contents');
     expect(
       verifyUpdaterSignature({ artifact, signature: keys.sign(artifact), pubkey: keys.pubkey }),
@@ -81,11 +89,36 @@ describe('updater signature verification', () => {
     );
   });
 
-  it('refuses an unsupported signature algorithm', () => {
+  it('refuses an unsupported public key algorithm', () => {
+    // 'ED' is a legitimate *signature* algorithm but never a public-key one:
+    // the key is the same Ed25519 key either way.
     const bytes = Buffer.concat([Buffer.from('ED'), randomBytes(40)]);
     expect(() => parsePublicKey(bytes.toString('base64'))).toThrow(
-      /unsupported signature algorithm/,
+      /unsupported public key algorithm/,
     );
+  });
+
+  it('refuses a signature algorithm minisign does not define', () => {
+    // Deterministic filler, not random: an earlier version of this test used
+    // randomBytes, and the decoded form occasionally looked enough like a
+    // minisign file to take a different code path. It passed locally and failed
+    // on CI.
+    const bytes = Buffer.concat([Buffer.from('eD'), Buffer.alloc(72, 0x41)]);
+    expect(() => parseSignature(bytes.toString('base64'))).toThrow(
+      /unsupported signature algorithm "eD" \(expected Ed or ED\)/,
+    );
+  });
+
+  it('reads a bare base64 blob whose decoded bytes happen to look like text', () => {
+    // The regression behind the CI flake: `AAAA…` decodes to printable ASCII
+    // with newlines in it, which a "does this look like a file?" heuristic
+    // reads as a minisign file. Only the `untrusted comment:` marker decides.
+    const bytes = Buffer.concat([Buffer.from('Ed'), Buffer.alloc(40, 0x0a)]);
+    expect(decodeMinisignBlock(bytes.toString('base64'))).toEqual(bytes);
+  });
+
+  it('rejects an empty block instead of decoding nothing', () => {
+    expect(() => decodeMinisignBlock('   ')).toThrow(/minisign block is empty/);
   });
 
   it('finds exactly the artifacts that carry a sibling .sig', () => {
@@ -101,5 +134,38 @@ describe('updater signature verification', () => {
       'PumpOS.app.tar.gz',
       'PumpOS_1.2.3_x64-setup.exe',
     ]);
+  });
+});
+
+/**
+ * The test that would have caught the release failure.
+ *
+ * The hand-built fixtures above can only prove this module agrees with itself:
+ * the first version of it understood only minisign's legacy `Ed` algorithm, and
+ * the tests obligingly produced `Ed` signatures. Tauri emits prehashed `ED`, so
+ * the release gate rejected every genuine artifact — and nothing said so until
+ * a macOS runner had finished a full build.
+ *
+ * These bytes came out of a real `tauri signer` run. See the fixture README.
+ */
+describe('a real Tauri signature', () => {
+  const dir = join(dirname(fileURLToPath(import.meta.url)), 'fixtures/updater');
+  const artifact = readFileSync(join(dir, 'artifact.bin'));
+  const signature = readFileSync(join(dir, 'artifact.bin.sig'), 'utf8');
+  const pubkey = readFileSync(join(dir, 'throwaway.key.pub'), 'utf8');
+
+  it('is what Tauri actually produces: prehashed ED against an Ed public key', () => {
+    expect(parseSignature(signature).algorithm).toBe('ED');
+    expect(parsePublicKey(pubkey).keyId).toEqual(parseSignature(signature).keyId);
+  });
+
+  it('verifies against the matching public key', () => {
+    expect(verifyUpdaterSignature({ artifact, signature, pubkey })).toBe(true);
+  });
+
+  it('rejects the same signature over different bytes', () => {
+    expect(verifyUpdaterSignature({ artifact: Buffer.from('tampered'), signature, pubkey })).toBe(
+      false,
+    );
   });
 });
