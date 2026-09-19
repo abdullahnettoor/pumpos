@@ -5,6 +5,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
+  decodeMinisignBlock,
   findSignedArtifacts,
   parsePublicKey,
   parseSignature,
@@ -98,10 +99,26 @@ describe('updater signature verification', () => {
   });
 
   it('refuses a signature algorithm minisign does not define', () => {
-    const bytes = Buffer.concat([Buffer.from('eD'), randomBytes(72)]);
+    // Deterministic filler, not random: an earlier version of this test used
+    // randomBytes, and the decoded form occasionally looked enough like a
+    // minisign file to take a different code path. It passed locally and failed
+    // on CI.
+    const bytes = Buffer.concat([Buffer.from('eD'), Buffer.alloc(72, 0x41)]);
     expect(() => parseSignature(bytes.toString('base64'))).toThrow(
       /unsupported signature algorithm "eD" \(expected Ed or ED\)/,
     );
+  });
+
+  it('reads a bare base64 blob whose decoded bytes happen to look like text', () => {
+    // The regression behind the CI flake: `AAAA…` decodes to printable ASCII
+    // with newlines in it, which a "does this look like a file?" heuristic
+    // reads as a minisign file. Only the `untrusted comment:` marker decides.
+    const bytes = Buffer.concat([Buffer.from('Ed'), Buffer.alloc(40, 0x0a)]);
+    expect(decodeMinisignBlock(bytes.toString('base64'))).toEqual(bytes);
+  });
+
+  it('rejects an empty block instead of decoding nothing', () => {
+    expect(() => decodeMinisignBlock('   ')).toThrow(/minisign block is empty/);
   });
 
   it('finds exactly the artifacts that carry a sibling .sig', () => {
