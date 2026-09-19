@@ -332,12 +332,41 @@ both platforms and record what you saw:
 
 ### A bad release
 
-**Never replace assets under a published tag.** Clients cache and compare by
-version; a swapped asset makes two machines running "the same version" different
-software.
+**Never replace an artifact under a published tag.** Clients compare by version;
+a swapped installer or `.app.tar.gz` makes two machines reporting "the same
+version" different software, and its signature no longer matches what the
+manifest promises. Recover by releasing a **higher patch version**. Phase one
+has no downgrade path: an older manifest reads as "up to date" and installs
+nothing.
 
-Recover by releasing a **higher patch version** with the fix. Phase one has no
-downgrade path: an older manifest reads as "up to date" and installs nothing.
+**`latest.json` is the exception, and only when no artifact changes.** The
+manifest is routing metadata, not software: it says which file each machine
+should fetch. Correcting it re-points clients at the _same_ bytes with the
+_same_ signatures, so no installation can diverge. That makes it repairable in
+place when — and only when — every artifact URL, signature, version and note is
+unchanged and the sole fault is which keys carry them.
+
+This was used once, on `v1.3.1`, whose manifest listed `darwin-universal` and
+was unreadable by every Mac (see "Which platform keys"). A rebuild would have
+produced byte-identical artifacts purely to change two keys. Regenerating the
+manifest fixed every client in minutes.
+
+The bar for doing it, all of which must hold:
+
+- No artifact is added, removed, or altered — diff the old and new manifests and
+  confirm only platform keys move.
+- The version, notes and `pub_date` are unchanged, so the release still
+  describes itself identically.
+- The corrected manifest passes `scripts/updater-manifest.mjs` validation and
+  `scripts/check-release-assets.mjs` against the live release.
+- `scripts/smoke-updater.mjs` passes afterwards at the public endpoint.
+
+GitHub's CDN serves the old manifest for a few minutes after the upload; the
+smoke check is what confirms the correction has actually propagated. Keep the
+replaced manifest until it has.
+
+If any of that does not hold, it is a bad release, not a bad manifest — ship a
+higher patch version.
 
 If a release must be pulled before anyone takes it, mark the GitHub Release as a
 draft again — `releases/latest` immediately falls back to the previous published
