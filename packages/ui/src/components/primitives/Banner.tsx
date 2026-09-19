@@ -33,6 +33,16 @@ export interface BannerProps {
    */
   dismissible?: boolean;
   onDismiss?: () => void;
+  /**
+   * Accessible name for the dismiss control. Defaults to "Dismiss".
+   *
+   * Override it where dismissing means something more specific than "hide
+   * this" — the desktop update notice uses "Not now", because putting an
+   * offered update away is a different act from discarding a stale message,
+   * and a screen-reader user hearing "Dismiss" for both cannot tell them
+   * apart.
+   */
+  dismissLabel?: string;
   /** Override the default severity icon. Pass null to hide it. */
   icon?: React.ReactNode | null;
   style?: React.CSSProperties;
@@ -52,6 +62,7 @@ export const Banner: React.FC<BannerProps> = ({
   onAction,
   dismissible = false,
   onDismiss,
+  dismissLabel = 'Dismiss',
   icon,
   style,
 }) => {
@@ -99,7 +110,7 @@ export const Banner: React.FC<BannerProps> = ({
         {dismissible && (
           <button
             type="button"
-            aria-label="Dismiss"
+            aria-label={dismissLabel}
             onClick={() => {
               setDismissed(true);
               onDismiss?.();

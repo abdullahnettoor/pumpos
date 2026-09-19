@@ -40,6 +40,8 @@ import {
 } from '@pump/ui';
 import { Station } from '@pump/shared';
 import { environmentTag, showDeveloperSurfaces } from './buildEnv.js';
+import { useDesktopUpdates } from './updates/useDesktopUpdates.js';
+import { UpdateNotice } from './updates/UpdateNotice.js';
 
 setApiBaseUrl(import.meta.env.VITE_API_URL);
 
@@ -198,6 +200,27 @@ const App: React.FC = () => {
     // never greets the operator with an auth error.
     return keepSessionFresh();
   }, []);
+
+  /**
+   * In-app updates (desktop only). The automatic check fires once the
+   * authenticated shell is up — never during boot, and never from a dev or web
+   * build. A failed check lands in the coordinator's state, so nothing here can
+   * delay or break the operator's start-up.
+   */
+  const shellReady = !!session && !!userRole && !profileError;
+  const updates = useDesktopUpdates(shellReady);
+  const updateMenuEntries = updates.enabled
+    ? [
+        {
+          id: 'check-updates',
+          label: 'Check for updates',
+          // The installed version rides in the shortcut slot, so one entry both
+          // reports where the operator is and offers the check.
+          shortcut: updates.currentVersion ? `v${updates.currentVersion}` : undefined,
+          onSelect: updates.check,
+        },
+      ]
+    : undefined;
 
   const handleStationChange = (station: Station) => {
     pickStation(station.id);
@@ -508,9 +531,11 @@ const App: React.FC = () => {
       stationsLoading={stationsLoading}
       onStationChange={handleStationChange}
       environmentTag={environmentTag}
+      userMenuExtras={updateMenuEntries}
     >
       {renderContent()}
       <QuickEntryHost selectedStation={selectedStation} />
+      <UpdateNotice updates={updates} />
     </AppShell>
   );
 };

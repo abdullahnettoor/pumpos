@@ -1051,11 +1051,14 @@ stationSetupRouter.post(
     try {
       const parsed = c.req.valid('json') as { draft: OnboardingDraft };
 
-      const useCase = new FinalizeStationOnboarding({
-        provisioner: new DrizzleOnboardingProvisioner(db),
-        events: createDispatcher(db),
-      });
-      const result = await useCase.execute(parsed.draft, buildContext(user));
+      // Provisioning writes and the ONBOARDING_COMPLETED append share one
+      // transaction: a failure in either rolls back the whole station setup.
+      const result = await runInTransaction(db, (tx, events) =>
+        new FinalizeStationOnboarding({
+          provisioner: new DrizzleOnboardingProvisioner(tx),
+          events,
+        }).execute(parsed.draft, buildContext(user)),
+      );
       return sendResult(c, result);
     } catch (err: any) {
       return c.json({ success: false, error: { code: 'SERVER_ERROR', message: err.message } }, 500);

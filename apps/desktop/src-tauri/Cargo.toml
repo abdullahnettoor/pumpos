@@ -19,6 +19,14 @@ tauri = { version = "2.0.0", features = [] }
 tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
 
+# Desktop-only: the in-app updater and the controlled relaunch that follows an
+# install. Mobile has no updater path (stores own that), so these never build
+# for iOS/Android.
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
+tauri-plugin-os = "2"
+
 [patch.crates-io]
 alloc-no-stdlib = { git = "https://github.com/dropbox/rust-alloc-no-stdlib.git" }
 alloc-stdlib = { git = "https://github.com/dropbox/rust-alloc-no-stdlib.git" }
