@@ -2,6 +2,7 @@ ALTER TABLE "organizations" ADD COLUMN IF NOT EXISTS "access_until" timestamp wi
 ALTER TABLE "organizations" ALTER COLUMN "subscription_plan" SET DEFAULT 'CORE';--> statement-breakpoint
 ALTER TABLE "organizations" ALTER COLUMN "subscription_status" SET DEFAULT 'ACTIVE';--> statement-breakpoint
 UPDATE "organizations" SET "subscription_plan" = 'CORE' WHERE upper("subscription_plan") = 'CORE';--> statement-breakpoint
+UPDATE "organizations" SET "metadata" = coalesce("metadata", '{}'::jsonb) || jsonb_build_object('revoked_at', to_char(now(), 'YYYY-MM-DD"T"HH24:MI:SS.MSZ')) WHERE upper("subscription_status") = 'REVOKED';--> statement-breakpoint
 UPDATE "organizations" SET "subscription_status" = CASE upper("subscription_status")
     WHEN 'ACTIVE' THEN 'ACTIVE'
     WHEN 'DEACTIVATED' THEN 'SUSPENDED'
