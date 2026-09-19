@@ -120,6 +120,22 @@ export const EventActivityCatalog = {
     BusinessEvents.OWNER_INVITE_REVOKED,
     'Owner invitation revoked',
   ),
+  [BusinessEvents.ORGANIZATION_CAPABILITY_GRANTED]: success(
+    BusinessEvents.ORGANIZATION_CAPABILITY_GRANTED,
+    'Product Capability granted',
+  ),
+  [BusinessEvents.ORGANIZATION_CAPABILITY_REVOKED]: danger(
+    BusinessEvents.ORGANIZATION_CAPABILITY_REVOKED,
+    'Product Capability revoked',
+  ),
+  [BusinessEvents.ORGANIZATION_LIMIT_OVERRIDE_SET]: info(
+    BusinessEvents.ORGANIZATION_LIMIT_OVERRIDE_SET,
+    'Limit override set',
+  ),
+  [BusinessEvents.ORGANIZATION_LIMIT_OVERRIDE_CLEARED]: info(
+    BusinessEvents.ORGANIZATION_LIMIT_OVERRIDE_CLEARED,
+    'Limit override cleared',
+  ),
   [BusinessEvents.STATION_CREATED]: success(BusinessEvents.STATION_CREATED, 'Station added'),
   [BusinessEvents.STATION_UPDATED]: info(BusinessEvents.STATION_UPDATED, 'Station updated'),
   [BusinessEvents.USER_CREATED]: success(BusinessEvents.USER_CREATED, 'Team member added'),

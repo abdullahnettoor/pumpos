@@ -1,4 +1,7 @@
 export * from './registry.js';
 export * from './ports.js';
+export * from './admin-ports.js';
 export * from './resolve-access.js';
 export * from './get-access-document.js';
+export * from './administer-access.js';
+export * from './station-capacity.js';

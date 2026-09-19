@@ -32,6 +32,7 @@ import { transactionsRouter } from './routes/transactions.js';
 import { dssrRouter } from './routes/dssr.js';
 import { financeRouter } from './routes/finance.js';
 import { accessRouter } from './routes/access.js';
+import { platformAccessRouter } from './routes/platform-access.js';
 import { idempotency } from './infra/idempotency.js';
 import { verifySupabaseJwt } from './infra/supabase-jwt.js';
 import { SupabaseAdmin } from './infra/supabase-admin.js';
@@ -1450,6 +1451,9 @@ async function setOwnerActive(c: any, active: boolean): Promise<Response> {
 
 platform.post('/owners/:orgId/deactivate', (c) => setOwnerActive(c, false));
 platform.post('/owners/:orgId/reactivate', (c) => setOwnerActive(c, true));
+
+// Organization access administration (grants + Limit overrides).
+platform.route('/organizations', platformAccessRouter);
 
 app.route('/platform', platform);
 

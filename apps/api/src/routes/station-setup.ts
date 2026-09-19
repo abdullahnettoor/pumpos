@@ -50,6 +50,7 @@ import { runInTransaction } from '../infra/transaction.js';
 import { SupabaseAdmin } from '../infra/supabase-admin.js';
 import { rateLimit } from '../infra/rate-limit.js';
 import { DrizzleOnboardingProvisioner } from '../infra/onboarding-provisioner.js';
+import { DrizzleStationCapacityPort } from '../infra/repositories/organization-access.repo.js';
 import {
   DrizzleStationRepository,
   DrizzleUserRepository,
@@ -1056,6 +1057,7 @@ stationSetupRouter.post(
       const result = await runInTransaction(db, (tx, events) =>
         new FinalizeStationOnboarding({
           provisioner: new DrizzleOnboardingProvisioner(tx),
+          capacity: new DrizzleStationCapacityPort(tx),
           events,
         }).execute(parsed.draft, buildContext(user)),
       );
