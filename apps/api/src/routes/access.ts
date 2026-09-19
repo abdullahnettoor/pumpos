@@ -33,7 +33,7 @@ function sendResult<T>(c: any, result: Result<T>) {
  * anything this user may not see. Clients use it for presentation only; every
  * protected operation is still checked here.
  */
-accessRouter.get('/access', async (c) => {
+accessRouter.get('/', async (c) => {
   const user = c.var.user;
   const useCase = new GetAccessDocument({
     access: new DrizzleOrganizationAccessReader(c.var.db),

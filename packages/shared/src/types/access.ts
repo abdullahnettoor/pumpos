@@ -38,17 +38,22 @@ export type ResolutionCode =
   | 'WAIT_FOR_REACTIVATION';
 
 /**
- * How an unavailable capability is presented. `HIDDEN` entries are dropped
+ * How an *unavailable* capability is presented. `HIDDEN` entries are dropped
  * before the document leaves the server, so a client never learns about
- * commercial options it may not see.
+ * commercial options it may not see — which means only `UPGRADE` ever reaches
+ * the wire.
  */
 export type CapabilityVisibility = 'HIDDEN' | 'UPGRADE';
 
-/** One capability as presented to the requesting user. */
+/**
+ * One capability as presented to the requesting user. `visibility`,
+ * `unavailableMessage` and `resolution` describe how to explain the absence,
+ * so they appear only on disabled entries.
+ */
 export interface AccessCapabilityEntry {
   enabled: boolean;
-  visibility: CapabilityVisibility;
   title: string;
+  visibility?: CapabilityVisibility;
   unavailableMessage?: string;
   resolution?: ResolutionCode;
 }
@@ -81,4 +86,15 @@ export interface AccessDocument {
   capabilities: Record<string, AccessCapabilityEntry>;
   limits: Record<LimitKey, AccessLimitEntry>;
   subscription: AccessSubscription;
+}
+
+/**
+ * Is this Product Capability available to the holder of this document?
+ *
+ * Absent access data — a cold start, or a Role the entry is not sent to —
+ * means "not available": a client never grants what the server has not
+ * confirmed. Presentation only; the API re-checks every protected operation.
+ */
+export function capabilityEnabled(access: AccessDocument | undefined, capability: string): boolean {
+  return access?.capabilities[capability]?.enabled === true;
 }

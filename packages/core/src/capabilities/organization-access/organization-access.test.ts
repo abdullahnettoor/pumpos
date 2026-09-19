@@ -4,9 +4,10 @@ import { FixedClock, SequentialIdGenerator } from '../../kernel/index.js';
 import type { ExecutionContext } from '../../kernel/index.js';
 import { GetAccessDocument } from './get-access-document.js';
 import { PRODUCT_ACCESS_REGISTRY, resolveProductPlan, type AccessRegistry } from './registry.js';
-import { normalizeSubscriptionStatus, type OrganizationAccessInputs } from './ports.js';
+import type { OrganizationAccessInputs } from './ports.js';
 import {
   buildAccessDocument,
+  normalizeSubscriptionStatus,
   resolveEffectiveCapabilities,
   resolveEffectiveLimit,
   resolveSubscriptionMode,
@@ -142,8 +143,8 @@ describe('Role filtering of the Access Document', () => {
   it('shows Owners a disabled upgrade entry for an unentitled capability', () => {
     expect(documentFor('Owner').capabilities['exports.tally']).toEqual({
       enabled: false,
-      visibility: 'UPGRADE',
       title: 'Tally export',
+      visibility: 'UPGRADE',
       unavailableMessage: 'Tally export is not available for this Organization.',
       resolution: 'CONTACT_PUMPOS',
     });
@@ -156,7 +157,6 @@ describe('Role filtering of the Access Document', () => {
       expect(capabilities['exports.tally']).toBeUndefined();
       expect(capabilities['reports.dealer_margin']).toEqual({
         enabled: true,
-        visibility: 'UPGRADE',
         title: 'Dealer margin report',
       });
       expect(Object.values(capabilities).every((entry) => entry.enabled)).toBe(true);
@@ -171,7 +171,6 @@ describe('Role filtering of the Access Document', () => {
     const doc = documentFor('Owner', { grantedCapabilities: ['exports.tally'] });
     expect(doc.capabilities['exports.tally']).toEqual({
       enabled: true,
-      visibility: 'UPGRADE',
       title: 'Tally export',
     });
   });

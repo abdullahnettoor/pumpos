@@ -9,13 +9,45 @@ import type {
   SubscriptionStatus,
 } from '@pump/shared';
 import { PRODUCT_ACCESS_REGISTRY, resolveProductPlan, type AccessRegistry } from './registry.js';
-import { normalizeSubscriptionStatus, type OrganizationAccessInputs } from './ports.js';
+import type { OrganizationAccessInputs } from './ports.js';
 
 /**
  * Pure access resolution. Given what the Organization has (plan, grants,
  * overrides, usage, subscription) and who is asking, produce the Access
  * Document the client renders. No I/O, no framework, no database.
  */
+
+/**
+ * Legacy Subscription Status values written before Phase E normalized the
+ * column. Kept as a resolver-side safety net for rows an older build may
+ * still write; the migration rewrites existing data to the typed values.
+ */
+const LEGACY_STATUS: Record<string, SubscriptionStatus> = {
+  Active: 'ACTIVE',
+  Deactivated: 'SUSPENDED',
+  Revoked: 'SUSPENDED',
+};
+
+const KNOWN_STATUSES: readonly SubscriptionStatus[] = [
+  'TRIALING',
+  'ACTIVE',
+  'PAST_DUE',
+  'RESTRICTED',
+  'CANCELED',
+  'SUSPENDED',
+];
+
+/**
+ * Map a stored status onto the typed union. An unrecognized value resolves to
+ * ACTIVE on purpose: a corrupt string must never silently lock a paying
+ * station out of its own operations. Suspension is always explicit.
+ */
+export function normalizeSubscriptionStatus(raw: string | null | undefined): SubscriptionStatus {
+  if (!raw) return 'ACTIVE';
+  const upper = raw.toUpperCase();
+  const known = KNOWN_STATUSES.find((status) => status === upper);
+  return known ?? LEGACY_STATUS[raw] ?? 'ACTIVE';
+}
 
 /** Roles that may see commercial information: the plan and upgrade guidance. */
 const COMMERCIAL_ROLES: readonly Role[] = ['Owner', 'Manager'];
@@ -139,18 +171,14 @@ function resolveCapabilities(
   const entries: Record<string, AccessCapabilityEntry> = {};
   for (const definition of Object.values(registry.capabilities)) {
     if (entitled.has(definition.key)) {
-      entries[definition.key] = {
-        enabled: true,
-        visibility: 'UPGRADE',
-        title: definition.title,
-      };
+      entries[definition.key] = { enabled: true, title: definition.title };
       continue;
     }
     if (!definition.upgradable || !seesCommercialAccess(role)) continue;
     entries[definition.key] = {
       enabled: false,
-      visibility: 'UPGRADE',
       title: definition.title,
+      visibility: 'UPGRADE',
       unavailableMessage: definition.unavailableMessage,
       resolution: definition.resolution,
     };

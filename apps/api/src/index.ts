@@ -799,7 +799,7 @@ api.route('/transactions', transactionsRouter);
 api.route('/dssr', dssrRouter);
 api.route('/finance', financeRouter);
 // Organization access document (role-filtered, presentation only).
-api.route('/', accessRouter);
+api.route('/access', accessRouter);
 
 // Mount authenticated group
 app.route('/api', api);
@@ -1351,6 +1351,10 @@ platform.post('/owners/:orgId/revoke', async (c) => {
   }
   await db
     .update(schema.organizations)
+    // Revoking an invite and deactivating an Owner both mean "PumpOS stopped
+    // this Organization", which is SUSPENDED in the typed model. The two
+    // remain distinguishable through their events (OWNER_INVITE_REVOKED vs
+    // ORGANIZATION_DEACTIVATED), which is where that history belongs.
     .set({ subscriptionStatus: 'SUSPENDED', updatedAt: new Date() })
     .where(eq(schema.organizations.id, org.id));
   await appendPlatformEvent(

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { QueryClient } from '@tanstack/react-query';
-import type { AccessDocument } from '@pump/shared';
-import { capabilityEnabled, queryKeys, TIER } from './hooks.js';
+import { capabilityEnabled, type AccessDocument } from '@pump/shared';
+import { queryKeys, TIER } from './hooks.js';
 
 /**
  * Access is presentation data with two honest failure modes (Phase E1):
@@ -12,7 +12,7 @@ import { capabilityEnabled, queryKeys, TIER } from './hooks.js';
 const document = (over: Partial<AccessDocument> = {}): AccessDocument => ({
   plan: 'CORE',
   capabilities: {
-    'exports.tally': { enabled: true, visibility: 'UPGRADE', title: 'Tally export' },
+    'exports.tally': { enabled: true, title: 'Tally export' },
   },
   limits: { station_count: { value: 1, used: 1, reached: true } },
   subscription: {
@@ -35,8 +35,8 @@ describe('capabilityEnabled', () => {
       capabilities: {
         'exports.tally': {
           enabled: false,
-          visibility: 'UPGRADE',
           title: 'Tally export',
+          visibility: 'UPGRADE',
           unavailableMessage: 'Not available.',
           resolution: 'CONTACT_PUMPOS',
         },

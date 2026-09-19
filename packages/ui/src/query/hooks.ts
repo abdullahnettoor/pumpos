@@ -264,16 +264,6 @@ export function useAccess(options?: Options<AccessDocument>) {
   });
 }
 
-/**
- * Is this Product Capability available? Absent access data (cold start, or a
- * user whose Role is not sent the entry) means "not available": the client
- * never grants what the server has not confirmed. Presentation only — the API
- * re-checks every protected operation.
- */
-export function capabilityEnabled(access: AccessDocument | undefined, capability: string): boolean {
-  return access?.capabilities[capability]?.enabled === true;
-}
-
 export function useOrganization(options?: Options<any>) {
   return useQuery({
     queryKey: queryKeys.organization(),

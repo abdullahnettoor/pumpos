@@ -50,7 +50,7 @@ async function getAccess(
     });
     await next();
   });
-  app.route('/', accessRouter);
+  app.route('/access', accessRouter);
 
   const res = await app.request('/access');
   expect(res.status).toBe(200);
