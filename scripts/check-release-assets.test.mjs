@@ -14,7 +14,8 @@ function manifest(overrides = {}) {
     notes: '',
     pub_date: '2026-05-01T00:00:00.000Z',
     platforms: {
-      'darwin-universal': { signature: 'bWFj', url: `${BASE}/PumpOS.app.tar.gz` },
+      'darwin-aarch64': { signature: 'bWFj', url: `${BASE}/PumpOS.app.tar.gz` },
+      'darwin-x86_64': { signature: 'bWFj', url: `${BASE}/PumpOS.app.tar.gz` },
       'windows-x86_64': { signature: 'd2lu', url: `${BASE}/PumpOS_1.2.3_x64-setup.exe` },
     },
     ...overrides,
@@ -75,19 +76,26 @@ describe('release asset presence', () => {
     expect(() => assertManifestAssetsPresent(manifest(), assets)).toThrow(/is empty/);
   });
 
-  it('fails when two targets point at one file', () => {
-    const duplicated = manifest();
-    duplicated.platforms['windows-x86_64'].url = `${BASE}/PumpOS.app.tar.gz`;
-    expect(() => assertManifestAssetsPresent(duplicated, COMPLETE)).toThrow(
-      /two targets reference the same asset/,
+  it('allows the universal macOS artifact under both Mac keys', () => {
+    // One file, two architectures. This is the shape that was wrongly rejected
+    // by a duplicate-count rule.
+    const assets = assertManifestAssetsPresent(manifest(), COMPLETE);
+    expect(assets.map((a) => a.name)).toEqual(['PumpOS.app.tar.gz', 'PumpOS_1.2.3_x64-setup.exe']);
+  });
+
+  it('fails when a key points at a file that cannot serve it', () => {
+    const wrong = manifest();
+    wrong.platforms['darwin-aarch64'].url = `${BASE}/PumpOS_1.2.3_x64-setup.exe`;
+    expect(() => assertManifestAssetsPresent(wrong, COMPLETE)).toThrow(
+      /darwin-aarch64 points at PumpOS_1\.2\.3_x64-setup\.exe, which cannot serve that platform/,
     );
   });
 
   it('inherits the manifest validation, so a malformed manifest never publishes', () => {
     const broken = manifest();
-    delete broken.platforms['darwin-universal'];
+    delete broken.platforms['darwin-aarch64'];
     expect(() => assertManifestAssetsPresent(broken, COMPLETE)).toThrow(
-      /missing required target darwin-universal/,
+      /missing required target darwin-aarch64/,
     );
   });
 
