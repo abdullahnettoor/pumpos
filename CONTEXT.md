@@ -125,6 +125,62 @@ Authorization level for app users: Owner, Manager, Accountant, Staff (console),
 Attendant (mobile-only, DU-scoped). `guards.ts` is the source of truth.
 _Avoid_: user type, permission group
 
+**Product Capability**:
+A coarse, customer-visible area of PumpOS that can be granted independently,
+such as advanced inventory or multi-station reporting. Product Capabilities are
+named for business value, not individual screens, buttons, or implementation
+details.
+_Avoid_: feature, module, screen flag
+
+**Entitlement**:
+An Organization's grant to use a Product Capability. It controls whether the
+Organization has access; a Role separately controls what a user may do within
+that access. Revoking an Entitlement prevents new actions but does not hide the
+Organization's historical records.
+_Avoid_: permission, role, feature flag
+
+**Feature Flag**:
+A temporary control used by PumpOS to stage software rollout or disable faulty
+behavior. It is not customer access, authorization, or commercial packaging.
+_Avoid_: entitlement, permission
+
+**Product Plan**:
+The commercial package assigned to an Organization. A Product Plan supplies a
+set of Product Capabilities and Limits; an Organization may also receive
+additional Entitlements without changing its Product Plan.
+_Avoid_: role, subscription status
+
+**Limit**:
+A numeric allowance attached to an Organization through its Product Plan, such
+as the maximum number of Stations. A Limit constrains use of an available
+Product Capability; it is not a boolean Entitlement.
+_Avoid_: feature flag, permission, quota flag
+
+**Subscription Status**:
+The Organization's commercial access state: Trialing, Active, Past Due,
+Restricted, Canceled, or Suspended. It applies to the Organization as a whole
+and is separate from any user's login status or Role.
+_Avoid_: owner status, user status, entitlement
+
+**Payment Grace Period**:
+The seven-day period after a subscription payment fails. The Organization is
+Past Due but retains normal access while Owners and Managers receive payment
+warnings.
+_Avoid_: trial, extension
+
+**Restricted Access**:
+The access mode after the Payment Grace Period ends. Existing Stations retain
+the essential actions needed to finish station operations safely, while growth,
+setup changes, and premium actions are blocked.
+_Avoid_: read-only mode, deactivated Organization
+
+**Suspended Organization**:
+An Organization manually stopped by PumpOS for a security, legal, fraud, or
+abuse concern. Suspension blocks new writes and is separate from payment-based
+Restricted Access. Historical access may remain available to Owners and
+Managers.
+_Avoid_: Past Due Organization, Restricted Access
+
 **Nozzle**:
 The metered dispensing point whose readings derive all Fuel Sales.
 _Avoid_: hose, gun
