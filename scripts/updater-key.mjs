@@ -63,7 +63,14 @@ export function assertUsablePublicKey(pubkey) {
     .find((l) => l.length > 0 && !l.startsWith('untrusted comment:'));
   const bytes = Buffer.from(line ?? '', 'base64');
   if (bytes.length !== 42 || bytes.subarray(0, 2).toString('utf8') !== 'Ed') {
-    throw new Error('updater public key is not a minisign Ed25519 public key');
+    // Tauri already writes the .pub file base64-encoded, so the most common way
+    // to get here is running it through `base64` a second time. Say so: the
+    // difference is invisible in the shell and the raw error is not a clue.
+    const doubled = Buffer.from(decoded.trim(), 'base64').toString('utf8');
+    const hint = doubled.startsWith('untrusted comment:')
+      ? ' It looks double-encoded — use `cat ~/.pumpos/updater.key.pub`, not `base64 -i`.'
+      : '';
+    throw new Error(`updater public key is not a minisign Ed25519 public key.${hint}`);
   }
   return pubkey.trim();
 }

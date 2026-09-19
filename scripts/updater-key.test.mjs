@@ -78,3 +78,12 @@ describe('updater public key', () => {
     expect(readEmbeddedPublicKey(root)).toBe(PLACEHOLDER_PUBLIC_KEY);
   });
 });
+
+describe('double-encoded key', () => {
+  it('names the mistake instead of just rejecting the key', () => {
+    // `base64 -i updater.key.pub` instead of `cat` — invisible in a shell, and
+    // the raw "not a minisign key" error gives no clue which way to go.
+    const doubled = Buffer.from(publicKeyFixture()).toString('base64');
+    expect(() => assertUsablePublicKey(doubled)).toThrow(/looks double-encoded/);
+  });
+});

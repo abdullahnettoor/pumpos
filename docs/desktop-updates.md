@@ -61,10 +61,13 @@ That writes:
 ### 2. Embed the public key
 
 ```bash
-TAURI_SIGNING_PUBLIC_KEY="$(base64 -i ~/.pumpos/updater.key.pub)" \
+TAURI_SIGNING_PUBLIC_KEY="$(cat ~/.pumpos/updater.key.pub)" \
   node scripts/updater-key.mjs --stamp
 node scripts/updater-key.mjs --check
 ```
+
+`cat`, not `base64`: Tauri already writes the `.pub` file base64-encoded, so
+encoding it again produces a key the app would reject.
 
 Commit the resulting change to `apps/desktop/src-tauri/tauri.conf.json`. The
 script refuses anything that is not a minisign Ed25519 public key, and refuses
