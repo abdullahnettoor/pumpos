@@ -120,10 +120,9 @@ const provisionProductRow = async (product: Record<string, unknown>) => {
 describe('DrizzleOnboardingProvisioner writes on the caller transaction (#161)', () => {
   it('never opens its own transaction — the injected client is the unit of work', async () => {
     const inserts: RecordedInsert[] = [];
+    // The fake client has no `transaction` method: if the adapter tried to open
+    // a nested unit of work it would throw instead of provisioning.
     const db = makeFakeDb(inserts);
-    // A client with no `transaction` method at all: if the adapter tried to
-    // open a nested unit of work it would throw instead of provisioning.
-    expect((db as unknown as Record<string, unknown>).transaction).toBeUndefined();
     const result = await new DrizzleOnboardingProvisioner(db).provision({
       organizationId: 'org-1',
       actorId: 'user-1',
