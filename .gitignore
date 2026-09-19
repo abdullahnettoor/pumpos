@@ -100,3 +100,9 @@ coverage/
 
 # graft's local graph cache — regenerable, not committed (run `graft build`).
 /graft/
+
+# local scratch
+/tmp/
+
+# local-only agent skills
+/.agents/skills/openscreen-recording/

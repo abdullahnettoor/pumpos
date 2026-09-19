@@ -160,155 +160,119 @@ shiftsRouter.get('/dashboard-summary', async (c) => {
   });
   const now = Date.now();
 
-  const [openShiftRows, lastShiftRows, todayRollupRows] = await Promise.all([
-    db
-      .select({ shift: schema.shifts, templateName: schema.shiftTemplates.name })
-      .from(schema.shifts)
-      .leftJoin(schema.shiftTemplates, eq(schema.shiftTemplates.id, schema.shifts.shiftTemplateId))
-      .where(
-        and(
-          eq(schema.shifts.organizationId, orgId),
-          eq(schema.shifts.stationId, stationId),
-          eq(schema.shifts.status, 'OPEN'),
-        ),
-      )
-      .limit(1),
-    db
-      .select({ shift: schema.shifts, templateName: schema.shiftTemplates.name })
-      .from(schema.shifts)
-      .leftJoin(schema.shiftTemplates, eq(schema.shiftTemplates.id, schema.shifts.shiftTemplateId))
-      .where(
-        and(
-          eq(schema.shifts.organizationId, orgId),
-          eq(schema.shifts.stationId, stationId),
-          ne(schema.shifts.status, 'OPEN'),
-        ),
-      )
-      .orderBy(desc(schema.shifts.closedAt), desc(schema.shifts.createdAt))
-      .limit(1),
-    // Today's closed-shift totals aggregated in SQL from the stored snapshots —
-    // no rows or snapshots travel to the Worker, only the sums.
-    db
-      .select({
-        shiftsClosed: sql<number>`COUNT(*)::int`,
-        fuelSalesValue: sql<string>`COALESCE(SUM((${schema.shiftSummaries.snapshotData} ->> 'totalFuelSalesValue')::numeric), 0)`,
-        volume: sql<string>`COALESCE(SUM((${schema.shiftSummaries.snapshotData} ->> 'totalVolume')::numeric), 0)`,
-        cashVariance: sql<string>`COALESCE(SUM((${schema.shiftSummaries.snapshotData} ->> 'cashVariance')::numeric), 0)`,
-      })
-      .from(schema.shiftSummaries)
-      .innerJoin(schema.shifts, eq(schema.shifts.id, schema.shiftSummaries.shiftId))
-      .innerJoin(schema.businessDays, eq(schema.businessDays.id, schema.shifts.businessDayId))
-      .where(
-        and(
-          eq(schema.shifts.organizationId, orgId),
-          eq(schema.shifts.stationId, stationId),
-          eq(schema.businessDays.businessDate, todayBusinessDate),
-        ),
-      ),
-  ]);
+  // ONE round-trip for everything (#155): each query costs ~2-3 ms of Worker
+  // CPU in driver serialize/parse alone, so the open-shift identity, the
+  // last-shift card, and today's rollup are fetched as three CTEs in a single
+  // statement. Timestamps are rendered as ISO-8601 UTC (matching what the
+  // driver's Date serialization produced before) and columns are aliased to
+  // the camelCase contract.
+  const isoTs = (col: string) => `to_char(${col}, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`;
+  const [row] = await db.execute(sql`
+    WITH open_shift AS (
+      SELECT
+        s.id,
+        s.business_day_id AS "businessDayId",
+        COALESCE(t.name, 'Custom') AS "templateName",
+        bd.business_date AS "businessDate",
+        COALESCE(u.full_name, 'System') AS "openedByName",
+        ${sql.raw(isoTs('s.opened_at'))} AS "openedAt",
+        s.opening_cash AS "openingCash"
+      FROM shifts s
+      LEFT JOIN shift_templates t ON t.id = s.shift_template_id
+      LEFT JOIN users u ON u.id = s.opened_by AND u.organization_id = s.organization_id
+      LEFT JOIN business_days bd ON bd.id = s.business_day_id
+      WHERE s.organization_id = ${orgId} AND s.station_id = ${stationId} AND s.status = 'OPEN'
+      LIMIT 1
+    ),
+    last_shift AS (
+      SELECT
+        s.id,
+        s.status,
+        COALESCE(t.name, 'Custom') AS "templateName",
+        ${sql.raw(isoTs('s.closed_at'))} AS "closedAt",
+        bd.status AS "dayStatus",
+        (ss.shift_id IS NOT NULL) AS "hasSummary",
+        COALESCE((ss.snapshot_data ->> 'totalVolumeSold')::numeric,
+                 (ss.snapshot_data ->> 'totalVolume')::numeric, 0) AS "totalVolumeSold",
+        COALESCE((ss.snapshot_data ->> 'closingCash')::numeric, 0) AS "closingCash",
+        COALESCE(ss.snapshot_data -> 'fuelByProduct', '[]'::jsonb) AS "fuelByProduct"
+      FROM shifts s
+      LEFT JOIN shift_templates t ON t.id = s.shift_template_id
+      LEFT JOIN business_days bd ON bd.id = s.business_day_id
+      LEFT JOIN shift_summaries ss ON ss.shift_id = s.id
+      WHERE s.organization_id = ${orgId} AND s.station_id = ${stationId} AND s.status <> 'OPEN'
+      ORDER BY s.closed_at DESC, s.created_at DESC
+      LIMIT 1
+    ),
+    today AS (
+      SELECT
+        COUNT(*)::int AS "shiftsClosed",
+        COALESCE(SUM((ss.snapshot_data ->> 'totalFuelSalesValue')::numeric), 0) AS "fuelSalesValue",
+        COALESCE(SUM((ss.snapshot_data ->> 'totalVolume')::numeric), 0) AS "volume",
+        COALESCE(SUM((ss.snapshot_data ->> 'cashVariance')::numeric), 0) AS "cashVariance"
+      FROM shift_summaries ss
+      JOIN shifts s ON s.id = ss.shift_id
+      JOIN business_days bd ON bd.id = s.business_day_id
+      WHERE s.organization_id = ${orgId} AND s.station_id = ${stationId}
+        AND bd.business_date = ${todayBusinessDate}
+    )
+    SELECT
+      (SELECT row_to_json(open_shift) FROM open_shift) AS open_shift,
+      (SELECT row_to_json(last_shift) FROM last_shift) AS last_shift,
+      (SELECT row_to_json(today) FROM today) AS today
+  `);
 
-  const openRow = openShiftRows[0];
-  const lastRow = lastShiftRows[0];
+  const openRaw = (row as any)?.open_shift as Record<string, any> | null;
+  const lastRaw = (row as any)?.last_shift as Record<string, any> | null;
+  const todayRaw = (row as any)?.today as Record<string, any> | null;
 
-  // Active-shift identity enrichment (opened-by name + business date).
-  let activeShift: any = null;
-  if (openRow) {
-    const [openedByRows, dayRows] = await Promise.all([
-      db
-        .select({ fullName: schema.users.fullName })
-        .from(schema.users)
-        .where(
-          and(eq(schema.users.id, openRow.shift.openedBy), eq(schema.users.organizationId, orgId)),
-        )
-        .limit(1),
-      db
-        .select({ businessDate: schema.businessDays.businessDate })
-        .from(schema.businessDays)
-        .where(
-          and(
-            eq(schema.businessDays.id, openRow.shift.businessDayId),
-            eq(schema.businessDays.organizationId, orgId),
-          ),
-        )
-        .limit(1),
-    ]);
-    activeShift = {
-      id: openRow.shift.id,
-      businessDayId: openRow.shift.businessDayId,
-      templateName: openRow.templateName ?? 'Custom',
-      businessDate: dayRows[0]?.businessDate ?? null,
-      openedByName: openedByRows[0]?.fullName ?? 'System',
-      openedAt: openRow.shift.openedAt,
-      openingCash: openRow.shift.openingCash,
-    };
-  }
+  const activeShift = openRaw
+    ? {
+        id: openRaw.id,
+        businessDayId: openRaw.businessDayId,
+        templateName: openRaw.templateName,
+        businessDate: openRaw.businessDate ?? null,
+        openedByName: openRaw.openedByName,
+        openedAt: openRaw.openedAt,
+        openingCash: openRaw.openingCash,
+      }
+    : null;
 
-  // Last-shift identity + the stored-snapshot scalars the dashboard renders.
   let lastShift: any = null;
   let lastShiftSummary: any = null;
   let canReopenLastShift = false;
   let gracePeriodExpiresAt: string | null = null;
-  if (lastRow) {
-    if (lastRow.shift.status === 'CLOSED' && lastRow.shift.closedAt) {
-      const reopenExpiry = new Date(lastRow.shift.closedAt).getTime() + graceMinutes * 60 * 1000;
+  if (lastRaw) {
+    if (lastRaw.status === 'CLOSED' && lastRaw.closedAt) {
+      const reopenExpiry = new Date(lastRaw.closedAt).getTime() + graceMinutes * 60 * 1000;
       if (now <= reopenExpiry) gracePeriodExpiresAt = new Date(reopenExpiry).toISOString();
     }
-    const [summaryScalarRows, parentDayRows] = await Promise.all([
-      db
-        .select({
-          totalVolumeSold: sql<string>`COALESCE((${schema.shiftSummaries.snapshotData} ->> 'totalVolumeSold')::numeric, (${schema.shiftSummaries.snapshotData} ->> 'totalVolume')::numeric, 0)`,
-          closingCash: sql<string>`COALESCE((${schema.shiftSummaries.snapshotData} ->> 'closingCash')::numeric, 0)`,
-          fuelByProduct: sql<unknown>`COALESCE(${schema.shiftSummaries.snapshotData} -> 'fuelByProduct', '[]'::jsonb)`,
-        })
-        .from(schema.shiftSummaries)
-        .innerJoin(schema.shifts, eq(schema.shifts.id, schema.shiftSummaries.shiftId))
-        .where(
-          and(
-            eq(schema.shiftSummaries.shiftId, lastRow.shift.id),
-            eq(schema.shifts.organizationId, orgId),
-            eq(schema.shifts.stationId, stationId),
-          ),
-        )
-        .limit(1),
-      db
-        .select({ status: schema.businessDays.status })
-        .from(schema.businessDays)
-        .where(
-          and(
-            eq(schema.businessDays.id, lastRow.shift.businessDayId),
-            eq(schema.businessDays.organizationId, orgId),
-          ),
-        )
-        .limit(1),
-    ]);
     if (
-      lastRow.shift.status === 'CLOSED' &&
-      parentDayRows[0]?.status === 'OPEN' &&
+      lastRaw.status === 'CLOSED' &&
+      lastRaw.dayStatus === 'OPEN' &&
       canReopenShift(user.role) &&
-      !openRow
+      !openRaw
     )
       canReopenLastShift = true;
     lastShift = {
-      id: lastRow.shift.id,
-      status: lastRow.shift.status,
-      templateName: lastRow.templateName ?? 'Custom',
-      closedAt: lastRow.shift.closedAt,
+      id: lastRaw.id,
+      status: lastRaw.status,
+      templateName: lastRaw.templateName,
+      closedAt: lastRaw.closedAt,
     };
-    const scalars = summaryScalarRows[0];
-    lastShiftSummary = scalars
+    lastShiftSummary = lastRaw.hasSummary
       ? {
-          totalVolumeSold: Number(scalars.totalVolumeSold),
-          closingCash: Number(scalars.closingCash),
+          totalVolumeSold: Number(lastRaw.totalVolumeSold),
+          closingCash: Number(lastRaw.closingCash),
           fuelUnits: Array.from(
             new Set(
-              ((scalars.fuelByProduct as any[]) ?? []).map((p: any) => String(p?.unit ?? 'L')),
+              ((lastRaw.fuelByProduct as any[]) ?? []).map((p: any) => String(p?.unit ?? 'L')),
             ),
           ),
         }
       : null;
   }
 
-  const rollup = todayRollupRows[0];
   return c.json({
     success: true,
     data: {
@@ -319,10 +283,10 @@ shiftsRouter.get('/dashboard-summary', async (c) => {
       gracePeriodExpiresAt,
       today: {
         businessDate: todayBusinessDate,
-        shiftsClosed: Number(rollup?.shiftsClosed ?? 0),
-        fuelSalesValue: Number(rollup?.fuelSalesValue ?? 0),
-        volume: Number(rollup?.volume ?? 0),
-        cashVariance: Number(rollup?.cashVariance ?? 0),
+        shiftsClosed: Number(todayRaw?.shiftsClosed ?? 0),
+        fuelSalesValue: Number(todayRaw?.fuelSalesValue ?? 0),
+        volume: Number(todayRaw?.volume ?? 0),
+        cashVariance: Number(todayRaw?.cashVariance ?? 0),
       },
     },
   });
@@ -364,6 +328,104 @@ shiftsRouter.get('/status', async (c) => {
   const lockGraceDays = settings.shift_lock_grace_days ?? 3;
   const now = Date.now();
 
+  // --- Lite mode: attribution context only, in ONE round-trip (#155) ---
+  // Consumers (expense / collection / purchase entry, business-day tab, P&L)
+  // need just the open shift's identity plus the grace-window closed shifts.
+  // Each query costs ~2-3 ms of Worker CPU in driver work alone, so the open
+  // business day, the enriched open shift, and the recent closed shifts are
+  // fetched as CTEs in a single statement, shaped to the legacy camelCase
+  // contract in SQL (timestamps as ISO-8601 UTC, matching Date serialization).
+  if (lite) {
+    // ISO string, not Date: raw-SQL params bypass drizzle's column mappers and
+    // a JS Date would stringify to a format Postgres cannot parse.
+    const graceCutoff = new Date(now - lockGraceDays * 24 * 60 * 60 * 1000).toISOString();
+    const ts = (col: string) => sql.raw(`to_char(${col}, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`);
+    const shiftJson = sql`jsonb_build_object(
+      'id', s.id,
+      'organizationId', s.organization_id,
+      'stationId', s.station_id,
+      'businessDayId', s.business_day_id,
+      'shiftTemplateId', s.shift_template_id,
+      'status', s.status,
+      'openedBy', s.opened_by,
+      'openedAt', ${ts('s.opened_at')},
+      'closedBy', s.closed_by,
+      'closedAt', ${ts('s.closed_at')},
+      'lockedAt', ${ts('s.locked_at')},
+      'openingCash', s.opening_cash,
+      'closingCash', s.closing_cash,
+      'createdAt', ${ts('s.created_at')},
+      'updatedAt', ${ts('s.updated_at')}
+    )`;
+    const [row] = await db.execute(sql`
+      WITH open_day AS (
+        SELECT jsonb_build_object(
+          'id', d.id,
+          'organizationId', d.organization_id,
+          'stationId', d.station_id,
+          'businessDate', d.business_date,
+          'status', d.status,
+          'openedBy', d.opened_by,
+          'openedAt', ${ts('d.opened_at')},
+          'closedBy', d.closed_by,
+          'closedAt', ${ts('d.closed_at')},
+          'createdAt', ${ts('d.created_at')},
+          'updatedAt', ${ts('d.updated_at')}
+        ) AS j
+        FROM business_days d
+        WHERE d.station_id = ${stationId} AND d.status = 'OPEN'
+        ORDER BY d.business_date DESC
+        LIMIT 1
+      ),
+      open_shift AS (
+        SELECT ${shiftJson} || jsonb_build_object(
+          'templateName', COALESCE(t.name, 'Custom'),
+          'businessDate', bd.business_date,
+          'scheduledStartTime', t.start_time,
+          'scheduledEndTime', t.end_time,
+          'openedByName', COALESCE(u.full_name, 'System')
+        ) AS j
+        FROM shifts s
+        LEFT JOIN shift_templates t ON t.id = s.shift_template_id
+        LEFT JOIN users u ON u.id = s.opened_by AND u.organization_id = s.organization_id
+        LEFT JOIN business_days bd ON bd.id = s.business_day_id
+        WHERE s.organization_id = ${orgId} AND s.station_id = ${stationId} AND s.status = 'OPEN'
+        LIMIT 1
+      ),
+      recent AS (
+        SELECT ${shiftJson} || jsonb_build_object(
+          'templateName', COALESCE(t.name, 'Custom')
+        ) AS j
+        FROM shifts s
+        LEFT JOIN shift_templates t ON t.id = s.shift_template_id
+        WHERE s.organization_id = ${orgId} AND s.station_id = ${stationId}
+          AND s.status = 'CLOSED' AND s.closed_at > ${graceCutoff}
+        ORDER BY s.closed_at DESC
+        LIMIT 50
+      )
+      SELECT
+        (SELECT j FROM open_day) AS business_day,
+        (SELECT j FROM open_shift) AS active_shift,
+        COALESCE((SELECT jsonb_agg(j) FROM recent), '[]'::jsonb) AS recent_closed
+    `);
+
+    const activeShiftJson = ((row as any)?.active_shift as Record<string, any> | null) ?? null;
+    return c.json({
+      success: true,
+      data: {
+        businessDay: ((row as any)?.business_day as Record<string, any> | null) ?? null,
+        shift: activeShiftJson,
+        readings: [],
+        activeShift: activeShiftJson,
+        lastShift: null,
+        lastShiftSummary: null,
+        canReopenLastShift: false,
+        gracePeriodExpiresAt: null,
+        recentClosedShifts: ((row as any)?.recent_closed as any[]) ?? [],
+      },
+    });
+  }
+
   // Business day + active shift are independent — fetch together.
   const [businessDayRows, activeShiftRows] = await Promise.all([
     db
@@ -403,59 +465,6 @@ shiftsRouter.get('/status', async (c) => {
       .limit(50);
     return rows.map((item) => ({ ...item.shift, templateName: item.templateName ?? 'Custom' }));
   };
-
-  // --- Lite mode: attribution context only ---
-  // Consumers (expense / collection / purchase entry, business-day tab, P&L)
-  // need just the open shift's identity plus the grace-window closed shifts.
-  // No nozzle/handover/staff enrichment, no last-shift block, no reference data.
-  if (lite) {
-    let liteActiveShift: any = null;
-    if (dbActiveShift) {
-      const [templateRows, openedByRows, activeBusinessDayRows] = await Promise.all([
-        db
-          .select()
-          .from(schema.shiftTemplates)
-          .where(eq(schema.shiftTemplates.id, dbActiveShift.shiftTemplateId))
-          .limit(1),
-        db.select().from(schema.users).where(eq(schema.users.id, dbActiveShift.openedBy)).limit(1),
-        db
-          .select({ businessDate: schema.businessDays.businessDate })
-          .from(schema.businessDays)
-          .where(
-            and(
-              eq(schema.businessDays.id, dbActiveShift.businessDayId),
-              eq(schema.businessDays.organizationId, orgId),
-              eq(schema.businessDays.stationId, stationId),
-            ),
-          )
-          .limit(1),
-      ]);
-      const template = templateRows[0];
-      liteActiveShift = {
-        ...dbActiveShift,
-        templateName: template?.name ?? 'Custom',
-        businessDate: activeBusinessDayRows[0]?.businessDate ?? null,
-        scheduledStartTime: template?.startTime ?? null,
-        scheduledEndTime: template?.endTime ?? null,
-        openedByName: openedByRows[0]?.fullName ?? 'System',
-      };
-    }
-    const recentClosedShifts = await loadRecentClosedShifts();
-    return c.json({
-      success: true,
-      data: {
-        businessDay: businessDay ?? null,
-        shift: dbActiveShift ?? null,
-        readings: [],
-        activeShift: liteActiveShift,
-        lastShift: null,
-        lastShiftSummary: null,
-        canReopenLastShift: false,
-        gracePeriodExpiresAt: null,
-        recentClosedShifts,
-      },
-    });
-  }
 
   let activeShift: any = null;
   if (dbActiveShift) {
