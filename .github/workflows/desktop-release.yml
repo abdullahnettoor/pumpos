@@ -251,15 +251,18 @@ jobs:
             > latest.json
           cat latest.json
 
-      # The last gate before publication. A manifest can only reference assets
-      # that are actually on the release: a draft's assets are not reachable at
-      # the public URLs clients use, so presence on the release is what can be
-      # proved here, and it is proved before the channel flips.
-      - name: Confirm every manifest asset is on the release
+      # The last gate before publication: every asset latest.json names is on
+      # the release, carries its signature, and can actually be read. A draft's
+      # assets are not served at the public URLs clients use, but the same bytes
+      # are reachable through the authenticated asset API — so an inaccessible
+      # asset stops the release here instead of being reported after the stable
+      # channel has already flipped.
+      - name: Confirm every manifest asset is attached and fetchable
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release view "v${{ inputs.version }}" --json assets --jq '[.assets[].name]' > assets.json
+          gh release view "v${{ inputs.version }}" --json assets --jq '.assets' > assets.json
           node scripts/check-release-assets.mjs latest.json assets.json
 
       - name: Attach latest.json to the draft release

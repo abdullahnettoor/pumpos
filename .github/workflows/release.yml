@@ -163,9 +163,10 @@ jobs:
     with:
       version: ${{ needs.tag.outputs.version }}
 
-  # Publishing is the moment the stable update channel changes: every installed
-  # desktop client starts seeing this version. It is therefore a separate,
-  # explicitly approved step, and it never runs while a desktop build failed.
+  # A web-only release changes no desktop update channel, so it publishes as
+  # soon as the deploy succeeds — the draft exists only so the release and its
+  # assets appear together. It costs no second approval, exactly as before this
+  # feature landed.
   publish:
     name: Publish release
     needs: [tag, deploy, desktop]
@@ -173,7 +174,26 @@ jobs:
       always() &&
       needs.tag.outputs.release == 'true' &&
       needs.deploy.result == 'success' &&
-      (needs.desktop.result == 'success' || needs.desktop.result == 'skipped')
+      needs.desktop.result == 'skipped'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish the GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release edit "${{ needs.tag.outputs.tag }}" --draft=false --latest
+
+  # A desktop release is different: publishing is the moment every installed
+  # client starts seeing this version. That gets its own approval, because it
+  # changes software already running on stations rather than a surface they
+  # fetch fresh.
+  publish-desktop:
+    name: Publish desktop release
+    needs: [tag, deploy, desktop]
+    if: |
+      always() &&
+      needs.tag.outputs.release == 'true' &&
+      needs.deploy.result == 'success' &&
+      needs.desktop.result == 'success'
     runs-on: ubuntu-latest
     environment: production
     steps:
@@ -185,13 +205,11 @@ jobs:
       - name: Publish the GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release edit "${{ needs.tag.outputs.tag }}" --draft=false --latest
+        run: gh release edit "${{ needs.tag.outputs.tag }}" --draft=false --latest
 
-      # Upload success is not health: the manifest can be published with a URL
-      # that 404s. Check the exact endpoint installed clients poll, before the
-      # release is announced. A failure here is recovered with a higher patch
+      # The candidate's assets were already proved fetchable while the release
+      # was a draft. This confirms the same bytes answer at the public URLs
+      # clients actually poll. A failure here is recovered with a higher patch
       # version, never by replacing assets under this tag.
       - name: Smoke-test the stable update channel
-        if: needs.desktop.result == 'success'
         run: node scripts/smoke-updater.mjs --expect-version "${{ needs.tag.outputs.version }}"

@@ -172,16 +172,19 @@ The release model is unchanged: **merge `dev` into `main`**. See
    (`scripts/updater-manifest.mjs`). It must carry exactly
    `darwin-universal` and `windows-x86_64`, HTTPS URLs for the tagged version,
    and nothing else, or the job fails and the release stays a draft.
-5. **Presence is proved before the channel flips.** A draft's assets are not
-   reachable at the public URLs clients use, so reachability cannot be tested
-   yet — but `scripts/check-release-assets.mjs` confirms every file
-   `latest.json` names is attached to the release, with its signature, and that
-   no two targets point at one file.
-6. **Publication is a second approval.** The `publish` job uses the protected
-   `production` environment. Approving it is the moment the stable channel
-   changes.
+5. **The candidate is proved usable before the channel flips.**
+   `scripts/check-release-assets.mjs` confirms every file `latest.json` names is
+   attached, non-empty, fully uploaded, carrying its signature, not shared
+   between two targets — and **actually fetchable**. A draft's assets are not
+   served at the public URLs yet, but the same bytes answer a one-byte ranged
+   request on the authenticated asset API, so an inaccessible asset stops the
+   release rather than reaching stations.
+6. **Publishing a desktop release is a second approval.** `publish-desktop` uses
+   the protected `production` environment: approving it is the moment software
+   already running on stations starts seeing a new version. A web-only release
+   publishes straight after its deploy — it changes no update channel.
 7. **The published channel is smoke-tested.** `scripts/smoke-updater.mjs`
-   fetches the real manifest and confirms every referenced asset is reachable.
+   re-checks the same bytes at the public URLs clients actually poll.
 
 Check the channel by hand at any time:
 

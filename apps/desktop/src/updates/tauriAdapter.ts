@@ -15,6 +15,12 @@ import type {
  * selection and installation all live in the plugin, and the decision-making
  * lives in the coordinator. Imports are dynamic so a non-desktop bundle (or a
  * node test run) never pulls the plugins in.
+ *
+ * `plugin-os` is the third plugin here and earns its place: macOS and Windows
+ * genuinely differ after `install()` — the Windows installer terminates PumpOS,
+ * macOS leaves it running until the operator restarts — so the coordinator has
+ * to know which one it is on. The alternative is sniffing `navigator.userAgent`
+ * inside a webview, which is a guess where `os:allow-platform` is an answer.
  */
 export async function createTauriUpdaterAdapter(): Promise<UpdaterAdapter> {
   const [{ check }, { getVersion }, { platform }] = await Promise.all([
