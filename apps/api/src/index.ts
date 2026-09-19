@@ -31,6 +31,7 @@ import { shiftsRouter } from './routes/shifts.js';
 import { transactionsRouter } from './routes/transactions.js';
 import { dssrRouter } from './routes/dssr.js';
 import { financeRouter } from './routes/finance.js';
+import { accessRouter } from './routes/access.js';
 import { idempotency } from './infra/idempotency.js';
 import { verifySupabaseJwt } from './infra/supabase-jwt.js';
 import { SupabaseAdmin } from './infra/supabase-admin.js';
@@ -797,6 +798,8 @@ api.route('/shifts', shiftsRouter);
 api.route('/transactions', transactionsRouter);
 api.route('/dssr', dssrRouter);
 api.route('/finance', financeRouter);
+// Organization access document (role-filtered, presentation only).
+api.route('/', accessRouter);
 
 // Mount authenticated group
 app.route('/api', api);
@@ -1057,7 +1060,8 @@ function deriveOwnerStatus(
 }
 
 // GET /platform/owners — one row per org (its Owner user), enriched with auth
-// state. Revoked orgs are hidden by default; pass ?includeRevoked=1 to show them.
+// state. Suspended orgs (revoked or deactivated) are hidden by default; pass
+// ?includeRevoked=1 to show them.
 platform.get('/owners', async (c) => {
   const db = c.var.db;
   const includeRevoked = ['1', 'true', 'yes'].includes(
@@ -1069,7 +1073,9 @@ platform.get('/owners', async (c) => {
     .select()
     .from(schema.organizations)
     .orderBy(desc(schema.organizations.createdAt));
-  const orgs = includeRevoked ? allOrgs : allOrgs.filter((o) => o.subscriptionStatus !== 'Revoked');
+  const orgs = includeRevoked
+    ? allOrgs
+    : allOrgs.filter((o) => o.subscriptionStatus !== 'SUSPENDED');
   if (orgs.length === 0) {
     return c.json({ success: true, data: [] });
   }
@@ -1345,7 +1351,7 @@ platform.post('/owners/:orgId/revoke', async (c) => {
   }
   await db
     .update(schema.organizations)
-    .set({ subscriptionStatus: 'Revoked', updatedAt: new Date() })
+    .set({ subscriptionStatus: 'SUSPENDED', updatedAt: new Date() })
     .where(eq(schema.organizations.id, org.id));
   await appendPlatformEvent(
     db,
@@ -1397,7 +1403,7 @@ async function setOwnerActive(c: any, active: boolean): Promise<Response> {
     .where(eq(schema.users.id, owner.id));
   await db
     .update(schema.organizations)
-    .set({ subscriptionStatus: active ? 'Active' : 'Deactivated', updatedAt: new Date() })
+    .set({ subscriptionStatus: active ? 'ACTIVE' : 'SUSPENDED', updatedAt: new Date() })
     .where(eq(schema.organizations.id, org.id));
   await appendPlatformEvent(
     db,

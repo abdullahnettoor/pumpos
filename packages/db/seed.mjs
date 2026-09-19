@@ -83,8 +83,8 @@ async function main() {
     .values({
       id: ID.org,
       name: 'Demo Fuels Pvt Ltd',
-      subscriptionPlan: 'Core',
-      subscriptionStatus: 'Active',
+      subscriptionPlan: 'CORE',
+      subscriptionStatus: 'ACTIVE',
     })
     .onConflictDoNothing();
 

@@ -23,11 +23,15 @@ const PERSIST_PREFIXES = new Set([
   'payment-terminals',
   'pricing',
   'organization',
+  // Only the role-filtered Access Document is persisted — never grant rows,
+  // reasons, or platform actor data, which clients are not sent at all.
+  'access',
 ]);
-// Bump to invalidate all persisted client caches on next load. v3 drops stale
-// empty `stations` lists cached while a user briefly resolved to a wrong/empty
-// org (Phase A duplicate-auth-user bug).
-const CACHE_BUSTER = 'v3';
+// Bump to invalidate all persisted client caches on next load. v4 adds the
+// persisted Access Document (Phase E1); v3 dropped stale empty `stations`
+// lists cached while a user briefly resolved to a wrong/empty org (Phase A
+// duplicate-auth-user bug).
+const CACHE_BUSTER = 'v4';
 
 /** localStorage key the persisted static/semi cache is written to. */
 export const PERSISTED_QUERY_CACHE_KEY = 'pumpos-rq-cache';

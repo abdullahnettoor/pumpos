@@ -55,8 +55,8 @@ export type OpenShiftFormValues = z.input<ReturnType<typeof createOpenShiftFormS
 
 export const organizationSchema = z.object({
   name: z.string().min(2, 'Organization name must be at least 2 characters'),
-  subscriptionPlan: z.string().default('Core'),
-  subscriptionStatus: z.string().default('Active'),
+  subscriptionPlan: z.string().default('CORE'),
+  subscriptionStatus: z.string().default('ACTIVE'),
 });
 
 /** Owner-editable organization profile (name + legal/branding metadata). */
