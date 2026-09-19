@@ -128,19 +128,21 @@ whenever the operator picks **Check for updates** from the user menu (which also
 shows the installed version). It never checks during boot, from a development
 build, from the web console, or from mobile.
 
-| State             | What the notice says                                  | What the operator can do          |
-| ----------------- | ----------------------------------------------------- | --------------------------------- |
-| Checking          | "Checking for updates…"                               | keep working                      |
-| Up to date        | the installed version                                 | dismiss                           |
-| Available         | the new version and its release notes                 | **Download update**, or Not now   |
-| Downloading       | MB downloaded, or a percentage when the size is known | keep working                      |
-| Ready             | "ready to install"                                    | **Install and restart**, or Later |
-| Restart postponed | the concrete reason local writes are unsafe           | Try again, or Later               |
-| Installed (macOS) | "installed"                                           | **Restart and update**            |
-| Failed            | a plain-language cause                                | retry the step that failed        |
+| State             | What the notice says                                  | What the operator can do            |
+| ----------------- | ----------------------------------------------------- | ----------------------------------- |
+| Checking          | "Checking for updates…"                               | keep working                        |
+| Up to date        | the installed version                                 | dismiss                             |
+| Available         | the new version and its release notes                 | **Download update**, or dismiss     |
+| Downloading       | MB downloaded, or a percentage when the size is known | keep working                        |
+| Ready             | "ready to install"                                    | **Install and restart**, or dismiss |
+| Restart postponed | the concrete reason local writes are unsafe           | Try again, or dismiss               |
+| Installed (macOS) | "installed"                                           | **Restart and update**              |
+| Failed            | a plain-language cause                                | retry the step that failed          |
 
 The notice is a compact panel in the corner, never a modal: an update is never
-more important than the shift in front of the operator.
+more important than the shift in front of the operator. Dismissing it puts the
+offer away without losing it — including a finished download — and the menu's
+manual check brings it straight back rather than re-fetching it.
 
 **Restart readiness.** Installation asks one interface — owned by desktop
 resilience — whether PumpOS may close. It is deliberately _not_ derived from

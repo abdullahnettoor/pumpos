@@ -57,8 +57,9 @@ describe('UpdateNotice rendering', () => {
 
   it('announces state to assistive technology without stealing focus', () => {
     render(<UpdateNotice updates={updates({ phase: 'checking', currentVersion: '1.0.0' })} />);
-    const notice = screen.getByRole('status');
-    expect(notice.getAttribute('aria-live')).toBe('polite');
+    // `role="status"` is an implicit polite live region, so the state is
+    // announced where it changes rather than by moving the operator's focus.
+    expect(screen.getByRole('status')).toBeTruthy();
     expect(document.activeElement).toBe(document.body);
     cleanup();
   });
@@ -106,15 +107,46 @@ describe('UpdateNotice rendering', () => {
     cleanup();
   });
 
-  it('is keyboard reachable: every action is a real button', () => {
+  it('is keyboard reachable: the action and the dismissal are both real buttons', () => {
     render(
       <UpdateNotice
         updates={updates({ phase: 'downloaded', currentVersion: '1.0.0', update: offered })}
       />,
     );
-    const names = screen.getAllByRole('button').map((b) => b.textContent);
-    expect(names).toContain('Install and restart');
-    expect(names).toContain('Later');
+    expect(screen.getByRole('button', { name: 'Install and restart' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Dismiss' })).toBeTruthy();
+    cleanup();
+  });
+
+  it('renders nothing once an offer is postponed', () => {
+    const { container } = render(
+      <UpdateNotice
+        updates={updates({
+          phase: 'postponed',
+          currentVersion: '1.0.0',
+          update: offered,
+          resume: 'downloaded',
+        })}
+      />,
+    );
+    expect(container.innerHTML).toBe('');
+    cleanup();
+  });
+
+  it('puts an available offer away when the operator dismisses it', () => {
+    const postpone = vi.fn();
+    render(
+      <UpdateNotice
+        updates={updates(
+          { phase: 'available', currentVersion: '1.0.0', update: offered },
+          { postpone },
+        )}
+      />,
+    );
+    // "Not now" is Banner's dismissal, not a button of its own: one primary
+    // action plus an optional put-away is the shape every state takes.
+    screen.getByRole('button', { name: 'Dismiss' }).click();
+    expect(postpone).toHaveBeenCalledTimes(1);
     cleanup();
   });
 
@@ -166,8 +198,10 @@ describe('describeUpdateState', () => {
     );
     expect(view?.title).toBe('Restart postponed');
     expect(view?.detail).toMatch('3 entries have not reached the cloud yet.');
-    // Blocked is not failed: the operator can try again once it clears.
-    expect(view?.actions.map((a) => a.label)).toEqual(['Try again', 'Later']);
+    // Blocked is not failed: the operator can try again once it clears, or put
+    // it away and come back to it.
+    expect(view?.action?.label).toBe('Try again');
+    expect(view?.onDismiss).toBeTypeOf('function');
   });
 
   it.each([
@@ -184,7 +218,7 @@ describe('describeUpdateState', () => {
       },
       actions,
     );
-    expect(view?.actions[0].label).toBe(label);
+    expect(view?.action?.label).toBe(label);
   });
 
   it('confirms the installed version when a manual check finds nothing', () => {
@@ -201,12 +235,14 @@ describe('describeUpdateState', () => {
       { phase: 'installing', currentVersion: '1.0.0', update: offered },
       actions,
     );
-    expect(installing?.actions).toEqual([]);
+    expect(installing?.action).toBeUndefined();
 
     const ready = describeUpdateState(
       { phase: 'relaunch-ready', currentVersion: '1.0.0', update: offered },
       actions,
     );
-    expect(ready?.actions.map((a) => a.label)).toEqual(['Restart and update']);
+    expect(ready?.action?.label).toBe('Restart and update');
+    // Nothing to dismiss: the new binary is already on disk.
+    expect(ready?.onDismiss).toBeUndefined();
   });
 });

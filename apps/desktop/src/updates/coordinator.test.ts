@@ -343,28 +343,49 @@ describe('DesktopUpdateCoordinator — installing and restarting', () => {
     expect(state.retry).toBe('install');
   });
 
-  it('keeps a postponed update actionable later in the same session', async () => {
+  it('keeps a postponed update actionable later, without downloading it twice', async () => {
+    const check = vi.fn(async () => fakeHandle());
+    const downloads = vi.fn();
     const coordinator = new DesktopUpdateCoordinator(
-      fakeUpdater({ check: async () => fakeHandle() }),
+      fakeUpdater({
+        check: async () => {
+          const handle = await check();
+          const original = handle.download.bind(handle);
+          handle.download = async (onProgress) => {
+            downloads();
+            await original(onProgress);
+          };
+          return handle;
+        },
+      }),
       readiness({ safe: false, reason: 'Shift close in progress.' }),
     );
     await coordinator.check();
     await coordinator.download();
     await coordinator.install();
-    coordinator.postpone();
 
-    // Postponing a downloaded update returns it to "downloaded", not to
-    // "available": the bytes are on disk and re-fetching them helps nobody.
+    coordinator.postpone();
+    // Nothing on screen any more — "later" has to actually put it away.
+    expect(coordinator.getState().phase).toBe('postponed');
+
+    // The menu's manual check brings it back where it left off. The bytes are
+    // already on disk, so it must not touch the network again.
+    await coordinator.check();
     expect(coordinator.getState().phase).toBe('downloaded');
+    expect(check).toHaveBeenCalledTimes(1);
+    expect(downloads).toHaveBeenCalledTimes(1);
   });
 
-  it('postpones an un-downloaded offer back to available', async () => {
+  it('resumes an un-downloaded offer as available', async () => {
     const coordinator = new DesktopUpdateCoordinator(
       fakeUpdater({ check: async () => fakeHandle() }),
       readiness(),
     );
     await coordinator.check();
     coordinator.postpone();
+    expect(coordinator.getState().phase).toBe('postponed');
+
+    await coordinator.check();
     expect(coordinator.getState().phase).toBe('available');
   });
 });
@@ -409,5 +430,23 @@ describe('DesktopUpdateCoordinator — platform differences', () => {
     // button that appears to do nothing.
     expect(check).toHaveBeenCalledTimes(1);
     expect(seen).toEqual(['available']);
+  });
+});
+
+describe('DesktopUpdateCoordinator — subscriber notification', () => {
+  it('emits a fresh state object when re-announcing, so subscribers see a change', async () => {
+    const coordinator = new DesktopUpdateCoordinator(
+      fakeUpdater({ check: async () => fakeHandle() }),
+      readiness(),
+    );
+    await coordinator.check();
+    const before = coordinator.getState();
+
+    await coordinator.check();
+    // React's useSyncExternalStore compares snapshots by reference: re-emitting
+    // the identical object would render nothing and the menu entry would look
+    // broken.
+    expect(coordinator.getState()).not.toBe(before);
+    expect(coordinator.getState()).toEqual(before);
   });
 });

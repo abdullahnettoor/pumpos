@@ -51,6 +51,17 @@ export type UpdateState =
   | { phase: 'checking'; currentVersion: string }
   | { phase: 'up-to-date'; currentVersion: string; checkedAt: number }
   | { phase: 'available'; currentVersion: string; update: AvailableUpdate }
+  /**
+   * The operator said "not now". The offer is kept — including a finished
+   * download — but nothing is on screen. A manual check resumes it without
+   * going back to the network.
+   */
+  | {
+      phase: 'postponed';
+      currentVersion: string;
+      update: AvailableUpdate;
+      resume: 'available' | 'downloaded';
+    }
   | {
       phase: 'downloading';
       currentVersion: string;

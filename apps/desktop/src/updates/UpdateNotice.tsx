@@ -1,20 +1,26 @@
 import React from 'react';
-import { Button } from '@pump/ui';
+import { Banner, type BannerSeverity } from '@pump/ui';
 import type { DesktopUpdates } from './useDesktopUpdates.js';
 import type { UpdateState } from './types.js';
 
 /**
  * The operator-facing surface for desktop updates.
  *
- * Deliberately a compact notice pinned to the bottom of the shell, not a
- * startup modal: an update is never more important than the shift in front of
- * the operator, so it must be dismissible, ignorable, and incapable of blocking
+ * Built on the shared `Banner` primitive, which is exactly what this is: "the
+ * persistent counterpart to a transient toast… for conditions the user should
+ * keep seeing until resolved". A toast is the wrong shape — it auto-expires and
+ * dismisses on any click, so "Download update" would dismiss the notice that
+ * offers it.
+ *
+ * Deliberately pinned to the bottom corner rather than shown as a startup
+ * modal: an update is never more important than the shift in front of the
+ * operator, so it must be dismissible, ignorable, and incapable of blocking
  * navigation or data entry. Every transition past "an update exists" needs an
  * explicit click.
  *
- * Accessibility: the notice is a `status` live region so screen readers hear
- * checks, progress, failures and blocked restarts without focus being stolen;
- * every action is an ordinary button in DOM order.
+ * Accessibility comes from Banner's `role="status"` (an implicit polite live
+ * region), so checks, progress, failures and blocked restarts are announced
+ * without focus being stolen; every action is an ordinary button in DOM order.
  */
 export const UpdateNotice: React.FC<{ updates: DesktopUpdates }> = ({ updates }) => {
   const { state } = updates;
@@ -23,79 +29,91 @@ export const UpdateNotice: React.FC<{ updates: DesktopUpdates }> = ({ updates })
   if (!view) return null;
 
   return (
-    <div
-      role="status"
-      aria-live="polite"
-      aria-label="Desktop update"
-      className="fixed bottom-4 right-4 z-50 w-[360px] max-w-[calc(100vw-2rem)] rounded-card border border-border-strong bg-surface p-3 shadow-lg font-sans text-[13px] text-ink-default"
+    <Banner
+      // Banner hides itself locally once dismissed. Keying by phase gives each
+      // state its own instance, so dismissing "up to date" cannot also swallow
+      // the "ready to install" notice that follows.
+      key={view.key}
+      severity={view.severity}
+      title={view.title}
+      actionLabel={view.action?.label}
+      onAction={view.action?.onClick}
+      dismissible={!!view.onDismiss}
+      onDismiss={view.onDismiss}
+      style={{
+        position: 'fixed',
+        bottom: 'var(--space-4)',
+        right: 'var(--space-4)',
+        zIndex: 60,
+        width: '360px',
+        maxWidth: 'calc(100vw - var(--space-8))',
+        // Banner is a single-line strip by default; the update notice stacks a
+        // detail line, release notes and a progress bar under its title.
+        alignItems: 'flex-start',
+        backgroundColor: 'var(--bg-surface)',
+        boxShadow: '0 6px 18px rgba(0,0,0,0.12)',
+      }}
     >
-      <div className="flex items-start justify-between gap-2">
-        <p className="font-semibold text-ink-strong">{view.title}</p>
-        {view.onDismiss ? (
-          <Button size="xs" variant="ghost" onClick={view.onDismiss}>
-            {view.dismissLabel}
-          </Button>
+      <span style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+        {view.detail ? <span>{view.detail}</span> : null}
+
+        {/* Release notes are plain text from an external manifest: rendered as
+            a text node, never as markup. */}
+        {view.notes ? (
+          <span
+            style={{
+              display: 'block',
+              maxHeight: '112px',
+              overflow: 'auto',
+              whiteSpace: 'pre-wrap',
+              overflowWrap: 'break-word',
+              fontWeight: 400,
+              padding: 'var(--space-2)',
+              borderRadius: 'var(--radius-input)',
+              backgroundColor: 'var(--bg-surface-alt)',
+              color: 'var(--text-muted)',
+            }}
+          >
+            {view.notes}
+          </span>
         ) : null}
-      </div>
 
-      {view.detail ? <p className="mt-1 text-ink-muted">{view.detail}</p> : null}
-
-      {/* Release notes are plain text from an external manifest: rendered as a
-          text node, never as markup. */}
-      {view.notes ? (
-        <pre className="mt-2 max-h-28 overflow-auto whitespace-pre-wrap break-words rounded-input bg-surface-alt p-2 font-sans text-[12px] text-ink-muted">
-          {view.notes}
-        </pre>
-      ) : null}
-
-      {view.progress ? (
-        <progress
-          className="mt-2 w-full"
-          aria-label="Update download progress"
-          {...(view.progress.totalBytes
-            ? { value: view.progress.downloadedBytes, max: view.progress.totalBytes }
-            : {})}
-        />
-      ) : null}
-
-      {view.actions.length > 0 ? (
-        <div className="mt-2 flex flex-wrap gap-2">
-          {view.actions.map((action) => (
-            <Button
-              key={action.label}
-              size="sm"
-              variant={action.variant ?? 'secondary'}
-              onClick={action.onClick}
-            >
-              {action.label}
-            </Button>
-          ))}
-        </div>
-      ) : null}
-    </div>
+        {view.progress ? (
+          <progress
+            style={{ width: '100%' }}
+            aria-label="Update download progress"
+            {...(view.progress.totalBytes
+              ? { value: view.progress.downloadedBytes, max: view.progress.totalBytes }
+              : {})}
+          />
+        ) : null}
+      </span>
+    </Banner>
   );
 };
 
-interface NoticeAction {
-  label: string;
-  onClick: () => void;
-  variant?: 'primary' | 'secondary' | 'ghost';
-}
-
 interface NoticeView {
+  /** The state this view belongs to; resets Banner's local dismissal. */
+  key: UpdateState['phase'];
+  severity: BannerSeverity;
   title: string;
   detail?: string;
   notes?: string;
   progress?: { downloadedBytes: number; totalBytes: number | null };
-  actions: NoticeAction[];
+  /** The one thing the operator can do next. Absent while PumpOS is working. */
+  action?: { label: string; onClick: () => void };
+  /** Present when the operator may put this away. Absent when they must not. */
   onDismiss?: () => void;
-  dismissLabel: string;
 }
 
 /**
  * The whole notice is a pure projection of one coordinator state, which is why
  * this function is exported: the copy an operator reads in each state is
  * testable without rendering anything.
+ *
+ * Every state resolves to at most one action plus an optional dismissal —
+ * which is exactly Banner's shape, and the reason "Not now" and "Later" are the
+ * dismissal rather than buttons of their own.
  */
 export function describeUpdateState(
   state: UpdateState,
@@ -105,78 +123,81 @@ export function describeUpdateState(
   >,
 ): NoticeView | null {
   switch (state.phase) {
+    // Nothing to say: no notice at all, rather than an empty one.
     case 'idle':
+    case 'postponed':
       return null;
     case 'checking':
-      return { title: 'Checking for updates…', actions: [], dismissLabel: 'Dismiss' };
+      return { key: state.phase, severity: 'info', title: 'Checking for updates…' };
     case 'up-to-date':
       return {
+        key: state.phase,
+        severity: 'success',
         title: 'PumpOS is up to date',
         detail: `Version ${state.currentVersion} is the latest release.`,
-        actions: [],
         onDismiss: actions.dismiss,
-        dismissLabel: 'Dismiss',
       };
     case 'available':
       return {
+        key: state.phase,
+        severity: 'info',
         title: `PumpOS ${state.update.version} is available`,
         detail: `You are on ${state.currentVersion}. Download when it suits the station.`,
         notes: state.update.notes,
-        actions: [
-          { label: 'Download update', onClick: actions.download, variant: 'primary' },
-          { label: 'Not now', onClick: actions.postpone, variant: 'ghost' },
-        ],
-        dismissLabel: 'Dismiss',
+        action: { label: 'Download update', onClick: actions.download },
+        onDismiss: actions.postpone,
       };
     case 'downloading':
       return {
+        key: state.phase,
+        severity: 'info',
         title: `Downloading PumpOS ${state.update.version}`,
         detail: formatProgress(state.progress),
         progress: state.progress,
-        actions: [],
-        dismissLabel: 'Dismiss',
       };
     case 'downloaded':
       return {
+        key: state.phase,
+        severity: 'info',
         title: `PumpOS ${state.update.version} is ready to install`,
         detail: 'PumpOS will restart to finish. Nothing installs until you say so.',
-        actions: [
-          { label: 'Install and restart', onClick: actions.install, variant: 'primary' },
-          { label: 'Later', onClick: actions.postpone, variant: 'ghost' },
-        ],
-        dismissLabel: 'Later',
+        action: { label: 'Install and restart', onClick: actions.install },
+        onDismiss: actions.postpone,
       };
     case 'restart-blocked':
       return {
+        key: state.phase,
+        severity: 'warning',
         title: 'Restart postponed',
         detail: `${state.reason} PumpOS will not restart until this clears.`,
-        actions: [
-          { label: 'Try again', onClick: actions.install },
-          { label: 'Later', onClick: actions.postpone, variant: 'ghost' },
-        ],
-        dismissLabel: 'Later',
+        action: { label: 'Try again', onClick: actions.install },
+        onDismiss: actions.postpone,
       };
     case 'installing':
       return {
+        key: state.phase,
+        severity: 'info',
         title: `Installing PumpOS ${state.update.version}…`,
         detail: 'Do not close PumpOS.',
-        actions: [],
-        dismissLabel: 'Dismiss',
       };
     case 'relaunch-ready':
+      // No dismissal: the new binary is already on disk, and hiding this would
+      // leave the operator on the old one with no way back to the button.
       return {
+        key: state.phase,
+        severity: 'success',
         title: `PumpOS ${state.update.version} is installed`,
         detail: 'Restart to start using it.',
-        actions: [{ label: 'Restart and update', onClick: actions.relaunch, variant: 'primary' }],
-        dismissLabel: 'Later',
+        action: { label: 'Restart and update', onClick: actions.relaunch },
       };
     case 'failed':
       return {
+        key: state.phase,
+        severity: 'danger',
         title: 'Update failed',
         detail: state.error.message,
-        actions: [{ label: retryLabel(state.retry), onClick: actions.retry }],
+        action: { label: retryLabel(state.retry), onClick: actions.retry },
         onDismiss: actions.dismiss,
-        dismissLabel: 'Dismiss',
       };
   }
 }

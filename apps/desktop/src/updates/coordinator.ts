@@ -85,11 +85,20 @@ export class DesktopUpdateCoordinator {
     // A manual click while the automatic check is still in flight should join
     // that check rather than start a second one against the same endpoint.
     if (this.checkInFlight) return this.checkInFlight;
-    // An offer already exists: re-checking would throw away a finished download
-    // for no gain. Re-announce what we have instead — a manual check that
-    // answers with silence reads as a broken button.
+    // A postponed offer comes back rather than being re-fetched: the operator
+    // asked to be reminded, not to spend a station's bandwidth twice.
+    if (this.state.phase === 'postponed') {
+      const { update, resume } = this.state;
+      this.emit({ phase: resume, currentVersion: this.updater.currentVersion, update });
+      return;
+    }
+    // An offer is already on screen: re-checking would throw away a finished
+    // download for no gain. Re-announce what we have instead — a manual check
+    // that answers with silence reads as a broken button. The copy matters:
+    // subscribers compare by reference, so re-emitting the same object would
+    // change nothing at all.
     if (this.isBusyWithOffer()) {
-      this.emit(this.state);
+      this.emit({ ...this.state });
       return;
     }
 
@@ -282,11 +291,15 @@ export class DesktopUpdateCoordinator {
     // Already installed: only the restart is left, and hiding that prompt would
     // leave the operator running the old binary with no way back to the button.
     if (this.state.phase === 'relaunch-ready') return;
-    if (this.state.phase === 'downloaded' || this.state.phase === 'restart-blocked') {
-      this.emit({ phase: 'downloaded', currentVersion: this.updater.currentVersion, update });
-      return;
-    }
-    this.emit({ phase: 'available', currentVersion: this.updater.currentVersion, update });
+
+    // Postponing clears the notice but keeps the offer. A finished download
+    // resumes as "downloaded", so saying "later" never costs the operator the
+    // bytes they already paid for.
+    const resume =
+      this.state.phase === 'downloaded' || this.state.phase === 'restart-blocked'
+        ? 'downloaded'
+        : 'available';
+    this.emit({ phase: 'postponed', currentVersion: this.updater.currentVersion, update, resume });
   }
 
   /** Re-run whichever step failed. */
