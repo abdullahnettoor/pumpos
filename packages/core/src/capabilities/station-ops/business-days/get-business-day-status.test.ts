@@ -9,14 +9,13 @@ import {
 
 class Reader implements BusinessDayStatusReader {
   constructor(readonly rows: BusinessDayStatusItem[]) {}
-  async findByDate(org: string, station: string, date: string) {
-    return this.rows.find((row) => row.businessDate === date) ?? null;
-  }
-  async listOpen(org: string, station: string) {
-    return this.rows.filter((row) => row.status === 'OPEN');
-  }
-  async listPastOpen(org: string, station: string, date: string) {
-    return this.rows.filter((row) => row.status === 'OPEN' && row.businessDate < date);
+  async loadSlices(org: string, station: string, requestedDate: string, currentDate: string) {
+    const open = this.rows.filter((row) => row.status === 'OPEN');
+    return {
+      requested: this.rows.find((row) => row.businessDate === requestedDate) ?? null,
+      open,
+      pastOpen: open.filter((row) => row.businessDate < currentDate),
+    };
   }
 }
 

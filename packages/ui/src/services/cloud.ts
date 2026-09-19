@@ -124,6 +124,47 @@ function getHeaders(token: string) {
 
 type ApiError = Error & { code?: string; details?: Record<string, any>; status?: number };
 
+/**
+ * Cloudflare terminates a Worker that exceeds its CPU budget with an HTML
+ * error page (error 1102, "Worker exceeded resource limits") instead of our
+ * JSON envelope. Those failures are NOT transient — retrying immediately
+ * re-runs the same over-budget work and amplifies load — so they get their own
+ * error code, which the query client treats as non-retryable (#148 / #113).
+ */
+export const RESOURCE_LIMIT = 'RESOURCE_LIMIT';
+
+const CF_RESOURCE_LIMIT_RE = /\b1102\b|worker exceeded resource limits|exceeded\s+cpu/i;
+
+/** True when an error is a Cloudflare resource-limit termination. */
+export function isResourceLimitError(error: unknown): boolean {
+  return (
+    !!error && typeof error === 'object' && (error as { code?: string }).code === RESOURCE_LIMIT
+  );
+}
+
+/**
+ * Classify a non-JSON response body (exported for tests). A 5xx whose body
+ * carries the Cloudflare resource-limit signature maps to RESOURCE_LIMIT;
+ * everything else stays a generic BAD_RESPONSE.
+ */
+export function classifyNonJsonFailure(
+  status: number,
+  ok: boolean,
+  bodyText: string,
+): { message: string; code: string } {
+  if (!ok && status >= 500 && CF_RESOURCE_LIMIT_RE.test(bodyText)) {
+    return {
+      message:
+        'The server hit its compute limit handling this request. This is not a connectivity problem — please try again shortly.',
+      code: RESOURCE_LIMIT,
+    };
+  }
+  return {
+    message: ok ? 'Unexpected empty response from the server.' : `Request failed (${status}).`,
+    code: 'BAD_RESPONSE',
+  };
+}
+
 /** A 401 that names a dead token — worth one refresh-and-replay. */
 function isExpiredTokenError(error: ApiError) {
   return error.status === 401 && error.code === 'UNAUTHORIZED';
@@ -153,16 +194,20 @@ async function attempt<T>(
   }
 
   let res: any;
+  // Clone before consuming so a non-JSON body (e.g. a Cloudflare error page)
+  // can still be read as text for classification.
+  const textCopy = typeof response.clone === 'function' ? response.clone() : null;
   try {
     res = await response.json();
   } catch {
-    return fail(
-      response.ok
-        ? 'Unexpected empty response from the server.'
-        : `Request failed (${response.status}).`,
-      'BAD_RESPONSE',
-      response.status,
-    );
+    let bodyText = '';
+    try {
+      bodyText = (await textCopy?.text()) ?? '';
+    } catch {
+      /* body unavailable — classify on status alone */
+    }
+    const { message, code } = classifyNonJsonFailure(response.status, response.ok, bodyText);
+    return fail(message, code, response.status);
   }
 
   if (!res.success) {
@@ -595,8 +640,17 @@ export class CloudShiftService {
     return request<any[]>(`/shifts/handovers?shiftId=${shiftId}`);
   }
 
-  async getShiftSummaries(stationId: string): Promise<any[]> {
-    const data = await request<any[]>(`/shifts/shift-summaries?stationId=${stationId}`);
+  async getDashboardSummary(stationId: string): Promise<any> {
+    return request<any>(`/shifts/dashboard-summary?stationId=${stationId}`);
+  }
+
+  async getShiftSummaries(stationId: string, limit = 200): Promise<any[]> {
+    // The route is cursor-paginated (newest first, default 50). Ask for the
+    // maximum page so existing history views keep their depth; deeper history
+    // can pass `before` when a paginated UI lands.
+    const data = await request<any[]>(
+      `/shifts/shift-summaries?stationId=${stationId}&limit=${limit}`,
+    );
     return data || [];
   }
 

@@ -1,10 +1,11 @@
-import { and, eq, inArray, desc, lt, ne, sql } from 'drizzle-orm';
+import { and, eq, inArray, desc, ne, or, sql } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
 import type {
   BusinessDay,
   BusinessDayRepository,
   BusinessDayLock,
   BusinessDayStatusReader,
+  BusinessDayStatusSlices,
   BusinessDayStatusItem,
   Shift,
   ShiftRepository,
@@ -18,7 +19,7 @@ import type {
   CreditSaleRecord,
   StockMovementInput,
   StockMovementWriter,
-  ShiftSummaryWriter,
+  ShiftSummaryStore,
   AcceptedHandoverReading,
   AttendantHandover,
   HandoverContext,
@@ -63,30 +64,15 @@ export class DrizzleBusinessDayStatusReader implements BusinessDayStatusReader {
     };
   }
 
-  async findByDate(
+  async loadSlices(
     organizationId: string,
     stationId: string,
-    businessDate: string,
-  ): Promise<BusinessDayStatusItem | null> {
-    const [row] = await this.db
-      .select(this.projection())
-      .from(schema.businessDays)
-      .where(
-        and(
-          eq(schema.businessDays.organizationId, organizationId),
-          eq(schema.businessDays.stationId, stationId),
-          eq(schema.businessDays.businessDate, businessDate),
-        ),
-      )
-      .limit(1);
-    return row ? this.toItem(row) : null;
-  }
-
-  async listPastOpen(
-    organizationId: string,
-    stationId: string,
+    requestedBusinessDate: string,
     currentBusinessDate: string,
-  ): Promise<BusinessDayStatusItem[]> {
+  ): Promise<BusinessDayStatusSlices> {
+    // ONE query for all three slices (#155): the requested date's day plus
+    // every OPEN day. `pastOpen` is a pure subset of `open`, and `requested`
+    // is a lookup by date, so classification happens here, not in SQL.
     const rows = await this.db
       .select(this.projection())
       .from(schema.businessDays)
@@ -94,27 +80,20 @@ export class DrizzleBusinessDayStatusReader implements BusinessDayStatusReader {
         and(
           eq(schema.businessDays.organizationId, organizationId),
           eq(schema.businessDays.stationId, stationId),
-          eq(schema.businessDays.status, 'OPEN'),
-          lt(schema.businessDays.businessDate, currentBusinessDate),
+          or(
+            eq(schema.businessDays.businessDate, requestedBusinessDate),
+            eq(schema.businessDays.status, 'OPEN'),
+          ),
         ),
       )
       .orderBy(desc(schema.businessDays.businessDate));
-    return rows.map((row) => this.toItem(row));
-  }
-
-  async listOpen(organizationId: string, stationId: string): Promise<BusinessDayStatusItem[]> {
-    const rows = await this.db
-      .select(this.projection())
-      .from(schema.businessDays)
-      .where(
-        and(
-          eq(schema.businessDays.organizationId, organizationId),
-          eq(schema.businessDays.stationId, stationId),
-          eq(schema.businessDays.status, 'OPEN'),
-        ),
-      )
-      .orderBy(desc(schema.businessDays.businessDate));
-    return rows.map((row) => this.toItem(row));
+    const items = rows.map((row) => this.toItem(row));
+    const open = items.filter((i) => i.status === 'OPEN');
+    return {
+      requested: items.find((i) => i.businessDate === requestedBusinessDate) ?? null,
+      open,
+      pastOpen: open.filter((i) => i.businessDate < currentBusinessDate),
+    };
   }
 }
 
@@ -886,7 +865,7 @@ export class DrizzleStockMovementWriter implements StockMovementWriter {
 }
 
 // ---------------- Shift Summaries ----------------
-export class DrizzleShiftSummaryWriter implements ShiftSummaryWriter {
+export class DrizzleShiftSummaryWriter implements ShiftSummaryStore {
   constructor(private readonly db: DbClient) {}
   async save(shiftId: string, snapshot: Record<string, unknown>): Promise<void> {
     await this.db.delete(schema.shiftSummaries).where(eq(schema.shiftSummaries.shiftId, shiftId));
@@ -896,6 +875,14 @@ export class DrizzleShiftSummaryWriter implements ShiftSummaryWriter {
   }
   async deleteForShift(shiftId: string): Promise<void> {
     await this.db.delete(schema.shiftSummaries).where(eq(schema.shiftSummaries.shiftId, shiftId));
+  }
+  async findByShift(shiftId: string): Promise<Record<string, unknown> | null> {
+    const [row] = await this.db
+      .select({ snapshotData: schema.shiftSummaries.snapshotData })
+      .from(schema.shiftSummaries)
+      .where(eq(schema.shiftSummaries.shiftId, shiftId))
+      .limit(1);
+    return (row?.snapshotData as Record<string, unknown>) ?? null;
   }
 }
 

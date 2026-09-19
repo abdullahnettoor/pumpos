@@ -49,6 +49,7 @@ import { buildContext, createCommandTrace } from '../infra/context.js';
 import type { AuthenticatedPrincipal } from '../infra/authenticated-principal.js';
 import { loadStationClock } from '../infra/station-clock.js';
 import { lockStationInventory, runInTransaction } from '../infra/transaction.js';
+import { refreshShiftSummaryForShift } from '../infra/shift-summary-projection.js';
 import { TimestampDocumentNumberGenerator } from '../infra/doc-numbers.js';
 import {
   DrizzleCustomerRepository,
@@ -1229,8 +1230,11 @@ transactionsRouter.post('/expenses', async (c) => {
       businessDays: new DrizzleBusinessDayRepository(tx),
       events,
     }).execute(body, buildContext(user, { stationId: body?.stationId, ...clock }));
-    if (r.success)
+    if (r.success) {
       await new LedgerPostingService(tx).postExpense(user.organizationId, r.data, body?.accountId);
+      // Late attribution to a closed shift: keep its stored summary current.
+      await refreshShiftSummaryForShift(tx, events, user, (r.data as any)?.shiftId);
+    }
     return r;
   });
   return sendResult(c, result);
@@ -1261,7 +1265,10 @@ transactionsRouter.post('/expenses/:id/void', async (c) => {
       shifts: new DrizzleShiftRepository(tx),
       events,
     }).execute({ id, reason: body?.reason }, buildContext(user));
-    if (r.success) await new LedgerPostingService(tx).reverseExpense(id);
+    if (r.success) {
+      await new LedgerPostingService(tx).reverseExpense(id);
+      await refreshShiftSummaryForShift(tx, events, user, (r.data as any)?.shiftId);
+    }
     return r;
   });
   return sendResult(c, result);
@@ -1299,15 +1306,17 @@ transactionsRouter.post('/collections', async (c) => {
   // A "Credit" collection is a credit SALE (a receivable), not a payment. It is
   // recorded on the customer ledger with no drawer/stock impact.
   if (body?.paymentMethod === 'Credit') {
-    const result = await runInTransaction(c.var.db, (tx, events) =>
-      new RecordCreditSale({
+    const result = await runInTransaction(c.var.db, async (tx, events) => {
+      const r = await new RecordCreditSale({
         ledger: new DrizzleCustomerLedgerRepository(tx),
         customers: new DrizzleCustomerRepository(tx),
         shifts: new DrizzleShiftRepository(tx),
         businessDays: new DrizzleBusinessDayRepository(tx),
         events,
-      }).execute(body, buildContext(user, { stationId: body?.stationId, ...clock })),
-    );
+      }).execute(body, buildContext(user, { stationId: body?.stationId, ...clock }));
+      if (r.success) await refreshShiftSummaryForShift(tx, events, user, (r.data as any)?.shiftId);
+      return r;
+    });
     return sendResult(c, result);
   }
   // An "OMC" sale is paid by the Oil Company's fleet card and settled to the
@@ -1321,8 +1330,10 @@ transactionsRouter.post('/collections', async (c) => {
         businessDays: new DrizzleBusinessDayRepository(tx),
         events,
       }).execute(body, buildContext(user, { stationId: body?.stationId, ...clock }));
-      if (r.success)
+      if (r.success) {
         await new LedgerPostingService(tx).postOmcCardSale(user.organizationId, r.data);
+        await refreshShiftSummaryForShift(tx, events, user, (r.data as any)?.shiftId);
+      }
       return r;
     });
     return sendResult(c, result);
@@ -1337,12 +1348,14 @@ transactionsRouter.post('/collections', async (c) => {
       docNumbers,
       events,
     }).execute(body, buildContext(user, { stationId: body?.stationId, ...clock }));
-    if (r.success)
+    if (r.success) {
       await new LedgerPostingService(tx).postCollection(
         user.organizationId,
         r.data,
         body?.accountId,
       );
+      await refreshShiftSummaryForShift(tx, events, user, (r.data as any)?.shiftId);
+    }
     return r;
   });
   return sendResult(c, result);
@@ -1532,6 +1545,9 @@ transactionsRouter.post('/purchases', async (c) => {
       );
     }
 
+    if (r.success) {
+      await refreshShiftSummaryForShift(tx, events, user, (r.data.purchase as any)?.shiftId);
+    }
     return r;
   });
   return sendResult(c, result);
@@ -1588,12 +1604,14 @@ transactionsRouter.post('/supplier-payments', async (c) => {
       businessDays: new DrizzleBusinessDayRepository(tx),
       events,
     }).execute(body, buildContext(user, { stationId: body?.stationId, ...clock }));
-    if (r.success)
+    if (r.success) {
       await new LedgerPostingService(tx).postSupplierPayment(
         user.organizationId,
         r.data,
         body?.accountId,
       );
+      await refreshShiftSummaryForShift(tx, events, user, (r.data as any)?.shiftId);
+    }
     return r;
   });
   return sendResult(c, result);
@@ -2669,11 +2687,53 @@ transactionsRouter.get('/shifts/:id/transactions', async (c) => {
       403,
     );
   }
-  const [expenses, purchases, collections, sales, creditSales] = await Promise.all([
-    db.select().from(schema.expenses).where(eq(schema.expenses.shiftId, shiftId)),
-    db.select().from(schema.purchases).where(eq(schema.purchases.shiftId, shiftId)),
-    db.select().from(schema.collections).where(eq(schema.collections.shiftId, shiftId)),
-    db.select().from(schema.sales).where(eq(schema.sales.shiftId, shiftId)),
+  // Project ONLY the columns the shift-transactions panel and close-wizard
+  // totals consume (#149 / #113) — full-row selects made this payload scale
+  // with every column of every table. Names are joined here (category /
+  // supplier / customer) because the raw tables store only ids.
+  const [expenses, purchases, collections, creditSales] = await Promise.all([
+    db
+      .select({
+        id: schema.expenses.id,
+        amount: schema.expenses.amount,
+        description: schema.expenses.description,
+        paidFrom: schema.expenses.paidFrom,
+        affectsDrawer: schema.expenses.affectsDrawer,
+        status: schema.expenses.status,
+        createdAt: schema.expenses.createdAt,
+        categoryName: schema.expenseCategories.name,
+      })
+      .from(schema.expenses)
+      .leftJoin(
+        schema.expenseCategories,
+        eq(schema.expenseCategories.id, schema.expenses.categoryId),
+      )
+      .where(eq(schema.expenses.shiftId, shiftId)),
+    db
+      .select({
+        id: schema.purchases.id,
+        amount: schema.purchases.amount,
+        documentNumber: schema.purchases.documentNumber,
+        invoiceNumber: schema.purchases.invoiceNumber,
+        notes: schema.purchases.notes,
+        createdAt: schema.purchases.createdAt,
+        supplierName: schema.suppliers.name,
+      })
+      .from(schema.purchases)
+      .leftJoin(schema.suppliers, eq(schema.suppliers.id, schema.purchases.supplierId))
+      .where(eq(schema.purchases.shiftId, shiftId)),
+    db
+      .select({
+        id: schema.collections.id,
+        amount: schema.collections.amount,
+        paymentMethod: schema.collections.paymentMethod,
+        notes: schema.collections.notes,
+        createdAt: schema.collections.createdAt,
+        customerName: schema.customers.name,
+      })
+      .from(schema.collections)
+      .leftJoin(schema.customers, eq(schema.customers.id, schema.collections.customerId))
+      .where(eq(schema.collections.shiftId, shiftId)),
     // Stage B fuel-on-credit sales live in customer_transactions (a receivable),
     // not the collections table — surface them so totals/reconciliation/summary see them.
     db
@@ -2711,7 +2771,13 @@ transactionsRouter.get('/shifts/:id/transactions', async (c) => {
         ),
       ),
   ]);
-  return c.json({ success: true, data: { expenses, purchases, collections, sales, creditSales } });
+  // `sales` has no UI consumer on this payload (fuel is metered via readings;
+  // merchandise renders from the status/merch endpoints). Kept as a key for
+  // contract stability, no longer queried.
+  return c.json({
+    success: true,
+    data: { expenses, purchases, collections, sales: [], creditSales },
+  });
 });
 
 // ====================================================

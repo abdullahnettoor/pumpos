@@ -15,18 +15,27 @@ export interface BusinessDayStatusItem {
   lastActivityAt: string;
 }
 
+export interface BusinessDayStatusSlices {
+  /** The business day on the requested date, or null when never created. */
+  requested: BusinessDayStatusItem | null;
+  /** Every OPEN business day, newest first. */
+  open: BusinessDayStatusItem[];
+  /** OPEN business days strictly before the current business date, newest first. */
+  pastOpen: BusinessDayStatusItem[];
+}
+
 export interface BusinessDayStatusReader {
-  findByDate(
+  /**
+   * All three status slices in one call so adapters can serve them from a
+   * single query — the projection carries correlated subselects, and each
+   * round-trip costs Worker CPU (#155).
+   */
+  loadSlices(
     organizationId: string,
     stationId: string,
-    businessDate: string,
-  ): Promise<BusinessDayStatusItem | null>;
-  listOpen(organizationId: string, stationId: string): Promise<BusinessDayStatusItem[]>;
-  listPastOpen(
-    organizationId: string,
-    stationId: string,
+    requestedBusinessDate: string,
     currentBusinessDate: string,
-  ): Promise<BusinessDayStatusItem[]>;
+  ): Promise<BusinessDayStatusSlices>;
 }
 
 export interface GetBusinessDayStatusResult {
@@ -57,18 +66,19 @@ export class GetBusinessDayStatus implements UseCase<
         validationError('Business Day status requires a Station and valid Business Dates'),
       );
     }
-    const [requestedBusinessDay, openBusinessDays, pastOpenBusinessDays] = await Promise.all([
-      this.reader.findByDate(ctx.organizationId, input.stationId, input.requestedBusinessDate),
-      this.reader.listOpen(ctx.organizationId, input.stationId),
-      this.reader.listPastOpen(ctx.organizationId, input.stationId, input.currentBusinessDate),
-    ]);
+    const slices = await this.reader.loadSlices(
+      ctx.organizationId,
+      input.stationId,
+      input.requestedBusinessDate,
+      input.currentBusinessDate,
+    );
     return ok({
       currentBusinessDate: input.currentBusinessDate,
       requestedBusinessDate: input.requestedBusinessDate,
-      requestedState: requestedBusinessDay?.status ?? 'NOT_CREATED',
-      requestedBusinessDay,
-      openBusinessDays,
-      pastOpenBusinessDays,
+      requestedState: slices.requested?.status ?? 'NOT_CREATED',
+      requestedBusinessDay: slices.requested,
+      openBusinessDays: slices.open,
+      pastOpenBusinessDays: slices.pastOpen,
     });
   }
 }

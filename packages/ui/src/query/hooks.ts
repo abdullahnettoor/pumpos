@@ -55,6 +55,7 @@ export const queryKeys = {
   businessDayStatusPrefix: (stationId: string) => ['business-day-status', stationId] as const,
   myAssignment: () => ['my-assignment'] as const,
   shiftSummaries: (stationId: string) => ['shift-summaries', stationId] as const,
+  dashboardSummary: (stationId: string) => ['dashboard-summary', stationId] as const,
   shiftTransactions: (shiftId: string) => ['shift-transactions', shiftId] as const,
   merchandiseHandovers: (shiftId: string) => ['merchandise-handovers', shiftId] as const,
   merchandiseSales: (shiftId: string) => ['merchandise-sales', shiftId] as const,
@@ -507,6 +508,21 @@ export function useShiftSummaries(stationId: string | null | undefined, options?
   });
 }
 
+/**
+ * The dashboard's single shift read (#147): open/last shift identity, stored
+ * last-summary scalars, reopen/grace state, and today's rollup — one bounded
+ * request instead of full shift status + every historical shift summary.
+ */
+export function useDashboardSummary(stationId: string | null | undefined, options?: Options<any>) {
+  return useQuery({
+    queryKey: queryKeys.dashboardSummary(stationId ?? ''),
+    queryFn: () => shiftService.getDashboardSummary(stationId!),
+    enabled: !!stationId,
+    ...TIER.operational,
+    ...options,
+  });
+}
+
 export function useMyAssignment(options?: Options<any>) {
   return useQuery({
     queryKey: queryKeys.myAssignment(),
@@ -738,6 +754,7 @@ export function useInvalidateOperational() {
       qc.invalidateQueries({ queryKey: ['shift-status'] }),
       qc.invalidateQueries({ queryKey: ['business-day-status'] }),
       qc.invalidateQueries({ queryKey: ['shift-summaries'] }),
+      qc.invalidateQueries({ queryKey: ['dashboard-summary'] }),
       qc.invalidateQueries({ queryKey: ['shift-transactions'] }),
       qc.invalidateQueries({ queryKey: ['merchandise-handovers'] }),
       qc.invalidateQueries({ queryKey: ['merchandise-sales'] }),
