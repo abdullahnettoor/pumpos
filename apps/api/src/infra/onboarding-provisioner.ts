@@ -20,8 +20,10 @@ const round4 = (n: number) => Math.round((n + Number.EPSILON) * 10000) / 10000;
 
 /**
  * Drizzle adapter for the onboarding provisioning port. Performs all station
- * setup inserts atomically in one transaction and maps draft-local ids to real
- * ids. Mirrors the proven finalize SQL; failures roll the whole thing back.
+ * setup inserts on the injected client and maps draft-local ids to real ids.
+ * The client is expected to be transaction-scoped (see `runInTransaction`), so
+ * a failure here — or in the event append that follows — rolls back every
+ * onboarding write.
  */
 export class DrizzleOnboardingProvisioner implements OnboardingProvisioner {
   constructor(private readonly db: DbClient) {}
@@ -32,8 +34,12 @@ export class DrizzleOnboardingProvisioner implements OnboardingProvisioner {
     draft: OnboardingDraft;
   }): Promise<Result<FinalizeOnboardingResult>> {
     const { organizationId, actorId, draft } = input;
+    // The caller owns the transaction (`runInTransaction`), so every write here
+    // goes through the injected client — the same handle the event dispatcher
+    // uses — keeping station state and ONBOARDING_COMPLETED in one commit.
+    const tx = this.db;
     try {
-      const result = await this.db.transaction(async (tx) => {
+      const result = await (async () => {
         const existingStation = await tx
           .select()
           .from(schema.stations)
@@ -308,7 +314,7 @@ export class DrizzleOnboardingProvisioner implements OnboardingProvisioner {
         // Provision the station's default money accounts (Cash in Hand + Bank).
         // Card/UPI clearing accounts are created per acquirer and linked to the
         // terminals just created (none if the station registered no terminals).
-        const provisioner = new AccountProvisioningService(tx as unknown as DbClient);
+        const provisioner = new AccountProvisioningService(tx);
         await provisioner.ensureStationDefaults(organizationId, newStation.id);
         if (paymentTerminals.length > 0) {
           await provisioner.provisionTerminalClearing(organizationId, newStation.id);
@@ -338,7 +344,7 @@ export class DrizzleOnboardingProvisioner implements OnboardingProvisioner {
             paymentTerminalCount: paymentTerminals.length,
           },
         } as unknown as FinalizeOnboardingResult;
-      });
+      })();
 
       return ok(result);
     } catch (e) {

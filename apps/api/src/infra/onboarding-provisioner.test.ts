@@ -13,7 +13,7 @@ import { DrizzleOnboardingProvisioner } from './onboarding-provisioner.js';
  * the database.
  *
  * Rather than stand up Postgres, we drive the real adapter against a recording
- * fake of the Drizzle transaction: every query builder is a chainable that
+ * fake of the caller's transaction handle: every query builder is a chainable that
  * resolves to a stub row and records each `insert(table).values(...)`. That lets
  * us assert exactly what column values the provisioner writes for the products
  * table — the persistence contract #133 is about — while the rest of the
@@ -50,8 +50,8 @@ const makeChainable = (result: unknown): unknown => {
   return proxy;
 };
 
-const makeFakeTx = (inserts: RecordedInsert[]) => {
-  const tx = {
+const makeFakeDb = (inserts: RecordedInsert[]): DbClient => {
+  const db = {
     select: () => makeChainable([]),
     update: (table: unknown) => makeChainable([stubRow(table)]),
     insert: (table: unknown) => ({
@@ -61,13 +61,8 @@ const makeFakeTx = (inserts: RecordedInsert[]) => {
       },
     }),
   };
-  return tx;
+  return db as unknown as DbClient;
 };
-
-const makeFakeDb = (inserts: RecordedInsert[]): DbClient =>
-  ({
-    transaction: async (cb: (tx: unknown) => Promise<unknown>) => cb(makeFakeTx(inserts)),
-  }) as unknown as DbClient;
 
 const baseDraft = (): OnboardingDraft =>
   ({
@@ -121,6 +116,23 @@ const provisionProductRow = async (product: Record<string, unknown>) => {
   expect(productInsert, 'a products row must be inserted').toBeDefined();
   return productInsert!.values as Record<string, unknown>;
 };
+
+describe('DrizzleOnboardingProvisioner writes on the caller transaction (#161)', () => {
+  it('never opens its own transaction — the injected client is the unit of work', async () => {
+    const inserts: RecordedInsert[] = [];
+    const db = makeFakeDb(inserts);
+    // A client with no `transaction` method at all: if the adapter tried to
+    // open a nested unit of work it would throw instead of provisioning.
+    expect((db as unknown as Record<string, unknown>).transaction).toBeUndefined();
+    const result = await new DrizzleOnboardingProvisioner(db).provision({
+      organizationId: 'org-1',
+      actorId: 'user-1',
+      draft: baseDraft(),
+    });
+    expect(result.success).toBe(true);
+    expect(inserts.some((i) => i.table === schema.stations)).toBe(true);
+  });
+});
 
 describe('DrizzleOnboardingProvisioner persists fuel under Fuel VAT (#133)', () => {
   it('stores taxCategory FUEL_VAT explicitly, never relying on the GST default', async () => {
