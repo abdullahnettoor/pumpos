@@ -20,14 +20,27 @@
  * The public key is read from apps/desktop/src-tauri/tauri.conf.json, or from
  * TAURI_SIGNING_PUBLIC_KEY when set.
  */
-import { createPublicKey, verify as verifySignature } from 'node:crypto';
+import { createHash, createPublicKey, verify as verifySignature } from 'node:crypto';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readEmbeddedPublicKey } from './updater-key.mjs';
 
-/** Minisign's legacy Ed25519 algorithm — what Tauri emits. */
-const ALGORITHM_ED = 'Ed';
+/**
+ * Minisign's two Ed25519 modes, and the difference that matters here:
+ *
+ *   'Ed' — the signature covers the file bytes directly (legacy).
+ *   'ED' — the signature covers BLAKE2b-512 of the file (prehashed).
+ *
+ * Tauri emits 'ED'. Both are accepted: an installed client's minisign verifier
+ * handles either, so refusing one here would reject releases that every PumpOS
+ * in the field would have taken happily.
+ *
+ * The *public key* is always tagged 'Ed' — the key is the same Ed25519 key
+ * whichever way a given signature was produced.
+ */
+const ALGORITHM_LEGACY = 'Ed';
+const ALGORITHM_PREHASHED = 'ED';
 /** DER prefix that turns 32 raw Ed25519 bytes into an SPKI key Node accepts. */
 const SPKI_ED25519_PREFIX = Buffer.from('302a300506032b6570032100', 'hex');
 
@@ -57,8 +70,10 @@ export function parsePublicKey(pubkey) {
     throw new Error(`public key must be 42 bytes, got ${bytes.length}`);
   }
   const algorithm = bytes.subarray(0, 2).toString('utf8');
-  if (algorithm !== ALGORITHM_ED) {
-    throw new Error(`unsupported signature algorithm "${algorithm}" (expected ${ALGORITHM_ED})`);
+  if (algorithm !== ALGORITHM_LEGACY) {
+    throw new Error(
+      `unsupported public key algorithm "${algorithm}" (expected ${ALGORITHM_LEGACY})`,
+    );
   }
   return { keyId: bytes.subarray(2, 10), key: bytes.subarray(10, 42) };
 }
@@ -69,10 +84,17 @@ export function parseSignature(signature) {
     throw new Error(`signature must be 74 bytes, got ${bytes.length}`);
   }
   const algorithm = bytes.subarray(0, 2).toString('utf8');
-  if (algorithm !== ALGORITHM_ED) {
-    throw new Error(`unsupported signature algorithm "${algorithm}" (expected ${ALGORITHM_ED})`);
+  if (algorithm !== ALGORITHM_LEGACY && algorithm !== ALGORITHM_PREHASHED) {
+    throw new Error(
+      `unsupported signature algorithm "${algorithm}" ` +
+        `(expected ${ALGORITHM_LEGACY} or ${ALGORITHM_PREHASHED})`,
+    );
   }
-  return { keyId: bytes.subarray(2, 10), signature: bytes.subarray(10, 74) };
+  return {
+    algorithm,
+    keyId: bytes.subarray(2, 10),
+    signature: bytes.subarray(10, 74),
+  };
 }
 
 /**
@@ -96,7 +118,12 @@ export function verifyUpdaterSignature({ artifact, signature, pubkey }) {
     format: 'der',
     type: 'spki',
   });
-  return verifySignature(null, artifact, key, parsedSignature.signature);
+  // In prehashed mode the signed message is the digest, not the file.
+  const signed =
+    parsedSignature.algorithm === ALGORITHM_PREHASHED
+      ? createHash('blake2b512').update(artifact).digest()
+      : artifact;
+  return verifySignature(null, signed, key, parsedSignature.signature);
 }
 
 /** Every `<artifact>` that has a sibling `<artifact>.sig`, in one directory. */
