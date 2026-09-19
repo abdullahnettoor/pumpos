@@ -1,0 +1,3 @@
+interface:
+  display_name: "OpenScreen Recording"
+  short_description: "Record repeatable browser product flows"
