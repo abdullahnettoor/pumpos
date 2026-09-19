@@ -73,15 +73,20 @@ export class DesktopUpdateCoordinator {
   async checkOnceAfterShellReady(): Promise<void> {
     if (this.automaticCheckStarted) return;
     this.automaticCheckStarted = true;
-    await this.check();
+    await this.check({ manual: false });
   }
 
   /**
-   * Check the stable channel. Also the operator-initiated check behind the menu
-   * entry — both entry points produce the same states, which is what keeps the
-   * manual check honest about what the automatic one did.
+   * Check the stable channel.
+   *
+   * `manual` changes exactly one thing: whether a *failure* is shown. An
+   * operator who clicked "Check for updates" is owed an answer, including a bad
+   * one. An operator who merely signed in did not ask, and cannot act on
+   * "the update server did not respond" — showing it every morning at a station
+   * with a flaky connection is noise dressed as an alert. Failures of automatic
+   * checks are logged and dropped; everything else behaves identically.
    */
-  async check(): Promise<void> {
+  async check({ manual = true }: { manual?: boolean } = {}): Promise<void> {
     // A manual click while the automatic check is still in flight should join
     // that check rather than start a second one against the same endpoint.
     if (this.checkInFlight) return this.checkInFlight;
@@ -102,7 +107,7 @@ export class DesktopUpdateCoordinator {
       return;
     }
 
-    const run = this.runCheck();
+    const run = this.runCheck(manual);
     this.checkInFlight = run;
     try {
       await run;
@@ -111,13 +116,13 @@ export class DesktopUpdateCoordinator {
     }
   }
 
-  private async runCheck(): Promise<void> {
+  private async runCheck(manual: boolean): Promise<void> {
     this.emit({ phase: 'checking', currentVersion: this.updater.currentVersion });
     let handle: UpdateHandle | null;
     try {
       handle = await this.updater.check();
     } catch (cause) {
-      this.fail(normalizeUpdateError(cause), 'check');
+      this.failCheck(normalizeUpdateError(cause), manual);
       return;
     }
 
@@ -133,12 +138,12 @@ export class DesktopUpdateCoordinator {
 
     if (!parseVersion(handle.version)) {
       await this.release(handle);
-      this.fail(
+      this.failCheck(
         {
           kind: 'malformed',
           message: `The update server offered an unreadable version ("${handle.version}").`,
         },
-        'check',
+        manual,
       );
       return;
     }
@@ -340,6 +345,19 @@ export class DesktopUpdateCoordinator {
       this.state.phase === 'installing' ||
       this.state.phase === 'relaunch-ready'
     );
+  }
+
+  /**
+   * A check that failed. Only surfaced when the operator asked for it; an
+   * automatic check that fails leaves the app exactly as it was.
+   */
+  private failCheck(error: UpdateError, manual: boolean): void {
+    if (!manual) {
+      console.warn('Automatic update check failed:', error.kind, error.message);
+      this.emit({ phase: 'idle', currentVersion: this.updater.currentVersion });
+      return;
+    }
+    this.fail(error, 'check');
   }
 
   private fail(error: UpdateError, retry: RetryAction, update?: AvailableUpdate): void {

@@ -450,3 +450,56 @@ describe('DesktopUpdateCoordinator — subscriber notification', () => {
     expect(coordinator.getState()).toEqual(before);
   });
 });
+
+describe('DesktopUpdateCoordinator — who asked', () => {
+  const failing = () =>
+    fakeUpdater({
+      check: async () => {
+        throw new Error('Failed to fetch');
+      },
+    });
+
+  it('says nothing when an automatic check fails', async () => {
+    // The operator did not ask, and cannot act on "the update server did not
+    // respond". A station with a flaky connection would otherwise be greeted by
+    // a red banner every single morning.
+    const coordinator = new DesktopUpdateCoordinator(failing(), readiness());
+    const seen: string[] = [];
+    coordinator.subscribe((state) => seen.push(state.phase));
+
+    await coordinator.checkOnceAfterShellReady();
+
+    expect(coordinator.getState().phase).toBe('idle');
+    expect(seen).not.toContain('failed');
+  });
+
+  it('reports the same failure when the operator asked for it', async () => {
+    const coordinator = new DesktopUpdateCoordinator(failing(), readiness());
+    await coordinator.check();
+
+    const state = coordinator.getState();
+    expect(state.phase).toBe('failed');
+    if (state.phase !== 'failed') throw new Error('unreachable');
+    expect(state.error.kind).toBe('offline');
+    expect(state.retry).toBe('check');
+  });
+
+  it('still announces an available update found by an automatic check', async () => {
+    // Only failures are quiet. News the operator can act on is always shown.
+    const coordinator = new DesktopUpdateCoordinator(
+      fakeUpdater({ check: async () => fakeHandle() }),
+      readiness(),
+    );
+    await coordinator.checkOnceAfterShellReady();
+    expect(coordinator.getState().phase).toBe('available');
+  });
+
+  it('stays quiet about malformed metadata from an automatic check', async () => {
+    const coordinator = new DesktopUpdateCoordinator(
+      fakeUpdater({ check: async () => fakeHandle({ version: 'latest-build' }) }),
+      readiness(),
+    );
+    await coordinator.checkOnceAfterShellReady();
+    expect(coordinator.getState().phase).toBe('idle');
+  });
+});

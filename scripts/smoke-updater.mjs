@@ -61,8 +61,16 @@ export async function smokeUpdaterManifest({
   validateUpdaterManifest(manifest, expectVersion ? { version: expectVersion } : undefined);
   log(`  manifest  ${url} -> v${manifest.version}`);
 
+  // Distinct URLs only: the universal macOS artifact is referenced by both Mac
+  // keys and does not need fetching twice.
+  const byUrl = new Map();
   for (const target of SUPPORTED_TARGETS) {
-    const assetUrl = manifest.platforms[target].url;
+    const url = manifest.platforms[target].url;
+    byUrl.set(url, [...(byUrl.get(url) ?? []), target]);
+  }
+
+  for (const [assetUrl, targets] of byUrl) {
+    const target = targets.join(' + ');
     // HEAD keeps the check cheap; a server that refuses HEAD still answers a
     // ranged GET, so fall back rather than reporting a false outage.
     let assetResponse = await fetchImpl(assetUrl, { method: 'HEAD', redirect: 'follow' });

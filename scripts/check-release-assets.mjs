@@ -17,7 +17,11 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { SUPPORTED_TARGETS, validateUpdaterManifest } from './updater-manifest.mjs';
+import {
+  SUPPORTED_TARGETS,
+  classifyUpdaterAsset,
+  validateUpdaterManifest,
+} from './updater-manifest.mjs';
 
 /** The file name a manifest URL points at. */
 export function assetNameFromUrl(url) {
@@ -26,9 +30,14 @@ export function assetNameFromUrl(url) {
 
 /**
  * Structural checks: the manifest names files that exist on the release, each
- * carries its signature, and no two targets share one file (which would mean a
- * build's artifact silently replaced another's — the kind of release where half
- * the estate updates into the wrong binary).
+ * carries its signature, and each key points at a file that can actually serve
+ * that platform.
+ *
+ * Note what is NOT checked: two keys sharing one file. That is legitimate — the
+ * universal macOS artifact serves both Apple Silicon and Intel. The real risk
+ * is a file under a key it cannot serve (a Windows installer offered to a Mac),
+ * which `classifyUpdaterAsset` decides directly instead of being inferred from
+ * a duplicate count.
  */
 export function assertManifestAssetsPresent(manifest, assets) {
   validateUpdaterManifest(manifest);
@@ -54,16 +63,17 @@ export function assertManifestAssetsPresent(manifest, assets) {
     if (byName.get(name).size === 0) {
       problems.push(`${name} is empty`);
     }
+    if (!classifyUpdaterAsset(name).includes(target)) {
+      problems.push(`${target} points at ${name}, which cannot serve that platform`);
+    }
   });
-
-  if (new Set(names).size !== names.length) {
-    problems.push(`two targets reference the same asset: ${names.join(', ')}`);
-  }
 
   if (problems.length > 0) {
     throw new Error(`release is not publishable:\n  - ${problems.join('\n  - ')}`);
   }
-  return names.map((name) => byName.get(name));
+  // One entry per distinct file: the universal macOS artifact is referenced by
+  // two keys and does not need fetching twice.
+  return [...new Set(names)].map((name) => byName.get(name));
 }
 
 /**
