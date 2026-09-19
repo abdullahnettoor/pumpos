@@ -103,3 +103,6 @@ coverage/
 
 # local scratch
 /tmp/
+
+# local-only agent skills
+/.agents/skills/openscreen-recording/
