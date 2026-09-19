@@ -16,17 +16,25 @@ Workflows: [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) (web),
 [`.github/workflows/desktop-release.yml`](.github/workflows/desktop-release.yml)
 (desktop), [`.github/workflows/migrate.yml`](.github/workflows/migrate.yml) (DB).
 
+> **Desktop in-app updates** (updater key, `latest.json`, Gatekeeper/SmartScreen,
+> bootstrap install) → **[docs/desktop-updates.md](docs/desktop-updates.md)**.
+
 > **A release went wrong?** → **[Rollback runbook](docs/rollback-runbook.md)**.
 > Read its first section before touching anything: whether a code rollback is
 > safe depends entirely on whether a migration has already run.
 
-Two guardrails sit on the production path:
+Three guardrails sit on the production path:
 
 - The release gate uses the `production` GitHub Environment, which has a
   **required reviewer**. No tag, GitHub Release, desktop installer, or production
   deployment exists until a human approves the release.
 - Every deploy ends with a **smoke check** ([`scripts/smoke-deploy.mjs`](scripts/smoke-deploy.mjs))
   that asserts the surface actually answers. Upload success is not health.
+- The GitHub Release is created as a **draft** and published only after a second
+  `production` approval. Installed desktop clients read
+  `releases/latest/download/latest.json`, so a candidate whose installers or
+  updater manifest are still building — or have failed validation — is invisible
+  to stations by construction.
 
 ## Trigger matrix
 

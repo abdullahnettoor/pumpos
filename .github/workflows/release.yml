@@ -109,7 +109,10 @@ jobs:
             desktop=true
           elif git diff --quiet "$previous"..HEAD -- apps/desktop packages tsconfig*.json \
             package.json package-lock.json .github/workflows/desktop-release.yml \
-            .github/workflows/release.yml scripts/gen-download-manifest.mjs scripts/release.mjs; then
+            .github/workflows/release.yml scripts/gen-download-manifest.mjs scripts/release.mjs \
+            scripts/updater-manifest.mjs scripts/updater-key.mjs \
+            scripts/verify-updater-signature.mjs scripts/check-desktop-versions.mjs \
+            scripts/check-release-assets.mjs; then
             desktop=false
           else
             desktop=true
@@ -126,7 +129,11 @@ jobs:
           git tag -a "${{ steps.version.outputs.tag }}" -m "PumpOS ${{ steps.version.outputs.tag }}"
           git push origin "${{ steps.version.outputs.tag }}"
 
-      - name: Publish GitHub Release
+      # Created as a DRAFT. `releases/latest` only resolves to a published
+      # release, so installed desktop clients cannot see a candidate whose
+      # installers, updater signatures or latest.json are still being built or
+      # have failed validation. The publish job below flips it, once.
+      - name: Create draft GitHub Release
         if: steps.current.outputs.release == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -135,7 +142,7 @@ jobs:
             gh release create "${{ steps.version.outputs.tag }}" \
               --title "PumpOS ${{ steps.version.outputs.tag }}" \
               --generate-notes \
-              --latest
+              --draft
 
   # Reusable workflows build from this merge commit and stamp the derived
   # version into their disposable workspaces.
@@ -155,3 +162,54 @@ jobs:
     secrets: inherit
     with:
       version: ${{ needs.tag.outputs.version }}
+
+  # A web-only release changes no desktop update channel, so it publishes as
+  # soon as the deploy succeeds — the draft exists only so the release and its
+  # assets appear together. It costs no second approval, exactly as before this
+  # feature landed.
+  publish:
+    name: Publish release
+    needs: [tag, deploy, desktop]
+    if: |
+      always() &&
+      needs.tag.outputs.release == 'true' &&
+      needs.deploy.result == 'success' &&
+      needs.desktop.result == 'skipped'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish the GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release edit "${{ needs.tag.outputs.tag }}" --draft=false --latest
+
+  # A desktop release is different: publishing is the moment every installed
+  # client starts seeing this version. That gets its own approval, because it
+  # changes software already running on stations rather than a surface they
+  # fetch fresh.
+  publish-desktop:
+    name: Publish desktop release
+    needs: [tag, deploy, desktop]
+    if: |
+      always() &&
+      needs.tag.outputs.release == 'true' &&
+      needs.deploy.result == 'success' &&
+      needs.desktop.result == 'success'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Publish the GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release edit "${{ needs.tag.outputs.tag }}" --draft=false --latest
+
+      # The candidate's assets were already proved fetchable while the release
+      # was a draft. This confirms the same bytes answer at the public URLs
+      # clients actually poll. A failure here is recovered with a higher patch
+      # version, never by replacing assets under this tag.
+      - name: Smoke-test the stable update channel
+        run: node scripts/smoke-updater.mjs --expect-version "${{ needs.tag.outputs.version }}"

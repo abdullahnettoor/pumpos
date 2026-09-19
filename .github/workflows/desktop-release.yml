@@ -1,33 +1,38 @@
 name: Desktop release
 
-# Builds the Tauri desktop app for macOS + Windows and attaches the installers
-# to the GitHub Release created for the same vX.Y.Z version. The main Release
-# workflow calls this after deriving and tagging a release.
+# Builds the PumpOS desktop app for macOS universal and Windows x64 from one
+# tagged commit, signs the updater artifacts with the PumpOS Tauri key, and
+# attaches the human installers, the updater artifacts and a validated
+# `latest.json` to the DRAFT GitHub Release for that version.
 #
-# Signing / notarization: this first cut ships UNSIGNED — users will see an
-# "unverified publisher" (Windows SmartScreen) / Gatekeeper warning. To sign:
-#   - macOS: set APPLE_CERTIFICATE, APPLE_CERTIFICATE_PASSWORD, APPLE_SIGNING_IDENTITY,
-#     APPLE_ID, APPLE_PASSWORD, APPLE_TEAM_ID (Apple Developer, $99/yr) → tauri-action
-#     picks them up from env for signing + notarization.
-#   - Windows: set a code-signing cert (WINDOWS_CERTIFICATE / password).
+# Nothing here publishes. `releases/latest/download/latest.json` — the endpoint
+# every installed client polls — only resolves to a *published* release, so a
+# half-finished or failed candidate is invisible to stations by construction.
+# Publication is the separate, approval-gated job in release.yml.
 #
-# Auto-updater (opt-in, separate from OS signing — uses a free Tauri keypair):
-#   1. npx @tauri-apps/cli signer generate -w ~/.tauri/pumpos.key
-#   2. Add the PUBLIC key to apps/desktop/src-tauri/tauri.conf.json → plugins.updater.pubkey
-#      and set an updater endpoint (e.g. the GitHub Releases latest.json).
-#   3. Add repo secrets TAURI_SIGNING_PRIVATE_KEY (+ _PASSWORD) — tauri-action
-#      then emits the signed `latest.json` + `.sig` files on the release.
+# ── Signing, and what it does and does not buy ────────────────────────────────
+# Tauri updater signing (MANDATORY, free, no developer account): proves to an
+# installed PumpOS that an update came from us. Without it the updater refuses
+# every artifact.
+#   TAURI_SIGNING_PRIVATE_KEY / _PASSWORD live in the protected
+#   `desktop-signing` environment. The public half is embedded in the app
+#   (apps/desktop/src-tauri/tauri.conf.json → plugins.updater.pubkey).
 #
-# Public downloads (needed once the repo is PRIVATE — GitHub Release assets on a
-# private repo aren't publicly downloadable). Installers are also pushed to a
-# public Cloudflare R2 bucket that the marketing download page reads. Configure:
-#   - Create an R2 bucket + public access (custom domain e.g. downloads.pumpos.app,
-#     or the r2.dev URL). Add a CORS rule allowing GET from the marketing origin.
-#   - REPOSITORY variables: R2_BUCKET (bucket name), R2_PUBLIC_BASE (public URL).
-#   - The CLOUDFLARE_API_TOKEN must include R2 read/write (Workers R2 Storage).
-#   - Point the download page at the R2 manifest: set the marketing build var
-#     DOWNLOAD_MANIFEST_URL = <R2_PUBLIC_BASE>/downloads/manifest.json
-#   Until R2_BUCKET is set, the R2 steps are skipped (GitHub Release still made).
+# Operating-system signing (NOT done in phase one): PumpOS has no Apple
+# Developer ID and no Windows code-signing certificate, so:
+#   - macOS builds are ad-hoc signed. Users see the "unidentified developer"
+#     Gatekeeper prompt on first install and must approve the app in
+#     System Settings → Privacy & Security. Tauri signatures do not remove this.
+#   - Windows installers are unsigned. SmartScreen may warn about an unknown
+#     publisher. Users must confirm they downloaded from the official release.
+# Both flows are documented for operators in docs/desktop-updates.md.
+#
+# Linux is not a target: no matrix entry, no bundle, no manifest platform.
+#
+# Public downloads (needed while the repo is private — GitHub Release assets on
+# a private repo aren't publicly downloadable). Installers are also pushed to a
+# public Cloudflare R2 bucket that the marketing download page reads. Configure
+# R2_BUCKET / R2_PUBLIC_BASE repository variables to enable those steps.
 
 on:
   workflow_call:
@@ -37,8 +42,7 @@ on:
         required: true
         type: string
 
-# The release step needs write access to create/update the GitHub Release and
-# upload the installers. GITHUB_TOKEN is read-only by default.
+# Upload installers and latest.json to the draft release. Nothing else.
 permissions:
   contents: write
 
@@ -48,17 +52,28 @@ concurrency:
 
 jobs:
   build:
-    name: Build desktop (${{ matrix.platform }})
+    name: Build desktop (${{ matrix.target }})
+    # Holds the updater signing secrets and nothing else. Deliberately NOT
+    # `production`: that environment carries a required reviewer, and putting it
+    # on a two-entry build matrix would charge every desktop release two extra
+    # approvals for jobs that cannot publish anything. `desktop-signing` is
+    # protected by branch/tag restriction rather than a human, and the only
+    # approval that gates a desktop release stays the one that publishes it.
+    environment: desktop-signing
     strategy:
       fail-fast: false
       matrix:
         include:
           - platform: macos-latest
+            target: darwin-universal
             args: '--target universal-apple-darwin'
             rust-targets: 'aarch64-apple-darwin,x86_64-apple-darwin'
+            bundle-dir: apps/desktop/src-tauri/target/universal-apple-darwin/release/bundle
           - platform: windows-latest
+            target: windows-x86_64
             args: ''
             rust-targets: ''
+            bundle-dir: apps/desktop/src-tauri/target/release/bundle
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v7
@@ -66,22 +81,54 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - uses: dtolnay/rust-toolchain@stable
+      # Pinned: a third-party action that installs the toolchain which compiles
+      # the signed binaries.
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
         with:
           targets: ${{ matrix.rust-targets }}
-      - uses: Swatinem/rust-cache@v2
+      # Pinned: third-party, and it runs in the job that builds signed artifacts.
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           workspaces: apps/desktop/src-tauri
+
       - run: npm ci
+
       - name: Stamp release version
         run: node scripts/release.mjs "${{ inputs.version }}"
+
+      # The repo stamps the version rather than committing it, so this is where
+      # "the tag, the app, Cargo and the lockfile all agree" is actually proved.
+      - name: Verify every desktop version source matches the tag
+        run: node scripts/check-desktop-versions.mjs "${{ inputs.version }}"
+
+      # The embedded public key is the root of trust for every installed client,
+      # so it is only ever changed by a reviewed commit — never by a CI variable.
+      - name: Require a usable updater public key
+        run: node scripts/updater-key.mjs --check
+
       - name: Build shared UI
         # The desktop frontend imports @pump/ui (and @pump/shared) from dist/;
         # tauri-action's beforeBuildCommand then runs the desktop vite build.
         run: npm run build --workspace=@pump/ui
-      - uses: tauri-apps/tauri-action@v0
+
+      # Build only — deliberately no `tagName`, so this action never uploads.
+      # Nothing reaches the release until the signatures below have been checked
+      # against the key installed clients carry.
+      #
+      # Pinned to a reviewed revision (action-v0.6.2): this action receives the
+      # updater private key, so it must not float.
+      - id: build
+        uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # action-v0.6.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Mandatory Tauri updater signing. Never echoed, never written to a file
+          # in the workspace.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # macOS: ad-hoc signature only. This establishes no identified
+          # developer and does not notarize — it only satisfies Apple Silicon's
+          # requirement that a distributed binary carry *a* signature.
+          APPLE_SIGNING_IDENTITY: '-'
           # The desktop shell resolves its environment from this value alone —
           # its serving host is `localhost` in every packaged build, so it has
           # nothing else to go on (#116). The vite config fails the packaged
@@ -94,12 +141,64 @@ jobs:
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.PROD_SUPABASE_PUBLISHABLE_KEY }}
         with:
           projectPath: apps/desktop
-          tagName: v${{ inputs.version }}
-          releaseName: 'PumpOS v${{ inputs.version }}'
-          releaseBody: 'PumpOS desktop installers. Download the file for your OS below.'
-          releaseDraft: false
-          prerelease: false
           args: ${{ matrix.args }}
+
+      - name: Collect updater signatures
+        shell: bash
+        run: |
+          mkdir -p updater-signatures
+          find "${{ matrix.bundle-dir }}" -name '*.sig' -exec cp {} updater-signatures/ \;
+          ls -l updater-signatures
+
+      # A signature CI never checked is a signature that fails on a station's
+      # machine instead. This runs BEFORE anything is uploaded: verifying here
+      # costs one re-run, verifying in the field costs every installed client.
+      - name: Verify updater signatures against the embedded public key
+        shell: bash
+        run: |
+          shopt -s nullglob
+          found=0
+          for sig in updater-signatures/*.sig; do
+            artifact="$(find "${{ matrix.bundle-dir }}" -name "$(basename "${sig%.sig}")" | head -n 1)"
+            if [ -z "$artifact" ]; then
+              echo "::error::signature $sig has no matching artifact"
+              exit 1
+            fi
+            node scripts/verify-updater-signature.mjs "$artifact" "$sig"
+            found=$((found + 1))
+          done
+          if [ "$found" -eq 0 ]; then
+            echo "::error::the build produced no signed updater artifacts"
+            exit 1
+          fi
+
+      # Only now, with every signature verified, do the artifacts reach the
+      # draft release created by release.yml.
+      - name: Upload verified artifacts to the draft release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          shopt -s nullglob
+          files=(
+            "${{ matrix.bundle-dir }}"/dmg/*.dmg
+            "${{ matrix.bundle-dir }}"/macos/*.app.tar.gz
+            "${{ matrix.bundle-dir }}"/macos/*.app.tar.gz.sig
+            "${{ matrix.bundle-dir }}"/msi/*.msi
+            "${{ matrix.bundle-dir }}"/nsis/*-setup.exe
+            "${{ matrix.bundle-dir }}"/nsis/*-setup.exe.sig
+          )
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "::error::no desktop artifacts to upload"
+            exit 1
+          fi
+          gh release upload "v${{ inputs.version }}" "${files[@]}" --clobber
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: updater-signatures-${{ matrix.target }}
+          path: updater-signatures/
+          if-no-files-found: error
 
       # Public distribution: private-repo GitHub Release assets aren't publicly
       # downloadable, so we also push installers to a public R2 bucket that the
@@ -123,6 +222,57 @@ jobs:
             echo "Uploading $name"
             npx wrangler r2 object put "${{ vars.R2_BUCKET }}/pumpos/v$version/$name" --file "$f" --remote
           done
+
+  # The manifest installed clients read. Generated from what the builds actually
+  # produced — never hand-assembled — and validated before it reaches the draft.
+  updater-manifest:
+    name: Publish latest.json to the draft release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: updater-signatures-*
+          merge-multiple: true
+          path: updater-signatures
+
+      - name: Generate and validate latest.json
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="v${{ inputs.version }}"
+          gh release view "$tag" --json body --jq '.body' > release-notes.txt || echo "" > release-notes.txt
+          node scripts/updater-manifest.mjs \
+            --version "${{ inputs.version }}" \
+            --dir updater-signatures \
+            --base-url "https://github.com/${{ github.repository }}/releases/download/$tag" \
+            --notes-file release-notes.txt \
+            > latest.json
+          cat latest.json
+
+      # The last gate before publication: every asset latest.json names is on
+      # the release, carries its signature, and can actually be read. A draft's
+      # assets are not served at the public URLs clients use, but the same bytes
+      # are reachable through the authenticated asset API — so an inaccessible
+      # asset stops the release here instead of being reported after the stable
+      # channel has already flipped.
+      - name: Confirm every manifest asset is attached and fetchable
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view "v${{ inputs.version }}" --json assets --jq '.assets' > assets.json
+          node scripts/check-release-assets.mjs latest.json assets.json
+
+      - name: Attach latest.json to the draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "v${{ inputs.version }}" latest.json --clobber
 
   # After both installers are on R2, publish the manifest the download page
   # reads. Skipped until R2 is configured.

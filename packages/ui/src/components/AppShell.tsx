@@ -3,6 +3,7 @@ import { AppTopBar } from './AppTopBar.js';
 import { cn } from '../pump-ds/lib/cn.js';
 import { Icon, type IconName, ICON_REGISTRY } from '../pump-ds/icon/index.js';
 import { Station } from '@pump/shared';
+import type { UserMenuAction } from '../pump-ds/shell/index.js';
 
 export interface NavItem {
   label: string;
@@ -35,6 +36,15 @@ export interface AppShellProps {
    *  the top bar hides operational affordances (business day, quick-create,
    *  station alerts) and scopes search to org actions + navigation. */
   stationReady?: boolean;
+  /**
+   * Extra entries appended above "Log out" in the user menu.
+   *
+   * The desktop shell uses this for the installed version and "Check for
+   * updates": in-app updates exist only in the packaged desktop app, so that
+   * entry cannot live in the shared top bar, and the web console must never
+   * grow a menu item it has no way to honour.
+   */
+  userMenuExtras?: UserMenuAction[];
 }
 
 /**
@@ -131,6 +141,7 @@ export const AppShell: React.FC<AppShellProps> = ({
   stationsLoading = false,
   environmentTag = null,
   stationReady = true,
+  userMenuExtras,
 }) => {
   // Sidebar expanded by default; the top-bar hamburger collapses it to an icon rail.
   const [collapsed, setCollapsed] = useState(false);
@@ -198,6 +209,7 @@ export const AppShell: React.FC<AppShellProps> = ({
           onLogout={onLogout}
           onToggleSidebar={() => setCollapsed((c) => !c)}
           stationReady={stationReady}
+          userMenuExtras={userMenuExtras}
         />
       </div>
 
