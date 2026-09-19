@@ -124,13 +124,16 @@ Add authenticated `GET /access`. It returns a server-computed Access Document:
 ```ts
 type AccessDocument = {
   plan?: 'CORE';
-  capabilities: Record<string, {
-    enabled: boolean;
-    visibility: 'HIDDEN' | 'UPGRADE';
-    title: string;
-    unavailableMessage?: string;
-    resolution?: string;
-  }>;
+  capabilities: Record<
+    string,
+    {
+      enabled: boolean;
+      visibility: 'HIDDEN' | 'UPGRADE';
+      title: string;
+      unavailableMessage?: string;
+      resolution?: string;
+    }
+  >;
   limits: {
     station_count: { value: number; used: number; reached: boolean };
   };
