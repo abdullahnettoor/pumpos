@@ -11,6 +11,8 @@ export const ErrorCodes = {
   FORBIDDEN: 'FORBIDDEN',
   UNAUTHORIZED: 'UNAUTHORIZED',
   INVARIANT_VIOLATION: 'INVARIANT_VIOLATION',
+  /** A numeric Limit supplied by the Organization's Product Plan is used up. */
+  LIMIT_REACHED: 'LIMIT_REACHED',
   INTERNAL: 'INTERNAL_ERROR',
 } as const;
 
@@ -45,6 +47,17 @@ export function forbiddenError(
   details?: Record<string, unknown>,
 ): CoreError {
   return { code: ErrorCodes.FORBIDDEN, message, details };
+}
+
+/**
+ * A Limit is used up. Carries the structured detail the UI needs to explain
+ * the next action instead of showing a generic error. Maps to HTTP 409.
+ */
+export function limitReachedError(
+  message: string,
+  details: { limit: string; value: number; used: number; resolution: string; actionLabel: string },
+): CoreError {
+  return { code: ErrorCodes.LIMIT_REACHED, message, details };
 }
 
 export function invariantViolation(message: string, details?: Record<string, unknown>): CoreError {
