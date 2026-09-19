@@ -14,12 +14,27 @@
  *   node scripts/smoke-updater.mjs --url <latest.json>   # a candidate manifest
  *   node scripts/smoke-updater.mjs --expect-version 1.2.3
  */
-import { resolve } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SUPPORTED_TARGETS, validateUpdaterManifest } from './updater-manifest.mjs';
+import { TAURI_CONF } from './updater-key.mjs';
 
-export const STABLE_MANIFEST_URL =
-  'https://github.com/abdullahnettoor/pumpos/releases/latest/download/latest.json';
+/**
+ * The endpoint installed clients poll, read from the one place that actually
+ * decides it: the updater plugin's configuration. A copy here would be a second
+ * truth that drifts the first time the channel moves, and the whole point of
+ * this check is to test what clients really see.
+ */
+export function readStableManifestUrl(root = join(dirname(fileURLToPath(import.meta.url)), '..')) {
+  const config = JSON.parse(readFileSync(join(root, TAURI_CONF), 'utf8'));
+  const [endpoint, ...rest] = config?.plugins?.updater?.endpoints ?? [];
+  if (!endpoint) throw new Error(`${TAURI_CONF} configures no updater endpoint`);
+  // One stable channel. A second endpoint would mean clients fall back to a
+  // manifest this check never looked at.
+  if (rest.length > 0) throw new Error(`${TAURI_CONF} configures more than one updater endpoint`);
+  return endpoint;
+}
 
 /**
  * Fetch the manifest, validate it, then confirm every asset it references is
@@ -27,7 +42,7 @@ export const STABLE_MANIFEST_URL =
  * failure modes without the network.
  */
 export async function smokeUpdaterManifest({
-  url = STABLE_MANIFEST_URL,
+  url = readStableManifestUrl(),
   expectVersion,
   fetchImpl = fetch,
   log = console.log,

@@ -14,8 +14,8 @@ name: Desktop release
 # Tauri updater signing (MANDATORY, free, no developer account): proves to an
 # installed PumpOS that an update came from us. Without it the updater refuses
 # every artifact.
-#   TAURI_SIGNING_PRIVATE_KEY / _PASSWORD live in the protected `production`
-#   environment. The public half is embedded in the app
+#   TAURI_SIGNING_PRIVATE_KEY / _PASSWORD live in the protected
+#   `desktop-signing` environment. The public half is embedded in the app
 #   (apps/desktop/src-tauri/tauri.conf.json → plugins.updater.pubkey).
 #
 # Operating-system signing (NOT done in phase one): PumpOS has no Apple
@@ -53,9 +53,13 @@ concurrency:
 jobs:
   build:
     name: Build desktop (${{ matrix.target }})
-    # The updater private key lives in this protected environment. The release
-    # has already cleared its approval gate in release.yml before we get here.
-    environment: production
+    # Holds the updater signing secrets and nothing else. Deliberately NOT
+    # `production`: that environment carries a required reviewer, and putting it
+    # on a two-entry build matrix would charge every desktop release two extra
+    # approvals for jobs that cannot publish anything. `desktop-signing` is
+    # protected by branch/tag restriction rather than a human, and the only
+    # approval that gates a desktop release stays the one that publishes it.
+    environment: desktop-signing
     strategy:
       fail-fast: false
       matrix:

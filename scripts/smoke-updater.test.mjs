@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { STABLE_MANIFEST_URL, smokeUpdaterManifest } from './smoke-updater.mjs';
+import { readStableManifestUrl, smokeUpdaterManifest } from './smoke-updater.mjs';
 
 const BASE = 'https://github.com/abdullahnettoor/pumpos/releases/download/v1.2.3';
 
@@ -32,8 +32,10 @@ function fakeFetch({ manifest = MANIFEST, assetStatus = {}, manifestStatus = 200
 }
 
 describe('stable update channel smoke check', () => {
-  it('defaults to the endpoint installed clients actually poll', () => {
-    expect(STABLE_MANIFEST_URL).toBe(
+  it('reads the endpoint from the config that installed clients actually use', () => {
+    // Not a copy of the URL: the updater plugin's own configuration is the
+    // single source, so this check can never test an endpoint clients left.
+    expect(readStableManifestUrl()).toBe(
       'https://github.com/abdullahnettoor/pumpos/releases/latest/download/latest.json',
     );
   });

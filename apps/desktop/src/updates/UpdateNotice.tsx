@@ -39,7 +39,8 @@ export const UpdateNotice: React.FC<{ updates: DesktopUpdates }> = ({ updates })
       actionLabel={view.action?.label}
       onAction={view.action?.onClick}
       dismissible={!!view.onDismiss}
-      onDismiss={view.onDismiss}
+      onDismiss={view.onDismiss?.onClick}
+      dismissLabel={view.onDismiss?.label}
       style={{
         position: 'fixed',
         bottom: 'var(--space-4)',
@@ -50,7 +51,9 @@ export const UpdateNotice: React.FC<{ updates: DesktopUpdates }> = ({ updates })
         // Banner is a single-line strip by default; the update notice stacks a
         // detail line, release notes and a progress bar under its title.
         alignItems: 'flex-start',
-        backgroundColor: 'var(--bg-surface)',
+        // No background override: Banner's severity colour is the whole point
+        // of passing a severity, and cancelling it would make a failed update
+        // look exactly like an available one.
         boxShadow: '0 6px 18px rgba(0,0,0,0.12)',
       }}
     >
@@ -102,8 +105,12 @@ interface NoticeView {
   progress?: { downloadedBytes: number; totalBytes: number | null };
   /** The one thing the operator can do next. Absent while PumpOS is working. */
   action?: { label: string; onClick: () => void };
-  /** Present when the operator may put this away. Absent when they must not. */
-  onDismiss?: () => void;
+  /**
+   * Present when the operator may put this away, absent when they must not.
+   * Carries its own label: putting an offered update away ("Not now") is a
+   * different act from discarding a stale message ("Dismiss").
+   */
+  onDismiss?: { label: string; onClick: () => void };
 }
 
 /**
@@ -135,7 +142,7 @@ export function describeUpdateState(
         severity: 'success',
         title: 'PumpOS is up to date',
         detail: `Version ${state.currentVersion} is the latest release.`,
-        onDismiss: actions.dismiss,
+        onDismiss: { label: 'Dismiss', onClick: actions.dismiss },
       };
     case 'available':
       return {
@@ -145,7 +152,7 @@ export function describeUpdateState(
         detail: `You are on ${state.currentVersion}. Download when it suits the station.`,
         notes: state.update.notes,
         action: { label: 'Download update', onClick: actions.download },
-        onDismiss: actions.postpone,
+        onDismiss: { label: 'Not now', onClick: actions.postpone },
       };
     case 'downloading':
       return {
@@ -162,7 +169,7 @@ export function describeUpdateState(
         title: `PumpOS ${state.update.version} is ready to install`,
         detail: 'PumpOS will restart to finish. Nothing installs until you say so.',
         action: { label: 'Install and restart', onClick: actions.install },
-        onDismiss: actions.postpone,
+        onDismiss: { label: 'Later', onClick: actions.postpone },
       };
     case 'restart-blocked':
       return {
@@ -171,7 +178,7 @@ export function describeUpdateState(
         title: 'Restart postponed',
         detail: `${state.reason} PumpOS will not restart until this clears.`,
         action: { label: 'Try again', onClick: actions.install },
-        onDismiss: actions.postpone,
+        onDismiss: { label: 'Later', onClick: actions.postpone },
       };
     case 'installing':
       return {
@@ -197,7 +204,7 @@ export function describeUpdateState(
         title: 'Update failed',
         detail: state.error.message,
         action: { label: retryLabel(state.retry), onClick: actions.retry },
-        onDismiss: actions.dismiss,
+        onDismiss: { label: 'Dismiss', onClick: actions.dismiss },
       };
   }
 }

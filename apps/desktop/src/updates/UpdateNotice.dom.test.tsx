@@ -114,7 +114,7 @@ describe('UpdateNotice rendering', () => {
       />,
     );
     expect(screen.getByRole('button', { name: 'Install and restart' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Dismiss' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Later' })).toBeTruthy();
     cleanup();
   });
 
@@ -144,8 +144,10 @@ describe('UpdateNotice rendering', () => {
       />,
     );
     // "Not now" is Banner's dismissal, not a button of its own: one primary
-    // action plus an optional put-away is the shape every state takes.
-    screen.getByRole('button', { name: 'Dismiss' }).click();
+    // action plus an optional put-away is the shape every state takes. It is
+    // named, not left as the generic "Dismiss", so a screen-reader user can
+    // tell putting an update away from discarding a stale message.
+    screen.getByRole('button', { name: 'Not now' }).click();
     expect(postpone).toHaveBeenCalledTimes(1);
     cleanup();
   });
@@ -201,7 +203,7 @@ describe('describeUpdateState', () => {
     // Blocked is not failed: the operator can try again once it clears, or put
     // it away and come back to it.
     expect(view?.action?.label).toBe('Try again');
-    expect(view?.onDismiss).toBeTypeOf('function');
+    expect(view?.onDismiss?.label).toBe('Later');
   });
 
   it.each([
@@ -244,5 +246,42 @@ describe('describeUpdateState', () => {
     expect(ready?.action?.label).toBe('Restart and update');
     // Nothing to dismiss: the new binary is already on disk.
     expect(ready?.onDismiss).toBeUndefined();
+  });
+});
+
+describe('UpdateNotice severity', () => {
+  it('distinguishes a failure from an offer by the primitive severity, not by copy alone', () => {
+    const failed = describeUpdateState(
+      {
+        phase: 'failed',
+        currentVersion: '1.0.0',
+        error: { kind: 'offline', message: 'No connection.' },
+        retry: 'check',
+      },
+      actions,
+    );
+    const available = describeUpdateState(
+      { phase: 'available', currentVersion: '1.0.0', update: offered },
+      actions,
+    );
+    expect(failed?.severity).toBe('danger');
+    expect(available?.severity).toBe('info');
+    expect(
+      describeUpdateState(
+        { phase: 'restart-blocked', currentVersion: '1.0.0', update: offered, reason: 'Pending.' },
+        actions,
+      )?.severity,
+    ).toBe('warning');
+  });
+
+  it('names the put-away differently from a plain dismissal', () => {
+    expect(
+      describeUpdateState({ phase: 'available', currentVersion: '1.0.0', update: offered }, actions)
+        ?.onDismiss?.label,
+    ).toBe('Not now');
+    expect(
+      describeUpdateState({ phase: 'up-to-date', currentVersion: '1.0.0', checkedAt: 0 }, actions)
+        ?.onDismiss?.label,
+    ).toBe('Dismiss');
   });
 });

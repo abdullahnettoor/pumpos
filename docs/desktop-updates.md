@@ -72,16 +72,21 @@ outright to write a secret key.
 
 ### 3. Store the private key in GitHub
 
-**Settings → Environments → `production` → Environment secrets:**
+Create a **`desktop-signing`** environment (Settings → Environments) restricted
+to the `main` branch, with **no required reviewer**, and add its secrets:
 
 | Secret                               | Value                               |
 | ------------------------------------ | ----------------------------------- |
 | `TAURI_SIGNING_PRIVATE_KEY`          | contents of `~/.pumpos/updater.key` |
 | `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | the password from step 1            |
 
-They go in the **`production` environment**, not in repository secrets, so only
-an approved release job can read them. The workflow passes them straight to
-`tauri-action` as environment variables and never echoes them.
+They go in an environment, not in repository secrets, so only jobs that declare
+it can read them. It is deliberately a _separate_ environment from `production`:
+`production` carries a required reviewer, and putting that on a two-target build
+matrix would charge every desktop release two extra approvals for jobs that
+cannot publish anything. The gate that matters — publication — keeps its
+reviewer. The workflow passes these straight to `tauri-action` as environment
+variables and never echoes them.
 
 ### 4. Back it up outside GitHub
 
@@ -192,6 +197,26 @@ Check the channel by hand at any time:
 node scripts/smoke-updater.mjs                       # what clients see now
 node scripts/smoke-updater.mjs --expect-version 1.2.3
 ```
+
+### Two deliberate deviations from the original plan
+
+**The version is stamped, then verified — not committed and validated.** The
+milestone asked CI to "validate that all version sources already match the tag
+rather than rewriting them in CI". PumpOS does the opposite by design:
+[RELEASING.md](../RELEASING.md) states "you do not pick or commit the version",
+because release-only commits on `main` were the thing that model removed. So
+`scripts/release.mjs` stamps, and `scripts/check-desktop-versions.mjs` then
+proves every desktop source carries the tag. What that catches is a stamp that
+_missed a file_ — a new version source nobody added to the stamper — which is
+the real failure mode here. What it cannot catch is a committed version
+disagreeing with a tag, because no version is committed.
+
+**The stable endpoint assumes this repository stays public.** GitHub Release
+assets on a private repo are not publicly downloadable — it is why the R2
+mirror exists for the marketing download page. If `abdullahnettoor/pumpos` is
+ever made private, every installed client's check and the post-publish smoke
+check start returning 404, and the updater endpoint has to move to the public
+R2 base before that happens.
 
 ### Which Windows installer updates
 
