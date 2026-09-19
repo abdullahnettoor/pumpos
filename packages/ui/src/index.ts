@@ -147,6 +147,10 @@ export { runTask, useRunTask } from './utils/runTask.js';
 export * from './pump-ds/icon/index.js';
 export * from './pump-ds/brand/index.js';
 export * from './pump-ds/boot/index.js';
+// The canonical action control. Re-exported so app shells (the desktop update
+// notice, for one) build their own surfaces from the design system rather than
+// hand-rolling buttons.
+export * from './pump-ds/button/index.js';
 
 // Post-sign-in boot: the branded wait screen and the parallel resolve behind it.
 export * from './boot/sessionBoot.js';

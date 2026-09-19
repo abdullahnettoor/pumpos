@@ -69,6 +69,8 @@ export interface AppTopBarProps {
    *  hide business day, station alerts, and operational quick-create; scope the
    *  “+ New” menu to getting-started actions. */
   stationReady?: boolean;
+  /** Shell-provided menu entries appended above "Log out" (desktop updates). */
+  userMenuExtras?: UserMenuAction[];
 }
 
 function initialsOf(name: string): string {
@@ -103,6 +105,7 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
   onLogout,
   onToggleSidebar,
   stationReady = true,
+  userMenuExtras,
 }) => {
   const runTask = useRunTask();
   const { open, setOpen } = useCommandPalette();
@@ -232,6 +235,7 @@ export const AppTopBar: React.FC<AppTopBarProps> = ({
 
   // --- user menu ---
   const userMenu: UserMenuAction[] = [
+    ...(userMenuExtras ?? []),
     {
       id: 'logout',
       label: 'Log out',
