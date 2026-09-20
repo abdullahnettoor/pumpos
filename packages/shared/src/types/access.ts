@@ -98,3 +98,55 @@ export interface AccessDocument {
 export function capabilityEnabled(access: AccessDocument | undefined, capability: string): boolean {
   return access?.capabilities[capability]?.enabled === true;
 }
+
+/**
+ * How a client should present one Product Capability:
+ *  - `enabled`  — the Organization has it; render the feature.
+ *  - `upgrade`  — it is unavailable and this user may be told how to get it
+ *                 (Owners and Managers only; the server decides).
+ *  - `hidden`   — unavailable and not this user's concern, or access is not
+ *                 known yet (cold start). Render nothing.
+ */
+export type CapabilityState =
+  | { status: 'enabled'; title: string }
+  | { status: 'upgrade'; title: string; message: string; resolution: ResolutionCode }
+  | { status: 'hidden' };
+
+/**
+ * Resolve the presentation state of one capability. This is the single
+ * decision every gate — navigation entry, action button, whole route — should
+ * ask, so they cannot drift apart. It never authorizes anything: the API
+ * re-checks access on every protected operation.
+ */
+export function capabilityState(
+  access: AccessDocument | undefined,
+  capability: string,
+): CapabilityState {
+  const entry = access?.capabilities[capability];
+  if (!entry) return { status: 'hidden' };
+  if (entry.enabled) return { status: 'enabled', title: entry.title };
+  // The server only sends a disabled entry to a Role that may act on it, so
+  // its presence is the permission to explain it.
+  return {
+    status: 'upgrade',
+    title: entry.title,
+    message: entry.unavailableMessage ?? 'This feature is not available for your Organization.',
+    resolution: entry.resolution ?? 'CONTACT_PUMPOS',
+  };
+}
+
+/** Error code the API returns when the Organization lacks a capability. */
+export const CAPABILITY_NOT_ENTITLED = 'CAPABILITY_NOT_ENTITLED';
+
+/** Error code the API returns when a numeric Limit is used up. */
+export const LIMIT_REACHED = 'LIMIT_REACHED';
+
+/**
+ * Did this failure come from Organization access policy rather than the
+ * request itself? Such a rejection means the client's Access Document is
+ * stale (a grant was revoked, a Limit changed) and should be refetched.
+ */
+export function isAccessPolicyError(error: unknown): boolean {
+  const code = (error as { code?: unknown } | null | undefined)?.code;
+  return code === CAPABILITY_NOT_ENTITLED || code === LIMIT_REACHED;
+}
