@@ -169,17 +169,26 @@ export const CAPABILITY_NOT_ENTITLED = 'CAPABILITY_NOT_ENTITLED';
 /** Error code the API returns when a numeric Limit is used up. */
 export const LIMIT_REACHED = 'LIMIT_REACHED';
 
+/** Error code for a write blocked by Restricted Access. */
+export const SUBSCRIPTION_RESTRICTED = 'SUBSCRIPTION_RESTRICTED';
+
+/** Error code for any tenant write while the Organization is suspended. */
+export const ORGANIZATION_SUSPENDED = 'ORGANIZATION_SUSPENDED';
+
 /**
  * Did this failure come from Organization access policy rather than the
  * request itself?
  *
- * #167 adds SUBSCRIPTION_RESTRICTED and ORGANIZATION_SUSPENDED: both belong
- * in this list, since either also means the client's Access Document is out
- * of date. This is a published client contract — extend it, never narrow it.
+ * This is a published client contract — extend it, never narrow it.
  * Such a rejection means the client's Access Document is
  * stale (a grant was revoked, a Limit changed) and should be refetched.
  */
 export function isAccessPolicyError(error: unknown): boolean {
   const code = (error as { code?: unknown } | null | undefined)?.code;
-  return code === CAPABILITY_NOT_ENTITLED || code === LIMIT_REACHED;
+  return (
+    code === CAPABILITY_NOT_ENTITLED ||
+    code === LIMIT_REACHED ||
+    code === SUBSCRIPTION_RESTRICTED ||
+    code === ORGANIZATION_SUSPENDED
+  );
 }

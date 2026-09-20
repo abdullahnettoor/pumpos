@@ -7,3 +7,4 @@ export * from './administer-access.js';
 export * from './station-capacity.js';
 export * from './require-capability.js';
 export * from './subscription-lifecycle.js';
+export * from './write-policy.js';
