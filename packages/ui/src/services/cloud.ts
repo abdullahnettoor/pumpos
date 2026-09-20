@@ -683,6 +683,21 @@ export class CloudShiftService {
     );
     return data || [];
   }
+
+  /**
+   * Attendant Handover Report for a Business-Date range. Gated server-side on
+   * the `reports.attendant` Product Capability.
+   */
+  async getAttendantHandoverReport(
+    stationId: string,
+    from: string,
+    to: string,
+    attendantId?: string,
+  ): Promise<any> {
+    const query = new URLSearchParams({ stationId, from, to });
+    if (attendantId) query.set('attendantId', attendantId);
+    return request<any>(`/reports/attendant-handovers?${query.toString()}`);
+  }
 }
 
 export class CloudTransactionService {

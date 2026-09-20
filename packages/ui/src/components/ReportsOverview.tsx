@@ -15,10 +15,23 @@ import { UnifiedLedger } from './reports/UnifiedLedger.js';
 import { InvoicesPanel } from './reports/InvoicesPanel.js';
 import { TaxRegisterPanel } from './reports/TaxRegisterPanel.js';
 import { ProfitLossView } from './reports/ProfitLossView.js';
+import { AttendantHandoverReportPanel } from './reports/AttendantHandoverReportPanel.js';
+import { useCapability } from '../access/CapabilityGate.js';
+import { ATTENDANT_REPORT_CAPABILITY } from '@pump/shared';
 import { inr } from '../utils/format.js';
 import { resolveBusinessDate } from '@pump/shared';
 import { Panel, Button, KpiStrip, KpiTile, EmptyState, DateText } from '../pump-ds/index.js';
-import { Play, Zap, Receipt, Wallet, BookOpen, FileText, TrendingUp, Percent } from 'lucide-react';
+import {
+  Play,
+  Zap,
+  Receipt,
+  Wallet,
+  BookOpen,
+  FileText,
+  TrendingUp,
+  Percent,
+  Users,
+} from 'lucide-react';
 import { useRunTask } from '../utils/runTask.js';
 
 const shiftService = new CloudShiftService();
@@ -78,7 +91,14 @@ interface ReportsOverviewProps {
 }
 
 type ReportsTab =
-  'daily-dssr' | 'pnl' | 'ledger' | 'invoices' | 'tax-register' | 'expense-register' | 'cash-bank';
+  | 'daily-dssr'
+  | 'pnl'
+  | 'ledger'
+  | 'invoices'
+  | 'tax-register'
+  | 'expense-register'
+  | 'cash-bank'
+  | 'attendant-handovers';
 
 export const ReportsOverview: React.FC<ReportsOverviewProps> = ({ selectedStation, userRole }) => {
   const qc = useQueryClient();
@@ -88,6 +108,9 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({ selectedStatio
   const clock = { timeZone: s.timezone, dayStartsAt: s.business_day_starts_at };
 
   const [selectedTab, setSelectedTab] = useState<ReportsTab>('daily-dssr');
+  // One decision drives both the tab and its panel, so they cannot disagree.
+  const attendantReport = useCapability(ATTENDANT_REPORT_CAPABILITY);
+  const showAttendantReport = attendantReport.status === 'enabled';
   const { intent, token: intentToken } = useNavIntentEntry();
   const activeTab: ReportsTab = intent?.openDssrDate ? 'daily-dssr' : selectedTab;
   const setActiveTab = (tab: ReportsTab) => {
@@ -216,6 +239,15 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({ selectedStatio
             { id: 'tax-register', label: 'Tax Register', icon: <Percent size={13} /> },
             { id: 'cash-bank', label: 'Cash & Bank', icon: <Wallet size={13} /> },
             { id: 'expense-register', label: 'Expense Register', icon: <Receipt size={13} /> },
+            ...(showAttendantReport
+              ? [
+                  {
+                    id: 'attendant-handovers',
+                    label: 'Attendant Handovers',
+                    icon: <Users size={13} />,
+                  },
+                ]
+              : []),
           ]}
         />
       }
@@ -321,6 +353,10 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({ selectedStatio
       {activeTab === 'expense-register' && <ExpenseRegister selectedStation={selectedStation} />}
 
       {activeTab === 'cash-bank' && <CashBankLedger selectedStation={selectedStation} />}
+
+      {activeTab === 'attendant-handovers' && showAttendantReport && (
+        <AttendantHandoverReportPanel selectedStation={selectedStation} />
+      )}
     </PageLayout>
   );
 };

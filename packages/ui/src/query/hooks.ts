@@ -80,6 +80,8 @@ export const queryKeys = {
   dssrPreview: (stationId: string, date: string) => ['dssr-preview', stationId, date] as const,
   dssrRange: (stationId: string, from: string, to: string) =>
     ['dssr-range', stationId, from, to] as const,
+  attendantHandoverReport: (stationId: string, from: string, to: string, attendantId = '') =>
+    ['attendant-handover-report', stationId, from, to, attendantId] as const,
   expenseCategories: () => ['expense-categories'] as const,
   incomeCategories: () => ['income-categories'] as const,
   products: () => ['products'] as const,
@@ -754,6 +756,28 @@ export function useDailyDssrRange(
     queryKey: queryKeys.dssrRange(stationId ?? '', from, to),
     queryFn: () => shiftService.getDailyDssrRange(stationId!, from, to),
     enabled: !!stationId && !!from && !!to,
+    ...options,
+  });
+}
+
+/**
+ * Attendant Handover Report over a Business-Date range. Operational tier: it
+ * reads live operational rows, so it must never serve same-session stale data.
+ * `enabled` gates on the capability so an unentitled Organization never fires
+ * a request the server would refuse.
+ */
+export function useAttendantHandoverReport(
+  stationId: string | null | undefined,
+  from: string,
+  to: string,
+  attendantId?: string,
+  options?: Options<any>,
+) {
+  return useQuery({
+    queryKey: queryKeys.attendantHandoverReport(stationId ?? '', from, to, attendantId ?? ''),
+    queryFn: () => shiftService.getAttendantHandoverReport(stationId!, from, to, attendantId),
+    enabled: !!stationId && !!from && !!to,
+    ...TIER.operational,
     ...options,
   });
 }

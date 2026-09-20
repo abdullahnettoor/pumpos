@@ -3,7 +3,12 @@ import type { Role } from '@pump/shared';
 import { FixedClock, SequentialIdGenerator } from '../../kernel/index.js';
 import type { ExecutionContext } from '../../kernel/index.js';
 import { GetAccessDocument } from './get-access-document.js';
-import { PRODUCT_ACCESS_REGISTRY, resolveProductPlan, type AccessRegistry } from './registry.js';
+import {
+  ATTENDANT_REPORT_CAPABILITY,
+  PRODUCT_ACCESS_REGISTRY,
+  resolveProductPlan,
+  type AccessRegistry,
+} from './registry.js';
 import type { OrganizationAccessInputs } from './ports.js';
 import {
   buildAccessDocument,
@@ -65,9 +70,19 @@ const documentFor = (role: Role, over: Partial<OrganizationAccessInputs> = {}) =
   buildAccessDocument({ inputs: inputs(over), role, registry: testRegistry });
 
 describe('the CORE baseline', () => {
-  it('ships every current feature ungated: no production capability is registered', () => {
-    expect(Object.keys(PRODUCT_ACCESS_REGISTRY.capabilities)).toEqual([]);
+  it('carries no capability in the CORE plan: every baseline feature ships ungated', () => {
     expect(PRODUCT_ACCESS_REGISTRY.plans.CORE.capabilities).toEqual([]);
+  });
+
+  it('registers the Attendant Handover Report as a grant-only capability', () => {
+    const definition = PRODUCT_ACCESS_REGISTRY.capabilities[ATTENDANT_REPORT_CAPABILITY];
+    expect(definition).toBeDefined();
+    expect(definition.title).toBe('Attendant Handover Report');
+    // Belongs to no plan — an Organization obtains it only by platform grant
+    // until the second-tier Product Plan exists.
+    expect(PRODUCT_ACCESS_REGISTRY.plans.CORE.capabilities).not.toContain(
+      ATTENDANT_REPORT_CAPABILITY,
+    );
   });
 
   it('allows exactly one Station', () => {

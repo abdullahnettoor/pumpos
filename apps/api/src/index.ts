@@ -30,6 +30,7 @@ import { productsRouter } from './routes/products.js';
 import { shiftsRouter } from './routes/shifts.js';
 import { transactionsRouter } from './routes/transactions.js';
 import { dssrRouter } from './routes/dssr.js';
+import { reportsRouter } from './routes/reports.js';
 import { financeRouter } from './routes/finance.js';
 import { accessRouter } from './routes/access.js';
 import { platformAccessRouter } from './routes/platform-access.js';
@@ -803,6 +804,7 @@ api.route('/setup', productsRouter);
 api.route('/shifts', shiftsRouter);
 api.route('/transactions', transactionsRouter);
 api.route('/dssr', dssrRouter);
+api.route('/reports', reportsRouter);
 api.route('/finance', financeRouter);
 // Organization access document (role-filtered, presentation only).
 api.route('/access', accessRouter);
