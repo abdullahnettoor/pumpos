@@ -217,6 +217,18 @@ A Sale of directly-entered non-fuel lines — engine oil, coolant, grease,
 accessories. What earlier docs called a manual sale.
 _Avoid_: manual sale, merchandise sale, lube sale
 
+**Billed Sale**:
+A Product Sale captured individually at the counter (`captureMechanism =
+'POS'`), optionally carrying a GST invoice. Distinct from a Handover Product
+Sale.
+_Avoid_: invoiced sale, POS sale, quick sale
+
+**Handover Product Sale**:
+The single bulk Product Sale an Attendant declares at Shift close
+(`captureMechanism = 'MERCH_HANDOVER'`) covering non-fuel items sold during
+the Shift that were not individually billed. One per Shift per Attendant.
+_Avoid_: merchandise handover, bulk sale
+
 ## Money Movements
 
 **Drawer**:
@@ -360,6 +372,14 @@ its Business Day is closed; an open day's DSSR is a preview, computed on
 demand and never persisted. Financial sections are as of `generatedAt`; Late
 Entries recorded afterwards do not alter the snapshot.
 _Avoid_: Shift Summary, daily report, day summary
+
+**Attendant Handover Report**:
+A read-only, date-range report composing one Attendant's Handovers across
+closed Shifts: fuel sales, Billed Sales, Handover Product Sales, Credit Sales,
+Payment Terminal declarations, DU/Nozzle attribution, and per-Shift plus net
+Variance. Gated on the `reports.attendant` Product Capability; exports as a
+per-attendant PDF statement with a sign-off block.
+_Avoid_: attendant report, staff report, variance report
 
 **Snapshot Immutability**:
 Summaries are stored permanently, never recalculated historically, never
