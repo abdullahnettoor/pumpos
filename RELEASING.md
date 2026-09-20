@@ -112,6 +112,38 @@ node scripts/next-version.mjs --range v1.0.8..HEAD
 `node scripts/release.mjs X.Y.Z` is an internal build-stamping command. Release
 workflows call it in disposable runners. It does not commit, tag, or push.
 
+### Write the operator summary
+
+Desktop clients show the manifest's `notes` to a station operator inside PumpOS.
+That is a different artifact from the developer changelog: "fix(release): emit
+the platform keys updater clients actually request" tells a station manager
+nothing about whether to update now or after the shift.
+
+So the person cutting the release adds a **`## For operators`** section to the
+GitHub Release body, in plain sentences, addressed to whoever runs the station:
+
+```markdown
+## For operators
+
+Fuel sales now round to the paise, so the drawer matches the till at close.
+Nothing changes in how you open or close a shift.
+
+## What's Changed
+
+<!-- GitHub's auto-generated changelog stays here, untouched. -->
+```
+
+- Only that section reaches clients. The rest of the body stays on the Release,
+  where developers read it.
+- **Omitting it is allowed and never blocks a release.** No section means no
+  notes: the operator sees the version and the action, which beats commit
+  subjects.
+- The section is cleaned on the way through
+  ([`scripts/updater-manifest.mjs`](scripts/updater-manifest.mjs) →
+  `operatorNotes`): commit prefixes, `@handle` mentions, `by … in …` trailers,
+  markdown markers and every URL are stripped, so a link written by hand cannot
+  reach a station. Notes stay plain text end to end.
+
 > Cost note: desktop CI uses macOS (**10×** minutes) and Windows (**2×**) runners,
 > so releases that cannot affect the desktop app skip those builds automatically.
 
