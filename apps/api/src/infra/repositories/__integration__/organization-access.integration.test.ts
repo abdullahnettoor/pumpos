@@ -36,10 +36,14 @@ const TEST_SCHEMA = 'organization_access_it';
 const ORG = '00000000-0000-0000-0000-0000000000a1';
 const OTHER_ORG = '00000000-0000-0000-0000-0000000000b1';
 
-/** The parts of the product schema these adapters actually touch. */
-const FIXTURE_SCHEMA = `
-  create extension if not exists "pgcrypto";
-
+/**
+ * Roles and the schema itself, run before anything is pinned to that schema —
+ * a connection whose search_path names a schema that does not exist yet cannot
+ * create objects.
+ *
+ * `gen_random_uuid()` is core since Postgres 13, so no extension is needed.
+ */
+const BOOTSTRAP = `
   -- Supabase provides these; the adapters and the shipped migration expect them.
   do $$ begin
     if not exists (select from pg_roles where rolname = 'authenticated') then
@@ -52,8 +56,10 @@ const FIXTURE_SCHEMA = `
 
   drop schema if exists ${TEST_SCHEMA} cascade;
   create schema ${TEST_SCHEMA};
-  set local search_path to ${TEST_SCHEMA};
+`;
 
+/** The parts of the product schema these adapters actually touch. */
+const FIXTURE_SCHEMA = `
   create table organizations (
     id uuid primary key default gen_random_uuid(),
     name varchar(255) not null,
@@ -124,14 +130,21 @@ describe.skipIf(!CONNECTION)('Organization access against real Postgres', () => 
   let db: DbClient;
 
   beforeAll(async () => {
-    // Every connection in the pool resolves unqualified names to the test
+    const bootstrap = postgres(CONNECTION!, { max: 1, onnotice: () => {} });
+    try {
+      await bootstrap.unsafe(BOOTSTRAP);
+    } finally {
+      await bootstrap.end();
+    }
+
+    // Every connection in this pool resolves unqualified names to the test
     // schema, so neither Drizzle nor the raw probes can reach `public`.
     sql = postgres(CONNECTION!, {
       max: 4,
       onnotice: () => {},
       connection: { search_path: TEST_SCHEMA },
     });
-    await sql.unsafe(FIXTURE_SCHEMA.replace(`set local search_path to ${TEST_SCHEMA};`, ''));
+    await sql.unsafe(FIXTURE_SCHEMA);
     await sql.unsafe(grantsMigration());
     db = drizzle(sql, { schema }) as unknown as DbClient;
   }, 60_000);
