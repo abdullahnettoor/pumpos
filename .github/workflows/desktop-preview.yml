@@ -27,21 +27,24 @@ name: Desktop preview
 #
 # Linux is not a target.
 
+# Manual only, and deliberately so. The first design queued a build on every
+# desktop-affecting merge to `dev` and relied on the `desktop-preview`
+# environment's required reviewer to hold it. On the first real run the gate did
+# NOT engage: the deployment went straight to in_progress, with no waiting state
+# and no approval recorded, and both runners built unattended — precisely the
+# cost this feature exists to prevent.
+#
+# `workflow_dispatch` needs no such guarantee. Nothing runs unless a human asks,
+# by construction rather than by configuration. The environment declaration
+# stays below: if the gate does hold it is a second lock, and if it does not,
+# nothing is lost. The push trigger can return once the gate is proven.
 on:
-  push:
-    branches: [dev]
-    # Only ask when a desktop build could actually differ. A pending approval on
-    # a README change is the noise this feature exists to avoid.
-    paths:
-      - 'apps/desktop/**'
-      - 'packages/**'
-      - 'package.json'
-      - 'package-lock.json'
-      - 'tsconfig*.json'
-      - '.github/workflows/desktop-preview.yml'
-      - 'scripts/preview-desktop.mjs'
-  # Build any branch on demand, without waiting for a merge to land on dev.
   workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch or commit to build (defaults to the selected ref)
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -66,11 +69,18 @@ jobs:
           - platform: macos-latest
             target: darwin-universal
             args: '--target universal-apple-darwin'
+            bundles: dmg
             rust-targets: 'aarch64-apple-darwin,x86_64-apple-darwin'
             bundle-dir: apps/desktop/src-tauri/target/universal-apple-darwin/release/bundle
           - platform: windows-latest
             target: windows-x86_64
             args: ''
+            # NSIS only. The MSI bundler rejects our version outright:
+            # "optional pre-release identifier in app version must be
+            # numeric-only" — and `-preview.<sha>` is the whole point. NSIS is
+            # also the format PumpOS updates through, so it is the one that
+            # matters to test.
+            bundles: nsis
             rust-targets: ''
             bundle-dir: apps/desktop/src-tauri/target/release/bundle
     runs-on: ${{ matrix.platform }}
@@ -118,9 +128,18 @@ jobs:
       - name: Build shared UI
         run: npm run build --workspace=@pump/ui
 
+      # `tauri build` directly, NOT tauri-action. The action packages the macOS
+      # .app into a .app.tar.gz unconditionally — an updater artifact — even
+      # though Tauri itself honoured `createUpdaterArtifacts: false` and emitted
+      # only the .app and the .dmg. The isolation gate caught it on the first
+      # run. A preview has no use for the action's release-upload machinery
+      # anyway: the artifacts are uploaded below.
+      #
       # No signing environment variables: this build must not be able to sign
-      # anything even by accident. Pinned to a reviewed revision.
-      - uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # action-v0.6.2
+      # anything, even by accident.
+      - name: Build the preview
+        working-directory: apps/desktop
+        shell: bash
         env:
           # Resolves to the Preview badge and a disabled updater in the shell.
           VITE_APP_ENV: preview
@@ -129,9 +148,10 @@ jobs:
           VITE_API_URL: ${{ vars.PREVIEW_API_URL || 'https://api.pumpos.abdullahnettoor.com' }}
           VITE_SUPABASE_URL: ${{ secrets.DEV_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.DEV_SUPABASE_PUBLISHABLE_KEY }}
-        with:
-          projectPath: apps/desktop
-          args: ${{ matrix.args }} --config src-tauri/tauri.preview.conf.json
+        run: |
+          npm run tauri -- build ${{ matrix.args }} \
+            --bundles ${{ matrix.bundles }} \
+            --config src-tauri/tauri.preview.conf.json
 
       # Asserted, not assumed: a preview carrying a signature, an updater
       # artifact, or a release version is indistinguishable from a real release
@@ -149,7 +169,6 @@ jobs:
           shopt -s nullglob
           files=(
             "${{ matrix.bundle-dir }}"/dmg/*.dmg
-            "${{ matrix.bundle-dir }}"/msi/*.msi
             "${{ matrix.bundle-dir }}"/nsis/*-setup.exe
           )
           for f in "${files[@]}"; do cp "$f" preview-artifacts/; done
