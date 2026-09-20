@@ -21,7 +21,7 @@ import {
   CloudPaymentTerminalService,
   CloudAccessService,
 } from '../services/cloud.js';
-import type { AccessDocument } from '@pump/shared';
+import type { AccessDocument, AttendantHandoverReport, AttendantReportFilters } from '@pump/shared';
 
 /**
  * Centralised query hooks. These replace the hand-rolled
@@ -80,6 +80,8 @@ export const queryKeys = {
   dssrPreview: (stationId: string, date: string) => ['dssr-preview', stationId, date] as const,
   dssrRange: (stationId: string, from: string, to: string) =>
     ['dssr-range', stationId, from, to] as const,
+  attendantHandoverReport: (stationId: string, from: string, to: string) =>
+    ['attendant-handover-report', stationId, from, to] as const,
   expenseCategories: () => ['expense-categories'] as const,
   incomeCategories: () => ['income-categories'] as const,
   products: () => ['products'] as const,
@@ -759,6 +761,29 @@ export function useDailyDssrRange(
 }
 
 /**
+ * Attendant Handover Report over a Business-Date range. Operational tier: it
+ * reads live operational rows, so it must never serve same-session stale data.
+ *
+ * Entitlement is NOT checked here — callers mount this behind the capability
+ * gate, and the server refuses regardless of what the client believes.
+ */
+export function useAttendantHandoverReport(
+  filters: Partial<AttendantReportFilters> & { stationId: string | null | undefined },
+  options?: Options<AttendantHandoverReport>,
+) {
+  // The period is fetched whole; callers filter by attendant in memory. The
+  // endpoint's own `attendantId` is for consumers that want the narrow read.
+  const { stationId, from = '', to = '' } = filters;
+  return useQuery({
+    queryKey: queryKeys.attendantHandoverReport(stationId ?? '', from, to),
+    queryFn: () => shiftService.getAttendantHandoverReport({ stationId: stationId!, from, to }),
+    enabled: !!stationId && !!from && !!to,
+    ...TIER.operational,
+    ...options,
+  });
+}
+
+/**
  * Returns a callback that invalidates the operational caches for a station after
  * a mutation (open/close shift, record expense/collection/etc.) so screens stay
  * fresh without manual refetch wiring.
@@ -783,6 +808,9 @@ export function useInvalidateOperational() {
       qc.invalidateQueries({ queryKey: ['shift-transactions'] }),
       qc.invalidateQueries({ queryKey: ['merchandise-handovers'] }),
       qc.invalidateQueries({ queryKey: ['merchandise-sales'] }),
+      // The Attendant Handover Report reads closed-shift handovers, so closing
+      // a shift (or correcting one) changes it within the same session.
+      qc.invalidateQueries({ queryKey: ['attendant-handover-report'] }),
       // Business Day cockpit + P&L read the live DSSR preview — refresh it too.
       qc.invalidateQueries({ queryKey: ['dssr'] }),
       qc.invalidateQueries({ queryKey: ['dssr-preview'] }),

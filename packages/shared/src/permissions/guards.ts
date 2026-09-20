@@ -231,6 +231,18 @@ export function canExportReports(role: Role): boolean {
   return role === 'Owner' || role === 'Manager' || role === 'Accountant';
 }
 
+/**
+ * View the Attendant Handover Report. Back-office roles only: an Attendant
+ * must not see a peer's variance history, and Staff have no accountability
+ * role over attendants.
+ *
+ * This is the Role axis only — the report is additionally gated on the
+ * `reports.attendant` Product Capability, which the server checks first.
+ */
+export function canViewAttendantReport(role: Role): boolean {
+  return role === 'Owner' || role === 'Manager' || role === 'Accountant';
+}
+
 // ----------------------------------------------------
 // Financial Accounts (Phase F) — money accounts & ledger
 // ----------------------------------------------------

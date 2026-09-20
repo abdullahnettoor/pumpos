@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Hono } from 'hono';
 import { undeclaredOperations } from '@pump/core';
 import { dssrRouter } from '../routes/dssr.js';
+import { reportsRouter } from '../routes/reports.js';
 import { financeRouter } from '../routes/finance.js';
 import { paymentTerminalsRouter } from '../routes/payment-terminals.js';
 import { productsRouter } from '../routes/products.js';
@@ -35,6 +36,9 @@ const MOUNTED: ReadonlyArray<[string, Hono<any>]> = [
   ['/transactions', transactionsRouter as Hono<any>],
   ['/dssr', dssrRouter as Hono<any>],
   ['/finance', financeRouter as Hono<any>],
+  // Read-only today. Enumerated anyway so the first mutation added under
+  // /reports is caught by this test instead of escaping it silently.
+  ['/reports', reportsRouter as Hono<any>],
 ];
 
 /** Every mutating operation the tenant API exposes, as `METHOD path`. */

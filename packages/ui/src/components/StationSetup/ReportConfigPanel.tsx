@@ -10,7 +10,11 @@ import {
   SHIFT_SUMMARY_SECTION_LABELS,
   DEFAULT_DSSR_CONFIG,
   DSSR_SECTION_LABELS,
+  DEFAULT_ATTENDANT_REPORT_CONFIG,
+  ATTENDANT_REPORT_SECTION_LABELS,
 } from '../../services/reports/reportConfig.js';
+import { useCapability } from '../../access/CapabilityGate.js';
+import { ATTENDANT_REPORT_CAPABILITY } from '@pump/shared';
 import { Save, GripVertical } from 'lucide-react';
 import { showLogoFromStation } from '../../services/reports/letterhead.js';
 
@@ -50,7 +54,10 @@ const reorder = (list: OrderedSection[], from: number, to: number): OrderedSecti
   return next;
 };
 
-type ListId = 'ss' | 'dssr';
+type ListId = 'ss' | 'dssr' | 'attendant';
+
+/** The documents whose sections can be configured and previewed. */
+type PreviewDoc = 'shiftSummary' | 'dssr' | 'attendantReport';
 
 /**
  * Station-level report configuration (Phase R2): choose paper size, toggle and
@@ -83,7 +90,17 @@ const ReportConfigForm: React.FC<ReportConfigPanelProps> = ({ selectedStation, o
   const [dssr, setDssr] = useState<OrderedSection[]>(() =>
     buildOrdered(DEFAULT_DSSR_CONFIG.sections, selectedStation?.settings?.report_config?.dssr),
   );
-  const [previewDoc, setPreviewDoc] = useState<'shiftSummary' | 'dssr'>('shiftSummary');
+  const [attendant, setAttendant] = useState<OrderedSection[]>(() =>
+    buildOrdered(
+      DEFAULT_ATTENDANT_REPORT_CONFIG.sections,
+      selectedStation?.settings?.report_config?.attendantReport,
+    ),
+  );
+  const [previewDoc, setPreviewDoc] = useState<PreviewDoc>('shiftSummary');
+  // The Attendant Handover Report is gated; an Organization without it must
+  // not be offered configuration for a report it cannot open.
+  const attendantReportAccess = useCapability(ATTENDANT_REPORT_CAPABILITY);
+  const showAttendantReport = attendantReportAccess.status === 'enabled';
   const [saving, setSaving] = useState(false);
   const [drag, setDrag] = useState<{ list: ListId; index: number } | null>(null);
 
@@ -100,9 +117,33 @@ const ReportConfigForm: React.FC<ReportConfigPanelProps> = ({ selectedStation, o
     .filter(Boolean)
     .join('  •  ');
 
-  const activeList = previewDoc === 'shiftSummary' ? ss : dssr;
-  const activeLabels: Record<string, string> =
-    previewDoc === 'shiftSummary' ? SHIFT_SUMMARY_SECTION_LABELS : DSSR_SECTION_LABELS;
+  /*
+   * One entry per configurable document, so adding a fourth report means
+   * adding a row here — not another branch in the several places that switch
+   * on the previewed document. The title is part of the entry: a preview that
+   * names the wrong document is worse than no preview.
+   */
+  const docs: Record<
+    PreviewDoc,
+    { list: OrderedSection[]; labels: Record<string, string>; title: string }
+  > = {
+    shiftSummary: {
+      list: ss,
+      labels: SHIFT_SUMMARY_SECTION_LABELS,
+      title: 'SHIFT SUMMARY RECORD',
+    },
+    dssr: {
+      list: dssr,
+      labels: DSSR_SECTION_LABELS,
+      title: 'DAILY SALES SUMMARY RECORD',
+    },
+    attendantReport: {
+      list: attendant,
+      labels: ATTENDANT_REPORT_SECTION_LABELS,
+      title: 'ATTENDANT HANDOVER REPORT',
+    },
+  };
+  const { list: activeList, labels: activeLabels, title: previewTitle } = docs[previewDoc];
   const previewSections = useMemo(
     () => activeList.filter((s) => s.enabled).map((s) => activeLabels[s.key] || s.key),
     [activeList, activeLabels],
@@ -123,6 +164,7 @@ const ReportConfigForm: React.FC<ReportConfigPanelProps> = ({ selectedStation, o
           report_config: {
             shiftSummary: ss.filter((s) => s.enabled).map((s) => s.key),
             dssr: dssr.filter((s) => s.enabled).map((s) => s.key),
+            attendantReport: attendant.filter((s) => s.enabled).map((s) => s.key),
             paper,
             showLogo,
           },
@@ -302,6 +344,14 @@ const ReportConfigForm: React.FC<ReportConfigPanelProps> = ({ selectedStation, o
 
           {renderList('Shift Summary', 'ss', ss, setSs, SHIFT_SUMMARY_SECTION_LABELS)}
           {renderList('Daily DSSR', 'dssr', dssr, setDssr, DSSR_SECTION_LABELS)}
+          {showAttendantReport &&
+            renderList(
+              'Attendant Handover Report',
+              'attendant',
+              attendant,
+              setAttendant,
+              ATTENDANT_REPORT_SECTION_LABELS,
+            )}
           <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
             Toggle sections on/off and drag the handle to reorder them. “Header / Letterhead” is
             always first.
@@ -335,9 +385,12 @@ const ReportConfigForm: React.FC<ReportConfigPanelProps> = ({ selectedStation, o
                 options={[
                   { value: 'shiftSummary', label: 'Shift Summary' },
                   { value: 'dssr', label: 'DSSR' },
+                  ...(showAttendantReport
+                    ? [{ value: 'attendantReport', label: 'Attendant' }]
+                    : []),
                 ]}
                 value={previewDoc}
-                onChange={(v) => setPreviewDoc(v)}
+                onChange={(v) => setPreviewDoc(v as PreviewDoc)}
                 aria-label="Preview report"
               />
             </div>
@@ -376,9 +429,7 @@ const ReportConfigForm: React.FC<ReportConfigPanelProps> = ({ selectedStation, o
                     marginTop: 2,
                   }}
                 >
-                  {previewDoc === 'shiftSummary'
-                    ? 'SHIFT SUMMARY RECORD'
-                    : 'DAILY SALES SUMMARY RECORD'}
+                  {previewTitle}
                 </div>
               </div>
               {showLogo && logo ? (

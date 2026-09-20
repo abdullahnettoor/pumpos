@@ -1,6 +1,7 @@
 export * from './types/core.js';
 export * from './types/access.js';
 export * from './types/entities.js';
+export * from './types/attendant-report.js';
 export * from './schemas/validation.js';
 export * from './permissions/guards.js';
 export * from './services/interfaces.js';

@@ -21,6 +21,8 @@ import {
   FinalizeOnboardingPayload,
   FinalizeOnboardingResult,
   AccessDocument,
+  AttendantHandoverReport,
+  AttendantReportFilters,
 } from '@pump/shared';
 import { getAccessToken, refreshAccessToken } from './auth/tokenStore.js';
 
@@ -682,6 +684,22 @@ export class CloudShiftService {
       `/dssr/daily/range?stationId=${stationId}&from=${from}&to=${to}`,
     );
     return data || [];
+  }
+
+  /**
+   * Attendant Handover Report for a Business-Date range. Gated server-side on
+   * the `reports.attendant` Product Capability.
+   */
+  async getAttendantHandoverReport(
+    filters: AttendantReportFilters,
+  ): Promise<AttendantHandoverReport> {
+    const query = new URLSearchParams({
+      stationId: filters.stationId,
+      from: filters.from,
+      to: filters.to,
+    });
+    if (filters.attendantId) query.set('attendantId', filters.attendantId);
+    return request<AttendantHandoverReport>(`/reports/attendant-handovers?${query.toString()}`);
   }
 }
 

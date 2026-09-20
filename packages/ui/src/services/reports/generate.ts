@@ -1,11 +1,19 @@
 import React from 'react';
 import { exportReactPdf } from '../exportPdf.js';
 import {
+  DEFAULT_ATTENDANT_REPORT_CONFIG,
   DEFAULT_DSSR_CONFIG,
   DEFAULT_SHIFT_SUMMARY_CONFIG,
   paperFromStation,
 } from './reportConfig.js';
-import { letterheadFromStation } from './letterhead.js';
+import { letterheadFromStation, showLogoFromStation } from './letterhead.js';
+import type { AttendantReportEntry } from '@pump/shared';
+import type { AttendantReportSection } from './reportConfig.js';
+
+/** The slice of station settings the report generators read. */
+interface StationReportSettings {
+  report_config?: { attendantReport?: string[] } | null;
+}
 
 /**
  * One-call report PDF generators that build the station-configured document and
@@ -54,5 +62,36 @@ export async function generateShiftSummaryPdf(
   await exportReactPdf(
     React.createElement(doc.ShiftSummaryDoc, { snapshot, config }),
     `Shift_Summary_${String(shiftId).slice(0, 8)}`,
+  );
+}
+
+/**
+ * Attendant Handover Report PDF — a statement for ONE attendant over one
+ * Business-Date range. `entry` is that attendant's report entry; `period`
+ * carries the range and generation instant the report was composed with.
+ */
+export async function generateAttendantReportPdf(
+  station: { name?: string; settings?: Record<string, unknown> } | null,
+  entry: AttendantReportEntry,
+  period: { from: string; to: string; generatedAt: string },
+): Promise<void> {
+  const doc = await import('./attendantReportDoc.js');
+  const configured = (station?.settings as StationReportSettings | undefined)?.report_config
+    ?.attendantReport;
+  const sections = configured?.length
+    ? (configured as AttendantReportSection[])
+    : DEFAULT_ATTENDANT_REPORT_CONFIG.sections;
+  const config = {
+    ...DEFAULT_ATTENDANT_REPORT_CONFIG,
+    sections,
+    stationName: station?.name,
+    letterhead: letterheadFromStation(station),
+    paper: paperFromStation(station),
+    // A station that turned its logo off must not get one back.
+    showLogo: showLogoFromStation(station),
+  };
+  await exportReactPdf(
+    React.createElement(doc.AttendantReportDoc, { data: { ...entry, ...period }, config }),
+    `Attendant_Report_${entry.attendantName.replace(/\s+/g, '_')}_${period.from}_${period.to}`,
   );
 }
