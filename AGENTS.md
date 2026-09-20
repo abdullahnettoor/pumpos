@@ -365,6 +365,13 @@ Custom Roles
 Custom Permissions
 ```
 
+A Role answers whether the **user** may act. Whether the **Organization** may —
+its Product Capabilities, its Limits, and whether Restricted Access or
+Suspension permits the write at all — is a separate axis enforced on the server.
+Every mutating tenant route declares its Restricted Access answer, and a route
+added without one fails the coverage tests. Apply the `pump-access-gating`
+skill for any gated feature, Limit, or new mutating route.
+
 ---
 
 # UI Design Principles
