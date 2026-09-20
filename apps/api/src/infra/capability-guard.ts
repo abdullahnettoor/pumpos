@@ -3,7 +3,7 @@ import type { DbClient } from '@pump/db';
 import { requireCapability, type AccessRegistry } from '@pump/core';
 import type { AuthenticatedPrincipal } from './authenticated-principal.js';
 import { DrizzleOrganizationAccessReader } from './repositories/organization-access.repo.js';
-import { STATUS_BY_CODE } from './send-result.js';
+import { sendResult } from './send-result.js';
 
 type Variables = {
   db: DbClient;
@@ -35,10 +35,7 @@ export function requireCapabilityGuard(
       capabilityKey,
     );
 
-    if (!result.success) {
-      const status = STATUS_BY_CODE[result.error.code] ?? 403;
-      return c.json({ success: false, error: result.error }, status as 403);
-    }
+    if (!result.success) return sendResult(c, result);
 
     await next();
   };

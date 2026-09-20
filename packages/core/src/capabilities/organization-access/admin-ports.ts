@@ -71,6 +71,8 @@ export interface OrganizationSubscription {
   plan: string | null;
   status: string | null;
   accessUntil: string | null;
+  /** When PumpOS manually stopped the Organization, independent of billing. */
+  suspendedAt: string | null;
 }
 
 /**
@@ -86,6 +88,8 @@ export interface OrganizationSubscriptionRepository {
     accessUntil: string | null;
   }): Promise<void>;
   setPlan(input: { organizationId: string; plan: ProductPlanKey }): Promise<void>;
+  /** Record or clear the manual stop. Never touches the billing columns. */
+  setSuspension(input: { organizationId: string; suspendedAt: string | null }): Promise<void>;
 }
 
 /**

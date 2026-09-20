@@ -10,6 +10,7 @@ import type { ExecutionContext, Result } from '../../kernel/index.js';
 import type { FinalizeOnboardingResult, OnboardingDraft } from '@pump/shared';
 import { FinalizeStationOnboarding } from '../station-setup/onboarding/index.js';
 import { ensureStationCapacity, type StationCapacityPort } from './station-capacity.js';
+import { buildAccessDocument } from './resolve-access.js';
 import type { OrganizationAccessInputs } from './ports.js';
 
 /**
@@ -190,6 +191,36 @@ describe('ensureStationCapacity', () => {
     await ensureStationCapacity(port, 'org-1');
 
     expect(order).toEqual(['lock', 'load']);
+  });
+});
+
+describe('after a Limit is lowered below current usage', () => {
+  // A downgrade must not strand an Organization: the Stations it already has
+  // keep operating, and only growth stops. Nothing deactivates a Station.
+  it('refuses another Station without disturbing the ones that exist', async () => {
+    const result = await ensureStationCapacity(capacityPort({ stations: 3, override: 1 }), 'org-1');
+
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.error.code).toBe('LIMIT_REACHED');
+    // The message reports the contracted allowance, and usage above it is
+    // simply carried — the error is about adding, never about removing.
+    expect(result.error.details).toMatchObject({ value: 1, used: 3 });
+  });
+
+  it('reports the over-limit usage honestly in the Access Document', async () => {
+    const document = buildAccessDocument({
+      inputs: inputs({ limitOverrides: { station_count: 1 }, usage: { station_count: 3 } }),
+      role: 'Owner',
+    });
+
+    expect(document.limits.station_count).toEqual({ value: 1, used: 3, reached: true });
+  });
+
+  it('allows growth again once the override is raised back', async () => {
+    const result = await ensureStationCapacity(capacityPort({ stations: 3, override: 4 }), 'org-1');
+
+    expect(result.success).toBe(true);
   });
 });
 

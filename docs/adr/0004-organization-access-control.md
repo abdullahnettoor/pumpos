@@ -93,3 +93,29 @@ overdue invoice needs the payment warning, its deadline and the action that
 clears it; they are not the purchasing decision-maker, so unavailable-capability
 upgrade entries and the Product Plan key remain withheld. Staff and Attendants
 continue to see only that access is limited and whom to ask.
+
+Three further rules were settled while reviewing the completed phase, and are
+recorded here because each decides behaviour the spec did not state.
+
+**Suspension is stored separately from Subscription Status.** It was first
+implemented as a status value, which made the two share one column: a confirmed
+payment overwrote the suspension, so an Organization stopped for fraud could
+lift its own stop by paying an invoice. Suspension now has its own column and
+its own commands. It outranks every billing state while it stands, a restore
+returns the Organization to whatever its billing lifecycle says rather than to
+Active, and the two move independently in both directions.
+
+**A missing paid-through instant means different things by status.** Mid-grace
+or mid-trial there is simply no deadline recorded yet, so access continues;
+a Canceled subscription with no instant has nothing left to honour and resolves
+as Restricted. Reading "no instant" as open in every case granted a canceled
+Organization normal access permanently.
+
+**Trialing expires like any other window, and an unreadable status fails
+closed.** A Trialing Organization past its `access_until` resolves as
+Restricted, which the original decision's "Trialing and Active allow normal
+access" did not anticipate. Separately, a Subscription Status that cannot be
+read resolves as Restricted rather than Active: while nothing was enforced the
+permissive reading was safer, but once the status gates writes a garbled row
+must not grant full access. Both are the gentlest safe answer — the open day
+can still be finished.

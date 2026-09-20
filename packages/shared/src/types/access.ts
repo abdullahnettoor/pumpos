@@ -113,7 +113,9 @@ export interface AccessDocument {
  * confirmed. Presentation only; the API re-checks every protected operation.
  */
 export function capabilityEnabled(access: AccessDocument | undefined, capability: string): boolean {
-  return access?.capabilities[capability]?.enabled === true;
+  // Answers through `capabilityState` rather than reading the document itself,
+  // so the two can never disagree about the same capability.
+  return capabilityState(access, capability).status === 'enabled';
 }
 
 /**

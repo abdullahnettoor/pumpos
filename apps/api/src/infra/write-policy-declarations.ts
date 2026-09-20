@@ -15,9 +15,9 @@ import { declareWritePolicies, type WritePolicyRegistry } from '@pump/core';
  * `write-policy-coverage.test.ts` enumerates: adding a mutation without adding
  * a line here fails that test rather than silently inheriting a default.
  *
- * Nothing consumes this yet beyond the completeness check. Route families
- * adopt the guard one at a time in #168-#171; until then behaviour is
- * unchanged.
+ * Every route listed here carries `writePolicyGuard`, and the per-family
+ * coverage tests check both directions: a mutation without a declaration
+ * fails, and so does a declaration whose route no longer exists.
  */
 export const WRITE_POLICY_DECLARATIONS: WritePolicyRegistry = declareWritePolicies([
   // ---------------------------------------------------------------------

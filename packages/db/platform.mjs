@@ -36,6 +36,8 @@
  *   node packages/db/platform.mjs organization plan set <org-id> CORE [--reason "<why>"]
  *   node packages/db/platform.mjs organization subscription set <org-id> PAST_DUE [--until <iso>] [--reason "<why>"]
  *   node packages/db/platform.mjs organization subscription confirm-payment <org-id>
+ *   node packages/db/platform.mjs organization suspend <org-id> --reason "<why>"
+ *   node packages/db/platform.mjs organization restore <org-id> --reason "<why>"
  *
  * Tip: Run below script to source the API secrets first:
 set -a
@@ -270,6 +272,17 @@ async function organizationCommand() {
     }
   }
 
+  // Suspension is not a Subscription Status: a suspended Organization that
+  // pays its invoice stays suspended, and restoring returns it to whatever
+  // its billing lifecycle says.
+  if (action === 'suspend' || action === 'restore') {
+    const orgId = requireArg(args[0], `organization ${action} <org-id>`);
+    return printChange(
+      await api('POST', `/platform/organizations/${orgId}/${action}`, { reason }),
+      action === 'suspend' ? 'organization suspended' : 'suspension lifted',
+    );
+  }
+
   if (action === 'limit') {
     const verb = args[0];
     const orgId = requireArg(args[1], `organization limit ${verb} <org-id> <limit-key>`);
@@ -422,6 +435,9 @@ Platform back-office CLI
       STATUS: TRIALING | ACTIVE | PAST_DUE | RESTRICTED | CANCELED | SUSPENDED
       PAST_DUE without --until applies the standard 7-day payment grace period.
   node packages/db/platform.mjs organization subscription confirm-payment <org-id> [--reason "<why>"]
+  node packages/db/platform.mjs organization suspend <org-id> --reason "<why>"
+  node packages/db/platform.mjs organization restore <org-id> --reason "<why>"
+      Suspension is a manual security/legal/fraud stop, independent of billing.
 
 Env: PUMP_API_URL, SUPABASE_URL, SUPABASE_ANON_KEY,
      PLATFORM_ADMIN_EMAIL, PLATFORM_ADMIN_PASSWORD

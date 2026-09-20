@@ -10,13 +10,16 @@ import {
 import type { ExecutionContext } from '../../kernel/index.js';
 import {
   ConfirmOrganizationPayment,
+  RestoreOrganization,
   SetOrganizationPlan,
   SetOrganizationSubscriptionStatus,
+  SuspendOrganization,
 } from './subscription-lifecycle.js';
 import type { OrganizationSubscription, PlatformActor } from './admin-ports.js';
 import {
   buildAccessDocument,
   paymentGraceUntil,
+  resolveAccessMode,
   resolveSubscriptionMode,
 } from './resolve-access.js';
 import type { OrganizationAccessInputs } from './ports.js';
@@ -60,6 +63,9 @@ class FakeSubscriptions {
   async setPlan(input: { plan: string }) {
     this.state = { ...(this.state as OrganizationSubscription), plan: input.plan };
   }
+  async setSuspension(input: { suspendedAt: string | null }) {
+    this.state = { ...(this.state as OrganizationSubscription), suspendedAt: input.suspendedAt };
+  }
 }
 
 function harness(initial: Partial<OrganizationSubscription> = {}) {
@@ -67,6 +73,7 @@ function harness(initial: Partial<OrganizationSubscription> = {}) {
     plan: 'CORE',
     status: 'ACTIVE',
     accessUntil: null,
+    suspendedAt: null,
     ...initial,
   });
   const store = new InMemoryEventStore();
@@ -373,5 +380,114 @@ describe('what each Role is told about the subscription', () => {
       warningMessage: null,
       resolution: null,
     });
+  });
+});
+
+/** The access mode the stored state actually resolves to. */
+const modeOf = (state: OrganizationSubscription | null, now = NOW) =>
+  resolveAccessMode(
+    inputs({
+      subscriptionStatus: state?.status ?? null,
+      accessUntil: state?.accessUntil ?? null,
+      suspendedAt: state?.suspendedAt ?? null,
+    }),
+    now,
+  );
+
+describe('suspension is independent of billing', () => {
+  it('records the stop without touching the billing lifecycle', async () => {
+    // An Organization mid-grace that gets suspended is still mid-grace when
+    // it is restored; suspension answers a different question.
+    const { subscriptions, store, deps } = harness({
+      status: 'PAST_DUE',
+      accessUntil: '2026-09-27T10:00:00.000Z',
+    });
+
+    const result = await new SuspendOrganization(deps).execute({ actor, reason: 'fraud' }, ctx());
+
+    expect(result.success && result.data.changed).toBe(true);
+    expect(subscriptions.state).toMatchObject({
+      status: 'PAST_DUE',
+      accessUntil: '2026-09-27T10:00:00.000Z',
+      suspendedAt: NOW.toISOString(),
+    });
+    expect(store.events.map((e) => e.eventType)).toEqual(['ORGANIZATION_DEACTIVATED']);
+  });
+
+  it('cannot be cleared by paying an invoice', async () => {
+    // The defect this design replaced: suspension lived in the status column,
+    // so a confirmed payment overwrote it and a suspended Organization could
+    // lift its own stop.
+    const { subscriptions, deps } = harness({
+      status: 'PAST_DUE',
+      accessUntil: null,
+      suspendedAt: '2026-09-01T00:00:00.000Z',
+    });
+
+    await new ConfirmOrganizationPayment(deps).execute({ actor }, ctx());
+
+    expect(subscriptions.state).toMatchObject({
+      status: 'ACTIVE',
+      suspendedAt: '2026-09-01T00:00:00.000Z',
+    });
+    expect(modeOf(subscriptions.state)).toBe('SUSPENDED');
+  });
+
+  it('is not lifted by a subscription status change either', async () => {
+    const { subscriptions, deps } = harness({
+      status: 'RESTRICTED',
+      suspendedAt: '2026-09-01T00:00:00.000Z',
+    });
+
+    await new SetOrganizationSubscriptionStatus(deps).execute({ status: 'ACTIVE', actor }, ctx());
+
+    expect(subscriptions.state).toMatchObject({ suspendedAt: '2026-09-01T00:00:00.000Z' });
+  });
+
+  it('suspending twice is a no-op', async () => {
+    const { store, deps } = harness({ suspendedAt: '2026-09-01T00:00:00.000Z' });
+
+    const result = await new SuspendOrganization(deps).execute({ actor }, ctx());
+
+    expect(result.success && result.data.changed).toBe(false);
+    expect(store.events).toHaveLength(0);
+  });
+
+  it('restoring returns the Organization to its billing state, not to ACTIVE', async () => {
+    // Restoring is not the same as paying: an Organization stopped while
+    // overdue is overdue again once the stop is lifted.
+    const { subscriptions, store, deps } = harness({
+      status: 'PAST_DUE',
+      accessUntil: '2026-09-01T00:00:00.000Z',
+      suspendedAt: '2026-09-02T00:00:00.000Z',
+    });
+
+    const result = await new RestoreOrganization(deps).execute({ actor }, ctx());
+
+    expect(result.success && result.data.changed).toBe(true);
+    expect(subscriptions.state).toMatchObject({ status: 'PAST_DUE', suspendedAt: null });
+    expect(store.events.map((e) => e.eventType)).toEqual(['ORGANIZATION_REACTIVATED']);
+    // The grace period had already lapsed, so it is Restricted again.
+    expect(modeOf(subscriptions.state)).toBe('RESTRICTED');
+  });
+
+  it('restoring an Organization that was never suspended is a no-op', async () => {
+    const { store, deps } = harness({ suspendedAt: null });
+
+    const result = await new RestoreOrganization(deps).execute({ actor }, ctx());
+
+    expect(result.success && result.data.changed).toBe(false);
+    expect(store.events).toHaveLength(0);
+  });
+
+  it('outranks every billing state while it stands', () => {
+    for (const status of ['ACTIVE', 'TRIALING', 'PAST_DUE', 'CANCELED', 'RESTRICTED'] as const) {
+      expect(
+        resolveAccessMode(
+          inputs({ subscriptionStatus: status, suspendedAt: '2026-09-01T00:00:00.000Z' }),
+          NOW,
+        ),
+      ).toBe('SUSPENDED');
+    }
   });
 });

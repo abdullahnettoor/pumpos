@@ -1,9 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { Hono } from 'hono';
 import type { Role } from '@pump/shared';
 import { transactionsRouter } from './transactions.js';
 import { dssrRouter } from './dssr.js';
 import { WRITE_POLICY_DECLARATIONS } from '../infra/write-policy-declarations.js';
+import {
+  fakeAccessDb,
+  guardCoverage,
+  policyRequest,
+  refusalsAcross,
+  ACTIVE,
+  IN_GRACE,
+  LAPSED_GRACE,
+  RESTRICTED,
+  SUSPENDED,
+} from './write-policy-harness.js';
 
 /**
  * Sales, stock and reporting under Restricted Access.
@@ -16,87 +26,12 @@ import { WRITE_POLICY_DECLARATIONS } from '../infra/write-policy-declarations.js
  * anything that starts new work is handled by the other families.
  */
 
+const ROUTERS: ReadonlyArray<[string, any]> = [
+  ['/transactions', transactionsRouter],
+  ['/dssr', dssrRouter],
+];
+
 type Subscription = { status: string; accessUntil?: string | null };
-
-function fakeDb(subscription: Subscription) {
-  let queue: unknown[][] = [];
-  const rows = () => [
-    [
-      {
-        subscriptionPlan: 'CORE',
-        subscriptionStatus: subscription.status,
-        accessUntil: subscription.accessUntil ? new Date(subscription.accessUntil) : null,
-      },
-    ],
-    [{ value: 1 }],
-    [],
-    [],
-  ];
-  const chainable = (result: unknown[]): any => {
-    const chain: any = {
-      from: () => chain,
-      where: () => chain,
-      orderBy: () => chain,
-      limit: () => chain,
-      innerJoin: () => chain,
-      leftJoin: () => chain,
-      groupBy: () => chain,
-      for: () => chain,
-      then: (resolve: (v: unknown[]) => void, reject?: (e: unknown) => void) =>
-        Promise.resolve(result).then(resolve, reject),
-    };
-    return chain;
-  };
-  const db: any = {
-    select: () => {
-      if (queue.length === 0) queue = rows();
-      return chainable(queue.shift() ?? []);
-    },
-    insert: () => ({ values: () => chainable([{ id: 'row-1' }]) }),
-    update: () => chainable([{ id: 'row-1' }]),
-    delete: () => chainable([{ id: 'row-1' }]),
-    execute: async () => [],
-    transaction: async (run: (tx: unknown) => Promise<unknown>) => run(db),
-  };
-  return db;
-}
-
-async function request(
-  method: string,
-  path: string,
-  options: { subscription: Subscription; role?: Role; body?: unknown },
-): Promise<{ status: number; code: string | null }> {
-  const app = new Hono<{ Variables: { db: any; user: any } }>();
-  app.use('*', async (c, next) => {
-    c.set('db', fakeDb(options.subscription));
-    c.set('user', {
-      id: 'user-1',
-      email: 'manager@example.com',
-      fullName: 'Manager',
-      organizationId: 'org-1',
-      role: options.role ?? 'Manager',
-      assignedStationIds: ['station-1'],
-    });
-    await next();
-  });
-  app.route('/transactions', transactionsRouter);
-  app.route('/dssr', dssrRouter);
-
-  const res = await app.request(path, {
-    method,
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(options.body ?? { stationId: 'station-1' }),
-  });
-  const body = (await res.json().catch(() => null)) as any;
-  return { status: res.status, code: body?.error?.code ?? null };
-}
-
-const RESTRICTED: Subscription = { status: 'RESTRICTED' };
-const SUSPENDED: Subscription = { status: 'SUSPENDED' };
-const LAPSED_GRACE: Subscription = {
-  status: 'PAST_DUE',
-  accessUntil: new Date(Date.now() - 86_400_000).toISOString(),
-};
 
 /** Recording work that has already physically happened. */
 const RECORDING: ReadonlyArray<[string, string, string]> = [
@@ -117,7 +52,7 @@ const RECORDING: ReadonlyArray<[string, string, string]> = [
 
 describe('recording completed work under Restricted Access', () => {
   it.each(RECORDING)('allows %s %s — %s', async (method, path) => {
-    const result = await request(method, path, { subscription: RESTRICTED });
+    const result = await policyRequest(ROUTERS, method, path, { subscription: RESTRICTED });
 
     expect(result.code).not.toBe('SUBSCRIPTION_RESTRICTED');
   });
@@ -134,7 +69,7 @@ describe('recording completed work under Restricted Access', () => {
     ];
     const refusals: string[] = [];
     for (const [method, path] of workflow) {
-      const result = await request(method, path, { subscription: RESTRICTED });
+      const result = await policyRequest(ROUTERS, method, path, { subscription: RESTRICTED });
       if (result.code === 'SUBSCRIPTION_RESTRICTED') refusals.push(`${method} ${path}`);
     }
 
@@ -142,7 +77,9 @@ describe('recording completed work under Restricted Access', () => {
   });
 
   it('keeps recording open once the Payment Grace Period has lapsed', async () => {
-    const result = await request('POST', '/transactions/sales', { subscription: LAPSED_GRACE });
+    const result = await policyRequest(ROUTERS, 'POST', '/transactions/sales', {
+      subscription: LAPSED_GRACE,
+    });
 
     expect(result.code).not.toBe('SUBSCRIPTION_RESTRICTED');
   });
@@ -150,7 +87,7 @@ describe('recording completed work under Restricted Access', () => {
 
 describe('a suspended Organization', () => {
   it.each(RECORDING)('cannot %s %s', async (method, path) => {
-    const result = await request(method, path, { subscription: SUSPENDED });
+    const result = await policyRequest(ROUTERS, method, path, { subscription: SUSPENDED });
 
     expect(result.status).toBe(403);
     expect(result.code).toBe('ORGANIZATION_SUSPENDED');
@@ -161,7 +98,7 @@ describe('the rest of the rules still decide', () => {
   it('never yields an access-policy code while the subscription is healthy', async () => {
     // Business Day anchoring, Day Seal, stock movement and Role rules run in
     // the handler exactly as before; the request fails there on its own terms.
-    const result = await request('POST', '/transactions/sales', {
+    const result = await policyRequest(ROUTERS, 'POST', '/transactions/sales', {
       subscription: { status: 'ACTIVE' },
     });
 

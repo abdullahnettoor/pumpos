@@ -30,7 +30,7 @@ const LEGACY_STATUS: Record<string, SubscriptionStatus> = {
   Revoked: 'SUSPENDED',
 };
 
-const KNOWN_STATUSES: readonly SubscriptionStatus[] = [
+export const KNOWN_SUBSCRIPTION_STATUSES: readonly SubscriptionStatus[] = [
   'TRIALING',
   'ACTIVE',
   'PAST_DUE',
@@ -58,7 +58,7 @@ export function normalizeSubscriptionStatus(raw: string | null | undefined): Sub
   // integrity problem, not a commercial state, so it gets the safe answer.
   if (!raw) return 'RESTRICTED';
   const upper = raw.toUpperCase();
-  const known = KNOWN_STATUSES.find((status) => status === upper);
+  const known = KNOWN_SUBSCRIPTION_STATUSES.find((status) => status === upper);
   return known ?? LEGACY_STATUS[raw] ?? 'RESTRICTED';
 }
 
@@ -138,31 +138,59 @@ export function resolveSubscriptionMode(
 ): AccessMode {
   switch (status) {
     case 'SUSPENDED':
-      // A manual security, legal, fraud or abuse stop. No grace, ever.
+      // Legacy rows, from before suspension had its own column. A manual stop
+      // has no grace, ever.
       return 'SUSPENDED';
     case 'RESTRICTED':
       return 'RESTRICTED';
     case 'PAST_DUE':
-    case 'CANCELED':
     case 'TRIALING':
-      // Paid (or trialling) through a known instant: normal until it passes.
-      return withinAccessWindow(context) ? 'NORMAL' : 'RESTRICTED';
+      // Mid-grace or mid-trial. A window that was never set reads as open:
+      // access has not been declared over, and no instant says otherwise.
+      return withinAccessWindow(context, 'OPEN') ? 'NORMAL' : 'RESTRICTED';
+    case 'CANCELED':
+      // Cancellation is an explicit end. With a paid-through instant the
+      // customer keeps what they bought; with none, there is nothing left to
+      // honour — treating a missing instant as open would grant a canceled
+      // Organization normal access forever.
+      return withinAccessWindow(context, 'CLOSED') ? 'NORMAL' : 'RESTRICTED';
     case 'ACTIVE':
       return 'NORMAL';
   }
 }
 
 /**
+ * The access mode an Organization is actually in, from everything that bears
+ * on it: the manual stop first, then the billing lifecycle.
+ *
+ * Callers use this rather than assembling the pieces themselves — the guards
+ * and the Access Document must never disagree about what mode means.
+ */
+export function resolveAccessMode(inputs: OrganizationAccessInputs, now: Date): AccessMode {
+  // A manual stop outranks every billing state, and paying cannot clear it.
+  if (inputs.suspendedAt) return 'SUSPENDED';
+  return resolveSubscriptionMode(normalizeSubscriptionStatus(inputs.subscriptionStatus), {
+    accessUntil: inputs.accessUntil,
+    now,
+  });
+}
+
+/**
  * Is the Organization still inside its paid-through window?
  *
- * A missing `access_until` means the window was never set. That reads as open
- * rather than expired: E1 rows carry no instant, and a Phase E1 Organization
- * marked PAST_DUE must not be restricted retroactively by a deploy.
+ * `whenUnset` decides what a missing instant means, because it differs by
+ * status: mid-grace there is simply no deadline recorded yet (open), while a
+ * canceled subscription with no paid-through date has nothing left to honour
+ * (closed). An unparseable instant is treated as unset rather than expired, so
+ * a bad string cannot silently end someone's access.
  */
-function withinAccessWindow(context: { accessUntil?: string | null; now?: Date }): boolean {
-  if (!context.accessUntil) return true;
+function withinAccessWindow(
+  context: { accessUntil?: string | null; now?: Date },
+  whenUnset: 'OPEN' | 'CLOSED',
+): boolean {
+  if (!context.accessUntil) return whenUnset === 'OPEN';
   const until = Date.parse(context.accessUntil);
-  if (Number.isNaN(until)) return true;
+  if (Number.isNaN(until)) return whenUnset === 'OPEN';
   return (context.now?.getTime() ?? Date.now()) < until;
 }
 
@@ -257,7 +285,7 @@ function resolveSubscription(
   now: Date,
 ): AccessSubscription {
   const status = normalizeSubscriptionStatus(inputs.subscriptionStatus);
-  const mode = resolveSubscriptionMode(status, { accessUntil: inputs.accessUntil, now });
+  const mode = resolveAccessMode(inputs, now);
 
   if (!seesBillingDetail(role)) {
     const notice = operationalNotice(mode);
@@ -271,7 +299,12 @@ function resolveSubscription(
     };
   }
 
-  const guidance = billingGuidance(status, mode, inputs.accessUntil);
+  // A manual stop is reported as a suspension whatever the billing status
+  // says, since the two are now independent.
+  const guidance =
+    mode === 'SUSPENDED'
+      ? billingGuidance('SUSPENDED', mode, null)
+      : billingGuidance(status, mode, inputs.accessUntil);
   return {
     status,
     mode,

@@ -177,17 +177,25 @@ describe('Role filtering of the Access Document', () => {
 });
 
 describe('subscription resolution', () => {
-  // With no paid-through instant the window is open; the boundary behaviour
-  // of `access_until` is covered in subscription-lifecycle.test.ts.
+  // What a *missing* paid-through instant means differs by status: mid-grace
+  // or mid-trial there is simply no deadline recorded yet, while a canceled
+  // subscription with no date has nothing left to honour. Boundary behaviour
+  // around a real instant is covered in subscription-lifecycle.test.ts.
   it.each([
     ['TRIALING', 'NORMAL'],
     ['ACTIVE', 'NORMAL'],
     ['PAST_DUE', 'NORMAL'],
     ['RESTRICTED', 'RESTRICTED'],
-    ['CANCELED', 'NORMAL'],
+    ['CANCELED', 'RESTRICTED'],
     ['SUSPENDED', 'SUSPENDED'],
   ] as const)('resolves %s to %s while no access window has been set', (status, mode) => {
     expect(resolveSubscriptionMode(status)).toBe(mode);
+  });
+
+  it('never leaves a canceled Organization with normal access forever', () => {
+    // The bug this replaced: "no instant means the window is open" granted a
+    // canceled subscription permanent access.
+    expect(resolveSubscriptionMode('CANCELED', { accessUntil: null })).toBe('RESTRICTED');
   });
 
   it('normalizes the legacy stored values the migration rewrites', () => {

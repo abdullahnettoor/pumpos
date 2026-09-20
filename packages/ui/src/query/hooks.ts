@@ -251,8 +251,9 @@ export function usePricingHistory(stationId: string | null | undefined, options?
  * the app sat in the background lands on return.
  *
  * It is persisted, so a warm client keeps working through a network drop. A
- * cold start has no document at all: read it with `capabilityEnabled`, which
- * hides optional capabilities rather than inventing access.
+ * cold start has no document at all: read it with `capabilityState` (or the
+ * `CapabilityGate` components built on it), which hides optional capabilities
+ * rather than inventing access.
  */
 export function useAccess(options?: Options<AccessDocument>) {
   return useQuery({

@@ -9,8 +9,13 @@ export interface OrganizationAccessInputs {
   plan: string | null;
   /** Stored Subscription Status; legacy/unknown values normalize to ACTIVE. */
   subscriptionStatus: string | null;
-  /** ISO instant access is paid through, or null. Enforced in Phase E2. */
+  /** ISO instant access is paid through, or null. */
   accessUntil: string | null;
+  /**
+   * When PumpOS manually stopped this Organization, or null. Independent of
+   * billing: a confirmed payment clears the Subscription Status, never this.
+   */
+  suspendedAt?: string | null;
   /** Capability keys from currently-active Organization grants (additive). */
   grantedCapabilities: readonly string[];
   /** Active Limit overrides; each replaces the Product Plan value. */

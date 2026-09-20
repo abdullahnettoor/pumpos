@@ -8,8 +8,10 @@ import {
   PRODUCT_ACCESS_REGISTRY,
   RevokeOrganizationCapability,
   SetOrganizationLimitOverride,
+  RestoreOrganization,
   SetOrganizationPlan,
   SetOrganizationSubscriptionStatus,
+  SuspendOrganization,
 } from '@pump/core';
 import { buildPlatformContext, type PlatformAdminPrincipal } from '../infra/context.js';
 import { runInTransaction } from '../infra/transaction.js';
@@ -231,6 +233,48 @@ platformAccessRouter.post('/:orgId/subscription/confirm-payment', async (c) => {
   const body = await readJson(c);
   const result = await runInTransaction(c.var.db, (tx, events) =>
     new ConfirmOrganizationPayment({
+      subscriptions: new DrizzleOrganizationSubscriptionRepository(tx),
+      events,
+    }).execute(
+      { reason: stringField(body, 'reason') || null, actor: c.var.platformAdmin },
+      buildPlatformContext(c.var.platformAdmin, organizationId),
+    ),
+  );
+  return sendResult(c, result);
+});
+
+/**
+ * POST /platform/organizations/:orgId/suspend — stop an Organization for a
+ * security, legal, fraud or abuse reason.
+ *
+ * Independent of billing on purpose: a suspended Organization that pays its
+ * invoice stays suspended, because the two answer different questions.
+ */
+platformAccessRouter.post('/:orgId/suspend', async (c) => {
+  const organizationId = c.req.param('orgId');
+  const body = await readJson(c);
+  const result = await runInTransaction(c.var.db, (tx, events) =>
+    new SuspendOrganization({
+      subscriptions: new DrizzleOrganizationSubscriptionRepository(tx),
+      events,
+    }).execute(
+      { reason: stringField(body, 'reason') || null, actor: c.var.platformAdmin },
+      buildPlatformContext(c.var.platformAdmin, organizationId),
+    ),
+  );
+  return sendResult(c, result);
+});
+
+/**
+ * POST /platform/organizations/:orgId/restore — lift a manual stop. The
+ * Organization returns to whatever its billing lifecycle says; restoring is
+ * not the same as paying.
+ */
+platformAccessRouter.post('/:orgId/restore', async (c) => {
+  const organizationId = c.req.param('orgId');
+  const body = await readJson(c);
+  const result = await runInTransaction(c.var.db, (tx, events) =>
+    new RestoreOrganization({
       subscriptions: new DrizzleOrganizationSubscriptionRepository(tx),
       events,
     }).execute(
