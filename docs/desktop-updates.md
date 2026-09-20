@@ -338,13 +338,13 @@ both platforms and record what you saw:
 
 ### Telling failures apart
 
-| What the user reports                                             | What it is                                                                                  | What to do                                                                               |
-| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| "This update could not be verified as an official PumpOS release" | **Tauri signature rejection.** The artifact was not signed with the key this install embeds | Do not work around it. Check the release's `.sig` assets and whether the key was rotated |
-| "unidentified developer" / "Open Anyway"                          | **macOS Gatekeeper.** Expected: PumpOS has no Developer ID                                  | Walk through Privacy & Security. Not an update failure                                   |
-| "Windows protected your PC"                                       | **SmartScreen.** Expected: the installer is unsigned                                        | Confirm the source is the official release, then Run anyway                              |
-| "PumpOS could not reach the update server"                        | Connectivity                                                                                | Retry later. The installed app is unaffected                                             |
-| "Restart postponed"                                               | Restart readiness said local writes are unsafe                                              | Let the pending work settle, then Install again                                          |
+| What the user reports                                             | What it is                                                                                  | What to do                                                                                                               |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| "This update could not be verified as an official PumpOS release" | **Tauri signature rejection.** The artifact was not signed with the key this install embeds | Do not work around it. Check the release's `.sig` assets and whether the key was rotated                                 |
+| macOS offers to move PumpOS to the Bin on first launch            | **macOS Gatekeeper.** Expected: PumpOS has no Developer ID                                  | Tell them to Cancel — the default button deletes the app — then Open Anyway in Privacy & Security. Not an update failure |
+| "Windows protected your PC"                                       | **SmartScreen.** Expected: the installer is unsigned                                        | Confirm the source is the official release, then Run anyway                                                              |
+| "PumpOS could not reach the update server"                        | Connectivity                                                                                | Retry later. The installed app is unaffected                                                                             |
+| "Restart postponed"                                               | Restart readiness said local writes are unsafe                                              | Let the pending work settle, then Install again                                                                          |
 
 ### A bad release
 
