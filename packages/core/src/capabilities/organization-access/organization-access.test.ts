@@ -177,14 +177,16 @@ describe('Role filtering of the Access Document', () => {
 });
 
 describe('subscription resolution', () => {
+  // With no paid-through instant the window is open; the boundary behaviour
+  // of `access_until` is covered in subscription-lifecycle.test.ts.
   it.each([
     ['TRIALING', 'NORMAL'],
     ['ACTIVE', 'NORMAL'],
     ['PAST_DUE', 'NORMAL'],
     ['RESTRICTED', 'RESTRICTED'],
-    ['CANCELED', 'RESTRICTED'],
+    ['CANCELED', 'NORMAL'],
     ['SUSPENDED', 'SUSPENDED'],
-  ] as const)('resolves %s to %s', (status, mode) => {
+  ] as const)('resolves %s to %s while no access window has been set', (status, mode) => {
     expect(resolveSubscriptionMode(status)).toBe(mode);
   });
 
@@ -209,14 +211,17 @@ describe('subscription resolution', () => {
     expect(doc.subscription.warningMessage).toContain('payment');
   });
 
-  it.each<Role>(['Accountant', 'Staff', 'Attendant'])(
-    'withholds payment detail from %s',
-    (role) => {
-      const doc = documentFor(role, { subscriptionStatus: 'PAST_DUE' });
-      expect(doc.subscription.showWarning).toBe(false);
-      expect(doc.subscription.warningMessage).toBeNull();
-    },
-  );
+  it('tells an Accountant about a failed payment: they are the one who chases it', () => {
+    const doc = documentFor('Accountant', { subscriptionStatus: 'PAST_DUE' });
+    expect(doc.subscription.showWarning).toBe(true);
+    expect(doc.subscription.resolution).toBe('COMPLETE_PAYMENT');
+  });
+
+  it.each<Role>(['Staff', 'Attendant'])('withholds payment detail from %s', (role) => {
+    const doc = documentFor(role, { subscriptionStatus: 'PAST_DUE' });
+    expect(doc.subscription.showWarning).toBe(false);
+    expect(doc.subscription.warningMessage).toBeNull();
+  });
 
   it('passes the paid-through instant through untouched', () => {
     const doc = documentFor('Owner', { accessUntil: '2026-10-01T00:00:00.000Z' });

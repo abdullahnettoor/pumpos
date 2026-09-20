@@ -21,6 +21,7 @@ const document = (over: Partial<AccessDocument> = {}): AccessDocument => ({
     accessUntil: null,
     showWarning: false,
     warningMessage: null,
+    resolution: null,
   },
   ...over,
 });

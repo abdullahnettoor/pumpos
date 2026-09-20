@@ -1,4 +1,4 @@
-import type { LimitKey } from '@pump/shared';
+import type { LimitKey, ProductPlanKey, SubscriptionStatus } from '@pump/shared';
 
 /**
  * Platform-side view of one Entitlement grant. Actor fields are snapshots of
@@ -64,6 +64,28 @@ export interface OrganizationAccessAdminRepository {
     reason: string;
   }): Promise<LimitOverride>;
   revokeOverride(id: string, actor: PlatformActor): Promise<LimitOverride>;
+}
+
+/** The Organization's current commercial state, as stored. */
+export interface OrganizationSubscription {
+  plan: string | null;
+  status: string | null;
+  accessUntil: string | null;
+}
+
+/**
+ * Reads and writes the Organization's own commercial columns. Separate from
+ * the grant/override history: these are current-state fields, and their audit
+ * trail is the event stream rather than a closed row.
+ */
+export interface OrganizationSubscriptionRepository {
+  load(organizationId: string): Promise<OrganizationSubscription | null>;
+  setStatus(input: {
+    organizationId: string;
+    status: SubscriptionStatus;
+    accessUntil: string | null;
+  }): Promise<void>;
+  setPlan(input: { organizationId: string; plan: ProductPlanKey }): Promise<void>;
 }
 
 /**

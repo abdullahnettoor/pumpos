@@ -15,6 +15,10 @@ export const ErrorCodes = {
   LIMIT_REACHED: 'LIMIT_REACHED',
   /** The Organization has not been granted the Product Capability required. */
   CAPABILITY_NOT_ENTITLED: 'CAPABILITY_NOT_ENTITLED',
+  /** Restricted Access: the operation is not one of those still permitted. */
+  SUBSCRIPTION_RESTRICTED: 'SUBSCRIPTION_RESTRICTED',
+  /** The Organization is suspended; no tenant write is permitted. */
+  ORGANIZATION_SUSPENDED: 'ORGANIZATION_SUSPENDED',
   INTERNAL: 'INTERNAL_ERROR',
 } as const;
 
@@ -61,6 +65,25 @@ export function capabilityNotEntitledError(
   details: { capability: string; resolution: ResolutionCode; actionLabel: string },
 ): CoreError {
   return { code: ErrorCodes.CAPABILITY_NOT_ENTITLED, message, details };
+}
+
+/**
+ * The Organization is under Restricted Access and this operation is not one
+ * of those that may still be performed. Maps to HTTP 403.
+ */
+export function subscriptionRestrictedError(
+  message: string,
+  details: { operation: string; resolution: ResolutionCode; actionLabel: string },
+): CoreError {
+  return { code: ErrorCodes.SUBSCRIPTION_RESTRICTED, message, details };
+}
+
+/** The Organization is suspended: no tenant write is permitted. HTTP 403. */
+export function organizationSuspendedError(
+  message: string,
+  details: { operation: string; resolution: ResolutionCode; actionLabel: string },
+): CoreError {
+  return { code: ErrorCodes.ORGANIZATION_SUSPENDED, message, details };
 }
 
 /**

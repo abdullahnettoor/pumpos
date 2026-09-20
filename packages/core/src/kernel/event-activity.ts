@@ -120,6 +120,10 @@ export const EventActivityCatalog = {
     BusinessEvents.OWNER_INVITE_REVOKED,
     'Owner invitation revoked',
   ),
+  [BusinessEvents.ORGANIZATION_PLAN_CHANGED]: info(
+    BusinessEvents.ORGANIZATION_PLAN_CHANGED,
+    'Product Plan changed',
+  ),
   [BusinessEvents.ORGANIZATION_SUBSCRIPTION_STATUS_CHANGED]: info(
     BusinessEvents.ORGANIZATION_SUBSCRIPTION_STATUS_CHANGED,
     'Subscription status changed',
