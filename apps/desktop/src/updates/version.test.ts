@@ -17,6 +17,18 @@ describe('isNewerVersion', () => {
     expect(isNewerVersion(offered, installed)).toBe(expected);
   });
 
+  it.each([
+    // The exact shape scripts/preview-desktop.mjs produces. A preview build
+    // must never be able to offer itself to a client as newer than the release
+    // it was built from — nor than an older one, which would be a downgrade
+    // wearing a prerelease label.
+    ['1.3.2-preview.a1b2c3d', '1.3.2'],
+    ['1.3.2-preview.a1b2c3d', '1.3.3'],
+    ['1.3.2-preview.a1b2c3d', '1.3.2-preview.b2c3d4e'],
+  ])('a preview build (%s) never looks newer than %s', (preview, installed) => {
+    expect(isNewerVersion(preview, installed)).toBe(false);
+  });
+
   it('refuses to compare unreadable versions', () => {
     expect(isNewerVersion('latest', '1.0.0')).toBe(false);
     expect(isNewerVersion('1.0.0', 'unknown')).toBe(false);
