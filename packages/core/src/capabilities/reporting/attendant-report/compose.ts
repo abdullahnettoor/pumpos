@@ -1,5 +1,9 @@
 import type {
   AttendantCreditSaleSourceRow,
+  AttendantHandoverReportNozzle,
+  AttendantHandoverReportTerminal,
+  AttendantNozzleReadingSourceRow,
+  AttendantTerminalEntrySourceRow,
   AttendantHandoverReport,
   AttendantHandoverReportEntry,
   AttendantHandoverReportShift,
@@ -38,6 +42,44 @@ function indexSales(sales: AttendantSaleSourceRow[]) {
   return { billed, handoverProduct };
 }
 
+/** Terminal detail hangs off the Handover it was declared in. */
+function indexTerminals(rows: AttendantTerminalEntrySourceRow[]) {
+  const byHandover = new Map<string, AttendantHandoverReportTerminal[]>();
+  for (const row of rows) {
+    const list = byHandover.get(row.handoverId) ?? [];
+    list.push({
+      terminalId: row.terminalId,
+      terminalName: row.terminalName,
+      cardAmount: row.cardAmount,
+      upiAmount: row.upiAmount,
+      batchRef: row.batchRef,
+    });
+    byHandover.set(row.handoverId, list);
+  }
+  return byHandover;
+}
+
+/** Readings reach a Handover through its Dispenser: (Shift, Dispenser). */
+function indexNozzleReadings(rows: AttendantNozzleReadingSourceRow[]) {
+  const byShiftDu = new Map<string, AttendantHandoverReportNozzle[]>();
+  for (const row of rows) {
+    const k = key(row.shiftId, row.duId);
+    const list = byShiftDu.get(k) ?? [];
+    list.push({
+      nozzleId: row.nozzleId,
+      nozzleName: row.nozzleName,
+      productName: row.productName,
+      openingReading: row.openingReading,
+      closingReading: row.closingReading,
+      volumeSold: row.volumeSold,
+      testingVolume: row.testingVolume,
+      unitPrice: row.unitPrice,
+    });
+    byShiftDu.set(k, list);
+  }
+  return byShiftDu;
+}
+
 function indexCreditSales(rows: AttendantCreditSaleSourceRow[]) {
   const byKey = new Map<string, number>();
   for (const row of rows) {
@@ -61,6 +103,8 @@ export function composeAttendantHandoverReport(
 ): AttendantHandoverReport {
   const { billed, handoverProduct } = indexSales(source.sales ?? []);
   const creditByKey = indexCreditSales(source.creditSales ?? []);
+  const terminalsByHandover = indexTerminals(source.terminalEntries ?? []);
+  const nozzlesByShiftDu = indexNozzleReadings(source.nozzleReadings ?? []);
 
   const byAttendant = new Map<string, AttendantHandoverReportEntry>();
   const shiftsByKey = new Map<string, AttendantHandoverReportShift>();
@@ -118,6 +162,10 @@ export function composeAttendantHandoverReport(
       expectedFuelSales: row.expectedFuelSales,
       varianceAmount: row.varianceAmount,
       testingVolume: row.testingVolume,
+      terminals: terminalsByHandover.get(row.handoverId) ?? [],
+      nozzles: [...(nozzlesByShiftDu.get(key(row.shiftId, row.duId)) ?? [])].sort((a, b) =>
+        a.nozzleName.localeCompare(b.nozzleName),
+      ),
     });
 
     shift.cashHandedOver += row.cashHandedOver;

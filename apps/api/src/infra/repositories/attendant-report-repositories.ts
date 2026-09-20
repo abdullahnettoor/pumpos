@@ -6,7 +6,9 @@ import type {
   AttendantHandoverReportReader,
   AttendantHandoverReportSource,
   AttendantHandoverSourceRow,
+  AttendantNozzleReadingSourceRow,
   AttendantSaleSourceRow,
+  AttendantTerminalEntrySourceRow,
 } from '@pump/core';
 
 const num = (v: string | number | null | undefined): number => Number(v ?? 0) || 0;
@@ -85,14 +87,97 @@ export class DrizzleAttendantHandoverReportReader implements AttendantHandoverRe
     // Components are attributed to the (Shift, Attendant) pairs the handovers
     // already established, so an unrelated attendant's sales never leak in.
     const shiftIds = [...new Set(handovers.map((h) => h.shiftId))];
-    if (shiftIds.length === 0) return { handovers, sales: [], creditSales: [] };
+    if (shiftIds.length === 0) {
+      return { handovers, sales: [], creditSales: [], terminalEntries: [], nozzleReadings: [] };
+    }
 
-    const [sales, creditSales] = await Promise.all([
+    const handoverIds = handovers.map((h) => h.handoverId);
+    const duIds = [...new Set(handovers.map((h) => h.duId))];
+
+    const [sales, creditSales, terminalEntries, nozzleReadings] = await Promise.all([
       this.readSales(shiftIds, query),
       this.readCreditSales(shiftIds, query),
+      this.readTerminalEntries(handoverIds),
+      this.readNozzleReadings(shiftIds, duIds),
     ]);
 
-    return { handovers, sales, creditSales };
+    return { handovers, sales, creditSales, terminalEntries, nozzleReadings };
+  }
+
+  /** Per-terminal card/UPI detail declared inside those Handovers. */
+  private async readTerminalEntries(
+    handoverIds: string[],
+  ): Promise<AttendantTerminalEntrySourceRow[]> {
+    const rows = await this.db
+      .select({
+        handoverId: schema.handoverTerminalEntries.handoverId,
+        terminalId: schema.handoverTerminalEntries.terminalId,
+        terminalName: schema.paymentTerminals.label,
+        cardAmount: schema.handoverTerminalEntries.cardAmount,
+        upiAmount: schema.handoverTerminalEntries.upiAmount,
+        batchRef: schema.handoverTerminalEntries.batchRef,
+      })
+      .from(schema.handoverTerminalEntries)
+      .innerJoin(
+        schema.paymentTerminals,
+        eq(schema.handoverTerminalEntries.terminalId, schema.paymentTerminals.id),
+      )
+      .where(inArray(schema.handoverTerminalEntries.handoverId, handoverIds));
+
+    return rows.map((r) => ({
+      handoverId: r.handoverId,
+      terminalId: r.terminalId,
+      terminalName: r.terminalName,
+      cardAmount: num(r.cardAmount),
+      upiAmount: num(r.upiAmount),
+      batchRef: r.batchRef ?? null,
+    }));
+  }
+
+  /**
+   * Readings of the Nozzles belonging to the Handovers' Dispensers. A Handover
+   * is accountable for one Dispenser, so the reading reaches it through
+   * (Shift, Dispenser) rather than through the Handover row itself.
+   */
+  private async readNozzleReadings(
+    shiftIds: string[],
+    duIds: string[],
+  ): Promise<AttendantNozzleReadingSourceRow[]> {
+    const rows = await this.db
+      .select({
+        shiftId: schema.nozzleReadings.shiftId,
+        duId: schema.nozzles.duId,
+        nozzleId: schema.nozzleReadings.nozzleId,
+        nozzleName: schema.nozzles.name,
+        productName: schema.products.name,
+        openingReading: schema.nozzleReadings.openingReading,
+        closingReading: schema.nozzleReadings.closingReading,
+        volumeSold: schema.nozzleReadings.volumeSold,
+        testingVolume: schema.nozzleReadings.testingVolume,
+        unitPrice: schema.nozzleReadings.unitPrice,
+      })
+      .from(schema.nozzleReadings)
+      .innerJoin(schema.nozzles, eq(schema.nozzleReadings.nozzleId, schema.nozzles.id))
+      .leftJoin(schema.products, eq(schema.nozzles.productId, schema.products.id))
+      .where(
+        and(
+          inArray(schema.nozzleReadings.shiftId, shiftIds),
+          inArray(schema.nozzles.duId, duIds),
+        ),
+      );
+
+    return rows.map((r) => ({
+      shiftId: r.shiftId,
+      duId: r.duId,
+      nozzleId: r.nozzleId,
+      nozzleName: r.nozzleName,
+      productName: r.productName ?? null,
+      openingReading: num(r.openingReading),
+      closingReading: num(r.closingReading),
+      volumeSold: num(r.volumeSold),
+      testingVolume: num(r.testingVolume),
+      unitPrice: r.unitPrice === null ? null : num(r.unitPrice),
+    }));
   }
 
   /**

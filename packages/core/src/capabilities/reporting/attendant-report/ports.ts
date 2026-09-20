@@ -52,6 +52,32 @@ export interface AttendantHandoverReportSource {
   sales: AttendantSaleSourceRow[];
   /** Fuel-on-credit chits attributed to an Attendant within a Shift. */
   creditSales: AttendantCreditSaleSourceRow[];
+  /** Per-Payment-Terminal card/UPI detail, keyed to its parent Handover. */
+  terminalEntries: AttendantTerminalEntrySourceRow[];
+  /** Nozzle Readings of the Shifts in range, keyed to the Nozzle's Dispenser. */
+  nozzleReadings: AttendantNozzleReadingSourceRow[];
+}
+
+export interface AttendantTerminalEntrySourceRow {
+  handoverId: string;
+  terminalId: string;
+  terminalName: string;
+  cardAmount: number;
+  upiAmount: number;
+  batchRef: string | null;
+}
+
+export interface AttendantNozzleReadingSourceRow {
+  shiftId: string;
+  duId: string;
+  nozzleId: string;
+  nozzleName: string;
+  productName: string | null;
+  openingReading: number;
+  closingReading: number;
+  volumeSold: number;
+  testingVolume: number;
+  unitPrice: number | null;
 }
 
 export interface AttendantSaleSourceRow {
@@ -84,6 +110,32 @@ export interface AttendantHandoverReportDispenser {
   expectedFuelSales: number;
   varianceAmount: number;
   testingVolume: number;
+  /**
+   * Per-terminal card/UPI declarations. Empty at a Station with no configured
+   * Payment Terminals, where the Attendant declares aggregates instead.
+   */
+  terminals: AttendantHandoverReportTerminal[];
+  /** Readings of the Nozzles belonging to this Dispenser in this Shift. */
+  nozzles: AttendantHandoverReportNozzle[];
+}
+
+export interface AttendantHandoverReportTerminal {
+  terminalId: string;
+  terminalName: string;
+  cardAmount: number;
+  upiAmount: number;
+  batchRef: string | null;
+}
+
+export interface AttendantHandoverReportNozzle {
+  nozzleId: string;
+  nozzleName: string;
+  productName: string | null;
+  openingReading: number;
+  closingReading: number;
+  volumeSold: number;
+  testingVolume: number;
+  unitPrice: number | null;
 }
 
 /**

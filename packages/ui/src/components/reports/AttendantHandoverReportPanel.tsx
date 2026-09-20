@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useAttendantHandoverReport } from '../../query/hooks.js';
 import { computeRange } from '../primitives/DateRangeField.js';
 import type { DateRange } from '../primitives/DateRangeField.js';
@@ -28,12 +29,111 @@ const varianceTone = (amount: number): string =>
  * Gated on the `reports.attendant` Product Capability; the server re-checks it
  * on every request, so this component assumes nothing about entitlement.
  */
+/** Per-shift detail for one attendant: dispensers, their nozzles and terminals. */
+const ShiftDetail: React.FC<{ attendant: any }> = ({ attendant }) => (
+  <tr>
+    <td colSpan={9} style={{ padding: 0, backgroundColor: 'var(--bg-surface-alt)' }}>
+      <div style={{ padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        {attendant.shifts.map((shift: any) => (
+          <div
+            key={shift.shiftId}
+            style={{
+              border: '1px solid var(--border-soft)',
+              borderRadius: '6px',
+              backgroundColor: 'var(--bg-surface)',
+              padding: '10px 12px',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                gap: '12px',
+                flexWrap: 'wrap',
+                marginBottom: '8px',
+              }}
+            >
+              <strong style={{ fontSize: '12px' }}>
+                {shift.businessDate}
+                {shift.shiftTemplateName ? ` · ${shift.shiftTemplateName}` : ''}
+              </strong>
+              <span
+                style={{
+                  fontSize: '12px',
+                  fontFamily: 'var(--font-mono)',
+                  color: varianceTone(Number(shift.varianceAmount)),
+                }}
+              >
+                Variance {inr(shift.varianceAmount)}
+              </span>
+            </div>
+
+            <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '8px' }}>
+              Billed {inr(shift.billedSales)} · Merch. handover {inr(shift.handoverProductSales)} ·
+              Credit {inr(shift.creditSales)} · Fuel expected {inr(shift.expectedFuelSales)}
+            </div>
+
+            {shift.dispensers.map((du: any) => (
+              <div key={du.handoverId} style={{ marginTop: '6px' }}>
+                <div style={{ fontSize: '11px', fontWeight: 600 }}>{du.duName}</div>
+                {du.nozzles.length > 0 && (
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+                    <thead>
+                      <tr style={{ color: 'var(--text-faint)' }}>
+                        <th style={th}>Nozzle</th>
+                        <th style={th}>Product</th>
+                        <th style={thR}>Opening</th>
+                        <th style={thR}>Closing</th>
+                        <th style={thR}>Volume</th>
+                        <th style={thR}>Testing</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {du.nozzles.map((n: any) => (
+                        <tr key={n.nozzleId}>
+                          <td style={td}>{n.nozzleName}</td>
+                          <td style={td}>{n.productName ?? '—'}</td>
+                          <td style={tdR}>{n.openingReading}</td>
+                          <td style={tdR}>{n.closingReading}</td>
+                          <td style={tdR}>{n.volumeSold}</td>
+                          <td style={tdR}>{n.testingVolume}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+                {du.terminals.length > 0 ? (
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                    {du.terminals.map((t: any) => (
+                      <div key={t.terminalId}>
+                        {t.terminalName}: card {inr(t.cardAmount)}, UPI {inr(t.upiAmount)}
+                        {t.batchRef ? ` · batch ${t.batchRef}` : ''}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{ fontSize: '11px', color: 'var(--text-faint)', marginTop: '4px' }}>
+                    Aggregate declaration — card {inr(du.cardHandedOver)}, UPI{' '}
+                    {inr(du.upiHandedOver)}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+    </td>
+  </tr>
+);
+
 export const AttendantHandoverReportPanel: React.FC<AttendantHandoverReportPanelProps> = ({
   selectedStation,
 }) => {
   const s = selectedStation?.settings || {};
   const clock = { timeZone: s.timezone, dayStartsAt: s.business_day_starts_at };
   const [range, setRange] = useState<DateRange>(() => computeRange('this-month', clock));
+  // Expanding reads the detail already held in the report payload — no refetch.
+  const [expanded, setExpanded] = useState<string | null>(null);
   const stationId = selectedStation?.id ?? null;
 
   const reportQ = useAttendantHandoverReport(stationId, range.from, range.to);
@@ -121,6 +221,7 @@ export const AttendantHandoverReportPanel: React.FC<AttendantHandoverReportPanel
                       color: 'var(--text-muted)',
                     }}
                   >
+                    <th style={{ ...th, width: '20px' }} aria-label="Expand" />
                     <th style={th}>Attendant</th>
                     <th style={thR}>Shifts</th>
                     <th style={thR}>Cash</th>
@@ -136,24 +237,38 @@ export const AttendantHandoverReportPanel: React.FC<AttendantHandoverReportPanel
                 </thead>
                 <tbody>
                   {attendants.map((a: any) => (
-                    <tr
-                      key={a.attendantId}
-                      style={{ borderBottom: '1px solid var(--border-soft)' }}
-                    >
-                      <td style={td}>{a.attendantName}</td>
-                      <td style={tdR}>{a.shiftsWorked}</td>
-                      <td style={tdR}>{inr(a.totals.cashHandedOver)}</td>
-                      <td style={tdR}>{inr(a.totals.cardHandedOver)}</td>
-                      <td style={tdR}>{inr(a.totals.upiHandedOver)}</td>
-                      <td style={tdR}>{inr(a.totals.creditHandedOver)}</td>
-                      <td style={tdR}>{inr(a.totals.expectedFuelSales)}</td>
-                      <td style={tdR}>{inr(a.totals.billedSales)}</td>
-                      <td style={tdR}>{inr(a.totals.handoverProductSales)}</td>
-                      <td style={tdR}>{inr(a.totals.creditSales)}</td>
-                      <td style={{ ...tdR, color: varianceTone(Number(a.totals.varianceAmount)) }}>
-                        {inr(a.totals.varianceAmount)}
-                      </td>
-                    </tr>
+                    <React.Fragment key={a.attendantId}>
+                      <tr
+                        style={{ borderBottom: '1px solid var(--border-soft)', cursor: 'pointer' }}
+                        onClick={() =>
+                          setExpanded((cur) => (cur === a.attendantId ? null : a.attendantId))
+                        }
+                      >
+                        <td style={td}>
+                          {expanded === a.attendantId ? (
+                            <ChevronDown size={13} />
+                          ) : (
+                            <ChevronRight size={13} />
+                          )}
+                        </td>
+                        <td style={td}>{a.attendantName}</td>
+                        <td style={tdR}>{a.shiftsWorked}</td>
+                        <td style={tdR}>{inr(a.totals.cashHandedOver)}</td>
+                        <td style={tdR}>{inr(a.totals.cardHandedOver)}</td>
+                        <td style={tdR}>{inr(a.totals.upiHandedOver)}</td>
+                        <td style={tdR}>{inr(a.totals.creditHandedOver)}</td>
+                        <td style={tdR}>{inr(a.totals.expectedFuelSales)}</td>
+                        <td style={tdR}>{inr(a.totals.billedSales)}</td>
+                        <td style={tdR}>{inr(a.totals.handoverProductSales)}</td>
+                        <td style={tdR}>{inr(a.totals.creditSales)}</td>
+                        <td
+                          style={{ ...tdR, color: varianceTone(Number(a.totals.varianceAmount)) }}
+                        >
+                          {inr(a.totals.varianceAmount)}
+                        </td>
+                      </tr>
+                      {expanded === a.attendantId && <ShiftDetail attendant={a} />}
+                    </React.Fragment>
                   ))}
                 </tbody>
               </table>

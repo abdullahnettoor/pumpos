@@ -7,7 +7,9 @@ import type {
   AttendantHandoverReportQuery,
   AttendantHandoverReportReader,
   AttendantHandoverSourceRow,
+  AttendantNozzleReadingSourceRow,
   AttendantSaleSourceRow,
+  AttendantTerminalEntrySourceRow,
 } from './ports.js';
 
 const ORG = 'org-1';
@@ -50,6 +52,8 @@ function row(over: Partial<AttendantHandoverSourceRow> = {}): AttendantHandoverS
 interface SourceOverrides {
   sales?: AttendantSaleSourceRow[];
   creditSales?: AttendantCreditSaleSourceRow[];
+  terminalEntries?: AttendantTerminalEntrySourceRow[];
+  nozzleReadings?: AttendantNozzleReadingSourceRow[];
 }
 
 /** Records the query it was asked for, so scoping can be asserted. */
@@ -65,6 +69,8 @@ class Reader implements AttendantHandoverReportReader {
       handovers: this.rows,
       sales: this.extra.sales ?? [],
       creditSales: this.extra.creditSales ?? [],
+      terminalEntries: this.extra.terminalEntries ?? [],
+      nozzleReadings: this.extra.nozzleReadings ?? [],
     };
   }
 }
@@ -275,6 +281,94 @@ describe('GetAttendantHandoverReport', () => {
       expect(totals.creditSales).toBe(0);
       // Fuel expected stays its own component.
       expect(totals.expectedFuelSales).toBe(1650);
+    });
+  });
+
+  describe('per-shift detail', () => {
+    const reading = (
+      over: Partial<AttendantNozzleReadingSourceRow>,
+    ): AttendantNozzleReadingSourceRow => ({
+      shiftId: 's-1',
+      duId: 'du-1',
+      nozzleId: 'n-1',
+      nozzleName: 'N1',
+      productName: 'Petrol',
+      openingReading: 1000,
+      closingReading: 1100,
+      volumeSold: 100,
+      testingVolume: 2,
+      unitPrice: 100,
+      ...over,
+    });
+
+    it('attaches each dispenser only the nozzle readings of that dispenser', async () => {
+      const { result } = run(
+        [
+          row({ handoverId: 'h-1', shiftId: 's-1', duId: 'du-1', duName: 'DU 1' }),
+          row({ handoverId: 'h-2', shiftId: 's-1', duId: 'du-2', duName: 'DU 2' }),
+        ],
+        undefined,
+        {
+          nozzleReadings: [
+            reading({ duId: 'du-1', nozzleId: 'n-1', nozzleName: 'N1' }),
+            reading({ duId: 'du-2', nozzleId: 'n-2', nozzleName: 'N2' }),
+          ],
+        },
+      );
+      const res = await result;
+      if (!res.success) throw new Error('expected success');
+      const dispensers = res.data.attendants[0].shifts[0].dispensers;
+      expect(dispensers.map((d) => d.nozzles.map((n) => n.nozzleId))).toEqual([['n-1'], ['n-2']]);
+    });
+
+    it('attaches terminal declarations to the handover that declared them', async () => {
+      const { result } = run(
+        [
+          row({ handoverId: 'h-1', shiftId: 's-1', duId: 'du-1', duName: 'DU 1' }),
+          row({ handoverId: 'h-2', shiftId: 's-1', duId: 'du-2', duName: 'DU 2' }),
+        ],
+        undefined,
+        {
+          terminalEntries: [
+            {
+              handoverId: 'h-1',
+              terminalId: 't-1',
+              terminalName: 'HDFC 01',
+              cardAmount: 200,
+              upiAmount: 300,
+              batchRef: 'B-77',
+            },
+          ],
+        },
+      );
+      const res = await result;
+      if (!res.success) throw new Error('expected success');
+      const [du1, du2] = res.data.attendants[0].shifts[0].dispensers;
+      expect(du1.terminals).toHaveLength(1);
+      expect(du1.terminals[0]).toMatchObject({ terminalName: 'HDFC 01', batchRef: 'B-77' });
+      expect(du2.terminals).toEqual([]);
+    });
+
+    it('leaves terminals empty at a station that declares aggregates only', async () => {
+      const { result } = run([row({ cardHandedOver: 200, upiHandedOver: 300 })]);
+      const res = await result;
+      if (!res.success) throw new Error('expected success');
+      const dispenser = res.data.attendants[0].shifts[0].dispensers[0];
+      expect(dispenser.terminals).toEqual([]);
+      // The aggregate declaration still stands on the handover itself.
+      expect(dispenser.cardHandedOver).toBe(200);
+      expect(dispenser.upiHandedOver).toBe(300);
+    });
+
+    it('sums a shift variance across its dispensers', async () => {
+      const { result } = run([
+        row({ handoverId: 'h-1', shiftId: 's-1', duId: 'du-1', varianceAmount: -50 }),
+        row({ handoverId: 'h-2', shiftId: 's-1', duId: 'du-2', varianceAmount: 20 }),
+      ]);
+      const res = await result;
+      if (!res.success) throw new Error('expected success');
+      expect(res.data.attendants[0].shifts[0].varianceAmount).toBe(-30);
+      expect(res.data.attendants[0].totals.varianceAmount).toBe(-30);
     });
   });
 });
