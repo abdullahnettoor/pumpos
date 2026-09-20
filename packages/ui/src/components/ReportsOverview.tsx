@@ -17,7 +17,7 @@ import { TaxRegisterPanel } from './reports/TaxRegisterPanel.js';
 import { ProfitLossView } from './reports/ProfitLossView.js';
 import { AttendantHandoverReportPanel } from './reports/AttendantHandoverReportPanel.js';
 import { useCapability } from '../access/CapabilityGate.js';
-import { ATTENDANT_REPORT_CAPABILITY } from '@pump/shared';
+import { ATTENDANT_REPORT_CAPABILITY, canViewAttendantReport } from '@pump/shared';
 import { inr } from '../utils/format.js';
 import { resolveBusinessDate } from '@pump/shared';
 import { Panel, Button, KpiStrip, KpiTile, EmptyState, DateText } from '../pump-ds/index.js';
@@ -110,7 +110,10 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({ selectedStatio
   const [selectedTab, setSelectedTab] = useState<ReportsTab>('daily-dssr');
   // One decision drives both the tab and its panel, so they cannot disagree.
   const attendantReport = useCapability(ATTENDANT_REPORT_CAPABILITY);
-  const showAttendantReport = attendantReport.status === 'enabled';
+  // Both axes, as the server checks them: the Organization must have the
+  // capability AND the Role must be allowed, or the tab would 403 on click.
+  const showAttendantReport =
+    attendantReport.status === 'enabled' && canViewAttendantReport(userRole);
   const { intent, token: intentToken } = useNavIntentEntry();
   const activeTab: ReportsTab = intent?.openDssrDate ? 'daily-dssr' : selectedTab;
   const setActiveTab = (tab: ReportsTab) => {

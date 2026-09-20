@@ -97,8 +97,8 @@ export class DrizzleAttendantHandoverReportReader implements AttendantHandoverRe
     const [sales, creditSales, terminalEntries, nozzleReadings] = await Promise.all([
       this.readSales(shiftIds, query),
       this.readCreditSales(shiftIds, query),
-      this.readTerminalEntries(handoverIds),
-      this.readNozzleReadings(shiftIds, duIds),
+      this.readTerminalEntries(handoverIds, query.organizationId),
+      this.readNozzleReadings(shiftIds, duIds, query),
     ]);
 
     return { handovers, sales, creditSales, terminalEntries, nozzleReadings };
@@ -107,6 +107,7 @@ export class DrizzleAttendantHandoverReportReader implements AttendantHandoverRe
   /** Per-terminal card/UPI detail declared inside those Handovers. */
   private async readTerminalEntries(
     handoverIds: string[],
+    organizationId: string,
   ): Promise<AttendantTerminalEntrySourceRow[]> {
     const rows = await this.db
       .select({
@@ -122,7 +123,12 @@ export class DrizzleAttendantHandoverReportReader implements AttendantHandoverRe
         schema.paymentTerminals,
         eq(schema.handoverTerminalEntries.terminalId, schema.paymentTerminals.id),
       )
-      .where(inArray(schema.handoverTerminalEntries.handoverId, handoverIds));
+      .where(
+        and(
+          inArray(schema.handoverTerminalEntries.handoverId, handoverIds),
+          eq(schema.handoverTerminalEntries.organizationId, organizationId),
+        ),
+      );
 
     return rows.map((r) => ({
       handoverId: r.handoverId,
@@ -142,6 +148,7 @@ export class DrizzleAttendantHandoverReportReader implements AttendantHandoverRe
   private async readNozzleReadings(
     shiftIds: string[],
     duIds: string[],
+    query: AttendantHandoverReportQuery,
   ): Promise<AttendantNozzleReadingSourceRow[]> {
     const rows = await this.db
       .select({
@@ -189,6 +196,9 @@ export class DrizzleAttendantHandoverReportReader implements AttendantHandoverRe
   ): Promise<AttendantSaleSourceRow[]> {
     const filters = [
       inArray(schema.sales.shiftId, shiftIds),
+      // Scoped explicitly rather than trusting the caller's id list: a tenant
+      // predicate must not depend on an invariant held somewhere else.
+      eq(schema.businessDays.organizationId, query.organizationId),
       ne(schema.sales.saleType, 'Fuel'),
       isNotNull(schema.sales.attendantId),
     ];
@@ -202,6 +212,7 @@ export class DrizzleAttendantHandoverReportReader implements AttendantHandoverRe
         totalAmount: schema.sales.totalAmount,
       })
       .from(schema.sales)
+      .innerJoin(schema.businessDays, eq(schema.sales.businessDayId, schema.businessDays.id))
       .where(and(...filters));
 
     return rows.map((r) => ({
@@ -212,14 +223,22 @@ export class DrizzleAttendantHandoverReportReader implements AttendantHandoverRe
     }));
   }
 
-  /** Fuel-on-credit chits raised within those Shifts (receivables, not drawer cash). */
+  /**
+   * Fuel-on-credit chits raised within those Shifts (receivables, not drawer cash).
+   *
+   * Restricted to `CREDIT_SALE` references. A merchandise Sale settled on
+   * credit also writes a customer-ledger row, referencing its Sale — counting
+   * that here as well would double-count it against the Billed Sale it mirrors.
+   */
   private async readCreditSales(
     shiftIds: string[],
     query: AttendantHandoverReportQuery,
   ): Promise<AttendantCreditSaleSourceRow[]> {
     const filters = [
       inArray(schema.customerTransactions.shiftId, shiftIds),
+      eq(schema.businessDays.organizationId, query.organizationId),
       eq(schema.customerTransactions.transactionType, 'Credit Sale'),
+      eq(schema.customerTransactions.referenceType, 'CREDIT_SALE'),
       isNotNull(schema.customerTransactions.attendantId),
     ];
     if (query.attendantId) {
@@ -233,6 +252,10 @@ export class DrizzleAttendantHandoverReportReader implements AttendantHandoverRe
         amount: schema.customerTransactions.amount,
       })
       .from(schema.customerTransactions)
+      .innerJoin(
+        schema.businessDays,
+        eq(schema.customerTransactions.businessDayId, schema.businessDays.id),
+      )
       .where(and(...filters));
 
     return rows.map((r) => ({

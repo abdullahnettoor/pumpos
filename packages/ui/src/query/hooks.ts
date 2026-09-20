@@ -763,8 +763,9 @@ export function useDailyDssrRange(
 /**
  * Attendant Handover Report over a Business-Date range. Operational tier: it
  * reads live operational rows, so it must never serve same-session stale data.
- * `enabled` gates on the capability so an unentitled Organization never fires
- * a request the server would refuse.
+ *
+ * Entitlement is NOT checked here — callers mount this behind the capability
+ * gate, and the server refuses regardless of what the client believes.
  */
 export function useAttendantHandoverReport(
   stationId: string | null | undefined,

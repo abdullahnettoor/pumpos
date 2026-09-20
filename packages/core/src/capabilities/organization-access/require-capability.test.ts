@@ -119,7 +119,7 @@ describe('requireCapability', () => {
     expect(access.loads).toBe(2);
   });
 
-  it('refuses everything under the shipped registry, which gates nothing yet', async () => {
+  it('refuses everything under the shipped registry, whose capabilities an Organization holds only by grant', async () => {
     const access = reader(inputs({ grantedCapabilities: ['exports.tally'] }));
 
     const result = await requireCapability(
@@ -128,7 +128,7 @@ describe('requireCapability', () => {
       'exports.tally',
     );
 
-    // Nothing is registered in production, so nothing can be gated on — and a
+    // No production capability belongs to a plan, so nothing can be gated on — and a
     // gate on an unregistered key must refuse rather than pass.
     expect(result.success).toBe(false);
   });
