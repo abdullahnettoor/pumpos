@@ -14,6 +14,7 @@ import { buildContext } from '../infra/context.js';
 import type { AuthenticatedPrincipal } from '../infra/authenticated-principal.js';
 import { loadStationClock } from '../infra/station-clock.js';
 import { runInTransaction } from '../infra/transaction.js';
+import { sendResult } from '../infra/send-result.js';
 import {
   DrizzleFinancialAccountRepository,
   DrizzleLedgerEntryRepository,
@@ -26,21 +27,6 @@ type Variables = {
 };
 
 export const financeRouter = new Hono<{ Variables: Variables }>();
-
-const STATUS_BY_CODE: Record<string, number> = {
-  VALIDATION_ERROR: 400,
-  NOT_FOUND: 404,
-  CONFLICT: 409,
-  FORBIDDEN: 403,
-  UNAUTHORIZED: 401,
-  INVARIANT_VIOLATION: 409,
-};
-
-function sendResult<T>(c: any, result: Result<T>) {
-  if (result.success) return c.json({ success: true, data: result.data });
-  const status = STATUS_BY_CODE[result.error.code] ?? 400;
-  return c.json({ success: false, error: result.error }, status);
-}
 
 const forbidden = (c: any) =>
   c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Not permitted' } }, 403);

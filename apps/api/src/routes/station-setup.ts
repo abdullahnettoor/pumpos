@@ -51,6 +51,7 @@ import { SupabaseAdmin } from '../infra/supabase-admin.js';
 import { rateLimit } from '../infra/rate-limit.js';
 import { DrizzleOnboardingProvisioner } from '../infra/onboarding-provisioner.js';
 import { DrizzleStationCapacityPort } from '../infra/repositories/organization-access.repo.js';
+import { sendResult } from '../infra/send-result.js';
 import {
   DrizzleStationRepository,
   DrizzleUserRepository,
@@ -72,20 +73,6 @@ type Variables = {
 };
 
 export const stationSetupRouter = new Hono<{ Bindings: Bindings; Variables: Variables }>();
-
-const STATUS_BY_CODE: Record<string, number> = {
-  VALIDATION_ERROR: 400,
-  NOT_FOUND: 404,
-  CONFLICT: 409,
-  FORBIDDEN: 403,
-  UNAUTHORIZED: 401,
-};
-
-function sendResult<T>(c: any, result: Result<T>) {
-  if (result.success) return c.json({ success: true, data: result.data });
-  const status = STATUS_BY_CODE[result.error.code] ?? 400;
-  return c.json({ success: false, error: result.error }, status);
-}
 
 // ----------------------------------------------------
 // Helper Checkers
@@ -128,12 +115,16 @@ stationSetupRouter.post('/stations', validateJson(stationSchema), async (c) => {
     );
   }
   const body = c.req.valid('json');
-  const db = c.var.db;
-  const useCase = new CreateStation({
-    repository: new DrizzleStationRepository(db),
-    events: createDispatcher(db),
-  });
-  const result = await useCase.execute(body, buildContext(user));
+  // Creating a Station consumes `station_count`, so this path takes the same
+  // guard and the same lock as onboarding finalization — otherwise the Limit
+  // is bypassable by choosing the other endpoint.
+  const result = await runInTransaction(c.var.db, (tx, events) =>
+    new CreateStation({
+      repository: new DrizzleStationRepository(tx),
+      capacity: new DrizzleStationCapacityPort(tx),
+      events,
+    }).execute(body, buildContext(user)),
+  );
   return sendResult(c, result);
 });
 

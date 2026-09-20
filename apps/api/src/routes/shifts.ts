@@ -52,6 +52,7 @@ import {
 import { LedgerPostingService } from '../infra/ledger-posting.js';
 import { DrizzleStockVarianceRepository } from '../infra/repositories/inventory-repositories.js';
 import { DrizzleShiftSummaryProjector } from '../infra/shift-summary-projection.js';
+import { sendResult } from '../infra/send-result.js';
 
 type Variables = {
   db: DbClient;
@@ -59,21 +60,6 @@ type Variables = {
 };
 
 export const shiftsRouter = new Hono<{ Variables: Variables }>();
-
-const STATUS_BY_CODE: Record<string, number> = {
-  VALIDATION_ERROR: 400,
-  NOT_FOUND: 404,
-  CONFLICT: 409,
-  FORBIDDEN: 403,
-  UNAUTHORIZED: 401,
-  INVARIANT_VIOLATION: 409,
-};
-
-function sendResult<T>(c: any, result: Result<T>) {
-  if (result.success) return c.json({ success: true, data: result.data });
-  const status = STATUS_BY_CODE[result.error.code] ?? 400;
-  return c.json({ success: false, error: result.error }, status);
-}
 
 function canManageDay(role: Role): boolean {
   return role === 'Owner' || role === 'Manager';

@@ -21,14 +21,6 @@ UPDATE public.organizations
 SET subscription_plan = 'CORE'
 WHERE upper(subscription_plan) = 'CORE';
 
--- Revocation was previously encoded in the status itself. It is not a
--- Subscription Status — a revoked invite and a deactivated Owner are both
--- SUSPENDED — so preserve it on the Organization metadata before rewriting.
-UPDATE public.organizations
-SET metadata = coalesce(metadata, '{}'::jsonb)
-  || jsonb_build_object('revoked_at', to_char(now(), 'YYYY-MM-DD"T"HH24:MI:SS.MSZ'))
-WHERE upper(subscription_status) = 'REVOKED';
-
 -- Deactivated and Revoked were both manual PumpOS stops, which is exactly what
 -- SUSPENDED means in the typed model.
 UPDATE public.organizations

@@ -86,6 +86,7 @@ import {
   DrizzleTankRepository,
 } from '../infra/repositories/setup-repositories.js';
 import { LedgerPostingService } from '../infra/ledger-posting.js';
+import { sendResult } from '../infra/send-result.js';
 import {
   DrizzleShiftRepository,
   DrizzleBusinessDayRepository,
@@ -97,21 +98,6 @@ type Variables = {
 };
 
 export const transactionsRouter = new Hono<{ Variables: Variables }>();
-
-const STATUS_BY_CODE: Record<string, number> = {
-  VALIDATION_ERROR: 400,
-  NOT_FOUND: 404,
-  CONFLICT: 409,
-  FORBIDDEN: 403,
-  UNAUTHORIZED: 401,
-  INVARIANT_VIOLATION: 409,
-};
-
-function sendResult<T>(c: any, result: Result<T>) {
-  if (result.success) return c.json({ success: true, data: result.data });
-  const status = STATUS_BY_CODE[result.error.code] ?? 400;
-  return c.json({ success: false, error: result.error }, status);
-}
 
 const docNumbers = new TimestampDocumentNumberGenerator();
 

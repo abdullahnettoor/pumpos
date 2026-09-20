@@ -135,6 +135,17 @@ export function capabilityState(
   };
 }
 
+/**
+ * The sentence shown when Station capacity is used up. Defined once: the API
+ * puts it in the LIMIT_REACHED error, the Organization screen shows it beside
+ * a disabled onboarding action, and they must not drift.
+ */
+export function stationLimitMessage(value: number): string {
+  return value === 1
+    ? 'This plan includes one Station. Contact PumpOS to add another.'
+    : `This plan includes ${value} Stations. Contact PumpOS to add another.`;
+}
+
 /** Error code the API returns when the Organization lacks a capability. */
 export const CAPABILITY_NOT_ENTITLED = 'CAPABILITY_NOT_ENTITLED';
 

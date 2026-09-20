@@ -1,3 +1,4 @@
+import { stationLimitMessage } from '@pump/shared';
 import { err, limitReachedError, ok } from '../../kernel/index.js';
 import type { Result } from '../../kernel/index.js';
 import type { OrganizationAccessInputs } from './ports.js';
@@ -42,18 +43,13 @@ export async function ensureStationCapacity(
 
   if (used >= value) {
     return err(
-      limitReachedError(
-        value === 1
-          ? 'This plan includes one Station. Contact PumpOS to add another.'
-          : `This plan includes ${value} Stations, and ${used} are in use. Contact PumpOS to add another.`,
-        {
-          limit: 'station_count',
-          value,
-          used,
-          resolution: 'CONTACT_PUMPOS',
-          actionLabel: 'Contact PumpOS',
-        },
-      ),
+      limitReachedError(stationLimitMessage(value), {
+        limit: 'station_count',
+        value,
+        used,
+        resolution: 'CONTACT_PUMPOS',
+        actionLabel: 'Contact PumpOS',
+      }),
     );
   }
 
