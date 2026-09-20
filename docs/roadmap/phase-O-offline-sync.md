@@ -37,6 +37,14 @@ the desktop reliability differentiator over the pure web app.
 
 - Push queued events when online; retry/backoff; real network detection (heartbeat
   to the API, not just `navigator.onLine`). Pull cloud changes since a cursor.
+- **Replay is evaluated under current Organization access policy, not the policy
+  in force when the write was queued** (Phase E, #160 story 33). A queued
+  mutation carries no authority of its own: on push it passes the same
+  `writePolicyGuard` as a live write, so a Station that went Restricted or
+  Suspended while offline cannot drain a backlog of growth operations on
+  reconnect. A client-supplied timestamp never excuses a write — the queue is a
+  delivery mechanism, not a licence. Expect some queued writes to be rejected
+  on replay; O4 has to show that honestly rather than silently dropping them.
 
 ## O3 — Conflict policy (light)
 

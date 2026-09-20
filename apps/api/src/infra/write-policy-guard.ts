@@ -22,6 +22,12 @@ type Variables = {
  * Every mutating tenant route carries one. The per-family coverage tests fail
  * if a route loses its guard or gains a mutation without a declaration, so the
  * matrix and the enforcement cannot drift apart.
+ *
+ * Replayed offline writes (Phase O) arrive through these same routes, so they
+ * are judged by the access mode at replay time rather than the one that held
+ * when they were queued. Nothing extra is needed here for that — it falls out
+ * of resolving the mode per request — but it is the reason this guard must
+ * stay on the route rather than moving into a client-side check.
  */
 export function writePolicyGuard(
   operation: string,

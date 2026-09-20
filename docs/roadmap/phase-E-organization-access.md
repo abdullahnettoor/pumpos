@@ -291,7 +291,11 @@ Implement subscription mutation commands and provider integration after E1.
 - `SUSPENDED` is a manual security, legal, fraud, or abuse stop. It blocks all
   new writes and offline replay while preserving appropriate historical reads.
 - Offline replay uses the same request-time policy as live writes. It does not
-  trust a client timestamp to bypass current access policy.
+  trust a client timestamp to bypass current access policy. There is no write
+  outbox yet, so nothing replays today; the obligation is carried in
+  `docs/roadmap/phase-O-offline-sync.md` (O2) and in the doc comments on
+  `evaluateWritePolicy` and `writePolicyGuard`, which is where replay will be
+  judged when it exists.
 - Payment confirmation restores `ACTIVE` immediately and invalidates access
   data. Existing usage above a downgraded Limit remains operational, but growth
   is blocked until usage is below the effective Limit.

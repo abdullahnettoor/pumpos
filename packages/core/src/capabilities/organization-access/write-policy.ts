@@ -48,6 +48,13 @@ export interface WritePolicyDeclaration {
  *
  * Reads are not routed through here: historical records stay readable in every
  * mode, so revoking access never damages auditability.
+ *
+ * When the offline write outbox lands (Phase O), replayed mutations must reach
+ * this same function with the mode resolved *at replay time*, not the one that
+ * applied when the write was queued: a Station that went Restricted while
+ * offline must not drain a backlog of growth operations on reconnect. The
+ * queue is a delivery mechanism, not a licence — see
+ * docs/roadmap/phase-O-offline-sync.md (O2).
  */
 export function evaluateWritePolicy(
   mode: AccessMode,
