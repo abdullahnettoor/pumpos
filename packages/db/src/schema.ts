@@ -26,8 +26,14 @@ export const organizations = pgTable('organizations', {
   // plain varchar so a deploy can add a plan without a schema migration.
   subscriptionPlan: varchar('subscription_plan', { length: 50 }).default('CORE').notNull(),
   subscriptionStatus: varchar('subscription_status', { length: 50 }).default('ACTIVE').notNull(),
-  /** Instant access is paid through. Null means no dated grace. Enforced in E2. */
+  /** Instant access is paid through. Null means no dated grace. */
   accessUntil: timestamp('access_until', { withTimezone: true }),
+  /**
+   * When PumpOS manually stopped this Organization for a security, legal,
+   * fraud or abuse reason. Deliberately NOT a Subscription Status: suspension
+   * is independent of billing, so paying an invoice must never clear it.
+   */
+  suspendedAt: timestamp('suspended_at', { withTimezone: true }),
   metadata: jsonb('metadata').default({}).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),

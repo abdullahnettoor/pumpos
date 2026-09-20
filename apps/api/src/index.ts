@@ -33,8 +33,8 @@ import { dssrRouter } from './routes/dssr.js';
 import { financeRouter } from './routes/finance.js';
 import { accessRouter } from './routes/access.js';
 import { platformAccessRouter } from './routes/platform-access.js';
-import { SetOrganizationSubscriptionStatus } from '@pump/core';
-import type { SubscriptionStatus } from '@pump/shared';
+import { RestoreOrganization, SuspendOrganization } from '@pump/core';
+import type { AccessChangeResult } from '@pump/core';
 import { DrizzleOrganizationSubscriptionRepository } from './infra/repositories/organization-access.repo.js';
 import { buildPlatformContext } from './infra/context.js';
 import { runInTransaction } from './infra/transaction.js';
@@ -1077,38 +1077,42 @@ function deriveOwnerStatus(
  */
 function isRevokedOwner(
   owner: { status: string; authUserId: string | null } | null | undefined,
-  subscriptionStatus: string,
+  suspendedAt: Date | null,
 ): boolean {
-  if (!owner) return subscriptionStatus === 'SUSPENDED';
+  if (!owner) return suspendedAt !== null;
   return owner.status === 'INACTIVE' && owner.authUserId === null;
 }
 
 /**
- * Move an Organization's Subscription Status from a platform command.
+ * Stop or restore an Organization from a platform command.
  *
- * Delegates to the lifecycle use-case rather than writing the column here, so
- * there is exactly one writer: status change and
- * ORGANIZATION_SUBSCRIPTION_STATUS_CHANGED commit together, and a no-op write
- * emits nothing. Owner deactivation and invite revocation are platform stops,
- * so they carry no paid-through window.
+ * Revoking an invite and deactivating an Owner are manual stops, so they set
+ * the suspension column and leave the billing lifecycle alone — an
+ * Organization that was mid-grace when it was stopped is still mid-grace when
+ * it is restored. State and event commit together through the use-case, and a
+ * no-op emits nothing.
  */
-async function setSubscriptionStatus(
+async function setOrganizationSuspension(
   c: any,
   org: { id: string },
-  status: SubscriptionStatus,
+  suspended: boolean,
   reason: string,
 ): Promise<void> {
-  const result = await runInTransaction(c.var.db as DbClient, (tx, events) =>
-    new SetOrganizationSubscriptionStatus({
-      subscriptions: new DrizzleOrganizationSubscriptionRepository(tx),
-      events,
-    }).execute(
-      { status, accessUntil: null, reason, actor: c.var.platformAdmin },
-      buildPlatformContext(c.var.platformAdmin, org.id),
-    ),
+  const deps = (tx: DbClient) => ({
+    subscriptions: new DrizzleOrganizationSubscriptionRepository(tx),
+  });
+  const result = await runInTransaction<AccessChangeResult<{ suspendedAt: string | null }>>(
+    c.var.db as DbClient,
+    (tx, events) => {
+      const command = { reason, actor: c.var.platformAdmin };
+      const ctx = buildPlatformContext(c.var.platformAdmin, org.id);
+      return suspended
+        ? new SuspendOrganization({ ...deps(tx), events }).execute(command, ctx)
+        : new RestoreOrganization({ ...deps(tx), events }).execute(command, ctx);
+    },
   );
   if (!result.success) {
-    throw new Error(`Could not update subscription status: ${result.error.message}`);
+    throw new Error(`Could not update organization suspension: ${result.error.message}`);
   }
 }
 
@@ -1152,7 +1156,7 @@ platform.get('/owners', async (c) => {
   // listed, as it always has.
   const orgs = includeRevoked
     ? allOrgs
-    : allOrgs.filter((o) => !isRevokedOwner(ownersByOrg.get(o.id), o.subscriptionStatus));
+    : allOrgs.filter((o) => !isRevokedOwner(ownersByOrg.get(o.id), o.suspendedAt));
   const orgIds = orgs.map((o) => o.id);
 
   const stationRows = orgIds.length
@@ -1419,7 +1423,7 @@ platform.post('/owners/:orgId/revoke', async (c) => {
   // Revoking an invite and deactivating an Owner both mean "PumpOS stopped
   // this Organization", which is SUSPENDED in the typed model. Which of the
   // two it was stays readable from the Owner row and from the events.
-  await setSubscriptionStatus(c, org, 'SUSPENDED', 'owner invite revoked');
+  await setOrganizationSuspension(c, org, true, 'owner invite revoked');
   await appendPlatformEvent(
     db,
     buildPlatformEvent(
@@ -1468,10 +1472,10 @@ async function setOwnerActive(c: any, active: boolean): Promise<Response> {
     .update(schema.users)
     .set({ status: active ? 'ACTIVE' : 'INACTIVE', updatedAt: new Date() })
     .where(eq(schema.users.id, owner.id));
-  await setSubscriptionStatus(
+  await setOrganizationSuspension(
     c,
     org,
-    active ? 'ACTIVE' : 'SUSPENDED',
+    !active,
     active ? 'owner reactivated' : 'owner deactivated',
   );
   await appendPlatformEvent(

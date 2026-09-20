@@ -64,6 +64,7 @@ export class DrizzleOrganizationAccessReader implements OrganizationAccessReader
         subscriptionPlan: schema.organizations.subscriptionPlan,
         subscriptionStatus: schema.organizations.subscriptionStatus,
         accessUntil: schema.organizations.accessUntil,
+        suspendedAt: schema.organizations.suspendedAt,
       })
       .from(schema.organizations)
       .where(eq(schema.organizations.id, organizationId));
@@ -107,6 +108,7 @@ export class DrizzleOrganizationAccessReader implements OrganizationAccessReader
       plan: organization?.subscriptionPlan ?? null,
       subscriptionStatus: organization?.subscriptionStatus ?? null,
       accessUntil: organization?.accessUntil?.toISOString() ?? null,
+      suspendedAt: organization?.suspendedAt?.toISOString() ?? null,
       grantedCapabilities: grants.map((grant) => grant.capabilityKey),
       limitOverrides,
       usage: { station_count: Number(stations?.value ?? 0) },
@@ -274,6 +276,7 @@ export class DrizzleOrganizationSubscriptionRepository implements OrganizationSu
         plan: schema.organizations.subscriptionPlan,
         status: schema.organizations.subscriptionStatus,
         accessUntil: schema.organizations.accessUntil,
+        suspendedAt: schema.organizations.suspendedAt,
       })
       .from(schema.organizations)
       .where(eq(schema.organizations.id, organizationId));
@@ -282,6 +285,7 @@ export class DrizzleOrganizationSubscriptionRepository implements OrganizationSu
       plan: row.plan,
       status: row.status,
       accessUntil: row.accessUntil?.toISOString() ?? null,
+      suspendedAt: row.suspendedAt?.toISOString() ?? null,
     };
   }
 
@@ -304,6 +308,21 @@ export class DrizzleOrganizationSubscriptionRepository implements OrganizationSu
     await this.tx
       .update(schema.organizations)
       .set({ subscriptionPlan: input.plan, updatedAt: new Date() })
+      .where(eq(schema.organizations.id, input.organizationId));
+  }
+
+  async setSuspension(input: {
+    organizationId: string;
+    suspendedAt: string | null;
+  }): Promise<void> {
+    // Only the suspension column: the billing lifecycle is untouched, so a
+    // restored Organization returns to whatever it was paying (or not paying).
+    await this.tx
+      .update(schema.organizations)
+      .set({
+        suspendedAt: input.suspendedAt ? new Date(input.suspendedAt) : null,
+        updatedAt: new Date(),
+      })
       .where(eq(schema.organizations.id, input.organizationId));
   }
 }

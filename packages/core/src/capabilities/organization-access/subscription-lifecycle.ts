@@ -4,7 +4,11 @@ import { BusinessEvents, err, eventFromContext, ok, validationError } from '../.
 import type { EventPublisher, ExecutionContext, Result, UseCase } from '../../kernel/index.js';
 import type { AccessChangeResult, PlatformActor } from './admin-ports.js';
 import type { OrganizationSubscriptionRepository } from './admin-ports.js';
-import { paymentGraceUntil, resolveSubscriptionMode } from './resolve-access.js';
+import {
+  KNOWN_SUBSCRIPTION_STATUSES,
+  paymentGraceUntil,
+  resolveSubscriptionMode,
+} from './resolve-access.js';
 import { PRODUCT_ACCESS_REGISTRY, type AccessRegistry } from './registry.js';
 
 /**
@@ -16,15 +20,6 @@ import { PRODUCT_ACCESS_REGISTRY, type AccessRegistry } from './registry.js';
  * grace to Restricted happens by the clock rather than by a job that could
  * fail to run.
  */
-
-const KNOWN_STATUSES: readonly SubscriptionStatus[] = [
-  'TRIALING',
-  'ACTIVE',
-  'PAST_DUE',
-  'RESTRICTED',
-  'CANCELED',
-  'SUSPENDED',
-];
 
 export interface SubscriptionLifecycleDeps {
   subscriptions: OrganizationSubscriptionRepository;
@@ -69,7 +64,7 @@ export class SetOrganizationSubscriptionStatus implements UseCase<
     ctx: ExecutionContext,
   ): Promise<Result<AccessChangeResult<SubscriptionChange>>> {
     const status = input.status?.trim().toUpperCase() as SubscriptionStatus;
-    if (!KNOWN_STATUSES.includes(status)) {
+    if (!KNOWN_SUBSCRIPTION_STATUSES.includes(status)) {
       return err(validationError(`Unknown Subscription Status "${input.status}"`));
     }
 
@@ -233,3 +228,96 @@ export class SetOrganizationPlan implements UseCase<
 
 /** Re-exported so callers do not have to reach into `@pump/shared` for it. */
 export { PAYMENT_GRACE_DAYS };
+
+export interface SuspensionCommand {
+  actor: PlatformActor;
+  reason?: string | null;
+}
+
+/**
+ * Stop an Organization for a security, legal, fraud or abuse reason.
+ *
+ * Deliberately separate from the billing lifecycle. When suspension was a
+ * Subscription Status, confirming a payment overwrote it — an Organization
+ * suspended for fraud could clear its own stop by paying an invoice. The stop
+ * now lives on its own column, so the two move independently and only an
+ * explicit restore lifts it.
+ */
+export class SuspendOrganization implements UseCase<
+  SuspensionCommand,
+  AccessChangeResult<{ suspendedAt: string }>
+> {
+  constructor(private readonly deps: SubscriptionLifecycleDeps) {}
+
+  async execute(
+    input: SuspensionCommand,
+    ctx: ExecutionContext,
+  ): Promise<Result<AccessChangeResult<{ suspendedAt: string }>>> {
+    const current = await this.deps.subscriptions.load(ctx.organizationId);
+    if (!current) return err(validationError('Organization not found'));
+    if (current.suspendedAt) {
+      return ok({ changed: false, record: { suspendedAt: current.suspendedAt } });
+    }
+
+    const suspendedAt = ctx.clock.now().toISOString();
+    await this.deps.subscriptions.setSuspension({
+      organizationId: ctx.organizationId,
+      suspendedAt,
+    });
+
+    await this.deps.events.publish([
+      eventFromContext(ctx, {
+        eventType: BusinessEvents.ORGANIZATION_DEACTIVATED,
+        aggregateType: 'Organization',
+        aggregateId: ctx.organizationId,
+        payload: {
+          suspendedAt,
+          reason: input.reason?.trim() || null,
+          platformActorEmail: input.actor.email,
+        },
+      }),
+    ]);
+
+    return ok({ changed: true, record: { suspendedAt } });
+  }
+}
+
+/**
+ * Lift a manual stop. The Organization returns to whatever its billing
+ * lifecycle says — restoring is not the same as paying.
+ */
+export class RestoreOrganization implements UseCase<
+  SuspensionCommand,
+  AccessChangeResult<{ suspendedAt: null }>
+> {
+  constructor(private readonly deps: SubscriptionLifecycleDeps) {}
+
+  async execute(
+    input: SuspensionCommand,
+    ctx: ExecutionContext,
+  ): Promise<Result<AccessChangeResult<{ suspendedAt: null }>>> {
+    const current = await this.deps.subscriptions.load(ctx.organizationId);
+    if (!current) return err(validationError('Organization not found'));
+    if (!current.suspendedAt) return ok({ changed: false, record: { suspendedAt: null } });
+
+    await this.deps.subscriptions.setSuspension({
+      organizationId: ctx.organizationId,
+      suspendedAt: null,
+    });
+
+    await this.deps.events.publish([
+      eventFromContext(ctx, {
+        eventType: BusinessEvents.ORGANIZATION_REACTIVATED,
+        aggregateType: 'Organization',
+        aggregateId: ctx.organizationId,
+        payload: {
+          previousSuspendedAt: current.suspendedAt,
+          reason: input.reason?.trim() || null,
+          platformActorEmail: input.actor.email,
+        },
+      }),
+    ]);
+
+    return ok({ changed: true, record: { suspendedAt: null } });
+  }
+}

@@ -1,14 +1,10 @@
 import type { MiddlewareHandler } from 'hono';
 import type { DbClient } from '@pump/db';
-import {
-  evaluateWritePolicy,
-  normalizeSubscriptionStatus,
-  resolveSubscriptionMode,
-  type WritePolicyRegistry,
-} from '@pump/core';
+import { evaluateWritePolicy, resolveAccessMode, SystemClock, type Clock } from '@pump/core';
+import type { WritePolicyRegistry } from '@pump/core';
 import type { AuthenticatedPrincipal } from './authenticated-principal.js';
 import { DrizzleOrganizationAccessReader } from './repositories/organization-access.repo.js';
-import { STATUS_BY_CODE } from './send-result.js';
+import { sendResult } from './send-result.js';
 import { WRITE_POLICY_DECLARATIONS } from './write-policy-declarations.js';
 
 type Variables = {
@@ -23,15 +19,24 @@ type Variables = {
  * lapsed Payment Grace Period bites on the next call with nothing scheduled,
  * and a confirmed payment restores writes immediately.
  *
- * Adoption is per route family (#168-#171): a route is governed only once this
- * middleware is attached to it, which is why the declarations registry and the
- * coverage test exist ahead of the enforcement.
+ * Every mutating tenant route carries one. The per-family coverage tests fail
+ * if a route loses its guard or gains a mutation without a declaration, so the
+ * matrix and the enforcement cannot drift apart.
+ *
+ * Replayed offline writes (Phase O) arrive through these same routes, so they
+ * are judged by the access mode at replay time rather than the one that held
+ * when they were queued. Nothing extra is needed here for that — it falls out
+ * of resolving the mode per request — but it is the reason this guard must
+ * stay on the route rather than moving into a client-side check.
  */
 export function writePolicyGuard(
   operation: string,
-  options: { registry?: WritePolicyRegistry } = {},
+  options: { registry?: WritePolicyRegistry; clock?: Clock } = {},
 ): MiddlewareHandler<{ Variables: Variables }> {
   const registry = options.registry ?? WRITE_POLICY_DECLARATIONS;
+  // Injectable so the grace-period boundary is testable at the point that
+  // actually decides whether the write happens.
+  const clock = options.clock ?? new SystemClock();
   const declaration = registry[operation];
   if (!declaration) {
     // A programming error, caught at wiring time rather than per request: an
@@ -45,16 +50,11 @@ export function writePolicyGuard(
     const inputs = await new DrizzleOrganizationAccessReader(c.var.db).load(
       c.var.user.organizationId,
     );
-    const mode = resolveSubscriptionMode(normalizeSubscriptionStatus(inputs.subscriptionStatus), {
-      accessUntil: inputs.accessUntil,
-      now: new Date(),
-    });
 
-    const decision = evaluateWritePolicy(mode, declaration);
-    if (!decision.success) {
-      const status = STATUS_BY_CODE[decision.error.code] ?? 403;
-      return c.json({ success: false, error: decision.error }, status as 403);
-    }
+    // One resolver, shared with the Access Document: a guard and the document
+    // the operator is reading must never disagree about the mode.
+    const decision = evaluateWritePolicy(resolveAccessMode(inputs, clock.now()), declaration);
+    if (!decision.success) return sendResult(c, decision);
 
     await next();
   };
