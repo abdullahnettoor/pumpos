@@ -31,6 +31,7 @@ const baseDocument = (capabilities: AccessDocument['capabilities']): AccessDocum
     accessUntil: null,
     showWarning: false,
     warningMessage: null,
+    resolution: null,
   },
 });
 

@@ -65,14 +65,31 @@ export interface AccessLimitEntry {
   reached: boolean;
 }
 
-/** Safe, role-filtered presentation of the Organization's subscription. */
+/**
+ * Safe, role-filtered presentation of the Organization's subscription.
+ *
+ * Every Role learns the operational facts — what the status is and what the
+ * Organization may currently do — because that explains why a write was
+ * refused. Only Owners and Managers get the billing detail: the paid-through
+ * instant, the warning copy and the action that resolves it.
+ */
 export interface AccessSubscription {
   status: SubscriptionStatus;
   mode: AccessMode;
+  /** Paid-through instant. Billing detail: null for non-commercial Roles. */
   accessUntil: string | null;
   showWarning: boolean;
   warningMessage: string | null;
+  /** What would restore access. Billing detail: null for non-commercial Roles. */
+  resolution: ResolutionCode | null;
 }
+
+/**
+ * Days an Organization keeps normal access after a failed payment. The
+ * Payment Grace Period is a product promise, not a provider detail: one
+ * failed charge must not interrupt station work the same day.
+ */
+export const PAYMENT_GRACE_DAYS = 7;
 
 /**
  * Server-computed, role-filtered view of what an Organization may use.

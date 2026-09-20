@@ -33,6 +33,11 @@ import { dssrRouter } from './routes/dssr.js';
 import { financeRouter } from './routes/finance.js';
 import { accessRouter } from './routes/access.js';
 import { platformAccessRouter } from './routes/platform-access.js';
+import { SetOrganizationSubscriptionStatus } from '@pump/core';
+import type { SubscriptionStatus } from '@pump/shared';
+import { DrizzleOrganizationSubscriptionRepository } from './infra/repositories/organization-access.repo.js';
+import { buildPlatformContext } from './infra/context.js';
+import { runInTransaction } from './infra/transaction.js';
 import { idempotency } from './infra/idempotency.js';
 import { verifySupabaseJwt } from './infra/supabase-jwt.js';
 import { SupabaseAdmin } from './infra/supabase-admin.js';
@@ -1079,39 +1084,32 @@ function isRevokedOwner(
 }
 
 /**
- * Write a Subscription Status and append its audit event in the same step.
+ * Move an Organization's Subscription Status from a platform command.
  *
- * Access state must never change without the event that explains it, so the
- * two live in one function rather than being re-paired at each call site. A
- * no-op write emits nothing.
+ * Delegates to the lifecycle use-case rather than writing the column here, so
+ * there is exactly one writer: status change and
+ * ORGANIZATION_SUBSCRIPTION_STATUS_CHANGED commit together, and a no-op write
+ * emits nothing. Owner deactivation and invite revocation are platform stops,
+ * so they carry no paid-through window.
  */
 async function setSubscriptionStatus(
   c: any,
-  org: { id: string; name: string; subscriptionStatus: string },
-  status: string,
+  org: { id: string },
+  status: SubscriptionStatus,
   reason: string,
 ): Promise<void> {
-  if (org.subscriptionStatus === status) return;
-  const db = c.var.db as DbClient;
-  await db
-    .update(schema.organizations)
-    .set({ subscriptionStatus: status, updatedAt: new Date() })
-    .where(eq(schema.organizations.id, org.id));
-  await appendPlatformEvent(
-    db,
-    buildPlatformEvent(
-      BusinessEvents.ORGANIZATION_SUBSCRIPTION_STATUS_CHANGED,
-      org.id,
-      org.id,
-      {
-        organizationName: org.name,
-        previousStatus: org.subscriptionStatus,
-        status,
-        reason,
-      },
-      c.var.platformAdmin,
+  const result = await runInTransaction(c.var.db as DbClient, (tx, events) =>
+    new SetOrganizationSubscriptionStatus({
+      subscriptions: new DrizzleOrganizationSubscriptionRepository(tx),
+      events,
+    }).execute(
+      { status, accessUntil: null, reason, actor: c.var.platformAdmin },
+      buildPlatformContext(c.var.platformAdmin, org.id),
     ),
   );
+  if (!result.success) {
+    throw new Error(`Could not update subscription status: ${result.error.message}`);
+  }
 }
 
 // GET /platform/owners — one row per org (its Owner user), enriched with auth

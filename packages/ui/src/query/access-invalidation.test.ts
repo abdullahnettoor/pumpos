@@ -21,6 +21,7 @@ const document: AccessDocument = {
     accessUntil: null,
     showWarning: false,
     warningMessage: null,
+    resolution: null,
   },
 };
 

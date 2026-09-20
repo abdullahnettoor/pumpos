@@ -22,6 +22,15 @@ export class GetAccessDocument implements UseCase<{ role: Role }, AccessDocument
 
   async execute(input: { role: Role }, ctx: ExecutionContext): Promise<Result<AccessDocument>> {
     const inputs = await this.deps.access.load(ctx.organizationId);
-    return ok(buildAccessDocument({ inputs, role: input.role, registry: this.deps.registry }));
+    return ok(
+      buildAccessDocument({
+        inputs,
+        role: input.role,
+        registry: this.deps.registry,
+        // Request-time evaluation: a lapsed grace period restricts on the very
+        // next request, with no scheduled transition to run or miss.
+        now: ctx.clock.now(),
+      }),
+    );
   }
 }

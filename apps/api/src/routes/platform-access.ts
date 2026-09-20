@@ -2,11 +2,14 @@ import { Hono } from 'hono';
 import type { DbClient } from '@pump/db';
 import {
   ClearOrganizationLimitOverride,
+  ConfirmOrganizationPayment,
   GetAccessDocument,
   GrantOrganizationCapability,
   PRODUCT_ACCESS_REGISTRY,
   RevokeOrganizationCapability,
   SetOrganizationLimitOverride,
+  SetOrganizationPlan,
+  SetOrganizationSubscriptionStatus,
 } from '@pump/core';
 import { buildPlatformContext, type PlatformAdminPrincipal } from '../infra/context.js';
 import { runInTransaction } from '../infra/transaction.js';
@@ -14,6 +17,7 @@ import { sendResult } from '../infra/send-result.js';
 import {
   DrizzleOrganizationAccessAdminRepository,
   DrizzleOrganizationAccessReader,
+  DrizzleOrganizationSubscriptionRepository,
 } from '../infra/repositories/organization-access.repo.js';
 
 type Variables = {
@@ -29,12 +33,6 @@ type Variables = {
  * The Organization UUID is the authoritative argument; use the owners list to
  * find it. Every real change and its business event commit in one transaction,
  * and repeated commands return `changed: false` without writing or emitting.
- *
- * MISSING, by decomposition gap rather than by design: assigning a Product
- * Plan (`organization plan set <org> CORE`, emitting ORGANIZATION_PLAN_CHANGED).
- * The phase doc lists it, but no E1 ticket's acceptance criteria named it, so
- * it was never built — #160 story 1 is unsatisfied. It belongs with #166,
- * which owns plan and subscription mutation. Add it as a sibling route here.
  */
 export const platformAccessRouter = new Hono<{ Variables: Variables }>();
 
@@ -165,6 +163,78 @@ platformAccessRouter.delete('/:orgId/limits/:key', async (c) => {
         reason: stringField(body, 'reason') || null,
         actor: c.var.platformAdmin,
       },
+      buildPlatformContext(c.var.platformAdmin, organizationId),
+    ),
+  );
+  return sendResult(c, result);
+});
+
+/**
+ * PUT /platform/organizations/:orgId/plan — assign a Product Plan.
+ *
+ * Plan keys are code-defined, so an unknown one is rejected before anything
+ * is written: configuration can never name a package this build cannot serve.
+ */
+platformAccessRouter.put('/:orgId/plan', async (c) => {
+  const organizationId = c.req.param('orgId');
+  const body = await readJson(c);
+  const result = await runInTransaction(c.var.db, (tx, events) =>
+    new SetOrganizationPlan({
+      subscriptions: new DrizzleOrganizationSubscriptionRepository(tx),
+      events,
+    }).execute(
+      {
+        plan: stringField(body, 'plan'),
+        reason: stringField(body, 'reason') || null,
+        actor: c.var.platformAdmin,
+      },
+      buildPlatformContext(c.var.platformAdmin, organizationId),
+    ),
+  );
+  return sendResult(c, result);
+});
+
+/**
+ * PUT /platform/organizations/:orgId/subscription — move the Organization to
+ * a Subscription Status, optionally with the instant its access runs through.
+ *
+ * Omitting `accessUntil` on PAST_DUE applies the standard Payment Grace
+ * Period; omitting it on any other status clears the window.
+ */
+platformAccessRouter.put('/:orgId/subscription', async (c) => {
+  const organizationId = c.req.param('orgId');
+  const body = await readJson(c);
+  const result = await runInTransaction(c.var.db, (tx, events) =>
+    new SetOrganizationSubscriptionStatus({
+      subscriptions: new DrizzleOrganizationSubscriptionRepository(tx),
+      events,
+    }).execute(
+      {
+        status: stringField(body, 'status'),
+        // Distinguish "not supplied" (derive it) from an explicit null (clear).
+        ...('accessUntil' in body ? { accessUntil: stringField(body, 'accessUntil') || null } : {}),
+        reason: stringField(body, 'reason') || null,
+        actor: c.var.platformAdmin,
+      },
+      buildPlatformContext(c.var.platformAdmin, organizationId),
+    ),
+  );
+  return sendResult(c, result);
+});
+
+/**
+ * POST /platform/organizations/:orgId/subscription/confirm-payment — payment
+ * received: ACTIVE again immediately, grace window cleared.
+ */
+platformAccessRouter.post('/:orgId/subscription/confirm-payment', async (c) => {
+  const organizationId = c.req.param('orgId');
+  const body = await readJson(c);
+  const result = await runInTransaction(c.var.db, (tx, events) =>
+    new ConfirmOrganizationPayment({
+      subscriptions: new DrizzleOrganizationSubscriptionRepository(tx),
+      events,
+    }).execute(
+      { reason: stringField(body, 'reason') || null, actor: c.var.platformAdmin },
       buildPlatformContext(c.var.platformAdmin, organizationId),
     ),
   );

@@ -1,6 +1,8 @@
 import { and, count, desc, eq, isNull, sql } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
 import type {
+  OrganizationSubscription,
+  OrganizationSubscriptionRepository,
   CapabilityGrant,
   LimitOverride,
   OrganizationAccessAdminRepository,
@@ -10,7 +12,7 @@ import type {
   StationCapacityPort,
 } from '@pump/core';
 import { isLimitKey } from '@pump/core';
-import type { LimitKey } from '@pump/shared';
+import type { LimitKey, ProductPlanKey, SubscriptionStatus } from '@pump/shared';
 
 type GrantRow = typeof schema.organizationCapabilityGrants.$inferSelect;
 type OverrideRow = typeof schema.organizationLimitOverrides.$inferSelect;
@@ -255,5 +257,53 @@ export class DrizzleOrganizationAccessAdminRepository implements OrganizationAcc
       .where(eq(schema.organizationLimitOverrides.id, id))
       .returning();
     return toOverride(row);
+  }
+}
+
+/**
+ * The Organization's own commercial columns. Current state, not history: the
+ * audit trail for these lives in the event stream, which is why every writer
+ * goes through a use-case that appends its event in the same transaction.
+ */
+export class DrizzleOrganizationSubscriptionRepository implements OrganizationSubscriptionRepository {
+  constructor(private readonly tx: DbClient) {}
+
+  async load(organizationId: string): Promise<OrganizationSubscription | null> {
+    const [row] = await this.tx
+      .select({
+        plan: schema.organizations.subscriptionPlan,
+        status: schema.organizations.subscriptionStatus,
+        accessUntil: schema.organizations.accessUntil,
+      })
+      .from(schema.organizations)
+      .where(eq(schema.organizations.id, organizationId));
+    if (!row) return null;
+    return {
+      plan: row.plan,
+      status: row.status,
+      accessUntil: row.accessUntil?.toISOString() ?? null,
+    };
+  }
+
+  async setStatus(input: {
+    organizationId: string;
+    status: SubscriptionStatus;
+    accessUntil: string | null;
+  }): Promise<void> {
+    await this.tx
+      .update(schema.organizations)
+      .set({
+        subscriptionStatus: input.status,
+        accessUntil: input.accessUntil ? new Date(input.accessUntil) : null,
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.organizations.id, input.organizationId));
+  }
+
+  async setPlan(input: { organizationId: string; plan: ProductPlanKey }): Promise<void> {
+    await this.tx
+      .update(schema.organizations)
+      .set({ subscriptionPlan: input.plan, updatedAt: new Date() })
+      .where(eq(schema.organizations.id, input.organizationId));
   }
 }

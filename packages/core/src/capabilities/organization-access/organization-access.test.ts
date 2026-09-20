@@ -177,14 +177,16 @@ describe('Role filtering of the Access Document', () => {
 });
 
 describe('subscription resolution', () => {
+  // With no paid-through instant the window is open; the boundary behaviour
+  // of `access_until` is covered in subscription-lifecycle.test.ts.
   it.each([
     ['TRIALING', 'NORMAL'],
     ['ACTIVE', 'NORMAL'],
     ['PAST_DUE', 'NORMAL'],
     ['RESTRICTED', 'RESTRICTED'],
-    ['CANCELED', 'RESTRICTED'],
+    ['CANCELED', 'NORMAL'],
     ['SUSPENDED', 'SUSPENDED'],
-  ] as const)('resolves %s to %s', (status, mode) => {
+  ] as const)('resolves %s to %s while no access window has been set', (status, mode) => {
     expect(resolveSubscriptionMode(status)).toBe(mode);
   });
 

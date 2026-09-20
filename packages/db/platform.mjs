@@ -33,6 +33,9 @@
  *   node packages/db/platform.mjs organization capability revoke <org-id> <capability-key> [--reason "<why>"]
  *   node packages/db/platform.mjs organization limit set   <org-id> station_count <value> --reason "<why>"
  *   node packages/db/platform.mjs organization limit clear <org-id> station_count [--reason "<why>"]
+ *   node packages/db/platform.mjs organization plan set <org-id> CORE [--reason "<why>"]
+ *   node packages/db/platform.mjs organization subscription set <org-id> PAST_DUE [--until <iso>] [--reason "<why>"]
+ *   node packages/db/platform.mjs organization subscription confirm-payment <org-id>
  *
  * Tip: Run below script to source the API secrets first:
 set -a
@@ -231,6 +234,42 @@ async function organizationCommand() {
     }
   }
 
+  if (action === 'plan' && args[0] === 'set') {
+    const orgId = requireArg(args[1], 'organization plan set <org-id> <plan>');
+    const plan = requireArg(args[2], 'organization plan set <org-id> <plan>');
+    return printChange(
+      await api('PUT', `/platform/organizations/${orgId}/plan`, { plan, reason }),
+      `plan set to ${plan}`,
+    );
+  }
+
+  if (action === 'subscription') {
+    const verb = args[0];
+    const orgId = requireArg(args[1], `organization subscription ${verb} <org-id>`);
+    if (verb === 'set') {
+      const status = requireArg(args[2], 'organization subscription set <org-id> <STATUS>');
+      const until = (flags.until || '').trim();
+      return printChange(
+        await api('PUT', `/platform/organizations/${orgId}/subscription`, {
+          status,
+          // Omitted entirely so the server applies the standard grace window
+          // for PAST_DUE rather than clearing it.
+          ...(until ? { accessUntil: until } : {}),
+          reason,
+        }),
+        `subscription status set to ${status.toUpperCase()}`,
+      );
+    }
+    if (verb === 'confirm-payment') {
+      return printChange(
+        await api('POST', `/platform/organizations/${orgId}/subscription/confirm-payment`, {
+          reason,
+        }),
+        'payment confirmed — access restored',
+      );
+    }
+  }
+
   if (action === 'limit') {
     const verb = args[0];
     const orgId = requireArg(args[1], `organization limit ${verb} <org-id> <limit-key>`);
@@ -378,6 +417,11 @@ Platform back-office CLI
   node packages/db/platform.mjs organization capability revoke <org-id> <capability-key> [--reason "<why>"]
   node packages/db/platform.mjs organization limit set   <org-id> station_count <value> --reason "<why>"
   node packages/db/platform.mjs organization limit clear <org-id> station_count [--reason "<why>"]
+  node packages/db/platform.mjs organization plan set <org-id> CORE [--reason "<why>"]
+  node packages/db/platform.mjs organization subscription set <org-id> <STATUS> [--until <iso>] [--reason "<why>"]
+      STATUS: TRIALING | ACTIVE | PAST_DUE | RESTRICTED | CANCELED | SUSPENDED
+      PAST_DUE without --until applies the standard 7-day payment grace period.
+  node packages/db/platform.mjs organization subscription confirm-payment <org-id> [--reason "<why>"]
 
 Env: PUMP_API_URL, SUPABASE_URL, SUPABASE_ANON_KEY,
      PLATFORM_ADMIN_EMAIL, PLATFORM_ADMIN_PASSWORD

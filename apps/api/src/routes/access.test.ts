@@ -70,6 +70,7 @@ describe('GET /access', () => {
       accessUntil: null,
       showWarning: false,
       warningMessage: null,
+      resolution: null,
     });
   });
 
