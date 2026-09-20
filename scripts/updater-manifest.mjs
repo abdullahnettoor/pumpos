@@ -17,6 +17,10 @@
  *   node scripts/updater-manifest.mjs --version 1.2.3 --dir <collected-artifacts> \
  *     --base-url https://github.com/<owner>/<repo>/releases/download/v1.2.3 \
  *     [--notes-file NOTES.md] [--pub-date 2026-05-01T00:00:00Z] > latest.json
+ *
+ * `--notes-file` is the **GitHub Release body**, not the manifest's notes. Only
+ * its `## For operators` section reaches a client, cleaned — see
+ * `operatorNotes` below.
  */
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
@@ -101,6 +105,127 @@ export function collectUpdaterAssets(dir, baseUrl) {
     for (const target of targets) assets.push({ target, name, url, signature });
   }
   return assets;
+}
+
+/**
+ * The heading a release manager writes the operator summary under.
+ *
+ * It lives in the GitHub Release body rather than a committed file because a
+ * PumpOS release adds no commits (see RELEASING.md) and the pipeline already
+ * reads that body. Writing the section is the whole release habit.
+ */
+const OPERATOR_HEADING = /^#{1,6}\s*for operators\s*$/i;
+const MARKDOWN_HEADING = /^#{1,6}\s+/;
+
+/** Lines that are developer changelog furniture, never operator content. */
+const CHANGELOG_FURNITURE = [
+  /^#{1,6}\s*what'?s changed\s*$/i,
+  // GitHub's own trailer, anchored: an operator line that merely mentions a
+  // full changelog is content, not furniture, and deleting it loses a sentence.
+  /^\*{0,2}full changelog\*{0,2}\s*:/i,
+];
+
+/**
+ * Conventional-commit prefixes, in two forms, because they carry different
+ * risks. `feat(scope):` is unambiguous — no English sentence contains it — so
+ * it is stripped wherever it appears. The bare `fix:` form is only stripped at
+ * the start of a line or bullet: mid-sentence it is ordinary prose ("what we
+ * fix: rounding"), and eating the verb would be worse than leaving the prefix.
+ */
+const COMMIT_TYPES = 'feat|fix|perf|docs|ci|test|chore|style|refactor|build|revert';
+const SCOPED_COMMIT_PREFIX = new RegExp(`\\b(${COMMIT_TYPES})\\([^)]*\\)!?:\\s*`, 'gi');
+const COMMIT_PREFIX = new RegExp(`^(${COMMIT_TYPES})!?:\\s*`, 'i');
+
+/**
+ * Pull the `## For operators` section out of a GitHub Release body.
+ *
+ * Everything else on the release — the auto-generated changelog, the compare
+ * link, whatever else a human wrote — stays on the Release, where developers
+ * read it. No section means no notes, which is the correct outcome: the version
+ * and the action alone beat three lines of commit subjects.
+ */
+export function extractOperatorSummary(body) {
+  if (typeof body !== 'string') return '';
+  const lines = body.replace(/\r\n?/g, '\n').split('\n');
+  const start = lines.findIndex((line) => OPERATOR_HEADING.test(line.trim()));
+  if (start === -1) return '';
+  const rest = lines.slice(start + 1);
+  const end = rest.findIndex((line) => MARKDOWN_HEADING.test(line.trim()));
+  return (end === -1 ? rest : rest.slice(0, end)).join('\n').trim();
+}
+
+/**
+ * Clean whatever was written into plain text an operator can read.
+ *
+ * This runs at the generator rather than the renderer on purpose: stripping
+ * here means a stray pull-request link cannot reach a client even when someone
+ * hand-writes one into the operators section, and it keeps the desktop shell
+ * free of any need to interpret markup at all.
+ */
+export function normalizeOperatorNotes(raw, maxLength = 4000) {
+  if (typeof raw !== 'string') return '';
+  const cleaned = raw
+    .replace(/\r\n?/g, '\n')
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, '')
+    .split('\n')
+    .filter((line) => !CHANGELOG_FURNITURE.some((pattern) => pattern.test(line.trim())))
+    .map((line) => cleanLine(line))
+    .join('\n')
+    // Collapse the blank runs that stripping whole lines leaves behind.
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/[ \t]+\n/g, '\n')
+    .trim();
+  return cleaned.length > maxLength ? `${cleaned.slice(0, maxLength).trim()}…` : cleaned;
+}
+
+function cleanLine(line) {
+  let text = line
+    // "… by @user in https://github.com/…" — the whole trailer, not its pieces.
+    .replace(/\s+by\s+@[\w-]+\s+in\s+\S+/gi, '')
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
+    // A markdown link keeps its text and loses its destination.
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/<https?:\/\/[^>]*>/gi, '')
+    .replace(/\bhttps?:\/\/\S+/gi, '')
+    .replace(/\bwww\.\S+/gi, '')
+    .replace(/(^|[\s(])@[\w-]+/g, '$1')
+    .replace(/^#{1,6}\s+/, '')
+    .replace(SCOPED_COMMIT_PREFIX, '');
+
+  // Bullets are normalised before emphasis is stripped, or a `*` bullet would
+  // be read as an emphasis marker and the line would lose its bullet entirely.
+  const bullet = /^(\s*)[-*+]\s+/.exec(text);
+  if (bullet) text = `${bullet[1]}- ${text.slice(bullet[0].length)}`;
+
+  const body = stripEmphasis(bullet ? text.slice(bullet[1].length + 2) : text).replace(
+    COMMIT_PREFIX,
+    '',
+  );
+  text = bullet ? `${bullet[1]}- ${body}` : body;
+
+  // Stripping a URL or a mention mid-sentence leaves a double space behind.
+  return text.replace(/[ \t]{2,}/g, ' ').replace(/\s+$/, '');
+}
+
+/**
+ * Drop markdown emphasis without touching identifiers.
+ *
+ * `*`, backtick and `~` are punctuation an operator summary has no other use
+ * for. `_` is not: it carries `business_day_id` and `latest.json`-style names,
+ * so only paired emphasis around a word boundary goes — mangling a column name
+ * into prose would corrupt the very text this exists to make legible.
+ */
+function stripEmphasis(text) {
+  return text.replace(/[*`~]/g, '').replace(/(^|[^\w_])_{1,2}([^_]+?)_{1,2}(?=[^\w_]|$)/g, '$1$2');
+}
+
+/**
+ * The one call the pipeline makes: a release body in, operator notes out.
+ * Empty is a valid, publishable answer.
+ */
+export function operatorNotes(releaseBody) {
+  return normalizeOperatorNotes(extractOperatorSummary(releaseBody));
 }
 
 export function buildUpdaterManifest({ version, notes = '', pubDate, assets }) {
@@ -198,7 +323,8 @@ function main(argv) {
   if (!args.dir || !args['base-url']) {
     throw new Error('Usage: --version X.Y.Z --dir <artifacts> --base-url <https://...>');
   }
-  const notes = args['notes-file'] ? readFileSync(args['notes-file'], 'utf8').trim() : '';
+  // The file is the release *body*; only its operator section reaches clients.
+  const notes = args['notes-file'] ? operatorNotes(readFileSync(args['notes-file'], 'utf8')) : '';
   const manifest = buildUpdaterManifest({
     version,
     notes,

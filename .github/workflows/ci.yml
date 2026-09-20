@@ -54,6 +54,46 @@ jobs:
       - name: Build
         run: npm run build --workspaces --if-present
 
+  # Guarantees only a real database can make: partial unique indexes, CHECK
+  # constraints, RLS denial for tenant roles, and `SELECT ... FOR UPDATE`
+  # actually serializing two concurrent Station-capacity checks. Fakes cannot
+  # show any of those, and each one is a promise a customer would feel.
+  #
+  # Separate job because it needs a service container the other checks do not,
+  # and because a database failure should never read as a unit-test failure.
+  integration:
+    name: integration (postgres)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: pumpos_test
+        ports:
+          - 5432:5432
+        # Give the job a database that is actually accepting connections.
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Build packages
+        run: npx tsc -b
+      - name: Integration tests
+        env:
+          # The suite creates and drops its own schema, so it is safe against
+          # any database; CI still gets a throwaway one.
+          TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/pumpos_test
+        run: npx vitest run apps/api/src/infra/repositories/__integration__
+
   # Separate job so a lint failure is instantly distinguishable from a broken
   # test, and so lint problems never mask a real regression.
   #

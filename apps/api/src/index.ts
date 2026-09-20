@@ -31,6 +31,13 @@ import { shiftsRouter } from './routes/shifts.js';
 import { transactionsRouter } from './routes/transactions.js';
 import { dssrRouter } from './routes/dssr.js';
 import { financeRouter } from './routes/finance.js';
+import { accessRouter } from './routes/access.js';
+import { platformAccessRouter } from './routes/platform-access.js';
+import { RestoreOrganization, SuspendOrganization } from '@pump/core';
+import type { AccessChangeResult } from '@pump/core';
+import { DrizzleOrganizationSubscriptionRepository } from './infra/repositories/organization-access.repo.js';
+import { buildPlatformContext } from './infra/context.js';
+import { runInTransaction } from './infra/transaction.js';
 import { idempotency } from './infra/idempotency.js';
 import { verifySupabaseJwt } from './infra/supabase-jwt.js';
 import { SupabaseAdmin } from './infra/supabase-admin.js';
@@ -797,6 +804,8 @@ api.route('/shifts', shiftsRouter);
 api.route('/transactions', transactionsRouter);
 api.route('/dssr', dssrRouter);
 api.route('/finance', financeRouter);
+// Organization access document (role-filtered, presentation only).
+api.route('/access', accessRouter);
 
 // Mount authenticated group
 app.route('/api', api);
@@ -1056,8 +1065,60 @@ function deriveOwnerStatus(
   return 'invited';
 }
 
+/**
+ * Was this Organization's Owner invite revoked (rather than merely
+ * deactivated)? Both end at SUSPENDED, so the distinction is read from the
+ * Owner row, which revocation clears and deactivation does not: revoking
+ * unlinks `auth_user_id` so the address can be re-invited, deactivation keeps
+ * it so the same login can be restored.
+ *
+ * Derived, not stored: the subscription column carries the Subscription
+ * Status and nothing else.
+ */
+function isRevokedOwner(
+  owner: { status: string; authUserId: string | null } | null | undefined,
+  suspendedAt: Date | null,
+): boolean {
+  if (!owner) return suspendedAt !== null;
+  return owner.status === 'INACTIVE' && owner.authUserId === null;
+}
+
+/**
+ * Stop or restore an Organization from a platform command.
+ *
+ * Revoking an invite and deactivating an Owner are manual stops, so they set
+ * the suspension column and leave the billing lifecycle alone — an
+ * Organization that was mid-grace when it was stopped is still mid-grace when
+ * it is restored. State and event commit together through the use-case, and a
+ * no-op emits nothing.
+ */
+async function setOrganizationSuspension(
+  c: any,
+  org: { id: string },
+  suspended: boolean,
+  reason: string,
+): Promise<void> {
+  const deps = (tx: DbClient) => ({
+    subscriptions: new DrizzleOrganizationSubscriptionRepository(tx),
+  });
+  const result = await runInTransaction<AccessChangeResult<{ suspendedAt: string | null }>>(
+    c.var.db as DbClient,
+    (tx, events) => {
+      const command = { reason, actor: c.var.platformAdmin };
+      const ctx = buildPlatformContext(c.var.platformAdmin, org.id);
+      return suspended
+        ? new SuspendOrganization({ ...deps(tx), events }).execute(command, ctx)
+        : new RestoreOrganization({ ...deps(tx), events }).execute(command, ctx);
+    },
+  );
+  if (!result.success) {
+    throw new Error(`Could not update organization suspension: ${result.error.message}`);
+  }
+}
+
 // GET /platform/owners — one row per org (its Owner user), enriched with auth
-// state. Revoked orgs are hidden by default; pass ?includeRevoked=1 to show them.
+// state. Suspended orgs (revoked or deactivated) are hidden by default; pass
+// ?includeRevoked=1 to show them.
 platform.get('/owners', async (c) => {
   const db = c.var.db;
   const includeRevoked = ['1', 'true', 'yes'].includes(
@@ -1069,30 +1130,46 @@ platform.get('/owners', async (c) => {
     .select()
     .from(schema.organizations)
     .orderBy(desc(schema.organizations.createdAt));
-  const orgs = includeRevoked ? allOrgs : allOrgs.filter((o) => o.subscriptionStatus !== 'Revoked');
-  if (orgs.length === 0) {
+  if (allOrgs.length === 0) {
     return c.json({ success: true, data: [] });
   }
-  const orgIds = orgs.map((o) => o.id);
   const owners = await db
     .select()
     .from(schema.users)
-    .where(and(inArray(schema.users.organizationId, orgIds), eq(schema.users.role, 'Owner')));
-  const stationRows = await db
-    .select({
-      organizationId: schema.stations.organizationId,
-      onboardingStatus: schema.stations.onboardingStatus,
-      isActive: schema.stations.isActive,
-    })
-    .from(schema.stations)
-    .where(inArray(schema.stations.organizationId, orgIds));
-
+    .where(
+      and(
+        inArray(
+          schema.users.organizationId,
+          allOrgs.map((o) => o.id),
+        ),
+        eq(schema.users.role, 'Owner'),
+      ),
+    );
   const ownersByOrg = new Map<string, (typeof owners)[number]>();
   for (const u of owners) {
     // If multiple Owner rows exist, prefer the linked (authUserId set) one.
     const prev = ownersByOrg.get(u.organizationId);
     if (!prev || (!prev.authUserId && u.authUserId)) ownersByOrg.set(u.organizationId, u);
   }
+
+  // Revoked invites are hidden by default; a deactivated Organization stays
+  // listed, as it always has.
+  const orgs = includeRevoked
+    ? allOrgs
+    : allOrgs.filter((o) => !isRevokedOwner(ownersByOrg.get(o.id), o.suspendedAt));
+  const orgIds = orgs.map((o) => o.id);
+
+  const stationRows = orgIds.length
+    ? await db
+        .select({
+          organizationId: schema.stations.organizationId,
+          onboardingStatus: schema.stations.onboardingStatus,
+          isActive: schema.stations.isActive,
+        })
+        .from(schema.stations)
+        .where(inArray(schema.stations.organizationId, orgIds))
+    : [];
+
   const stationCounts = new Map<string, { total: number; ready: number }>();
   for (const s of stationRows) {
     const bucket = stationCounts.get(s.organizationId) ?? { total: 0, ready: 0 };
@@ -1343,10 +1420,10 @@ platform.post('/owners/:orgId/revoke', async (c) => {
       .set({ status: 'INACTIVE', authUserId: null, updatedAt: new Date() })
       .where(eq(schema.users.id, owner.id));
   }
-  await db
-    .update(schema.organizations)
-    .set({ subscriptionStatus: 'Revoked', updatedAt: new Date() })
-    .where(eq(schema.organizations.id, org.id));
+  // Revoking an invite and deactivating an Owner both mean "PumpOS stopped
+  // this Organization", which is SUSPENDED in the typed model. Which of the
+  // two it was stays readable from the Owner row and from the events.
+  await setOrganizationSuspension(c, org, true, 'owner invite revoked');
   await appendPlatformEvent(
     db,
     buildPlatformEvent(
@@ -1395,10 +1472,12 @@ async function setOwnerActive(c: any, active: boolean): Promise<Response> {
     .update(schema.users)
     .set({ status: active ? 'ACTIVE' : 'INACTIVE', updatedAt: new Date() })
     .where(eq(schema.users.id, owner.id));
-  await db
-    .update(schema.organizations)
-    .set({ subscriptionStatus: active ? 'Active' : 'Deactivated', updatedAt: new Date() })
-    .where(eq(schema.organizations.id, org.id));
+  await setOrganizationSuspension(
+    c,
+    org,
+    !active,
+    active ? 'owner reactivated' : 'owner deactivated',
+  );
   await appendPlatformEvent(
     db,
     buildPlatformEvent(
@@ -1414,6 +1493,9 @@ async function setOwnerActive(c: any, active: boolean): Promise<Response> {
 
 platform.post('/owners/:orgId/deactivate', (c) => setOwnerActive(c, false));
 platform.post('/owners/:orgId/reactivate', (c) => setOwnerActive(c, true));
+
+// Organization access administration (grants + Limit overrides).
+platform.route('/organizations', platformAccessRouter);
 
 app.route('/platform', platform);
 

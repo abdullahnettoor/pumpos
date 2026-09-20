@@ -1,0 +1,183 @@
+name: Desktop preview
+
+# A desktop build of a `dev` commit, for trying a change on real macOS and
+# Windows before it becomes a release.
+#
+# ── Why this waits for a human ────────────────────────────────────────────────
+# macOS runners bill at 10x and Windows at 2x. Building on every `dev` merge
+# would spend a large share of the Actions budget on builds nobody asked for —
+# theoretical while this repository is public, real the moment it is private.
+# So the job is queued and then waits on an approval: a job waiting on an
+# environment approval consumes no runner minutes, which makes ignoring it free.
+#
+# ── Why a preview is not a release ───────────────────────────────────────────
+# A preview is a BUILD, not a channel. It installs by hand, it updates nothing,
+# and nothing updates to it:
+#   - its own bundle identifier and product name, so it installs ALONGSIDE an
+#     operator's production PumpOS instead of replacing it;
+#   - a version of `X.Y.Z-preview.<sha>`, which names the commit and — being a
+#     SemVer prerelease — sorts below the release it derives from;
+#   - `VITE_APP_ENV=preview`, which the desktop shell already resolves into a
+#     Preview badge and a disabled updater (apps/desktop/src/buildEnv.ts);
+#   - no updater artifacts and no signatures, asserted before upload.
+#
+# The updater signing key is unreachable from here regardless: the
+# `desktop-signing` environment is restricted to `main`, so a `dev`-triggered
+# run cannot read it even if this workflow asked. Nothing below asks.
+#
+# Linux is not a target.
+
+# Manual only, and deliberately so. The first design queued a build on every
+# desktop-affecting merge to `dev` and relied on the `desktop-preview`
+# environment's required reviewer to hold it. On the first real run the gate did
+# NOT engage: the deployment went straight to in_progress, with no waiting state
+# and no approval recorded, and both runners built unattended — precisely the
+# cost this feature exists to prevent.
+#
+# `workflow_dispatch` needs no such guarantee. Nothing runs unless a human asks,
+# by construction rather than by configuration. The environment declaration
+# stays below: if the gate does hold it is a second lock, and if it does not,
+# nothing is lost. The push trigger can return once the gate is proven.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch or commit to build (defaults to the selected ref)
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  # Deliberately NOT the release group: a preview sitting on an approval must
+  # never queue behind or delay a production release. A newer preview supersedes
+  # an older one still waiting — nobody wants yesterday's build approved today.
+  group: desktop-preview-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Preview desktop (${{ matrix.target }})
+    # This is the gate. `desktop-preview` carries a required reviewer and NO
+    # secrets — the approval is the whole point of the environment.
+    environment: desktop-preview
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            target: darwin-universal
+            args: '--target universal-apple-darwin'
+            bundles: dmg
+            rust-targets: 'aarch64-apple-darwin,x86_64-apple-darwin'
+            bundle-dir: apps/desktop/src-tauri/target/universal-apple-darwin/release/bundle
+          - platform: windows-latest
+            target: windows-x86_64
+            args: ''
+            # NSIS only. The MSI bundler rejects our version outright:
+            # "optional pre-release identifier in app version must be
+            # numeric-only" — and `-preview.<sha>` is the whole point. NSIS is
+            # also the format PumpOS updates through, so it is the one that
+            # matters to test.
+            bundles: nsis
+            rust-targets: ''
+            bundle-dir: apps/desktop/src-tauri/target/release/bundle
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Tags are how the preview learns which release line it belongs to.
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      # Pinned: third-party, and it installs the toolchain that compiles the app.
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        with:
+          targets: ${{ matrix.rust-targets }}
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: apps/desktop/src-tauri
+
+      - run: npm ci
+
+      - name: Derive the preview identity
+        id: preview
+        shell: bash
+        run: |
+          # The base is the latest RELEASED version, not package.json. The repo
+          # stamps versions at release time and never commits them (see
+          # RELEASING.md), so package.json on dev still reads 1.0.0 — a preview
+          # built from it would claim a version that never shipped. Tags live on
+          # main merge commits and are not ancestors of dev, so ask for the
+          # newest tag outright rather than describing this commit.
+          base="$(git tag --list 'v*.*.*' --sort=-version:refname | head -n 1 | sed 's/^v//')"
+          if [ -z "$base" ]; then
+            base="$(node -p "require('./package.json').version")"
+            echo "::notice::No release tags found; basing the preview on package.json ($base)."
+          fi
+          version="$(node scripts/preview-desktop.mjs version "$base" "${{ github.sha }}")"
+          node scripts/preview-desktop.mjs config "$base" "${{ github.sha }}" \
+            > apps/desktop/src-tauri/tauri.preview.conf.json
+          cat apps/desktop/src-tauri/tauri.preview.conf.json
+          echo "::notice::Preview version $version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Build shared UI
+        run: npm run build --workspace=@pump/ui
+
+      # `tauri build` directly, NOT tauri-action. The action packages the macOS
+      # .app into a .app.tar.gz unconditionally — an updater artifact — even
+      # though Tauri itself honoured `createUpdaterArtifacts: false` and emitted
+      # only the .app and the .dmg. The isolation gate caught it on the first
+      # run. A preview has no use for the action's release-upload machinery
+      # anyway: the artifacts are uploaded below.
+      #
+      # No signing environment variables: this build must not be able to sign
+      # anything, even by accident.
+      - name: Build the preview
+        working-directory: apps/desktop
+        shell: bash
+        env:
+          # Resolves to the Preview badge and a disabled updater in the shell.
+          VITE_APP_ENV: preview
+          # Preview backends, matching the other preview surfaces — a beta build
+          # must not be pointed at a live station's data.
+          VITE_API_URL: ${{ vars.PREVIEW_API_URL || 'https://api.pumpos.abdullahnettoor.com' }}
+          VITE_SUPABASE_URL: ${{ secrets.DEV_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.DEV_SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          npm run tauri -- build ${{ matrix.args }} \
+            --bundles ${{ matrix.bundles }} \
+            --config src-tauri/tauri.preview.conf.json
+
+      # Asserted, not assumed: a preview carrying a signature, an updater
+      # artifact, or a release version is indistinguishable from a real release
+      # to anything that finds it later.
+      - name: Verify the preview is isolated
+        shell: bash
+        run: |
+          node scripts/preview-desktop.mjs verify \
+            "${{ matrix.bundle-dir }}" "${{ steps.preview.outputs.version }}"
+
+      - name: Collect installers
+        shell: bash
+        run: |
+          mkdir -p preview-artifacts
+          shopt -s nullglob
+          files=(
+            "${{ matrix.bundle-dir }}"/dmg/*.dmg
+            "${{ matrix.bundle-dir }}"/nsis/*-setup.exe
+          )
+          for f in "${files[@]}"; do cp "$f" preview-artifacts/; done
+          ls -l preview-artifacts
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: pumpos-preview-${{ steps.preview.outputs.version }}-${{ matrix.target }}
+          path: preview-artifacts/
+          if-no-files-found: error
+          # Bounded on purpose: unreleased builds should not accumulate.
+          retention-days: 14

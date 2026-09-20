@@ -52,6 +52,10 @@ import {
 import { LedgerPostingService } from '../infra/ledger-posting.js';
 import { DrizzleStockVarianceRepository } from '../infra/repositories/inventory-repositories.js';
 import { DrizzleShiftSummaryProjector } from '../infra/shift-summary-projection.js';
+import { sendResult } from '../infra/send-result.js';
+import { writePolicyGuard } from '../infra/write-policy-guard.js';
+import { validateJson } from '../utils/validator.js';
+import { z } from 'zod';
 
 type Variables = {
   db: DbClient;
@@ -60,20 +64,25 @@ type Variables = {
 
 export const shiftsRouter = new Hono<{ Variables: Variables }>();
 
-const STATUS_BY_CODE: Record<string, number> = {
-  VALIDATION_ERROR: 400,
-  NOT_FOUND: 404,
-  CONFLICT: 409,
-  FORBIDDEN: 403,
-  UNAUTHORIZED: 401,
-  INVARIANT_VIOLATION: 409,
-};
+/**
+ * Ids that arrive in the request body and are used to look a record up.
+ *
+ * They are validated at the edge rather than inside each handler, because an
+ * absent or non-string id used to reach the driver as `undefined` and come
+ * back as a bare 500 — outside the response envelope, and reported as a server
+ * fault when it is a malformed request (#205).
+ *
+ * Both schemas pass the rest of the body through: the command payloads are
+ * validated by the use-cases that own them, and duplicating those shapes here
+ * would give the same rule two homes.
+ */
+const shiftIdBody = z
+  .object({ shiftId: z.string().trim().min(1, 'shiftId is required') })
+  .passthrough();
 
-function sendResult<T>(c: any, result: Result<T>) {
-  if (result.success) return c.json({ success: true, data: result.data });
-  const status = STATUS_BY_CODE[result.error.code] ?? 400;
-  return c.json({ success: false, error: result.error }, status);
-}
+const stationIdBody = z
+  .object({ stationId: z.string().trim().min(1, 'stationId is required') })
+  .passthrough();
 
 function canManageDay(role: Role): boolean {
   return role === 'Owner' || role === 'Manager';
@@ -1309,239 +1318,233 @@ shiftsRouter.get('/handovers', async (c) => {
 });
 
 // POST /api/shifts/handovers
-shiftsRouter.post('/handovers', async (c) => {
-  const db = c.var.db;
-  const user = c.var.user;
-  if (!canRecordHandover(user.role)) {
-    return c.json(
-      {
-        success: false,
-        error: { code: 'FORBIDDEN', message: 'Insufficient permissions to record a handover' },
-      },
-      403,
-    );
-  }
-  const body = await c.req.json().catch(() => ({}));
-  const parsed = attendantHandoverSchema.safeParse(body);
-  if (!parsed.success) {
-    return c.json(
-      { success: false, error: { code: 'VALIDATION_ERROR', message: 'Invalid Handover request' } },
-      400,
-    );
-  }
-  const {
-    shiftId,
-    userId,
-    duId,
-    cashHandedOver,
-    cardHandedOver,
-    upiHandedOver,
-    nozzleReadings,
-    terminalEntries,
-  } = parsed.data;
-  const attendantId = isAttendant(user.role) ? user.id : userId;
-  // Attendants derive userId from their own session, so only shiftId + duId are
-  // required from them; operational roles must name the attendant (userId).
-  if (!attendantId) {
-    return c.json(
-      {
-        success: false,
-        error: { code: 'VALIDATION_ERROR', message: 'shiftId, userId and duId are required' },
-      },
-      400,
-    );
-  }
-  const [shift] = await db
-    .select()
-    .from(schema.shifts)
-    .where(
-      and(eq(schema.shifts.id, shiftId), eq(schema.shifts.organizationId, user.organizationId)),
-    )
-    .limit(1);
-  if (!shift) {
-    return c.json(
-      { success: false, error: { code: 'NOT_FOUND', message: 'Shift not found' } },
-      404,
-    );
-  }
-  if (
-    !isAuthorizedForStation(user, {
-      organizationId: user.organizationId,
-      stationId: shift.stationId,
-    })
-  ) {
-    return c.json(
-      { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
-      403,
-    );
-  }
-  const result = await runInTransaction(db, async (tx, events) => {
-    await lockStationInventory(tx, user.organizationId, shift.stationId);
-    return new RecordHandover({
-      shifts: new DrizzleShiftRepository(tx),
-      businessDays: new DrizzleBusinessDayRepository(tx),
-      context: new DrizzleHandoverContextReader(tx),
-      handovers: new DrizzleHandoverRepository(tx),
-      events,
-    }).execute(
-      {
-        shiftId,
-        attendantId,
-        duId,
-        cashHandedOver,
-        cardHandedOver,
-        upiHandedOver,
-        nozzleReadings,
-        terminalEntries,
-      },
-      buildContext(user, { stationId: shift.stationId, businessDayId: shift.businessDayId }),
-    );
-  });
-  return sendResult(c, result);
-});
+shiftsRouter.post(
+  '/handovers',
+  writePolicyGuard('POST /shifts/handovers'),
+  validateJson(shiftIdBody),
+  async (c) => {
+    const db = c.var.db;
+    const user = c.var.user;
+    if (!canRecordHandover(user.role)) {
+      return c.json(
+        {
+          success: false,
+          error: { code: 'FORBIDDEN', message: 'Insufficient permissions to record a handover' },
+        },
+        403,
+      );
+    }
+    const body = await c.req.json().catch(() => ({}));
+    const parsed = attendantHandoverSchema.safeParse(body);
+    if (!parsed.success) {
+      return c.json(
+        {
+          success: false,
+          error: { code: 'VALIDATION_ERROR', message: 'Invalid Handover request' },
+        },
+        400,
+      );
+    }
+    const {
+      shiftId,
+      userId,
+      duId,
+      cashHandedOver,
+      cardHandedOver,
+      upiHandedOver,
+      nozzleReadings,
+      terminalEntries,
+    } = parsed.data;
+    const attendantId = isAttendant(user.role) ? user.id : userId;
+    // Attendants derive userId from their own session, so only shiftId + duId are
+    // required from them; operational roles must name the attendant (userId).
+    if (!attendantId) {
+      return c.json(
+        {
+          success: false,
+          error: { code: 'VALIDATION_ERROR', message: 'shiftId, userId and duId are required' },
+        },
+        400,
+      );
+    }
+    const [shift] = await db
+      .select()
+      .from(schema.shifts)
+      .where(
+        and(eq(schema.shifts.id, shiftId), eq(schema.shifts.organizationId, user.organizationId)),
+      )
+      .limit(1);
+    if (!shift) {
+      return c.json(
+        { success: false, error: { code: 'NOT_FOUND', message: 'Shift not found' } },
+        404,
+      );
+    }
+    if (
+      !isAuthorizedForStation(user, {
+        organizationId: user.organizationId,
+        stationId: shift.stationId,
+      })
+    ) {
+      return c.json(
+        { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
+        403,
+      );
+    }
+    const result = await runInTransaction(db, async (tx, events) => {
+      await lockStationInventory(tx, user.organizationId, shift.stationId);
+      return new RecordHandover({
+        shifts: new DrizzleShiftRepository(tx),
+        businessDays: new DrizzleBusinessDayRepository(tx),
+        context: new DrizzleHandoverContextReader(tx),
+        handovers: new DrizzleHandoverRepository(tx),
+        events,
+      }).execute(
+        {
+          shiftId,
+          attendantId,
+          duId,
+          cashHandedOver,
+          cardHandedOver,
+          upiHandedOver,
+          nozzleReadings,
+          terminalEntries,
+        },
+        buildContext(user, { stationId: shift.stationId, businessDayId: shift.businessDayId }),
+      );
+    });
+    return sendResult(c, result);
+  },
+);
 
 // POST /api/shifts/open
-shiftsRouter.post('/open', async (c) => {
-  const user = c.var.user;
-  if (!canOpenShift(user.role)) {
-    return c.json(
-      {
-        success: false,
-        error: { code: 'FORBIDDEN', message: 'Insufficient permissions to open a shift' },
-      },
-      403,
-    );
-  }
-  const body = await c.req.json().catch(() => ({}));
-  if (
-    !isAuthorizedForStation(user, {
-      organizationId: user.organizationId,
-      stationId: body?.stationId,
-    })
-  ) {
-    return c.json(
-      { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
-      403,
-    );
-  }
-  const db = c.var.db;
-  const clock = await loadStationClock(db, body?.stationId);
-  const result = await runInTransaction(db, async (tx, events) => {
-    await lockStationInventory(tx, user.organizationId, body?.stationId);
-    return new OpenShift({
-      shifts: new DrizzleShiftRepository(tx),
-      businessDays: new DrizzleBusinessDayRepository(tx),
-      nozzles: new DrizzleNozzleRepository(tx),
-      nozzleReadings: new DrizzleNozzleReadingRepository(tx),
-      fuelPrices: new DrizzleFuelPriceRepository(tx),
-      events,
-    }).execute(body, buildContext(user, { stationId: body?.stationId, ...clock }));
-  });
-  return sendResult(c, result);
-});
+shiftsRouter.post(
+  '/open',
+  writePolicyGuard('POST /shifts/open'),
+  validateJson(stationIdBody),
+  async (c) => {
+    const user = c.var.user;
+    if (!canOpenShift(user.role)) {
+      return c.json(
+        {
+          success: false,
+          error: { code: 'FORBIDDEN', message: 'Insufficient permissions to open a shift' },
+        },
+        403,
+      );
+    }
+    const body = await c.req.json().catch(() => ({}));
+    if (
+      !isAuthorizedForStation(user, {
+        organizationId: user.organizationId,
+        stationId: body?.stationId,
+      })
+    ) {
+      return c.json(
+        { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
+        403,
+      );
+    }
+    const db = c.var.db;
+    const clock = await loadStationClock(db, body?.stationId);
+    const result = await runInTransaction(db, async (tx, events) => {
+      await lockStationInventory(tx, user.organizationId, body?.stationId);
+      return new OpenShift({
+        shifts: new DrizzleShiftRepository(tx),
+        businessDays: new DrizzleBusinessDayRepository(tx),
+        nozzles: new DrizzleNozzleRepository(tx),
+        nozzleReadings: new DrizzleNozzleReadingRepository(tx),
+        fuelPrices: new DrizzleFuelPriceRepository(tx),
+        events,
+      }).execute(body, buildContext(user, { stationId: body?.stationId, ...clock }));
+    });
+    return sendResult(c, result);
+  },
+);
 
 // PUT /api/shifts/readings
-shiftsRouter.put('/readings', async (c) => {
-  const user = c.var.user;
-  const body = await c.req.json().catch(() => ({}));
-  const db = c.var.db;
-  if (typeof body?.shiftId !== 'string' || body.shiftId.length === 0) {
-    return c.json(
-      {
-        success: false,
-        error: { code: 'VALIDATION_ERROR', message: 'Invalid RecordNozzleReadings command' },
-      },
-      400,
-    );
-  }
-  const [shift] = await db
-    .select({ stationId: schema.shifts.stationId, businessDayId: schema.shifts.businessDayId })
-    .from(schema.shifts)
-    .where(
-      and(
-        eq(schema.shifts.id, body.shiftId),
-        eq(schema.shifts.organizationId, user.organizationId),
-      ),
-    )
-    .limit(1);
-  if (!shift) {
-    return c.json(
-      { success: false, error: { code: 'NOT_FOUND', message: 'Shift not found' } },
-      404,
-    );
-  }
-  if (
-    !isAuthorizedForStation(user, {
-      organizationId: user.organizationId,
-      stationId: shift.stationId,
-    })
-  ) {
-    return c.json(
-      { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
-      403,
-    );
-  }
-  const result = await runInTransaction(db, async (tx, events) => {
-    await lockStationInventory(tx, user.organizationId, shift.stationId);
-    return new RecordNozzleReadings({
-      shifts: new DrizzleShiftRepository(tx),
-      businessDays: new DrizzleBusinessDayRepository(tx),
-      nozzleReadings: new DrizzleNozzleReadingRepository(tx),
-      events,
-    }).execute(
-      body,
-      buildContext(user, { stationId: shift.stationId, businessDayId: shift.businessDayId }),
-    );
-  });
-  return sendResult(c, result);
-});
+shiftsRouter.put(
+  '/readings',
+  writePolicyGuard('PUT /shifts/readings'),
+  validateJson(shiftIdBody),
+  async (c) => {
+    const user = c.var.user;
+    const body = await c.req.json().catch(() => ({}));
+    const db = c.var.db;
+    if (typeof body?.shiftId !== 'string' || body.shiftId.length === 0) {
+      return c.json(
+        {
+          success: false,
+          error: { code: 'VALIDATION_ERROR', message: 'Invalid RecordNozzleReadings command' },
+        },
+        400,
+      );
+    }
+    const [shift] = await db
+      .select({ stationId: schema.shifts.stationId, businessDayId: schema.shifts.businessDayId })
+      .from(schema.shifts)
+      .where(
+        and(
+          eq(schema.shifts.id, body.shiftId),
+          eq(schema.shifts.organizationId, user.organizationId),
+        ),
+      )
+      .limit(1);
+    if (!shift) {
+      return c.json(
+        { success: false, error: { code: 'NOT_FOUND', message: 'Shift not found' } },
+        404,
+      );
+    }
+    if (
+      !isAuthorizedForStation(user, {
+        organizationId: user.organizationId,
+        stationId: shift.stationId,
+      })
+    ) {
+      return c.json(
+        { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
+        403,
+      );
+    }
+    const result = await runInTransaction(db, async (tx, events) => {
+      await lockStationInventory(tx, user.organizationId, shift.stationId);
+      return new RecordNozzleReadings({
+        shifts: new DrizzleShiftRepository(tx),
+        businessDays: new DrizzleBusinessDayRepository(tx),
+        nozzleReadings: new DrizzleNozzleReadingRepository(tx),
+        events,
+      }).execute(
+        body,
+        buildContext(user, { stationId: shift.stationId, businessDayId: shift.businessDayId }),
+      );
+    });
+    return sendResult(c, result);
+  },
+);
 
 // POST /api/shifts/close
-shiftsRouter.post('/close', async (c) => {
-  const user = c.var.user;
-  if (!canCloseShift(user.role)) {
-    return c.json(
-      {
-        success: false,
-        error: { code: 'FORBIDDEN', message: 'Insufficient permissions to close a shift' },
-      },
-      403,
-    );
-  }
-  const body = await c.req.json().catch(() => ({}));
-  const command = { ...(body?.payload ?? {}), shiftId: body?.shiftId };
-  const db = c.var.db;
-  // Authorize the shift's stored station (matches open/readings/reopen): a
-  // Manager assigned to Station A must not close Station B's shift.
-  const [target] = await db
-    .select({ stationId: schema.shifts.stationId })
-    .from(schema.shifts)
-    .where(
-      and(
-        eq(schema.shifts.id, body?.shiftId),
-        eq(schema.shifts.organizationId, user.organizationId),
-      ),
-    )
-    .limit(1);
-  if (!target) {
-    return c.json(
-      { success: false, error: { code: 'NOT_FOUND', message: 'Shift not found' } },
-      404,
-    );
-  }
-  if (
-    !isAuthorizedForStation(user, {
-      organizationId: user.organizationId,
-      stationId: target.stationId,
-    })
-  ) {
-    return c.json(
-      { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
-      403,
-    );
-  }
-  const result = await runInTransaction(db, async (tx, events) => {
-    const [shift] = await tx
+shiftsRouter.post(
+  '/close',
+  writePolicyGuard('POST /shifts/close'),
+  validateJson(shiftIdBody),
+  async (c) => {
+    const user = c.var.user;
+    if (!canCloseShift(user.role)) {
+      return c.json(
+        {
+          success: false,
+          error: { code: 'FORBIDDEN', message: 'Insufficient permissions to close a shift' },
+        },
+        403,
+      );
+    }
+    const body = await c.req.json().catch(() => ({}));
+    const command = { ...(body?.payload ?? {}), shiftId: body?.shiftId };
+    const db = c.var.db;
+    // Authorize the shift's stored station (matches open/readings/reopen): a
+    // Manager assigned to Station A must not close Station B's shift.
+    const [target] = await db
       .select({ stationId: schema.shifts.stationId })
       .from(schema.shifts)
       .where(
@@ -1551,236 +1554,279 @@ shiftsRouter.post('/close', async (c) => {
         ),
       )
       .limit(1);
-    if (shift) await lockStationInventory(tx, user.organizationId, shift.stationId);
-    const r = await new CloseShift({
-      shifts: new DrizzleShiftRepository(tx),
-      nozzles: new DrizzleNozzleRepository(tx),
-      nozzleReadings: new DrizzleNozzleReadingRepository(tx),
-      reconciliation: new DrizzleShiftReconciliationReader(tx),
-      creditSales: new DrizzleCreditSalesReader(tx),
-      stockMovements: new DrizzleStockMovementWriter(tx),
-      summaries: new DrizzleShiftSummaryWriter(tx),
-      events,
-    }).execute(command, buildContext(user));
-    if (r.success) {
-      const snap = r.data.snapshot as any;
-      // Persist the FULL projected presentation snapshot so every read path
-      // (summaries list/detail, shift status) serves stored data without
-      // re-enrichment. projectShiftSummary is idempotent over its own output.
-      const projected = await new DrizzleShiftSummaryProjector(tx).project(
-        r.data.shift,
-        r.data.snapshot,
-      );
-      await new DrizzleShiftSummaryWriter(tx).save(r.data.shift.id, projected);
-      await new LedgerPostingService(tx).postShiftClose(
-        user.organizationId,
-        {
-          id: r.data.shift.id,
-          stationId: r.data.shift.stationId,
-          businessDayId: r.data.shift.businessDayId,
-        },
-        { cashSales: Number(snap?.reconciliation?.cashSales ?? 0) },
+    if (!target) {
+      return c.json(
+        { success: false, error: { code: 'NOT_FOUND', message: 'Shift not found' } },
+        404,
       );
     }
-    return r;
-  });
-  return sendResult(c, result);
-});
+    if (
+      !isAuthorizedForStation(user, {
+        organizationId: user.organizationId,
+        stationId: target.stationId,
+      })
+    ) {
+      return c.json(
+        { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
+        403,
+      );
+    }
+    const result = await runInTransaction(db, async (tx, events) => {
+      const [shift] = await tx
+        .select({ stationId: schema.shifts.stationId })
+        .from(schema.shifts)
+        .where(
+          and(
+            eq(schema.shifts.id, body?.shiftId),
+            eq(schema.shifts.organizationId, user.organizationId),
+          ),
+        )
+        .limit(1);
+      if (shift) await lockStationInventory(tx, user.organizationId, shift.stationId);
+      const r = await new CloseShift({
+        shifts: new DrizzleShiftRepository(tx),
+        nozzles: new DrizzleNozzleRepository(tx),
+        nozzleReadings: new DrizzleNozzleReadingRepository(tx),
+        reconciliation: new DrizzleShiftReconciliationReader(tx),
+        creditSales: new DrizzleCreditSalesReader(tx),
+        stockMovements: new DrizzleStockMovementWriter(tx),
+        summaries: new DrizzleShiftSummaryWriter(tx),
+        events,
+      }).execute(command, buildContext(user));
+      if (r.success) {
+        const snap = r.data.snapshot as any;
+        // Persist the FULL projected presentation snapshot so every read path
+        // (summaries list/detail, shift status) serves stored data without
+        // re-enrichment. projectShiftSummary is idempotent over its own output.
+        const projected = await new DrizzleShiftSummaryProjector(tx).project(
+          r.data.shift,
+          r.data.snapshot,
+        );
+        await new DrizzleShiftSummaryWriter(tx).save(r.data.shift.id, projected);
+        await new LedgerPostingService(tx).postShiftClose(
+          user.organizationId,
+          {
+            id: r.data.shift.id,
+            stationId: r.data.shift.stationId,
+            businessDayId: r.data.shift.businessDayId,
+          },
+          { cashSales: Number(snap?.reconciliation?.cashSales ?? 0) },
+        );
+      }
+      return r;
+    });
+    return sendResult(c, result);
+  },
+);
 
 // POST /api/shifts/reopen
-shiftsRouter.post('/reopen', async (c) => {
-  const user = c.var.user;
-  if (!canReopenShift(user.role)) {
-    return c.json(
-      {
-        success: false,
-        error: { code: 'FORBIDDEN', message: 'Only Owners/Managers can reopen a shift' },
-      },
-      403,
-    );
-  }
-  const body = await c.req.json().catch(() => ({}));
-  const db = c.var.db;
-  const [shift] = await db
-    .select({ stationId: schema.shifts.stationId, businessDayId: schema.shifts.businessDayId })
-    .from(schema.shifts)
-    .where(
-      and(
-        eq(schema.shifts.id, body?.shiftId),
-        eq(schema.shifts.organizationId, user.organizationId),
-      ),
-    )
-    .limit(1);
-  if (
-    shift &&
-    !isAuthorizedForStation(user, {
-      organizationId: user.organizationId,
-      stationId: shift.stationId,
-    })
-  ) {
-    return c.json(
-      { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
-      403,
-    );
-  }
-  const result = await runInTransaction(db, async (tx, events) => {
-    if (shift) await lockStationInventory(tx, user.organizationId, shift.stationId);
-    const businessDays = new DrizzleBusinessDayRepository(tx);
-    const r = await new ReopenShift({
-      shifts: new DrizzleShiftRepository(tx),
-      businessDays,
-      summaries: new DrizzleShiftSummaryWriter(tx),
-      stockVariances: new DrizzleStockVarianceRepository(tx),
-      events,
-    }).execute(
-      body,
-      buildContext(
-        user,
-        shift ? { stationId: shift.stationId, businessDayId: shift.businessDayId } : undefined,
-      ),
-    );
-    // Roll back the shift-close money postings; they will be re-posted on re-close.
-    if (r.success && body?.shiftId)
-      await new LedgerPostingService(tx).reverseShiftClose(body.shiftId);
-    return r;
-  });
-  return sendResult(c, result);
-});
+shiftsRouter.post(
+  '/reopen',
+  writePolicyGuard('POST /shifts/reopen'),
+  validateJson(shiftIdBody),
+  async (c) => {
+    const user = c.var.user;
+    if (!canReopenShift(user.role)) {
+      return c.json(
+        {
+          success: false,
+          error: { code: 'FORBIDDEN', message: 'Only Owners/Managers can reopen a shift' },
+        },
+        403,
+      );
+    }
+    const body = await c.req.json().catch(() => ({}));
+    const db = c.var.db;
+    const [shift] = await db
+      .select({ stationId: schema.shifts.stationId, businessDayId: schema.shifts.businessDayId })
+      .from(schema.shifts)
+      .where(
+        and(
+          eq(schema.shifts.id, body?.shiftId),
+          eq(schema.shifts.organizationId, user.organizationId),
+        ),
+      )
+      .limit(1);
+    if (
+      shift &&
+      !isAuthorizedForStation(user, {
+        organizationId: user.organizationId,
+        stationId: shift.stationId,
+      })
+    ) {
+      return c.json(
+        { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
+        403,
+      );
+    }
+    const result = await runInTransaction(db, async (tx, events) => {
+      if (shift) await lockStationInventory(tx, user.organizationId, shift.stationId);
+      const businessDays = new DrizzleBusinessDayRepository(tx);
+      const r = await new ReopenShift({
+        shifts: new DrizzleShiftRepository(tx),
+        businessDays,
+        summaries: new DrizzleShiftSummaryWriter(tx),
+        stockVariances: new DrizzleStockVarianceRepository(tx),
+        events,
+      }).execute(
+        body,
+        buildContext(
+          user,
+          shift ? { stationId: shift.stationId, businessDayId: shift.businessDayId } : undefined,
+        ),
+      );
+      // Roll back the shift-close money postings; they will be re-posted on re-close.
+      if (r.success && body?.shiftId)
+        await new LedgerPostingService(tx).reverseShiftClose(body.shiftId);
+      return r;
+    });
+    return sendResult(c, result);
+  },
+);
 
 // POST /api/shifts/lock
-shiftsRouter.post('/lock', async (c) => {
-  const user = c.var.user;
-  if (!canManageDay(user.role)) {
-    return c.json(
-      {
-        success: false,
-        error: { code: 'FORBIDDEN', message: 'Only Owners/Managers can lock a shift' },
-      },
-      403,
+shiftsRouter.post(
+  '/lock',
+  writePolicyGuard('POST /shifts/lock'),
+  validateJson(shiftIdBody),
+  async (c) => {
+    const user = c.var.user;
+    if (!canManageDay(user.role)) {
+      return c.json(
+        {
+          success: false,
+          error: { code: 'FORBIDDEN', message: 'Only Owners/Managers can lock a shift' },
+        },
+        403,
+      );
+    }
+    const body = await c.req.json().catch(() => ({}));
+    const db = c.var.db;
+    const [shift] = await db
+      .select({ stationId: schema.shifts.stationId, businessDayId: schema.shifts.businessDayId })
+      .from(schema.shifts)
+      .where(
+        and(
+          eq(schema.shifts.id, body?.shiftId),
+          eq(schema.shifts.organizationId, user.organizationId),
+        ),
+      )
+      .limit(1);
+    if (!shift) {
+      return c.json(
+        { success: false, error: { code: 'NOT_FOUND', message: 'Shift not found' } },
+        404,
+      );
+    }
+    if (
+      !isAuthorizedForStation(user, {
+        organizationId: user.organizationId,
+        stationId: shift.stationId,
+      })
+    ) {
+      return c.json(
+        { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
+        403,
+      );
+    }
+    const result = await runInTransaction(db, (tx, events) =>
+      new LockShift({
+        shifts: new DrizzleShiftRepository(tx),
+        businessDays: new DrizzleBusinessDayRepository(tx),
+        events,
+      }).execute(body, buildContext(user, shift)),
     );
-  }
-  const body = await c.req.json().catch(() => ({}));
-  if (!body?.shiftId) {
-    return c.json(
-      { success: false, error: { code: 'VALIDATION_ERROR', message: 'shiftId is required' } },
-      400,
-    );
-  }
-  const db = c.var.db;
-  const [shift] = await db
-    .select({ stationId: schema.shifts.stationId, businessDayId: schema.shifts.businessDayId })
-    .from(schema.shifts)
-    .where(
-      and(
-        eq(schema.shifts.id, body?.shiftId),
-        eq(schema.shifts.organizationId, user.organizationId),
-      ),
-    )
-    .limit(1);
-  if (!shift) {
-    return c.json(
-      { success: false, error: { code: 'NOT_FOUND', message: 'Shift not found' } },
-      404,
-    );
-  }
-  if (
-    !isAuthorizedForStation(user, {
-      organizationId: user.organizationId,
-      stationId: shift.stationId,
-    })
-  ) {
-    return c.json(
-      { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
-      403,
-    );
-  }
-  const result = await runInTransaction(db, (tx, events) =>
-    new LockShift({
-      shifts: new DrizzleShiftRepository(tx),
-      businessDays: new DrizzleBusinessDayRepository(tx),
-      events,
-    }).execute(body, buildContext(user, shift)),
-  );
-  return sendResult(c, result);
-});
+    return sendResult(c, result);
+  },
+);
 
 // POST /api/shifts/business-day/open
-shiftsRouter.post('/business-day/open', async (c) => {
-  const user = c.var.user;
-  if (!canManageDay(user.role)) {
-    return c.json(
-      {
-        success: false,
-        error: { code: 'FORBIDDEN', message: 'Only Owners/Managers can open a business day' },
-      },
-      403,
+shiftsRouter.post(
+  '/business-day/open',
+  writePolicyGuard('POST /shifts/business-day/open'),
+  validateJson(stationIdBody),
+  async (c) => {
+    const user = c.var.user;
+    if (!canManageDay(user.role)) {
+      return c.json(
+        {
+          success: false,
+          error: { code: 'FORBIDDEN', message: 'Only Owners/Managers can open a business day' },
+        },
+        403,
+      );
+    }
+    const body = await c.req.json().catch(() => ({}));
+    const db = c.var.db;
+    if (
+      !body?.stationId ||
+      !isAuthorizedForStation(user, {
+        organizationId: user.organizationId,
+        stationId: body.stationId,
+      })
+    ) {
+      return c.json(
+        { success: false, error: { code: 'FORBIDDEN', message: 'No access to this Station' } },
+        403,
+      );
+    }
+    const clock = await loadStationClock(db, body?.stationId);
+    const result = await runInTransaction(db, (tx, events) =>
+      new OpenBusinessDay({ repository: new DrizzleBusinessDayRepository(tx), events }).execute(
+        body,
+        buildContext(user, { stationId: body?.stationId, ...clock }),
+      ),
     );
-  }
-  const body = await c.req.json().catch(() => ({}));
-  const db = c.var.db;
-  if (
-    !body?.stationId ||
-    !isAuthorizedForStation(user, {
-      organizationId: user.organizationId,
-      stationId: body.stationId,
-    })
-  ) {
-    return c.json(
-      { success: false, error: { code: 'FORBIDDEN', message: 'No access to this Station' } },
-      403,
-    );
-  }
-  const clock = await loadStationClock(db, body?.stationId);
-  const result = await runInTransaction(db, (tx, events) =>
-    new OpenBusinessDay({ repository: new DrizzleBusinessDayRepository(tx), events }).execute(
-      body,
-      buildContext(user, { stationId: body?.stationId, ...clock }),
-    ),
-  );
-  return sendResult(c, result);
-});
+    return sendResult(c, result);
+  },
+);
 
 // POST /api/shifts/business-day/close
-shiftsRouter.post('/business-day/close', async (c) => {
-  const user = c.var.user;
-  if (!canManageDay(user.role)) {
-    return c.json(
-      {
-        success: false,
-        error: { code: 'FORBIDDEN', message: 'Only Owners/Managers can close a business day' },
-      },
-      403,
-    );
-  }
-  const body = await c.req.json().catch(() => ({}));
-  const db = c.var.db;
-  if (
-    !body?.stationId ||
-    !isAuthorizedForStation(user, {
-      organizationId: user.organizationId,
-      stationId: body.stationId,
-    })
-  ) {
-    return c.json(
-      { success: false, error: { code: 'FORBIDDEN', message: 'No access to this Station' } },
-      403,
-    );
-  }
-  const result = await runInTransaction(db, async (tx, events) => {
-    const businessDays = new DrizzleBusinessDayRepository(tx);
-    return new CloseBusinessDayAndGenerateDssr({
-      businessDays,
-      openShifts: new DrizzleShiftRepository(tx),
-      snapshots: new DrizzleDssrSnapshotRepository(tx),
-      dssrData: new DrizzleDssrDataReader(tx),
-      events,
-    }).execute(
-      body,
-      buildContext(user, { stationId: body.stationId, businessDayId: body.businessDayId }),
-    );
-  });
-  return sendResult(c, result);
-});
+shiftsRouter.post(
+  '/business-day/close',
+  writePolicyGuard('POST /shifts/business-day/close'),
+  validateJson(stationIdBody),
+  async (c) => {
+    const user = c.var.user;
+    if (!canManageDay(user.role)) {
+      return c.json(
+        {
+          success: false,
+          error: { code: 'FORBIDDEN', message: 'Only Owners/Managers can close a business day' },
+        },
+        403,
+      );
+    }
+    const body = await c.req.json().catch(() => ({}));
+    const db = c.var.db;
+    if (
+      !body?.stationId ||
+      !isAuthorizedForStation(user, {
+        organizationId: user.organizationId,
+        stationId: body.stationId,
+      })
+    ) {
+      return c.json(
+        { success: false, error: { code: 'FORBIDDEN', message: 'No access to this Station' } },
+        403,
+      );
+    }
+    const result = await runInTransaction(db, async (tx, events) => {
+      const businessDays = new DrizzleBusinessDayRepository(tx);
+      return new CloseBusinessDayAndGenerateDssr({
+        businessDays,
+        openShifts: new DrizzleShiftRepository(tx),
+        snapshots: new DrizzleDssrSnapshotRepository(tx),
+        dssrData: new DrizzleDssrDataReader(tx),
+        events,
+      }).execute(
+        body,
+        buildContext(user, { stationId: body.stationId, businessDayId: body.businessDayId }),
+      );
+    });
+    return sendResult(c, result);
+  },
+);
 
 // GET /api/shifts/shift-summaries?stationId=...&limit=...&before=...
 // Serves the STORED snapshot per summary — the snapshot is kept current at

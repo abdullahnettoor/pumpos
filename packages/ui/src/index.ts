@@ -76,6 +76,8 @@ export type {
 export { DesignSystem } from './components/DesignSystem.js';
 
 // Data layer (TanStack Query) + shared primitives
+export * from './access/CapabilityGate.js';
+export * from './access/SubscriptionNotice.js';
 export * from './query/queryClient.js';
 export * from './query/hooks.js';
 export * from './query/handoverMutation.js';
@@ -147,6 +149,10 @@ export { runTask, useRunTask } from './utils/runTask.js';
 export * from './pump-ds/icon/index.js';
 export * from './pump-ds/brand/index.js';
 export * from './pump-ds/boot/index.js';
+// Used by the desktop update surface: a design-system meter instead of a
+// native <progress>, and the design-system button inside its drawer.
+export * from './pump-ds/meter/index.js';
+export * from './pump-ds/button/index.js';
 
 // Post-sign-in boot: the branded wait screen and the parallel resolve behind it.
 export * from './boot/sessionBoot.js';

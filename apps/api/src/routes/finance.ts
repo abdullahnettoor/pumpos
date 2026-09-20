@@ -14,6 +14,8 @@ import { buildContext } from '../infra/context.js';
 import type { AuthenticatedPrincipal } from '../infra/authenticated-principal.js';
 import { loadStationClock } from '../infra/station-clock.js';
 import { runInTransaction } from '../infra/transaction.js';
+import { sendResult } from '../infra/send-result.js';
+import { writePolicyGuard } from '../infra/write-policy-guard.js';
 import {
   DrizzleFinancialAccountRepository,
   DrizzleLedgerEntryRepository,
@@ -26,21 +28,6 @@ type Variables = {
 };
 
 export const financeRouter = new Hono<{ Variables: Variables }>();
-
-const STATUS_BY_CODE: Record<string, number> = {
-  VALIDATION_ERROR: 400,
-  NOT_FOUND: 404,
-  CONFLICT: 409,
-  FORBIDDEN: 403,
-  UNAUTHORIZED: 401,
-  INVARIANT_VIOLATION: 409,
-};
-
-function sendResult<T>(c: any, result: Result<T>) {
-  if (result.success) return c.json({ success: true, data: result.data });
-  const status = STATUS_BY_CODE[result.error.code] ?? 400;
-  return c.json({ success: false, error: result.error }, status);
-}
 
 const forbidden = (c: any) =>
   c.json({ success: false, error: { code: 'FORBIDDEN', message: 'Not permitted' } }, 403);
@@ -103,7 +90,7 @@ financeRouter.get('/movements', async (c) => {
 });
 
 // POST /finance/accounts — create a money account (seeds an OPENING entry).
-financeRouter.post('/accounts', async (c) => {
+financeRouter.post('/accounts', writePolicyGuard('POST /finance/accounts'), async (c) => {
   const db = c.var.db;
   const user = c.var.user;
   if (!canManageFinancialAccounts(user.role)) return forbidden(c);
@@ -130,7 +117,7 @@ financeRouter.post('/accounts', async (c) => {
 });
 
 // PUT /finance/accounts/:id — edit name / metadata / active flag.
-financeRouter.put('/accounts/:id', async (c) => {
+financeRouter.put('/accounts/:id', writePolicyGuard('PUT /finance/accounts/:id'), async (c) => {
   const db = c.var.db;
   const user = c.var.user;
   if (!canManageFinancialAccounts(user.role)) return forbidden(c);
@@ -146,23 +133,27 @@ financeRouter.put('/accounts/:id', async (c) => {
 });
 
 // PUT /finance/accounts/:id/opening — set/correct the opening balance at any time.
-financeRouter.put('/accounts/:id/opening', async (c) => {
-  const db = c.var.db;
-  const user = c.var.user;
-  if (!canManageFinancialAccounts(user.role)) return forbidden(c);
-  const body = await c.req.json().catch(() => ({}));
-  const result = await runInTransaction(db, (tx, events) =>
-    new SetOpeningBalance({
-      accounts: new DrizzleFinancialAccountRepository(tx),
-      ledger: new DrizzleLedgerEntryRepository(tx),
-      events,
-    }).execute({ ...body, id: c.req.param('id') }, buildContext(user)),
-  );
-  return sendResult(c, result);
-});
+financeRouter.put(
+  '/accounts/:id/opening',
+  writePolicyGuard('PUT /finance/accounts/:id/opening'),
+  async (c) => {
+    const db = c.var.db;
+    const user = c.var.user;
+    if (!canManageFinancialAccounts(user.role)) return forbidden(c);
+    const body = await c.req.json().catch(() => ({}));
+    const result = await runInTransaction(db, (tx, events) =>
+      new SetOpeningBalance({
+        accounts: new DrizzleFinancialAccountRepository(tx),
+        ledger: new DrizzleLedgerEntryRepository(tx),
+        events,
+      }).execute({ ...body, id: c.req.param('id') }, buildContext(user)),
+    );
+    return sendResult(c, result);
+  },
+);
 
 // POST /finance/transfers — move money between accounts (deposit / float / bank↔bank).
-financeRouter.post('/transfers', async (c) => {
+financeRouter.post('/transfers', writePolicyGuard('POST /finance/transfers'), async (c) => {
   const db = c.var.db;
   const user = c.var.user;
   if (!canManageFinancialAccounts(user.role)) return forbidden(c);
@@ -178,7 +169,7 @@ financeRouter.post('/transfers', async (c) => {
 });
 
 // POST /finance/settlements — settle a card/UPI clearing batch to bank, net of MDR.
-financeRouter.post('/settlements', async (c) => {
+financeRouter.post('/settlements', writePolicyGuard('POST /finance/settlements'), async (c) => {
   const db = c.var.db;
   const user = c.var.user;
   if (!canManageFinancialAccounts(user.role)) return forbidden(c);
@@ -194,17 +185,21 @@ financeRouter.post('/settlements', async (c) => {
 });
 
 // POST /finance/accounts/:id/entry — manual entry (bank charge / interest / adjustment).
-financeRouter.post('/accounts/:id/entry', async (c) => {
-  const db = c.var.db;
-  const user = c.var.user;
-  if (!canManageFinancialAccounts(user.role)) return forbidden(c);
-  const body = await c.req.json().catch(() => ({}));
-  const result = await runInTransaction(db, (tx, events) =>
-    new RecordLedgerAdjustment({
-      accounts: new DrizzleFinancialAccountRepository(tx),
-      ledger: new DrizzleLedgerEntryRepository(tx),
-      events,
-    }).execute({ ...body, accountId: c.req.param('id') }, buildContext(user)),
-  );
-  return sendResult(c, result);
-});
+financeRouter.post(
+  '/accounts/:id/entry',
+  writePolicyGuard('POST /finance/accounts/:id/entry'),
+  async (c) => {
+    const db = c.var.db;
+    const user = c.var.user;
+    if (!canManageFinancialAccounts(user.role)) return forbidden(c);
+    const body = await c.req.json().catch(() => ({}));
+    const result = await runInTransaction(db, (tx, events) =>
+      new RecordLedgerAdjustment({
+        accounts: new DrizzleFinancialAccountRepository(tx),
+        ledger: new DrizzleLedgerEntryRepository(tx),
+        events,
+      }).execute({ ...body, accountId: c.req.param('id') }, buildContext(user)),
+    );
+    return sendResult(c, result);
+  },
+);

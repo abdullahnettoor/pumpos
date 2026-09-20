@@ -136,22 +136,31 @@ whenever the operator picks **Check for updates** from the user menu (which also
 shows the installed version). It never checks during boot, from a development
 build, from the web console, or from mobile.
 
-| State             | What the notice says                                  | What the operator can do            |
-| ----------------- | ----------------------------------------------------- | ----------------------------------- |
-| Checking          | "Checking for updates…"                               | keep working                        |
-| Up to date        | the installed version                                 | dismiss                             |
-| Available         | the new version and its release notes                 | **Download update**, or dismiss     |
-| Downloading       | MB downloaded, or a percentage when the size is known | keep working                        |
-| Ready             | "ready to install"                                    | **Install and restart**, or dismiss |
-| Restart postponed | the concrete reason local writes are unsafe           | Try again, or dismiss               |
-| Installed (macOS) | "installed"                                           | **Restart and update**              |
-| Failed            | a plain-language cause                                | retry the step that failed          |
+| State             | What the notice says                                  | What the operator can do                        |
+| ----------------- | ----------------------------------------------------- | ----------------------------------------------- |
+| Checking          | "Checking for updates…"                               | keep working                                    |
+| Up to date        | the installed version                                 | dismiss                                         |
+| Available         | the new version and one line of the release summary   | **Download update**, **What's new**, or dismiss |
+| Downloading       | MB downloaded, or a percentage when the size is known | keep working                                    |
+| Ready             | "ready to install"                                    | **Install and restart**, or dismiss             |
+| Restart postponed | the concrete reason local writes are unsafe           | Try again, or dismiss                           |
+| Installed (macOS) | "installed"                                           | **Restart and update**                          |
+| Failed            | a plain-language cause                                | retry the step that failed                      |
 
 A **failed automatic check is silent** — it is logged and dropped. The operator
 did not ask, and "the update server did not respond" is not something they can
 act on; a station with a flaky connection would otherwise meet a red banner
 every morning. A failed **manual** check always reports, because the operator
 asked and is owed an answer.
+
+Release notes are an **operator summary written for the station**, not the
+developer changelog — see [RELEASING.md](../RELEASING.md#write-the-operator-summary)
+for where it is written and what is stripped from it. The notice carries one
+line of it; **What's new** opens the whole thing in the standard drawer, which
+also repeats the primary action so reading never puts the decision out of reach.
+A release with no summary shows no notes section and no affordance. Notes are
+plain text rendered as text nodes and contain no links, so a manifest can
+neither inject markup nor send an operator to a repository.
 
 The notice is a compact panel in the corner, never a modal: an update is never
 more important than the shift in front of the operator. Dismissing it puts the
@@ -265,6 +274,91 @@ adds nothing, and a fully silent install would hide a failure.
 
 ---
 
+## Preview builds
+
+A desktop build of a `dev` commit, for trying a change on real hardware before
+it becomes a release. A preview is a **build, not a channel**: you install it by
+hand, it updates nothing, and nothing updates to it.
+
+### Getting one
+
+Merging to `dev` queues a preview build that **waits for an approval** — it does
+not start on its own. Approve it from the run page and both installers appear as
+workflow artifacts; ignore it and it costs nothing, because a job waiting on an
+environment approval consumes no runner minutes. macOS runners bill at 10x and
+Windows at 2x, which is the whole reason the gate exists.
+
+You can also start one for any branch from **Actions → Desktop preview → Run
+workflow**.
+
+Artifacts are attached to the run for 14 days. They are never attached to a
+GitHub Release, never published as a prerelease, and never pushed to the public
+download bucket.
+
+### What makes a preview safe to install
+
+It installs **alongside** your production PumpOS rather than replacing it. Both
+can run; neither knows about the other.
+
+|                    | Production           | Preview                      |
+| ------------------ | -------------------- | ---------------------------- |
+| Product name       | PumpOS               | PumpOS Preview               |
+| Bundle identifier  | `com.pumpos.desktop` | `com.pumpos.desktop.preview` |
+| Version            | `1.3.2`              | `1.3.2-preview.<sha>`        |
+| Environment badge  | none                 | **Preview**                  |
+| Checks for updates | yes                  | **never**                    |
+| Updater artifacts  | signed               | **none**                     |
+| Backend            | production           | preview API and Supabase     |
+
+The version being a SemVer _prerelease_ is what stops a preview ever presenting
+itself as newer than the release it came from, and naming the commit is what
+makes a bug report traceable.
+
+A preview build **cannot be signed**. The `desktop-signing` environment is
+restricted to `main`, so a `dev`-triggered run cannot read the updater private
+key even if it asked — and the build asserts before upload that it produced no
+signature, no updater artifact, and nothing carrying the production identity or
+a release version. Widening who can trigger a build never widens who can sign
+one.
+
+Be precise about where "never checks for updates" comes from: the updater plugin
+is still compiled in and still carries the stable endpoint, exactly as in a
+release build. What stops it is `shouldEnableUpdates`, which returns false for
+every non-production build — asserted by a test that walks each environment. The
+preview build's contribution is `VITE_APP_ENV=preview`; the guarantee itself is
+the shell's, and it is the same guarantee a local `npm run tauri dev` relies on.
+
+`workflow_dispatch` will build any branch, not just `dev`. That is deliberate —
+it is the purest form of "only when I ask" — and it runs under the same
+approval gate and the same secret-less environment, so no branch gains anything
+by using it.
+
+Preview builds are unsigned at the OS level too, exactly like releases, so
+expect the same Gatekeeper and SmartScreen steps described below.
+
+No MSI is built for previews. The MSI bundler rejects the version outright —
+_"optional pre-release identifier in app version must be numeric-only"_ — and
+`-preview.<sha>` is the whole point of the version. NSIS is the format PumpOS
+updates through anyway, so it is the one worth testing.
+
+Previews call `tauri build` directly rather than going through `tauri-action`,
+which packages the macOS `.app` into a `.app.tar.gz` — an updater artifact —
+regardless of configuration. Tauri itself honours `createUpdaterArtifacts:
+false` and emits only the `.app` and the `.dmg`; the action adds the tarball
+afterwards. The isolation gate caught this on the first run, which is what it is
+for.
+
+### Owner setup, once
+
+Create a **`desktop-preview`** environment (Settings → Environments) with a
+**required reviewer**, and add **no secrets** to it.
+
+Note that this is belt-and-braces, not the mechanism: the trigger is manual, so
+nothing builds unattended whether or not the gate engages. On the first run it
+did not. If you later want merges to `dev` to queue a build automatically, prove
+the gate holds first — a job that should wait and does not is an unattended 10x
+macOS build per merge.
+
 ## First install (bootstrap)
 
 Releases before in-app updates carry no `latest.json` and no `.sig` assets, so
@@ -281,16 +375,24 @@ release. PumpOS is never distributed by email attachment or file-sharing link.
 
 PumpOS has no Apple Developer ID, so macOS does not recognise the publisher.
 
+> **Do not click the highlighted button.** On current macOS the refusal dialog
+> offers **Move to Bin** and **Cancel** — and Move to Bin is the default. It
+> deletes PumpOS. There is no "Open" button on this dialog; approving the app
+> happens in System Settings afterwards.
+
 1. Open the `.dmg` and drag PumpOS to Applications.
-2. The first launch is refused: _"PumpOS cannot be opened because it is from an
-   unidentified developer"_ (or _"Apple could not verify PumpOS is free of
-   malware"_).
+2. Launch PumpOS. macOS refuses and offers to delete it. Choose **Cancel**.
 3. Open **System Settings → Privacy & Security**, scroll to Security, and choose
    **Open Anyway** next to PumpOS.
-4. Confirm **Open** in the dialog that follows.
+4. Confirm in the dialog that follows, authenticating if asked.
 
 This happens once per machine. In-app updates afterwards do not repeat it — the
 update is applied to an app the user already approved.
+
+Observed on macOS 26.6.2, Apple Silicon, installing `v1.3.1`. Older macOS
+releases phrased this as _"cannot be opened because it is from an unidentified
+developer"_ and allowed Control-click → Open as a bypass; current versions
+removed that path, so System Settings is the only route.
 
 ### Windows x64
 
@@ -301,6 +403,14 @@ the publisher.
 2. If _"Windows protected your PC"_ appears, choose **More info**, confirm the
    app name is PumpOS, then **Run anyway**.
 3. Complete the installer.
+
+**No SmartScreen warning was seen** when installing `v1.3.1` on the test
+machine. Do not read that as "Windows never warns". SmartScreen is
+reputation-based: the same unsigned installer can pass silently on one machine
+and be blocked on another depending on how many people have run that exact
+file, whether the download carried a mark-of-the-web, and the machine's own
+SmartScreen settings. Step 2 stays in these instructions because the first
+users of any new release are exactly the case most likely to trigger it.
 
 ### Verifying the upgrade path
 
@@ -322,13 +432,13 @@ both platforms and record what you saw:
 
 ### Telling failures apart
 
-| What the user reports                                             | What it is                                                                                  | What to do                                                                               |
-| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| "This update could not be verified as an official PumpOS release" | **Tauri signature rejection.** The artifact was not signed with the key this install embeds | Do not work around it. Check the release's `.sig` assets and whether the key was rotated |
-| "unidentified developer" / "Open Anyway"                          | **macOS Gatekeeper.** Expected: PumpOS has no Developer ID                                  | Walk through Privacy & Security. Not an update failure                                   |
-| "Windows protected your PC"                                       | **SmartScreen.** Expected: the installer is unsigned                                        | Confirm the source is the official release, then Run anyway                              |
-| "PumpOS could not reach the update server"                        | Connectivity                                                                                | Retry later. The installed app is unaffected                                             |
-| "Restart postponed"                                               | Restart readiness said local writes are unsafe                                              | Let the pending work settle, then Install again                                          |
+| What the user reports                                             | What it is                                                                                  | What to do                                                                                                               |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| "This update could not be verified as an official PumpOS release" | **Tauri signature rejection.** The artifact was not signed with the key this install embeds | Do not work around it. Check the release's `.sig` assets and whether the key was rotated                                 |
+| macOS offers to move PumpOS to the Bin on first launch            | **macOS Gatekeeper.** Expected: PumpOS has no Developer ID                                  | Tell them to Cancel — the default button deletes the app — then Open Anyway in Privacy & Security. Not an update failure |
+| "Windows protected your PC"                                       | **SmartScreen.** Expected: the installer is unsigned                                        | Confirm the source is the official release, then Run anyway                                                              |
+| "PumpOS could not reach the update server"                        | Connectivity                                                                                | Retry later. The installed app is unaffected                                                                             |
+| "Restart postponed"                                               | Restart readiness said local writes are unsafe                                              | Let the pending work settle, then Install again                                                                          |
 
 ### A bad release
 

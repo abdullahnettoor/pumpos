@@ -7,6 +7,10 @@ import {
   validationError,
 } from '../../../kernel/index.js';
 import type { EventPublisher, ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
+import {
+  ensureStationCapacity,
+  type StationCapacityPort,
+} from '../../organization-access/station-capacity.js';
 
 /**
  * Persistence port for the multi-aggregate onboarding provisioning. The adapter
@@ -28,6 +32,13 @@ export interface OnboardingProvisioner {
 export interface FinalizeStationOnboardingDeps {
   provisioner: OnboardingProvisioner;
   events: EventPublisher;
+  /**
+   * Station capacity guard. Required, not optional: the Limit is a commercial
+   * rule the API must enforce for bookmarks, stale clients, retries and
+   * concurrent requests, so there is deliberately no way to construct this
+   * use-case without it.
+   */
+  capacity: StationCapacityPort;
 }
 
 /**
@@ -119,6 +130,10 @@ export function validateOnboardingDraftForProvisioning(draft: OnboardingDraft): 
  * Provision a fully-configured station from an onboarding draft in one atomic
  * operation, then emit ONBOARDING_COMPLETED. Domain validation lives here; the
  * transactional multi-table write is delegated to the OnboardingProvisioner port.
+ *
+ * Capacity is checked first, under a lock on the Organization, so two
+ * concurrent onboardings cannot both pass a "0 of 1 used" read. The check, the
+ * provisioning and the event append share the caller's transaction.
  */
 export class FinalizeStationOnboarding implements UseCase<
   OnboardingDraft,
@@ -132,6 +147,9 @@ export class FinalizeStationOnboarding implements UseCase<
   ): Promise<Result<FinalizeOnboardingResult>> {
     const validationMessage = validateOnboardingDraftForProvisioning(draft);
     if (validationMessage) return err(validationError(validationMessage));
+
+    const capacity = await ensureStationCapacity(this.deps.capacity, ctx.organizationId);
+    if (!capacity.success) return capacity;
 
     const result = await this.deps.provisioner.provision({
       organizationId: ctx.organizationId,
