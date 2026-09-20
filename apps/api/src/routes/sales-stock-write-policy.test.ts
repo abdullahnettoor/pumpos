@@ -103,7 +103,11 @@ const RECORDING: ReadonlyArray<[string, string, string]> = [
   ['POST', '/transactions/sales', 'the fuel or goods have already left'],
   ['POST', '/transactions/purchases', 'the tanker has already been decanted'],
   ['POST', '/transactions/inventory/count', 'the dip reading explains the day’s variance'],
-  ['POST', '/transactions/shifts/shift-1/merchandise-handover', 'the attendant already holds the cash'],
+  [
+    'POST',
+    '/transactions/shifts/shift-1/merchandise-handover',
+    'the attendant already holds the cash',
+  ],
   ['POST', '/transactions/sales/sale-1/invoice', 'the customer is entitled to their invoice'],
   ['DELETE', '/transactions/merchandise-handovers/sale-1', 'correcting a mis-keyed handover'],
   ['DELETE', '/transactions/credit-sales/sale-1', 'correcting a mis-keyed credit sale'],
@@ -166,14 +170,15 @@ describe('the rest of the rules still decide', () => {
 });
 
 describe('this family is completely covered', () => {
-  const OPERATIONS = RECORDING.map(([method, path]) =>
-    // Route patterns, not the concrete ids used to drive the requests above.
-    `${method} ${path
-      .replace('/sale-1/invoice', '/:id/invoice')
-      .replace('/shifts/shift-1/', '/shifts/:id/')
-      .replace('/merchandise-handovers/sale-1', '/merchandise-handovers/:saleId')
-      .replace('/credit-sales/sale-1', '/credit-sales/:id')
-      .replace('/omc-card-sales/sale-1', '/omc-card-sales/:id')}`,
+  const OPERATIONS = RECORDING.map(
+    ([method, path]) =>
+      // Route patterns, not the concrete ids used to drive the requests above.
+      `${method} ${path
+        .replace('/sale-1/invoice', '/:id/invoice')
+        .replace('/shifts/shift-1/', '/shifts/:id/')
+        .replace('/merchandise-handovers/sale-1', '/merchandise-handovers/:saleId')
+        .replace('/credit-sales/sale-1', '/credit-sales/:id')
+        .replace('/omc-card-sales/sale-1', '/omc-card-sales/:id')}`,
   );
 
   it('declares every route in the assigned family', () => {
