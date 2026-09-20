@@ -38,14 +38,28 @@ const KNOWN_STATUSES: readonly SubscriptionStatus[] = [
 ];
 
 /**
- * Map a stored status onto the typed union. An unrecognized value resolves to
- * ACTIVE on purpose: a corrupt string must never silently lock a paying
- * station out of its own operations. Suspension is always explicit.
+ * Map a stored status onto the typed union.
+ *
+ * This FAILS OPEN: an unrecognized or missing value resolves to ACTIVE. That
+ * is the right default in Phase E1, where the status is reported and nothing
+ * is enforced — a corrupt string must not lock a paying station out of its
+ * own operations, and suspension is always explicit.
+ *
+ * INVERT THIS IN #167 (Restricted and Suspended write policy). Once the status
+ * gates writes, failing open means a garbled value silently grants normal
+ * access — the opposite of what a write policy is for. When #167 lands, an
+ * unreadable status should resolve to RESTRICTED (finish open work, block
+ * growth) rather than ACTIVE, and the unparseable value should be surfaced
+ * rather than swallowed. Every caller of this function inherits the choice:
+ * `buildAccessDocument` (what the operator sees) and, after #167, the write
+ * guards themselves.
  */
 export function normalizeSubscriptionStatus(raw: string | null | undefined): SubscriptionStatus {
+  // Phase E1 default; see the #167 note above before changing behaviour.
   if (!raw) return 'ACTIVE';
   const upper = raw.toUpperCase();
   const known = KNOWN_STATUSES.find((status) => status === upper);
+  // Unreadable value → ACTIVE (fail open). #167 must change this to RESTRICTED.
   return known ?? LEGACY_STATUS[raw] ?? 'ACTIVE';
 }
 

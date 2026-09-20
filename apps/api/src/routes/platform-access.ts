@@ -29,6 +29,12 @@ type Variables = {
  * The Organization UUID is the authoritative argument; use the owners list to
  * find it. Every real change and its business event commit in one transaction,
  * and repeated commands return `changed: false` without writing or emitting.
+ *
+ * MISSING, by decomposition gap rather than by design: assigning a Product
+ * Plan (`organization plan set <org> CORE`, emitting ORGANIZATION_PLAN_CHANGED).
+ * The phase doc lists it, but no E1 ticket's acceptance criteria named it, so
+ * it was never built — #160 story 1 is unsatisfied. It belongs with #166,
+ * which owns plan and subscription mutation. Add it as a sibling route here.
  */
 export const platformAccessRouter = new Hono<{ Variables: Variables }>();
 

@@ -154,7 +154,12 @@ export const LIMIT_REACHED = 'LIMIT_REACHED';
 
 /**
  * Did this failure come from Organization access policy rather than the
- * request itself? Such a rejection means the client's Access Document is
+ * request itself?
+ *
+ * #167 adds SUBSCRIPTION_RESTRICTED and ORGANIZATION_SUSPENDED: both belong
+ * in this list, since either also means the client's Access Document is out
+ * of date. This is a published client contract — extend it, never narrow it.
+ * Such a rejection means the client's Access Document is
  * stale (a grant was revoked, a Limit changed) and should be refetched.
  */
 export function isAccessPolicyError(error: unknown): boolean {
