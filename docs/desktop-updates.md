@@ -327,11 +327,28 @@ by using it.
 Preview builds are unsigned at the OS level too, exactly like releases, so
 expect the same Gatekeeper and SmartScreen steps described below.
 
+No MSI is built for previews. The MSI bundler rejects the version outright —
+_"optional pre-release identifier in app version must be numeric-only"_ — and
+`-preview.<sha>` is the whole point of the version. NSIS is the format PumpOS
+updates through anyway, so it is the one worth testing.
+
+Previews call `tauri build` directly rather than going through `tauri-action`,
+which packages the macOS `.app` into a `.app.tar.gz` — an updater artifact —
+regardless of configuration. Tauri itself honours `createUpdaterArtifacts:
+false` and emits only the `.app` and the `.dmg`; the action adds the tarball
+afterwards. The isolation gate caught this on the first run, which is what it is
+for.
+
 ### Owner setup, once
 
 Create a **`desktop-preview`** environment (Settings → Environments) with a
-**required reviewer** — that reviewer is the approval gate. Add **no secrets**
-to it: the environment exists to make the job wait, not to grant it anything.
+**required reviewer**, and add **no secrets** to it.
+
+Note that this is belt-and-braces, not the mechanism: the trigger is manual, so
+nothing builds unattended whether or not the gate engages. On the first run it
+did not. If you later want merges to `dev` to queue a build automatically, prove
+the gate holds first — a job that should wait and does not is an unattended 10x
+macOS build per merge.
 
 ## First install (bootstrap)
 
