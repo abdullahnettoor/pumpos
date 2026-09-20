@@ -147,6 +147,10 @@ export { runTask, useRunTask } from './utils/runTask.js';
 export * from './pump-ds/icon/index.js';
 export * from './pump-ds/brand/index.js';
 export * from './pump-ds/boot/index.js';
+// Used by the desktop update surface: a design-system meter instead of a
+// native <progress>, and the design-system button inside its drawer.
+export * from './pump-ds/meter/index.js';
+export * from './pump-ds/button/index.js';
 
 // Post-sign-in boot: the branded wait screen and the parallel resolve behind it.
 export * from './boot/sessionBoot.js';
