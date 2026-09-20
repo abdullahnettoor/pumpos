@@ -1,10 +1,12 @@
 import React, { useMemo, useState } from 'react';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronRight, Download } from 'lucide-react';
 import { useAttendantHandoverReport } from '../../query/hooks.js';
 import { computeRange } from '../primitives/DateRangeField.js';
 import type { DateRange } from '../primitives/DateRangeField.js';
 import { inr } from '../../utils/format.js';
-import { KpiStrip, KpiTile, Panel, EmptyState, Icon } from '../../pump-ds/index.js';
+import { KpiStrip, KpiTile, Panel, EmptyState, Icon, Button } from '../../pump-ds/index.js';
+import { generateAttendantReportPdf } from '../../services/reports/generate.js';
+import { useRunTask } from '../../utils/runTask.js';
 import { ReportRangeBar } from './ReportRangeBar.js';
 import { LoadingSpinner } from '../LoadingSpinner.js';
 
@@ -30,10 +32,18 @@ const varianceTone = (amount: number): string =>
  * on every request, so this component assumes nothing about entitlement.
  */
 /** Per-shift detail for one attendant: dispensers, their nozzles and terminals. */
-const ShiftDetail: React.FC<{ attendant: any }> = ({ attendant }) => (
+const ShiftDetail: React.FC<{ attendant: any; onExport: () => void }> = ({
+  attendant,
+  onExport,
+}) => (
   <tr>
-    <td colSpan={9} style={{ padding: 0, backgroundColor: 'var(--bg-surface-alt)' }}>
+    <td colSpan={12} style={{ padding: 0, backgroundColor: 'var(--bg-surface-alt)' }}>
       <div style={{ padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <Button size="sm" variant="secondary" onClick={onExport}>
+            <Download size={13} /> Export statement
+          </Button>
+        </div>
         {attendant.shifts.map((shift: any) => (
           <div
             key={shift.shiftId}
@@ -131,6 +141,7 @@ export const AttendantHandoverReportPanel: React.FC<AttendantHandoverReportPanel
 }) => {
   const s = selectedStation?.settings || {};
   const clock = { timeZone: s.timezone, dayStartsAt: s.business_day_starts_at };
+  const runTask = useRunTask();
   const [range, setRange] = useState<DateRange>(() => computeRange('this-month', clock));
   // Expanding reads the detail already held in the report payload — no refetch.
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -267,7 +278,21 @@ export const AttendantHandoverReportPanel: React.FC<AttendantHandoverReportPanel
                           {inr(a.totals.varianceAmount)}
                         </td>
                       </tr>
-                      {expanded === a.attendantId && <ShiftDetail attendant={a} />}
+                      {expanded === a.attendantId && (
+                        <ShiftDetail
+                          attendant={a}
+                          onExport={() =>
+                            runTask(
+                              generateAttendantReportPdf(selectedStation, a, {
+                                from: range.from,
+                                to: range.to,
+                                generatedAt: reportQ.data?.generatedAt,
+                              }),
+                              'Could not export the attendant statement.',
+                            )
+                          }
+                        />
+                      )}
                     </React.Fragment>
                   ))}
                 </tbody>

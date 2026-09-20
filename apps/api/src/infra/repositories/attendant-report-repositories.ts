@@ -160,10 +160,7 @@ export class DrizzleAttendantHandoverReportReader implements AttendantHandoverRe
       .innerJoin(schema.nozzles, eq(schema.nozzleReadings.nozzleId, schema.nozzles.id))
       .leftJoin(schema.products, eq(schema.nozzles.productId, schema.products.id))
       .where(
-        and(
-          inArray(schema.nozzleReadings.shiftId, shiftIds),
-          inArray(schema.nozzles.duId, duIds),
-        ),
+        and(inArray(schema.nozzleReadings.shiftId, shiftIds), inArray(schema.nozzles.duId, duIds)),
       );
 
     return rows.map((r) => ({

@@ -34,9 +34,10 @@ export interface GetAttendantHandoverReportDeps {
  * Read-only: it derives no state and emits no Business Event. Only CLOSED (and
  * LOCKED) Shifts contribute, so every figure the report shows is final.
  */
-export class GetAttendantHandoverReport
-  implements UseCase<GetAttendantHandoverReportCommand, AttendantHandoverReport>
-{
+export class GetAttendantHandoverReport implements UseCase<
+  GetAttendantHandoverReportCommand,
+  AttendantHandoverReport
+> {
   constructor(private readonly deps: GetAttendantHandoverReportDeps) {}
 
   async execute(

@@ -85,6 +85,7 @@ export interface StationSettings {
   report_config?: {
     shiftSummary?: string[];
     dssr?: string[];
+    attendantReport?: string[];
     paper?: 'A4' | 'LETTER';
     showLogo?: boolean;
     showStationLogo?: boolean;

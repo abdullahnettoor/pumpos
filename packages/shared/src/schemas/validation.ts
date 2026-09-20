@@ -133,6 +133,7 @@ export const stationSchema = z.object({
         .object({
           shiftSummary: z.array(z.string()).optional(),
           dssr: z.array(z.string()).optional(),
+          attendantReport: z.array(z.string()).optional(),
           paper: z.enum(['A4', 'LETTER']).optional(),
           showLogo: z.boolean().optional(),
           showStationLogo: z.boolean().optional(),

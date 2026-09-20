@@ -151,7 +151,8 @@ describe('GET /reports/attendant-handovers', () => {
     expect(res.status).toBe(200);
   });
 
-  it('rejects a request missing its date range before touching the reader', async () => {    const res = await makeApp(fakeDb(['reports.attendant'])).request(
+  it('rejects a request missing its date range before touching the reader', async () => {
+    const res = await makeApp(fakeDb(['reports.attendant'])).request(
       '/reports/attendant-handovers?stationId=st-1',
     );
     expect(res.status).toBe(400);

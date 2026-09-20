@@ -60,6 +60,31 @@ describe('Validation Schemas Tests', () => {
       const result = stationSchema.safeParse(invalid);
       expect(result.success).toBe(false);
     });
+
+    /**
+     * report_config lists keys explicitly and is NOT strict, so an undeclared
+     * key is silently stripped — a configuration that appears to save and then
+     * quietly reverts. Every configurable report must therefore round-trip.
+     */
+    it('round-trips every configurable report section list', () => {
+      const report_config = {
+        shiftSummary: ['header', 'nozzles'],
+        dssr: ['header', 'kpis'],
+        attendantReport: ['header', 'summary', 'variance', 'signature'],
+        paper: 'A4' as const,
+        showLogo: true,
+      };
+
+      const result = stationSchema.safeParse({
+        name: 'Main Station A',
+        code: 'STA-A',
+        settings: { report_config },
+      });
+
+      expect(result.success).toBe(true);
+      if (!result.success) return;
+      expect(result.data.settings?.report_config).toEqual(report_config);
+    });
   });
 
   describe('nozzleReadingSchema', () => {
