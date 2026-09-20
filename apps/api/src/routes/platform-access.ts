@@ -40,6 +40,12 @@ async function readJson(c: any): Promise<Record<string, unknown>> {
   }
 }
 
+/** Read a body field as a string, treating any other JSON type as absent. */
+function stringField(body: Record<string, unknown>, key: string): string {
+  const value = body[key];
+  return typeof value === 'string' ? value : '';
+}
+
 /**
  * GET /platform/organizations/:orgId/access — effective access plus the full
  * grant and override history. Platform-only: tenants receive the role-filtered
@@ -88,8 +94,8 @@ platformAccessRouter.post('/:orgId/capabilities', async (c) => {
       events,
     }).execute(
       {
-        capabilityKey: String(body.capabilityKey ?? ''),
-        reason: (body.reason as string | undefined) ?? null,
+        capabilityKey: stringField(body, 'capabilityKey'),
+        reason: stringField(body, 'reason') || null,
         actor: c.var.platformAdmin,
       },
       buildPlatformContext(c.var.platformAdmin, organizationId),
@@ -109,7 +115,7 @@ platformAccessRouter.delete('/:orgId/capabilities/:key', async (c) => {
     }).execute(
       {
         capabilityKey: c.req.param('key'),
-        reason: (body.reason as string | undefined) ?? null,
+        reason: stringField(body, 'reason') || null,
         actor: c.var.platformAdmin,
       },
       buildPlatformContext(c.var.platformAdmin, organizationId),
@@ -130,7 +136,7 @@ platformAccessRouter.put('/:orgId/limits/:key', async (c) => {
       {
         limitKey: c.req.param('key'),
         value: Number(body.value),
-        reason: String(body.reason ?? ''),
+        reason: stringField(body, 'reason'),
         actor: c.var.platformAdmin,
       },
       buildPlatformContext(c.var.platformAdmin, organizationId),
@@ -150,7 +156,7 @@ platformAccessRouter.delete('/:orgId/limits/:key', async (c) => {
     }).execute(
       {
         limitKey: c.req.param('key'),
-        reason: (body.reason as string | undefined) ?? null,
+        reason: stringField(body, 'reason') || null,
         actor: c.var.platformAdmin,
       },
       buildPlatformContext(c.var.platformAdmin, organizationId),

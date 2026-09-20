@@ -59,13 +59,14 @@ export const OrganizationOverview: React.FC<OrganizationOverviewProps> = ({
   // enforces the Limit regardless of what is rendered here.
   const { data: access } = useAccess();
   const stationCapacity = access?.limits?.station_count;
-  const showsCapacity = Boolean(access?.plan && stationCapacity);
+  const showsCapacity = Boolean(access?.plan) && stationCapacity !== undefined;
   const capacityReached = stationCapacity?.reached === true;
-  const capacityMessage = capacityReached
-    ? stationCapacity!.value === 1
-      ? 'This plan includes one Station. Contact PumpOS to add another.'
-      : `This plan includes ${stationCapacity!.value} Stations. Contact PumpOS to add another.`
-    : undefined;
+  const capacityMessage =
+    stationCapacity && stationCapacity.reached
+      ? stationCapacity.value === 1
+        ? 'This plan includes one Station. Contact PumpOS to add another.'
+        : `This plan includes ${stationCapacity.value} Stations. Contact PumpOS to add another.`
+      : undefined;
 
   const hasReadyStation = stations.some(
     (s) => (s as any).onboardingStatus === 'READY_FOR_OPERATIONS',
@@ -157,9 +158,9 @@ export const OrganizationOverview: React.FC<OrganizationOverviewProps> = ({
               >
                 Stations
               </span>
-              {showsCapacity && (
+              {showsCapacity && stationCapacity && (
                 <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                  {stationCapacity!.used} of {stationCapacity!.value} used
+                  {stationCapacity.used} of {stationCapacity.value} used
                 </span>
               )}
             </div>
