@@ -65,12 +65,28 @@ export function normalizeSubscriptionStatus(raw: string | null | undefined): Sub
   return known ?? LEGACY_STATUS[raw] ?? 'ACTIVE';
 }
 
-/** Roles that may see commercial information: the plan and upgrade guidance. */
+/**
+ * Two different audiences, deliberately not one:
+ *
+ * - Commercial: who decides what the Organization buys. They see the Product
+ *   Plan and upgrade guidance for capabilities it does not have.
+ * - Billing: who deals with money owed. They see the subscription's payment
+ *   state, its deadline and the action that clears it.
+ *
+ * An Accountant is in the second set and not the first: chasing an overdue
+ * invoice is their job, choosing to buy a new capability is not.
+ */
 const COMMERCIAL_ROLES: readonly Role[] = ['Owner', 'Manager'];
+const BILLING_ROLES: readonly Role[] = ['Owner', 'Manager', 'Accountant'];
 
 /** Does this Role make or escalate purchasing decisions? */
 export function seesCommercialAccess(role: Role): boolean {
   return COMMERCIAL_ROLES.includes(role);
+}
+
+/** Does this Role deal with what the Organization owes? */
+export function seesBillingDetail(role: Role): boolean {
+  return BILLING_ROLES.includes(role);
 }
 
 /**
@@ -246,7 +262,7 @@ function resolveSubscription(
   const status = normalizeSubscriptionStatus(inputs.subscriptionStatus);
   const mode = resolveSubscriptionMode(status, { accessUntil: inputs.accessUntil, now });
 
-  if (!seesCommercialAccess(role)) {
+  if (!seesBillingDetail(role)) {
     const notice = operationalNotice(mode);
     return {
       status,
@@ -289,7 +305,9 @@ function resolveLimits(
  *  - unentitled ones appear as disabled upgrade entries for Owners and
  *    Managers when the registry marks them upgradable;
  *  - everyone else (Accountant, Staff, Attendant) receives enabled entries
- *    only, so daily workflows carry no pricing or upgrade prompts.
+ *    only, so daily workflows carry no upgrade prompts. An Accountant does
+ *    see the subscription's payment state (see `seesBillingDetail`) — what
+ *    they are withheld is the buy-more prompt, not the money owed.
  */
 function resolveCapabilities(
   inputs: OrganizationAccessInputs,

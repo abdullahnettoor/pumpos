@@ -309,7 +309,28 @@ describe('what each Role is told about the subscription', () => {
     expect(subscriptionFor('Manager', pastDueInGrace).resolution).toBe('COMPLETE_PAYMENT');
   });
 
-  it.each<Role>(['Accountant', 'Staff', 'Attendant'])(
+  it('gives Accountants the same, since chasing an overdue invoice is their job', () => {
+    const subscription = subscriptionFor('Accountant', pastDueInGrace);
+
+    expect(subscription).toMatchObject({
+      showWarning: true,
+      accessUntil: '2026-09-27T10:00:00.000Z',
+      resolution: 'COMPLETE_PAYMENT',
+    });
+  });
+
+  it('still withholds the buy-more prompt from an Accountant', () => {
+    // Billing state is theirs; purchasing decisions are not.
+    const document = buildAccessDocument({
+      inputs: inputs(pastDueInGrace),
+      role: 'Accountant',
+      now: NOW,
+    });
+
+    expect(document.plan).toBeUndefined();
+  });
+
+  it.each<Role>(['Staff', 'Attendant'])(
     'tells %s nothing at all while access is still normal',
     (role) => {
       expect(subscriptionFor(role, pastDueInGrace)).toMatchObject({
@@ -323,7 +344,7 @@ describe('what each Role is told about the subscription', () => {
     },
   );
 
-  it.each<Role>(['Accountant', 'Staff', 'Attendant'])(
+  it.each<Role>(['Staff', 'Attendant'])(
     'tells %s that access is restricted, without any billing detail',
     (role) => {
       const subscription = subscriptionFor(role, {

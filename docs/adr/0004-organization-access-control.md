@@ -65,3 +65,31 @@ Limit overrides, `CORE` with a one-Station Limit, platform administration,
 Access Document, API enforcement, useful UI gates, and audit events. Full
 payment lifecycle enforcement, Restricted Access classification across all
 mutations, and offline replay policy follow in phase two.
+
+## Amendments
+
+Three questions the original decision left open, settled during Phase E2 and
+recorded here because each is a business rule rather than an implementation
+detail.
+
+**Fuel pricing continues under Restricted Access.** Prices are published daily
+by the oil marketing company, and the pump keeps dispensing whether or not
+PumpOS knows the current rate. Blocking a price update would not stop trade; it
+would record every subsequent sale at the wrong value and leave the day
+unreconcilable. Pricing is therefore classified as an operation, not a setup
+change, despite living alongside setup in the UI.
+
+**Opening a new Business Day is blocked under Restricted Access.** The
+Restricted carve-out exists so a station can finish work already in progress.
+An Organization that can keep opening new days indefinitely is not restricted at
+all, so the open day remains closable while the next one requires payment. This
+extends the spec's explicit block on opening a new Shift to the day that
+contains it.
+
+**Accountants see billing state, but not upgrade prompts.** The two audiences
+are separated: who decides what the Organization buys (Owner, Manager) and who
+deals with what it owes (Owner, Manager, Accountant). An Accountant chasing an
+overdue invoice needs the payment warning, its deadline and the action that
+clears it; they are not the purchasing decision-maker, so unavailable-capability
+upgrade entries and the Product Plan key remain withheld. Staff and Attendants
+continue to see only that access is limited and whom to ask.
