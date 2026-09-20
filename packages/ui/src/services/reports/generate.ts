@@ -73,7 +73,7 @@ export async function generateShiftSummaryPdf(
 export async function generateAttendantReportPdf(
   station: { name?: string; settings?: Record<string, unknown> } | null,
   entry: AttendantReportEntry,
-  period: { from: string; to: string; generatedAt?: string },
+  period: { from: string; to: string; generatedAt: string },
 ): Promise<void> {
   const doc = await import('./attendantReportDoc.js');
   const configured = (station?.settings as StationReportSettings | undefined)?.report_config

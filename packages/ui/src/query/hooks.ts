@@ -80,8 +80,8 @@ export const queryKeys = {
   dssrPreview: (stationId: string, date: string) => ['dssr-preview', stationId, date] as const,
   dssrRange: (stationId: string, from: string, to: string) =>
     ['dssr-range', stationId, from, to] as const,
-  attendantHandoverReport: (stationId: string, from: string, to: string, attendantId = '') =>
-    ['attendant-handover-report', stationId, from, to, attendantId] as const,
+  attendantHandoverReport: (stationId: string, from: string, to: string) =>
+    ['attendant-handover-report', stationId, from, to] as const,
   expenseCategories: () => ['expense-categories'] as const,
   incomeCategories: () => ['income-categories'] as const,
   products: () => ['products'] as const,
@@ -771,11 +771,12 @@ export function useAttendantHandoverReport(
   filters: Partial<AttendantReportFilters> & { stationId: string | null | undefined },
   options?: Options<AttendantHandoverReport>,
 ) {
-  const { stationId, from = '', to = '', attendantId } = filters;
+  // The period is fetched whole; callers filter by attendant in memory. The
+  // endpoint's own `attendantId` is for consumers that want the narrow read.
+  const { stationId, from = '', to = '' } = filters;
   return useQuery({
-    queryKey: queryKeys.attendantHandoverReport(stationId ?? '', from, to, attendantId ?? ''),
-    queryFn: () =>
-      shiftService.getAttendantHandoverReport({ stationId: stationId!, from, to, attendantId }),
+    queryKey: queryKeys.attendantHandoverReport(stationId ?? '', from, to),
+    queryFn: () => shiftService.getAttendantHandoverReport({ stationId: stationId!, from, to }),
     enabled: !!stationId && !!from && !!to,
     ...TIER.operational,
     ...options,
@@ -810,8 +811,6 @@ export function useInvalidateOperational() {
       // The Attendant Handover Report reads closed-shift handovers, so closing
       // a shift (or correcting one) changes it within the same session.
       qc.invalidateQueries({ queryKey: ['attendant-handover-report'] }),
-      // The Attendant Handover Report reads closed-shift handovers, so closing
-      // a shift (or correcting one) changes it within the same session.
       // Business Day cockpit + P&L read the live DSSR preview — refresh it too.
       qc.invalidateQueries({ queryKey: ['dssr'] }),
       qc.invalidateQueries({ queryKey: ['dssr-preview'] }),

@@ -117,13 +117,33 @@ const ReportConfigForm: React.FC<ReportConfigPanelProps> = ({ selectedStation, o
     .filter(Boolean)
     .join('  •  ');
 
-  const activeList = previewDoc === 'shiftSummary' ? ss : previewDoc === 'dssr' ? dssr : attendant;
-  const activeLabels: Record<string, string> =
-    previewDoc === 'shiftSummary'
-      ? SHIFT_SUMMARY_SECTION_LABELS
-      : previewDoc === 'dssr'
-        ? DSSR_SECTION_LABELS
-        : ATTENDANT_REPORT_SECTION_LABELS;
+  /*
+   * One entry per configurable document, so adding a fourth report means
+   * adding a row here — not another branch in the several places that switch
+   * on the previewed document. The title is part of the entry: a preview that
+   * names the wrong document is worse than no preview.
+   */
+  const docs: Record<
+    PreviewDoc,
+    { list: OrderedSection[]; labels: Record<string, string>; title: string }
+  > = {
+    shiftSummary: {
+      list: ss,
+      labels: SHIFT_SUMMARY_SECTION_LABELS,
+      title: 'SHIFT SUMMARY RECORD',
+    },
+    dssr: {
+      list: dssr,
+      labels: DSSR_SECTION_LABELS,
+      title: 'DAILY SALES SUMMARY RECORD',
+    },
+    attendantReport: {
+      list: attendant,
+      labels: ATTENDANT_REPORT_SECTION_LABELS,
+      title: 'ATTENDANT HANDOVER REPORT',
+    },
+  };
+  const { list: activeList, labels: activeLabels, title: previewTitle } = docs[previewDoc];
   const previewSections = useMemo(
     () => activeList.filter((s) => s.enabled).map((s) => activeLabels[s.key] || s.key),
     [activeList, activeLabels],
@@ -409,9 +429,7 @@ const ReportConfigForm: React.FC<ReportConfigPanelProps> = ({ selectedStation, o
                     marginTop: 2,
                   }}
                 >
-                  {previewDoc === 'shiftSummary'
-                    ? 'SHIFT SUMMARY RECORD'
-                    : 'DAILY SALES SUMMARY RECORD'}
+                  {previewTitle}
                 </div>
               </div>
               {showLogo && logo ? (

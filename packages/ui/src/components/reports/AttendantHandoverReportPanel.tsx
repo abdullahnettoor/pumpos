@@ -185,27 +185,20 @@ const AttendantHandoverReportBody: React.FC<AttendantHandoverReportPanelProps> =
     stationId,
     from: range.from,
     to: range.to,
-    attendantId: attendantId || undefined,
   });
   const report: AttendantHandoverReport | undefined = reportQ.data;
-  const attendants = useMemo(() => report?.attendants ?? [], [report]);
 
-  /**
-   * Filter options come from an unfiltered read of the same period, so
-   * selecting one attendant does not empty the list you selected from.
+  /*
+   * The period is fetched once, unfiltered, and the attendant filter is
+   * applied to what is already here. The server supports `attendantId`, but
+   * asking it again would re-fetch a subset of a payload the client is
+   * already holding — and would empty the very list the filter selects from.
    */
-  const optionsQ = useAttendantHandoverReport({
-    stationId,
-    from: range.from,
-    to: range.to,
-  });
-  const attendantOptions = useMemo(
+  const allAttendants = useMemo(() => report?.attendants ?? [], [report]);
+  const attendants = useMemo(
     () =>
-      (optionsQ.data?.attendants ?? []).map((a) => ({
-        value: a.attendantId,
-        label: a.attendantName,
-      })),
-    [optionsQ.data],
+      attendantId ? allAttendants.filter((a) => a.attendantId === attendantId) : allAttendants,
+    [allAttendants, attendantId],
   );
 
   const totals = useMemo(
@@ -223,12 +216,14 @@ const AttendantHandoverReportBody: React.FC<AttendantHandoverReportPanelProps> =
 
   const openAttendant = attendants.find((a) => a.attendantId === openAttendantId) ?? null;
 
-  const exportStatement = (entry: AttendantReportEntry) =>
+  // Only reachable from the drawer, which only opens over a loaded report —
+  // so the statement always carries the instant its figures were composed.
+  const exportStatement = (entry: AttendantReportEntry, composedAt: string) =>
     runTask(
       generateAttendantReportPdf(selectedStation, entry, {
         from: range.from,
         to: range.to,
-        generatedAt: report?.generatedAt,
+        generatedAt: composedAt,
       }),
       'Could not export the attendant statement.',
     );
@@ -257,9 +252,9 @@ const AttendantHandoverReportBody: React.FC<AttendantHandoverReportPanelProps> =
                 aria-label="Filter by attendant"
               >
                 <option value="">All attendants</option>
-                {attendantOptions.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
+                {allAttendants.map((a) => (
+                  <option key={a.attendantId} value={a.attendantId}>
+                    {a.attendantName}
                   </option>
                 ))}
               </Select>
@@ -370,7 +365,9 @@ const AttendantHandoverReportBody: React.FC<AttendantHandoverReportPanelProps> =
         attendant={openAttendant}
         range={range}
         onClose={() => setOpenAttendantId(null)}
-        onExport={() => openAttendant && exportStatement(openAttendant)}
+        onExport={() =>
+          openAttendant && report && exportStatement(openAttendant, report.generatedAt)
+        }
       />
     </div>
   );

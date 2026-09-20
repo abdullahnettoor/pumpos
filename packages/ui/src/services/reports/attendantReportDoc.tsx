@@ -37,7 +37,8 @@ export {
 export interface AttendantStatementData extends AttendantReportEntry {
   from: string;
   to: string;
-  generatedAt?: string;
+  /** The instant the report was composed — never the moment of printing. */
+  generatedAt: string;
 }
 
 const shiftLabel = (shift: AttendantReportShift): string =>
@@ -64,7 +65,7 @@ const builders: Record<
       />
       <Text style={s.sub}>
         {d.attendantName} • {d.from} to {d.to}
-        {d.generatedAt ? ` • Generated ${fmtDateTime(d.generatedAt)}` : ''}
+        {` • Generated ${fmtDateTime(d.generatedAt)}`}
       </Text>
       <Text style={s.sub}>
         Closed shifts only. Sales components are listed separately; fuel expected is metered from
@@ -295,7 +296,7 @@ export const AttendantReportDoc: React.FC<{
       <View style={s.foot} fixed>
         {/* The instant the report was composed — a re-print must not claim to
             be newer than the data it prints. */}
-        <Text>Generated {fmtDateTime(data.generatedAt) || new Date().toLocaleString('en-IN')}</Text>
+        <Text>Generated {fmtDateTime(data.generatedAt)}</Text>
         <Text render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} />
       </View>
     </Page>
