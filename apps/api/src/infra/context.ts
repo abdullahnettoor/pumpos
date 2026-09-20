@@ -61,3 +61,40 @@ export function buildContext(
     ids,
   };
 }
+
+/** Identity of the PumpOS platform administrator acting on an Organization. */
+export interface PlatformAdminPrincipal {
+  email: string;
+  subjectId: string | null;
+}
+
+/**
+ * Build an ExecutionContext for a platform command acting on one Organization.
+ *
+ * `actorId` stays null: a platform administrator is not a tenant User, so the
+ * actor lives in the snapshot (and on the row) as an email + auth subject.
+ */
+export function buildPlatformContext(
+  admin: PlatformAdminPrincipal,
+  organizationId: string,
+): ActivityExecutionContext {
+  const ids = new UuidGenerator();
+  return {
+    organizationId,
+    stationId: null,
+    businessDayId: null,
+    actorId: null,
+    correlationId: ids.newId(),
+    actorSnapshot: {
+      kind: 'platform_admin',
+      displayName: admin.email,
+      role: 'Platform Admin',
+      subjectId: admin.subjectId,
+    },
+    groupingRole: 'primary',
+    timeZone: null,
+    businessDayStartsAt: null,
+    clock: new SystemClock(),
+    ids,
+  };
+}

@@ -11,6 +11,8 @@ import {
   DrizzleDssrDataReader,
 } from '../infra/repositories/reporting-repositories.js';
 import { DrizzleBusinessDayRepository } from '../infra/repositories/station-ops-repositories.js';
+import { sendResult } from '../infra/send-result.js';
+import { writePolicyGuard } from '../infra/write-policy-guard.js';
 
 type Variables = {
   db: DbClient;
@@ -18,21 +20,6 @@ type Variables = {
 };
 
 export const dssrRouter = new Hono<{ Variables: Variables }>();
-
-const STATUS_BY_CODE: Record<string, number> = {
-  VALIDATION_ERROR: 400,
-  NOT_FOUND: 404,
-  CONFLICT: 409,
-  FORBIDDEN: 403,
-  UNAUTHORIZED: 401,
-  INVARIANT_VIOLATION: 409,
-};
-
-function sendResult<T>(c: any, result: Result<T>) {
-  if (result.success) return c.json({ success: true, data: result.data });
-  const status = STATUS_BY_CODE[result.error.code] ?? 400;
-  return c.json({ success: false, error: result.error }, status);
-}
 
 async function buildLiveDssrPreview(
   db: DbClient,
@@ -94,7 +81,7 @@ async function loadPersistedDssr(
 }
 
 // POST /api/dssr/daily/generate — { stationId, businessDate } | { businessDayId }
-dssrRouter.post('/daily/generate', async (c) => {
+dssrRouter.post('/daily/generate', writePolicyGuard('POST /dssr/daily/generate'), async (c) => {
   const db = c.var.db;
   const user = c.var.user;
   if (!canExportReports(user.role)) {

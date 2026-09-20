@@ -52,6 +52,8 @@ import {
 import { LedgerPostingService } from '../infra/ledger-posting.js';
 import { DrizzleStockVarianceRepository } from '../infra/repositories/inventory-repositories.js';
 import { DrizzleShiftSummaryProjector } from '../infra/shift-summary-projection.js';
+import { sendResult } from '../infra/send-result.js';
+import { writePolicyGuard } from '../infra/write-policy-guard.js';
 
 type Variables = {
   db: DbClient;
@@ -59,21 +61,6 @@ type Variables = {
 };
 
 export const shiftsRouter = new Hono<{ Variables: Variables }>();
-
-const STATUS_BY_CODE: Record<string, number> = {
-  VALIDATION_ERROR: 400,
-  NOT_FOUND: 404,
-  CONFLICT: 409,
-  FORBIDDEN: 403,
-  UNAUTHORIZED: 401,
-  INVARIANT_VIOLATION: 409,
-};
-
-function sendResult<T>(c: any, result: Result<T>) {
-  if (result.success) return c.json({ success: true, data: result.data });
-  const status = STATUS_BY_CODE[result.error.code] ?? 400;
-  return c.json({ success: false, error: result.error }, status);
-}
 
 function canManageDay(role: Role): boolean {
   return role === 'Owner' || role === 'Manager';
@@ -1309,7 +1296,7 @@ shiftsRouter.get('/handovers', async (c) => {
 });
 
 // POST /api/shifts/handovers
-shiftsRouter.post('/handovers', async (c) => {
+shiftsRouter.post('/handovers', writePolicyGuard('POST /shifts/handovers'), async (c) => {
   const db = c.var.db;
   const user = c.var.user;
   if (!canRecordHandover(user.role)) {
@@ -1401,7 +1388,7 @@ shiftsRouter.post('/handovers', async (c) => {
 });
 
 // POST /api/shifts/open
-shiftsRouter.post('/open', async (c) => {
+shiftsRouter.post('/open', writePolicyGuard('POST /shifts/open'), async (c) => {
   const user = c.var.user;
   if (!canOpenShift(user.role)) {
     return c.json(
@@ -1441,7 +1428,7 @@ shiftsRouter.post('/open', async (c) => {
 });
 
 // PUT /api/shifts/readings
-shiftsRouter.put('/readings', async (c) => {
+shiftsRouter.put('/readings', writePolicyGuard('PUT /shifts/readings'), async (c) => {
   const user = c.var.user;
   const body = await c.req.json().catch(() => ({}));
   const db = c.var.db;
@@ -1497,7 +1484,7 @@ shiftsRouter.put('/readings', async (c) => {
 });
 
 // POST /api/shifts/close
-shiftsRouter.post('/close', async (c) => {
+shiftsRouter.post('/close', writePolicyGuard('POST /shifts/close'), async (c) => {
   const user = c.var.user;
   if (!canCloseShift(user.role)) {
     return c.json(
@@ -1588,7 +1575,7 @@ shiftsRouter.post('/close', async (c) => {
 });
 
 // POST /api/shifts/reopen
-shiftsRouter.post('/reopen', async (c) => {
+shiftsRouter.post('/reopen', writePolicyGuard('POST /shifts/reopen'), async (c) => {
   const user = c.var.user;
   if (!canReopenShift(user.role)) {
     return c.json(
@@ -1648,7 +1635,7 @@ shiftsRouter.post('/reopen', async (c) => {
 });
 
 // POST /api/shifts/lock
-shiftsRouter.post('/lock', async (c) => {
+shiftsRouter.post('/lock', writePolicyGuard('POST /shifts/lock'), async (c) => {
   const user = c.var.user;
   if (!canManageDay(user.role)) {
     return c.json(
@@ -1705,82 +1692,90 @@ shiftsRouter.post('/lock', async (c) => {
 });
 
 // POST /api/shifts/business-day/open
-shiftsRouter.post('/business-day/open', async (c) => {
-  const user = c.var.user;
-  if (!canManageDay(user.role)) {
-    return c.json(
-      {
-        success: false,
-        error: { code: 'FORBIDDEN', message: 'Only Owners/Managers can open a business day' },
-      },
-      403,
+shiftsRouter.post(
+  '/business-day/open',
+  writePolicyGuard('POST /shifts/business-day/open'),
+  async (c) => {
+    const user = c.var.user;
+    if (!canManageDay(user.role)) {
+      return c.json(
+        {
+          success: false,
+          error: { code: 'FORBIDDEN', message: 'Only Owners/Managers can open a business day' },
+        },
+        403,
+      );
+    }
+    const body = await c.req.json().catch(() => ({}));
+    const db = c.var.db;
+    if (
+      !body?.stationId ||
+      !isAuthorizedForStation(user, {
+        organizationId: user.organizationId,
+        stationId: body.stationId,
+      })
+    ) {
+      return c.json(
+        { success: false, error: { code: 'FORBIDDEN', message: 'No access to this Station' } },
+        403,
+      );
+    }
+    const clock = await loadStationClock(db, body?.stationId);
+    const result = await runInTransaction(db, (tx, events) =>
+      new OpenBusinessDay({ repository: new DrizzleBusinessDayRepository(tx), events }).execute(
+        body,
+        buildContext(user, { stationId: body?.stationId, ...clock }),
+      ),
     );
-  }
-  const body = await c.req.json().catch(() => ({}));
-  const db = c.var.db;
-  if (
-    !body?.stationId ||
-    !isAuthorizedForStation(user, {
-      organizationId: user.organizationId,
-      stationId: body.stationId,
-    })
-  ) {
-    return c.json(
-      { success: false, error: { code: 'FORBIDDEN', message: 'No access to this Station' } },
-      403,
-    );
-  }
-  const clock = await loadStationClock(db, body?.stationId);
-  const result = await runInTransaction(db, (tx, events) =>
-    new OpenBusinessDay({ repository: new DrizzleBusinessDayRepository(tx), events }).execute(
-      body,
-      buildContext(user, { stationId: body?.stationId, ...clock }),
-    ),
-  );
-  return sendResult(c, result);
-});
+    return sendResult(c, result);
+  },
+);
 
 // POST /api/shifts/business-day/close
-shiftsRouter.post('/business-day/close', async (c) => {
-  const user = c.var.user;
-  if (!canManageDay(user.role)) {
-    return c.json(
-      {
-        success: false,
-        error: { code: 'FORBIDDEN', message: 'Only Owners/Managers can close a business day' },
-      },
-      403,
-    );
-  }
-  const body = await c.req.json().catch(() => ({}));
-  const db = c.var.db;
-  if (
-    !body?.stationId ||
-    !isAuthorizedForStation(user, {
-      organizationId: user.organizationId,
-      stationId: body.stationId,
-    })
-  ) {
-    return c.json(
-      { success: false, error: { code: 'FORBIDDEN', message: 'No access to this Station' } },
-      403,
-    );
-  }
-  const result = await runInTransaction(db, async (tx, events) => {
-    const businessDays = new DrizzleBusinessDayRepository(tx);
-    return new CloseBusinessDayAndGenerateDssr({
-      businessDays,
-      openShifts: new DrizzleShiftRepository(tx),
-      snapshots: new DrizzleDssrSnapshotRepository(tx),
-      dssrData: new DrizzleDssrDataReader(tx),
-      events,
-    }).execute(
-      body,
-      buildContext(user, { stationId: body.stationId, businessDayId: body.businessDayId }),
-    );
-  });
-  return sendResult(c, result);
-});
+shiftsRouter.post(
+  '/business-day/close',
+  writePolicyGuard('POST /shifts/business-day/close'),
+  async (c) => {
+    const user = c.var.user;
+    if (!canManageDay(user.role)) {
+      return c.json(
+        {
+          success: false,
+          error: { code: 'FORBIDDEN', message: 'Only Owners/Managers can close a business day' },
+        },
+        403,
+      );
+    }
+    const body = await c.req.json().catch(() => ({}));
+    const db = c.var.db;
+    if (
+      !body?.stationId ||
+      !isAuthorizedForStation(user, {
+        organizationId: user.organizationId,
+        stationId: body.stationId,
+      })
+    ) {
+      return c.json(
+        { success: false, error: { code: 'FORBIDDEN', message: 'No access to this Station' } },
+        403,
+      );
+    }
+    const result = await runInTransaction(db, async (tx, events) => {
+      const businessDays = new DrizzleBusinessDayRepository(tx);
+      return new CloseBusinessDayAndGenerateDssr({
+        businessDays,
+        openShifts: new DrizzleShiftRepository(tx),
+        snapshots: new DrizzleDssrSnapshotRepository(tx),
+        dssrData: new DrizzleDssrDataReader(tx),
+        events,
+      }).execute(
+        body,
+        buildContext(user, { stationId: body.stationId, businessDayId: body.businessDayId }),
+      );
+    });
+    return sendResult(c, result);
+  },
+);
 
 // GET /api/shifts/shift-summaries?stationId=...&limit=...&before=...
 // Serves the STORED snapshot per summary — the snapshot is kept current at

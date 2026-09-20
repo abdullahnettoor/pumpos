@@ -14,6 +14,10 @@ import type {
   Result,
   UseCase,
 } from '../../../kernel/index.js';
+import {
+  ensureStationCapacity,
+  type StationCapacityPort,
+} from '../../organization-access/station-capacity.js';
 
 export interface Station {
   id: string;
@@ -86,12 +90,25 @@ export interface StationDeps {
   events: EventPublisher;
 }
 
+export interface CreateStationDeps extends StationDeps {
+  /**
+   * Station capacity guard. Required, like the onboarding one: every path that
+   * creates a Station row must consume `station_count`, or the Limit is
+   * bypassable by picking the other endpoint.
+   */
+  capacity: StationCapacityPort;
+}
+
 export class CreateStation implements UseCase<CreateStationCommand, Station> {
-  constructor(private readonly deps: StationDeps) {}
+  constructor(private readonly deps: CreateStationDeps) {}
   async execute(input: CreateStationCommand, ctx: ExecutionContext): Promise<Result<Station>> {
     const p = createSchema.safeParse(input);
     if (!p.success)
       return err(validationError('Invalid CreateStation command', { issues: p.error.flatten() }));
+
+    const capacity = await ensureStationCapacity(this.deps.capacity, ctx.organizationId);
+    if (!capacity.success) return capacity;
+
     const now = ctx.clock.now().toISOString();
     const station: Station = {
       id: ctx.ids.newId(),

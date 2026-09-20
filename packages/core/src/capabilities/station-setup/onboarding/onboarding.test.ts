@@ -145,12 +145,29 @@ describe('validateOnboardingDraftForProvisioning', () => {
   });
 });
 
+/**
+ * Capacity enforcement has its own suite (station-capacity.test.ts); these
+ * cases run with room to spare so they exercise provisioning, not the Limit.
+ */
+const capacity = {
+  lockOrganization: async () => {},
+  load: async () => ({
+    plan: 'CORE',
+    subscriptionStatus: 'ACTIVE',
+    accessUntil: null,
+    grantedCapabilities: [],
+    limitOverrides: {},
+    usage: { station_count: 0 },
+  }),
+};
+
 describe('FinalizeStationOnboarding', () => {
   it('provisions and emits ONBOARDING_COMPLETED', async () => {
     const store = new InMemoryEventStore();
     const provisioner = new FakeProvisioner(ok(okResult));
     const result = await new FinalizeStationOnboarding({
       provisioner,
+      capacity,
       events: new InProcessEventDispatcher({ store }),
     }).execute(validDraft(), ctx());
     expect(result.success).toBe(true);
@@ -164,6 +181,7 @@ describe('FinalizeStationOnboarding', () => {
     d.products = [];
     const result = await new FinalizeStationOnboarding({
       provisioner,
+      capacity,
       events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
     }).execute(d, ctx());
     expect(result.success).toBe(false);
@@ -177,6 +195,7 @@ describe('FinalizeStationOnboarding', () => {
     );
     const result = await new FinalizeStationOnboarding({
       provisioner,
+      capacity,
       events: new InProcessEventDispatcher({ store }),
     }).execute(validDraft(), ctx());
     expect(result.success).toBe(false);

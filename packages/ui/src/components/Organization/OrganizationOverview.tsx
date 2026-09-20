@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Station } from '@pump/shared';
+import { Station, stationLimitMessage } from '@pump/shared';
 import { PageLayout } from '../primitives/PageLayout.js';
 import { Tabs } from '../primitives/Tabs.js';
 import { Chip, Button } from '../../pump-ds/index.js';
@@ -7,6 +7,7 @@ import { UserRolesAssignment } from '../StationSetup/UserRolesAssignment.js';
 import { OrgProfile } from './OrgProfile.js';
 import { ActivityFeed } from './ActivityFeed.js';
 import { Check, Fuel, Users, Plus } from 'lucide-react';
+import { useAccess } from '../../query/hooks.js';
 
 export interface OrganizationOverviewProps {
   stations: Station[];
@@ -51,6 +52,19 @@ export const OrganizationOverview: React.FC<OrganizationOverviewProps> = ({
   onNavigate,
 }) => {
   const [tab, setTab] = useState<'stations' | 'team' | 'activity' | 'profile'>('stations');
+
+  // Station capacity comes from the Access Document. The server already
+  // decided what this user may see: only Owners and Managers receive the plan
+  // key, so that is the signal for showing commercial guidance at all. The API
+  // enforces the Limit regardless of what is rendered here.
+  const { data: access } = useAccess();
+  const stationCapacity = access?.limits?.station_count;
+  const showsCapacity = Boolean(access?.plan) && stationCapacity !== undefined;
+  const capacityReached = stationCapacity?.reached === true;
+  const capacityMessage =
+    stationCapacity && stationCapacity.reached
+      ? stationLimitMessage(stationCapacity.value)
+      : undefined;
 
   const hasReadyStation = stations.some(
     (s) => (s as any).onboardingStatus === 'READY_FOR_OPERATIONS',
@@ -103,6 +117,8 @@ export const OrganizationOverview: React.FC<OrganizationOverviewProps> = ({
                   variant="primary"
                   size="sm"
                   leftIcon={<Fuel size={14} />}
+                  disabled={capacityReached}
+                  title={capacityMessage}
                   onClick={() => onNavigate('/onboarding')}
                 >
                   Onboard station
@@ -128,25 +144,41 @@ export const OrganizationOverview: React.FC<OrganizationOverviewProps> = ({
               gap: '12px',
             }}
           >
-            <span
-              style={{
-                fontSize: '12px',
-                fontWeight: 600,
-                color: 'var(--text-muted)',
-                textTransform: 'uppercase',
-                letterSpacing: '0.05em',
-              }}
-            >
-              Stations
-            </span>
-            <Button
-              variant="secondary"
-              size="sm"
-              leftIcon={<Plus size={14} />}
-              onClick={() => onNavigate('/onboarding')}
-            >
-              Onboard station
-            </Button>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px' }}>
+              <span
+                style={{
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  color: 'var(--text-muted)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                }}
+              >
+                Stations
+              </span>
+              {showsCapacity && stationCapacity && (
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                  {stationCapacity.used} of {stationCapacity.value} used
+                </span>
+              )}
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              {capacityReached && capacityMessage && (
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                  {capacityMessage}
+                </span>
+              )}
+              <Button
+                variant="secondary"
+                size="sm"
+                leftIcon={<Plus size={14} />}
+                disabled={capacityReached}
+                title={capacityMessage}
+                onClick={() => onNavigate('/onboarding')}
+              >
+                Onboard station
+              </Button>
+            </div>
           </div>
 
           {stations.length === 0 ? (

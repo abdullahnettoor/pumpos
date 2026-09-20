@@ -20,6 +20,7 @@ import {
   AttendantHandoverInput,
   FinalizeOnboardingPayload,
   FinalizeOnboardingResult,
+  AccessDocument,
 } from '@pump/shared';
 import { getAccessToken, refreshAccessToken } from './auth/tokenStore.js';
 
@@ -1257,6 +1258,13 @@ export class CloudPricingService {
       method: 'POST',
       body: JSON.stringify(payload),
     });
+  }
+}
+
+export class CloudAccessService {
+  /** The caller's role-filtered Access Document. Presentation data only. */
+  async getAccess(): Promise<AccessDocument> {
+    return request<AccessDocument>('/access');
   }
 }
 

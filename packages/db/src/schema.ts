@@ -10,6 +10,7 @@ import {
   primaryKey,
   index,
   uniqueIndex,
+  check,
 } from 'drizzle-orm/pg-core';
 import { desc, sql } from 'drizzle-orm';
 
@@ -20,8 +21,19 @@ import { desc, sql } from 'drizzle-orm';
 export const organizations = pgTable('organizations', {
   id: uuid('id').defaultRandom().primaryKey(),
   name: varchar('name', { length: 255 }).notNull(),
-  subscriptionPlan: varchar('subscription_plan', { length: 50 }).default('Core').notNull(),
-  subscriptionStatus: varchar('subscription_status', { length: 50 }).default('Active').notNull(),
+  // Typed access fields (Phase E1). Plan keys and Subscription Statuses are
+  // defined in `@pump/core` (organization-access registry); the column is a
+  // plain varchar so a deploy can add a plan without a schema migration.
+  subscriptionPlan: varchar('subscription_plan', { length: 50 }).default('CORE').notNull(),
+  subscriptionStatus: varchar('subscription_status', { length: 50 }).default('ACTIVE').notNull(),
+  /** Instant access is paid through. Null means no dated grace. */
+  accessUntil: timestamp('access_until', { withTimezone: true }),
+  /**
+   * When PumpOS manually stopped this Organization for a security, legal,
+   * fraud or abuse reason. Deliberately NOT a Subscription Status: suspension
+   * is independent of billing, so paying an invoice must never clear it.
+   */
+  suspendedAt: timestamp('suspended_at', { withTimezone: true }),
   metadata: jsonb('metadata').default({}).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
@@ -1099,5 +1111,73 @@ export const handoverTerminalEntries = pgTable(
   (t) => ({
     handoverIdx: index('handover_terminal_entries_handover_idx').on(t.handoverId),
     shiftIdx: index('handover_terminal_entries_shift_idx').on(t.shiftId),
+  }),
+);
+
+// ----------------------------------------------------
+// ORGANIZATION ACCESS (Phase E)
+// ----------------------------------------------------
+
+/**
+ * Append-only history of Product Capability grants. A revocation closes the
+ * active row; regranting inserts a new one, so each access period stays
+ * visible. Actor columns are platform snapshots, not tenant `users` FKs.
+ * Tenant database roles cannot read this table — clients receive only the
+ * effective, role-filtered Access Document.
+ */
+export const organizationCapabilityGrants = pgTable(
+  'organization_capability_grants',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    organizationId: uuid('organization_id')
+      .references(() => organizations.id)
+      .notNull(),
+    capabilityKey: varchar('capability_key', { length: 100 }).notNull(),
+    grantedBySubject: varchar('granted_by_subject', { length: 255 }),
+    grantedByEmail: varchar('granted_by_email', { length: 255 }).notNull(),
+    reason: varchar('reason', { length: 500 }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    revokedBySubject: varchar('revoked_by_subject', { length: 255 }),
+    revokedByEmail: varchar('revoked_by_email', { length: 255 }),
+  },
+  (t) => ({
+    orgIdx: index('organization_capability_grants_org_idx').on(t.organizationId),
+    // At most one active grant per Organization and capability.
+    activeUniq: uniqueIndex('organization_capability_grants_active_uniq')
+      .on(t.organizationId, t.capabilityKey)
+      .where(sql`${t.revokedAt} IS NULL`),
+  }),
+);
+
+/**
+ * Append-only history of Limit overrides. An active override replaces the
+ * Product Plan value; changing it closes the old row and inserts a new one
+ * rather than editing history in place.
+ */
+export const organizationLimitOverrides = pgTable(
+  'organization_limit_overrides',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    organizationId: uuid('organization_id')
+      .references(() => organizations.id)
+      .notNull(),
+    limitKey: varchar('limit_key', { length: 100 }).notNull(),
+    value: integer('value').notNull(),
+    assignedBySubject: varchar('assigned_by_subject', { length: 255 }),
+    assignedByEmail: varchar('assigned_by_email', { length: 255 }).notNull(),
+    /** Required for manual overrides: support must be able to explain the contract. */
+    reason: varchar('reason', { length: 500 }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    revokedBySubject: varchar('revoked_by_subject', { length: 255 }),
+    revokedByEmail: varchar('revoked_by_email', { length: 255 }),
+  },
+  (t) => ({
+    orgIdx: index('organization_limit_overrides_org_idx').on(t.organizationId),
+    activeUniq: uniqueIndex('organization_limit_overrides_active_uniq')
+      .on(t.organizationId, t.limitKey)
+      .where(sql`${t.revokedAt} IS NULL`),
+    positiveValue: check('organization_limit_overrides_value_positive', sql`${t.value} > 0`),
   }),
 );

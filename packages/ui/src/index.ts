@@ -76,6 +76,8 @@ export type {
 export { DesignSystem } from './components/DesignSystem.js';
 
 // Data layer (TanStack Query) + shared primitives
+export * from './access/CapabilityGate.js';
+export * from './access/SubscriptionNotice.js';
 export * from './query/queryClient.js';
 export * from './query/hooks.js';
 export * from './query/handoverMutation.js';

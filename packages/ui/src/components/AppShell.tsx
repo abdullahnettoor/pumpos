@@ -14,6 +14,7 @@ export interface NavItem {
 
 export type { NavIntent } from '../nav-intent/store.js';
 import type { NavIntent } from '../nav-intent/store.js';
+import { SubscriptionNotice } from '../access/SubscriptionNotice.js';
 
 export interface AppShellProps {
   children: React.ReactNode;
@@ -313,6 +314,9 @@ export const AppShell: React.FC<AppShellProps> = ({
               {environmentTag}
             </div>
           ) : null}
+          {/* Subscription state is app-wide, so the notice sits above every
+              screen rather than being remembered on each one. */}
+          <SubscriptionNotice />
           {children}
         </main>
       </div>
