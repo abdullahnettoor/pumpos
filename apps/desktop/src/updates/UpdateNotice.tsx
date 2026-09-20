@@ -33,13 +33,16 @@ import { releaseNotesBody, releaseSummaryLine } from './version.js';
 export const UpdateNotice: React.FC<{ updates: DesktopUpdates }> = ({ updates }) => {
   const { state } = updates;
   const view = updates.enabled && state ? describeUpdateState(state, updates) : null;
-  // Notes belong to the offer, not to the session. Remembering *which* state
+  // Notes belong to the offer, not to the session. Remembering *which* offer
   // the drawer was opened for closes it by derivation once the state moves on
-  // (downloaded, failed, dismissed), with no effect to resynchronise.
-  const [notesOpenFor, setNotesOpenFor] = useState<UpdateState['phase'] | null>(null);
+  // (downloaded, failed, dismissed), with no effect to resynchronise. The
+  // version is part of that identity: one offer replacing another must not
+  // leave the new notes open under the old intent.
+  const [notesOpenFor, setNotesOpenFor] = useState<string | null>(null);
 
   if (!view) return null;
-  const notesOpen = notesOpenFor === view.key;
+  const offer = `${view.key}:${view.version ?? ''}`;
+  const notesOpen = notesOpenFor === offer;
 
   return (
     <>
@@ -90,7 +93,7 @@ export const UpdateNotice: React.FC<{ updates: DesktopUpdates }> = ({ updates })
 
           {view.notes ? (
             <span style={{ display: 'block', marginTop: 'var(--space-1)' }}>
-              <Button variant="ghost" size="xs" onClick={() => setNotesOpenFor(view.key)}>
+              <Button variant="ghost" size="xs" onClick={() => setNotesOpenFor(offer)}>
                 What&apos;s new
               </Button>
             </span>
@@ -124,27 +127,23 @@ export const UpdateNotice: React.FC<{ updates: DesktopUpdates }> = ({ updates })
             // acting and putting the offer away.
             view.action || view.onDismiss ? (
               <span style={{ display: 'flex', gap: 'var(--space-2)', justifyContent: 'flex-end' }}>
-                {view.onDismiss ? (
-                  <Button
-                    variant="secondary"
-                    onClick={() => {
-                      setNotesOpenFor(null);
-                      view.onDismiss?.onClick();
-                    }}
-                  >
-                    {view.onDismiss.label}
-                  </Button>
-                ) : null}
-                {view.action ? (
-                  <Button
-                    onClick={() => {
-                      setNotesOpenFor(null);
-                      view.action?.onClick();
-                    }}
-                  >
-                    {view.action.label}
-                  </Button>
-                ) : null}
+                {[
+                  { choice: view.onDismiss, variant: 'secondary' as const },
+                  { choice: view.action, variant: 'primary' as const },
+                ].map(({ choice, variant }) =>
+                  choice ? (
+                    <Button
+                      key={variant}
+                      variant={variant}
+                      onClick={() => {
+                        setNotesOpenFor(null);
+                        choice.onClick();
+                      }}
+                    >
+                      {choice.label}
+                    </Button>
+                  ) : null,
+                )}
               </span>
             ) : undefined
           }
@@ -238,7 +237,6 @@ export function describeUpdateState(
         key: state.phase,
         severity: 'info',
         title: `Downloading PumpOS ${state.update.version}`,
-
         detail: formatProgress(state.progress),
         progress: state.progress,
       };
@@ -247,7 +245,6 @@ export function describeUpdateState(
         key: state.phase,
         severity: 'info',
         title: `PumpOS ${state.update.version} is ready to install`,
-
         detail: 'PumpOS will restart to finish. Nothing installs until you say so.',
         action: { label: 'Install and restart', onClick: actions.install },
         onDismiss: { label: 'Later', onClick: actions.postpone },
@@ -257,7 +254,6 @@ export function describeUpdateState(
         key: state.phase,
         severity: 'warning',
         title: 'Restart postponed',
-
         detail: `${state.reason} PumpOS will not restart until this clears.`,
         action: { label: 'Try again', onClick: actions.install },
         onDismiss: { label: 'Later', onClick: actions.postpone },
@@ -267,7 +263,6 @@ export function describeUpdateState(
         key: state.phase,
         severity: 'info',
         title: `Installing PumpOS ${state.update.version}…`,
-
         detail: 'Do not close PumpOS.',
       };
     case 'relaunch-ready':
@@ -277,7 +272,6 @@ export function describeUpdateState(
         key: state.phase,
         severity: 'success',
         title: `PumpOS ${state.update.version} is installed`,
-
         detail: 'Restart to start using it.',
         action: { label: 'Restart and update', onClick: actions.relaunch },
       };

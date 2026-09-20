@@ -278,6 +278,25 @@ describe('operator notes', () => {
     expect(operatorNotes('## For operators\nWhat we fix: rounding')).toBe('What we fix: rounding');
   });
 
+  it('keeps identifiers and bullets that look like markdown', () => {
+    const body = [
+      '## For operators',
+      '* Cash counts add up again',
+      'Check the _new_ business_day_id column in latest.json.',
+      'See the full changelog in the release for detail.',
+      '**Full Changelog**: https://github.com/a/b/compare/v1.3.1...v1.3.2',
+    ].join('\n');
+    // An asterisk bullet survives as a bullet; a snake_case column and a
+    // dotted filename survive intact; only GitHub's own trailer is furniture.
+    expect(operatorNotes(body)).toBe(
+      [
+        '- Cash counts add up again',
+        'Check the new business_day_id column in latest.json.',
+        'See the full changelog in the release for detail.',
+      ].join('\n'),
+    );
+  });
+
   it('lets no repository, pull-request or compare URL reach a client', () => {
     const notes = operatorNotes(
       [

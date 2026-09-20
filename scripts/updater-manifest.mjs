@@ -118,7 +118,12 @@ const OPERATOR_HEADING = /^#{1,6}\s*for operators\s*$/i;
 const MARKDOWN_HEADING = /^#{1,6}\s+/;
 
 /** Lines that are developer changelog furniture, never operator content. */
-const CHANGELOG_FURNITURE = [/^#{1,6}\s*what'?s changed\s*$/i, /full changelog/i];
+const CHANGELOG_FURNITURE = [
+  /^#{1,6}\s*what'?s changed\s*$/i,
+  // GitHub's own trailer, anchored: an operator line that merely mentions a
+  // full changelog is content, not furniture, and deleting it loses a sentence.
+  /^\*{0,2}full changelog\*{0,2}\s*:/i,
+];
 
 /**
  * Conventional-commit prefixes, in two forms, because they carry different
@@ -185,20 +190,34 @@ function cleanLine(line) {
     .replace(/\bhttps?:\/\/\S+/gi, '')
     .replace(/\bwww\.\S+/gi, '')
     .replace(/(^|[\s(])@[\w-]+/g, '$1')
-    .replace(/[*_`~]/g, '')
     .replace(/^#{1,6}\s+/, '')
     .replace(SCOPED_COMMIT_PREFIX, '');
 
+  // Bullets are normalised before emphasis is stripped, or a `*` bullet would
+  // be read as an emphasis marker and the line would lose its bullet entirely.
   const bullet = /^(\s*)[-*+]\s+/.exec(text);
   if (bullet) text = `${bullet[1]}- ${text.slice(bullet[0].length)}`;
 
-  const body = bullet ? text.slice(bullet[1].length + 2) : text;
-  const stripped = body.replace(COMMIT_PREFIX, '');
-  if (stripped !== body) {
-    text = bullet ? `${bullet[1]}- ${stripped}` : stripped;
-  }
+  const body = stripEmphasis(bullet ? text.slice(bullet[1].length + 2) : text).replace(
+    COMMIT_PREFIX,
+    '',
+  );
+  text = bullet ? `${bullet[1]}- ${body}` : body;
+
   // Stripping a URL or a mention mid-sentence leaves a double space behind.
   return text.replace(/[ \t]{2,}/g, ' ').replace(/\s+$/, '');
+}
+
+/**
+ * Drop markdown emphasis without touching identifiers.
+ *
+ * `*`, backtick and `~` are punctuation an operator summary has no other use
+ * for. `_` is not: it carries `business_day_id` and `latest.json`-style names,
+ * so only paired emphasis around a word boundary goes — mangling a column name
+ * into prose would corrupt the very text this exists to make legible.
+ */
+function stripEmphasis(text) {
+  return text.replace(/[*`~]/g, '').replace(/(^|[^\w_])_{1,2}([^_]+?)_{1,2}(?=[^\w_]|$)/g, '$1$2');
 }
 
 /**

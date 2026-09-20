@@ -48,7 +48,6 @@ describe('UpdateNotice rendering', () => {
       />,
     );
     expect(container.innerHTML).toBe('');
-    cleanup();
   });
 
   it('renders nothing while idle, so the shell is untouched until there is news', () => {
@@ -56,7 +55,6 @@ describe('UpdateNotice rendering', () => {
       <UpdateNotice updates={updates({ phase: 'idle', currentVersion: '1.0.0' })} />,
     );
     expect(container.innerHTML).toBe('');
-    cleanup();
   });
 
   it('announces state to assistive technology without stealing focus', () => {
@@ -65,7 +63,6 @@ describe('UpdateNotice rendering', () => {
     // announced where it changes rather than by moving the operator's focus.
     expect(screen.getByRole('status')).toBeTruthy();
     expect(document.activeElement).toBe(document.body);
-    cleanup();
   });
 
   it('shows the offered version, the installed version and one line of summary', () => {
@@ -77,7 +74,6 @@ describe('UpdateNotice rendering', () => {
     expect(screen.getByText('PumpOS 1.1.0 is available')).toBeTruthy();
     expect(screen.getByText(/You are on 1\.0\.0/)).toBeTruthy();
     expect(screen.getByText('Fixes drawer rounding.')).toBeTruthy();
-    cleanup();
   });
 
   it('keeps the notice compact: the body lives in the drawer, not in the notice', () => {
@@ -101,7 +97,6 @@ describe('UpdateNotice rendering', () => {
 
     fireEvent.click(screen.getByRole('button', { name: "What's new" }));
     expect(screen.getByText(/Another paragraph\./)).toBeTruthy();
-    cleanup();
   });
 
   it('closes the notes drawer without losing the update action', () => {
@@ -125,7 +120,6 @@ describe('UpdateNotice rendering', () => {
     // Acting closes the drawer and leaves the notice exactly where it was.
     expect(document.querySelector('.drawer-container')).toBeNull();
     expect(screen.getByRole('button', { name: 'Download update' })).toBeTruthy();
-    cleanup();
   });
 
   it('lets the operator close the notes and go back to the notice', () => {
@@ -138,7 +132,6 @@ describe('UpdateNotice rendering', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Close Drawer' }));
     expect(document.querySelector('.drawer-container')).toBeNull();
     expect(screen.getByRole('button', { name: 'Download update' })).toBeTruthy();
-    cleanup();
   });
 
   it('offers no "What\'s new" affordance when the release has no notes', () => {
@@ -152,7 +145,6 @@ describe('UpdateNotice rendering', () => {
       />,
     );
     expect(screen.queryByRole('button', { name: "What's new" })).toBeNull();
-    cleanup();
   });
 
   it('never renders release notes as markup, in either surface', () => {
@@ -172,7 +164,6 @@ describe('UpdateNotice rendering', () => {
     fireEvent.click(screen.getByRole('button', { name: "What's new" }));
     expect(document.querySelector('.drawer-body img')).toBeNull();
     expect(document.querySelector('.drawer-body')?.textContent).toBe(markup);
-    cleanup();
   });
 
   it('renders no link anywhere, so nothing sends an operator to a repository', () => {
@@ -187,7 +178,6 @@ describe('UpdateNotice rendering', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: "What's new" }));
     expect(document.querySelectorAll('a').length).toBe(0);
-    cleanup();
   });
 
   it('requires an explicit click to download', async () => {
@@ -203,7 +193,6 @@ describe('UpdateNotice rendering', () => {
     const button = screen.getByRole('button', { name: 'Download update' });
     button.click();
     expect(download).toHaveBeenCalledTimes(1);
-    cleanup();
   });
 
   it('is keyboard reachable: the action and the dismissal are both real buttons', () => {
@@ -214,7 +203,6 @@ describe('UpdateNotice rendering', () => {
     );
     expect(screen.getByRole('button', { name: 'Install and restart' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Later' })).toBeTruthy();
-    cleanup();
   });
 
   it('renders nothing once an offer is postponed', () => {
@@ -229,7 +217,6 @@ describe('UpdateNotice rendering', () => {
       />,
     );
     expect(container.innerHTML).toBe('');
-    cleanup();
   });
 
   it('puts an available offer away when the operator dismisses it', () => {
@@ -248,7 +235,6 @@ describe('UpdateNotice rendering', () => {
     // tell putting an update away from discarding a stale message.
     screen.getByRole('button', { name: 'Not now' }).click();
     expect(postpone).toHaveBeenCalledTimes(1);
-    cleanup();
   });
 
   it('draws determinate progress in the design system, not a native <progress>', () => {
@@ -266,7 +252,6 @@ describe('UpdateNotice rendering', () => {
     expect(bar.tagName).not.toBe('PROGRESS');
     expect(bar.getAttribute('aria-valuenow')).toBe('50');
     expect(screen.getByText('5.0 MB of 10.0 MB (50%)')).toBeTruthy();
-    cleanup();
   });
 
   it('stays honestly indeterminate when the server gave no content length', () => {
@@ -283,7 +268,6 @@ describe('UpdateNotice rendering', () => {
     // No bar at all rather than one creeping toward a number nobody measured.
     expect(screen.queryByRole('progressbar')).toBeNull();
     expect(screen.getByText('1.0 MB downloaded')).toBeTruthy();
-    cleanup();
   });
 });
 
