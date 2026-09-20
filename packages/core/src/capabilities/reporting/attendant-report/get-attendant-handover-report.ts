@@ -62,7 +62,7 @@ export class GetAttendantHandoverReport
     });
 
     return ok(
-      composeAttendantHandoverReport(source.handovers, {
+      composeAttendantHandoverReport(source, {
         stationId: p.data.stationId,
         from: p.data.from,
         to: p.data.to,

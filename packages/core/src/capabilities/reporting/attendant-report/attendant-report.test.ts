@@ -3,9 +3,11 @@ import { FixedClock, SequentialIdGenerator } from '../../../kernel/index.js';
 import type { ExecutionContext } from '../../../kernel/index.js';
 import { GetAttendantHandoverReport } from './get-attendant-handover-report.js';
 import type {
+  AttendantCreditSaleSourceRow,
   AttendantHandoverReportQuery,
   AttendantHandoverReportReader,
   AttendantHandoverSourceRow,
+  AttendantSaleSourceRow,
 } from './ports.js';
 
 const ORG = 'org-1';
@@ -45,18 +47,34 @@ function row(over: Partial<AttendantHandoverSourceRow> = {}): AttendantHandoverS
   };
 }
 
+interface SourceOverrides {
+  sales?: AttendantSaleSourceRow[];
+  creditSales?: AttendantCreditSaleSourceRow[];
+}
+
 /** Records the query it was asked for, so scoping can be asserted. */
 class Reader implements AttendantHandoverReportReader {
   lastQuery: AttendantHandoverReportQuery | null = null;
-  constructor(private readonly rows: AttendantHandoverSourceRow[]) {}
+  constructor(
+    private readonly rows: AttendantHandoverSourceRow[],
+    private readonly extra: SourceOverrides = {},
+  ) {}
   async read(query: AttendantHandoverReportQuery) {
     this.lastQuery = query;
-    return { handovers: this.rows };
+    return {
+      handovers: this.rows,
+      sales: this.extra.sales ?? [],
+      creditSales: this.extra.creditSales ?? [],
+    };
   }
 }
 
-function run(rows: AttendantHandoverSourceRow[], input?: Partial<Record<string, unknown>>) {
-  const reader = new Reader(rows);
+function run(
+  rows: AttendantHandoverSourceRow[],
+  input?: Partial<Record<string, unknown>>,
+  extra: SourceOverrides = {},
+) {
+  const reader = new Reader(rows, extra);
   const useCase = new GetAttendantHandoverReport({ reader });
   return {
     reader,
@@ -111,6 +129,8 @@ describe('GetAttendantHandoverReport', () => {
     expect(res.data.attendants[0].shiftsWorked).toBe(1);
     expect(res.data.attendants[0].handoverCount).toBe(2);
     expect(res.data.attendants[0].totals.cashHandedOver).toBe(300);
+    expect(res.data.attendants[0].shifts).toHaveLength(1);
+    expect(res.data.attendants[0].shifts[0].dispensers).toHaveLength(2);
   });
 
   it('returns an empty attendant list when no handovers fall in the range', async () => {
@@ -180,5 +200,81 @@ describe('GetAttendantHandoverReport', () => {
       '2026-03-02',
       '2026-03-05',
     ]);
+  });
+
+  describe('sales components', () => {
+    const sale = (over: Partial<AttendantSaleSourceRow>): AttendantSaleSourceRow => ({
+      shiftId: 's-1',
+      attendantId: 'att-1',
+      captureMechanism: 'POS',
+      totalAmount: 0,
+      ...over,
+    });
+
+    it('splits non-fuel sales into billed and handover product sales', async () => {
+      const { result } = run([row({ shiftId: 's-1' })], undefined, {
+        sales: [
+          sale({ captureMechanism: 'POS', totalAmount: 250 }),
+          sale({ captureMechanism: 'POS', totalAmount: 150 }),
+          sale({ captureMechanism: 'MERCH_HANDOVER', totalAmount: 900 }),
+        ],
+      });
+      const res = await result;
+      if (!res.success) throw new Error('expected success');
+      const totals = res.data.attendants[0].totals;
+      expect(totals.billedSales).toBe(400);
+      expect(totals.handoverProductSales).toBe(900);
+      // The bulk declaration is never also counted as a billed sale.
+      expect(totals.billedSales + totals.handoverProductSales).toBe(1300);
+    });
+
+    it('attributes fuel-on-credit chits to the attendant who raised them', async () => {
+      const { result } = run(
+        [row({ shiftId: 's-1' }), row({ handoverId: 'h-2', shiftId: 's-2' })],
+        undefined,
+        {
+          creditSales: [
+            { shiftId: 's-1', attendantId: 'att-1', amount: 800 },
+            { shiftId: 's-2', attendantId: 'att-1', amount: 200 },
+            { shiftId: 's-1', attendantId: 'att-2', amount: 999 },
+          ],
+        },
+      );
+      const res = await result;
+      if (!res.success) throw new Error('expected success');
+      const ravi = res.data.attendants.find((a) => a.attendantId === 'att-1');
+      expect(ravi?.totals.creditSales).toBe(1000);
+      expect(ravi?.shifts.find((s) => s.shiftId === 's-1')?.creditSales).toBe(800);
+    });
+
+    it('counts a shift component once even when the attendant worked two dispensers', async () => {
+      const { result } = run(
+        [
+          row({ handoverId: 'h-1', shiftId: 's-1', duId: 'du-1' }),
+          row({ handoverId: 'h-2', shiftId: 's-1', duId: 'du-2' }),
+        ],
+        undefined,
+        {
+          sales: [sale({ captureMechanism: 'POS', totalAmount: 500 })],
+          creditSales: [{ shiftId: 's-1', attendantId: 'att-1', amount: 300 }],
+        },
+      );
+      const res = await result;
+      if (!res.success) throw new Error('expected success');
+      expect(res.data.attendants[0].totals.billedSales).toBe(500);
+      expect(res.data.attendants[0].totals.creditSales).toBe(300);
+    });
+
+    it('reports zero components for a shift with none, without inventing a grand total', async () => {
+      const { result } = run([row({ expectedFuelSales: 1650 })]);
+      const res = await result;
+      if (!res.success) throw new Error('expected success');
+      const totals = res.data.attendants[0].totals;
+      expect(totals.billedSales).toBe(0);
+      expect(totals.handoverProductSales).toBe(0);
+      expect(totals.creditSales).toBe(0);
+      // Fuel expected stays its own component.
+      expect(totals.expectedFuelSales).toBe(1650);
+    });
   });
 });

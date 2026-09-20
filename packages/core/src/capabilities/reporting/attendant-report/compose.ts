@@ -1,24 +1,71 @@
 import type {
+  AttendantCreditSaleSourceRow,
   AttendantHandoverReport,
   AttendantHandoverReportEntry,
   AttendantHandoverReportShift,
-  AttendantHandoverSourceRow,
+  AttendantHandoverReportSource,
+  AttendantSaleSourceRow,
 } from './ports.js';
+
+/** The bulk end-of-shift merchandise declaration; everything else is billed. */
+const HANDOVER_CAPTURE = 'MERCH_HANDOVER';
+
+const key = (shiftId: string, attendantId: string) => `${shiftId}::${attendantId}`;
+
+function emptyTotals() {
+  return {
+    cashHandedOver: 0,
+    cardHandedOver: 0,
+    upiHandedOver: 0,
+    creditHandedOver: 0,
+    expectedFuelSales: 0,
+    billedSales: 0,
+    handoverProductSales: 0,
+    creditSales: 0,
+    varianceAmount: 0,
+  };
+}
+
+/** Sum non-fuel sales per (Shift, Attendant), split by capture mechanism. */
+function indexSales(sales: AttendantSaleSourceRow[]) {
+  const billed = new Map<string, number>();
+  const handoverProduct = new Map<string, number>();
+  for (const sale of sales) {
+    const target = sale.captureMechanism === HANDOVER_CAPTURE ? handoverProduct : billed;
+    const k = key(sale.shiftId, sale.attendantId);
+    target.set(k, (target.get(k) ?? 0) + sale.totalAmount);
+  }
+  return { billed, handoverProduct };
+}
+
+function indexCreditSales(rows: AttendantCreditSaleSourceRow[]) {
+  const byKey = new Map<string, number>();
+  for (const row of rows) {
+    const k = key(row.shiftId, row.attendantId);
+    byKey.set(k, (byKey.get(k) ?? 0) + row.amount);
+  }
+  return byKey;
+}
 
 /**
  * Fold Handover source rows into one entry per Attendant.
  *
  * Pure: all report arithmetic lives here so it can be tested without a
- * database. Totals are summed per component — the Handover's stored expected
- * sales is fuel-only, so no grand total is derived from it.
+ * database. Handovers nest under the Shift they belong to, because one
+ * Attendant may hand over several Dispensers in a Shift while the sales
+ * components are attributed to the (Shift, Attendant) pair once.
  */
 export function composeAttendantHandoverReport(
-  rows: AttendantHandoverSourceRow[],
+  source: AttendantHandoverReportSource,
   meta: { stationId: string; from: string; to: string; generatedAt: string },
 ): AttendantHandoverReport {
-  const byAttendant = new Map<string, AttendantHandoverReportEntry>();
+  const { billed, handoverProduct } = indexSales(source.sales ?? []);
+  const creditByKey = indexCreditSales(source.creditSales ?? []);
 
-  for (const row of rows) {
+  const byAttendant = new Map<string, AttendantHandoverReportEntry>();
+  const shiftsByKey = new Map<string, AttendantHandoverReportShift>();
+
+  for (const row of source.handovers) {
     let entry = byAttendant.get(row.attendantId);
     if (!entry) {
       entry = {
@@ -26,25 +73,42 @@ export function composeAttendantHandoverReport(
         attendantName: row.attendantName,
         shiftsWorked: 0,
         handoverCount: 0,
-        totals: {
-          cashHandedOver: 0,
-          cardHandedOver: 0,
-          upiHandedOver: 0,
-          creditHandedOver: 0,
-          expectedFuelSales: 0,
-          varianceAmount: 0,
-        },
+        totals: emptyTotals(),
         shifts: [],
       };
       byAttendant.set(row.attendantId, entry);
     }
 
-    const shift: AttendantHandoverReportShift = {
+    const k = key(row.shiftId, row.attendantId);
+    let shift = shiftsByKey.get(k);
+    if (!shift) {
+      shift = {
+        shiftId: row.shiftId,
+        businessDate: row.businessDate,
+        shiftTemplateName: row.shiftTemplateName,
+        closedAt: row.closedAt,
+        dispensers: [],
+        cashHandedOver: 0,
+        cardHandedOver: 0,
+        upiHandedOver: 0,
+        creditHandedOver: 0,
+        expectedFuelSales: 0,
+        // Attributed once per (Shift, Attendant), not per Dispenser.
+        billedSales: billed.get(k) ?? 0,
+        handoverProductSales: handoverProduct.get(k) ?? 0,
+        creditSales: creditByKey.get(k) ?? 0,
+        varianceAmount: 0,
+        testingVolume: 0,
+      };
+      shiftsByKey.set(k, shift);
+      entry.shifts.push(shift);
+      entry.totals.billedSales += shift.billedSales;
+      entry.totals.handoverProductSales += shift.handoverProductSales;
+      entry.totals.creditSales += shift.creditSales;
+    }
+
+    shift.dispensers.push({
       handoverId: row.handoverId,
-      shiftId: row.shiftId,
-      businessDate: row.businessDate,
-      shiftTemplateName: row.shiftTemplateName,
-      closedAt: row.closedAt,
       duId: row.duId,
       duName: row.duName,
       cashHandedOver: row.cashHandedOver,
@@ -54,8 +118,16 @@ export function composeAttendantHandoverReport(
       expectedFuelSales: row.expectedFuelSales,
       varianceAmount: row.varianceAmount,
       testingVolume: row.testingVolume,
-    };
-    entry.shifts.push(shift);
+    });
+
+    shift.cashHandedOver += row.cashHandedOver;
+    shift.cardHandedOver += row.cardHandedOver;
+    shift.upiHandedOver += row.upiHandedOver;
+    shift.creditHandedOver += row.creditHandedOver;
+    shift.expectedFuelSales += row.expectedFuelSales;
+    shift.varianceAmount += row.varianceAmount;
+    shift.testingVolume += row.testingVolume;
+
     entry.handoverCount += 1;
     entry.totals.cashHandedOver += row.cashHandedOver;
     entry.totals.cardHandedOver += row.cardHandedOver;
@@ -67,12 +139,13 @@ export function composeAttendantHandoverReport(
 
   const attendants = [...byAttendant.values()].map((entry) => ({
     ...entry,
-    // One Attendant may hand over several Dispensers in one Shift; the Shift is
-    // still one shift worked.
-    shiftsWorked: new Set(entry.shifts.map((s) => s.shiftId)).size,
-    shifts: [...entry.shifts].sort(
-      (a, b) => a.businessDate.localeCompare(b.businessDate) || a.duName.localeCompare(b.duName),
-    ),
+    shiftsWorked: entry.shifts.length,
+    shifts: [...entry.shifts]
+      .sort((a, b) => a.businessDate.localeCompare(b.businessDate))
+      .map((shift) => ({
+        ...shift,
+        dispensers: [...shift.dispensers].sort((a, b) => a.duName.localeCompare(b.duName)),
+      })),
   }));
   attendants.sort((a, b) => a.attendantName.localeCompare(b.attendantName));
 

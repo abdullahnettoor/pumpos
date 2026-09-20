@@ -34,13 +34,20 @@ const HANDOVER_ROW = {
  * Serves the access reader's four reads (organization, station count, grants,
  * limit overrides) and then the report reader's single joined select.
  */
-function fakeDb(grants: string[], handoverRows: unknown[] = [HANDOVER_ROW]) {
+function fakeDb(
+  grants: string[],
+  handoverRows: unknown[] = [HANDOVER_ROW],
+  saleRows: unknown[] = [],
+  creditRows: unknown[] = [],
+) {
   const queue: unknown[][] = [
     [{ subscriptionPlan: 'CORE', subscriptionStatus: 'ACTIVE', accessUntil: null }],
     [{ value: 1 }],
     grants.map((capabilityKey) => ({ capabilityKey })),
     [],
     handoverRows,
+    saleRows,
+    creditRows,
   ];
   return {
     select() {
@@ -104,6 +111,32 @@ describe('GET /reports/attendant-handovers', () => {
     });
     expect(body.data.attendants[0].totals.cashHandedOver).toBe(1000);
     expect(body.data.attendants[0].totals.varianceAmount).toBe(-50);
+  });
+
+  it('reports the sales components separately for an attendant', async () => {
+    const res = await makeApp(
+      fakeDb(
+        ['reports.attendant'],
+        [HANDOVER_ROW],
+        [
+          { shiftId: 'sh-1', attendantId: 'att-1', captureMechanism: 'POS', totalAmount: '400.00' },
+          {
+            shiftId: 'sh-1',
+            attendantId: 'att-1',
+            captureMechanism: 'MERCH_HANDOVER',
+            totalAmount: '900.00',
+          },
+        ],
+        [{ shiftId: 'sh-1', attendantId: 'att-1', amount: '800.00' }],
+      ),
+    ).request(URL);
+    const body = (await res.json()) as any;
+    expect(body.data.attendants[0].totals).toMatchObject({
+      billedSales: 400,
+      handoverProductSales: 900,
+      creditSales: 800,
+      expectedFuelSales: 1650,
+    });
   });
 
   it.each(['Attendant', 'Staff'])('refuses a %s of an entitled Organization', async (role) => {

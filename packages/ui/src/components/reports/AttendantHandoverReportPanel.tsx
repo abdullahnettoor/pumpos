@@ -66,7 +66,7 @@ export const AttendantHandoverReportPanel: React.FC<AttendantHandoverReportPanel
         value={range}
         onChange={setRange}
         clock={clock}
-        note="Closed shifts only. Variance is the attendant's net shortage or excess for the period."
+        note="Closed shifts only. Sales components are listed separately — fuel expected is metered, not a grand total."
       />
 
       <KpiStrip columns="auto">
@@ -128,6 +128,9 @@ export const AttendantHandoverReportPanel: React.FC<AttendantHandoverReportPanel
                     <th style={thR}>UPI</th>
                     <th style={thR}>Credit</th>
                     <th style={thR}>Fuel sales</th>
+                    <th style={thR}>Billed</th>
+                    <th style={thR}>Merch. handover</th>
+                    <th style={thR}>Credit sales</th>
                     <th style={thR}>Variance</th>
                   </tr>
                 </thead>
@@ -144,6 +147,9 @@ export const AttendantHandoverReportPanel: React.FC<AttendantHandoverReportPanel
                       <td style={tdR}>{inr(a.totals.upiHandedOver)}</td>
                       <td style={tdR}>{inr(a.totals.creditHandedOver)}</td>
                       <td style={tdR}>{inr(a.totals.expectedFuelSales)}</td>
+                      <td style={tdR}>{inr(a.totals.billedSales)}</td>
+                      <td style={tdR}>{inr(a.totals.handoverProductSales)}</td>
+                      <td style={tdR}>{inr(a.totals.creditSales)}</td>
                       <td style={{ ...tdR, color: varianceTone(Number(a.totals.varianceAmount)) }}>
                         {inr(a.totals.varianceAmount)}
                       </td>

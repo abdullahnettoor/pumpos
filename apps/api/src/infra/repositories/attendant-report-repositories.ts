@@ -1,10 +1,12 @@
-import { and, eq, gte, inArray, lte } from 'drizzle-orm';
+import { and, eq, gte, inArray, isNotNull, lte, ne } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
 import type {
+  AttendantCreditSaleSourceRow,
   AttendantHandoverReportQuery,
   AttendantHandoverReportReader,
   AttendantHandoverReportSource,
   AttendantHandoverSourceRow,
+  AttendantSaleSourceRow,
 } from '@pump/core';
 
 const num = (v: string | number | null | undefined): number => Number(v ?? 0) || 0;
@@ -80,6 +82,81 @@ export class DrizzleAttendantHandoverReportReader implements AttendantHandoverRe
       testingVolume: num(r.testingVolume),
     }));
 
-    return { handovers };
+    // Components are attributed to the (Shift, Attendant) pairs the handovers
+    // already established, so an unrelated attendant's sales never leak in.
+    const shiftIds = [...new Set(handovers.map((h) => h.shiftId))];
+    if (shiftIds.length === 0) return { handovers, sales: [], creditSales: [] };
+
+    const [sales, creditSales] = await Promise.all([
+      this.readSales(shiftIds, query),
+      this.readCreditSales(shiftIds, query),
+    ]);
+
+    return { handovers, sales, creditSales };
+  }
+
+  /**
+   * Non-fuel Sales for those Shifts. `MERCH_HANDOVER` captures the one bulk
+   * end-of-shift declaration; every other capture is an individually Billed
+   * Sale. Fuel is excluded — it is metered through nozzle readings and already
+   * carried by the Handover's expected sales.
+   */
+  private async readSales(
+    shiftIds: string[],
+    query: AttendantHandoverReportQuery,
+  ): Promise<AttendantSaleSourceRow[]> {
+    const filters = [
+      inArray(schema.sales.shiftId, shiftIds),
+      ne(schema.sales.saleType, 'Fuel'),
+      isNotNull(schema.sales.attendantId),
+    ];
+    if (query.attendantId) filters.push(eq(schema.sales.attendantId, query.attendantId));
+
+    const rows = await this.db
+      .select({
+        shiftId: schema.sales.shiftId,
+        attendantId: schema.sales.attendantId,
+        captureMechanism: schema.sales.captureMechanism,
+        totalAmount: schema.sales.totalAmount,
+      })
+      .from(schema.sales)
+      .where(and(...filters));
+
+    return rows.map((r) => ({
+      shiftId: r.shiftId,
+      attendantId: r.attendantId as string,
+      captureMechanism: r.captureMechanism,
+      totalAmount: num(r.totalAmount),
+    }));
+  }
+
+  /** Fuel-on-credit chits raised within those Shifts (receivables, not drawer cash). */
+  private async readCreditSales(
+    shiftIds: string[],
+    query: AttendantHandoverReportQuery,
+  ): Promise<AttendantCreditSaleSourceRow[]> {
+    const filters = [
+      inArray(schema.customerTransactions.shiftId, shiftIds),
+      eq(schema.customerTransactions.transactionType, 'Credit Sale'),
+      isNotNull(schema.customerTransactions.attendantId),
+    ];
+    if (query.attendantId) {
+      filters.push(eq(schema.customerTransactions.attendantId, query.attendantId));
+    }
+
+    const rows = await this.db
+      .select({
+        shiftId: schema.customerTransactions.shiftId,
+        attendantId: schema.customerTransactions.attendantId,
+        amount: schema.customerTransactions.amount,
+      })
+      .from(schema.customerTransactions)
+      .where(and(...filters));
+
+    return rows.map((r) => ({
+      shiftId: r.shiftId as string,
+      attendantId: r.attendantId as string,
+      amount: num(r.amount),
+    }));
   }
 }

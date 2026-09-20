@@ -44,6 +44,27 @@ export interface AttendantHandoverSourceRow {
 
 export interface AttendantHandoverReportSource {
   handovers: AttendantHandoverSourceRow[];
+  /**
+   * Non-fuel Sales attributed to an Attendant within a Shift. Classified by
+   * capture mechanism: `MERCH_HANDOVER` is the one bulk Handover Product Sale,
+   * everything else is a Billed Sale.
+   */
+  sales: AttendantSaleSourceRow[];
+  /** Fuel-on-credit chits attributed to an Attendant within a Shift. */
+  creditSales: AttendantCreditSaleSourceRow[];
+}
+
+export interface AttendantSaleSourceRow {
+  shiftId: string;
+  attendantId: string;
+  captureMechanism: string;
+  totalAmount: number;
+}
+
+export interface AttendantCreditSaleSourceRow {
+  shiftId: string;
+  attendantId: string;
+  amount: number;
 }
 
 export interface AttendantHandoverReportReader {
@@ -51,13 +72,9 @@ export interface AttendantHandoverReportReader {
   read(query: AttendantHandoverReportQuery): Promise<AttendantHandoverReportSource>;
 }
 
-/** One Shift's Handover within an Attendant's period. */
-export interface AttendantHandoverReportShift {
+/** One Dispenser's Handover within a Shift. */
+export interface AttendantHandoverReportDispenser {
   handoverId: string;
-  shiftId: string;
-  businessDate: string;
-  shiftTemplateName: string | null;
-  closedAt: string | null;
   duId: string;
   duName: string;
   cashHandedOver: number;
@@ -69,13 +86,49 @@ export interface AttendantHandoverReportShift {
   testingVolume: number;
 }
 
-/** Period totals for one Attendant. */
+/**
+ * One Shift in an Attendant's period.
+ *
+ * Handovers are per (Shift, Dispenser); the sales components are attributed
+ * per (Shift, Attendant) and therefore live here rather than on a Dispenser.
+ */
+export interface AttendantHandoverReportShift {
+  shiftId: string;
+  businessDate: string;
+  shiftTemplateName: string | null;
+  closedAt: string | null;
+  dispensers: AttendantHandoverReportDispenser[];
+  cashHandedOver: number;
+  cardHandedOver: number;
+  upiHandedOver: number;
+  creditHandedOver: number;
+  expectedFuelSales: number;
+  /** Individually billed non-fuel Sales (counter quick entry). */
+  billedSales: number;
+  /** The bulk end-of-shift merchandise declaration. */
+  handoverProductSales: number;
+  /** Fuel-on-credit receivables raised by this Attendant in this Shift. */
+  creditSales: number;
+  varianceAmount: number;
+  testingVolume: number;
+}
+
+/**
+ * Period totals for one Attendant.
+ *
+ * Components are summed separately and never rolled into a single "sales"
+ * figure: the Handover's stored expected sales is fuel-only, so any grand
+ * total derived from it would mislead.
+ */
 export interface AttendantHandoverReportTotals {
   cashHandedOver: number;
   cardHandedOver: number;
   upiHandedOver: number;
   creditHandedOver: number;
   expectedFuelSales: number;
+  billedSales: number;
+  handoverProductSales: number;
+  creditSales: number;
   /** Net Variance across the period — the figure a recovery conversation uses. */
   varianceAmount: number;
 }
@@ -90,7 +143,6 @@ export interface AttendantHandoverReportEntry {
   totals: AttendantHandoverReportTotals;
   shifts: AttendantHandoverReportShift[];
 }
-
 export interface AttendantHandoverReport {
   stationId: string;
   from: string;
