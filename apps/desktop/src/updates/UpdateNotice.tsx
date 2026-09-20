@@ -1,5 +1,5 @@
-import React from 'react';
-import { Banner, type BannerSeverity } from '@pump/ui';
+import React, { useState } from 'react';
+import { Banner, Button, Drawer, MeterRow, type BannerSeverity } from '@pump/ui';
 import type { DesktopUpdates } from './useDesktopUpdates.js';
 import type { UpdateState } from './types.js';
 
@@ -11,6 +11,13 @@ import type { UpdateState } from './types.js';
  * keep seeing until resolved". A toast is the wrong shape — it auto-expires and
  * dismisses on any click, so "Download update" would dismiss the notice that
  * offers it.
+ *
+ * The notice is genuinely compact: the offered version, at most one line of
+ * summary, and the one thing the operator can do. It never scrolls inside
+ * itself and never grows to hold the full release notes — those live behind
+ * "What's new", in the `Drawer` this repository already uses for detail. Banner
+ * is therefore used as designed, with placement (corner, width) as the only
+ * styling here; nothing about its internal layout is overridden.
  *
  * Deliberately pinned to the bottom corner rather than shown as a startup
  * modal: an update is never more important than the shift in front of the
@@ -24,74 +31,135 @@ import type { UpdateState } from './types.js';
  */
 export const UpdateNotice: React.FC<{ updates: DesktopUpdates }> = ({ updates }) => {
   const { state } = updates;
-  if (!updates.enabled || !state) return null;
-  const view = describeUpdateState(state, updates);
+  const view = updates.enabled && state ? describeUpdateState(state, updates) : null;
+  // Notes belong to the offer, not to the session. Remembering *which* state
+  // the drawer was opened for closes it by derivation once the state moves on
+  // (downloaded, failed, dismissed), with no effect to resynchronise.
+  const [notesOpenFor, setNotesOpenFor] = useState<UpdateState['phase'] | null>(null);
+
   if (!view) return null;
+  const notesOpen = notesOpenFor === view.key;
 
   return (
-    <Banner
-      // Banner hides itself locally once dismissed. Keying by phase gives each
-      // state its own instance, so dismissing "up to date" cannot also swallow
-      // the "ready to install" notice that follows.
-      key={view.key}
-      severity={view.severity}
-      title={view.title}
-      actionLabel={view.action?.label}
-      onAction={view.action?.onClick}
-      dismissible={!!view.onDismiss}
-      onDismiss={view.onDismiss?.onClick}
-      dismissLabel={view.onDismiss?.label}
-      style={{
-        position: 'fixed',
-        bottom: 'var(--space-4)',
-        right: 'var(--space-4)',
-        zIndex: 60,
-        width: '360px',
-        maxWidth: 'calc(100vw - var(--space-8))',
-        // Banner is a single-line strip by default; the update notice stacks a
-        // detail line, release notes and a progress bar under its title.
-        alignItems: 'flex-start',
-        // No background override: Banner's severity colour is the whole point
-        // of passing a severity, and cancelling it would make a failed update
-        // look exactly like an available one.
-        boxShadow: '0 6px 18px rgba(0,0,0,0.12)',
-      }}
-    >
-      <span style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-        {view.detail ? <span>{view.detail}</span> : null}
+    <>
+      <Banner
+        // Banner hides itself locally once dismissed. Keying by phase gives each
+        // state its own instance, so dismissing "up to date" cannot also swallow
+        // the "ready to install" notice that follows.
+        key={view.key}
+        severity={view.severity}
+        title={view.title}
+        actionLabel={view.action?.label}
+        onAction={view.action?.onClick}
+        dismissible={!!view.onDismiss}
+        onDismiss={view.onDismiss?.onClick}
+        dismissLabel={view.onDismiss?.label}
+        style={{
+          position: 'fixed',
+          bottom: 'var(--space-4)',
+          right: 'var(--space-4)',
+          zIndex: 60,
+          width: '360px',
+          maxWidth: 'calc(100vw - var(--space-8))',
+          // No background override: Banner's severity colour is the whole point
+          // of passing a severity, and cancelling it would make a failed update
+          // look exactly like an available one.
+        }}
+      >
+        <span style={{ display: 'block' }}>
+          {view.detail && !view.progress?.totalBytes ? (
+            <span style={{ display: 'block', fontWeight: 400 }}>{view.detail}</span>
+          ) : null}
 
-        {/* Release notes are plain text from an external manifest: rendered as
-            a text node, never as markup. */}
-        {view.notes ? (
-          <span
+          {/* One line, never the body. Release notes are plain text from an
+              external manifest: rendered as a text node, never as markup. */}
+          {view.summary ? (
+            <span
+              style={{
+                display: 'block',
+                fontWeight: 400,
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+              }}
+            >
+              {view.summary}
+            </span>
+          ) : null}
+
+          {view.notes ? (
+            <button
+              type="button"
+              onClick={() => setNotesOpenFor(view.key)}
+              style={{
+                display: 'inline-block',
+                marginTop: 'var(--space-1)',
+                padding: 0,
+                border: 'none',
+                background: 'transparent',
+                color: 'inherit',
+                font: 'inherit',
+                fontWeight: 600,
+                textDecoration: 'underline',
+                cursor: 'pointer',
+              }}
+            >
+              What&apos;s new
+            </button>
+          ) : null}
+
+          {/* Determinate downloads get the design system's meter. An unknown
+              content length gets the honest readout above and no bar at all,
+              rather than one creeping toward a number nobody measured. */}
+          {view.progress?.totalBytes ? (
+            <span style={{ display: 'block', marginTop: 'var(--space-1)' }}>
+              <MeterRow
+                label="Downloading"
+                value={view.progress.downloadedBytes}
+                max={view.progress.totalBytes}
+                valueLabel={view.detail}
+                tone="brand"
+              />
+            </span>
+          ) : null}
+        </span>
+      </Banner>
+
+      {view.notes ? (
+        <Drawer
+          isOpen={notesOpen}
+          onClose={() => setNotesOpenFor(null)}
+          title={`What's new in PumpOS ${view.version ?? ''}`.trim()}
+          footer={
+            view.action ? (
+              // The drawer carries the primary action too, so reading the notes
+              // never puts the decision out of reach behind a backdrop.
+              <Button
+                onClick={() => {
+                  setNotesOpenFor(null);
+                  view.action?.onClick();
+                }}
+              >
+                {view.action.label}
+              </Button>
+            ) : undefined
+          }
+        >
+          <p
             style={{
-              display: 'block',
-              maxHeight: '112px',
-              overflow: 'auto',
+              margin: 0,
               whiteSpace: 'pre-wrap',
               overflowWrap: 'break-word',
-              fontWeight: 400,
-              padding: 'var(--space-2)',
-              borderRadius: 'var(--radius-input)',
-              backgroundColor: 'var(--bg-surface-alt)',
-              color: 'var(--text-muted)',
+              fontSize: '13px',
+              lineHeight: 1.6,
+              color: 'var(--text-default)',
             }}
           >
             {view.notes}
-          </span>
-        ) : null}
-
-        {view.progress ? (
-          <progress
-            style={{ width: '100%' }}
-            aria-label="Update download progress"
-            {...(view.progress.totalBytes
-              ? { value: view.progress.downloadedBytes, max: view.progress.totalBytes }
-              : {})}
-          />
-        ) : null}
-      </span>
-    </Banner>
+          </p>
+        </Drawer>
+      ) : null}
+    </>
   );
 };
 
@@ -100,7 +168,12 @@ interface NoticeView {
   key: UpdateState['phase'];
   severity: BannerSeverity;
   title: string;
+  /** The offered version, when there is one. Names the notes drawer. */
+  version?: string;
   detail?: string;
+  /** At most one line, for the compact notice. Never the whole body. */
+  summary?: string;
+  /** The full release notes, shown only in the drawer. */
   notes?: string;
   progress?: { downloadedBytes: number; totalBytes: number | null };
   /** The one thing the operator can do next. Absent while PumpOS is working. */
@@ -149,8 +222,10 @@ export function describeUpdateState(
         key: state.phase,
         severity: 'info',
         title: `PumpOS ${state.update.version} is available`,
+        version: state.update.version,
         detail: `You are on ${state.currentVersion}. Download when it suits the station.`,
-        notes: state.update.notes,
+        summary: summaryLine(state.update.notes),
+        notes: fullNotes(state.update.notes),
         action: { label: 'Download update', onClick: actions.download },
         onDismiss: { label: 'Not now', onClick: actions.postpone },
       };
@@ -159,6 +234,7 @@ export function describeUpdateState(
         key: state.phase,
         severity: 'info',
         title: `Downloading PumpOS ${state.update.version}`,
+        version: state.update.version,
         detail: formatProgress(state.progress),
         progress: state.progress,
       };
@@ -167,6 +243,7 @@ export function describeUpdateState(
         key: state.phase,
         severity: 'info',
         title: `PumpOS ${state.update.version} is ready to install`,
+        version: state.update.version,
         detail: 'PumpOS will restart to finish. Nothing installs until you say so.',
         action: { label: 'Install and restart', onClick: actions.install },
         onDismiss: { label: 'Later', onClick: actions.postpone },
@@ -176,6 +253,7 @@ export function describeUpdateState(
         key: state.phase,
         severity: 'warning',
         title: 'Restart postponed',
+        version: state.update.version,
         detail: `${state.reason} PumpOS will not restart until this clears.`,
         action: { label: 'Try again', onClick: actions.install },
         onDismiss: { label: 'Later', onClick: actions.postpone },
@@ -185,6 +263,7 @@ export function describeUpdateState(
         key: state.phase,
         severity: 'info',
         title: `Installing PumpOS ${state.update.version}…`,
+        version: state.update.version,
         detail: 'Do not close PumpOS.',
       };
     case 'relaunch-ready':
@@ -194,6 +273,7 @@ export function describeUpdateState(
         key: state.phase,
         severity: 'success',
         title: `PumpOS ${state.update.version} is installed`,
+        version: state.update.version,
         detail: 'Restart to start using it.',
         action: { label: 'Restart and update', onClick: actions.relaunch },
       };
@@ -207,6 +287,31 @@ export function describeUpdateState(
         onDismiss: { label: 'Dismiss', onClick: actions.dismiss },
       };
   }
+}
+
+/** Empty notes mean no notes section and no affordance, not an empty one. */
+function fullNotes(notes: string | undefined): string | undefined {
+  const text = (notes ?? '').trim();
+  return text.length > 0 ? text : undefined;
+}
+
+const SUMMARY_MAX = 90;
+
+/**
+ * The one line the compact notice can afford: the first sentence of the notes,
+ * shortened. The body stays in the drawer, so the notice can never grow to hold
+ * it however long a release manager writes.
+ */
+export function summaryLine(notes: string | undefined): string | undefined {
+  const first = (fullNotes(notes) ?? '')
+    .split('\n')
+    .map((line) => line.replace(/^\s*[-*•]\s*/, '').trim())
+    .find((line) => line.length > 0);
+  if (!first) return undefined;
+  if (first.length <= SUMMARY_MAX) return first;
+  const cut = first.slice(0, SUMMARY_MAX);
+  const lastSpace = cut.lastIndexOf(' ');
+  return `${(lastSpace > 40 ? cut.slice(0, lastSpace) : cut).trimEnd()}…`;
 }
 
 function retryLabel(retry: 'check' | 'download' | 'install'): string {

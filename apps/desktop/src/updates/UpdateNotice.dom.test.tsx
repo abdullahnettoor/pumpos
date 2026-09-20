@@ -1,11 +1,14 @@
 /**
  * @vitest-environment jsdom
  */
-import { describe, expect, it, vi } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
-import { UpdateNotice, describeUpdateState } from './UpdateNotice.js';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { render, screen, cleanup, fireEvent } from '@testing-library/react';
+import { UpdateNotice, describeUpdateState, summaryLine } from './UpdateNotice.js';
 import type { DesktopUpdates } from './useDesktopUpdates.js';
 import type { UpdateState } from './types.js';
+
+// A failing assertion must not leak a mounted tree into the next test.
+afterEach(cleanup);
 
 const noop = () => {};
 const actions = {
@@ -64,7 +67,7 @@ describe('UpdateNotice rendering', () => {
     cleanup();
   });
 
-  it('shows the offered version, the installed version and the release notes', () => {
+  it('shows the offered version, the installed version and one line of summary', () => {
     render(
       <UpdateNotice
         updates={updates({ phase: 'available', currentVersion: '1.0.0', update: offered })}
@@ -76,18 +79,113 @@ describe('UpdateNotice rendering', () => {
     cleanup();
   });
 
-  it('never renders release notes as markup', () => {
+  it('keeps the notice compact: the body lives in the drawer, not in the notice', () => {
+    const long = ['Drawer rounding is fixed.', '', ...Array(20).fill('Another paragraph.')].join(
+      '\n',
+    );
     render(
       <UpdateNotice
         updates={updates({
           phase: 'available',
           currentVersion: '1.0.0',
-          update: { version: '1.1.0', notes: '<img src=x onerror="alert(1)">' },
+          update: { version: '1.1.0', notes: long },
+        })}
+      />,
+    );
+    const notice = screen.getByRole('status');
+    // The notice carries the first line only, and nothing that scrolls.
+    expect(notice.textContent).not.toMatch('Another paragraph.');
+    expect(notice.innerHTML).not.toMatch(/overflow:\s*auto/);
+    expect(notice.innerHTML).not.toMatch(/max-height/);
+
+    fireEvent.click(screen.getByRole('button', { name: "What's new" }));
+    expect(screen.getByText(/Another paragraph\./)).toBeTruthy();
+    cleanup();
+  });
+
+  it('closes the notes drawer without losing the update action', () => {
+    const download = vi.fn();
+    render(
+      <UpdateNotice
+        updates={updates(
+          { phase: 'available', currentVersion: '1.0.0', update: offered },
+          { download },
+        )}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: "What's new" }));
+    // The drawer carries the primary action too, so reading the notes never
+    // puts the decision out of reach behind the backdrop.
+    const inDrawer = screen
+      .getAllByRole('button', { name: 'Download update' })
+      .at(-1) as HTMLButtonElement;
+    fireEvent.click(inDrawer);
+    expect(download).toHaveBeenCalledTimes(1);
+    // Acting closes the drawer and leaves the notice exactly where it was.
+    expect(document.querySelector('.drawer-container')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Download update' })).toBeTruthy();
+    cleanup();
+  });
+
+  it('lets the operator close the notes and go back to the notice', () => {
+    render(
+      <UpdateNotice
+        updates={updates({ phase: 'available', currentVersion: '1.0.0', update: offered })}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: "What's new" }));
+    fireEvent.click(screen.getByRole('button', { name: 'Close Drawer' }));
+    expect(document.querySelector('.drawer-container')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Download update' })).toBeTruthy();
+    cleanup();
+  });
+
+  it('offers no "What\'s new" affordance when the release has no notes', () => {
+    render(
+      <UpdateNotice
+        updates={updates({
+          phase: 'available',
+          currentVersion: '1.0.0',
+          update: { version: '1.1.0', notes: '   ' },
+        })}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: "What's new" })).toBeNull();
+    cleanup();
+  });
+
+  it('never renders release notes as markup, in either surface', () => {
+    const markup = '<img src=x onerror="alert(1)">';
+    render(
+      <UpdateNotice
+        updates={updates({
+          phase: 'available',
+          currentVersion: '1.0.0',
+          update: { version: '1.1.0', notes: markup },
         })}
       />,
     );
     expect(screen.getByRole('status').querySelector('img')).toBeNull();
-    expect(screen.getByText('<img src=x onerror="alert(1)">')).toBeTruthy();
+    expect(screen.getAllByText(markup).length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByRole('button', { name: "What's new" }));
+    expect(document.querySelector('.drawer-body img')).toBeNull();
+    expect(document.querySelector('.drawer-body')?.textContent).toBe(markup);
+    cleanup();
+  });
+
+  it('renders no link anywhere, so nothing sends an operator to a repository', () => {
+    render(
+      <UpdateNotice
+        updates={updates({
+          phase: 'available',
+          currentVersion: '1.0.0',
+          update: { version: '1.1.0', notes: 'See https://github.com/o/r/pull/1 for detail.' },
+        })}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: "What's new" }));
+    expect(document.querySelectorAll('a').length).toBe(0);
     cleanup();
   });
 
@@ -152,7 +250,7 @@ describe('UpdateNotice rendering', () => {
     cleanup();
   });
 
-  it('reports determinate progress when the total size is known', () => {
+  it('draws determinate progress in the design system, not a native <progress>', () => {
     render(
       <UpdateNotice
         updates={updates({
@@ -163,9 +261,10 @@ describe('UpdateNotice rendering', () => {
         })}
       />,
     );
-    const bar = screen.getByRole('progressbar') as HTMLProgressElement;
-    expect(bar.value).toBe(5 * 1024 * 1024);
-    expect(bar.max).toBe(10 * 1024 * 1024);
+    const bar = screen.getByRole('progressbar');
+    expect(bar.tagName).not.toBe('PROGRESS');
+    expect(bar.getAttribute('aria-valuenow')).toBe('50');
+    expect(screen.getByText('5.0 MB of 10.0 MB (50%)')).toBeTruthy();
     cleanup();
   });
 
@@ -180,8 +279,8 @@ describe('UpdateNotice rendering', () => {
         })}
       />,
     );
-    const bar = screen.getByRole('progressbar') as HTMLProgressElement;
-    expect(bar.hasAttribute('value')).toBe(false);
+    // No bar at all rather than one creeping toward a number nobody measured.
+    expect(screen.queryByRole('progressbar')).toBeNull();
     expect(screen.getByText('1.0 MB downloaded')).toBeTruthy();
     cleanup();
   });
@@ -246,6 +345,36 @@ describe('describeUpdateState', () => {
     expect(ready?.action?.label).toBe('Restart and update');
     // Nothing to dismiss: the new binary is already on disk.
     expect(ready?.onDismiss).toBeUndefined();
+  });
+});
+
+describe('summaryLine', () => {
+  it('has no notes section at all when the release summary is empty', () => {
+    const view = describeUpdateState(
+      { phase: 'available', currentVersion: '1.0.0', update: { version: '1.1.0', notes: '  ' } },
+      actions,
+    );
+    expect(view?.summary).toBeUndefined();
+    expect(view?.notes).toBeUndefined();
+  });
+
+  it('shortens a long summary to one readable line and keeps the body whole', () => {
+    const body = `${'Fuel sales now round to the paise so the drawer matches the till at close every single shift.'}\nAnd more.`;
+    const view = describeUpdateState(
+      { phase: 'available', currentVersion: '1.0.0', update: { version: '1.1.0', notes: body } },
+      actions,
+    );
+    expect(view?.summary?.length).toBeLessThanOrEqual(91);
+    expect(view?.summary?.endsWith('…')).toBe(true);
+    expect(view?.summary).not.toMatch('And more.');
+    // The compact notice never carries the full body; the drawer does.
+    expect(view?.notes).toBe(body);
+  });
+
+  it('reads past a bullet marker to the first real sentence', () => {
+    expect(summaryLine('\n- Drawer rounding is fixed.\n- Faster reports.')).toBe(
+      'Drawer rounding is fixed.',
+    );
   });
 });
 

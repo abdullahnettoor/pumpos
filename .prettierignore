@@ -16,3 +16,6 @@ packages/db/drizzle
 *.min.js
 package-lock.json
 eslint-suppressions.json
+
+# A real GitHub Release body, kept byte-for-byte as a test fixture.
+scripts/fixtures/updater/release-body-*.md

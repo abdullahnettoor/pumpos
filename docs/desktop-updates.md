@@ -136,22 +136,31 @@ whenever the operator picks **Check for updates** from the user menu (which also
 shows the installed version). It never checks during boot, from a development
 build, from the web console, or from mobile.
 
-| State             | What the notice says                                  | What the operator can do            |
-| ----------------- | ----------------------------------------------------- | ----------------------------------- |
-| Checking          | "Checking for updates…"                               | keep working                        |
-| Up to date        | the installed version                                 | dismiss                             |
-| Available         | the new version and its release notes                 | **Download update**, or dismiss     |
-| Downloading       | MB downloaded, or a percentage when the size is known | keep working                        |
-| Ready             | "ready to install"                                    | **Install and restart**, or dismiss |
-| Restart postponed | the concrete reason local writes are unsafe           | Try again, or dismiss               |
-| Installed (macOS) | "installed"                                           | **Restart and update**              |
-| Failed            | a plain-language cause                                | retry the step that failed          |
+| State             | What the notice says                                  | What the operator can do                        |
+| ----------------- | ----------------------------------------------------- | ----------------------------------------------- |
+| Checking          | "Checking for updates…"                               | keep working                                    |
+| Up to date        | the installed version                                 | dismiss                                         |
+| Available         | the new version and one line of the release summary   | **Download update**, **What's new**, or dismiss |
+| Downloading       | MB downloaded, or a percentage when the size is known | keep working                                    |
+| Ready             | "ready to install"                                    | **Install and restart**, or dismiss             |
+| Restart postponed | the concrete reason local writes are unsafe           | Try again, or dismiss                           |
+| Installed (macOS) | "installed"                                           | **Restart and update**                          |
+| Failed            | a plain-language cause                                | retry the step that failed                      |
 
 A **failed automatic check is silent** — it is logged and dropped. The operator
 did not ask, and "the update server did not respond" is not something they can
 act on; a station with a flaky connection would otherwise meet a red banner
 every morning. A failed **manual** check always reports, because the operator
 asked and is owed an answer.
+
+Release notes are an **operator summary written for the station**, not the
+developer changelog — see [RELEASING.md](../RELEASING.md#write-the-operator-summary)
+for where it is written and what is stripped from it. The notice carries one
+line of it; **What's new** opens the whole thing in the standard drawer, which
+also repeats the primary action so reading never puts the decision out of reach.
+A release with no summary shows no notes section and no affordance. Notes are
+plain text rendered as text nodes and contain no links, so a manifest can
+neither inject markup nor send an operator to a repository.
 
 The notice is a compact panel in the corner, never a modal: an update is never
 more important than the shift in front of the operator. Dismissing it puts the
