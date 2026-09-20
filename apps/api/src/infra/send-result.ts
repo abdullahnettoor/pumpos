@@ -11,6 +11,7 @@ export const STATUS_BY_CODE: Record<string, number> = {
   FORBIDDEN: 403,
   UNAUTHORIZED: 401,
   LIMIT_REACHED: 409,
+  CAPABILITY_NOT_ENTITLED: 403,
 };
 
 /**

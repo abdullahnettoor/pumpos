@@ -13,6 +13,8 @@ export const ErrorCodes = {
   INVARIANT_VIOLATION: 'INVARIANT_VIOLATION',
   /** A numeric Limit supplied by the Organization's Product Plan is used up. */
   LIMIT_REACHED: 'LIMIT_REACHED',
+  /** The Organization has not been granted the Product Capability required. */
+  CAPABILITY_NOT_ENTITLED: 'CAPABILITY_NOT_ENTITLED',
   INTERNAL: 'INTERNAL_ERROR',
 } as const;
 
@@ -47,6 +49,18 @@ export function forbiddenError(
   details?: Record<string, unknown>,
 ): CoreError {
   return { code: ErrorCodes.FORBIDDEN, message, details };
+}
+
+/**
+ * The Organization is not entitled to a Product Capability. Distinct from
+ * FORBIDDEN, which is about the user's Role: this says the Organization has
+ * not bought or been granted the capability at all. Maps to HTTP 403.
+ */
+export function capabilityNotEntitledError(
+  message: string,
+  details: { capability: string; resolution: string; actionLabel: string },
+): CoreError {
+  return { code: ErrorCodes.CAPABILITY_NOT_ENTITLED, message, details };
 }
 
 /**

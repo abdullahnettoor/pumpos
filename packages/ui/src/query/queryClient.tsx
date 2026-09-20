@@ -1,10 +1,12 @@
 import React from 'react';
 import { clearNavIntent } from '../nav-intent/store.js';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { persistQueryClient } from '@tanstack/query-persist-client-core';
 import { runTask } from '../utils/runTask.js';
 import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister';
 import { isResourceLimitError } from '../services/cloud.js';
+import { isAccessPolicyError } from '@pump/shared';
+import { queryKeys } from './hooks.js';
 
 // Query-key prefixes whose data is safe to persist across reloads (static +
 // semi-static tiers). Operational/live data and anything auth-related are never
@@ -93,6 +95,18 @@ export function shouldRetryQuery(failureCount: number, error: unknown): boolean 
 }
 
 /**
+ * An access-policy rejection means the cached Access Document is stale: a
+ * grant was revoked, or a Limit changed, since it was fetched. Refetch it so
+ * the UI stops offering something the server now refuses. The server was
+ * already authoritative for the rejected call — this only realigns what the
+ * operator is shown.
+ */
+function invalidateAccessOnPolicyError(client: QueryClient, error: unknown): void {
+  if (!isAccessPolicyError(error)) return;
+  void client.invalidateQueries({ queryKey: queryKeys.access() });
+}
+
+/**
  * Shared QueryClient factory. App shells (web, desktop) create one client and
  * wrap their tree in {@link QueryProvider}; all data hooks in @pump/ui read from
  * this single cache. Defaults favour operator workflows: short stale time,
@@ -101,7 +115,13 @@ export function shouldRetryQuery(failureCount: number, error: unknown): boolean 
  * failures, which are never retried.
  */
 export function createQueryClient(): QueryClient {
-  return new QueryClient({
+  const client: QueryClient = new QueryClient({
+    queryCache: new QueryCache({
+      onError: (error) => invalidateAccessOnPolicyError(client, error),
+    }),
+    mutationCache: new MutationCache({
+      onError: (error) => invalidateAccessOnPolicyError(client, error),
+    }),
     defaultOptions: {
       queries: {
         staleTime: 15_000,
@@ -113,6 +133,7 @@ export function createQueryClient(): QueryClient {
       },
     },
   });
+  return client;
 }
 
 export interface QueryProviderProps {
