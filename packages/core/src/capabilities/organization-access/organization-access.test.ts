@@ -196,12 +196,16 @@ describe('subscription resolution', () => {
     expect(normalizeSubscriptionStatus('Revoked')).toBe('SUSPENDED');
   });
 
-  // Fails open by design in E1. #167 (Restricted/Suspended write policy) must
-  // invert this to RESTRICTED once the status gates writes — this test should
-  // fail loudly when that happens rather than being quietly deleted.
-  it('treats an unreadable status as ACTIVE rather than locking a station out', () => {
-    expect(normalizeSubscriptionStatus('nonsense')).toBe('ACTIVE');
-    expect(normalizeSubscriptionStatus(null)).toBe('ACTIVE');
+  // Fails closed now that the status gates writes (#168): an unreadable value
+  // must not grant normal access. RESTRICTED is the gentlest safe answer — the
+  // open day can still be finished, but nothing new starts.
+  it('treats an unreadable status as RESTRICTED rather than granting full access', () => {
+    expect(normalizeSubscriptionStatus('nonsense')).toBe('RESTRICTED');
+    expect(normalizeSubscriptionStatus(undefined)).toBe('RESTRICTED');
+  });
+
+  it('treats a missing Organization row as RESTRICTED, not as a healthy default', () => {
+    expect(normalizeSubscriptionStatus(null)).toBe('RESTRICTED');
   });
 
   it('warns Owners and Managers about a failed payment', () => {
