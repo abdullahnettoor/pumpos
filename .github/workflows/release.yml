@@ -119,6 +119,7 @@ jobs:
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "previous=$previous" >> "$GITHUB_OUTPUT"
           echo "desktop=$desktop" >> "$GITHUB_OUTPUT"
 
       - name: Create and push tag
@@ -133,16 +134,46 @@ jobs:
       # release, so installed desktop clients cannot see a candidate whose
       # installers, updater signatures or latest.json are still being built or
       # have failed validation. The publish job below flips it, once.
+      #
+      # The body is composed here rather than left to `--generate-notes` alone,
+      # because the desktop manifest job reads it unattended tens of minutes
+      # later: anything an operator is meant to see has to already be in it by
+      # then. `docs/release-notes/<version>.md` is written in the release PR,
+      # where a human reviewed it, so nothing is typed against that clock.
       - name: Create draft GitHub Release
         if: steps.current.outputs.release == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release view "${{ steps.version.outputs.tag }}" >/dev/null 2>&1 || \
-            gh release create "${{ steps.version.outputs.tag }}" \
-              --title "PumpOS ${{ steps.version.outputs.tag }}" \
-              --generate-notes \
-              --draft
+          tag="${{ steps.version.outputs.tag }}"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "::notice::$tag already has a release."
+            exit 0
+          fi
+
+          # GitHub's own changelog, fetched explicitly so the operator section
+          # can sit above it in a body we control.
+          args=(-f tag_name="$tag")
+          if [ -n "${{ steps.version.outputs.previous }}" ]; then
+            args+=(-f previous_tag_name="${{ steps.version.outputs.previous }}")
+          fi
+          gh api "repos/$GITHUB_REPOSITORY/releases/generate-notes" "${args[@]}" --jq .body > generated.md
+
+          notes="docs/release-notes/${{ steps.version.outputs.version }}.md"
+          # No file is a valid release: the operator sees the version and the
+          # action, and nothing here gates publication on prose existing.
+          if [ -s "$notes" ]; then
+            { printf '## For operators\n\n'; cat "$notes"; printf '\n\n'; } > body.md
+          else
+            echo "::notice::No $notes — this release carries no operator summary."
+            : > body.md
+          fi
+          cat generated.md >> body.md
+
+          gh release create "$tag" \
+            --title "PumpOS $tag" \
+            --notes-file body.md \
+            --draft
 
   # Reusable workflows build from this merge commit and stamp the derived
   # version into their disposable workspaces.
