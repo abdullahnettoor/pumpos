@@ -41,15 +41,15 @@ reportsRouter.get(
     }
 
     const stationId = c.req.query('stationId');
-    const from = c.req.query('from');
-    const to = c.req.query('to');
+    const from = c.req.query('from') ?? '';
+    const to = c.req.query('to') ?? '';
     const attendantId = c.req.query('attendantId') || undefined;
-    if (!stationId || !from || !to) {
+    // Only the station id is checked here, because the station authorization
+    // below cannot run without it. The date range is the use case's to
+    // validate — it owns the rule that `from` may not follow `to`.
+    if (!stationId) {
       return c.json(
-        {
-          success: false,
-          error: { code: 'VALIDATION_ERROR', message: 'Missing stationId, from, or to' },
-        },
+        { success: false, error: { code: 'VALIDATION_ERROR', message: 'Missing stationId' } },
         400,
       );
     }

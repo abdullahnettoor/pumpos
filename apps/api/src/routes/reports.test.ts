@@ -151,13 +151,27 @@ describe('GET /reports/attendant-handovers', () => {
     expect(res.status).toBe(200);
   });
 
-  it('rejects a request missing its date range before touching the reader', async () => {
+  it('rejects a request with no station to authorize against', async () => {
     const res = await makeApp(fakeDb(['reports.attendant'])).request(
-      '/reports/attendant-handovers?stationId=st-1',
+      '/reports/attendant-handovers?from=2026-03-01&to=2026-03-31',
     );
     expect(res.status).toBe(400);
     const body = (await res.json()) as any;
     expect(body.error.code).toBe('VALIDATION_ERROR');
+  });
+
+  it('rejects a malformed or inverted date range', async () => {
+    const missing = await makeApp(fakeDb(['reports.attendant'])).request(
+      '/reports/attendant-handovers?stationId=st-1',
+    );
+    expect(missing.status).toBe(400);
+    expect(((await missing.json()) as any).error.code).toBe('VALIDATION_ERROR');
+
+    const inverted = await makeApp(fakeDb(['reports.attendant'])).request(
+      '/reports/attendant-handovers?stationId=st-1&from=2026-03-31&to=2026-03-01',
+    );
+    expect(inverted.status).toBe(400);
+    expect(((await inverted.json()) as any).error.code).toBe('VALIDATION_ERROR');
   });
 
   it('returns an empty attendant list when the range holds no closed-shift handovers', async () => {

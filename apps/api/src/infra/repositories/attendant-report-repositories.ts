@@ -144,6 +144,11 @@ export class DrizzleAttendantHandoverReportReader implements AttendantHandoverRe
    * Readings of the Nozzles belonging to the Handovers' Dispensers. A Handover
    * is accountable for one Dispenser, so the reading reaches it through
    * (Shift, Dispenser) rather than through the Handover row itself.
+   *
+   * The tenant predicate is defence in depth: a Nozzle's Dispenser already
+   * binds it to one Organization, so no leak is reachable through this path
+   * today. It is stated anyway because a tenant predicate must not rest on an
+   * invariant held in another query.
    */
   private async readNozzleReadings(
     shiftIds: string[],
@@ -167,7 +172,12 @@ export class DrizzleAttendantHandoverReportReader implements AttendantHandoverRe
       .innerJoin(schema.nozzles, eq(schema.nozzleReadings.nozzleId, schema.nozzles.id))
       .leftJoin(schema.products, eq(schema.nozzles.productId, schema.products.id))
       .where(
-        and(inArray(schema.nozzleReadings.shiftId, shiftIds), inArray(schema.nozzles.duId, duIds)),
+        and(
+          inArray(schema.nozzleReadings.shiftId, shiftIds),
+          inArray(schema.nozzles.duId, duIds),
+          eq(schema.nozzles.organizationId, query.organizationId),
+          eq(schema.nozzles.stationId, query.stationId),
+        ),
       );
 
     return rows.map((r) => ({
@@ -249,6 +259,7 @@ export class DrizzleAttendantHandoverReportReader implements AttendantHandoverRe
       .select({
         shiftId: schema.customerTransactions.shiftId,
         attendantId: schema.customerTransactions.attendantId,
+        duId: schema.customerTransactions.duId,
         amount: schema.customerTransactions.amount,
       })
       .from(schema.customerTransactions)
@@ -261,6 +272,7 @@ export class DrizzleAttendantHandoverReportReader implements AttendantHandoverRe
     return rows.map((r) => ({
       shiftId: r.shiftId as string,
       attendantId: r.attendantId as string,
+      duId: r.duId ?? null,
       amount: num(r.amount),
     }));
   }

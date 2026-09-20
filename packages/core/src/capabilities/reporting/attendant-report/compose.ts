@@ -1,14 +1,14 @@
 import type {
   AttendantCreditSaleSourceRow,
-  AttendantHandoverReportNozzle,
-  AttendantHandoverReportTerminal,
-  AttendantNozzleReadingSourceRow,
-  AttendantTerminalEntrySourceRow,
   AttendantHandoverReport,
-  AttendantHandoverReportEntry,
-  AttendantHandoverReportShift,
   AttendantHandoverReportSource,
+  AttendantNozzleReadingSourceRow,
+  AttendantReportEntry,
+  AttendantReportNozzle,
+  AttendantReportShift,
+  AttendantReportTerminal,
   AttendantSaleSourceRow,
+  AttendantTerminalEntrySourceRow,
 } from './ports.js';
 
 /** The bulk end-of-shift merchandise declaration; everything else is billed. */
@@ -44,7 +44,7 @@ function indexSales(sales: AttendantSaleSourceRow[]) {
 
 /** Terminal detail hangs off the Handover it was declared in. */
 function indexTerminals(rows: AttendantTerminalEntrySourceRow[]) {
-  const byHandover = new Map<string, AttendantHandoverReportTerminal[]>();
+  const byHandover = new Map<string, AttendantReportTerminal[]>();
   for (const row of rows) {
     const list = byHandover.get(row.handoverId) ?? [];
     list.push({
@@ -61,7 +61,7 @@ function indexTerminals(rows: AttendantTerminalEntrySourceRow[]) {
 
 /** Readings reach a Handover through its Dispenser: (Shift, Dispenser). */
 function indexNozzleReadings(rows: AttendantNozzleReadingSourceRow[]) {
-  const byShiftDu = new Map<string, AttendantHandoverReportNozzle[]>();
+  const byShiftDu = new Map<string, AttendantReportNozzle[]>();
   for (const row of rows) {
     const k = key(row.shiftId, row.duId);
     const list = byShiftDu.get(k) ?? [];
@@ -80,13 +80,24 @@ function indexNozzleReadings(rows: AttendantNozzleReadingSourceRow[]) {
   return byShiftDu;
 }
 
+/**
+ * Credit chits totalled two ways: per (Shift, Attendant) for the shift line,
+ * and per (Shift, Dispenser) so a Dispenser's row shows the credit dispensed
+ * from it. A chit recorded outside a Dispenser handover carries no `duId`; it
+ * still counts toward the Shift, it simply has no Dispenser to sit under.
+ */
 function indexCreditSales(rows: AttendantCreditSaleSourceRow[]) {
-  const byKey = new Map<string, number>();
+  const byShiftAttendant = new Map<string, number>();
+  const byShiftDu = new Map<string, number>();
   for (const row of rows) {
     const k = key(row.shiftId, row.attendantId);
-    byKey.set(k, (byKey.get(k) ?? 0) + row.amount);
+    byShiftAttendant.set(k, (byShiftAttendant.get(k) ?? 0) + row.amount);
+    if (row.duId) {
+      const duKey = key(row.shiftId, row.duId);
+      byShiftDu.set(duKey, (byShiftDu.get(duKey) ?? 0) + row.amount);
+    }
   }
-  return byKey;
+  return { byShiftAttendant, byShiftDu };
 }
 
 /**
@@ -102,12 +113,12 @@ export function composeAttendantHandoverReport(
   meta: { stationId: string; from: string; to: string; generatedAt: string },
 ): AttendantHandoverReport {
   const { billed, handoverProduct } = indexSales(source.sales ?? []);
-  const creditByKey = indexCreditSales(source.creditSales ?? []);
+  const credit = indexCreditSales(source.creditSales ?? []);
   const terminalsByHandover = indexTerminals(source.terminalEntries ?? []);
   const nozzlesByShiftDu = indexNozzleReadings(source.nozzleReadings ?? []);
 
-  const byAttendant = new Map<string, AttendantHandoverReportEntry>();
-  const shiftsByKey = new Map<string, AttendantHandoverReportShift>();
+  const byAttendant = new Map<string, AttendantReportEntry>();
+  const shiftsByKey = new Map<string, AttendantReportShift>();
 
   for (const row of source.handovers) {
     let entry = byAttendant.get(row.attendantId);
@@ -140,7 +151,7 @@ export function composeAttendantHandoverReport(
         // Attributed once per (Shift, Attendant), not per Dispenser.
         billedSales: billed.get(k) ?? 0,
         handoverProductSales: handoverProduct.get(k) ?? 0,
-        creditSales: creditByKey.get(k) ?? 0,
+        creditSales: credit.byShiftAttendant.get(k) ?? 0,
         varianceAmount: 0,
         testingVolume: 0,
       };
@@ -160,6 +171,7 @@ export function composeAttendantHandoverReport(
       upiHandedOver: row.upiHandedOver,
       creditHandedOver: row.creditHandedOver,
       expectedFuelSales: row.expectedFuelSales,
+      creditSales: credit.byShiftDu.get(key(row.shiftId, row.duId)) ?? 0,
       varianceAmount: row.varianceAmount,
       testingVolume: row.testingVolume,
       terminals: terminalsByHandover.get(row.handoverId) ?? [],

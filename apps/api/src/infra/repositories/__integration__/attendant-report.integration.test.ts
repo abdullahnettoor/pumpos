@@ -169,6 +169,44 @@ describe.skipIf(!CONNECTION)('Attendant Handover Report reader against real Post
       });
     }
 
+    // A tank + nozzle for our DU, and a reading in the in-range closed shift.
+    const tank = '00000000-0000-0000-0000-00000000f001';
+    const product = '00000000-0000-0000-0000-00000000f002';
+    await db.insert(schema.products).values({
+      id: product,
+      organizationId: ORG,
+      name: 'Petrol',
+      code: 'MS',
+      productType: 'FUEL',
+      unit: 'Litre',
+    });
+    await db.insert(schema.tanks).values({
+      id: tank,
+      organizationId: ORG,
+      stationId: STATION,
+      name: 'T1',
+      productId: product,
+      capacity: '10000',
+    });
+    const nozzle = '00000000-0000-0000-0000-00000000f003';
+    await db.insert(schema.nozzles).values({
+      id: nozzle,
+      organizationId: ORG,
+      stationId: STATION,
+      duId: DU,
+      tankId: tank,
+      productId: product,
+      name: 'N1',
+      currentReading: '1100',
+    });
+    await db.insert(schema.nozzleReadings).values({
+      shiftId: shifts[0][0],
+      nozzleId: nozzle,
+      openingReading: '1000',
+      closingReading: '1100',
+      volumeSold: '100',
+    });
+
     // A credit MERCHANDISE sale: a `sales` row AND its mirroring ledger entry.
     // The ledger entry references the sale, so counting it as a credit sale
     // would double-count the money already reported as a Billed Sale.
@@ -231,6 +269,16 @@ describe.skipIf(!CONNECTION)('Attendant Handover Report reader against real Post
     expect(source.sales.map((s) => s.totalAmount)).toEqual([400]);
     // Only the fuel-on-credit chit — the ledger row mirroring the sale is excluded.
     expect(source.creditSales.map((c) => c.amount)).toEqual([800]);
+  });
+
+  it('returns the readings of the handover’s own dispenser', async () => {
+    const source = await read();
+    expect(source.nozzleReadings).toHaveLength(1);
+    expect(source.nozzleReadings[0]).toMatchObject({
+      nozzleName: 'N1',
+      productName: 'Petrol',
+      volumeSold: 100,
+    });
   });
 
   it('never returns another tenant’s handovers', async () => {

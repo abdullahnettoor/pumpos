@@ -21,7 +21,7 @@ import {
   CloudPaymentTerminalService,
   CloudAccessService,
 } from '../services/cloud.js';
-import type { AccessDocument } from '@pump/shared';
+import type { AccessDocument, AttendantHandoverReport, AttendantReportFilters } from '@pump/shared';
 
 /**
  * Centralised query hooks. These replace the hand-rolled
@@ -768,15 +768,14 @@ export function useDailyDssrRange(
  * gate, and the server refuses regardless of what the client believes.
  */
 export function useAttendantHandoverReport(
-  stationId: string | null | undefined,
-  from: string,
-  to: string,
-  attendantId?: string,
-  options?: Options<any>,
+  filters: Partial<AttendantReportFilters> & { stationId: string | null | undefined },
+  options?: Options<AttendantHandoverReport>,
 ) {
+  const { stationId, from = '', to = '', attendantId } = filters;
   return useQuery({
     queryKey: queryKeys.attendantHandoverReport(stationId ?? '', from, to, attendantId ?? ''),
-    queryFn: () => shiftService.getAttendantHandoverReport(stationId!, from, to, attendantId),
+    queryFn: () =>
+      shiftService.getAttendantHandoverReport({ stationId: stationId!, from, to, attendantId }),
     enabled: !!stationId && !!from && !!to,
     ...TIER.operational,
     ...options,
@@ -808,6 +807,11 @@ export function useInvalidateOperational() {
       qc.invalidateQueries({ queryKey: ['shift-transactions'] }),
       qc.invalidateQueries({ queryKey: ['merchandise-handovers'] }),
       qc.invalidateQueries({ queryKey: ['merchandise-sales'] }),
+      // The Attendant Handover Report reads closed-shift handovers, so closing
+      // a shift (or correcting one) changes it within the same session.
+      qc.invalidateQueries({ queryKey: ['attendant-handover-report'] }),
+      // The Attendant Handover Report reads closed-shift handovers, so closing
+      // a shift (or correcting one) changes it within the same session.
       // Business Day cockpit + P&L read the live DSSR preview — refresh it too.
       qc.invalidateQueries({ queryKey: ['dssr'] }),
       qc.invalidateQueries({ queryKey: ['dssr-preview'] }),

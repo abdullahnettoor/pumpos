@@ -56,6 +56,9 @@ const reorder = (list: OrderedSection[], from: number, to: number): OrderedSecti
 
 type ListId = 'ss' | 'dssr' | 'attendant';
 
+/** The documents whose sections can be configured and previewed. */
+type PreviewDoc = 'shiftSummary' | 'dssr' | 'attendantReport';
+
 /**
  * Station-level report configuration (Phase R2): choose paper size, toggle and
  * reorder the sections that appear in the Shift Summary and DSSR PDFs, with a
@@ -93,9 +96,7 @@ const ReportConfigForm: React.FC<ReportConfigPanelProps> = ({ selectedStation, o
       selectedStation?.settings?.report_config?.attendantReport,
     ),
   );
-  const [previewDoc, setPreviewDoc] = useState<'shiftSummary' | 'dssr' | 'attendantReport'>(
-    'shiftSummary',
-  );
+  const [previewDoc, setPreviewDoc] = useState<PreviewDoc>('shiftSummary');
   // The Attendant Handover Report is gated; an Organization without it must
   // not be offered configuration for a report it cannot open.
   const attendantReportAccess = useCapability(ATTENDANT_REPORT_CAPABILITY);
@@ -369,7 +370,7 @@ const ReportConfigForm: React.FC<ReportConfigPanelProps> = ({ selectedStation, o
                     : []),
                 ]}
                 value={previewDoc}
-                onChange={(v) => setPreviewDoc(v as typeof previewDoc)}
+                onChange={(v) => setPreviewDoc(v as PreviewDoc)}
                 aria-label="Preview report"
               />
             </div>

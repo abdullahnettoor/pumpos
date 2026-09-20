@@ -240,9 +240,9 @@ describe('GetAttendantHandoverReport', () => {
         undefined,
         {
           creditSales: [
-            { shiftId: 's-1', attendantId: 'att-1', amount: 800 },
-            { shiftId: 's-2', attendantId: 'att-1', amount: 200 },
-            { shiftId: 's-1', attendantId: 'att-2', amount: 999 },
+            { shiftId: 's-1', attendantId: 'att-1', duId: 'du-1', amount: 800 },
+            { shiftId: 's-2', attendantId: 'att-1', duId: 'du-1', amount: 200 },
+            { shiftId: 's-1', attendantId: 'att-2', duId: 'du-1', amount: 999 },
           ],
         },
       );
@@ -251,6 +251,43 @@ describe('GetAttendantHandoverReport', () => {
       const ravi = res.data.attendants.find((a) => a.attendantId === 'att-1');
       expect(ravi?.totals.creditSales).toBe(1000);
       expect(ravi?.shifts.find((s) => s.shiftId === 's-1')?.creditSales).toBe(800);
+    });
+
+    it('attributes a credit chit to the dispenser it was dispensed from', async () => {
+      const { result } = run(
+        [
+          row({ handoverId: 'h-1', shiftId: 's-1', duId: 'du-1', duName: 'DU 1' }),
+          row({ handoverId: 'h-2', shiftId: 's-1', duId: 'du-2', duName: 'DU 2' }),
+        ],
+        undefined,
+        {
+          creditSales: [
+            { shiftId: 's-1', attendantId: 'att-1', duId: 'du-1', amount: 800 },
+            { shiftId: 's-1', attendantId: 'att-1', duId: 'du-2', amount: 200 },
+          ],
+        },
+      );
+      const res = await result;
+      if (!res.success) throw new Error('expected success');
+      const [du1, du2] = res.data.attendants[0].shifts[0].dispensers;
+      expect(du1.creditSales).toBe(800);
+      expect(du2.creditSales).toBe(200);
+      // The shift line still totals the attendant's chits once.
+      expect(res.data.attendants[0].shifts[0].creditSales).toBe(1000);
+    });
+
+    it('counts a chit with no dispenser toward the shift but under no dispenser', async () => {
+      const { result } = run(
+        [row({ handoverId: 'h-1', shiftId: 's-1', duId: 'du-1' })],
+        undefined,
+        {
+          creditSales: [{ shiftId: 's-1', attendantId: 'att-1', duId: null, amount: 500 }],
+        },
+      );
+      const res = await result;
+      if (!res.success) throw new Error('expected success');
+      expect(res.data.attendants[0].shifts[0].creditSales).toBe(500);
+      expect(res.data.attendants[0].shifts[0].dispensers[0].creditSales).toBe(0);
     });
 
     it('counts a shift component once even when the attendant worked two dispensers', async () => {
@@ -262,7 +299,7 @@ describe('GetAttendantHandoverReport', () => {
         undefined,
         {
           sales: [sale({ captureMechanism: 'POS', totalAmount: 500 })],
-          creditSales: [{ shiftId: 's-1', attendantId: 'att-1', amount: 300 }],
+          creditSales: [{ shiftId: 's-1', attendantId: 'att-1', duId: 'du-1', amount: 300 }],
         },
       );
       const res = await result;

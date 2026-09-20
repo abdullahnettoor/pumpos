@@ -13,6 +13,11 @@ import {
   type Col,
   type Cell,
 } from './shiftSummaryDoc.js';
+import type {
+  AttendantReportDispenser,
+  AttendantReportEntry,
+  AttendantReportShift,
+} from '@pump/shared';
 import type { AttendantReportSection, AttendantReportConfig } from './reportConfig.js';
 import { DEFAULT_ATTENDANT_REPORT_CONFIG } from './reportConfig.js';
 
@@ -29,12 +34,17 @@ export {
  *
  * `data` is one attendant entry from the report plus its period meta.
  */
+export interface AttendantStatementData extends AttendantReportEntry {
+  from: string;
+  to: string;
+  generatedAt?: string;
+}
 
-const shiftLabel = (shift: any): string =>
+const shiftLabel = (shift: AttendantReportShift): string =>
   `${shift.businessDate}${shift.shiftTemplateName ? ` · ${shift.shiftTemplateName}` : ''}`;
 
-const sum = (rows: any[], get: (r: any) => number): number =>
-  rows.reduce((acc, r) => acc + Number(get(r) || 0), 0);
+const sum = <T,>(rows: T[], get: (row: T) => number): number =>
+  rows.reduce((acc, row) => acc + Number(get(row) || 0), 0);
 
 const SectionTitle = ({ children }: { children: React.ReactNode }) => (
   <Text style={s.h2}>{children}</Text>
@@ -42,7 +52,7 @@ const SectionTitle = ({ children }: { children: React.ReactNode }) => (
 
 const builders: Record<
   AttendantReportSection,
-  (d: any, cfg: AttendantReportConfig) => React.ReactNode
+  (d: AttendantStatementData, cfg: AttendantReportConfig) => React.ReactNode
 > = {
   header: (d, cfg) => (
     <View key="header">
@@ -65,22 +75,19 @@ const builders: Record<
 
   summary: (d) => (
     <View key="summary" style={s.kpiRow}>
-      <Kpi l="Shifts" v={String(d.shiftsWorked ?? 0)} />
-      <Kpi l="Cash handed over" v={inr(d.totals?.cashHandedOver)} />
-      <Kpi
-        l="Card + UPI"
-        v={inr((d.totals?.cardHandedOver ?? 0) + (d.totals?.upiHandedOver ?? 0))}
-      />
+      <Kpi l="Shifts" v={String(d.shiftsWorked)} />
+      <Kpi l="Cash handed over" v={inr(d.totals.cashHandedOver)} />
+      <Kpi l="Card + UPI" v={inr(d.totals.cardHandedOver + d.totals.upiHandedOver)} />
       <Kpi
         l="Net variance"
-        v={inr(d.totals?.varianceAmount)}
-        c={varColor(Number(d.totals?.varianceAmount ?? 0))}
+        v={inr(d.totals.varianceAmount)}
+        c={varColor(d.totals.varianceAmount)}
       />
     </View>
   ),
 
   fuelSales: (d) => {
-    const shifts = d.shifts ?? [];
+    const shifts = d.shifts;
     if (shifts.length === 0) return null;
     const columns: Col[] = [
       { header: 'Shift', flex: 2.2 },
@@ -92,8 +99,8 @@ const builders: Record<
     ];
     const rows: Cell[][] = [];
     for (const shift of shifts) {
-      for (const du of shift.dispensers ?? []) {
-        const nozzles = du.nozzles ?? [];
+      for (const du of shift.dispensers) {
+        const nozzles = du.nozzles;
         if (nozzles.length === 0) {
           rows.push([
             { text: shiftLabel(shift) },
@@ -105,7 +112,7 @@ const builders: Record<
           ]);
           continue;
         }
-        nozzles.forEach((n: any, i: number) => {
+        nozzles.forEach((n, i) => {
           rows.push([
             { text: i === 0 ? shiftLabel(shift) : '' },
             { text: i === 0 ? du.duName : '' },
@@ -129,7 +136,7 @@ const builders: Record<
             { text: '' },
             { text: '' },
             { text: '' },
-            { text: inr(d.totals?.expectedFuelSales) },
+            { text: inr(d.totals.expectedFuelSales) },
           ]}
         />
       </View>
@@ -137,7 +144,7 @@ const builders: Record<
   },
 
   merchandise: (d) => {
-    const shifts = d.shifts ?? [];
+    const shifts = d.shifts;
     if (shifts.length === 0) return null;
     const columns: Col[] = [
       { header: 'Shift', flex: 2.5 },
@@ -149,15 +156,15 @@ const builders: Record<
         <SectionTitle>Merchandise</SectionTitle>
         <TableView
           columns={columns}
-          rows={shifts.map((shift: any) => [
+          rows={shifts.map((shift) => [
             { text: shiftLabel(shift) },
             { text: inr(shift.billedSales) },
             { text: inr(shift.handoverProductSales) },
           ])}
           total={[
             { text: 'Total' },
-            { text: inr(d.totals?.billedSales) },
-            { text: inr(d.totals?.handoverProductSales) },
+            { text: inr(d.totals.billedSales) },
+            { text: inr(d.totals.handoverProductSales) },
           ]}
         />
       </View>
@@ -165,7 +172,7 @@ const builders: Record<
   },
 
   creditSales: (d) => {
-    const shifts = (d.shifts ?? []).filter((sh: any) => Number(sh.creditSales || 0) !== 0);
+    const shifts = d.shifts.filter((sh) => sh.creditSales !== 0);
     if (shifts.length === 0) return null;
     return (
       <View key="creditSales" wrap={false}>
@@ -175,11 +182,11 @@ const builders: Record<
             { header: 'Shift', flex: 3 },
             { header: 'Credit sales', flex: 1.5, align: 'right', mono: true },
           ]}
-          rows={shifts.map((shift: any) => [
+          rows={shifts.map((shift) => [
             { text: shiftLabel(shift) },
             { text: inr(shift.creditSales) },
           ])}
-          total={[{ text: 'Total' }, { text: inr(d.totals?.creditSales) }]}
+          total={[{ text: 'Total' }, { text: inr(d.totals.creditSales) }]}
         />
       </View>
     );
@@ -187,9 +194,9 @@ const builders: Record<
 
   terminals: (d) => {
     const rows: Cell[][] = [];
-    for (const shift of d.shifts ?? []) {
-      for (const du of shift.dispensers ?? []) {
-        for (const t of du.terminals ?? []) {
+    for (const shift of d.shifts) {
+      for (const du of shift.dispensers) {
+        for (const t of du.terminals) {
           rows.push([
             { text: shiftLabel(shift) },
             { text: du.duName },
@@ -221,7 +228,7 @@ const builders: Record<
   },
 
   variance: (d) => {
-    const shifts = d.shifts ?? [];
+    const shifts = d.shifts;
     if (shifts.length === 0) return null;
     return (
       <View key="variance" wrap={false}>
@@ -234,14 +241,14 @@ const builders: Record<
             { header: 'UPI', flex: 1.2, align: 'right', mono: true },
             { header: 'Variance', flex: 1.3, align: 'right', mono: true, strong: true },
           ]}
-          rows={shifts.map((shift: any) => [
+          rows={shifts.map((shift) => [
             { text: shiftLabel(shift) },
             { text: inr(shift.cashHandedOver) },
             { text: inr(shift.cardHandedOver) },
             { text: inr(shift.upiHandedOver) },
             {
               text: inr(shift.varianceAmount),
-              color: varColor(Number(shift.varianceAmount || 0)),
+              color: varColor(shift.varianceAmount),
             },
           ])}
           total={[
@@ -250,8 +257,8 @@ const builders: Record<
             { text: inr(sum(shifts, (sh) => sh.cardHandedOver)) },
             { text: inr(sum(shifts, (sh) => sh.upiHandedOver)) },
             {
-              text: inr(d.totals?.varianceAmount),
-              color: varColor(Number(d.totals?.varianceAmount ?? 0)),
+              text: inr(d.totals.varianceAmount),
+              color: varColor(d.totals.varianceAmount),
             },
           ]}
         />
@@ -279,14 +286,16 @@ const builders: Record<
 };
 
 export const AttendantReportDoc: React.FC<{
-  data: any;
+  data: AttendantStatementData;
   config?: AttendantReportConfig;
 }> = ({ data, config = DEFAULT_ATTENDANT_REPORT_CONFIG }) => (
   <Document>
     <Page size={config.paper} style={s.page}>
       {config.sections.map((key) => builders[key]?.(data, config))}
       <View style={s.foot} fixed>
-        <Text>Generated {new Date().toLocaleString('en-IN')}</Text>
+        {/* The instant the report was composed — a re-print must not claim to
+            be newer than the data it prints. */}
+        <Text>Generated {fmtDateTime(data.generatedAt) || new Date().toLocaleString('en-IN')}</Text>
         <Text render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} />
       </View>
     </Page>

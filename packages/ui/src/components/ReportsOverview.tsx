@@ -110,10 +110,15 @@ export const ReportsOverview: React.FC<ReportsOverviewProps> = ({ selectedStatio
   const [selectedTab, setSelectedTab] = useState<ReportsTab>('daily-dssr');
   // One decision drives both the tab and its panel, so they cannot disagree.
   const attendantReport = useCapability(ATTENDANT_REPORT_CAPABILITY);
-  // Both axes, as the server checks them: the Organization must have the
-  // capability AND the Role must be allowed, or the tab would 403 on click.
+  /*
+   * Two axes, as the server checks them. The Role must allow it, or the tab
+   * would 403 on click. The capability may be `upgrade` rather than `enabled`:
+   * a Role that may be told about it still sees the tab, and the panel renders
+   * the explanatory unavailable state instead of silence. `hidden` — access
+   * unknown, or not this user's concern — shows nothing at all.
+   */
   const showAttendantReport =
-    attendantReport.status === 'enabled' && canViewAttendantReport(userRole);
+    canViewAttendantReport(userRole) && attendantReport.status !== 'hidden';
   const { intent, token: intentToken } = useNavIntentEntry();
   const activeTab: ReportsTab = intent?.openDssrDate ? 'daily-dssr' : selectedTab;
   const setActiveTab = (tab: ReportsTab) => {

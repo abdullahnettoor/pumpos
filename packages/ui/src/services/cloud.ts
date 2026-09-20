@@ -21,6 +21,8 @@ import {
   FinalizeOnboardingPayload,
   FinalizeOnboardingResult,
   AccessDocument,
+  AttendantHandoverReport,
+  AttendantReportFilters,
 } from '@pump/shared';
 import { getAccessToken, refreshAccessToken } from './auth/tokenStore.js';
 
@@ -689,14 +691,15 @@ export class CloudShiftService {
    * the `reports.attendant` Product Capability.
    */
   async getAttendantHandoverReport(
-    stationId: string,
-    from: string,
-    to: string,
-    attendantId?: string,
-  ): Promise<any> {
-    const query = new URLSearchParams({ stationId, from, to });
-    if (attendantId) query.set('attendantId', attendantId);
-    return request<any>(`/reports/attendant-handovers?${query.toString()}`);
+    filters: AttendantReportFilters,
+  ): Promise<AttendantHandoverReport> {
+    const query = new URLSearchParams({
+      stationId: filters.stationId,
+      from: filters.from,
+      to: filters.to,
+    });
+    if (filters.attendantId) query.set('attendantId', filters.attendantId);
+    return request<AttendantHandoverReport>(`/reports/attendant-handovers?${query.toString()}`);
   }
 }
 
