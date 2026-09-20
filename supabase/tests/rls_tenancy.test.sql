@@ -8,7 +8,10 @@
 --      outside their authoritative organization.
 --   2. Members cannot directly UPDATE users rows (role escalation) or
 --      INSERT station assignments via the Data API role.
---   3. handle_new_user() ignores caller-supplied signup_intent unless the
+--   3. Organization access history (capability grants, Limit overrides) is
+--      invisible and unwritable to tenant roles: commercial data belongs to
+--      the platform, and tenants only ever see the effective Access Document.
+--   4. handle_new_user() ignores caller-supplied signup_intent unless the
 --      account was server-invited or carries server-set app metadata,
 --      handles GoTrue's follow-up invited_at update idempotently, and always
 --      pins the bootstrap role to Owner.
@@ -21,8 +24,16 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO authentic
 
 -- Fixtures: two organizations, one active user in each.
 INSERT INTO organizations (id, name, subscription_plan, subscription_status)
-VALUES ('00000000-0000-0000-0000-00000000000a', 'Org A', 'Core', 'Active'),
-       ('00000000-0000-0000-0000-00000000000b', 'Org B', 'Core', 'Active');
+VALUES ('00000000-0000-0000-0000-00000000000a', 'Org A', 'CORE', 'ACTIVE'),
+       ('00000000-0000-0000-0000-00000000000b', 'Org B', 'CORE', 'ACTIVE');
+
+-- Access history for Alice's own organization: even her own commercial rows
+-- must be invisible to her.
+INSERT INTO organization_capability_grants (organization_id, capability_key, granted_by_email, reason)
+VALUES ('00000000-0000-0000-0000-00000000000a', 'exports.tally', 'admin@pumpos.app', 'Pilot');
+
+INSERT INTO organization_limit_overrides (organization_id, limit_key, value, assigned_by_email, reason)
+VALUES ('00000000-0000-0000-0000-00000000000a', 'station_count', 3, 'admin@pumpos.app', 'Three sites');
 
 INSERT INTO users (id, organization_id, auth_user_id, full_name, email, role, status)
 VALUES ('00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-00000000000a',
@@ -54,6 +65,29 @@ BEGIN
   --    SELECT-only policy.
   UPDATE users SET role = 'Owner' WHERE id = '00000000-0000-0000-0000-0000000000a1';
   ASSERT NOT FOUND, 'direct users UPDATE was allowed';
+
+  -- 3. Commercial access history is platform-only.
+  ASSERT (SELECT count(*) FROM organization_capability_grants) = 0,
+    'capability grants leaked to a tenant role';
+  ASSERT (SELECT count(*) FROM organization_limit_overrides) = 0,
+    'limit overrides leaked to a tenant role';
+
+  -- A tenant cannot grant itself access either.
+  BEGIN
+    INSERT INTO organization_capability_grants (organization_id, capability_key, granted_by_email)
+    VALUES ('00000000-0000-0000-0000-00000000000a', 'exports.tally', 'alice@a.test');
+    RAISE EXCEPTION 'tenant INSERT into organization_capability_grants was allowed';
+  EXCEPTION WHEN insufficient_privilege OR check_violation THEN
+    NULL; -- expected: RLS denies the write
+  END;
+
+  BEGIN
+    INSERT INTO organization_limit_overrides (organization_id, limit_key, value, assigned_by_email)
+    VALUES ('00000000-0000-0000-0000-00000000000a', 'station_count', 99, 'alice@a.test');
+    RAISE EXCEPTION 'tenant INSERT into organization_limit_overrides was allowed';
+  EXCEPTION WHEN insufficient_privilege OR check_violation THEN
+    NULL; -- expected: RLS denies the write
+  END;
 
   -- Direct assignment INSERT is denied outright.
   BEGIN

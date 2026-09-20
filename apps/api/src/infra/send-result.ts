@@ -10,6 +10,7 @@ export const STATUS_BY_CODE: Record<string, number> = {
   CONFLICT: 409,
   FORBIDDEN: 403,
   UNAUTHORIZED: 401,
+  LIMIT_REACHED: 409,
 };
 
 /**

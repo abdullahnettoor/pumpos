@@ -28,6 +28,12 @@
  *   node packages/db/platform.mjs owners deactivate  --org-id <uuid>
  *   node packages/db/platform.mjs owners reactivate  --org-id <uuid>
  *
+ *   node packages/db/platform.mjs organization access show <org-id>
+ *   node packages/db/platform.mjs organization capability grant  <org-id> <capability-key> [--reason "<why>"]
+ *   node packages/db/platform.mjs organization capability revoke <org-id> <capability-key> [--reason "<why>"]
+ *   node packages/db/platform.mjs organization limit set   <org-id> station_count <value> --reason "<why>"
+ *   node packages/db/platform.mjs organization limit clear <org-id> station_count [--reason "<why>"]
+ *
  * Tip: Run below script to source the API secrets first:
 set -a
 . apps/mobile/.env
@@ -55,12 +61,17 @@ const SUPABASE_ANON_KEY =
 const ADMIN_EMAIL = (process.env.PLATFORM_ADMIN_EMAIL || flags.email || '').trim();
 const ADMIN_PASSWORD = process.env.PLATFORM_ADMIN_PASSWORD || '';
 
-if (group !== 'owners') {
+if (group !== 'owners' && group !== 'organization') {
   usage();
   process.exit(group ? 1 : 0);
 }
 
 const token = await signIn();
+
+if (group === 'organization') {
+  await organizationCommand();
+  process.exit(0);
+}
 
 switch (action) {
   case 'list':
@@ -179,6 +190,152 @@ async function ownersInvite() {
   }
 }
 
+/**
+ * `organization <area> <verb> <org-id> [args]`. The Organization UUID is the
+ * authoritative argument — use `owners list` to find it. Unknown capability or
+ * Limit keys are rejected by the API before anything is written.
+ */
+async function organizationCommand() {
+  const args = positionals(rest);
+  const reason = (flags.reason || '').trim() || undefined;
+
+  if (action === 'access' && args[0] === 'show') {
+    const orgId = requireArg(args[1], 'organization access show <org-id>');
+    const data = await api('GET', `/platform/organizations/${orgId}/access`);
+    printAccess(data);
+    return;
+  }
+
+  if (action === 'capability') {
+    const verb = args[0];
+    const orgId = requireArg(args[1], `organization capability ${verb} <org-id> <capability-key>`);
+    const key = requireArg(args[2], `organization capability ${verb} <org-id> <capability-key>`);
+    if (verb === 'grant') {
+      return printChange(
+        await api('POST', `/platform/organizations/${orgId}/capabilities`, {
+          capabilityKey: key,
+          reason,
+        }),
+        `capability ${key} granted`,
+      );
+    }
+    if (verb === 'revoke') {
+      return printChange(
+        await api(
+          'DELETE',
+          `/platform/organizations/${orgId}/capabilities/${encodeURIComponent(key)}`,
+          { reason },
+        ),
+        `capability ${key} revoked`,
+      );
+    }
+  }
+
+  if (action === 'limit') {
+    const verb = args[0];
+    const orgId = requireArg(args[1], `organization limit ${verb} <org-id> <limit-key>`);
+    const key = requireArg(args[2], `organization limit ${verb} <org-id> <limit-key>`);
+    if (verb === 'set') {
+      const value = Number(
+        requireArg(args[3], 'organization limit set <org-id> <limit-key> <value>'),
+      );
+      if (!reason) fail('organization limit set requires --reason "<why>"');
+      return printChange(
+        await api('PUT', `/platform/organizations/${orgId}/limits/${encodeURIComponent(key)}`, {
+          value,
+          reason,
+        }),
+        `limit ${key} set to ${value}`,
+      );
+    }
+    if (verb === 'clear') {
+      return printChange(
+        await api('DELETE', `/platform/organizations/${orgId}/limits/${encodeURIComponent(key)}`, {
+          reason,
+        }),
+        `limit ${key} cleared`,
+      );
+    }
+  }
+
+  usage();
+  process.exit(1);
+}
+
+function printAccess(data) {
+  const { effective, grants, limitOverrides, registry } = data;
+  console.log(`\nOrganization ${data.organizationId}`);
+  console.log(`  plan          ${effective.plan ?? '(none)'}`);
+  console.log(
+    `  subscription  ${effective.subscription.status} (${effective.subscription.mode})` +
+      (effective.subscription.accessUntil ? ` until ${effective.subscription.accessUntil}` : ''),
+  );
+  for (const [key, limit] of Object.entries(effective.limits)) {
+    console.log(
+      `  limit         ${key}: ${limit.used} of ${limit.value} used${limit.reached ? ' (reached)' : ''}`,
+    );
+  }
+  const enabled = Object.entries(effective.capabilities)
+    .filter(([, entry]) => entry.enabled)
+    .map(([key]) => key);
+  console.log(`  capabilities  ${enabled.length ? enabled.join(', ') : '(plan baseline only)'}`);
+  console.log(`  grantable     ${registry.capabilities.join(', ') || '(none in this build)'}`);
+
+  console.log('\n  Grant history');
+  if (!grants.length) console.log('    (none)');
+  for (const grant of grants) {
+    const state = grant.revokedAt
+      ? `revoked ${grant.revokedAt} by ${grant.revokedByEmail}`
+      : 'active';
+    console.log(
+      `    ${grant.capabilityKey} — ${state}; granted ${grant.createdAt} by ${grant.grantedByEmail}` +
+        (grant.reason ? ` (${grant.reason})` : ''),
+    );
+  }
+
+  console.log('\n  Limit override history');
+  if (!limitOverrides.length) console.log('    (none)');
+  for (const override of limitOverrides) {
+    const state = override.revokedAt
+      ? `revoked ${override.revokedAt} by ${override.revokedByEmail}`
+      : 'active';
+    console.log(
+      `    ${override.limitKey} = ${override.value} — ${state}; set ${override.createdAt} by ${override.assignedByEmail}` +
+        (override.reason ? ` (${override.reason})` : ''),
+    );
+  }
+  console.log('');
+}
+
+function printChange(data, what) {
+  if (data?.changed === false) {
+    console.log(`\n• no change — ${what} was already in effect\n`);
+    return;
+  }
+  console.log(`\n✅ ${what}\n`);
+}
+
+function requireArg(value, syntax) {
+  const trimmed = (value || '').trim();
+  if (!trimmed) fail(`Missing argument. Usage: ${syntax}`);
+  return trimmed;
+}
+
+/** Positional arguments, i.e. everything that is not a `--flag` or its value. */
+function positionals(list) {
+  const out = [];
+  for (let i = 0; i < list.length; i++) {
+    const a = list[i];
+    if (a.startsWith('--')) {
+      const next = list[i + 1];
+      if (next !== undefined && !next.startsWith('--')) i++;
+      continue;
+    }
+    out.push(a);
+  }
+  return out;
+}
+
 async function rowAction(verb) {
   const orgId = (flags['org-id'] || '').trim();
   if (!orgId) fail(`owners ${verb} requires --org-id <uuid>`);
@@ -215,6 +372,12 @@ Platform back-office CLI
   node packages/db/platform.mjs owners revoke      --org-id <uuid>
   node packages/db/platform.mjs owners deactivate  --org-id <uuid>
   node packages/db/platform.mjs owners reactivate  --org-id <uuid>
+
+  node packages/db/platform.mjs organization access show <org-id>
+  node packages/db/platform.mjs organization capability grant  <org-id> <capability-key> [--reason "<why>"]
+  node packages/db/platform.mjs organization capability revoke <org-id> <capability-key> [--reason "<why>"]
+  node packages/db/platform.mjs organization limit set   <org-id> station_count <value> --reason "<why>"
+  node packages/db/platform.mjs organization limit clear <org-id> station_count [--reason "<why>"]
 
 Env: PUMP_API_URL, SUPABASE_URL, SUPABASE_ANON_KEY,
      PLATFORM_ADMIN_EMAIL, PLATFORM_ADMIN_PASSWORD

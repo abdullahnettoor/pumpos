@@ -74,6 +74,19 @@ function transactionalDb(committed: Write[], failOnTable?: unknown) {
   return { db, draftFor: (tx: DbClient) => drafts.get(tx as object)! };
 }
 
+/** Capacity is exercised in station-limit.test.ts; here it always allows. */
+const unlimitedCapacity = {
+  lockOrganization: async () => {},
+  load: async () => ({
+    plan: 'CORE',
+    subscriptionStatus: 'ACTIVE',
+    accessUntil: null,
+    grantedCapabilities: [],
+    limitOverrides: { station_count: 99 },
+    usage: { station_count: 0 },
+  }),
+};
+
 const ctx: ExecutionContext = {
   organizationId: 'org-1',
   stationId: null,
@@ -141,6 +154,7 @@ const finalize = (committed: Write[], eventPublisherFactory?: (tx: DbClient) => 
         (tx, events) =>
           new FinalizeStationOnboarding({
             provisioner: new DrizzleOnboardingProvisioner(tx),
+            capacity: unlimitedCapacity,
             events,
           }).execute(validDraft(), ctx),
         eventPublisherFactory,
@@ -202,6 +216,7 @@ describe('Station onboarding finalization is atomic (#161)', () => {
       runInTransaction(db, (tx, events) =>
         new FinalizeStationOnboarding({
           provisioner: new DrizzleOnboardingProvisioner(tx),
+          capacity: unlimitedCapacity,
           events,
         }).execute(validDraft(), ctx),
       ),
