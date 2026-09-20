@@ -265,6 +265,74 @@ adds nothing, and a fully silent install would hide a failure.
 
 ---
 
+## Preview builds
+
+A desktop build of a `dev` commit, for trying a change on real hardware before
+it becomes a release. A preview is a **build, not a channel**: you install it by
+hand, it updates nothing, and nothing updates to it.
+
+### Getting one
+
+Merging to `dev` queues a preview build that **waits for an approval** — it does
+not start on its own. Approve it from the run page and both installers appear as
+workflow artifacts; ignore it and it costs nothing, because a job waiting on an
+environment approval consumes no runner minutes. macOS runners bill at 10x and
+Windows at 2x, which is the whole reason the gate exists.
+
+You can also start one for any branch from **Actions → Desktop preview → Run
+workflow**.
+
+Artifacts are attached to the run for 14 days. They are never attached to a
+GitHub Release, never published as a prerelease, and never pushed to the public
+download bucket.
+
+### What makes a preview safe to install
+
+It installs **alongside** your production PumpOS rather than replacing it. Both
+can run; neither knows about the other.
+
+|                    | Production           | Preview                      |
+| ------------------ | -------------------- | ---------------------------- |
+| Product name       | PumpOS               | PumpOS Preview               |
+| Bundle identifier  | `com.pumpos.desktop` | `com.pumpos.desktop.preview` |
+| Version            | `1.3.2`              | `1.3.2-preview.<sha>`        |
+| Environment badge  | none                 | **Preview**                  |
+| Checks for updates | yes                  | **never**                    |
+| Updater artifacts  | signed               | **none**                     |
+| Backend            | production           | preview API and Supabase     |
+
+The version being a SemVer _prerelease_ is what stops a preview ever presenting
+itself as newer than the release it came from, and naming the commit is what
+makes a bug report traceable.
+
+A preview build **cannot be signed**. The `desktop-signing` environment is
+restricted to `main`, so a `dev`-triggered run cannot read the updater private
+key even if it asked — and the build asserts before upload that it produced no
+signature, no updater artifact, and nothing carrying the production identity or
+a release version. Widening who can trigger a build never widens who can sign
+one.
+
+Be precise about where "never checks for updates" comes from: the updater plugin
+is still compiled in and still carries the stable endpoint, exactly as in a
+release build. What stops it is `shouldEnableUpdates`, which returns false for
+every non-production build — asserted by a test that walks each environment. The
+preview build's contribution is `VITE_APP_ENV=preview`; the guarantee itself is
+the shell's, and it is the same guarantee a local `npm run tauri dev` relies on.
+
+`workflow_dispatch` will build any branch, not just `dev`. That is deliberate —
+it is the purest form of "only when I ask" — and it runs under the same
+approval gate and the same secret-less environment, so no branch gains anything
+by using it.
+
+Preview builds are unsigned at the OS level too, exactly like releases, so
+expect the same Gatekeeper and SmartScreen steps described below.
+
+### Owner setup, once
+
+Create a **`desktop-preview`** environment (Settings → Environments) with a
+**required reviewer** — that reviewer is the approval gate. Add **no secrets**
+to it: the environment exists to make the job wait, not to grant it anything.
+
 ## First install (bootstrap)
 
 Releases before in-app updates carry no `latest.json` and no `.sig` assets, so

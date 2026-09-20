@@ -13,6 +13,9 @@ node_modules
 apps/desktop/src-tauri/target/
 apps/desktop/src-tauri/gen/
 apps/desktop/src-tauri/icons/.DS_Store
+# Generated per preview build by scripts/preview-desktop.mjs. Never committed:
+# it names a specific commit, and the production config must stay authoritative.
+apps/desktop/src-tauri/tauri.preview.conf.json
 apps/desktop/src-tauri/target/debug/bundle/
 
 # ==============================================================================
