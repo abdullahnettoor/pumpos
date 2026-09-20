@@ -31,7 +31,17 @@ CREATE TABLE "organization_limit_overrides" (
 	"revoked_by_email" varchar(255),
 	CONSTRAINT "organization_limit_overrides_value_positive" CHECK ("organization_limit_overrides"."value" > 0)
 );
-ALTER TABLE "organization_capability_grants" ADD CONSTRAINT "organization_capability_grants_organization_id_organizations_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE no action ON UPDATE no action;ALTER TABLE "organization_limit_overrides" ADD CONSTRAINT "organization_limit_overrides_organization_id_organizations_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE no action ON UPDATE no action;CREATE INDEX "organization_capability_grants_org_idx" ON "organization_capability_grants" USING btree ("organization_id");CREATE UNIQUE INDEX "organization_capability_grants_active_uniq" ON "organization_capability_grants" USING btree ("organization_id","capability_key") WHERE "organization_capability_grants"."revoked_at" IS NULL;CREATE INDEX "organization_limit_overrides_org_idx" ON "organization_limit_overrides" USING btree ("organization_id");CREATE UNIQUE INDEX "organization_limit_overrides_active_uniq" ON "organization_limit_overrides" USING btree ("organization_id","limit_key") WHERE "organization_limit_overrides"."revoked_at" IS NULL;
+ALTER TABLE "organization_capability_grants" ADD CONSTRAINT "organization_capability_grants_organization_id_organizations_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE no action ON UPDATE no action;
+
+ALTER TABLE "organization_limit_overrides" ADD CONSTRAINT "organization_limit_overrides_organization_id_organizations_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE no action ON UPDATE no action;
+
+CREATE INDEX "organization_capability_grants_org_idx" ON "organization_capability_grants" USING btree ("organization_id");
+
+CREATE UNIQUE INDEX "organization_capability_grants_active_uniq" ON "organization_capability_grants" USING btree ("organization_id","capability_key") WHERE "organization_capability_grants"."revoked_at" IS NULL;
+
+CREATE INDEX "organization_limit_overrides_org_idx" ON "organization_limit_overrides" USING btree ("organization_id");
+
+CREATE UNIQUE INDEX "organization_limit_overrides_active_uniq" ON "organization_limit_overrides" USING btree ("organization_id","limit_key") WHERE "organization_limit_overrides"."revoked_at" IS NULL;
 
 -- Commercial history is platform-only. RLS is enabled with no policy for
 -- tenant roles, so `authenticated` and `anon` are denied by default, and the

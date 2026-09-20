@@ -7,6 +7,7 @@ import type { AuthenticatedPrincipal } from '../infra/authenticated-principal.js
 import { createDispatcher } from '../infra/events.js';
 import { DrizzlePaymentTerminalRepository } from '../infra/repositories/payment-terminal.repo.js';
 import { AccountProvisioningService } from '../infra/account-provisioning.js';
+import { sendResult } from '../infra/send-result.js';
 
 type Variables = {
   db: DbClient;
@@ -14,22 +15,6 @@ type Variables = {
 };
 
 export const paymentTerminalsRouter = new Hono<{ Variables: Variables }>();
-
-const STATUS_BY_CODE: Record<string, number> = {
-  VALIDATION_ERROR: 400,
-  NOT_FOUND: 404,
-  CONFLICT: 409,
-  FORBIDDEN: 403,
-  UNAUTHORIZED: 401,
-};
-
-function sendResult<T>(c: any, result: Result<T>) {
-  if (result.success) {
-    return c.json({ success: true, data: result.data });
-  }
-  const status = STATUS_BY_CODE[result.error.code] ?? 400;
-  return c.json({ success: false, error: result.error }, status);
-}
 
 function canWrite(c: any, stationId?: string | null): boolean {
   const user = c.var.user;

@@ -1061,17 +1061,57 @@ function deriveOwnerStatus(
 }
 
 /**
- * Revocation marker on the Organization. The typed Subscription Status cannot
- * carry it: a revoked invite and a deactivated Owner are both SUSPENDED, but
- * only the first is hidden from the platform list by default.
+ * Was this Organization's Owner invite revoked (rather than merely
+ * deactivated)? Both end at SUSPENDED, so the distinction is read from the
+ * Owner row, which revocation clears and deactivation does not: revoking
+ * unlinks `auth_user_id` so the address can be re-invited, deactivation keeps
+ * it so the same login can be restored.
+ *
+ * Derived, not stored: the subscription column carries the Subscription
+ * Status and nothing else.
  */
-function isRevoked(metadata: unknown): boolean {
-  return Boolean((metadata as { revoked_at?: string } | null)?.revoked_at);
+function isRevokedOwner(
+  owner: { status: string; authUserId: string | null } | null | undefined,
+  subscriptionStatus: string,
+): boolean {
+  if (!owner) return subscriptionStatus === 'SUSPENDED';
+  return owner.status === 'INACTIVE' && owner.authUserId === null;
 }
 
-function withoutRevocation(metadata: unknown): Record<string, unknown> {
-  const { revoked_at: _revoked, ...rest } = (metadata ?? {}) as Record<string, unknown>;
-  return rest;
+/**
+ * Write a Subscription Status and append its audit event in the same step.
+ *
+ * Access state must never change without the event that explains it, so the
+ * two live in one function rather than being re-paired at each call site. A
+ * no-op write emits nothing.
+ */
+async function setSubscriptionStatus(
+  c: any,
+  org: { id: string; name: string; subscriptionStatus: string },
+  status: string,
+  reason: string,
+): Promise<void> {
+  if (org.subscriptionStatus === status) return;
+  const db = c.var.db as DbClient;
+  await db
+    .update(schema.organizations)
+    .set({ subscriptionStatus: status, updatedAt: new Date() })
+    .where(eq(schema.organizations.id, org.id));
+  await appendPlatformEvent(
+    db,
+    buildPlatformEvent(
+      BusinessEvents.ORGANIZATION_SUBSCRIPTION_STATUS_CHANGED,
+      org.id,
+      org.id,
+      {
+        organizationName: org.name,
+        previousStatus: org.subscriptionStatus,
+        status,
+        reason,
+      },
+      c.var.platformAdmin,
+    ),
+  );
 }
 
 // GET /platform/owners — one row per org (its Owner user), enriched with auth
@@ -1088,33 +1128,46 @@ platform.get('/owners', async (c) => {
     .select()
     .from(schema.organizations)
     .orderBy(desc(schema.organizations.createdAt));
-  // Revoked invites are hidden by default. Deactivation and revocation both
-  // store SUSPENDED now, so revocation is marked on the Organization metadata
-  // — a deactivated org must stay listed, as it always was.
-  const orgs = includeRevoked ? allOrgs : allOrgs.filter((o) => !isRevoked(o.metadata));
-  if (orgs.length === 0) {
+  if (allOrgs.length === 0) {
     return c.json({ success: true, data: [] });
   }
-  const orgIds = orgs.map((o) => o.id);
   const owners = await db
     .select()
     .from(schema.users)
-    .where(and(inArray(schema.users.organizationId, orgIds), eq(schema.users.role, 'Owner')));
-  const stationRows = await db
-    .select({
-      organizationId: schema.stations.organizationId,
-      onboardingStatus: schema.stations.onboardingStatus,
-      isActive: schema.stations.isActive,
-    })
-    .from(schema.stations)
-    .where(inArray(schema.stations.organizationId, orgIds));
-
+    .where(
+      and(
+        inArray(
+          schema.users.organizationId,
+          allOrgs.map((o) => o.id),
+        ),
+        eq(schema.users.role, 'Owner'),
+      ),
+    );
   const ownersByOrg = new Map<string, (typeof owners)[number]>();
   for (const u of owners) {
     // If multiple Owner rows exist, prefer the linked (authUserId set) one.
     const prev = ownersByOrg.get(u.organizationId);
     if (!prev || (!prev.authUserId && u.authUserId)) ownersByOrg.set(u.organizationId, u);
   }
+
+  // Revoked invites are hidden by default; a deactivated Organization stays
+  // listed, as it always has.
+  const orgs = includeRevoked
+    ? allOrgs
+    : allOrgs.filter((o) => !isRevokedOwner(ownersByOrg.get(o.id), o.subscriptionStatus));
+  const orgIds = orgs.map((o) => o.id);
+
+  const stationRows = orgIds.length
+    ? await db
+        .select({
+          organizationId: schema.stations.organizationId,
+          onboardingStatus: schema.stations.onboardingStatus,
+          isActive: schema.stations.isActive,
+        })
+        .from(schema.stations)
+        .where(inArray(schema.stations.organizationId, orgIds))
+    : [];
+
   const stationCounts = new Map<string, { total: number; ready: number }>();
   for (const s of stationRows) {
     const bucket = stationCounts.get(s.organizationId) ?? { total: 0, ready: 0 };
@@ -1365,21 +1418,10 @@ platform.post('/owners/:orgId/revoke', async (c) => {
       .set({ status: 'INACTIVE', authUserId: null, updatedAt: new Date() })
       .where(eq(schema.users.id, owner.id));
   }
-  await db
-    .update(schema.organizations)
-    // Revoking an invite and deactivating an Owner both mean "PumpOS stopped
-    // this Organization", which is SUSPENDED in the typed model. The two
-    // remain distinguishable through their events (OWNER_INVITE_REVOKED vs
-    // ORGANIZATION_DEACTIVATED), which is where that history belongs.
-    .set({
-      subscriptionStatus: 'SUSPENDED',
-      metadata: {
-        ...(org.metadata as Record<string, unknown>),
-        revoked_at: new Date().toISOString(),
-      },
-      updatedAt: new Date(),
-    })
-    .where(eq(schema.organizations.id, org.id));
+  // Revoking an invite and deactivating an Owner both mean "PumpOS stopped
+  // this Organization", which is SUSPENDED in the typed model. Which of the
+  // two it was stays readable from the Owner row and from the events.
+  await setSubscriptionStatus(c, org, 'SUSPENDED', 'owner invite revoked');
   await appendPlatformEvent(
     db,
     buildPlatformEvent(
@@ -1428,14 +1470,12 @@ async function setOwnerActive(c: any, active: boolean): Promise<Response> {
     .update(schema.users)
     .set({ status: active ? 'ACTIVE' : 'INACTIVE', updatedAt: new Date() })
     .where(eq(schema.users.id, owner.id));
-  await db
-    .update(schema.organizations)
-    .set({
-      subscriptionStatus: active ? 'ACTIVE' : 'SUSPENDED',
-      ...(active ? { metadata: withoutRevocation(org.metadata) } : {}),
-      updatedAt: new Date(),
-    })
-    .where(eq(schema.organizations.id, org.id));
+  await setSubscriptionStatus(
+    c,
+    org,
+    active ? 'ACTIVE' : 'SUSPENDED',
+    active ? 'owner reactivated' : 'owner deactivated',
+  );
   await appendPlatformEvent(
     db,
     buildPlatformEvent(

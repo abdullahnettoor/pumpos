@@ -194,6 +194,9 @@ describe('subscription resolution', () => {
     expect(normalizeSubscriptionStatus('Revoked')).toBe('SUSPENDED');
   });
 
+  // Fails open by design in E1. #167 (Restricted/Suspended write policy) must
+  // invert this to RESTRICTED once the status gates writes — this test should
+  // fail loudly when that happens rather than being quietly deleted.
   it('treats an unreadable status as ACTIVE rather than locking a station out', () => {
     expect(normalizeSubscriptionStatus('nonsense')).toBe('ACTIVE');
     expect(normalizeSubscriptionStatus(null)).toBe('ACTIVE');

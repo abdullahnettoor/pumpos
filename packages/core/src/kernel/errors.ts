@@ -1,4 +1,4 @@
-import type { CoreError } from '@pump/shared';
+import type { CoreError, ResolutionCode } from '@pump/shared';
 
 /**
  * Canonical domain error codes. Adapters map these to transport-specific
@@ -58,7 +58,7 @@ export function forbiddenError(
  */
 export function capabilityNotEntitledError(
   message: string,
-  details: { capability: string; resolution: string; actionLabel: string },
+  details: { capability: string; resolution: ResolutionCode; actionLabel: string },
 ): CoreError {
   return { code: ErrorCodes.CAPABILITY_NOT_ENTITLED, message, details };
 }
@@ -69,7 +69,13 @@ export function capabilityNotEntitledError(
  */
 export function limitReachedError(
   message: string,
-  details: { limit: string; value: number; used: number; resolution: string; actionLabel: string },
+  details: {
+    limit: string;
+    value: number;
+    used: number;
+    resolution: ResolutionCode;
+    actionLabel: string;
+  },
 ): CoreError {
   return { code: ErrorCodes.LIMIT_REACHED, message, details };
 }

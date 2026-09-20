@@ -135,6 +135,17 @@ export function capabilityState(
   };
 }
 
+/**
+ * The sentence shown when Station capacity is used up. Defined once: the API
+ * puts it in the LIMIT_REACHED error, the Organization screen shows it beside
+ * a disabled onboarding action, and they must not drift.
+ */
+export function stationLimitMessage(value: number): string {
+  return value === 1
+    ? 'This plan includes one Station. Contact PumpOS to add another.'
+    : `This plan includes ${value} Stations. Contact PumpOS to add another.`;
+}
+
 /** Error code the API returns when the Organization lacks a capability. */
 export const CAPABILITY_NOT_ENTITLED = 'CAPABILITY_NOT_ENTITLED';
 
@@ -143,7 +154,12 @@ export const LIMIT_REACHED = 'LIMIT_REACHED';
 
 /**
  * Did this failure come from Organization access policy rather than the
- * request itself? Such a rejection means the client's Access Document is
+ * request itself?
+ *
+ * #167 adds SUBSCRIPTION_RESTRICTED and ORGANIZATION_SUSPENDED: both belong
+ * in this list, since either also means the client's Access Document is out
+ * of date. This is a published client contract — extend it, never narrow it.
+ * Such a rejection means the client's Access Document is
  * stale (a grant was revoked, a Limit changed) and should be refetched.
  */
 export function isAccessPolicyError(error: unknown): boolean {

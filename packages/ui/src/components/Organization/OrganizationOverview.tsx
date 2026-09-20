@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Station } from '@pump/shared';
+import { Station, stationLimitMessage } from '@pump/shared';
 import { PageLayout } from '../primitives/PageLayout.js';
 import { Tabs } from '../primitives/Tabs.js';
 import { Chip, Button } from '../../pump-ds/index.js';
@@ -63,9 +63,7 @@ export const OrganizationOverview: React.FC<OrganizationOverviewProps> = ({
   const capacityReached = stationCapacity?.reached === true;
   const capacityMessage =
     stationCapacity && stationCapacity.reached
-      ? stationCapacity.value === 1
-        ? 'This plan includes one Station. Contact PumpOS to add another.'
-        : `This plan includes ${stationCapacity.value} Stations. Contact PumpOS to add another.`
+      ? stationLimitMessage(stationCapacity.value)
       : undefined;
 
   const hasReadyStation = stations.some(
