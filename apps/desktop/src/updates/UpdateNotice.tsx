@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Banner, Button, Drawer, MeterRow, type BannerSeverity } from '@pump/ui';
 import type { DesktopUpdates } from './useDesktopUpdates.js';
 import type { UpdateState } from './types.js';
+import { releaseNotesBody, releaseSummaryLine } from './version.js';
 
 /**
  * The operator-facing surface for desktop updates.
@@ -88,24 +89,11 @@ export const UpdateNotice: React.FC<{ updates: DesktopUpdates }> = ({ updates })
           ) : null}
 
           {view.notes ? (
-            <button
-              type="button"
-              onClick={() => setNotesOpenFor(view.key)}
-              style={{
-                display: 'inline-block',
-                marginTop: 'var(--space-1)',
-                padding: 0,
-                border: 'none',
-                background: 'transparent',
-                color: 'inherit',
-                font: 'inherit',
-                fontWeight: 600,
-                textDecoration: 'underline',
-                cursor: 'pointer',
-              }}
-            >
-              What&apos;s new
-            </button>
+            <span style={{ display: 'block', marginTop: 'var(--space-1)' }}>
+              <Button variant="ghost" size="xs" onClick={() => setNotesOpenFor(view.key)}>
+                What&apos;s new
+              </Button>
+            </span>
           ) : null}
 
           {/* Determinate downloads get the design system's meter. An unknown
@@ -131,17 +119,33 @@ export const UpdateNotice: React.FC<{ updates: DesktopUpdates }> = ({ updates })
           onClose={() => setNotesOpenFor(null)}
           title={`What's new in PumpOS ${view.version ?? ''}`.trim()}
           footer={
-            view.action ? (
-              // The drawer carries the primary action too, so reading the notes
-              // never puts the decision out of reach behind a backdrop.
-              <Button
-                onClick={() => {
-                  setNotesOpenFor(null);
-                  view.action?.onClick();
-                }}
-              >
-                {view.action.label}
-              </Button>
+            // The drawer's backdrop covers the notice, so it carries the same
+            // choices: reading the notes never strands the operator between
+            // acting and putting the offer away.
+            view.action || view.onDismiss ? (
+              <span style={{ display: 'flex', gap: 'var(--space-2)', justifyContent: 'flex-end' }}>
+                {view.onDismiss ? (
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      setNotesOpenFor(null);
+                      view.onDismiss?.onClick();
+                    }}
+                  >
+                    {view.onDismiss.label}
+                  </Button>
+                ) : null}
+                {view.action ? (
+                  <Button
+                    onClick={() => {
+                      setNotesOpenFor(null);
+                      view.action?.onClick();
+                    }}
+                  >
+                    {view.action.label}
+                  </Button>
+                ) : null}
+              </span>
             ) : undefined
           }
         >
@@ -150,7 +154,7 @@ export const UpdateNotice: React.FC<{ updates: DesktopUpdates }> = ({ updates })
               margin: 0,
               whiteSpace: 'pre-wrap',
               overflowWrap: 'break-word',
-              fontSize: '13px',
+              fontSize: '14px',
               lineHeight: 1.6,
               color: 'var(--text-default)',
             }}
@@ -168,7 +172,7 @@ interface NoticeView {
   key: UpdateState['phase'];
   severity: BannerSeverity;
   title: string;
-  /** The offered version, when there is one. Names the notes drawer. */
+  /** Names the notes drawer. Present only where notes are, i.e. with an offer. */
   version?: string;
   detail?: string;
   /** At most one line, for the compact notice. Never the whole body. */
@@ -224,8 +228,8 @@ export function describeUpdateState(
         title: `PumpOS ${state.update.version} is available`,
         version: state.update.version,
         detail: `You are on ${state.currentVersion}. Download when it suits the station.`,
-        summary: summaryLine(state.update.notes),
-        notes: fullNotes(state.update.notes),
+        summary: releaseSummaryLine(state.update.notes),
+        notes: releaseNotesBody(state.update.notes),
         action: { label: 'Download update', onClick: actions.download },
         onDismiss: { label: 'Not now', onClick: actions.postpone },
       };
@@ -234,7 +238,7 @@ export function describeUpdateState(
         key: state.phase,
         severity: 'info',
         title: `Downloading PumpOS ${state.update.version}`,
-        version: state.update.version,
+
         detail: formatProgress(state.progress),
         progress: state.progress,
       };
@@ -243,7 +247,7 @@ export function describeUpdateState(
         key: state.phase,
         severity: 'info',
         title: `PumpOS ${state.update.version} is ready to install`,
-        version: state.update.version,
+
         detail: 'PumpOS will restart to finish. Nothing installs until you say so.',
         action: { label: 'Install and restart', onClick: actions.install },
         onDismiss: { label: 'Later', onClick: actions.postpone },
@@ -253,7 +257,7 @@ export function describeUpdateState(
         key: state.phase,
         severity: 'warning',
         title: 'Restart postponed',
-        version: state.update.version,
+
         detail: `${state.reason} PumpOS will not restart until this clears.`,
         action: { label: 'Try again', onClick: actions.install },
         onDismiss: { label: 'Later', onClick: actions.postpone },
@@ -263,7 +267,7 @@ export function describeUpdateState(
         key: state.phase,
         severity: 'info',
         title: `Installing PumpOS ${state.update.version}…`,
-        version: state.update.version,
+
         detail: 'Do not close PumpOS.',
       };
     case 'relaunch-ready':
@@ -273,7 +277,7 @@ export function describeUpdateState(
         key: state.phase,
         severity: 'success',
         title: `PumpOS ${state.update.version} is installed`,
-        version: state.update.version,
+
         detail: 'Restart to start using it.',
         action: { label: 'Restart and update', onClick: actions.relaunch },
       };
@@ -287,31 +291,6 @@ export function describeUpdateState(
         onDismiss: { label: 'Dismiss', onClick: actions.dismiss },
       };
   }
-}
-
-/** Empty notes mean no notes section and no affordance, not an empty one. */
-function fullNotes(notes: string | undefined): string | undefined {
-  const text = (notes ?? '').trim();
-  return text.length > 0 ? text : undefined;
-}
-
-const SUMMARY_MAX = 90;
-
-/**
- * The one line the compact notice can afford: the first sentence of the notes,
- * shortened. The body stays in the drawer, so the notice can never grow to hold
- * it however long a release manager writes.
- */
-export function summaryLine(notes: string | undefined): string | undefined {
-  const first = (fullNotes(notes) ?? '')
-    .split('\n')
-    .map((line) => line.replace(/^\s*[-*•]\s*/, '').trim())
-    .find((line) => line.length > 0);
-  if (!first) return undefined;
-  if (first.length <= SUMMARY_MAX) return first;
-  const cut = first.slice(0, SUMMARY_MAX);
-  const lastSpace = cut.lastIndexOf(' ');
-  return `${(lastSpace > 40 ? cut.slice(0, lastSpace) : cut).trimEnd()}…`;
 }
 
 function retryLabel(retry: 'check' | 'download' | 'install'): string {

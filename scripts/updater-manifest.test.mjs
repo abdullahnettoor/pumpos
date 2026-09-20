@@ -269,6 +269,15 @@ describe('operator notes', () => {
     expect(operatorNotes(`## For operators\n${written}`)).toBe(expected.trim());
   });
 
+  it('strips a scoped commit prefix mid-sentence, and leaves ordinary prose alone', () => {
+    expect(operatorNotes('## For operators\nDetails: fix(drawer): cash counts add up')).toBe(
+      'Details: cash counts add up',
+    );
+    // The bare form mid-sentence is English, not a prefix; eating the verb
+    // would be worse than leaving it.
+    expect(operatorNotes('## For operators\nWhat we fix: rounding')).toBe('What we fix: rounding');
+  });
+
   it('lets no repository, pull-request or compare URL reach a client', () => {
     const notes = operatorNotes(
       [

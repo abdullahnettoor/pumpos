@@ -120,9 +120,16 @@ const MARKDOWN_HEADING = /^#{1,6}\s+/;
 /** Lines that are developer changelog furniture, never operator content. */
 const CHANGELOG_FURNITURE = [/^#{1,6}\s*what'?s changed\s*$/i, /full changelog/i];
 
-/** Conventional-commit types, so "Note:" and "Warning:" survive and `fix:` does not. */
-const COMMIT_PREFIX =
-  /^(feat|fix|perf|docs|ci|test|chore|style|refactor|build|revert)(\([^)]*\))?!?:\s*/i;
+/**
+ * Conventional-commit prefixes, in two forms, because they carry different
+ * risks. `feat(scope):` is unambiguous — no English sentence contains it — so
+ * it is stripped wherever it appears. The bare `fix:` form is only stripped at
+ * the start of a line or bullet: mid-sentence it is ordinary prose ("what we
+ * fix: rounding"), and eating the verb would be worse than leaving the prefix.
+ */
+const COMMIT_TYPES = 'feat|fix|perf|docs|ci|test|chore|style|refactor|build|revert';
+const SCOPED_COMMIT_PREFIX = new RegExp(`\\b(${COMMIT_TYPES})\\([^)]*\\)!?:\\s*`, 'gi');
+const COMMIT_PREFIX = new RegExp(`^(${COMMIT_TYPES})!?:\\s*`, 'i');
 
 /**
  * Pull the `## For operators` section out of a GitHub Release body.
@@ -179,7 +186,8 @@ function cleanLine(line) {
     .replace(/\bwww\.\S+/gi, '')
     .replace(/(^|[\s(])@[\w-]+/g, '$1')
     .replace(/[*_`~]/g, '')
-    .replace(/^#{1,6}\s+/, '');
+    .replace(/^#{1,6}\s+/, '')
+    .replace(SCOPED_COMMIT_PREFIX, '');
 
   const bullet = /^(\s*)[-*+]\s+/.exec(text);
   if (bullet) text = `${bullet[1]}- ${text.slice(bullet[0].length)}`;

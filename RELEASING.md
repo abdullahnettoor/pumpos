@@ -133,6 +133,10 @@ Nothing changes in how you open or close a shift.
 <!-- GitHub's auto-generated changelog stays here, untouched. -->
 ```
 
+- **Write it before approving the desktop publish.** The pipeline reads the
+  release body once, when it generates `latest.json`; a section added after that
+  job runs never reaches a station, and the notes for that version stay empty
+  until a later release.
 - Only that section reaches clients. The rest of the body stays on the Release,
   where developers read it.
 - **Omitting it is allowed and never blocks a release.** No section means no

@@ -3,7 +3,8 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, cleanup, fireEvent } from '@testing-library/react';
-import { UpdateNotice, describeUpdateState, summaryLine } from './UpdateNotice.js';
+import { UpdateNotice, describeUpdateState } from './UpdateNotice.js';
+import { releaseSummaryLine } from './version.js';
 import type { DesktopUpdates } from './useDesktopUpdates.js';
 import type { UpdateState } from './types.js';
 
@@ -348,7 +349,7 @@ describe('describeUpdateState', () => {
   });
 });
 
-describe('summaryLine', () => {
+describe('the summary line the notice can afford', () => {
   it('has no notes section at all when the release summary is empty', () => {
     const view = describeUpdateState(
       { phase: 'available', currentVersion: '1.0.0', update: { version: '1.1.0', notes: '  ' } },
@@ -372,7 +373,7 @@ describe('summaryLine', () => {
   });
 
   it('reads past a bullet marker to the first real sentence', () => {
-    expect(summaryLine('\n- Drawer rounding is fixed.\n- Faster reports.')).toBe(
+    expect(releaseSummaryLine('\n- Drawer rounding is fixed.\n- Faster reports.')).toBe(
       'Drawer rounding is fixed.',
     );
   });
