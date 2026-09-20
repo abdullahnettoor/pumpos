@@ -12,6 +12,7 @@ import {
 } from '../infra/repositories/reporting-repositories.js';
 import { DrizzleBusinessDayRepository } from '../infra/repositories/station-ops-repositories.js';
 import { sendResult } from '../infra/send-result.js';
+import { writePolicyGuard } from '../infra/write-policy-guard.js';
 
 type Variables = {
   db: DbClient;
@@ -80,7 +81,7 @@ async function loadPersistedDssr(
 }
 
 // POST /api/dssr/daily/generate — { stationId, businessDate } | { businessDayId }
-dssrRouter.post('/daily/generate', async (c) => {
+dssrRouter.post('/daily/generate', writePolicyGuard('POST /dssr/daily/generate'), async (c) => {
   const db = c.var.db;
   const user = c.var.user;
   if (!canExportReports(user.role)) {
