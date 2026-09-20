@@ -42,27 +42,24 @@ const KNOWN_STATUSES: readonly SubscriptionStatus[] = [
 /**
  * Map a stored status onto the typed union.
  *
- * This FAILS OPEN: an unrecognized or missing value resolves to ACTIVE. That
- * is the right default in Phase E1, where the status is reported and nothing
- * is enforced — a corrupt string must not lock a paying station out of its
- * own operations, and suspension is always explicit.
+ * This FAILS CLOSED, and deliberately so now that the status gates writes
+ * (#168 onward): a value nobody can read must not grant normal access, which
+ * is what an ACTIVE fallback would do. It resolves to RESTRICTED rather than
+ * SUSPENDED, so the failure mode is the gentlest one that is still safe — a
+ * station can finish its open day and close out, but cannot grow or change
+ * setup until the row is understood.
  *
- * INVERT THIS IN #167 (Restricted and Suspended write policy). Once the status
- * gates writes, failing open means a garbled value silently grants normal
- * access — the opposite of what a write policy is for. When #167 lands, an
- * unreadable status should resolve to RESTRICTED (finish open work, block
- * growth) rather than ACTIVE, and the unparseable value should be surfaced
- * rather than swallowed. Every caller of this function inherits the choice:
- * `buildAccessDocument` (what the operator sees) and, after #167, the write
- * guards themselves.
+ * Legacy values written before Phase E normalized the column are recognized
+ * rather than treated as unreadable; the migration rewrote existing data, and
+ * this is the safety net for anything an older build still writes.
  */
 export function normalizeSubscriptionStatus(raw: string | null | undefined): SubscriptionStatus {
-  // Phase E1 default; see the #167 note above before changing behaviour.
-  if (!raw) return 'ACTIVE';
+  // No value at all: the Organization row is missing or unreadable. That is an
+  // integrity problem, not a commercial state, so it gets the safe answer.
+  if (!raw) return 'RESTRICTED';
   const upper = raw.toUpperCase();
   const known = KNOWN_STATUSES.find((status) => status === upper);
-  // Unreadable value → ACTIVE (fail open). #167 must change this to RESTRICTED.
-  return known ?? LEGACY_STATUS[raw] ?? 'ACTIVE';
+  return known ?? LEGACY_STATUS[raw] ?? 'RESTRICTED';
 }
 
 /**

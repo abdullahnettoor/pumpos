@@ -52,6 +52,7 @@ import { rateLimit } from '../infra/rate-limit.js';
 import { DrizzleOnboardingProvisioner } from '../infra/onboarding-provisioner.js';
 import { DrizzleStationCapacityPort } from '../infra/repositories/organization-access.repo.js';
 import { sendResult } from '../infra/send-result.js';
+import { writePolicyGuard } from '../infra/write-policy-guard.js';
 import {
   DrizzleStationRepository,
   DrizzleUserRepository,
@@ -106,50 +107,63 @@ stationSetupRouter.get('/stations', async (c) => {
 });
 
 // POST /api/setup/stations
-stationSetupRouter.post('/stations', validateJson(stationSchema), async (c) => {
-  const user = c.var.user;
-  if (user.role !== 'Owner') {
-    return c.json(
-      { success: false, error: { code: 'FORBIDDEN', message: 'Only Owners can create stations' } },
-      403,
+stationSetupRouter.post(
+  '/stations',
+  writePolicyGuard('POST /setup/stations'),
+  validateJson(stationSchema),
+  async (c) => {
+    const user = c.var.user;
+    if (user.role !== 'Owner') {
+      return c.json(
+        {
+          success: false,
+          error: { code: 'FORBIDDEN', message: 'Only Owners can create stations' },
+        },
+        403,
+      );
+    }
+    const body = c.req.valid('json');
+    // Creating a Station consumes `station_count`, so this path takes the same
+    // guard and the same lock as onboarding finalization — otherwise the Limit
+    // is bypassable by choosing the other endpoint.
+    const result = await runInTransaction(c.var.db, (tx, events) =>
+      new CreateStation({
+        repository: new DrizzleStationRepository(tx),
+        capacity: new DrizzleStationCapacityPort(tx),
+        events,
+      }).execute(body, buildContext(user)),
     );
-  }
-  const body = c.req.valid('json');
-  // Creating a Station consumes `station_count`, so this path takes the same
-  // guard and the same lock as onboarding finalization — otherwise the Limit
-  // is bypassable by choosing the other endpoint.
-  const result = await runInTransaction(c.var.db, (tx, events) =>
-    new CreateStation({
-      repository: new DrizzleStationRepository(tx),
-      capacity: new DrizzleStationCapacityPort(tx),
-      events,
-    }).execute(body, buildContext(user)),
-  );
-  return sendResult(c, result);
-});
+    return sendResult(c, result);
+  },
+);
 
 // PUT /api/setup/stations/:id
-stationSetupRouter.put('/stations/:id', validateJson(stationSchema.partial()), async (c) => {
-  const user = c.var.user;
-  const stationId = c.req.param('id');
-  if (!checkWriteAccess(c, stationId)) {
-    return c.json(
-      {
-        success: false,
-        error: { code: 'FORBIDDEN', message: 'Insufficient write permissions for this station' },
-      },
-      403,
-    );
-  }
-  const body = c.req.valid('json');
-  const db = c.var.db;
-  const useCase = new UpdateStation({
-    repository: new DrizzleStationRepository(db),
-    events: createDispatcher(db),
-  });
-  const result = await useCase.execute({ ...body, id: stationId }, buildContext(user));
-  return sendResult(c, result);
-});
+stationSetupRouter.put(
+  '/stations/:id',
+  writePolicyGuard('PUT /setup/stations/:id'),
+  validateJson(stationSchema.partial()),
+  async (c) => {
+    const user = c.var.user;
+    const stationId = c.req.param('id');
+    if (!checkWriteAccess(c, stationId)) {
+      return c.json(
+        {
+          success: false,
+          error: { code: 'FORBIDDEN', message: 'Insufficient write permissions for this station' },
+        },
+        403,
+      );
+    }
+    const body = c.req.valid('json');
+    const db = c.var.db;
+    const useCase = new UpdateStation({
+      repository: new DrizzleStationRepository(db),
+      events: createDispatcher(db),
+    });
+    const result = await useCase.execute({ ...body, id: stationId }, buildContext(user));
+    return sendResult(c, result);
+  },
+);
 
 // ----------------------------------------------------
 // Products are managed by the core-backed products router (routes/products.ts).
@@ -195,7 +209,7 @@ stationSetupRouter.get('/tanks', async (c) => {
   return c.json({ success: true, data: list });
 });
 
-stationSetupRouter.post('/tanks', async (c) => {
+stationSetupRouter.post('/tanks', writePolicyGuard('POST /setup/tanks'), async (c) => {
   const user = c.var.user;
   const body = await c.req.json().catch(() => ({}));
   if (!checkWriteAccess(c, body.stationId) || !canManageInfrastructure(user.role)) {
@@ -242,7 +256,7 @@ stationSetupRouter.get('/dispensers', async (c) => {
   return c.json({ success: true, data: list });
 });
 
-stationSetupRouter.post('/dispensers', async (c) => {
+stationSetupRouter.post('/dispensers', writePolicyGuard('POST /setup/dispensers'), async (c) => {
   const user = c.var.user;
   const body = await c.req.json().catch(() => ({}));
   if (!checkWriteAccess(c, body.stationId) || !canManageInfrastructure(user.role)) {
@@ -289,7 +303,7 @@ stationSetupRouter.get('/nozzles', async (c) => {
   return c.json({ success: true, data: list });
 });
 
-stationSetupRouter.post('/nozzles', async (c) => {
+stationSetupRouter.post('/nozzles', writePolicyGuard('POST /setup/nozzles'), async (c) => {
   const user = c.var.user;
   const body = await c.req.json().catch(() => ({}));
   if (!checkWriteAccess(c, body.stationId) || !canManageInfrastructure(user.role)) {
@@ -325,26 +339,30 @@ stationSetupRouter.get('/shift-templates', async (c) => {
   return c.json({ success: true, data: list });
 });
 
-stationSetupRouter.post('/shift-templates', async (c) => {
-  const user = c.var.user;
-  if (user.role !== 'Owner' && user.role !== 'Manager') {
-    return c.json(
-      {
-        success: false,
-        error: { code: 'FORBIDDEN', message: 'Only Owners/Managers can manage templates' },
-      },
-      403,
-    );
-  }
-  const body = await c.req.json().catch(() => ({}));
-  const db = c.var.db;
-  const useCase = new CreateShiftTemplate({
-    repository: new DrizzleShiftTemplateRepository(db),
-    events: createDispatcher(db),
-  });
-  const result = await useCase.execute(body, buildContext(user));
-  return sendResult(c, result);
-});
+stationSetupRouter.post(
+  '/shift-templates',
+  writePolicyGuard('POST /setup/shift-templates'),
+  async (c) => {
+    const user = c.var.user;
+    if (user.role !== 'Owner' && user.role !== 'Manager') {
+      return c.json(
+        {
+          success: false,
+          error: { code: 'FORBIDDEN', message: 'Only Owners/Managers can manage templates' },
+        },
+        403,
+      );
+    }
+    const body = await c.req.json().catch(() => ({}));
+    const db = c.var.db;
+    const useCase = new CreateShiftTemplate({
+      repository: new DrizzleShiftTemplateRepository(db),
+      events: createDispatcher(db),
+    });
+    const result = await useCase.execute(body, buildContext(user));
+    return sendResult(c, result);
+  },
+);
 
 // ----------------------------------------------------
 // User Management & Assignments
@@ -394,6 +412,7 @@ async function loadTargetStationIds(db: DbClient, userId: string): Promise<strin
 
 stationSetupRouter.post(
   '/users',
+  writePolicyGuard('POST /setup/users'),
   rateLimit({ scope: 'users-write', max: 30, windowMs: 60_000 }),
   validateJson(userSchema, 'BAD_REQUEST'),
   async (c) => {
@@ -501,36 +520,45 @@ stationSetupRouter.post(
   },
 );
 
-stationSetupRouter.put('/users/:id', validateJson(userUpdateSchema, 'BAD_REQUEST'), async (c) => {
-  const user = c.var.user;
-  const id = c.req.param('id');
-  const body = c.req.valid('json');
-  const repo = new DrizzleUserRepository(c.var.db);
-  const target = await repo.findById(id);
-  if (!target || target.organizationId !== user.organizationId) {
-    return c.json({ success: false, error: { code: 'NOT_FOUND', message: 'User not found' } }, 404);
-  }
-  // Authorize against the target's actual stations plus any requested change.
-  const currentStationIds = await loadTargetStationIds(c.var.db, id);
-  const requestedStationIds: string[] = Array.isArray(body.stationIds) ? body.stationIds : [];
-  const scope = [...new Set([...currentStationIds, ...requestedStationIds])];
-  if (!canActOnTarget(user, (body.role ?? target.role) as Role, scope)) {
-    return c.json(
-      { success: false, error: { code: 'FORBIDDEN', message: 'Not allowed to edit this user' } },
-      403,
-    );
-  }
-  const db = c.var.db;
-  const useCase = new UpdateUser({
-    repository: new DrizzleUserRepository(db),
-    events: createDispatcher(db),
-  });
-  const result = await useCase.execute({ ...body, id }, buildContext(user));
-  return sendResult(c, result);
-});
+stationSetupRouter.put(
+  '/users/:id',
+  writePolicyGuard('PUT /setup/users/:id'),
+  validateJson(userUpdateSchema, 'BAD_REQUEST'),
+  async (c) => {
+    const user = c.var.user;
+    const id = c.req.param('id');
+    const body = c.req.valid('json');
+    const repo = new DrizzleUserRepository(c.var.db);
+    const target = await repo.findById(id);
+    if (!target || target.organizationId !== user.organizationId) {
+      return c.json(
+        { success: false, error: { code: 'NOT_FOUND', message: 'User not found' } },
+        404,
+      );
+    }
+    // Authorize against the target's actual stations plus any requested change.
+    const currentStationIds = await loadTargetStationIds(c.var.db, id);
+    const requestedStationIds: string[] = Array.isArray(body.stationIds) ? body.stationIds : [];
+    const scope = [...new Set([...currentStationIds, ...requestedStationIds])];
+    if (!canActOnTarget(user, (body.role ?? target.role) as Role, scope)) {
+      return c.json(
+        { success: false, error: { code: 'FORBIDDEN', message: 'Not allowed to edit this user' } },
+        403,
+      );
+    }
+    const db = c.var.db;
+    const useCase = new UpdateUser({
+      repository: new DrizzleUserRepository(db),
+      events: createDispatcher(db),
+    });
+    const result = await useCase.execute({ ...body, id }, buildContext(user));
+    return sendResult(c, result);
+  },
+);
 
 stationSetupRouter.post(
   '/users/:id/reset-password',
+  writePolicyGuard('POST /setup/users/:id/reset-password'),
   rateLimit({ scope: 'password-reset', max: 15, windowMs: 60_000 }),
   async (c) => {
     const user = c.var.user;
@@ -605,6 +633,7 @@ stationSetupRouter.post(
 
 stationSetupRouter.post(
   '/users/:id/deactivate',
+  writePolicyGuard('POST /setup/users/:id/deactivate'),
   rateLimit({ scope: 'user-status', max: 30, windowMs: 60_000 }),
   async (c) => {
     return setUserActive(c, false);
@@ -613,6 +642,7 @@ stationSetupRouter.post(
 
 stationSetupRouter.post(
   '/users/:id/reactivate',
+  writePolicyGuard('POST /setup/users/:id/reactivate'),
   rateLimit({ scope: 'user-status', max: 30, windowMs: 60_000 }),
   async (c) => {
     return setUserActive(c, true);
@@ -724,7 +754,7 @@ async function authorizeInfrastructure(
   return { error: null, stationId };
 }
 
-stationSetupRouter.put('/tanks/:id', async (c) => {
+stationSetupRouter.put('/tanks/:id', writePolicyGuard('PUT /setup/tanks/:id'), async (c) => {
   const user = c.var.user;
   const id = c.req.param('id');
   const body = await c.req.json().catch(() => ({}));
@@ -739,7 +769,7 @@ stationSetupRouter.put('/tanks/:id', async (c) => {
   return sendResult(c, result);
 });
 
-stationSetupRouter.delete('/tanks/:id', async (c) => {
+stationSetupRouter.delete('/tanks/:id', writePolicyGuard('DELETE /setup/tanks/:id'), async (c) => {
   const user = c.var.user;
   const id = c.req.param('id');
   const { error } = await authorizeInfrastructure(c, schema.tanks, id);
@@ -754,36 +784,44 @@ stationSetupRouter.delete('/tanks/:id', async (c) => {
   return sendResult(c, result);
 });
 
-stationSetupRouter.put('/dispensers/:id', async (c) => {
-  const user = c.var.user;
-  const id = c.req.param('id');
-  const body = await c.req.json().catch(() => ({}));
-  const { error, stationId } = await authorizeInfrastructure(c, schema.dispenserUnits, id);
-  if (error) return error;
-  const db = c.var.db;
-  const useCase = new UpdateDispenser({
-    repository: new DrizzleDispenserRepository(db),
-    events: createDispatcher(db),
-  });
-  const result = await useCase.execute({ ...body, id }, buildContext(user, { stationId }));
-  return sendResult(c, result);
-});
+stationSetupRouter.put(
+  '/dispensers/:id',
+  writePolicyGuard('PUT /setup/dispensers/:id'),
+  async (c) => {
+    const user = c.var.user;
+    const id = c.req.param('id');
+    const body = await c.req.json().catch(() => ({}));
+    const { error, stationId } = await authorizeInfrastructure(c, schema.dispenserUnits, id);
+    if (error) return error;
+    const db = c.var.db;
+    const useCase = new UpdateDispenser({
+      repository: new DrizzleDispenserRepository(db),
+      events: createDispatcher(db),
+    });
+    const result = await useCase.execute({ ...body, id }, buildContext(user, { stationId }));
+    return sendResult(c, result);
+  },
+);
 
-stationSetupRouter.delete('/dispensers/:id', async (c) => {
-  const user = c.var.user;
-  const id = c.req.param('id');
-  const { error } = await authorizeInfrastructure(c, schema.dispenserUnits, id);
-  if (error) return error;
-  const db = c.var.db;
-  const useCase = new DeleteDispenser({
-    repository: new DrizzleDispenserRepository(db),
-    events: createDispatcher(db),
-  });
-  const result = await useCase.execute({ id }, buildContext(user));
-  return sendResult(c, result);
-});
+stationSetupRouter.delete(
+  '/dispensers/:id',
+  writePolicyGuard('DELETE /setup/dispensers/:id'),
+  async (c) => {
+    const user = c.var.user;
+    const id = c.req.param('id');
+    const { error } = await authorizeInfrastructure(c, schema.dispenserUnits, id);
+    if (error) return error;
+    const db = c.var.db;
+    const useCase = new DeleteDispenser({
+      repository: new DrizzleDispenserRepository(db),
+      events: createDispatcher(db),
+    });
+    const result = await useCase.execute({ id }, buildContext(user));
+    return sendResult(c, result);
+  },
+);
 
-stationSetupRouter.put('/nozzles/:id', async (c) => {
+stationSetupRouter.put('/nozzles/:id', writePolicyGuard('PUT /setup/nozzles/:id'), async (c) => {
   const user = c.var.user;
   const id = c.req.param('id');
   const body = await c.req.json().catch(() => ({}));
@@ -800,63 +838,75 @@ stationSetupRouter.put('/nozzles/:id', async (c) => {
   return sendResult(c, result);
 });
 
-stationSetupRouter.delete('/nozzles/:id', async (c) => {
-  const user = c.var.user;
-  const id = c.req.param('id');
-  const { error } = await authorizeInfrastructure(c, schema.nozzles, id);
-  if (error) return error;
-  const db = c.var.db;
-  const useCase = new DeleteNozzle({
-    repository: new DrizzleNozzleRepository(db),
-    tanks: new DrizzleTankRepository(db),
-    events: createDispatcher(db),
-  });
-  const result = await useCase.execute({ id }, buildContext(user));
-  return sendResult(c, result);
-});
+stationSetupRouter.delete(
+  '/nozzles/:id',
+  writePolicyGuard('DELETE /setup/nozzles/:id'),
+  async (c) => {
+    const user = c.var.user;
+    const id = c.req.param('id');
+    const { error } = await authorizeInfrastructure(c, schema.nozzles, id);
+    if (error) return error;
+    const db = c.var.db;
+    const useCase = new DeleteNozzle({
+      repository: new DrizzleNozzleRepository(db),
+      tanks: new DrizzleTankRepository(db),
+      events: createDispatcher(db),
+    });
+    const result = await useCase.execute({ id }, buildContext(user));
+    return sendResult(c, result);
+  },
+);
 
-stationSetupRouter.put('/shift-templates/:id', async (c) => {
-  const user = c.var.user;
-  const id = c.req.param('id');
-  if (user.role !== 'Owner' && user.role !== 'Manager') {
-    return c.json(
-      {
-        success: false,
-        error: { code: 'FORBIDDEN', message: 'Only Owners/Managers can manage templates' },
-      },
-      403,
-    );
-  }
-  const body = await c.req.json().catch(() => ({}));
-  const db = c.var.db;
-  const useCase = new UpdateShiftTemplate({
-    repository: new DrizzleShiftTemplateRepository(db),
-    events: createDispatcher(db),
-  });
-  const result = await useCase.execute({ ...body, id }, buildContext(user));
-  return sendResult(c, result);
-});
+stationSetupRouter.put(
+  '/shift-templates/:id',
+  writePolicyGuard('PUT /setup/shift-templates/:id'),
+  async (c) => {
+    const user = c.var.user;
+    const id = c.req.param('id');
+    if (user.role !== 'Owner' && user.role !== 'Manager') {
+      return c.json(
+        {
+          success: false,
+          error: { code: 'FORBIDDEN', message: 'Only Owners/Managers can manage templates' },
+        },
+        403,
+      );
+    }
+    const body = await c.req.json().catch(() => ({}));
+    const db = c.var.db;
+    const useCase = new UpdateShiftTemplate({
+      repository: new DrizzleShiftTemplateRepository(db),
+      events: createDispatcher(db),
+    });
+    const result = await useCase.execute({ ...body, id }, buildContext(user));
+    return sendResult(c, result);
+  },
+);
 
-stationSetupRouter.delete('/shift-templates/:id', async (c) => {
-  const user = c.var.user;
-  const id = c.req.param('id');
-  if (user.role !== 'Owner' && user.role !== 'Manager') {
-    return c.json(
-      {
-        success: false,
-        error: { code: 'FORBIDDEN', message: 'Only Owners/Managers can manage templates' },
-      },
-      403,
-    );
-  }
-  const db = c.var.db;
-  const useCase = new DeleteShiftTemplate({
-    repository: new DrizzleShiftTemplateRepository(db),
-    events: createDispatcher(db),
-  });
-  const result = await useCase.execute({ id }, buildContext(user));
-  return sendResult(c, result);
-});
+stationSetupRouter.delete(
+  '/shift-templates/:id',
+  writePolicyGuard('DELETE /setup/shift-templates/:id'),
+  async (c) => {
+    const user = c.var.user;
+    const id = c.req.param('id');
+    if (user.role !== 'Owner' && user.role !== 'Manager') {
+      return c.json(
+        {
+          success: false,
+          error: { code: 'FORBIDDEN', message: 'Only Owners/Managers can manage templates' },
+        },
+        403,
+      );
+    }
+    const db = c.var.db;
+    const useCase = new DeleteShiftTemplate({
+      repository: new DrizzleShiftTemplateRepository(db),
+      events: createDispatcher(db),
+    });
+    const result = await useCase.execute({ id }, buildContext(user));
+    return sendResult(c, result);
+  },
+);
 
 // ----------------------------------------------------
 // Onboarding Status & Completion
@@ -975,56 +1025,64 @@ stationSetupRouter.get('/onboarding/status', async (c) => {
   }
 });
 
-stationSetupRouter.post('/onboarding/complete', async (c) => {
-  const db = c.var.db;
-  const user = c.var.user;
-  try {
-    const body = await c.req.json();
-    const stationId = body.stationId;
+stationSetupRouter.post(
+  '/onboarding/complete',
+  writePolicyGuard('POST /setup/onboarding/complete'),
+  async (c) => {
+    const db = c.var.db;
+    const user = c.var.user;
+    try {
+      const body = await c.req.json();
+      const stationId = body.stationId;
 
-    if (!stationId) {
-      return c.json(
-        { success: false, error: { code: 'BAD_REQUEST', message: 'Missing stationId' } },
-        400,
-      );
+      if (!stationId) {
+        return c.json(
+          { success: false, error: { code: 'BAD_REQUEST', message: 'Missing stationId' } },
+          400,
+        );
+      }
+
+      if (!checkWriteAccess(c, stationId)) {
+        return c.json(
+          {
+            success: false,
+            error: { code: 'FORBIDDEN', message: 'Insufficient write permissions' },
+          },
+          403,
+        );
+      }
+
+      const [updated] = await db
+        .update(schema.stations)
+        .set({
+          onboardingStatus: 'READY_FOR_OPERATIONS',
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(schema.stations.id, stationId),
+            eq(schema.stations.organizationId, user.organizationId),
+          ),
+        )
+        .returning();
+
+      if (!updated) {
+        return c.json(
+          { success: false, error: { code: 'NOT_FOUND', message: 'Station not found' } },
+          404,
+        );
+      }
+
+      return c.json({ success: true, data: updated });
+    } catch (err: any) {
+      return c.json({ success: false, error: { code: 'BAD_REQUEST', message: err.message } }, 400);
     }
-
-    if (!checkWriteAccess(c, stationId)) {
-      return c.json(
-        { success: false, error: { code: 'FORBIDDEN', message: 'Insufficient write permissions' } },
-        403,
-      );
-    }
-
-    const [updated] = await db
-      .update(schema.stations)
-      .set({
-        onboardingStatus: 'READY_FOR_OPERATIONS',
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(schema.stations.id, stationId),
-          eq(schema.stations.organizationId, user.organizationId),
-        ),
-      )
-      .returning();
-
-    if (!updated) {
-      return c.json(
-        { success: false, error: { code: 'NOT_FOUND', message: 'Station not found' } },
-        404,
-      );
-    }
-
-    return c.json({ success: true, data: updated });
-  } catch (err: any) {
-    return c.json({ success: false, error: { code: 'BAD_REQUEST', message: err.message } }, 400);
-  }
-});
+  },
+);
 
 stationSetupRouter.post(
   '/onboarding/finalize',
+  writePolicyGuard('POST /setup/onboarding/finalize'),
   validateJson(finalizeOnboardingSchema),
   async (c) => {
     const db = c.var.db;
@@ -1180,23 +1238,31 @@ stationSetupRouter.get('/pricing/history', async (c) => {
 });
 
 // POST /api/setup/pricing
-stationSetupRouter.post('/pricing', validateJson(fuelPriceSchema), async (c) => {
-  const user = c.var.user;
-  const parsed = c.req.valid('json');
-  if (!checkWriteAccess(c, parsed.stationId)) {
-    return c.json(
-      {
-        success: false,
-        error: { code: 'FORBIDDEN', message: 'Insufficient write permissions for this station' },
-      },
-      403,
+stationSetupRouter.post(
+  '/pricing',
+  writePolicyGuard('POST /setup/pricing'),
+  validateJson(fuelPriceSchema),
+  async (c) => {
+    const user = c.var.user;
+    const parsed = c.req.valid('json');
+    if (!checkWriteAccess(c, parsed.stationId)) {
+      return c.json(
+        {
+          success: false,
+          error: { code: 'FORBIDDEN', message: 'Insufficient write permissions for this station' },
+        },
+        403,
+      );
+    }
+    const db = c.var.db;
+    const useCase = new RecordFuelPrice({
+      repository: new DrizzleFuelPriceRepository(db),
+      events: createDispatcher(db),
+    });
+    const result = await useCase.execute(
+      parsed,
+      buildContext(user, { stationId: parsed.stationId }),
     );
-  }
-  const db = c.var.db;
-  const useCase = new RecordFuelPrice({
-    repository: new DrizzleFuelPriceRepository(db),
-    events: createDispatcher(db),
-  });
-  const result = await useCase.execute(parsed, buildContext(user, { stationId: parsed.stationId }));
-  return sendResult(c, result);
-});
+    return sendResult(c, result);
+  },
+);
