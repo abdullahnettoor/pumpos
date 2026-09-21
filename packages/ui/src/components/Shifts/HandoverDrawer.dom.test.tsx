@@ -372,6 +372,59 @@ describe('HandoverDrawer', () => {
     });
   });
 
+  describe('recording a customer sale', () => {
+    // #219: the button's busy state belongs to the write, not to the parent's
+    // cache refresh. Tying it to the refresh left the spinner running for
+    // seconds after the sale was already recorded.
+    const openOmcRow = async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Add customer sale/ }));
+      fireEvent.click(await screen.findByText('OMC card → CMS'));
+      fireEvent.change(input('ccAmount'), { target: { value: '500' } });
+    };
+    const addButton = () =>
+      screen.getByRole('button', {
+        name: /Add (?:OMC card|credit) sale/,
+      }) as HTMLButtonElement;
+
+    it('returns the button to idle without waiting for the parent refresh', async () => {
+      recordCollection.mockResolvedValue({ id: 'collection-1' });
+      let releaseRefresh!: () => void;
+      const refreshed = new Promise<void>((resolve) => {
+        releaseRefresh = resolve;
+      });
+      const onCreditChanged = vi.fn(() => refreshed);
+
+      renderWithProviders(<HandoverDrawer {...baseProps({ onCreditChanged })} />);
+      await openOmcRow();
+      fireEvent.click(addButton());
+
+      // The recorded line lands and the row is idle again while the parent's
+      // refresh is still in flight.
+      await waitFor(() =>
+        expect(screen.getAllByText(/OMC card \(no customer\)/).length).toBeGreaterThan(0),
+      );
+      expect(addButton().getAttribute('aria-busy')).toBeNull();
+      expect(onCreditChanged).toHaveBeenCalledTimes(1);
+      releaseRefresh();
+      await refreshed;
+    });
+
+    it('keeps the button actionable and reports the error when the write fails', async () => {
+      recordCollection.mockRejectedValue(new Error('Collection rejected'));
+      const onCreditChanged = vi.fn();
+
+      renderWithProviders(<HandoverDrawer {...baseProps({ onCreditChanged })} />);
+      await openOmcRow();
+      fireEvent.click(addButton());
+
+      await waitFor(() =>
+        expect(screen.getAllByText(/Collection rejected/).length).toBeGreaterThan(0),
+      );
+      expect(addButton().disabled).toBe(false);
+      expect(onCreditChanged).not.toHaveBeenCalled();
+    });
+  });
+
   describe('submit guards', () => {
     it('refuses a closing reading below the opening reading', async () => {
       renderWithProviders(<HandoverDrawer {...baseProps()} />);

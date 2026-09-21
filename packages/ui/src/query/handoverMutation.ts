@@ -4,6 +4,7 @@ import {
   type RecordHandoverPayload,
   type RecordHandoverResult,
 } from '../services/cloud.js';
+import { runTask } from '../utils/runTask.js';
 import { queryKeys } from './hooks.js';
 
 const shiftService = new CloudShiftService();
@@ -100,17 +101,50 @@ export function handoverInvalidationKeys(stationId: string): readonly (readonly 
   ];
 }
 
-export function useRecordHandoverMutation() {
-  const queryClient = useQueryClient();
-  return useMutation({
+export interface HandoverInvalidationClient {
+  invalidateQueries(filters: { queryKey: readonly unknown[] }): Promise<unknown>;
+}
+
+/**
+ * Refreshes every projection a Handover moves. Deliberately separate from the
+ * mutation's `onSuccess` so the submit path can start it without awaiting it.
+ */
+export async function refreshAfterHandover(
+  queryClient: HandoverInvalidationClient,
+  stationId: string,
+): Promise<void> {
+  await Promise.all(
+    handoverInvalidationKeys(stationId).map((queryKey) =>
+      queryClient.invalidateQueries({ queryKey }),
+    ),
+  );
+}
+
+/**
+ * Mutation options as a value so the "never gate success on the refetch"
+ * convention is assertable in a test rather than only readable in review.
+ *
+ * `onSuccess` must stay synchronous: React Query awaits whatever it returns
+ * before settling `mutateAsync`, so returning the invalidation cascade would
+ * make the submitting spinner and the drawer close wait on five dependent
+ * queries the operator's feedback does not need.
+ */
+export function recordHandoverMutationOptions(queryClient: HandoverInvalidationClient) {
+  return {
     mutationFn: ({ payload, idempotencyKey }: RecordHandoverMutationInput) =>
       shiftService.recordHandover(payload, { idempotencyKey }),
-    onSuccess: async (_result, { stationId }) => {
-      await Promise.all(
-        handoverInvalidationKeys(stationId).map((queryKey) =>
-          queryClient.invalidateQueries({ queryKey }),
-        ),
+    onSuccess: (
+      _result: RecordHandoverResult,
+      { stationId }: RecordHandoverMutationInput,
+    ): void => {
+      runTask(refreshAfterHandover(queryClient, stationId), (error) =>
+        console.error('Handover recorded, but the screen could not be refreshed.', error),
       );
     },
-  });
+  };
+}
+
+export function useRecordHandoverMutation() {
+  const queryClient = useQueryClient();
+  return useMutation(recordHandoverMutationOptions(queryClient));
 }

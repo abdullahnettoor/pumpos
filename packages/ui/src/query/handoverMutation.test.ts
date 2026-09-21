@@ -4,6 +4,8 @@ import {
   handoverInvalidationKeys,
   handoverPayloadFingerprint,
   loadHandoverRequestIdentity,
+  recordHandoverMutationOptions,
+  refreshAfterHandover,
   resolveHandoverRequestIdentity,
   saveHandoverRequestIdentity,
   selectHandoverSummary,
@@ -94,6 +96,48 @@ describe('Handover mutation state', () => {
       ['dssr-preview', 'station-1'],
       ['activity-groups', 'station-1'],
     ]);
+  });
+
+  it('refreshes every Handover-owned projection', async () => {
+    const seen: readonly unknown[][] = [];
+    await refreshAfterHandover(
+      {
+        invalidateQueries: async ({ queryKey }) => {
+          (seen as unknown[][]).push(queryKey as unknown[]);
+        },
+      },
+      'station-1',
+    );
+
+    expect(seen).toEqual(handoverInvalidationKeys('station-1'));
+  });
+
+  it('settles the write without waiting for the refetch cascade', async () => {
+    // The convention this guards: success feedback comes from the write
+    // response. If `onSuccess` ever returns its invalidations, React Query
+    // awaits them and the drawer's spinner waits with them.
+    let released!: () => void;
+    const blocked = new Promise<void>((resolve) => {
+      released = resolve;
+    });
+    let invalidated = 0;
+    const options = recordHandoverMutationOptions({
+      invalidateQueries: async () => {
+        invalidated++;
+        await blocked;
+      },
+    });
+
+    const returned = options.onSuccess(accepted, {
+      stationId: 'station-1',
+      payload,
+      idempotencyKey: 'key-1',
+    });
+
+    expect(returned).toBeUndefined();
+    expect(invalidated).toBe(handoverInvalidationKeys('station-1').length);
+    released();
+    await blocked;
   });
 });
 
