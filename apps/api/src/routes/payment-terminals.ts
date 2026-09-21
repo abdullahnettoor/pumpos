@@ -9,6 +9,7 @@ import { DrizzlePaymentTerminalRepository } from '../infra/repositories/payment-
 import { AccountProvisioningService } from '../infra/account-provisioning.js';
 import { sendResult } from '../infra/send-result.js';
 import { writePolicyGuard } from '../infra/write-policy-guard.js';
+import { stationExistsInOrg, stationNotFound } from '../infra/station-clock.js';
 
 type Variables = {
   db: DbClient;
@@ -58,6 +59,16 @@ paymentTerminalsRouter.post(
     }
     body.provider = normalizeProvider(body?.provider);
     const db = c.var.db;
+    // Org-scoped station check (#235): an Owner passes canWrite for ANY
+    // stationId, so verify the station belongs to the caller's organization.
+    if (!body?.stationId) {
+      return c.json(
+        { success: false, error: { code: 'VALIDATION_ERROR', message: 'stationId is required' } },
+        400,
+      );
+    }
+    if (!(await stationExistsInOrg(db, c.var.user.organizationId, body.stationId)))
+      return stationNotFound(c);
     const useCase = new RegisterPaymentTerminal({
       repository: new DrizzlePaymentTerminalRepository(db),
       events: createDispatcher(db),

@@ -52,6 +52,7 @@ import { rateLimit } from '../infra/rate-limit.js';
 import { DrizzleOnboardingProvisioner } from '../infra/onboarding-provisioner.js';
 import { DrizzleStationCapacityPort } from '../infra/repositories/organization-access.repo.js';
 import { sendResult } from '../infra/send-result.js';
+import { stationNotFound, stationExistsInOrg } from '../infra/station-clock.js';
 import { writePolicyGuard } from '../infra/write-policy-guard.js';
 import {
   DrizzleStationRepository,
@@ -86,6 +87,20 @@ function checkWriteAccess(c: any, stationId?: string | null): boolean {
     return user.assignedStationIds.includes(stationId);
   }
   return false; // Accountant & Staff are read-only
+}
+
+/**
+ * Org-scoped station existence check (#235): a stationId naming another
+ * tenant's station must be indistinguishable from a missing one. Every route
+ * that anchors a record to a caller-supplied stationId must pass this before
+ * writing — `checkWriteAccess` alone lets an Owner name ANY stationId.
+ */
+async function stationInOrg(
+  c: { var: { db: DbClient; user: AuthenticatedPrincipal } },
+  stationId: string | null | undefined,
+): Promise<boolean> {
+  if (!stationId) return false;
+  return stationExistsInOrg(c.var.db, c.var.user.organizationId, stationId);
 }
 
 // Onboarding draft validation + multi-aggregate provisioning now live in the
@@ -218,6 +233,7 @@ stationSetupRouter.post('/tanks', writePolicyGuard('POST /setup/tanks'), async (
       403,
     );
   }
+  if (!(await stationInOrg(c, body.stationId))) return stationNotFound(c);
   const db = c.var.db;
   const useCase = new CreateTank({
     repository: new DrizzleTankRepository(db),
@@ -265,6 +281,7 @@ stationSetupRouter.post('/dispensers', writePolicyGuard('POST /setup/dispensers'
       403,
     );
   }
+  if (!(await stationInOrg(c, body.stationId))) return stationNotFound(c);
   const db = c.var.db;
   const useCase = new CreateDispenser({
     repository: new DrizzleDispenserRepository(db),
@@ -312,6 +329,7 @@ stationSetupRouter.post('/nozzles', writePolicyGuard('POST /setup/nozzles'), asy
       403,
     );
   }
+  if (!(await stationInOrg(c, body.stationId))) return stationNotFound(c);
   const db = c.var.db;
   const result = await runInTransaction(db, (tx, events) =>
     new CreateNozzle({
@@ -1254,6 +1272,7 @@ stationSetupRouter.post(
         403,
       );
     }
+    if (!(await stationInOrg(c, parsed.stationId))) return stationNotFound(c);
     const db = c.var.db;
     const useCase = new RecordFuelPrice({
       repository: new DrizzleFuelPriceRepository(db),

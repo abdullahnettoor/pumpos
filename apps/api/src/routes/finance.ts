@@ -12,7 +12,7 @@ import {
 } from '@pump/core';
 import { buildContext } from '../infra/context.js';
 import type { AuthenticatedPrincipal } from '../infra/authenticated-principal.js';
-import { loadStationClock } from '../infra/station-clock.js';
+import { loadStationClock, stationNotFound } from '../infra/station-clock.js';
 import { runInTransaction } from '../infra/transaction.js';
 import { sendResult } from '../infra/send-result.js';
 import { writePolicyGuard } from '../infra/write-policy-guard.js';
@@ -105,7 +105,8 @@ financeRouter.post('/accounts', writePolicyGuard('POST /finance/accounts'), asyn
       403,
     );
   }
-  const clock = stationId ? await loadStationClock(db, stationId) : {};
+  const clock = await loadStationClock(db, user.organizationId, stationId);
+  if (!clock) return stationNotFound(c);
   const result = await runInTransaction(db, (tx, events) =>
     new CreateFinancialAccount({
       accounts: new DrizzleFinancialAccountRepository(tx),

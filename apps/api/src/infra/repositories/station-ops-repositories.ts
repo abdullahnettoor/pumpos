@@ -38,13 +38,20 @@ export class DrizzleBusinessDayStatusReader implements BusinessDayStatusReader {
       status: schema.businessDays.status,
       openedAt: schema.businessDays.openedAt,
       closedAt: schema.businessDays.closedAt,
-      openShiftCount: sql<number>`(SELECT COUNT(*)::int FROM shifts s WHERE s.business_day_id = ${schema.businessDays.id} AND s.status = 'OPEN')`,
-      closedShiftCount: sql<number>`(SELECT COUNT(*)::int FROM shifts s WHERE s.business_day_id = ${schema.businessDays.id} AND s.status IN ('CLOSED', 'LOCKED'))`,
-      lastActivityAt: sql<Date>`GREATEST(
+      // The correlation MUST be qualified as business_days.id: Drizzle renders
+      // a bare column reference unqualified inside a raw sql`` fragment, so an
+      // unqualified `id` resolves to the subquery's own `s.id` / `e.id` scope —
+      // `s.business_day_id = s.id` is never true (#225).
+      openShiftCount: sql<number>`(SELECT COUNT(*)::int FROM shifts s WHERE s.business_day_id = business_days.id AND s.status = 'OPEN')`,
+      closedShiftCount: sql<number>`(SELECT COUNT(*)::int FROM shifts s WHERE s.business_day_id = business_days.id AND s.status IN ('CLOSED', 'LOCKED'))`,
+      // Rendered as ISO-8601 UTC in SQL: the raw fragment bypasses Drizzle's
+      // column mapper, and postgres-js would hand back a zone-less string that
+      // `new Date()` mis-parses as local time.
+      lastActivityAt: sql<string>`to_char(GREATEST(
         ${schema.businessDays.updatedAt},
-        COALESCE((SELECT MAX(s.updated_at) FROM shifts s WHERE s.business_day_id = ${schema.businessDays.id}), ${schema.businessDays.updatedAt}),
-        COALESCE((SELECT MAX(e.occurred_at) FROM events e WHERE e.business_day_id = ${schema.businessDays.id}), ${schema.businessDays.updatedAt})
-      )`,
+        COALESCE((SELECT MAX(s.updated_at) FROM shifts s WHERE s.business_day_id = business_days.id), ${schema.businessDays.updatedAt}),
+        COALESCE((SELECT MAX(e.occurred_at) FROM events e WHERE e.business_day_id = business_days.id), ${schema.businessDays.updatedAt})
+      ), 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`,
     };
   }
 
