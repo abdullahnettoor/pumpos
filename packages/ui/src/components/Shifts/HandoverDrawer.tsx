@@ -422,6 +422,16 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
     if (a > 0 && pr > 0) setCcQty((a / pr).toFixed(3));
   };
 
+  /**
+   * Started, never awaited. The credit line and the button's idle state come
+   * from the write's own response; the parent's invalidate + shift-status
+   * refetch only refreshes balances elsewhere on the screen. Awaiting it here
+   * is what kept the spinner running for seconds after the sale was recorded
+   * (#219), and the prefill latch already stops the refetch clobbering entry.
+   */
+  const refreshAfterCreditChange = () =>
+    runTask(onCreditChanged?.(), 'Sale recorded, but the screen could not be refreshed.');
+
   const addCreditLine = async () => {
     setError(null);
     const amt = Number(ccAmount);
@@ -475,7 +485,7 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
       setAcceptedResult(null);
       handoverRequestRef.current = null;
       resetCcRow();
-      await onCreditChanged?.();
+      refreshAfterCreditChange();
     } catch (e: any) {
       setError(e.message || 'Failed to add sale');
     } finally {
@@ -492,7 +502,7 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
       setCreditLines((prev) => prev.filter((l) => l.id !== id));
       setAcceptedResult(null);
       handoverRequestRef.current = null;
-      await onCreditChanged?.();
+      refreshAfterCreditChange();
     } catch (e: any) {
       setError(e.message || 'Failed to remove credit sale');
     } finally {
@@ -509,7 +519,7 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
       setOmcLines((prev) => prev.filter((l) => l.id !== id));
       setAcceptedResult(null);
       handoverRequestRef.current = null;
-      await onCreditChanged?.();
+      refreshAfterCreditChange();
     } catch (e: any) {
       setError(e.message || 'Failed to remove OMC card sale');
     } finally {
@@ -1553,6 +1563,8 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
                           type="number"
                           step="0.01"
                           min="0"
+                          name="ccAmount"
+                          aria-label="Customer sale amount"
                           value={ccAmount}
                           onChange={(e) => handleCcAmountChange(e.target.value)}
                           disabled={ccBusy}

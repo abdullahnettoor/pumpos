@@ -40,6 +40,18 @@ Auth/session and anything live are operational (or uncached); never persist them
 5. **Cross-screen safety.** Because invalidation is global on the shared client, busting a key in
    one screen refreshes it everywhere. If you add a new place that *mutates* a cached entity,
    you MUST invalidate that key there (or via `useInvalidateOperational`).
+6. **Never gate success UI on the refetch.** Invalidation is a background concern; the operator's
+   feedback is not. Derive the success card, the closed drawer and the cleared spinner from the
+   **write's own response**, then start the invalidation without awaiting it (`runTask(...)`).
+   Awaiting it makes every success wait on the slowest dependent query — seconds, on a station's
+   connection — while the server has already confirmed the write.
+   - In a React Query `onSuccess`, this means the handler must stay **synchronous**: React Query
+     awaits whatever `onSuccess` returns before `mutateAsync` settles, so returning the
+     invalidation cascade silently reintroduces the gate.
+   - Write failures are different: they must still surface an error and leave the UI actionable.
+   - Prior art: `recordHandoverMutationOptions` (`query/handoverMutation.ts`),
+     `refreshAfterCreditChange` (`Shifts/HandoverDrawer.tsx`), `handleCloseShift`
+     (`Shifts/ShiftsManagement.tsx`).
 
 ## Review checklist (before merge)
 - [ ] New reads use a hook / `ensureQueryData` with a centralized key + correct tier.
@@ -47,6 +59,8 @@ Auth/session and anything live are operational (or uncached); never persist them
       mutate it, not just the one you edited).
 - [ ] Entities with computed balances that change operationally (customers, suppliers) are in
       `useInvalidateOperational`.
+- [ ] No user-facing success feedback (spinner clear, drawer close, success card) is awaited
+      behind an invalidation/refetch; `onSuccess` handlers stay synchronous.
 - [ ] Nothing operational/auth is added to `PERSIST_PREFIXES`.
 - [ ] No `refetchOnMount: 'always'` on tiered queries (it defeats the cache).
 - [ ] Measure with the API `Server-Timing` header; confirm fewer network calls on repeat nav.
@@ -57,6 +71,8 @@ Auth/session and anything live are operational (or uncached); never persist them
 - Local optimistic delete (`setState`) without invalidating → item reappears on remount from cache.
 - Imperative `service.getX()` left in a component → cache never applies; API called every time.
 - Stale closures capturing state in long-lived subscriptions (use refs) — see App session resolve.
+- `async onSuccess` / an awaited `invalidate` in a submit handler → the write is done but the
+  button still spins. Feels like a slow server; it is a slow client. (#219, #232.)
 
 ## Key files
 - `packages/ui/src/query/hooks.ts` — `TIER`, `queryKeys`, hooks, `useInvalidateOperational`.

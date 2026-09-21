@@ -717,7 +717,6 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
 
       setIsPreparingClose(false);
       setCloseWizardOpen(false);
-      await loadShiftStatus();
 
       const closedWorkflow: PendingTankDipWorkflow = {
         ...preparedWorkflow,
@@ -725,7 +724,12 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
         closedAt: closeResult.shift.closedAt,
       };
       savePendingTankDipWorkflow(stationId!, closedWorkflow);
+      // The success card is rendered from the close response, which already
+      // carries everything it shows. Cache invalidation/refetch runs in the
+      // background so the operator is never made to wait on the slowest
+      // operational query for feedback the server has already given us.
       setClosedShiftSuccess(closedWorkflow);
+      runTask(loadShiftStatus(), 'Shift closed, but the screen could not be refreshed.');
       await saveTankDips(closedWorkflow).catch(() => undefined);
     } catch (err: any) {
       if (stationId && isAmbiguousMutationError(err)) {
