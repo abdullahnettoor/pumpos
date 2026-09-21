@@ -47,7 +47,7 @@ import {
 } from '@pump/core';
 import { buildContext, createCommandTrace } from '../infra/context.js';
 import type { AuthenticatedPrincipal } from '../infra/authenticated-principal.js';
-import { loadStationClock } from '../infra/station-clock.js';
+import { loadStationClock, stationNotFound } from '../infra/station-clock.js';
 import { lockStationInventory, runInTransaction } from '../infra/transaction.js';
 import { refreshShiftSummaryForShift } from '../infra/shift-summary-projection.js';
 import { TimestampDocumentNumberGenerator } from '../infra/doc-numbers.js';
@@ -113,6 +113,7 @@ const docNumbers = new TimestampDocumentNumberGenerator();
  */
 async function loadStationStateCode(
   db: DbClient,
+  organizationId: string,
   stationId?: string | null,
   shiftId?: string | null,
 ): Promise<string | null> {
@@ -121,7 +122,7 @@ async function loadStationStateCode(
     const [sh] = await db
       .select({ stationId: schema.shifts.stationId })
       .from(schema.shifts)
-      .where(eq(schema.shifts.id, shiftId))
+      .where(and(eq(schema.shifts.id, shiftId), eq(schema.shifts.organizationId, organizationId)))
       .limit(1);
     sid = sh?.stationId ?? null;
   }
@@ -129,7 +130,7 @@ async function loadStationStateCode(
   const [row] = await db
     .select({ settings: schema.stations.settings })
     .from(schema.stations)
-    .where(eq(schema.stations.id, sid))
+    .where(and(eq(schema.stations.id, sid), eq(schema.stations.organizationId, organizationId)))
     .limit(1);
   const legal = (row?.settings as any)?.legal || {};
   return typeof legal.stateCode === 'string' && legal.stateCode.trim()
@@ -220,7 +221,10 @@ transactionsRouter.post(
     const openingStationId: string | undefined =
       body?.openingStationId ?? body?.stationId ?? undefined;
     const clock =
-      openingDue > 0 && openingStationId ? await loadStationClock(c.var.db, openingStationId) : {};
+      openingDue > 0 && openingStationId
+        ? await loadStationClock(c.var.db, user.organizationId, openingStationId)
+        : {};
+    if (!clock) return stationNotFound(c);
     const result = await runInTransaction(c.var.db, async (tx, events) => {
       const trace = createCommandTrace();
       const created = await new CreateSupplier({
@@ -392,7 +396,10 @@ transactionsRouter.post(
     const openingStationId: string | undefined =
       body?.openingStationId ?? body?.stationId ?? undefined;
     const clock =
-      openingDue > 0 && openingStationId ? await loadStationClock(c.var.db, openingStationId) : {};
+      openingDue > 0 && openingStationId
+        ? await loadStationClock(c.var.db, user.organizationId, openingStationId)
+        : {};
+    if (!clock) return stationNotFound(c);
     const result = await runInTransaction(c.var.db, async (tx, events) => {
       const trace = createCommandTrace();
       const created = await new CreateCustomer({
@@ -1038,10 +1045,16 @@ transactionsRouter.post('/income', writePolicyGuard('POST /transactions/income')
       403,
     );
   }
-  const clock = await loadStationClock(c.var.db, body?.stationId);
+  const clock = await loadStationClock(c.var.db, user.organizationId, body?.stationId);
+  if (!clock) return stationNotFound(c);
   // FI4 — place of supply: station state is the supplier side; the payer state
   // (when the operator knows it) makes the entry inter-state (IGST).
-  const supplierStateCode = await loadStationStateCode(c.var.db, body?.stationId, body?.shiftId);
+  const supplierStateCode = await loadStationStateCode(
+    c.var.db,
+    user.organizationId,
+    body?.stationId,
+    body?.shiftId,
+  );
   const result = await runInTransaction(c.var.db, async (tx, events) => {
     // A chosen account overrides receivedInto/affectsDrawer by its type, so
     // drawer reconciliation stays correct (only shift Cash-in-Hand hits drawer).
@@ -1243,7 +1256,8 @@ transactionsRouter.post('/expenses', writePolicyGuard('POST /transactions/expens
       403,
     );
   }
-  const clock = await loadStationClock(c.var.db, body?.stationId);
+  const clock = await loadStationClock(c.var.db, user.organizationId, body?.stationId);
+  if (!clock) return stationNotFound(c);
   const result = await runInTransaction(c.var.db, async (tx, events) => {
     // When a specific pay-from account is chosen, derive paidFrom/affectsDrawer
     // from its type so drawer reconciliation stays correct (only the shift's
@@ -1358,7 +1372,8 @@ transactionsRouter.post(
         403,
       );
     }
-    const clock = await loadStationClock(c.var.db, body?.stationId);
+    const clock = await loadStationClock(c.var.db, user.organizationId, body?.stationId);
+    if (!clock) return stationNotFound(c);
     // A "Credit" collection is a credit SALE (a receivable), not a payment. It is
     // recorded on the customer ledger with no drawer/stock impact.
     if (body?.paymentMethod === 'Credit') {
@@ -1530,7 +1545,20 @@ transactionsRouter.post(
       );
     }
     const body = await c.req.json().catch(() => ({}));
-    const clock = await loadStationClock(c.var.db, body?.stationId);
+    if (
+      body?.stationId &&
+      !isAuthorizedForStation(user, {
+        organizationId: user.organizationId,
+        stationId: body.stationId,
+      })
+    ) {
+      return c.json(
+        { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
+        403,
+      );
+    }
+    const clock = await loadStationClock(c.var.db, user.organizationId, body?.stationId);
+    if (!clock) return stationNotFound(c);
     const result = await runInTransaction(c.var.db, async (tx, events) => {
       const trace = createCommandTrace();
       const ctx = buildContext(user, {
@@ -1641,7 +1669,8 @@ transactionsRouter.post(
       );
     }
     const body = await c.req.json().catch(() => ({}));
-    const clock = await loadStationClock(c.var.db, body?.stationId);
+    const clock = await loadStationClock(c.var.db, user.organizationId, body?.stationId);
+    if (!clock) return stationNotFound(c);
     const result = await runInTransaction(c.var.db, async (tx, events) => {
       // Chosen pay-from account → derive paidFrom/affectsDrawer so drawer
       // reconciliation stays correct (only the shift Cash-in-Hand affects it).
@@ -1694,10 +1723,27 @@ transactionsRouter.post(
 transactionsRouter.post('/sales', writePolicyGuard('POST /transactions/sales'), async (c) => {
   const user = c.var.user;
   const body = await c.req.json().catch(() => ({}));
+  if (
+    body?.stationId &&
+    !isAuthorizedForStation(user, {
+      organizationId: user.organizationId,
+      stationId: body.stationId,
+    })
+  ) {
+    return c.json(
+      { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
+      403,
+    );
+  }
   const rawBuyer = body.buyer && typeof body.buyer === 'object' ? body.buyer : null;
   const saveAsCustomer = !!body.saveAsCustomer;
   // T5 — supplier side of place of supply for the frozen line-tax split.
-  const supplierStateCode = await loadStationStateCode(c.var.db, body?.stationId, body?.shiftId);
+  const supplierStateCode = await loadStationStateCode(
+    c.var.db,
+    user.organizationId,
+    body?.stationId,
+    body?.shiftId,
+  );
   const result = await runInTransaction(c.var.db, async (tx, events) => {
     const trace = createCommandTrace();
     let customerId: string | null = body.customerId ?? null;
@@ -2994,7 +3040,8 @@ transactionsRouter.post(
         403,
       );
     }
-    const stockClock = await loadStationClock(c.var.db, body?.stationId);
+    const stockClock = await loadStationClock(c.var.db, user.organizationId, body?.stationId);
+    if (!stockClock) return stationNotFound(c);
     const result = await runInTransaction(c.var.db, async (tx, events) => {
       await lockStationInventory(tx, user.organizationId, body?.stationId);
       return new RecordStockCount({

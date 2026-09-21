@@ -27,7 +27,7 @@ import {
 } from '@pump/core';
 import { buildContext } from '../infra/context.js';
 import type { AuthenticatedPrincipal } from '../infra/authenticated-principal.js';
-import { loadStationClock } from '../infra/station-clock.js';
+import { loadStationClock, stationNotFound } from '../infra/station-clock.js';
 import { lockStationInventory, runInTransaction } from '../infra/transaction.js';
 import {
   DrizzleNozzleRepository,
@@ -108,7 +108,8 @@ shiftsRouter.get('/business-days/status', async (c) => {
     );
   }
 
-  const clock = await loadStationClock(c.var.db, stationId);
+  const clock = await loadStationClock(c.var.db, user.organizationId, stationId);
+  if (!clock) return stationNotFound(c);
   const currentBusinessDate = resolveBusinessDate({
     timeZone: clock.timeZone,
     dayStartsAt: clock.businessDayStartsAt,
@@ -1446,7 +1447,8 @@ shiftsRouter.post(
       );
     }
     const db = c.var.db;
-    const clock = await loadStationClock(db, body?.stationId);
+    const clock = await loadStationClock(db, user.organizationId, body?.stationId);
+    if (!clock) return stationNotFound(c);
     const result = await runInTransaction(db, async (tx, events) => {
       await lockStationInventory(tx, user.organizationId, body?.stationId);
       return new OpenShift({
@@ -1770,7 +1772,8 @@ shiftsRouter.post(
         403,
       );
     }
-    const clock = await loadStationClock(db, body?.stationId);
+    const clock = await loadStationClock(db, user.organizationId, body?.stationId);
+    if (!clock) return stationNotFound(c);
     const result = await runInTransaction(db, (tx, events) =>
       new OpenBusinessDay({ repository: new DrizzleBusinessDayRepository(tx), events }).execute(
         body,
