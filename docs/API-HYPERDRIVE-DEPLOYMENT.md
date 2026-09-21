@@ -7,7 +7,7 @@ This runbook covers:
 
 Linked Supabase project in this repository:
 
-- Project ref: `sniubtppskopxkpznfkh`
+- Project ref: `gpfqiesflrpmndhkfvhg`
 - Source: `supabase/.temp/linked-project.json`
 
 ## 1. Local Development Setup
