@@ -9,19 +9,38 @@ import {
 import type { ExecutionContext } from '../../../kernel/index.js';
 import { CloseShift } from './close-shift.js';
 import type {
+  CloseShiftContext,
+  CloseShiftContextReader,
   NozzleReading,
   NozzleReadingRepository,
   Shift,
-  ShiftReconciliationReader,
   ShiftReconciliationTotals,
   ShiftRepository,
   ShiftSummaryWriter,
-  CreditSalesReader,
   CreditSaleRecord,
   StockMovementInput,
   StockMovementWriter,
 } from './ports.js';
-import type { Nozzle, NozzleRepository } from '../../station-setup/nozzles/index.js';
+
+/** Consolidated context fake: serves the same rows the five old ports did. */
+class ContextReader implements CloseShiftContextReader {
+  constructor(
+    private readonly shifts: Shift[],
+    private readonly readings: NozzleReading[],
+    private readonly nozzles: { id: string; productId: string; tankId: string | null }[],
+    private readonly totals: ShiftReconciliationTotals,
+    private readonly creditSales: CreditSaleRecord[] = [],
+  ) {}
+  async load(_organizationId: string, shiftId: string): Promise<CloseShiftContext> {
+    return {
+      shift: this.shifts.find((r) => r.id === shiftId) ?? null,
+      readings: this.readings.filter((r) => r.shiftId === shiftId),
+      nozzles: this.nozzles,
+      totals: this.totals,
+      creditSales: this.creditSales,
+    };
+  }
+}
 
 class ShiftRepo implements ShiftRepository {
   constructor(readonly rows: Shift[]) {}
@@ -42,19 +61,6 @@ class ShiftRepo implements ShiftRepository {
   async addStaffAssignments() {}
   async addTerminalLinks() {}
 }
-class NozzleRepo implements NozzleRepository {
-  constructor(readonly rows: Nozzle[]) {}
-  async findById(id: string) {
-    return this.rows.find((r) => r.id === id) ?? null;
-  }
-  async save() {}
-  async deleteById() {
-    return true;
-  }
-  async listByStation() {
-    return this.rows;
-  }
-}
 class ReadingRepo implements NozzleReadingRepository {
   constructor(readonly rows: NozzleReading[]) {}
   async lastClosingByNozzleIds() {
@@ -64,24 +70,14 @@ class ReadingRepo implements NozzleReadingRepository {
   async listByShift(shiftId: string) {
     return this.rows.filter((r) => r.shiftId === shiftId);
   }
-  async updateClosing(id: string, closing: string, vol: string) {
-    const r = this.rows.find((x) => x.id === id);
-    if (r) {
-      r.closingReading = closing;
-      r.volumeSold = vol;
+  async updateClosingMany(updates: { id: string; closingReading: string; volumeSold: string }[]) {
+    for (const u of updates) {
+      const r = this.rows.find((x) => x.id === u.id);
+      if (r) {
+        r.closingReading = u.closingReading;
+        r.volumeSold = u.volumeSold;
+      }
     }
-  }
-}
-class ReconReader implements ShiftReconciliationReader {
-  constructor(private readonly totals: ShiftReconciliationTotals) {}
-  async totalsForShift() {
-    return this.totals;
-  }
-}
-class CreditSalesReaderMock implements CreditSalesReader {
-  constructor(private readonly records: CreditSaleRecord[] = []) {}
-  async listByShift(shiftId: string) {
-    return this.records.filter((r) => r.customerId);
   }
 }
 class StockWriter implements StockMovementWriter {
@@ -145,27 +141,15 @@ function reading(): NozzleReading {
     createdAt: '',
   };
 }
-function nozzle(): Nozzle {
-  return {
-    id: 'n1',
-    organizationId: 'org-1',
-    stationId: 'st-1',
-    duId: 'du',
-    tankId: 'tk1',
-    productId: 'pet',
-    name: 'n1',
-    currentReading: '1000',
-    createdAt: '',
-    updatedAt: '',
-  };
+function nozzle() {
+  return { id: 'n1', productId: 'pet', tankId: 'tk1' };
 }
 
 describe('CloseShift', () => {
   it('finalizes readings, records sale movement, reconciles drawer (variance 0)', async () => {
     const shifts = new ShiftRepo([openShiftRow()]);
-    const nozzles = new NozzleRepo([nozzle()]);
     const readings = new ReadingRepo([reading()]);
-    const recon = new ReconReader({
+    const context = new ContextReader(shifts.rows, readings.rows, [nozzle()], {
       cashSales: 0,
       cashCollections: 2000,
       cardCollections: 0,
@@ -178,15 +162,12 @@ describe('CloseShift', () => {
     const summaries = new SummaryWriter();
     const store = new InMemoryEventStore();
     const events = new InProcessEventDispatcher({ store });
-    const creditSales = new CreditSalesReaderMock([]);
 
     // expected = 5000 + 2000 - 300 = 6700; declare 6700 -> variance 0
     const result = await new CloseShift({
+      context,
       shifts,
-      nozzles,
       nozzleReadings: readings,
-      reconciliation: recon,
-      creditSales,
       stockMovements: stock,
       summaries,
       events,
@@ -217,22 +198,22 @@ describe('CloseShift', () => {
     expect(types).toContain(BusinessEvents.SHIFT_CLOSED);
   });
 
+  const emptyTotals: ShiftReconciliationTotals = {
+    cashSales: 0,
+    cashCollections: 0,
+    cardCollections: 0,
+    upiCollections: 0,
+    creditCollections: 0,
+    drawerExpenses: 0,
+    drawerSupplierPayments: 0,
+  };
+
   it('rejects closing an already-closed shift', async () => {
     const closed = { ...openShiftRow(), status: 'CLOSED' as const };
     const result = await new CloseShift({
+      context: new ContextReader([closed], [], [], emptyTotals),
       shifts: new ShiftRepo([closed]),
-      nozzles: new NozzleRepo([]),
       nozzleReadings: new ReadingRepo([]),
-      reconciliation: new ReconReader({
-        cashSales: 0,
-        cashCollections: 0,
-        cardCollections: 0,
-        upiCollections: 0,
-        creditCollections: 0,
-        drawerExpenses: 0,
-        drawerSupplierPayments: 0,
-      }),
-      creditSales: new CreditSalesReaderMock([]),
       stockMovements: new StockWriter(),
       summaries: new SummaryWriter(),
       events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
@@ -243,19 +224,9 @@ describe('CloseShift', () => {
 
   it('rejects Tank Dip input because stock counts are a separate post-close action', async () => {
     const result = await new CloseShift({
+      context: new ContextReader([openShiftRow()], [], [], emptyTotals),
       shifts: new ShiftRepo([openShiftRow()]),
-      nozzles: new NozzleRepo([]),
       nozzleReadings: new ReadingRepo([]),
-      reconciliation: new ReconReader({
-        cashSales: 0,
-        cashCollections: 0,
-        cardCollections: 0,
-        upiCollections: 0,
-        creditCollections: 0,
-        drawerExpenses: 0,
-        drawerSupplierPayments: 0,
-      }),
-      creditSales: new CreditSalesReaderMock([]),
       stockMovements: new StockWriter(),
       summaries: new SummaryWriter(),
       events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),

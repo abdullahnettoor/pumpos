@@ -157,3 +157,112 @@ export class AccountProvisioningService {
     }
   }
 }
+
+// ---------------------------------------------------------------------------
+// Batched resolution (statement-budget paths, #229)
+// ---------------------------------------------------------------------------
+
+/** A candidate row from one bulk read of the org's money accounts. */
+export interface CandidateAccount {
+  id: string;
+  stationId: string | null;
+  accountType: string;
+  provider: string | null;
+}
+
+/** An account the plan needs created (cold path), keyed for later resolution. */
+export interface PlannedAccountSpec {
+  key: string;
+  accountType: 'CASH_IN_HAND' | 'MERCHANT_CLEARING';
+  name: string;
+  metadata: { provider: string } | null;
+}
+
+/** Either an existing account id or a reference to a planned creation. */
+export type PlannedAccount = string | { pending: string };
+
+/**
+ * In-memory counterpart of ensureAccount / ensureClearingForProvider over one
+ * pre-fetched candidate list, so a statement-budgeted caller (shift-close
+ * ledger posting) can resolve every account without per-account round-trips —
+ * while the RULES (name shapes, provider matching, station-then-shared
+ * fallback) stay in this file next to the service they mirror. Missing
+ * accounts are collected as specs for ONE batched insert; names are unique
+ * per batch, so created ids can be matched back by name.
+ */
+export class AccountResolutionPlan {
+  private readonly toCreate: PlannedAccountSpec[] = [];
+
+  constructor(
+    private readonly stationId: string,
+    private readonly candidates: CandidateAccount[],
+  ) {}
+
+  private stationClearing(): CandidateAccount[] {
+    return this.candidates.filter(
+      (a) => a.accountType === 'MERCHANT_CLEARING' && a.stationId === this.stationId,
+    );
+  }
+
+  private plan(spec: PlannedAccountSpec): PlannedAccount {
+    if (!this.toCreate.some((t) => t.key === spec.key)) this.toCreate.push(spec);
+    return { pending: spec.key };
+  }
+
+  /** Mirrors ensureClearingForProvider: provider matched case-insensitively,
+   *  blank provider maps to the default "Card/UPI Clearing". */
+  clearing(providerRaw: string | null | undefined): PlannedAccount {
+    const prov = normalizeProvider(providerRaw);
+    if (prov) {
+      const match = this.stationClearing().find(
+        (a) => (a.provider ?? '').toLowerCase() === prov.toLowerCase(),
+      );
+      if (match) return match.id;
+      return this.plan({
+        key: `clearing:${prov.toLowerCase()}`,
+        accountType: 'MERCHANT_CLEARING',
+        name: `${prov} Clearing`,
+        metadata: { provider: prov },
+      });
+    }
+    const def = this.stationClearing().find((a) => a.provider == null);
+    if (def) return def.id;
+    return this.plan({
+      key: 'clearing:__default__',
+      accountType: 'MERCHANT_CLEARING',
+      name: DEFAULT_ACCOUNT_NAME.MERCHANT_CLEARING,
+      metadata: null,
+    });
+  }
+
+  /** The station's oldest clearing account of ANY provider (legacy aggregate
+   *  card/UPI fallback), else the default clearing. Candidates arrive ordered
+   *  by created_at, so [0] is the oldest — matching the old ORDER BY. */
+  anyStationClearing(): PlannedAccount {
+    return this.stationClearing()[0]?.id ?? this.clearing(null);
+  }
+
+  /** Mirrors ensureAccount(CASH_IN_HAND): station-scoped first (oldest), then
+   *  the org-shared account, else create the station default. */
+  cashInHand(): PlannedAccount {
+    const station = this.candidates.find(
+      (a) => a.accountType === 'CASH_IN_HAND' && a.stationId === this.stationId,
+    );
+    if (station) return station.id;
+    const shared = this.candidates.find(
+      (a) => a.accountType === 'CASH_IN_HAND' && a.stationId === null,
+    );
+    if (shared) return shared.id;
+    return this.plan({
+      key: 'cash:__default__',
+      accountType: 'CASH_IN_HAND',
+      name: DEFAULT_ACCOUNT_NAME.CASH_IN_HAND,
+      metadata: null,
+    });
+  }
+
+  /** Accounts the caller must create (cold path) before resolving pendings. */
+  get specs(): ReadonlyArray<PlannedAccountSpec> {
+    return this.toCreate;
+  }
+}

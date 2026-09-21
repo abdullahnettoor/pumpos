@@ -1,6 +1,8 @@
-import { and, eq } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
 import { byNaturalField } from '@pump/shared';
+import { rowJson, rowJsonNullable } from './sql-json.js';
+import { creditSaleLinesJson } from './repositories/shift-recon-sql.js';
 import {
   RefreshShiftSummary,
   type EventPublisher,
@@ -40,107 +42,76 @@ export async function projectShiftSummary(
   const snap = rawSnapshot ?? {};
   const recon = snap.reconciliation ?? {};
 
-  // Fetch every independent slice in ONE parallel batch instead of ~8 serial
-  // round-trips (the Hyperdrive latency was stacking to multi-second responses).
-  const [
-    templateRows,
-    closedUserRows,
-    openedUserRows,
-    nrRows,
-    hoRows,
-    teRows,
-    expenses,
-    purchases,
-    collections,
-    creditSaleRows,
-  ] = await Promise.all([
-    db
-      .select()
-      .from(schema.shiftTemplates)
-      .where(eq(schema.shiftTemplates.id, shift.shiftTemplateId))
-      .limit(1),
-    shift.closedBy
-      ? db.select().from(schema.users).where(eq(schema.users.id, shift.closedBy)).limit(1)
-      : Promise.resolve([] as any[]),
-    shift.openedBy
-      ? db.select().from(schema.users).where(eq(schema.users.id, shift.openedBy)).limit(1)
-      : Promise.resolve([] as any[]),
-    db
-      .select({ nr: schema.nozzleReadings, nz: schema.nozzles, prod: schema.products })
-      .from(schema.nozzleReadings)
-      .leftJoin(schema.nozzles, eq(schema.nozzles.id, schema.nozzleReadings.nozzleId))
-      .leftJoin(schema.products, eq(schema.products.id, schema.nozzles.productId))
-      .where(eq(schema.nozzleReadings.shiftId, shift.id)),
-    db
-      .select({
-        h: schema.attendantHandovers,
-        userName: schema.users.fullName,
-        duName: schema.dispenserUnits.name,
-        duCode: schema.dispenserUnits.code,
-      })
-      .from(schema.attendantHandovers)
-      .leftJoin(schema.users, eq(schema.users.id, schema.attendantHandovers.userId))
-      .leftJoin(schema.dispenserUnits, eq(schema.dispenserUnits.id, schema.attendantHandovers.duId))
-      .where(eq(schema.attendantHandovers.shiftId, shift.id)),
-    db
-      .select({
-        e: schema.handoverTerminalEntries,
-        label: schema.paymentTerminals.label,
-        provider: schema.paymentTerminals.provider,
-      })
-      .from(schema.handoverTerminalEntries)
-      .leftJoin(
-        schema.paymentTerminals,
-        eq(schema.paymentTerminals.id, schema.handoverTerminalEntries.terminalId),
-      )
-      .where(eq(schema.handoverTerminalEntries.shiftId, shift.id)),
-    db
-      .select({ e: schema.expenses, categoryName: schema.expenseCategories.name })
-      .from(schema.expenses)
-      .leftJoin(
-        schema.expenseCategories,
-        eq(schema.expenseCategories.id, schema.expenses.categoryId),
-      )
-      .where(eq(schema.expenses.shiftId, shift.id)),
-    db
-      .select({ p: schema.purchases, supplierName: schema.suppliers.name })
-      .from(schema.purchases)
-      .leftJoin(schema.suppliers, eq(schema.suppliers.id, schema.purchases.supplierId))
-      .where(eq(schema.purchases.shiftId, shift.id)),
-    db.select().from(schema.collections).where(eq(schema.collections.shiftId, shift.id)),
-    db
-      .select({
-        id: schema.customerTransactions.id,
-        amount: schema.customerTransactions.amount,
-        quantity: schema.customerTransactions.quantity,
-        unitPrice: schema.customerTransactions.unitPrice,
-        notes: schema.customerTransactions.notes,
-        duId: schema.customerTransactions.duId,
-        attendantId: schema.customerTransactions.attendantId,
-        customerId: schema.customerTransactions.customerId,
-        vehicleId: schema.customerTransactions.vehicleId,
-        productId: schema.customerTransactions.productId,
-        customerName: schema.customers.name,
-        productName: schema.products.name,
-        productCode: schema.products.code,
-        unit: schema.products.unit,
-        vehicleNumber: schema.customerVehicles.registrationNumber,
-      })
-      .from(schema.customerTransactions)
-      .leftJoin(schema.customers, eq(schema.customers.id, schema.customerTransactions.customerId))
-      .leftJoin(schema.products, eq(schema.products.id, schema.customerTransactions.productId))
-      .leftJoin(
-        schema.customerVehicles,
-        eq(schema.customerVehicles.id, schema.customerTransactions.vehicleId),
-      )
-      .where(
-        and(
-          eq(schema.customerTransactions.shiftId, shift.id),
-          eq(schema.customerTransactions.transactionType, 'Credit Sale'),
-          eq(schema.customerTransactions.referenceType, 'CREDIT_SALE'),
-        ),
-      ),
-  ]);
+  // Fetch every slice in ONE statement (#229): each sub-select renders rows as
+  // jsonb in exactly the shape the previous drizzle builders produced (camelCase
+  // keys, numerics as strings, ISO timestamps), so the shaping code below is
+  // untouched. The former 10-select Promise.all was serialized on the wire by
+  // the max:1 driver — ten round-trips inside the close transaction.
+  const S = schema;
+  const [row] = (await db.execute(sql`
+    SELECT
+      (SELECT ${rowJson(S.shiftTemplates, 't')} FROM shift_templates t
+        WHERE t.id = ${shift.shiftTemplateId}) AS template,
+      (SELECT ${rowJson(S.users, 'u')} FROM users u
+        WHERE u.id = ${shift.closedBy ?? null}::uuid) AS closed_user,
+      (SELECT ${rowJson(S.users, 'u')} FROM users u
+        WHERE u.id = ${shift.openedBy ?? null}::uuid) AS opened_user,
+      COALESCE((SELECT jsonb_agg(jsonb_build_object(
+          'nr', ${rowJson(S.nozzleReadings, 'nr')},
+          'nz', ${rowJsonNullable(S.nozzles, 'nz')},
+          'prod', ${rowJsonNullable(S.products, 'prod')}
+        ) ORDER BY nr.created_at, nr.id)
+        FROM nozzle_readings nr
+        LEFT JOIN nozzles nz ON nz.id = nr.nozzle_id
+        LEFT JOIN products prod ON prod.id = nz.product_id
+        WHERE nr.shift_id = ${shift.id}), '[]'::jsonb) AS nr_rows,
+      COALESCE((SELECT jsonb_agg(jsonb_build_object(
+          'h', ${rowJson(S.attendantHandovers, 'h')},
+          'userName', u.full_name,
+          'duName', du.name,
+          'duCode', du.code
+        ) ORDER BY h.created_at, h.id)
+        FROM attendant_handovers h
+        LEFT JOIN users u ON u.id = h.user_id
+        LEFT JOIN dispenser_units du ON du.id = h.du_id
+        WHERE h.shift_id = ${shift.id}), '[]'::jsonb) AS ho_rows,
+      COALESCE((SELECT jsonb_agg(jsonb_build_object(
+          'e', ${rowJson(S.handoverTerminalEntries, 'e')},
+          'label', pt.label,
+          'provider', pt.provider
+        ) ORDER BY e.created_at, e.id)
+        FROM handover_terminal_entries e
+        LEFT JOIN payment_terminals pt ON pt.id = e.terminal_id
+        WHERE e.shift_id = ${shift.id}), '[]'::jsonb) AS te_rows,
+      COALESCE((SELECT jsonb_agg(jsonb_build_object(
+          'e', ${rowJson(S.expenses, 'e')},
+          'categoryName', ec.name
+        ) ORDER BY e.created_at, e.id)
+        FROM expenses e
+        LEFT JOIN expense_categories ec ON ec.id = e.category_id
+        WHERE e.shift_id = ${shift.id}), '[]'::jsonb) AS expense_rows,
+      COALESCE((SELECT jsonb_agg(jsonb_build_object(
+          'p', ${rowJson(S.purchases, 'p')},
+          'supplierName', sup.name
+        ) ORDER BY p.created_at, p.id)
+        FROM purchases p
+        LEFT JOIN suppliers sup ON sup.id = p.supplier_id
+        WHERE p.shift_id = ${shift.id}), '[]'::jsonb) AS purchase_rows,
+      COALESCE((SELECT jsonb_agg(${rowJson(S.collections, 'c')} ORDER BY c.created_at, c.id)
+        FROM collections c WHERE c.shift_id = ${shift.id}), '[]'::jsonb) AS collection_rows,
+      ${creditSaleLinesJson(shift.id)} AS credit_rows
+  `)) as unknown as [Record<string, any>];
+
+  const templateRows = row.template ? [row.template] : [];
+  const closedUserRows = row.closed_user ? [row.closed_user] : [];
+  const openedUserRows = row.opened_user ? [row.opened_user] : [];
+  const nrRows: any[] = row.nr_rows ?? [];
+  const hoRows: any[] = row.ho_rows ?? [];
+  const teRows: any[] = row.te_rows ?? [];
+  const expenses: any[] = row.expense_rows ?? [];
+  const purchases: any[] = row.purchase_rows ?? [];
+  const collections: any[] = row.collection_rows ?? [];
+  const creditSaleRows: any[] = row.credit_rows ?? [];
 
   const template = templateRows[0];
   const closedByName = closedUserRows[0]?.fullName ?? 'System';

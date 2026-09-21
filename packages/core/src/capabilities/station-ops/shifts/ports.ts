@@ -51,12 +51,19 @@ export interface NozzleReading {
   createdAt: string;
 }
 
+export interface NozzleClosingUpdate {
+  id: string;
+  closingReading: string;
+  volumeSold: string;
+}
+
 export interface NozzleReadingRepository {
   /** Latest closing reading per nozzle across all prior shifts. */
   lastClosingByNozzleIds(nozzleIds: string[]): Promise<Map<string, number>>;
   saveMany(readings: NozzleReading[]): Promise<void>;
   listByShift(shiftId: string): Promise<NozzleReading[]>;
-  updateClosing(id: string, closingReading: string, volumeSold: string): Promise<void>;
+  /** Apply closing readings in ONE statement — never a per-nozzle loop (#229). */
+  updateClosingMany(updates: NozzleClosingUpdate[]): Promise<void>;
 }
 
 export interface HandoverNozzleReading extends NozzleReading {
@@ -206,6 +213,24 @@ export interface CreditSaleRecord {
 
 export interface CreditSalesReader {
   listByShift(shiftId: string): Promise<CreditSaleRecord[]>;
+}
+
+/**
+ * Everything CloseShift needs to READ, in one round-trip (#229): the shift row
+ * (locked FOR UPDATE), its nozzle readings, the station's nozzles, the drawer
+ * reconciliation totals, and the shift's credit sales. The previous five
+ * port reads each cost a round-trip while the station advisory lock was held.
+ */
+export interface CloseShiftContext {
+  shift: Shift | null;
+  readings: NozzleReading[];
+  nozzles: { id: string; productId: string; tankId: string | null }[];
+  totals: ShiftReconciliationTotals;
+  creditSales: CreditSaleRecord[];
+}
+
+export interface CloseShiftContextReader {
+  load(organizationId: string, shiftId: string): Promise<CloseShiftContext>;
 }
 
 export interface StockMovementInput {

@@ -31,6 +31,8 @@ import { buildContext } from '../infra/context.js';
 import type { AuthenticatedPrincipal } from '../infra/authenticated-principal.js';
 import { loadStationClock, stationNotFound } from '../infra/station-clock.js';
 import { lockStationInventory, runInTransaction } from '../infra/transaction.js';
+import { rowJson, rowJsonNullable, tsIso } from '../infra/sql-json.js';
+import { assembleReconTotals, reconTotalsJson } from '../infra/repositories/shift-recon-sql.js';
 import {
   DrizzleNozzleRepository,
   DrizzleFuelPriceRepository,
@@ -40,8 +42,7 @@ import {
   DrizzleBusinessDayStatusReader,
   DrizzleShiftRepository,
   DrizzleNozzleReadingRepository,
-  DrizzleShiftReconciliationReader,
-  DrizzleCreditSalesReader,
+  DrizzleCloseShiftContextReader,
   DrizzleStockMovementWriter,
   DrizzleShiftSummaryWriter,
   DrizzleHandoverContextReader,
@@ -446,85 +447,205 @@ shiftsRouter.get('/status', async (c) => {
     });
   }
 
-  // Business day + active shift are independent — fetch together.
-  const [businessDayRows, activeShiftRows] = await Promise.all([
-    db
-      .select()
-      .from(schema.businessDays)
-      .where(
-        and(eq(schema.businessDays.stationId, stationId), eq(schema.businessDays.status, 'OPEN')),
-      )
-      .orderBy(desc(schema.businessDays.businessDate))
-      .limit(1),
-    db
-      .select()
-      .from(schema.shifts)
-      .where(and(eq(schema.shifts.stationId, stationId), eq(schema.shifts.status, 'OPEN')))
-      .limit(1),
-  ]);
-  const businessDay = businessDayRows[0];
-  const dbActiveShift = activeShiftRows[0];
+  // --- Full mode (#230): the same payload, but every section is fetched in a
+  // fixed number of consolidated statements instead of ~25 sequential
+  // round-trips (serialized on the wire by the max:1 driver). Statement 1:
+  // open day + active/last/recent shifts; statement 2 (only when a shift is
+  // open): the active shift's operational detail; statement 3: station
+  // reference data. Each section renders rows as jsonb in exactly the shape
+  // the previous drizzle builders produced (sql-json helpers), so the shaping
+  // below — and the payload — are unchanged.
+  const graceCutoffIso = new Date(now - lockGraceDays * 24 * 60 * 60 * 1000).toISOString();
+  const [shiftsRow] = (await db.execute(sql`
+    SELECT
+      (SELECT ${rowJson(schema.businessDays, 'd')} FROM business_days d
+        WHERE d.station_id = ${stationId} AND d.status = 'OPEN'
+        ORDER BY d.business_date DESC LIMIT 1) AS business_day,
+      (SELECT ${rowJson(schema.shifts, 's')} FROM shifts s
+        WHERE s.station_id = ${stationId} AND s.status = 'OPEN' LIMIT 1) AS active_shift,
+      (SELECT jsonb_build_object(
+          'shift', ${rowJson(schema.shifts, 's')},
+          'templateName', t.name,
+          'closedByName', u.full_name,
+          'summary', (SELECT ${rowJson(schema.shiftSummaries, 'ss')} FROM shift_summaries ss
+            WHERE ss.shift_id = s.id LIMIT 1),
+          'parentDayStatus', (SELECT pd.status FROM business_days pd
+            WHERE pd.id = s.business_day_id AND pd.organization_id = ${orgId}
+              AND pd.station_id = ${stationId})
+        )
+        FROM shifts s
+        LEFT JOIN shift_templates t ON t.id = s.shift_template_id
+        LEFT JOIN users u ON u.id = s.closed_by
+        WHERE s.station_id = ${stationId} AND s.status <> 'OPEN'
+        ORDER BY s.closed_at DESC, s.created_at DESC
+        LIMIT 1) AS last_shift,
+      COALESCE((SELECT jsonb_agg(x.j ORDER BY x.closed_at DESC) FROM (
+          SELECT s.closed_at, (${rowJson(schema.shifts, 's')} || jsonb_build_object(
+            'templateName', COALESCE(t.name, 'Custom'))) AS j
+          FROM shifts s
+          LEFT JOIN shift_templates t ON t.id = s.shift_template_id
+          WHERE s.organization_id = ${orgId} AND s.station_id = ${stationId}
+            AND s.status = 'CLOSED' AND s.closed_at > ${graceCutoffIso}
+          ORDER BY s.closed_at DESC
+          LIMIT 50
+        ) x), '[]'::jsonb) AS recent_closed
+  `)) as unknown as [Record<string, any>];
 
-  // Recent closed shifts still inside the attribution grace window (SQL-filtered
-  // and bounded — never scan the station's full shift history).
-  const loadRecentClosedShifts = async () => {
-    const graceCutoff = new Date(now - lockGraceDays * 24 * 60 * 60 * 1000);
-    const rows = await db
-      .select({ shift: schema.shifts, templateName: schema.shiftTemplates.name })
-      .from(schema.shifts)
-      .leftJoin(schema.shiftTemplates, eq(schema.shifts.shiftTemplateId, schema.shiftTemplates.id))
-      .where(
-        and(
-          eq(schema.shifts.organizationId, orgId),
-          eq(schema.shifts.stationId, stationId),
-          eq(schema.shifts.status, 'CLOSED'),
-          gt(schema.shifts.closedAt, graceCutoff),
-        ),
-      )
-      .orderBy(desc(schema.shifts.closedAt))
-      .limit(50);
-    return rows.map((item) => ({ ...item.shift, templateName: item.templateName ?? 'Custom' }));
-  };
+  const businessDay = (shiftsRow.business_day as Record<string, any> | null) ?? null;
+  const dbActiveShift = (shiftsRow.active_shift as Record<string, any> | null) ?? null;
+  const lastShiftRow = (shiftsRow.last_shift as Record<string, any> | null) ?? null;
+  const recentClosedShifts = (shiftsRow.recent_closed as any[]) ?? [];
 
   let activeShift: any = null;
   if (dbActiveShift) {
-    const [templateRows2, openedByRows2, activeBusinessDayRows, nozzleReadingRows] =
-      await Promise.all([
-        db
-          .select()
-          .from(schema.shiftTemplates)
-          .where(eq(schema.shiftTemplates.id, dbActiveShift.shiftTemplateId))
-          .limit(1),
-        db.select().from(schema.users).where(eq(schema.users.id, dbActiveShift.openedBy)).limit(1),
-        db
-          .select({ businessDate: schema.businessDays.businessDate })
-          .from(schema.businessDays)
-          .where(
-            and(
-              eq(schema.businessDays.id, dbActiveShift.businessDayId),
-              eq(schema.businessDays.organizationId, orgId),
-              eq(schema.businessDays.stationId, stationId),
-            ),
-          )
-          .limit(1),
-        db
-          .select({
-            nr: schema.nozzleReadings,
-            nz: schema.nozzles,
-            prod: schema.products,
-            tnk: schema.tanks,
-            du: schema.dispenserUnits,
-          })
-          .from(schema.nozzleReadings)
-          .leftJoin(schema.nozzles, eq(schema.nozzles.id, schema.nozzleReadings.nozzleId))
-          .leftJoin(schema.products, eq(schema.products.id, schema.nozzles.productId))
-          .leftJoin(schema.tanks, eq(schema.tanks.id, schema.nozzles.tankId))
-          .leftJoin(schema.dispenserUnits, eq(schema.dispenserUnits.id, schema.nozzles.duId))
-          .where(eq(schema.nozzleReadings.shiftId, dbActiveShift.id)),
-      ]);
-    const template = templateRows2[0];
-    const openedByUser = openedByRows2[0];
-    const activeBusinessDay = activeBusinessDayRows[0];
+    const [detail] = (await db.execute(sql`
+      SELECT
+        (SELECT ${rowJson(schema.shiftTemplates, 't')} FROM shift_templates t
+          WHERE t.id = ${dbActiveShift.shiftTemplateId}) AS template,
+        (SELECT ${rowJson(schema.users, 'u')} FROM users u
+          WHERE u.id = ${dbActiveShift.openedBy}) AS opened_user,
+        (SELECT bd.business_date FROM business_days bd
+          WHERE bd.id = ${dbActiveShift.businessDayId} AND bd.organization_id = ${orgId}
+            AND bd.station_id = ${stationId}) AS business_date,
+        COALESCE((SELECT jsonb_agg(jsonb_build_object(
+            'nr', ${rowJson(schema.nozzleReadings, 'nr')},
+            'nz', ${rowJsonNullable(schema.nozzles, 'nz')},
+            'prod', ${rowJsonNullable(schema.products, 'prod')},
+            'tnk', ${rowJsonNullable(schema.tanks, 'tnk')},
+            'du', ${rowJsonNullable(schema.dispenserUnits, 'du')}
+          ) ORDER BY nr.created_at, nr.id)
+          FROM nozzle_readings nr
+          LEFT JOIN nozzles nz ON nz.id = nr.nozzle_id
+          LEFT JOIN products prod ON prod.id = nz.product_id
+          LEFT JOIN tanks tnk ON tnk.id = nz.tank_id
+          LEFT JOIN dispenser_units du ON du.id = nz.du_id
+          WHERE nr.shift_id = ${dbActiveShift.id}), '[]'::jsonb) AS nozzle_readings,
+        COALESCE((SELECT jsonb_agg(jsonb_build_object(
+            'attendantId', t.attendant_id,
+            'paymentMethod', t.payment_method,
+            'total', t.total::text,
+            'nonCash', t.non_cash::text
+          )) FROM (
+            SELECT s.attendant_id, s.payment_method,
+              COALESCE(SUM(s.total_amount), 0) AS total,
+              COALESCE(SUM(s.non_cash_amount), 0) AS non_cash
+            FROM sales s
+            WHERE s.shift_id = ${dbActiveShift.id} AND s.sale_type <> 'Fuel'
+            GROUP BY s.attendant_id, s.payment_method
+          ) t), '[]'::jsonb) AS attributed_sales,
+        COALESCE((SELECT jsonb_agg(jsonb_build_object(
+            'ct', ${rowJson(schema.customerTransactions, 'ct')},
+            'customerName', cust.name,
+            'customerType', cust.customer_type,
+            'productName', prod.name,
+            'productCode', prod.code
+          ) ORDER BY ct.created_at, ct.id)
+          FROM customer_transactions ct
+          LEFT JOIN customers cust ON cust.id = ct.customer_id
+          LEFT JOIN products prod ON prod.id = ct.product_id
+          WHERE ct.shift_id = ${dbActiveShift.id}
+            AND ct.transaction_type = 'Credit Sale'
+            AND ct.reference_type = 'CREDIT_SALE'), '[]'::jsonb) AS credit_lines,
+        COALESCE((SELECT jsonb_agg(jsonb_build_object(
+            'ct', ${rowJson(schema.customerTransactions, 'ct')},
+            'customerName', cust.name,
+            'customerType', cust.customer_type,
+            'productName', prod.name,
+            'productCode', prod.code
+          ) ORDER BY ct.created_at, ct.id)
+          FROM customer_transactions ct
+          LEFT JOIN customers cust ON cust.id = ct.customer_id
+          LEFT JOIN products prod ON prod.id = ct.product_id
+          WHERE ct.shift_id = ${dbActiveShift.id}
+            AND ct.transaction_type = 'OMC Sale'
+            AND ct.reference_type = 'OMC_CARD_SALE'), '[]'::jsonb) AS omc_lines,
+        COALESCE((SELECT jsonb_agg(jsonb_build_object(
+            'sa', ${rowJson(schema.shiftStaffAssignments, 'sa')},
+            'staffUser', ${rowJsonNullable(schema.users, 'u')},
+            'du', ${rowJsonNullable(schema.dispenserUnits, 'du')}
+          ))
+          FROM shift_staff_assignments sa
+          LEFT JOIN users u ON u.id = sa.user_id
+          LEFT JOIN dispenser_units du ON du.id = sa.du_id
+          WHERE sa.shift_id = ${dbActiveShift.id}), '[]'::jsonb) AS assignments,
+        COALESCE((SELECT jsonb_agg(${rowJson(schema.attendantHandovers, 'h')} ORDER BY h.created_at, h.id)
+          FROM attendant_handovers h WHERE h.shift_id = ${dbActiveShift.id}), '[]'::jsonb) AS handovers,
+        COALESCE((SELECT jsonb_agg(${rowJson(schema.handoverTerminalEntries, 'e')} ORDER BY e.created_at, e.id)
+          FROM handover_terminal_entries e WHERE e.shift_id = ${dbActiveShift.id}), '[]'::jsonb) AS handover_entries,
+        COALESCE((SELECT jsonb_agg(jsonb_build_object(
+            'link', ${rowJson(schema.shiftTerminalLinks, 'link')},
+            'term', ${rowJsonNullable(schema.paymentTerminals, 'term')},
+            'du', ${rowJsonNullable(schema.dispenserUnits, 'du')}
+          ))
+          FROM shift_terminal_links link
+          LEFT JOIN payment_terminals term ON term.id = link.terminal_id
+          LEFT JOIN dispenser_units du ON du.id = link.du_id
+          WHERE link.shift_id = ${dbActiveShift.id}), '[]'::jsonb) AS terminal_links,
+        COALESCE((SELECT jsonb_agg(jsonb_build_object(
+            'id', s.id,
+            'attendantId', s.attendant_id,
+            'attendantName', u.full_name,
+            'subtotalAmount', s.subtotal_amount::text,
+            'taxAmount', s.tax_amount::text,
+            'totalAmount', s.total_amount::text,
+            'nonCashAmount', s.non_cash_amount::text,
+            'createdAt', ${tsIso('s.created_at')}
+          ) ORDER BY s.created_at DESC)
+          FROM sales s
+          LEFT JOIN users u ON u.id = s.attendant_id
+          WHERE s.shift_id = ${dbActiveShift.id}
+            AND s.capture_mechanism = 'MERCH_HANDOVER'), '[]'::jsonb) AS merch_handovers,
+        COALESCE((SELECT jsonb_agg(jsonb_build_object(
+            'id', s.id,
+            'documentNumber', s.document_number,
+            'attendantId', s.attendant_id,
+            'attendantName', u.full_name,
+            'customerId', s.customer_id,
+            'customerName', c2.name,
+            'buyerDetails', s.buyer_details,
+            'paymentMethod', s.payment_method,
+            'totalAmount', s.total_amount::text,
+            'createdAt', ${tsIso('s.created_at')}
+          ) ORDER BY s.created_at DESC)
+          FROM sales s
+          LEFT JOIN users u ON u.id = s.attendant_id
+          LEFT JOIN customers c2 ON c2.id = s.customer_id
+          WHERE s.shift_id = ${dbActiveShift.id}
+            AND s.sale_type <> 'Fuel'
+            AND s.capture_mechanism <> 'MERCH_HANDOVER'), '[]'::jsonb) AS merch_sales,
+        COALESCE((SELECT jsonb_agg(jsonb_build_object(
+            'saleId', si.sale_id,
+            'productId', si.product_id,
+            'productName', p.name,
+            'quantity', si.quantity::text,
+            'unitPrice', si.unit_price::text,
+            'lineTotal', si.line_total::text
+          ))
+          FROM sale_items si
+          JOIN sales s ON s.id = si.sale_id
+            AND s.shift_id = ${dbActiveShift.id}
+            AND s.capture_mechanism = 'MERCH_HANDOVER'
+          LEFT JOIN products p ON p.id = si.product_id), '[]'::jsonb) AS merch_items,
+        ${reconTotalsJson(dbActiveShift.id)} AS recon
+    `)) as unknown as [Record<string, any>];
+
+    const template = (detail.template as Record<string, any> | null) ?? undefined;
+    const openedByUser = (detail.opened_user as Record<string, any> | null) ?? undefined;
+    const activeBusinessDay = detail.business_date
+      ? { businessDate: detail.business_date as string }
+      : undefined;
+    const nozzleReadingRows: any[] = detail.nozzle_readings ?? [];
+    const attributedSaleRows: any[] = detail.attributed_sales ?? [];
+    const creditLineRows: any[] = detail.credit_lines ?? [];
+    const omcLineRows: any[] = detail.omc_lines ?? [];
+    const assignmentRows: any[] = detail.assignments ?? [];
+    const handoverRows: any[] = detail.handovers ?? [];
+    const handoverEntryRows: any[] = detail.handover_entries ?? [];
+    const terminalLinkRows: any[] = detail.terminal_links ?? [];
+    const merchHandoverRows: any[] = detail.merch_handovers ?? [];
+    const merchandiseSales: any[] = detail.merch_sales ?? [];
+    const merchItemRows: any[] = detail.merch_items ?? [];
+    const reconciliation = assembleReconTotals(detail.recon ?? {});
 
     const nozzleReadings = nozzleReadingRows
       .map(({ nr, nz, prod, tnk, du }) => ({
@@ -542,106 +663,6 @@ shiftsRouter.get('/status', async (c) => {
       // Unsorted, this is raw Postgres row order — nondeterministic, so the
       // handover drawer could list the same nozzles differently on each open.
       .sort(compareNozzleRows);
-
-    // --- Per-attendant attributed sales (for handover reconciliation) ---
-    // Non-fuel merchandise sales (any payment method) and pure fleet fuel-on-credit
-    // (referenceType CREDIT_SALE, i.e. not the ledger debit of a merchandise credit
-    // sale) recorded by each attendant during this shift. These fold into the
-    // attendant's expectedSales so their handover variance covers total
-    // accountability, not just metered fuel.
-    const [
-      attributedSaleRows,
-      creditLineRows,
-      omcLineRows,
-      assignmentRows,
-      handoverRows,
-      handoverEntryRows,
-      terminalLinkRows,
-    ] = await Promise.all([
-      db
-        .select({
-          attendantId: schema.sales.attendantId,
-          paymentMethod: schema.sales.paymentMethod,
-          total: sql<string>`COALESCE(SUM(${schema.sales.totalAmount}), 0)`,
-          nonCash: sql<string>`COALESCE(SUM(${schema.sales.nonCashAmount}), 0)`,
-        })
-        .from(schema.sales)
-        .where(and(eq(schema.sales.shiftId, dbActiveShift.id), ne(schema.sales.saleType, 'Fuel')))
-        .groupBy(schema.sales.attendantId, schema.sales.paymentMethod),
-      db
-        .select({
-          ct: schema.customerTransactions,
-          customerName: schema.customers.name,
-          customerType: schema.customers.customerType,
-          productName: schema.products.name,
-          productCode: schema.products.code,
-        })
-        .from(schema.customerTransactions)
-        .leftJoin(schema.customers, eq(schema.customers.id, schema.customerTransactions.customerId))
-        .leftJoin(schema.products, eq(schema.products.id, schema.customerTransactions.productId))
-        .where(
-          and(
-            eq(schema.customerTransactions.shiftId, dbActiveShift.id),
-            eq(schema.customerTransactions.transactionType, 'Credit Sale'),
-            eq(schema.customerTransactions.referenceType, 'CREDIT_SALE'),
-          ),
-        ),
-      db
-        .select({
-          ct: schema.customerTransactions,
-          customerName: schema.customers.name,
-          customerType: schema.customers.customerType,
-          productName: schema.products.name,
-          productCode: schema.products.code,
-        })
-        .from(schema.customerTransactions)
-        .leftJoin(schema.customers, eq(schema.customers.id, schema.customerTransactions.customerId))
-        .leftJoin(schema.products, eq(schema.products.id, schema.customerTransactions.productId))
-        .where(
-          and(
-            eq(schema.customerTransactions.shiftId, dbActiveShift.id),
-            eq(schema.customerTransactions.transactionType, 'OMC Sale'),
-            eq(schema.customerTransactions.referenceType, 'OMC_CARD_SALE'),
-          ),
-        ),
-      db
-        .select({
-          sa: schema.shiftStaffAssignments,
-          staffUser: schema.users,
-          du: schema.dispenserUnits,
-        })
-        .from(schema.shiftStaffAssignments)
-        .leftJoin(schema.users, eq(schema.users.id, schema.shiftStaffAssignments.userId))
-        .leftJoin(
-          schema.dispenserUnits,
-          eq(schema.dispenserUnits.id, schema.shiftStaffAssignments.duId),
-        )
-        .where(eq(schema.shiftStaffAssignments.shiftId, dbActiveShift.id)),
-      db
-        .select()
-        .from(schema.attendantHandovers)
-        .where(eq(schema.attendantHandovers.shiftId, dbActiveShift.id)),
-      db
-        .select()
-        .from(schema.handoverTerminalEntries)
-        .where(eq(schema.handoverTerminalEntries.shiftId, dbActiveShift.id)),
-      db
-        .select({
-          link: schema.shiftTerminalLinks,
-          term: schema.paymentTerminals,
-          du: schema.dispenserUnits,
-        })
-        .from(schema.shiftTerminalLinks)
-        .leftJoin(
-          schema.paymentTerminals,
-          eq(schema.paymentTerminals.id, schema.shiftTerminalLinks.terminalId),
-        )
-        .leftJoin(
-          schema.dispenserUnits,
-          eq(schema.dispenserUnits.id, schema.shiftTerminalLinks.duId),
-        )
-        .where(eq(schema.shiftTerminalLinks.shiftId, dbActiveShift.id)),
-    ]);
 
     // Per-(attendant, DU) fuel-on-credit LINE ITEMS declared in the DU handover.
     // These are the credit chits; each handover derives its credit total from
@@ -806,67 +827,7 @@ shiftsRouter.get('/status', async (c) => {
     // Merchandise tracker data folded into the status payload so the panel
     // renders without a second round-trip (mirrors the /merchandise-handovers
     // and /merchandise-sales endpoints; the panel seeds its queries from these).
-    const [merchHandoverRows, merchandiseSales] = await Promise.all([
-      db
-        .select({
-          id: schema.sales.id,
-          attendantId: schema.sales.attendantId,
-          attendantName: schema.users.fullName,
-          subtotalAmount: schema.sales.subtotalAmount,
-          taxAmount: schema.sales.taxAmount,
-          totalAmount: schema.sales.totalAmount,
-          nonCashAmount: schema.sales.nonCashAmount,
-          createdAt: schema.sales.createdAt,
-        })
-        .from(schema.sales)
-        .leftJoin(schema.users, eq(schema.users.id, schema.sales.attendantId))
-        .where(
-          and(
-            eq(schema.sales.shiftId, dbActiveShift.id),
-            eq(schema.sales.captureMechanism, 'MERCH_HANDOVER'),
-          ),
-        )
-        .orderBy(desc(schema.sales.createdAt)),
-      db
-        .select({
-          id: schema.sales.id,
-          documentNumber: schema.sales.documentNumber,
-          attendantId: schema.sales.attendantId,
-          attendantName: schema.users.fullName,
-          customerId: schema.sales.customerId,
-          customerName: schema.customers.name,
-          buyerDetails: schema.sales.buyerDetails,
-          paymentMethod: schema.sales.paymentMethod,
-          totalAmount: schema.sales.totalAmount,
-          createdAt: schema.sales.createdAt,
-        })
-        .from(schema.sales)
-        .leftJoin(schema.users, eq(schema.users.id, schema.sales.attendantId))
-        .leftJoin(schema.customers, eq(schema.customers.id, schema.sales.customerId))
-        .where(
-          and(
-            eq(schema.sales.shiftId, dbActiveShift.id),
-            ne(schema.sales.saleType, 'Fuel'),
-            ne(schema.sales.captureMechanism, 'MERCH_HANDOVER'),
-          ),
-        )
-        .orderBy(desc(schema.sales.createdAt)),
-    ]);
-    const merchSaleIds = merchHandoverRows.map((h) => h.id);
-    const merchItemRows = merchSaleIds.length
-      ? await db
-          .select({
-            saleId: schema.saleItems.saleId,
-            productId: schema.saleItems.productId,
-            productName: schema.products.name,
-            quantity: schema.saleItems.quantity,
-            unitPrice: schema.saleItems.unitPrice,
-            lineTotal: schema.saleItems.lineTotal,
-          })
-          .from(schema.saleItems)
-          .leftJoin(schema.products, eq(schema.products.id, schema.saleItems.productId))
-          .where(inArray(schema.saleItems.saleId, merchSaleIds))
-      : [];
+    // Rows come from the consolidated detail statement above.
     const merchItemsBySale = merchItemRows.reduce((acc: Record<string, any[]>, it) => {
       (acc[it.saleId] ||= []).push(it);
       return acc;
@@ -892,26 +853,18 @@ shiftsRouter.get('/status', async (c) => {
       // Authoritative cash reconciliation (same figures CloseShift will use), so
       // the closing wizard's expected drawer includes non-attendant merch cash
       // and reads the true station-level short/surplus.
-      reconciliation: await new DrizzleShiftReconciliationReader(db).totalsForShift(
-        dbActiveShift.id,
-      ),
+      reconciliation,
     };
   }
 
-  // --- Last non-open shift + its summary ---
-  const [dbLastShift] = await db
-    .select()
-    .from(schema.shifts)
-    .where(and(eq(schema.shifts.stationId, stationId), ne(schema.shifts.status, 'OPEN')))
-    .orderBy(desc(schema.shifts.closedAt), desc(schema.shifts.createdAt))
-    .limit(1);
-
+  // --- Last non-open shift + its summary (fetched in statement 1) ---
   let lastShift: any = null;
   let lastShiftSummary: any = null;
   let canReopenLastShift = false;
   let gracePeriodExpiresAt: string | null = null;
 
-  if (dbLastShift) {
+  if (lastShiftRow?.shift) {
+    const dbLastShift = lastShiftRow.shift as Record<string, any>;
     const currentStatus = dbLastShift.status;
     const lockedAt = dbLastShift.lockedAt;
     if (currentStatus === 'CLOSED' && dbLastShift.closedAt) {
@@ -919,38 +872,9 @@ shiftsRouter.get('/status', async (c) => {
       const reopenExpiryTime = closedTime + graceMinutes * 60 * 1000;
       if (now <= reopenExpiryTime) gracePeriodExpiresAt = new Date(reopenExpiryTime).toISOString();
     }
-    const [lastTemplateRows, lastClosedByRows, lastSummaryRows, parentDayRows] = await Promise.all([
-      db
-        .select()
-        .from(schema.shiftTemplates)
-        .where(eq(schema.shiftTemplates.id, dbLastShift.shiftTemplateId))
-        .limit(1),
-      dbLastShift.closedBy
-        ? db.select().from(schema.users).where(eq(schema.users.id, dbLastShift.closedBy)).limit(1)
-        : Promise.resolve([] as any[]),
-      db
-        .select()
-        .from(schema.shiftSummaries)
-        .where(eq(schema.shiftSummaries.shiftId, dbLastShift.id))
-        .limit(1),
-      db
-        .select({ status: schema.businessDays.status })
-        .from(schema.businessDays)
-        .where(
-          and(
-            eq(schema.businessDays.id, dbLastShift.businessDayId),
-            eq(schema.businessDays.organizationId, orgId),
-            eq(schema.businessDays.stationId, stationId),
-          ),
-        )
-        .limit(1),
-    ]);
-    const template = lastTemplateRows[0];
-    const closedByName = lastClosedByRows[0]?.fullName ?? 'System';
-    const summary = lastSummaryRows[0];
     if (
       currentStatus === 'CLOSED' &&
-      parentDayRows[0]?.status === 'OPEN' &&
+      lastShiftRow.parentDayStatus === 'OPEN' &&
       canReopenShift(user.role) &&
       !dbActiveShift
     )
@@ -959,15 +883,13 @@ shiftsRouter.get('/status', async (c) => {
       ...dbLastShift,
       status: currentStatus,
       lockedAt,
-      templateName: template?.name ?? 'Custom',
-      closedByName,
+      templateName: lastShiftRow.templateName ?? 'Custom',
+      closedByName: lastShiftRow.closedByName ?? 'System',
     };
     // The stored snapshot is kept current at write time (close + refresh), so
     // it is served as-is — no read-time re-projection.
-    lastShiftSummary = summary ?? null;
+    lastShiftSummary = lastShiftRow.summary ?? null;
   }
-
-  const recentClosedShifts = await loadRecentClosedShifts();
 
   // v2 fields (businessDay, readings) kept alongside legacy-compatible fields.
   const base = {
@@ -982,21 +904,35 @@ shiftsRouter.get('/status', async (c) => {
     recentClosedShifts,
   };
 
-  const templates = await db
-    .select()
-    .from(schema.shiftTemplates)
-    .where(
-      and(
-        eq(schema.shiftTemplates.organizationId, orgId),
-        eq(schema.shiftTemplates.isActive, true),
-      ),
-    );
-  const nozzleRows = await db
-    .select({ nz: schema.nozzles, prod: schema.products, tnk: schema.tanks })
-    .from(schema.nozzles)
-    .leftJoin(schema.products, eq(schema.products.id, schema.nozzles.productId))
-    .leftJoin(schema.tanks, eq(schema.tanks.id, schema.nozzles.tankId))
-    .where(and(eq(schema.nozzles.stationId, stationId), eq(schema.nozzles.organizationId, orgId)));
+  // Statement 3: station reference data (templates / nozzles / staff /
+  // dispensers / terminals), previously five fully sequential selects.
+  const [refRow] = (await db.execute(sql`
+    SELECT
+      COALESCE((SELECT jsonb_agg(${rowJson(schema.shiftTemplates, 't')})
+        FROM shift_templates t
+        WHERE t.organization_id = ${orgId} AND t.is_active = true), '[]'::jsonb) AS templates,
+      COALESCE((SELECT jsonb_agg(jsonb_build_object(
+          'nz', ${rowJson(schema.nozzles, 'nz')},
+          'prod', ${rowJsonNullable(schema.products, 'prod')},
+          'tnk', ${rowJsonNullable(schema.tanks, 'tnk')}
+        ))
+        FROM nozzles nz
+        LEFT JOIN products prod ON prod.id = nz.product_id
+        LEFT JOIN tanks tnk ON tnk.id = nz.tank_id
+        WHERE nz.station_id = ${stationId} AND nz.organization_id = ${orgId}), '[]'::jsonb) AS nozzles,
+      COALESCE((SELECT jsonb_agg(${rowJson(schema.users, 'u')})
+        FROM users u
+        WHERE u.organization_id = ${orgId} AND u.status = 'ACTIVE'), '[]'::jsonb) AS staff,
+      COALESCE((SELECT jsonb_agg(${rowJson(schema.dispenserUnits, 'du')})
+        FROM dispenser_units du
+        WHERE du.station_id = ${stationId} AND du.status = 'ACTIVE'), '[]'::jsonb) AS dispensers,
+      COALESCE((SELECT jsonb_agg(${rowJson(schema.paymentTerminals, 'pt')})
+        FROM payment_terminals pt
+        WHERE pt.station_id = ${stationId} AND pt.is_active = true), '[]'::jsonb) AS terminals
+  `)) as unknown as [Record<string, any>];
+
+  const templates = (refRow.templates as any[]) ?? [];
+  const nozzleRows = (refRow.nozzles as any[]) ?? [];
   const nozzles = nozzleRows
     .map(({ nz, prod, tnk }) => ({
       ...nz,
@@ -1006,29 +942,9 @@ shiftsRouter.get('/status', async (c) => {
       tankName: tnk?.name ?? 'Unknown',
     }))
     .sort(byNaturalField((n) => n.name));
-  const staff = await db
-    .select()
-    .from(schema.users)
-    .where(and(eq(schema.users.organizationId, orgId), eq(schema.users.status, 'ACTIVE')));
-  const dispensers = await db
-    .select()
-    .from(schema.dispenserUnits)
-    .where(
-      and(
-        eq(schema.dispenserUnits.stationId, stationId),
-        eq(schema.dispenserUnits.status, 'ACTIVE'),
-      ),
-    );
-
-  const terminals = await db
-    .select()
-    .from(schema.paymentTerminals)
-    .where(
-      and(
-        eq(schema.paymentTerminals.stationId, stationId),
-        eq(schema.paymentTerminals.isActive, true),
-      ),
-    );
+  const staff = (refRow.staff as any[]) ?? [];
+  const dispensers = (refRow.dispensers as any[]) ?? [];
+  const terminals = (refRow.terminals as any[]) ?? [];
 
   return c.json({
     success: true,
@@ -1594,37 +1510,22 @@ shiftsRouter.post(
       );
     }
     const result = await runInTransaction(db, async (tx, events) => {
-      const [shift] = await tx
-        .select({ stationId: schema.shifts.stationId })
-        .from(schema.shifts)
-        .where(
-          and(
-            eq(schema.shifts.id, body?.shiftId),
-            eq(schema.shifts.organizationId, user.organizationId),
-          ),
-        )
-        .limit(1);
-      if (shift) await lockStationInventory(tx, user.organizationId, shift.stationId);
+      // The station was already resolved (org-scoped) by the auth lookup above;
+      // re-selecting the shift inside the transaction was a duplicate round-trip.
+      await lockStationInventory(tx, user.organizationId, target.stationId);
       const r = await new CloseShift({
+        context: new DrizzleCloseShiftContextReader(tx),
         shifts: new DrizzleShiftRepository(tx),
-        nozzles: new DrizzleNozzleRepository(tx),
         nozzleReadings: new DrizzleNozzleReadingRepository(tx),
-        reconciliation: new DrizzleShiftReconciliationReader(tx),
-        creditSales: new DrizzleCreditSalesReader(tx),
         stockMovements: new DrizzleStockMovementWriter(tx),
         summaries: new DrizzleShiftSummaryWriter(tx),
+        // The use case persists the FULL projected presentation snapshot in one
+        // write, so every read path (summaries list/detail, shift status) serves
+        // stored data without re-enrichment (#229).
+        projector: new DrizzleShiftSummaryProjector(tx),
         events,
       }).execute(command, buildContext(user));
       if (r.success) {
-        const snap = r.data.snapshot as any;
-        // Persist the FULL projected presentation snapshot so every read path
-        // (summaries list/detail, shift status) serves stored data without
-        // re-enrichment. projectShiftSummary is idempotent over its own output.
-        const projected = await new DrizzleShiftSummaryProjector(tx).project(
-          r.data.shift,
-          r.data.snapshot,
-        );
-        await new DrizzleShiftSummaryWriter(tx).save(r.data.shift.id, projected);
         await new LedgerPostingService(tx).postShiftClose(
           user.organizationId,
           {
@@ -1632,7 +1533,9 @@ shiftsRouter.post(
             stationId: r.data.shift.stationId,
             businessDayId: r.data.shift.businessDayId,
           },
-          { cashSales: Number(snap?.reconciliation?.cashSales ?? 0) },
+          // Typed on the use-case result — not dug out of the (projected)
+          // snapshot, whose shape is a presentation concern.
+          { cashSales: r.data.cashSales },
         );
       }
       return r;

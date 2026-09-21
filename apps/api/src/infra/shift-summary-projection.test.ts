@@ -13,35 +13,28 @@ import { projectShiftSummary, type ProjectableShift } from './shift-summary-proj
 type Rows = Map<unknown, unknown[]>;
 
 /**
- * A drizzle query builder stubbed down to what the projection uses: every
- * chained method returns the builder, and awaiting it yields the rows
- * registered for the table given to `.from()`. Keying on the table rather than
- * on call order means the test does not break when the projection reorders its
- * parallel batch.
+ * The projection fetches all of its slices in ONE consolidated statement
+ * (#229); the stub serves that statement's row, populating the template and
+ * closed-user slots from the rows registered per table.
  */
 function stubDb(rows: Rows) {
-  const builder = () => {
-    let table: unknown = null;
-    const self: Record<string, unknown> = {};
-    const chain = (fn?: (arg: unknown) => void) => (arg: unknown) => {
-      fn?.(arg);
-      return self;
-    };
-    Object.assign(self, {
-      select: chain(),
-      from: chain((t) => {
-        table = t;
-      }),
-      innerJoin: chain(),
-      leftJoin: chain(),
-      where: chain(),
-      orderBy: chain(),
-      limit: chain(),
-      then: (resolve: (v: unknown[]) => unknown) => resolve(rows.get(table) ?? []),
-    });
-    return self;
+  const first = (table: unknown) => (rows.get(table) ?? [])[0] ?? null;
+  return {
+    execute: async () => [
+      {
+        template: first(schema.shiftTemplates),
+        closed_user: first(schema.users),
+        opened_user: null,
+        nr_rows: [],
+        ho_rows: [],
+        te_rows: [],
+        expense_rows: [],
+        purchase_rows: [],
+        collection_rows: [],
+        credit_rows: [],
+      },
+    ],
   };
-  return { select: (...a: unknown[]) => (builder().select as (...x: unknown[]) => unknown)(...a) };
 }
 
 const shift: ProjectableShift = {

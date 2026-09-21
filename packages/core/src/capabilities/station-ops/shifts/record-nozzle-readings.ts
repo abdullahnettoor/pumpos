@@ -73,6 +73,7 @@ export class RecordNozzleReadings implements UseCase<
 
     let updated = 0;
     let totalVolume = 0;
+    const closingUpdates: { id: string; closingReading: string; volumeSold: string }[] = [];
     for (const rd of p.data.readings) {
       const existing = byNozzle.get(rd.nozzleId);
       if (!existing) continue;
@@ -86,13 +87,16 @@ export class RecordNozzleReadings implements UseCase<
         );
       }
       const volume = rd.closingReading - opening;
-      await this.deps.nozzleReadings.updateClosing(
-        existing.id,
-        String(rd.closingReading),
-        String(volume),
-      );
+      closingUpdates.push({
+        id: existing.id,
+        closingReading: String(rd.closingReading),
+        volumeSold: String(volume),
+      });
       updated += 1;
       totalVolume += volume;
+    }
+    if (closingUpdates.length > 0) {
+      await this.deps.nozzleReadings.updateClosingMany(closingUpdates);
     }
 
     await this.deps.events.publish([

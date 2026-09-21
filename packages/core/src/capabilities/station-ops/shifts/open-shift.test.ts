@@ -110,7 +110,7 @@ class ReadingRepo implements NozzleReadingRepository {
   async listByShift(shiftId: string) {
     return this.saved.filter((r) => r.shiftId === shiftId);
   }
-  async updateClosing() {}
+  async updateClosingMany() {}
 }
 
 class PriceRepo implements FuelPriceRepository {
