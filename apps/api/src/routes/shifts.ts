@@ -4,10 +4,12 @@ import { schema, type DbClient } from '@pump/db';
 import {
   attendantHandoverSchema,
   businessDateSettings,
+  byNaturalField,
   canOpenShift,
   canCloseShift,
   canReopenShift,
   canRecordHandover,
+  compareNatural,
   isAuthorizedForStation,
   isAttendant,
   resolveBusinessDate,
@@ -63,6 +65,14 @@ type Variables = {
 };
 
 export const shiftsRouter = new Hono<{ Variables: Variables }>();
+
+/**
+ * Deterministic nozzle order for the shift-status payload: by dispenser unit,
+ * then by nozzle, both naturally — so N10 follows N2, and a drawer reopened
+ * mid-shift shows the same list it showed a minute ago.
+ */
+const compareNozzleRows = <T extends { duName: string; nozzleName: string }>(a: T, b: T): number =>
+  compareNatural(a.duName, b.duName) || compareNatural(a.nozzleName, b.nozzleName);
 
 /**
  * Ids that arrive in the request body and are used to look a record up.
@@ -515,18 +525,22 @@ shiftsRouter.get('/status', async (c) => {
     const openedByUser = openedByRows2[0];
     const activeBusinessDay = activeBusinessDayRows[0];
 
-    const nozzleReadings = nozzleReadingRows.map(({ nr, nz, prod, tnk, du }) => ({
-      ...nr,
-      nozzleName: nz?.name ?? 'Unknown',
-      productId: nz?.productId ?? null,
-      productName: prod?.name ?? 'Unknown',
-      productCode: prod?.code ?? 'Unknown',
-      unit: prod?.unit ?? 'L',
-      tankName: tnk?.name ?? 'Unknown',
-      duId: nz?.duId ?? null,
-      duName: du?.name ?? 'Unknown',
-      duCode: du?.code ?? 'Unknown',
-    }));
+    const nozzleReadings = nozzleReadingRows
+      .map(({ nr, nz, prod, tnk, du }) => ({
+        ...nr,
+        nozzleName: nz?.name ?? 'Unknown',
+        productId: nz?.productId ?? null,
+        productName: prod?.name ?? 'Unknown',
+        productCode: prod?.code ?? 'Unknown',
+        unit: prod?.unit ?? 'L',
+        tankName: tnk?.name ?? 'Unknown',
+        duId: nz?.duId ?? null,
+        duName: du?.name ?? 'Unknown',
+        duCode: du?.code ?? 'Unknown',
+      }))
+      // Unsorted, this is raw Postgres row order — nondeterministic, so the
+      // handover drawer could list the same nozzles differently on each open.
+      .sort(compareNozzleRows);
 
     // --- Per-attendant attributed sales (for handover reconciliation) ---
     // Non-fuel merchandise sales (any payment method) and pure fleet fuel-on-credit
@@ -982,13 +996,15 @@ shiftsRouter.get('/status', async (c) => {
     .leftJoin(schema.products, eq(schema.products.id, schema.nozzles.productId))
     .leftJoin(schema.tanks, eq(schema.tanks.id, schema.nozzles.tankId))
     .where(and(eq(schema.nozzles.stationId, stationId), eq(schema.nozzles.organizationId, orgId)));
-  const nozzles = nozzleRows.map(({ nz, prod, tnk }) => ({
-    ...nz,
-    productName: prod?.name ?? 'Unknown',
-    productCode: prod?.code ?? 'Unknown',
-    unit: prod?.unit ?? 'L',
-    tankName: tnk?.name ?? 'Unknown',
-  }));
+  const nozzles = nozzleRows
+    .map(({ nz, prod, tnk }) => ({
+      ...nz,
+      productName: prod?.name ?? 'Unknown',
+      productCode: prod?.code ?? 'Unknown',
+      unit: prod?.unit ?? 'L',
+      tankName: tnk?.name ?? 'Unknown',
+    }))
+    .sort(byNaturalField((n) => n.name));
   const staff = await db
     .select()
     .from(schema.users)
@@ -1051,7 +1067,10 @@ shiftsRouter.get('/my-assignment', async (c) => {
   // An attendant works one active shift at a time; anchor on the first.
   const shift = assignmentRows[0].shift;
   const myRows = assignmentRows.filter((r) => r.sa.shiftId === shift.id && r.sa.duId);
-  const duIds = [...new Set(myRows.map((r) => r.sa.duId))];
+  // Name each dispenser once, then order by it — the attendant sees DU 2 before
+  // DU 10, and the comparator is not re-scanning the rows on every compare.
+  const duNameById = new Map(myRows.map((r) => [r.sa.duId, r.du?.name]));
+  const duIds = [...duNameById.keys()].sort(byNaturalField((duId) => duNameById.get(duId)));
 
   const [
     templateRows,
@@ -1158,7 +1177,8 @@ shiftsRouter.get('/my-assignment', async (c) => {
         closingReading: nr.closingReading != null ? Number(nr.closingReading) : null,
         testingVolume: nr.testingVolume != null ? Number(nr.testingVolume) : null,
         unitPrice: nr.unitPrice != null ? Number(nr.unitPrice) : null,
-      }));
+      }))
+      .sort(byNaturalField((n) => n.nozzleName));
     // Only terminals bound to THIS dispenser unit — shift-wide / other-DU
     // machines are not shown to the attendant (mirrors the desktop drawer).
     const terminals = terminalRows

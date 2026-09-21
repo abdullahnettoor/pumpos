@@ -1,5 +1,6 @@
 import { and, eq } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
+import { byNaturalField } from '@pump/shared';
 import {
   RefreshShiftSummary,
   type EventPublisher,
@@ -170,9 +171,7 @@ export async function projectShiftSummary(
     };
   });
   // Natural nozzle order (N1, N2, ... N10) for the summary tables.
-  nozzleReadings.sort((a, b) =>
-    String(a.nozzleName).localeCompare(String(b.nozzleName), undefined, { numeric: true }),
-  );
+  nozzleReadings.sort(byNaturalField((r) => String(r.nozzleName)));
   const totalTestingVolume = nozzleReadings.reduce((a, r) => a + r.testingVolume, 0);
   const totalNetVolumeSold =
     nozzleReadings.reduce((a, r) => a + r.netVolume, 0) || Number(snap.totalNetVolume ?? 0);

@@ -22,6 +22,7 @@ import {
   useRecordHandoverMutation,
 } from '../../query/handoverMutation.js';
 import { inr } from '../../utils/format.js';
+import { compareNatural } from '@pump/shared';
 import { useRunTask } from '../../utils/runTask.js';
 
 const transactionService = new CloudTransactionService();
@@ -517,28 +518,31 @@ const HandoverDrawerBody: React.FC<HandoverDrawerProps> = ({
     }
   };
 
-  // Derived Calculations
-  const calculatedNozzles = nozzles.map((nz) => {
-    const opening = Number(nz.openingReading || 0);
-    const closing = Number(formNozzleReadings[nz.nozzleId] ?? opening);
-    const volume = Math.max(0, closing - opening);
-    const price = Number(nz.unitPrice || 0);
-    const testing = Number(formNozzleTesting[nz.nozzleId] || 0);
+  // Derived Calculations. Sorted at the point of display so the drawer reads
+  // N1, N2 … N10 whatever order the caller happened to hand them in (#218).
+  const calculatedNozzles = [...nozzles]
+    .sort((a: any, b: any) => compareNatural(a.nozzleName, b.nozzleName))
+    .map((nz) => {
+      const opening = Number(nz.openingReading || 0);
+      const closing = Number(formNozzleReadings[nz.nozzleId] ?? opening);
+      const volume = Math.max(0, closing - opening);
+      const price = Number(nz.unitPrice || 0);
+      const testing = Number(formNozzleTesting[nz.nozzleId] || 0);
 
-    const rawValue = volume * price;
-    const testingDeduction = testing * price;
+      const rawValue = volume * price;
+      const testingDeduction = testing * price;
 
-    return {
-      ...nz,
-      opening,
-      closing,
-      volume,
-      price,
-      testing,
-      rawValue,
-      testingDeduction,
-    };
-  });
+      return {
+        ...nz,
+        opening,
+        closing,
+        volume,
+        price,
+        testing,
+        rawValue,
+        testingDeduction,
+      };
+    });
 
   const totalVolumeSold = calculatedNozzles.reduce((sum, n) => sum + n.volume, 0);
   const totalRawSales = calculatedNozzles.reduce((sum, n) => sum + n.rawValue, 0);

@@ -41,6 +41,7 @@ const { HandoverDrawer } = await import('./HandoverDrawer.js');
 // `nozzleReadings` keys are validated as UUIDs, so fixtures must be real ones.
 const NOZZLE_A = '11111111-1111-4111-8111-111111111111';
 const NOZZLE_B = '22222222-2222-4222-8222-222222222222';
+const NOZZLE_C = '33333333-3333-4333-8333-333333333333';
 
 const nozzle = (id: string, over: Record<string, unknown> = {}) => ({
   nozzleId: id,
@@ -123,6 +124,27 @@ describe('HandoverDrawer', () => {
   it('identifies the attendant and their dispenser unit', () => {
     renderWithProviders(<HandoverDrawer {...baseProps()} />);
     expect(screen.getByText('Attendant Handover: Ravi (DU-1)')).toBeDefined();
+  });
+
+  it('lists nozzles in natural order whatever order they arrive in', () => {
+    // #218: the shift-status query has no deterministic order, so the drawer
+    // used to re-shuffle on each open — and N10 sorted between N1 and N2.
+    renderWithProviders(
+      <HandoverDrawer
+        {...baseProps({
+          nozzles: [
+            nozzle(NOZZLE_B, { nozzleName: 'N10' }),
+            nozzle(NOZZLE_C, { nozzleName: 'N2' }),
+            nozzle(NOZZLE_A, { nozzleName: 'N1' }),
+          ],
+        })}
+      />,
+    );
+
+    const rendered = [...document.querySelectorAll('input[name^="nozzleReadings."]')].map(
+      (el) => (el as HTMLInputElement).name.split('.')[1],
+    );
+    expect(rendered).toEqual([NOZZLE_A, NOZZLE_C, NOZZLE_B]);
   });
 
   describe('expected sales from meter readings', () => {
