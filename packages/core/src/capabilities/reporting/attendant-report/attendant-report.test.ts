@@ -358,6 +358,42 @@ describe('GetAttendantHandoverReport', () => {
       expect(dispensers.map((d) => d.nozzles.map((n) => n.nozzleId))).toEqual([['n-1'], ['n-2']]);
     });
 
+    it('lists nozzles in natural order, so N10 follows N2 rather than N1', async () => {
+      // #218: lexicographic order printed N1, N10, N2 on the statement PDF
+      // while the drawer showed raw row order — three surfaces, three answers.
+      const { result } = run(
+        [row({ handoverId: 'h-1', shiftId: 's-1', duId: 'du-1' })],
+        undefined,
+        {
+          nozzleReadings: [
+            reading({ nozzleId: 'n-10', nozzleName: 'N10' }),
+            reading({ nozzleId: 'n-2', nozzleName: 'N2' }),
+            reading({ nozzleId: 'n-1', nozzleName: 'N1' }),
+          ],
+        },
+      );
+      const res = await result;
+      if (!res.success) throw new Error('expected success');
+
+      expect(
+        res.data.attendants[0].shifts[0].dispensers[0].nozzles.map((n) => n.nozzleName),
+      ).toEqual(['N1', 'N2', 'N10']);
+    });
+
+    it('orders dispenser groups naturally too', async () => {
+      const { result } = run([
+        row({ handoverId: 'h-1', shiftId: 's-1', duId: 'du-10', duName: 'DU 10' }),
+        row({ handoverId: 'h-2', shiftId: 's-1', duId: 'du-2', duName: 'DU 2' }),
+      ]);
+      const res = await result;
+      if (!res.success) throw new Error('expected success');
+
+      expect(res.data.attendants[0].shifts[0].dispensers.map((d) => d.duName)).toEqual([
+        'DU 2',
+        'DU 10',
+      ]);
+    });
+
     it('attaches terminal declarations to the handover that declared them', async () => {
       const { result } = run(
         [

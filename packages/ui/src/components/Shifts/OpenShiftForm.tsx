@@ -3,7 +3,7 @@ import { FileText, Info, Play } from 'lucide-react';
 import { Panel, Button, Form } from '../../pump-ds/index.js';
 import { Field, Select, NumberInput, DateField } from '../primitives/Field.js';
 import type { BusinessDayStatusItem } from '../../services/cloud.js';
-import { formatStationDateTime } from '@pump/shared';
+import { compareNatural, formatStationDateTime } from '@pump/shared';
 import { createOpenShiftFormSchema, type OpenShiftFormValues } from '@pump/shared';
 import { ShiftBusinessDateContext } from './ShiftBusinessDateContext.js';
 import { useZodForm } from '../../forms/useZodForm.js';
@@ -303,17 +303,11 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
               }}
             >
               {[...nozzles]
-                .sort((a: any, b: any) => {
-                  const du = String(a.duCode || a.duName || '').localeCompare(
-                    String(b.duCode || b.duName || ''),
-                    undefined,
-                    { numeric: true },
-                  );
-                  if (du !== 0) return du;
-                  return String(a.name || '').localeCompare(String(b.name || ''), undefined, {
-                    numeric: true,
-                  });
-                })
+                .sort(
+                  (a: any, b: any) =>
+                    compareNatural(a.duCode || a.duName, b.duCode || b.duName) ||
+                    compareNatural(a.name, b.name),
+                )
                 .map((nz: any) => {
                   const initial = initialReadings.find((r) => r.nozzleId === nz.id);
                   return (

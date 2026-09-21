@@ -10,6 +10,7 @@ import type {
   AttendantSaleSourceRow,
   AttendantTerminalEntrySourceRow,
 } from './ports.js';
+import { byNaturalField } from '@pump/shared';
 
 /** The bulk end-of-shift merchandise declaration; everything else is billed. */
 const HANDOVER_CAPTURE = 'MERCH_HANDOVER';
@@ -175,8 +176,10 @@ export function composeAttendantHandoverReport(
       varianceAmount: row.varianceAmount,
       testingVolume: row.testingVolume,
       terminals: terminalsByHandover.get(row.handoverId) ?? [],
-      nozzles: [...(nozzlesByShiftDu.get(key(row.shiftId, row.duId)) ?? [])].sort((a, b) =>
-        a.nozzleName.localeCompare(b.nozzleName),
+      // Natural, not lexicographic: plain localeCompare files N10 between N1
+      // and N2, which is the order the exported PDF used to print.
+      nozzles: [...(nozzlesByShiftDu.get(key(row.shiftId, row.duId)) ?? [])].sort(
+        byNaturalField((n) => n.nozzleName),
       ),
     });
 
@@ -204,7 +207,7 @@ export function composeAttendantHandoverReport(
       .sort((a, b) => a.businessDate.localeCompare(b.businessDate))
       .map((shift) => ({
         ...shift,
-        dispensers: [...shift.dispensers].sort((a, b) => a.duName.localeCompare(b.duName)),
+        dispensers: [...shift.dispensers].sort(byNaturalField((d) => d.duName)),
       })),
   }));
   attendants.sort((a, b) => a.attendantName.localeCompare(b.attendantName));
