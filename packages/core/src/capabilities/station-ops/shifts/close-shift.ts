@@ -59,6 +59,9 @@ export interface CloseShiftDeps {
 export interface CloseShiftResult {
   shift: Shift;
   snapshot: Record<string, unknown>;
+  /** Drawer cash sales from the reconciliation — typed for downstream ledger
+   *  posting, so callers need not dig through the (projected) snapshot. */
+  cashSales: number;
 }
 
 /**
@@ -278,6 +281,6 @@ export class CloseShift implements UseCase<CloseShiftCommand, CloseShiftResult> 
       }),
     ]);
 
-    return ok({ shift: closed, snapshot });
+    return ok({ shift: closed, snapshot, cashSales: totals.cashSales });
   }
 }

@@ -15,9 +15,15 @@ import type { PgTable } from 'drizzle-orm/pg-core';
  * the fragment with sql.raw is safe.
  */
 
-/** ISO-8601 UTC rendering for a timestamp column/expression (Date#toJSON shape). */
-export const tsIso = (expr: string): SQL =>
-  sql.raw(`to_char(${expr}, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`);
+/** ISO-8601 UTC rendering for a timestamp column reference (Date#toJSON shape).
+ *  Accepts only `alias.column` / `alias."column"` identifiers — this file's job
+ *  is safe raw-SQL construction, so the one string-taking helper is guarded. */
+export const tsIso = (columnRef: string): SQL => {
+  if (!/^[a-zA-Z_][a-zA-Z0-9_]*\."?[a-zA-Z_][a-zA-Z0-9_]*"?$/.test(columnRef)) {
+    throw new Error(`tsIso: expected an alias.column reference, got "${columnRef}"`);
+  }
+  return sql.raw(`to_char(${columnRef}, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`);
+};
 
 const jsonValueFor = (columnType: string, ref: string): string => {
   switch (columnType) {

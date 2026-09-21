@@ -138,16 +138,14 @@ describe.skipIf(!CONNECTION)('POST /shifts/handovers against real Postgres', () 
       startTime: '06:00',
       endTime: '14:00',
     });
-    await db
-      .insert(schema.products)
-      .values({
-        id: FUEL,
-        organizationId: ORG,
-        name: 'Petrol',
-        code: 'MS',
-        productType: 'FUEL',
-        unit: 'L',
-      });
+    await db.insert(schema.products).values({
+      id: FUEL,
+      organizationId: ORG,
+      name: 'Petrol',
+      code: 'MS',
+      productType: 'FUEL',
+      unit: 'L',
+    });
     await db.insert(schema.tanks).values({
       id: TANK,
       organizationId: ORG,

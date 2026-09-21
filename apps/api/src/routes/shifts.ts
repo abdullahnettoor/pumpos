@@ -480,8 +480,8 @@ shiftsRouter.get('/status', async (c) => {
         WHERE s.station_id = ${stationId} AND s.status <> 'OPEN'
         ORDER BY s.closed_at DESC, s.created_at DESC
         LIMIT 1) AS last_shift,
-      COALESCE((SELECT jsonb_agg(x.j) FROM (
-          SELECT (${rowJson(schema.shifts, 's')} || jsonb_build_object(
+      COALESCE((SELECT jsonb_agg(x.j ORDER BY x.closed_at DESC) FROM (
+          SELECT s.closed_at, (${rowJson(schema.shifts, 's')} || jsonb_build_object(
             'templateName', COALESCE(t.name, 'Custom'))) AS j
           FROM shifts s
           LEFT JOIN shift_templates t ON t.id = s.shift_template_id
@@ -1528,7 +1528,6 @@ shiftsRouter.post(
         events,
       }).execute(command, buildContext(user));
       if (r.success) {
-        const snap = r.data.snapshot as any;
         await new LedgerPostingService(tx).postShiftClose(
           user.organizationId,
           {
@@ -1536,7 +1535,9 @@ shiftsRouter.post(
             stationId: r.data.shift.stationId,
             businessDayId: r.data.shift.businessDayId,
           },
-          { cashSales: Number(snap?.reconciliation?.cashSales ?? 0) },
+          // Typed on the use-case result — not dug out of the (projected)
+          // snapshot, whose shape is a presentation concern.
+          { cashSales: r.data.cashSales },
         );
       }
       return r;

@@ -426,8 +426,7 @@ export class LedgerPostingService {
             'id', fa.id,
             'stationId', fa.station_id,
             'accountType', fa.account_type,
-            'provider', fa.metadata->>'provider',
-            'createdAt', to_char(fa.created_at, 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')
+            'provider', fa.metadata->>'provider'
           ) ORDER BY fa.created_at)
           FROM financial_accounts fa
           WHERE fa.organization_id = ${organizationId}
@@ -449,7 +448,6 @@ export class LedgerPostingService {
       stationId: string | null;
       accountType: string;
       provider: string | null;
-      createdAt: string;
     }> = read.accounts ?? [];
 
     // In-memory account resolution mirroring ensureAccount / ensureClearingForProvider:
@@ -550,7 +548,10 @@ export class LedgerPostingService {
           })),
         )
         .returning({ id: schema.financialAccounts.id, name: schema.financialAccounts.name });
-      toCreate.forEach((t, i) => createdByKey.set(t.key, created[i].id));
+      // RETURNING row order is not formally guaranteed to match VALUES order,
+      // and these ids route money — match by (unique-per-batch) account name.
+      const idByName = new Map(created.map((c) => [c.name, c.id]));
+      for (const t of toCreate) createdByKey.set(t.key, idByName.get(t.name)!);
     }
     const resolve = (a: string | { pending: string }): string =>
       typeof a === 'string' ? a : createdByKey.get(a.pending)!;
@@ -559,7 +560,6 @@ export class LedgerPostingService {
       organizationId,
       stationId: shift.stationId,
       entryDate,
-      transferId: null,
       sourceId: shift.id,
       businessDayId: shift.businessDayId,
       shiftId: shift.id,
