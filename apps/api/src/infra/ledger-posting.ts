@@ -539,7 +539,7 @@ export class LedgerPostingService {
             stationId: shift.stationId,
             accountType: (t.key.startsWith('cash:')
               ? 'CASH_IN_HAND'
-              : 'MERCHANT_CLEARING') as FinancialAccountType,
+              : 'MERCHANT_CLEARING'),
             name: t.name,
             openingBalance: '0',
             openingDate: null,

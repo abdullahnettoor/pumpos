@@ -644,7 +644,7 @@ export class DrizzleHandoverRepository implements HandoverRepository {
         ),
         sql`, `,
       );
-      savedEntries = (await this.db.execute(sql`
+      savedEntries = await this.db.execute(sql`
         WITH removed AS (
           DELETE FROM handover_terminal_entries WHERE handover_id = ${row.id}
         )
@@ -661,7 +661,7 @@ export class DrizzleHandoverRepository implements HandoverRepository {
           upi_amount::text AS "upiAmount",
           batch_ref AS "batchRef",
           to_char(created_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS "createdAt"
-      `)) as unknown as Array<Record<string, any>>;
+      `);
     } else {
       await this.db
         .delete(schema.handoverTerminalEntries)

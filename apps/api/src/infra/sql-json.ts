@@ -71,7 +71,7 @@ export function rowJsonNullable(table: PgTable, alias: string): SQL {
 export function rowJsonPick(table: PgTable, alias: string, props: string[]): SQL {
   const cols = getTableColumns(table);
   const pairs = props.map((prop) => {
-    const col = cols[prop as keyof typeof cols] as { name: string; columnType: string } | undefined;
+    const col = cols[prop] as { name: string; columnType: string } | undefined;
     if (!col) throw new Error(`rowJsonPick: unknown column property "${prop}"`);
     return `'${prop}', ${jsonValueFor(col.columnType, `${alias}."${col.name}"`)}`;
   });
