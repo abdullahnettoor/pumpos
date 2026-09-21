@@ -946,7 +946,6 @@ shiftsRouter.get('/status', async (c) => {
   const dispensers = (refRow.dispensers as any[]) ?? [];
   const terminals = (refRow.terminals as any[]) ?? [];
 
-
   return c.json({
     success: true,
     data: { ...base, templates, nozzles, staff, dispensers, terminals },
