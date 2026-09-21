@@ -32,6 +32,7 @@ import type { AuthenticatedPrincipal } from '../infra/authenticated-principal.js
 import { loadStationClock, stationNotFound } from '../infra/station-clock.js';
 import { lockStationInventory, runInTransaction } from '../infra/transaction.js';
 import { rowJson, rowJsonNullable, tsIso } from '../infra/sql-json.js';
+import { assembleReconTotals, reconTotalsJson } from '../infra/repositories/shift-recon-sql.js';
 import {
   DrizzleNozzleRepository,
   DrizzleFuelPriceRepository,
@@ -42,8 +43,6 @@ import {
   DrizzleShiftRepository,
   DrizzleNozzleReadingRepository,
   DrizzleCloseShiftContextReader,
-  reconTotalsJson,
-  assembleReconTotals,
   DrizzleStockMovementWriter,
   DrizzleShiftSummaryWriter,
   DrizzleHandoverContextReader,

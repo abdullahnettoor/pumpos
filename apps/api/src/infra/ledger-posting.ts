@@ -8,7 +8,7 @@ import {
   type LedgerDirection,
   type LedgerSourceType,
 } from '@pump/core';
-import { normalizeProvider } from '@pump/shared';
+import { AccountResolutionPlan, type PlannedAccount } from './account-provisioning.js';
 
 /**
  * Posts money movements onto the persisted ledger (Phase F, FA2). Called inside
@@ -450,94 +450,51 @@ export class LedgerPostingService {
       provider: string | null;
     }> = read.accounts ?? [];
 
-    // In-memory account resolution mirroring ensureAccount / ensureClearingForProvider:
-    // station-scoped first (oldest), org-shared fallback for CASH_IN_HAND, provider
-    // matched case-insensitively for clearing. Missing accounts are collected and
+    // Account resolution rules live beside AccountProvisioningService
+    // (AccountResolutionPlan mirrors ensureAccount / ensureClearingForProvider
+    // over the pre-fetched candidates); missing accounts are collected and
     // created in ONE batched insert (first-ever close only).
-    const stationClearing = accounts.filter(
-      (a) => a.accountType === 'MERCHANT_CLEARING' && a.stationId === shift.stationId,
-    );
-    const toCreate: Array<{ key: string; name: string; metadata: { provider: string } | null }> =
-      [];
-    const pendingKeys = new Map<string, string>(); // resolution key -> toCreate key
-    const clearingFor = (providerRaw: string | null | undefined): string | { pending: string } => {
-      const prov = normalizeProvider(providerRaw);
-      if (prov) {
-        const match = stationClearing.find(
-          (a) => (a.provider ?? '').toLowerCase() === prov.toLowerCase(),
-        );
-        if (match) return match.id;
-        const key = `clearing:${prov.toLowerCase()}`;
-        if (!pendingKeys.has(key)) {
-          pendingKeys.set(key, key);
-          toCreate.push({ key, name: `${prov} Clearing`, metadata: { provider: prov } });
-        }
-        return { pending: key };
-      }
-      const def = stationClearing.find((a) => a.provider == null);
-      if (def) return def.id;
-      const key = 'clearing:__default__';
-      if (!pendingKeys.has(key)) {
-        pendingKeys.set(key, key);
-        toCreate.push({ key, name: DEFAULT_ACCOUNT_NAME.MERCHANT_CLEARING, metadata: null });
-      }
-      return { pending: key };
-    };
+    const plan = new AccountResolutionPlan(shift.stationId, accounts);
 
     const cardPosts: Array<{
-      account: string | { pending: string };
+      account: PlannedAccount;
       amount: number;
       note: string;
     }> = [];
     for (const e of termEntries) {
       const amt = Number(e.card ?? 0) + Number(e.upi ?? 0);
       if (amt <= 0) continue;
-      const account = e.clearingAccountId ?? clearingFor(e.provider);
+      const account = e.clearingAccountId ?? plan.clearing(e.provider);
       cardPosts.push({ account, amount: amt, note: `Shift card/UPI · ${e.label || 'terminal'}` });
     }
 
     // Fallback: aggregate card/UPI declared on the handover without a per-terminal
-    // split (legacy / single-acquirer). Route to the station's clearing account.
+    // split (legacy / single-acquirer). Route to the station's clearing account —
+    // card/UPI money implies a machine was used, so one is created if none exists
+    // (money-driven, not a pre-provisioned empty bucket).
     if (cardPosts.length === 0) {
       const cardUpi = Number(read.handover_card_upi ?? 0);
       if (cardUpi > 0) {
-        // Card/UPI money implies a machine was used → create a clearing account if
-        // none exists yet (money-driven, not a pre-provisioned empty bucket).
-        const account = stationClearing[0]?.id ?? clearingFor(null);
-        cardPosts.push({ account, amount: cardUpi, note: 'Shift card/UPI (terminal batch)' });
+        cardPosts.push({
+          account: plan.anyStationClearing(),
+          amount: cardUpi,
+          note: 'Shift card/UPI (terminal batch)',
+        });
       }
     }
 
-    let cashAccount: string | { pending: string } | null = null;
-    if (cash > 0) {
-      const stationCash = accounts.find(
-        (a) => a.accountType === 'CASH_IN_HAND' && a.stationId === shift.stationId,
-      );
-      const sharedCash = accounts.find(
-        (a) => a.accountType === 'CASH_IN_HAND' && a.stationId === null,
-      );
-      if (stationCash) cashAccount = stationCash.id;
-      else if (sharedCash) cashAccount = sharedCash.id;
-      else {
-        const key = 'cash:__default__';
-        if (!pendingKeys.has(key)) {
-          pendingKeys.set(key, key);
-          toCreate.push({ key, name: DEFAULT_ACCOUNT_NAME.CASH_IN_HAND, metadata: null });
-        }
-        cashAccount = { pending: key };
-      }
-    }
+    const cashAccount: PlannedAccount | null = cash > 0 ? plan.cashInHand() : null;
 
     // Cold path: create every missing account in one statement.
     const createdByKey = new Map<string, string>();
-    if (toCreate.length > 0) {
+    if (plan.specs.length > 0) {
       const created = await this.db
         .insert(schema.financialAccounts)
         .values(
-          toCreate.map((t) => ({
+          plan.specs.map((t) => ({
             organizationId,
             stationId: shift.stationId,
-            accountType: t.key.startsWith('cash:') ? 'CASH_IN_HAND' : 'MERCHANT_CLEARING',
+            accountType: t.accountType,
             name: t.name,
             openingBalance: '0',
             openingDate: null,
@@ -549,9 +506,9 @@ export class LedgerPostingService {
       // RETURNING row order is not formally guaranteed to match VALUES order,
       // and these ids route money — match by (unique-per-batch) account name.
       const idByName = new Map(created.map((c) => [c.name, c.id]));
-      for (const t of toCreate) createdByKey.set(t.key, idByName.get(t.name)!);
+      for (const t of plan.specs) createdByKey.set(t.key, idByName.get(t.name)!);
     }
-    const resolve = (a: string | { pending: string }): string =>
+    const resolve = (a: PlannedAccount): string =>
       typeof a === 'string' ? a : createdByKey.get(a.pending)!;
 
     const entryBase = {

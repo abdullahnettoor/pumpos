@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
 import { byNaturalField } from '@pump/shared';
 import { rowJson, rowJsonNullable } from './sql-json.js';
+import { creditSaleLinesJson } from './repositories/shift-recon-sql.js';
 import {
   RefreshShiftSummary,
   type EventPublisher,
@@ -98,30 +99,7 @@ export async function projectShiftSummary(
         WHERE p.shift_id = ${shift.id}), '[]'::jsonb) AS purchase_rows,
       COALESCE((SELECT jsonb_agg(${rowJson(S.collections, 'c')} ORDER BY c.created_at, c.id)
         FROM collections c WHERE c.shift_id = ${shift.id}), '[]'::jsonb) AS collection_rows,
-      COALESCE((SELECT jsonb_agg(jsonb_build_object(
-          'id', ct.id,
-          'amount', ct.amount::text,
-          'quantity', ct.quantity::text,
-          'unitPrice', ct.unit_price::text,
-          'notes', ct.notes,
-          'duId', ct.du_id,
-          'attendantId', ct.attendant_id,
-          'customerId', ct.customer_id,
-          'vehicleId', ct.vehicle_id,
-          'productId', ct.product_id,
-          'customerName', cust.name,
-          'productName', prod.name,
-          'productCode', prod.code,
-          'unit', prod.unit,
-          'vehicleNumber', cv.registration_number
-        ) ORDER BY ct.created_at, ct.id)
-        FROM customer_transactions ct
-        LEFT JOIN customers cust ON cust.id = ct.customer_id
-        LEFT JOIN products prod ON prod.id = ct.product_id
-        LEFT JOIN customer_vehicles cv ON cv.id = ct.vehicle_id
-        WHERE ct.shift_id = ${shift.id}
-          AND ct.transaction_type = 'Credit Sale'
-          AND ct.reference_type = 'CREDIT_SALE'), '[]'::jsonb) AS credit_rows
+      ${creditSaleLinesJson(shift.id)} AS credit_rows
   `)) as unknown as [Record<string, any>];
 
   const templateRows = row.template ? [row.template] : [];

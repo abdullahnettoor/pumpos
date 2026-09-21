@@ -63,17 +63,3 @@ export function rowJsonNullable(table: PgTable, alias: string): SQL {
     `CASE WHEN ${alias}."id" IS NULL THEN NULL ELSE jsonb_build_object(${pairs.join(', ')}) END`,
   );
 }
-
-/**
- * Like rowJson but only the listed properties — for narrow selections that
- * must match an explicit drizzle `.select({...})` shape.
- */
-export function rowJsonPick(table: PgTable, alias: string, props: string[]): SQL {
-  const cols = getTableColumns(table);
-  const pairs = props.map((prop) => {
-    const col = cols[prop] as { name: string; columnType: string } | undefined;
-    if (!col) throw new Error(`rowJsonPick: unknown column property "${prop}"`);
-    return `'${prop}', ${jsonValueFor(col.columnType, `${alias}."${col.name}"`)}`;
-  });
-  return sql.raw(`jsonb_build_object(${pairs.join(', ')})`);
-}

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Hono } from 'hono';
 import { shiftsRouter } from './shifts.js';
+import { idempotency } from '../infra/idempotency.js';
 
 /**
  * Statement-budget regression guard for #229: POST /shifts/close must run in a
@@ -13,7 +14,7 @@ import { shiftsRouter } from './shifts.js';
  * like the consolidated CTE payloads.
  */
 
-function makeFakeDb(selectQueue: any[][], executeQueue: any[][]) {
+function makeFakeDb(selectQueue: any[][], executeQueue: any[][], insertQueue?: any[][]) {
   const counter = { selects: 0, executes: 0, inserts: 0, updates: 0, deletes: 0 };
   const chain = (rows: any[]) => {
     const b: any = {
@@ -42,7 +43,7 @@ function makeFakeDb(selectQueue: any[][], executeQueue: any[][]) {
     },
     insert: () => {
       counter.inserts += 1;
-      return chain([{ id: 'row-1' }]);
+      return chain(insertQueue ? (insertQueue.shift() ?? []) : [{ id: 'row-1' }]);
     },
     update: () => {
       counter.updates += 1;
@@ -290,5 +291,93 @@ describe('POST /shifts/close statement budget (#229)', () => {
 
     // Same counts as the 4-nozzle case: the budget is size-independent.
     expect(counter).toEqual({ selects: 5, executes: 7, inserts: 3, updates: 0, deletes: 0 });
+  });
+
+  // The offline/retry path: closes submitted with an Idempotency-Key run
+  // through the idempotency middleware (mounted app-wide in index.ts).
+  function makeIdempotentApp(db: unknown) {
+    const app = new Hono<{ Variables: { db: any; user: any } }>();
+    app.use('*', async (c, next) => {
+      c.set('db', db);
+      c.set('user', {
+        id: 'user-1',
+        email: 'owner@example.com',
+        fullName: 'Owner',
+        organizationId: 'org-1',
+        role: 'Owner',
+        assignedStationIds: [],
+      });
+      await next();
+    });
+    app.use('*', idempotency);
+    app.route('/', shiftsRouter);
+    return app;
+  }
+
+  const closeRequest = (app: Hono<any>) =>
+    app.request('/close', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Idempotency-Key': 'idem-1' },
+      body: JSON.stringify({
+        shiftId: 'sh-1',
+        payload: {
+          closingCash: 6250,
+          nozzleReadings: [1, 2, 3, 4].map((i) => ({ nozzleId: `n${i}`, closingReading: 150 })),
+        },
+      }),
+    });
+
+  it('an Idempotency-Key adds exactly two statements (key reserve + response cache)', async () => {
+    const { db, counter } = makeFakeDb(
+      [
+        [
+          {
+            subscriptionPlan: 'CORE',
+            subscriptionStatus: 'ACTIVE',
+            accessUntil: null,
+            suspendedAt: null,
+          },
+        ],
+        [{ value: 1 }],
+        [],
+        [],
+        [{ stationId: 'st-1' }],
+      ],
+      [[], [CONTEXT_ROW], [], [PROJECTION_ROW], [], [LEDGER_READ_ROW], []],
+    );
+    const res = await closeRequest(makeIdempotentApp(db));
+    expect(res.status).toBe(200);
+
+    // The plain budget + the key reservation insert and the completion update.
+    expect(counter).toEqual({
+      selects: 5,
+      executes: 7,
+      inserts: 4, // key reserve + stock movements + shift save + events outbox
+      updates: 1, // cache the response on the reservation
+      deletes: 0,
+    });
+  });
+
+  it('a replayed Idempotency-Key answers from the cache in two statements', async () => {
+    const cached = {
+      id: 'idem-row',
+      requestPath: 'POST /close',
+      actorId: 'user-1',
+      requestHash: null,
+      responseStatus: 200,
+      responseBody: { success: true, data: { shift: { id: 'sh-1', status: 'CLOSED' } } },
+    };
+    const { db, counter } = makeFakeDb(
+      [[cached]], // find the completed reservation
+      [],
+      [[]], // reserve insert conflicts -> no row
+    );
+    const res = await closeRequest(makeIdempotentApp(db));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as any;
+    expect(body.data.shift.status).toBe('CLOSED');
+
+    // Reserve attempt + cached-response lookup; the close transaction never runs.
+    expect(counter).toEqual({ selects: 1, executes: 0, inserts: 1, updates: 0, deletes: 0 });
   });
 });
