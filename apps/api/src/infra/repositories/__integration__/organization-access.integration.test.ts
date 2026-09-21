@@ -132,7 +132,17 @@ describe.skipIf(!CONNECTION)('Organization access against real Postgres', () => 
   beforeAll(async () => {
     const bootstrap = postgres(CONNECTION!, { max: 1, onnotice: () => {} });
     try {
-      await bootstrap.unsafe(BOOTSTRAP);
+      // Serialized with the other integration files: the shipped migrations
+      // inside BOOTSTRAP create shared/global objects that collide when
+      // replayed concurrently.
+      await bootstrap.unsafe('select pg_advisory_lock(872634)');
+      await bootstrap.unsafe(
+        BOOTSTRAP.replace(
+          /create trigger on_auth_user_created/gi,
+          'create or replace trigger on_auth_user_created',
+        ),
+      );
+      await bootstrap.unsafe('select pg_advisory_unlock(872634)');
     } finally {
       await bootstrap.end();
     }
@@ -150,7 +160,11 @@ describe.skipIf(!CONNECTION)('Organization access against real Postgres', () => 
   }, 60_000);
 
   afterAll(async () => {
+    // Serialized like the bootstrap: the cascade drop touches the global
+    // auth.users trigger's function and deadlocks against concurrent DDL.
+    await sql?.unsafe('select pg_advisory_lock(872634)').catch(() => undefined);
     await sql?.unsafe(`drop schema if exists ${TEST_SCHEMA} cascade`).catch(() => undefined);
+    await sql?.unsafe('select pg_advisory_unlock(872634)').catch(() => undefined);
     await sql?.end();
   });
 

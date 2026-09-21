@@ -91,8 +91,19 @@ describe.skipIf(!CONNECTION)('CloseShift consolidated path against real Postgres
   beforeAll(async () => {
     const bootstrap = postgres(CONNECTION!, { max: 1, onnotice: () => {} });
     try {
+      // The shipped migrations create shared/global objects (e.g. the
+      // on_auth_user_created trigger on auth.users), so two integration files
+      // replaying them concurrently collide — serialize the bootstrap.
+      await bootstrap.unsafe('select pg_advisory_lock(872634)');
       await bootstrap.unsafe(BOOTSTRAP);
-      await bootstrap.unsafe(`set search_path to ${TEST_SCHEMA};` + shippedSchema());
+      await bootstrap.unsafe(
+        `set search_path to ${TEST_SCHEMA};` +
+          shippedSchema().replace(
+            /create trigger on_auth_user_created/gi,
+            'create or replace trigger on_auth_user_created',
+          ),
+      );
+      await bootstrap.unsafe('select pg_advisory_unlock(872634)');
     } finally {
       await bootstrap.end();
     }
@@ -110,7 +121,12 @@ describe.skipIf(!CONNECTION)('CloseShift consolidated path against real Postgres
 
   afterAll(async () => {
     if (sql) {
+      // Same serialization as the bootstrap: cascade-dropping the schema also
+      // drops the function behind the global auth.users trigger, which
+      // deadlocks against another file's concurrent bootstrap DDL.
+      await sql.unsafe('select pg_advisory_lock(872634)');
       await sql.unsafe(`drop schema if exists ${TEST_SCHEMA} cascade`);
+      await sql.unsafe('select pg_advisory_unlock(872634)');
       await sql.end();
     }
   });
