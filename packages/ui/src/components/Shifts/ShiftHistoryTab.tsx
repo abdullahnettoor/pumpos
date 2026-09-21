@@ -78,7 +78,10 @@ export const ShiftHistoryTab: React.FC<ShiftHistoryTabProps> = ({
         header: 'Template',
         cell: ({ row }) => (
           <span style={{ color: 'var(--text-strong)', fontWeight: 600 }}>
-            {row.original.snapshotData?.templateName || 'Custom'}
+            {/* The list endpoint joins the template and returns its live name
+                top-level. The snapshot copy is the fallback, not the source:
+                reading it first made every row say "Custom". */}
+            {row.original.templateName || row.original.snapshotData?.templateName || 'Custom'}
           </span>
         ),
       },
@@ -86,7 +89,9 @@ export const ShiftHistoryTab: React.FC<ShiftHistoryTabProps> = ({
         id: 'status',
         header: 'Status',
         cell: ({ row }) => {
-          const s = row.original.shiftStatus || row.original.snapshotData?.shiftStatus || 'CLOSED';
+          // The endpoint returns `status`. Reading `shiftStatus` matched
+          // nothing, so a Locked shift rendered as merely Closed.
+          const s = row.original.status || row.original.snapshotData?.shiftStatus || 'CLOSED';
           return <StatusChip status={s === 'LOCKED' ? 'locked' : 'closed'} size="sm" />;
         },
       },
