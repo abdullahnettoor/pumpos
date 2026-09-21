@@ -9,7 +9,7 @@ import { DrizzlePaymentTerminalRepository } from '../infra/repositories/payment-
 import { AccountProvisioningService } from '../infra/account-provisioning.js';
 import { sendResult } from '../infra/send-result.js';
 import { writePolicyGuard } from '../infra/write-policy-guard.js';
-import { findStationClock, stationNotFound } from '../infra/station-clock.js';
+import { stationExistsInOrg, stationNotFound } from '../infra/station-clock.js';
 
 type Variables = {
   db: DbClient;
@@ -67,7 +67,7 @@ paymentTerminalsRouter.post(
         400,
       );
     }
-    if (!(await findStationClock(db, c.var.user.organizationId, body.stationId)))
+    if (!(await stationExistsInOrg(db, c.var.user.organizationId, body.stationId)))
       return stationNotFound(c);
     const useCase = new RegisterPaymentTerminal({
       repository: new DrizzlePaymentTerminalRepository(db),

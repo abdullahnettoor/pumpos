@@ -51,6 +51,29 @@ export async function loadStationClock(
   return findStationClock(db, organizationId, stationId);
 }
 
+/**
+ * Org-scoped station existence check (#235): the single mechanism for "does
+ * this caller-supplied stationId name a station of the caller's organization".
+ * A foreign station is indistinguishable from a missing one — `false` — and
+ * the route must refuse with `stationNotFound`. Use this when no clock is
+ * needed; use `findStationClock` when the route also needs the station's
+ * business-date settings (same predicate, one query).
+ */
+export async function stationExistsInOrg(
+  db: DbClient,
+  organizationId: string,
+  stationId: string,
+): Promise<boolean> {
+  const [row] = await db
+    .select({ id: schema.stations.id })
+    .from(schema.stations)
+    .where(
+      and(eq(schema.stations.id, stationId), eq(schema.stations.organizationId, organizationId)),
+    )
+    .limit(1);
+  return !!row;
+}
+
 /** The uniform refusal for a station outside the caller's organization. */
 export function stationNotFound(c: { json: (body: unknown, status: 404) => Response }): Response {
   return c.json(

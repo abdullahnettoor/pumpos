@@ -1,13 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Hono } from 'hono';
-import { shiftsRouter } from './shifts.js';
-import { transactionsRouter } from './transactions.js';
-import { financeRouter } from './finance.js';
-import { stationSetupRouter } from './station-setup.js';
-import { paymentTerminalsRouter } from './payment-terminals.js';
-import { productsRouter } from './products.js';
-import { dssrRouter } from './dssr.js';
-import { reportsRouter } from './reports.js';
+import { TENANT_ROUTERS } from './tenant-routers.js';
 
 /**
  * Station-tenancy coverage (#235): a stationId naming another organization's
@@ -20,9 +13,11 @@ import { reportsRouter } from './reports.js';
  * refuse (404) when it misses, or answer exclusively from queries that carry
  * the caller's organization_id (foreign stationId → empty, never foreign rows).
  *
- * Mirroring the Restricted Access coverage pattern: every GET a router
- * exposes must be declared below. A new GET without a declaration fails the
- * completeness test, so the tenancy question cannot be skipped.
+ * Mirroring the Restricted Access coverage pattern: every GET a tenant router
+ * exposes must be declared below. The routers come from TENANT_ROUTERS — the
+ * same list index.ts mounts from — so a new tenant router cannot ship without
+ * entering this coverage, and a new GET without a declaration fails the
+ * completeness test.
  */
 
 type Tenancy =
@@ -33,16 +28,7 @@ type Tenancy =
   /** Takes no stationId (directly or via a stored record). */
   | 'not-station-scoped';
 
-const ROUTERS: ReadonlyArray<[string, any]> = [
-  ['/shifts', shiftsRouter],
-  ['/transactions', transactionsRouter],
-  ['/finance', financeRouter],
-  ['/setup', stationSetupRouter],
-  ['/setup-terminals', paymentTerminalsRouter],
-  ['/setup-products', productsRouter],
-  ['/dssr', dssrRouter],
-  ['/reports', reportsRouter],
-];
+const ROUTERS = TENANT_ROUTERS;
 
 const DECLARATIONS: Record<string, Tenancy> = {
   'GET /shifts/business-days/status': 'refuses-foreign-station',
@@ -97,14 +83,16 @@ const DECLARATIONS: Record<string, Tenancy> = {
   'GET /setup/pricing': 'org-scoped-query',
   'GET /setup/pricing/history': 'org-scoped-query',
 
-  'GET /setup-terminals/payment-terminals': 'org-scoped-query',
-  'GET /setup-products/products': 'not-station-scoped',
+  'GET /setup/payment-terminals': 'org-scoped-query',
+  'GET /setup/products': 'not-station-scoped',
 
   'GET /dssr/daily': 'org-scoped-query',
   'GET /dssr/daily/preview': 'org-scoped-query',
   'GET /dssr/daily/range': 'org-scoped-query',
 
   'GET /reports/attendant-handovers': 'org-scoped-query',
+
+  'GET /access': 'not-station-scoped',
 };
 
 function exposedGets(): string[] {
@@ -183,4 +171,100 @@ describe('station-scoped GET tenancy coverage (#235)', () => {
     const body = (await res.json()) as any;
     expect(body.success).toBe(false);
   });
+});
+
+/**
+ * The write-side counterpart: station-anchored mutations must refuse a
+ * foreign stationId before anchoring the record to it. These routes sit
+ * behind writePolicyGuard, whose access reader issues four selects first —
+ * the scripted db serves those, then answers every further lookup (the
+ * org-scoped station resolution) with zero rows, exactly what the database
+ * returns for another tenant's station.
+ */
+function accessThenEmptyDb() {
+  let selects = 0;
+  const accessReads: unknown[][] = [
+    [
+      {
+        subscriptionPlan: 'CORE',
+        subscriptionStatus: 'ACTIVE',
+        accessUntil: null,
+        suspendedAt: null,
+      },
+    ],
+    [{ value: 1 }],
+    [],
+    [],
+  ];
+  const chainable = (result: unknown[]): any => {
+    const chain: any = {
+      from: () => chain,
+      where: () => chain,
+      orderBy: () => chain,
+      groupBy: () => chain,
+      limit: () => chain,
+      innerJoin: () => chain,
+      leftJoin: () => chain,
+      for: () => chain,
+      returning: () => Promise.resolve(result),
+      then: (resolve: (v: unknown[]) => void, reject?: (e: unknown) => void) =>
+        Promise.resolve(result).then(resolve, reject),
+    };
+    return chain;
+  };
+  const db: any = {
+    select: () => chainable(selects < accessReads.length ? accessReads[selects++] : []),
+    insert: () => ({ values: () => chainable([{ id: 'row-1' }]) }),
+    update: () => chainable([{ id: 'row-1' }]),
+    delete: () => chainable([{ id: 'row-1' }]),
+    execute: async () => [],
+    transaction: async (run: (tx: unknown) => Promise<unknown>) => run(db),
+  };
+  return db;
+}
+
+const MUTATING_STATION_ANCHORED: ReadonlyArray<[string, string]> = [
+  ['POST', '/transactions/sales'],
+  ['POST', '/transactions/expenses'],
+  ['POST', '/transactions/collections'],
+  ['POST', '/transactions/purchases'],
+  ['POST', '/transactions/income'],
+  ['POST', '/transactions/supplier-payments'],
+  ['POST', '/shifts/open'],
+  ['POST', '/shifts/business-day/open'],
+  ['POST', '/finance/accounts'],
+  ['POST', '/setup/tanks'],
+  ['POST', '/setup/dispensers'],
+  ['POST', '/setup/nozzles'],
+  ['POST', '/setup/payment-terminals'],
+];
+
+describe('station-anchored mutation tenancy (#235)', () => {
+  it.each(MUTATING_STATION_ANCHORED)(
+    '%s %s refuses a foreign-organization stationId',
+    async (method, path) => {
+      const app = new Hono<{ Variables: { db: any; user: any } }>();
+      app.use('*', async (c, next) => {
+        c.set('db', accessThenEmptyDb());
+        c.set('user', {
+          id: 'user-1',
+          email: 'owner@example.com',
+          fullName: 'Owner',
+          organizationId: 'org-1',
+          role: 'Owner',
+          assignedStationIds: [],
+        });
+        await next();
+      });
+      for (const [prefix, router] of ROUTERS) app.route(prefix, router);
+      const res = await app.request(path, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stationId: 'st-foreign', shiftTemplateId: 'tpl-1' }),
+      });
+      expect([403, 404]).toContain(res.status);
+      const body = (await res.json()) as any;
+      expect(body.success).toBe(false);
+    },
+  );
 });

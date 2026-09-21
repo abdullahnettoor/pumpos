@@ -52,7 +52,7 @@ import { rateLimit } from '../infra/rate-limit.js';
 import { DrizzleOnboardingProvisioner } from '../infra/onboarding-provisioner.js';
 import { DrizzleStationCapacityPort } from '../infra/repositories/organization-access.repo.js';
 import { sendResult } from '../infra/send-result.js';
-import { stationNotFound, findStationClock } from '../infra/station-clock.js';
+import { stationNotFound, stationExistsInOrg } from '../infra/station-clock.js';
 import { writePolicyGuard } from '../infra/write-policy-guard.js';
 import {
   DrizzleStationRepository,
@@ -100,7 +100,7 @@ async function stationInOrg(
   stationId: string | null | undefined,
 ): Promise<boolean> {
   if (!stationId) return false;
-  return !!(await findStationClock(c.var.db, c.var.user.organizationId, stationId));
+  return stationExistsInOrg(c.var.db, c.var.user.organizationId, stationId);
 }
 
 // Onboarding draft validation + multi-aggregate provisioning now live in the
