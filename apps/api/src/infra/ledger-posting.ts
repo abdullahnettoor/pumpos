@@ -537,9 +537,7 @@ export class LedgerPostingService {
           toCreate.map((t) => ({
             organizationId,
             stationId: shift.stationId,
-            accountType: (t.key.startsWith('cash:')
-              ? 'CASH_IN_HAND'
-              : 'MERCHANT_CLEARING'),
+            accountType: t.key.startsWith('cash:') ? 'CASH_IN_HAND' : 'MERCHANT_CLEARING',
             name: t.name,
             openingBalance: '0',
             openingDate: null,
