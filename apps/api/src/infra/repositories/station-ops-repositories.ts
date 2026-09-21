@@ -805,7 +805,7 @@ export class DrizzleHandoverRepository implements HandoverRepository {
  * array. Shared by the reconciliation reader and the consolidated close-shift
  * context read, so both paths always compute identical figures.
  */
-function reconTotalsJson(shiftId: string) {
+export function reconTotalsJson(shiftId: string) {
   return sql`(SELECT jsonb_build_object(
     'cash_collections', (SELECT COALESCE(SUM(amount) FILTER (WHERE payment_method = 'Cash'), 0)::float8
       FROM collections WHERE shift_id = ${shiftId}),
@@ -853,7 +853,7 @@ function reconTotalsJson(shiftId: string) {
 }
 
 /** Assemble the port shape from the reconTotalsJson payload (shared JS math). */
-function assembleReconTotals(raw: Record<string, any>): ShiftReconciliationTotals {
+export function assembleReconTotals(raw: Record<string, any>): ShiftReconciliationTotals {
   const sellers =
     (raw.sellers as Array<{
       attendantId: string | null;

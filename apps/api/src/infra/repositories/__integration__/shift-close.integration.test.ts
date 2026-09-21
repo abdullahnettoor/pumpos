@@ -64,6 +64,9 @@ const BOOTSTRAP = `
     if not exists (select from pg_roles where rolname = 'anon') then
       create role anon;
     end if;
+  exception when others then
+    -- Another integration file may create the shared roles concurrently.
+    null;
   end $$;
 
   drop schema if exists ${TEST_SCHEMA} cascade;
