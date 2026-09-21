@@ -32,12 +32,12 @@ export const API_TARGETS: ApiTarget[] = [
  */
 export const SUPABASE_URL = (
   (import.meta.env.VITE_SUPABASE_URL as string | undefined) ??
-  'https://sniubtppskopxkpznfkh.supabase.co'
+  'https://gpfqiesflrpmndhkfvhg.supabase.co'
 ).replace(/\/$/, '');
 
 export const SUPABASE_ANON_KEY =
   (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined) ??
-  'sb_publishable_4qh9e2uY02O81ph_1Z31EA_McoeuVjq';
+  'sb_publishable_mMyWNusxZtScUxjTOD9fVA_ViTJ5Gvg';
 
 const TARGET_STORAGE_KEY = 'pumpos.platform.target';
 
