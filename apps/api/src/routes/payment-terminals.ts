@@ -61,10 +61,13 @@ paymentTerminalsRouter.post(
     const db = c.var.db;
     // Org-scoped station check (#235): an Owner passes canWrite for ANY
     // stationId, so verify the station belongs to the caller's organization.
-    if (
-      !body?.stationId ||
-      !(await findStationClock(db, c.var.user.organizationId, body.stationId))
-    )
+    if (!body?.stationId) {
+      return c.json(
+        { success: false, error: { code: 'VALIDATION_ERROR', message: 'stationId is required' } },
+        400,
+      );
+    }
+    if (!(await findStationClock(db, c.var.user.organizationId, body.stationId)))
       return stationNotFound(c);
     const useCase = new RegisterPaymentTerminal({
       repository: new DrizzlePaymentTerminalRepository(db),

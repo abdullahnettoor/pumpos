@@ -220,10 +220,11 @@ transactionsRouter.post(
     const openingDue = Number(body?.openingDue ?? 0);
     const openingStationId: string | undefined =
       body?.openingStationId ?? body?.stationId ?? undefined;
-    const clock =
-      openingDue > 0 && openingStationId
-        ? await loadStationClock(c.var.db, user.organizationId, openingStationId)
-        : {};
+    const clock = await loadStationClock(
+      c.var.db,
+      user.organizationId,
+      openingDue > 0 ? openingStationId : undefined,
+    );
     if (!clock) return stationNotFound(c);
     const result = await runInTransaction(c.var.db, async (tx, events) => {
       const trace = createCommandTrace();
@@ -395,10 +396,11 @@ transactionsRouter.post(
     const openingDue = Number(body?.openingDue ?? 0);
     const openingStationId: string | undefined =
       body?.openingStationId ?? body?.stationId ?? undefined;
-    const clock =
-      openingDue > 0 && openingStationId
-        ? await loadStationClock(c.var.db, user.organizationId, openingStationId)
-        : {};
+    const clock = await loadStationClock(
+      c.var.db,
+      user.organizationId,
+      openingDue > 0 ? openingStationId : undefined,
+    );
     if (!clock) return stationNotFound(c);
     const result = await runInTransaction(c.var.db, async (tx, events) => {
       const trace = createCommandTrace();
