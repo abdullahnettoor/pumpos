@@ -41,7 +41,7 @@ import {
   DrizzleShiftRepository,
   DrizzleNozzleReadingRepository,
   DrizzleShiftReconciliationReader,
-  DrizzleCreditSalesReader,
+  DrizzleCloseShiftContextReader,
   DrizzleStockMovementWriter,
   DrizzleShiftSummaryWriter,
   DrizzleHandoverContextReader,
@@ -1594,37 +1594,23 @@ shiftsRouter.post(
       );
     }
     const result = await runInTransaction(db, async (tx, events) => {
-      const [shift] = await tx
-        .select({ stationId: schema.shifts.stationId })
-        .from(schema.shifts)
-        .where(
-          and(
-            eq(schema.shifts.id, body?.shiftId),
-            eq(schema.shifts.organizationId, user.organizationId),
-          ),
-        )
-        .limit(1);
-      if (shift) await lockStationInventory(tx, user.organizationId, shift.stationId);
+      // The station was already resolved (org-scoped) by the auth lookup above;
+      // re-selecting the shift inside the transaction was a duplicate round-trip.
+      await lockStationInventory(tx, user.organizationId, target.stationId);
       const r = await new CloseShift({
+        context: new DrizzleCloseShiftContextReader(tx),
         shifts: new DrizzleShiftRepository(tx),
-        nozzles: new DrizzleNozzleRepository(tx),
         nozzleReadings: new DrizzleNozzleReadingRepository(tx),
-        reconciliation: new DrizzleShiftReconciliationReader(tx),
-        creditSales: new DrizzleCreditSalesReader(tx),
         stockMovements: new DrizzleStockMovementWriter(tx),
         summaries: new DrizzleShiftSummaryWriter(tx),
+        // The use case persists the FULL projected presentation snapshot in one
+        // write, so every read path (summaries list/detail, shift status) serves
+        // stored data without re-enrichment (#229).
+        projector: new DrizzleShiftSummaryProjector(tx),
         events,
       }).execute(command, buildContext(user));
       if (r.success) {
         const snap = r.data.snapshot as any;
-        // Persist the FULL projected presentation snapshot so every read path
-        // (summaries list/detail, shift status) serves stored data without
-        // re-enrichment. projectShiftSummary is idempotent over its own output.
-        const projected = await new DrizzleShiftSummaryProjector(tx).project(
-          r.data.shift,
-          r.data.snapshot,
-        );
-        await new DrizzleShiftSummaryWriter(tx).save(r.data.shift.id, projected);
         await new LedgerPostingService(tx).postShiftClose(
           user.organizationId,
           {

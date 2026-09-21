@@ -114,8 +114,8 @@ class ReadingRepo implements NozzleReadingRepository {
       },
     ];
   }
-  async updateClosing(id: string, closingReading: string, volumeSold: string) {
-    this.updates.push({ id, closingReading, volumeSold });
+  async updateClosingMany(updates: { id: string; closingReading: string; volumeSold: string }[]) {
+    this.updates.push(...updates);
   }
 }
 

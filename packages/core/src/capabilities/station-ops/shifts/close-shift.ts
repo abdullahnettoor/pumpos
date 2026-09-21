@@ -9,13 +9,12 @@ import {
   validationError,
 } from '../../../kernel/index.js';
 import type { EventPublisher, ExecutionContext, Result, UseCase } from '../../../kernel/index.js';
-import type { NozzleRepository } from '../../station-setup/nozzles/index.js';
 import type {
-  CreditSalesReader,
+  CloseShiftContextReader,
   NozzleReadingRepository,
   Shift,
-  ShiftReconciliationReader,
   ShiftRepository,
+  ShiftSummaryProjector,
   ShiftSummaryWriter,
   StockMovementInput,
   StockMovementWriter,
@@ -42,13 +41,18 @@ const schema = z
   .strict();
 
 export interface CloseShiftDeps {
+  /** One consolidated read for shift + readings + nozzles + totals + credit sales (#229). */
+  context: CloseShiftContextReader;
   shifts: ShiftRepository;
-  nozzles: NozzleRepository;
   nozzleReadings: NozzleReadingRepository;
-  reconciliation: ShiftReconciliationReader;
-  creditSales: CreditSalesReader;
   stockMovements: StockMovementWriter;
   summaries: ShiftSummaryWriter;
+  /**
+   * Optional presentation projector: when provided, the persisted summary is the
+   * FULL projected snapshot, written ONCE — instead of the caller re-projecting
+   * and re-saving after the fact (two extra statements on the close path, #229).
+   */
+  projector?: ShiftSummaryProjector;
   events: EventPublisher;
 }
 
@@ -79,7 +83,8 @@ export class CloseShift implements UseCase<CloseShiftCommand, CloseShiftResult> 
       return err(validationError('Invalid CloseShift command', { issues: p.error.flatten() }));
     const cmd = p.data;
 
-    const shift = await this.deps.shifts.findById(cmd.shiftId);
+    const context = await this.deps.context.load(ctx.organizationId, cmd.shiftId);
+    const shift = context.shift;
     if (!shift || shift.organizationId !== ctx.organizationId)
       return err(notFoundError('Shift', cmd.shiftId));
     if (shift.status !== 'OPEN')
@@ -87,12 +92,13 @@ export class CloseShift implements UseCase<CloseShiftCommand, CloseShiftResult> 
         invariantViolation('Shift is not open', { shiftId: shift.id, status: shift.status }),
       );
 
-    const dbReadings = await this.deps.nozzleReadings.listByShift(shift.id);
+    const dbReadings = context.readings;
     const closingByNozzle = new Map(
       (cmd.nozzleReadings ?? []).map((r) => [r.nozzleId, r.closingReading]),
     );
 
-    // Apply any provided closing readings.
+    // Apply any provided closing readings — batched into ONE statement (#229).
+    const closingUpdates: { id: string; closingReading: string; volumeSold: string }[] = [];
     for (const reading of dbReadings) {
       const provided = closingByNozzle.get(reading.nozzleId);
       if (provided === undefined) continue;
@@ -105,13 +111,19 @@ export class CloseShift implements UseCase<CloseShiftCommand, CloseShiftResult> 
         );
       }
       const volume = provided - opening;
-      await this.deps.nozzleReadings.updateClosing(reading.id, String(provided), String(volume));
+      closingUpdates.push({
+        id: reading.id,
+        closingReading: String(provided),
+        volumeSold: String(volume),
+      });
       reading.closingReading = String(provided);
       reading.volumeSold = String(volume);
     }
+    if (closingUpdates.length > 0) {
+      await this.deps.nozzleReadings.updateClosingMany(closingUpdates);
+    }
 
-    const nozzles = await this.deps.nozzles.listByStation(ctx.organizationId, shift.stationId);
-    const nozzleMap = new Map(nozzles.map((n) => [n.id, n]));
+    const nozzleMap = new Map(context.nozzles.map((n) => [n.id, n]));
 
     // Enriched readings + fuel sale stock movements.
     const enriched: Record<string, unknown>[] = [];
@@ -163,8 +175,9 @@ export class CloseShift implements UseCase<CloseShiftCommand, CloseShiftResult> 
       await this.deps.stockMovements.saveMany(movements);
     }
 
-    // Drawer reconciliation.
-    const totals = await this.deps.reconciliation.totalsForShift(shift.id);
+    // Drawer reconciliation (totals preloaded in the consolidated context read;
+    // they aggregate money rows this use case never mutates).
+    const totals = context.totals;
     const openingCash = Number(shift.openingCash);
     const closingCash = cmd.closingCash;
     const cashDrops = Number(cmd.cashDrops ?? 0);
@@ -178,12 +191,12 @@ export class CloseShift implements UseCase<CloseShiftCommand, CloseShiftResult> 
       cashDrops;
     const cashVariance = closingCash - expectedDrawerCash;
 
-    // Fetch credit sales with vehicle information for immutable snapshot.
-    const creditSalesRecords = await this.deps.creditSales.listByShift(shift.id);
+    // Credit sales with vehicle information for the immutable snapshot.
+    const creditSalesRecords = context.creditSales;
     const creditSalesTotal = creditSalesRecords.reduce((sum, r) => sum + Number(r.amount), 0);
 
     const nowIso = ctx.clock.now().toISOString();
-    const snapshot: Record<string, unknown> = {
+    const baseSnapshot: Record<string, unknown> = {
       generatedAt: nowIso,
       shiftId: shift.id,
       businessDayId: shift.businessDayId,
@@ -217,7 +230,6 @@ export class CloseShift implements UseCase<CloseShiftCommand, CloseShiftResult> 
       creditSalesTotal,
       notes: cmd.notes ?? null,
     };
-    await this.deps.summaries.save(shift.id, snapshot);
 
     const closed: Shift = {
       ...shift,
@@ -227,6 +239,14 @@ export class CloseShift implements UseCase<CloseShiftCommand, CloseShiftResult> 
       closingCash: String(closingCash),
       updatedAt: nowIso,
     };
+
+    // Project BEFORE persisting so the summary is written exactly once with its
+    // final (presentation-enriched) content. projectShiftSummary is idempotent
+    // over its own output, so downstream refreshes remain safe.
+    const snapshot = this.deps.projector
+      ? await this.deps.projector.project(closed, baseSnapshot)
+      : baseSnapshot;
+    await this.deps.summaries.save(shift.id, snapshot);
     await this.deps.shifts.save(closed);
 
     await this.deps.events.publish([

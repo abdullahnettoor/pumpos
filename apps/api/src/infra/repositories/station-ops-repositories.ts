@@ -13,6 +13,7 @@ import type {
   TerminalLinkInput,
   NozzleReading,
   NozzleReadingRepository,
+  NozzleClosingUpdate,
   ShiftReconciliationReader,
   ShiftReconciliationTotals,
   CreditSalesReader,
@@ -26,7 +27,10 @@ import type {
   HandoverContextReader,
   HandoverRepository,
   HandoverTerminalEntry,
+  CloseShiftContext,
+  CloseShiftContextReader,
 } from '@pump/core';
+import { rowJson } from '../sql-json.js';
 
 export class DrizzleBusinessDayStatusReader implements BusinessDayStatusReader {
   constructor(private readonly db: DbClient) {}
@@ -391,11 +395,55 @@ export class DrizzleNozzleReadingRepository implements NozzleReadingRepository {
       .where(eq(schema.nozzleReadings.shiftId, shiftId));
     return rows.map((r) => this.toEntity(r));
   }
-  async updateClosing(id: string, closingReading: string, volumeSold: string): Promise<void> {
-    await this.db
-      .update(schema.nozzleReadings)
-      .set({ closingReading, volumeSold })
-      .where(eq(schema.nozzleReadings.id, id));
+  async updateClosingMany(updates: NozzleClosingUpdate[]): Promise<void> {
+    await updateReadingColumns(
+      this.db,
+      updates.map((u) => ({
+        id: u.id,
+        closingReading: u.closingReading,
+        volumeSold: u.volumeSold,
+      })),
+    );
+  }
+}
+
+/**
+ * Batched nozzle-reading update: ONE `UPDATE … FROM (VALUES …)` statement for
+ * any number of nozzles (#229/#231) — the per-row loop cost a round-trip per
+ * nozzle inside money-path transactions. testingVolume is only written when
+ * provided (handover path), preserving the stored value otherwise.
+ */
+async function updateReadingColumns(
+  db: DbClient,
+  rows: { id: string; closingReading: string; volumeSold: string; testingVolume?: string }[],
+): Promise<void> {
+  if (rows.length === 0) return;
+  const withTesting = rows.some((r) => r.testingVolume !== undefined);
+  const values = sql.join(
+    rows.map((r) =>
+      withTesting
+        ? sql`(${r.id}::uuid, ${r.closingReading}::numeric, ${r.volumeSold}::numeric, ${r.testingVolume ?? null}::numeric)`
+        : sql`(${r.id}::uuid, ${r.closingReading}::numeric, ${r.volumeSold}::numeric)`,
+    ),
+    sql`, `,
+  );
+  if (withTesting) {
+    await db.execute(sql`
+      UPDATE nozzle_readings nr SET
+        closing_reading = v.closing_reading,
+        volume_sold = v.volume_sold,
+        testing_volume = COALESCE(v.testing_volume, nr.testing_volume)
+      FROM (VALUES ${values}) AS v(id, closing_reading, volume_sold, testing_volume)
+      WHERE nr.id = v.id
+    `);
+  } else {
+    await db.execute(sql`
+      UPDATE nozzle_readings nr SET
+        closing_reading = v.closing_reading,
+        volume_sold = v.volume_sold
+      FROM (VALUES ${values}) AS v(id, closing_reading, volume_sold)
+      WHERE nr.id = v.id
+    `);
   }
 }
 
@@ -737,114 +785,191 @@ export class DrizzleHandoverRepository implements HandoverRepository {
   }
 
   async updateReadings(readings: AcceptedHandoverReading[]): Promise<void> {
-    for (const reading of readings) {
-      await this.db
-        .update(schema.nozzleReadings)
-        .set({
-          closingReading: String(reading.closingReading),
-          volumeSold: String(reading.grossVolume),
-          testingVolume: String(reading.testingVolume),
-        })
-        .where(eq(schema.nozzleReadings.id, reading.id));
-    }
+    await updateReadingColumns(
+      this.db,
+      readings.map((r) => ({
+        id: r.id,
+        closingReading: String(r.closingReading),
+        volumeSold: String(r.grossVolume),
+        testingVolume: String(r.testingVolume),
+      })),
+    );
   }
 }
 
 // ---------------- Shift Reconciliation (drawer model) ----------------
+
+/**
+ * The whole drawer model as ONE jsonb expression (#229): each money source is a
+ * scalar aggregate sub-select and the per-seller cash breakdown is a jsonb
+ * array. Shared by the reconciliation reader and the consolidated close-shift
+ * context read, so both paths always compute identical figures.
+ */
+function reconTotalsJson(shiftId: string) {
+  return sql`(SELECT jsonb_build_object(
+    'cash_collections', (SELECT COALESCE(SUM(amount) FILTER (WHERE payment_method = 'Cash'), 0)::float8
+      FROM collections WHERE shift_id = ${shiftId}),
+    'card_collections', (SELECT COALESCE(SUM(amount) FILTER (WHERE payment_method = 'Card'), 0)::float8
+      FROM collections WHERE shift_id = ${shiftId}),
+    'upi_collections', (SELECT COALESCE(SUM(amount) FILTER (WHERE payment_method = 'UPI'), 0)::float8
+      FROM collections WHERE shift_id = ${shiftId}),
+    'credit_collections', (SELECT COALESCE(SUM(amount) FILTER (WHERE payment_method = 'Credit'), 0)::float8
+      FROM collections WHERE shift_id = ${shiftId}),
+    'drawer_expenses', (SELECT COALESCE(SUM(amount) FILTER (
+        WHERE affects_drawer AND COALESCE(status, '') <> 'VOIDED'), 0)::float8
+      FROM expenses WHERE shift_id = ${shiftId}),
+    'cash_income', (SELECT COALESCE(SUM(amount) FILTER (
+        WHERE affects_drawer AND COALESCE(status, '') <> 'VOIDED'), 0)::float8
+      FROM other_income WHERE shift_id = ${shiftId}),
+    'drawer_supplier_payments', (SELECT COALESCE(SUM(amount) FILTER (
+        WHERE transaction_type = 'Payment' AND affects_drawer), 0)::float8
+      FROM supplier_transactions WHERE shift_id = ${shiftId}),
+    'handover_cash', (SELECT COALESCE(SUM(cash_handed_over), 0)::float8
+      FROM attendant_handovers WHERE shift_id = ${shiftId}),
+    'handover_count', (SELECT COUNT(*)::int FROM attendant_handovers WHERE shift_id = ${shiftId}),
+    -- Per-seller cash portion of cash-recorded sales (total − non-cash), with
+    -- whether the seller has a DU handover this shift ("inside" sellers' cash
+    -- is already declared in their handover cashHandedOver).
+    'sellers', COALESCE((SELECT jsonb_agg(jsonb_build_object(
+        'attendantId', t.attendant_id,
+        'fullName', t.full_name,
+        'amount', t.amount,
+        'inside', t.inside
+      )) FROM (
+        SELECT
+          s.attendant_id,
+          u.full_name,
+          SUM(s.total_amount - COALESCE(s.non_cash_amount, 0))::float8 AS amount,
+          (s.attendant_id IS NOT NULL AND EXISTS (
+            SELECT 1 FROM attendant_handovers h
+            WHERE h.shift_id = ${shiftId} AND h.user_id = s.attendant_id
+          )) AS inside
+        FROM sales s
+        LEFT JOIN users u ON u.id = s.attendant_id
+        WHERE s.shift_id = ${shiftId} AND s.payment_method = 'Cash'
+        GROUP BY s.attendant_id, u.full_name
+      ) t), '[]'::jsonb)
+  ))`;
+}
+
+/** Assemble the port shape from the reconTotalsJson payload (shared JS math). */
+function assembleReconTotals(raw: Record<string, any>): ShiftReconciliationTotals {
+  const sellers =
+    (raw.sellers as Array<{
+      attendantId: string | null;
+      fullName: string | null;
+      amount: number;
+      inside: boolean;
+    }>) ?? [];
+  const handoverCount = Number(raw.handover_count ?? 0);
+  const handoverCash = Number(raw.handover_cash ?? 0);
+
+  // Cash sales for the drawer = the cash attendants declared in their DU handovers
+  // (fuel cash is never a `sales` row — it's metered and declared at handover),
+  // PLUS merchandise cash from sellers who have NO handover (office/counter staff),
+  // whose cash isn't captured anywhere else. Attendants' own merch cash is already
+  // inside their handover cashHandedOver. Fall back to all merch cash when there
+  // are no handovers at all (legacy / handover-less shifts).
+  const merchCashSales = sellers.reduce((acc, s) => acc + Number(s.amount), 0);
+  const outsideRows = sellers.filter((s) => !s.inside);
+  const nonHandoverMerchCash = outsideRows.reduce((acc, s) => acc + Number(s.amount), 0);
+
+  // Per-seller breakdown of the non-attendant (outside-handover) merch cash,
+  // computed from the SAME rows as the total so the two always reconcile.
+  // Sales with no seller fall under "Counter / unassigned".
+  const rowsForBreakdown = handoverCount > 0 ? outsideRows : sellers;
+  const merchCashOutsideHandoverBreakdown = rowsForBreakdown
+    .filter((s) => Number(s.amount) !== 0)
+    .map((s) => ({
+      sellerName: s.attendantId == null ? 'Counter / unassigned' : (s.fullName ?? 'Unknown'),
+      amount: Number(s.amount),
+    }))
+    .sort((a, b) => b.amount - a.amount);
+
+  return {
+    cashSales: handoverCount > 0 ? handoverCash + nonHandoverMerchCash : merchCashSales,
+    handoverCash: handoverCount > 0 ? handoverCash : 0,
+    merchCashOutsideHandover: handoverCount > 0 ? nonHandoverMerchCash : merchCashSales,
+    merchCashOutsideHandoverBreakdown,
+    cashCollections: Number(raw.cash_collections ?? 0),
+    cardCollections: Number(raw.card_collections ?? 0),
+    upiCollections: Number(raw.upi_collections ?? 0),
+    creditCollections: Number(raw.credit_collections ?? 0),
+    cashIncome: Number(raw.cash_income ?? 0),
+    drawerExpenses: Number(raw.drawer_expenses ?? 0),
+    drawerSupplierPayments: Number(raw.drawer_supplier_payments ?? 0),
+  };
+}
+
 export class DrizzleShiftReconciliationReader implements ShiftReconciliationReader {
   constructor(private readonly db: DbClient) {}
   async totalsForShift(shiftId: string): Promise<ShiftReconciliationTotals> {
-    const collections = await this.db
-      .select()
-      .from(schema.collections)
-      .where(eq(schema.collections.shiftId, shiftId));
-    const expenses = await this.db
-      .select()
-      .from(schema.expenses)
-      .where(eq(schema.expenses.shiftId, shiftId));
-    const supplierTxns = await this.db
-      .select()
-      .from(schema.supplierTransactions)
-      .where(eq(schema.supplierTransactions.shiftId, shiftId));
-    const sales = await this.db
-      .select()
-      .from(schema.sales)
-      .where(eq(schema.sales.shiftId, shiftId));
-    const handovers = await this.db
-      .select()
-      .from(schema.attendantHandovers)
-      .where(eq(schema.attendantHandovers.shiftId, shiftId));
-    const incomeRows = await this.db
-      .select()
-      .from(schema.otherIncome)
-      .where(eq(schema.otherIncome.shiftId, shiftId));
+    const [row] = (await this.db.execute(
+      sql`SELECT ${reconTotalsJson(shiftId)} AS recon`,
+    )) as unknown as [Record<string, any>];
+    return assembleReconTotals(row.recon ?? {});
+  }
+}
 
-    const sumBy = (rows: { amount: string; paymentMethod?: string }[], method: string) =>
-      rows.filter((r) => r.paymentMethod === method).reduce((acc, r) => acc + Number(r.amount), 0);
+/** The credit-sale row shape used by close-shift snapshots and the reader. */
+const CREDIT_SALE_JSON = (shiftId: string) => sql`
+  COALESCE((SELECT jsonb_agg(jsonb_build_object(
+      'id', ct.id,
+      'amount', ct.amount::float8,
+      'quantity', ct.quantity::float8,
+      'unitPrice', ct.unit_price::float8,
+      'notes', ct.notes,
+      'duId', ct.du_id,
+      'attendantId', ct.attendant_id,
+      'customerId', COALESCE(ct.customer_id::text, ''),
+      'vehicleId', ct.vehicle_id,
+      'productId', ct.product_id,
+      'customerName', COALESCE(cust.name, 'Customer'),
+      'productName', prod.name,
+      'productCode', prod.code,
+      'vehicleNumber', cv.registration_number
+    ) ORDER BY ct.created_at, ct.id)
+    FROM customer_transactions ct
+    LEFT JOIN customers cust ON cust.id = ct.customer_id
+    LEFT JOIN products prod ON prod.id = ct.product_id
+    LEFT JOIN customer_vehicles cv ON cv.id = ct.vehicle_id
+    WHERE ct.shift_id = ${shiftId}
+      AND ct.transaction_type = 'Credit Sale'
+      AND ct.reference_type = 'CREDIT_SALE'), '[]'::jsonb)
+`;
 
-    // Cash sales for the drawer = the cash attendants declared in their DU handovers
-    // (fuel cash is never a `sales` row — it's metered and declared at handover),
-    // PLUS merchandise cash from sellers who have NO handover (office/counter staff),
-    // whose cash isn't captured anywhere else. Attendants' own merch cash is already
-    // inside their handover cashHandedOver. Fall back to all merch cash when there
-    // are no handovers at all (legacy / handover-less shifts).
-    const handoverCash = handovers.reduce((acc, h) => acc + Number(h.cashHandedOver ?? 0), 0);
-    const handoverUserIds = new Set(handovers.map((h) => h.userId));
-    const cashSaleRows = sales.filter((s) => s.paymentMethod === 'Cash');
-    // Cash portion = total − non-cash (card/UPI) portion (Option B).
-    const cashPortion = (s: { totalAmount: string; nonCashAmount?: string | null }) =>
-      Number(s.totalAmount) - Number(s.nonCashAmount ?? 0);
-    const merchCashSales = cashSaleRows.reduce((acc, s) => acc + cashPortion(s), 0);
-    const outsideRows = cashSaleRows.filter(
-      (s) => !(s.attendantId && handoverUserIds.has(s.attendantId)),
-    );
-    const nonHandoverMerchCash = outsideRows.reduce((acc, s) => acc + cashPortion(s), 0);
+/**
+ * Consolidated close-shift read (#229): shift row (locked FOR UPDATE), nozzle
+ * readings, station nozzles, drawer totals, and credit sales — ONE statement
+ * instead of five sequential port reads under the station advisory lock.
+ */
+export class DrizzleCloseShiftContextReader implements CloseShiftContextReader {
+  constructor(private readonly db: DbClient) {}
 
-    // Per-seller breakdown of the non-attendant (outside-handover) merch cash,
-    // computed from the SAME rows as the total so the two always reconcile. Names
-    // resolved via a users lookup (same pattern as the merchandise panel); sales
-    // with no seller fall under "Counter / unassigned".
-    const rowsForBreakdown = handovers.length > 0 ? outsideRows : cashSaleRows;
-    const bySeller = new Map<string, number>();
-    for (const s of rowsForBreakdown) {
-      const key = (s as { attendantId?: string | null }).attendantId ?? 'unassigned';
-      bySeller.set(key, (bySeller.get(key) ?? 0) + cashPortion(s));
-    }
-    const sellerIds = [...bySeller.keys()].filter((k) => k !== 'unassigned');
-    const sellerNameRows = sellerIds.length
-      ? await this.db
-          .select({ id: schema.users.id, fullName: schema.users.fullName })
-          .from(schema.users)
-          .where(inArray(schema.users.id, sellerIds))
-      : [];
-    const nameById = new Map(sellerNameRows.map((u) => [u.id, u.fullName]));
-    const merchCashOutsideHandoverBreakdown = [...bySeller.entries()]
-      .filter(([, amount]) => amount !== 0)
-      .map(([key, amount]) => ({
-        sellerName:
-          key === 'unassigned' ? 'Counter / unassigned' : (nameById.get(key) ?? 'Unknown'),
-        amount,
-      }))
-      .sort((a, b) => b.amount - a.amount);
+  async load(organizationId: string, shiftId: string): Promise<CloseShiftContext> {
+    const [row] = (await this.db.execute(sql`
+      WITH locked_shift AS (
+        SELECT * FROM shifts WHERE id = ${shiftId} FOR UPDATE
+      )
+      SELECT
+        (SELECT ${rowJson(schema.shifts, 's')} FROM locked_shift s) AS shift,
+        COALESCE((SELECT jsonb_agg(${rowJson(schema.nozzleReadings, 'nr')} ORDER BY nr.created_at, nr.id)
+          FROM nozzle_readings nr WHERE nr.shift_id = ${shiftId}), '[]'::jsonb) AS readings,
+        COALESCE((SELECT jsonb_agg(jsonb_build_object(
+            'id', n.id, 'productId', n.product_id, 'tankId', n.tank_id))
+          FROM nozzles n
+          WHERE n.organization_id = ${organizationId}
+            AND n.station_id = (SELECT station_id FROM locked_shift)), '[]'::jsonb) AS nozzles,
+        ${reconTotalsJson(shiftId)} AS recon,
+        ${CREDIT_SALE_JSON(shiftId)} AS credit_sales
+    `)) as unknown as [Record<string, any>];
 
     return {
-      cashSales: handovers.length > 0 ? handoverCash + nonHandoverMerchCash : merchCashSales,
-      handoverCash: handovers.length > 0 ? handoverCash : 0,
-      merchCashOutsideHandover: handovers.length > 0 ? nonHandoverMerchCash : merchCashSales,
-      merchCashOutsideHandoverBreakdown,
-      cashCollections: sumBy(collections, 'Cash'),
-      cardCollections: sumBy(collections, 'Card'),
-      upiCollections: sumBy(collections, 'UPI'),
-      creditCollections: sumBy(collections, 'Credit'),
-      cashIncome: incomeRows
-        .filter((i) => i.affectsDrawer && i.status !== 'VOIDED')
-        .reduce((acc, i) => acc + Number(i.amount), 0),
-      drawerExpenses: expenses
-        .filter((e) => e.affectsDrawer && e.status !== 'VOIDED')
-        .reduce((acc, e) => acc + Number(e.amount), 0),
-      drawerSupplierPayments: supplierTxns
-        .filter((t) => t.transactionType === 'Payment' && t.affectsDrawer)
-        .reduce((acc, t) => acc + Number(t.amount), 0),
+      shift: (row.shift as CloseShiftContext['shift']) ?? null,
+      readings: (row.readings as CloseShiftContext['readings']) ?? [],
+      nozzles: (row.nozzles as CloseShiftContext['nozzles']) ?? [],
+      totals: assembleReconTotals(row.recon ?? {}),
+      creditSales: (row.credit_sales as CloseShiftContext['creditSales']) ?? [],
     };
   }
 }
@@ -875,10 +1000,15 @@ export class DrizzleStockMovementWriter implements StockMovementWriter {
 export class DrizzleShiftSummaryWriter implements ShiftSummaryStore {
   constructor(private readonly db: DbClient) {}
   async save(shiftId: string, snapshot: Record<string, unknown>): Promise<void> {
-    await this.db.delete(schema.shiftSummaries).where(eq(schema.shiftSummaries.shiftId, shiftId));
-    await this.db
-      .insert(schema.shiftSummaries)
-      .values({ shiftId, snapshotData: snapshot, generatedAt: new Date() });
+    // Replace-in-one-statement: shift_summaries has no unique index on shift_id,
+    // so the swap is a data-modifying CTE instead of a delete + insert pair (#229).
+    await this.db.execute(sql`
+      WITH removed AS (
+        DELETE FROM shift_summaries WHERE shift_id = ${shiftId}
+      )
+      INSERT INTO shift_summaries (shift_id, snapshot_data, generated_at)
+      VALUES (${shiftId}, ${JSON.stringify(snapshot)}::jsonb, now())
+    `);
   }
   async deleteForShift(shiftId: string): Promise<void> {
     await this.db.delete(schema.shiftSummaries).where(eq(schema.shiftSummaries.shiftId, shiftId));

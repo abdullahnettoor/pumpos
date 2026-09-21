@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNull } from 'drizzle-orm';
+import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
 import {
   accountTypeForPaidFrom,
@@ -8,7 +8,7 @@ import {
   type LedgerDirection,
   type LedgerSourceType,
 } from '@pump/core';
-import { AccountProvisioningService } from './account-provisioning.js';
+import { normalizeProvider } from '@pump/shared';
 
 /**
  * Posts money movements onto the persisted ledger (Phase F, FA2). Called inside
@@ -398,107 +398,223 @@ export class LedgerPostingService {
     shift: { id: string; stationId: string; businessDayId: string },
     recon: { cashSales?: number },
   ): Promise<void> {
-    const meta = await this.businessDayMeta(shift.businessDayId);
-    const entryDate = meta?.businessDate ?? new Date().toISOString().slice(0, 10);
     const cash = Number(recon.cashSales ?? 0);
 
     // Card/UPI is captured per terminal; post ONE ledger entry per machine to
     // its acquirer's clearing account, so each machine's batch is visible.
-    const termEntries = await this.db
-      .select({
-        card: schema.handoverTerminalEntries.cardAmount,
-        upi: schema.handoverTerminalEntries.upiAmount,
-        clearingAccountId: schema.paymentTerminals.clearingAccountId,
-        provider: schema.paymentTerminals.provider,
-        label: schema.paymentTerminals.label,
-      })
-      .from(schema.handoverTerminalEntries)
-      .innerJoin(
-        schema.paymentTerminals,
-        eq(schema.paymentTerminals.id, schema.handoverTerminalEntries.terminalId),
-      )
-      .where(eq(schema.handoverTerminalEntries.shiftId, shift.id));
+    // Statement-budget shape (#229): one combined read for the entry date, the
+    // terminal entries, the handover card/UPI fallback aggregate, and every
+    // candidate account — then at most one batched account insert (cold path)
+    // and one delete+insert ledger write.
+    const [read] = (await this.db.execute(sql`
+      SELECT
+        (SELECT d.business_date FROM business_days d
+          WHERE d.id = ${shift.businessDayId}) AS business_date,
+        COALESCE((SELECT jsonb_agg(jsonb_build_object(
+            'card', e.card_amount::text,
+            'upi', e.upi_amount::text,
+            'clearingAccountId', pt.clearing_account_id,
+            'provider', pt.provider,
+            'label', pt.label
+          ))
+          FROM handover_terminal_entries e
+          JOIN payment_terminals pt ON pt.id = e.terminal_id
+          WHERE e.shift_id = ${shift.id}), '[]'::jsonb) AS term_entries,
+        (SELECT COALESCE(SUM(COALESCE(h.card_handed_over, 0) + COALESCE(h.upi_handed_over, 0)), 0)::float8
+          FROM attendant_handovers h WHERE h.shift_id = ${shift.id}) AS handover_card_upi,
+        COALESCE((SELECT jsonb_agg(jsonb_build_object(
+            'id', fa.id,
+            'stationId', fa.station_id,
+            'accountType', fa.account_type,
+            'provider', fa.metadata->>'provider',
+            'createdAt', to_char(fa.created_at, 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')
+          ) ORDER BY fa.created_at)
+          FROM financial_accounts fa
+          WHERE fa.organization_id = ${organizationId}
+            AND (fa.station_id = ${shift.stationId} OR fa.station_id IS NULL)
+            AND fa.account_type IN ('CASH_IN_HAND', 'MERCHANT_CLEARING')), '[]'::jsonb) AS accounts
+    `)) as unknown as [Record<string, any>];
 
-    const provisioner = new AccountProvisioningService(this.db);
-    const cardPosts: Array<{ accountId: string; amount: number; note: string }> = [];
+    const entryDate: string =
+      (read.business_date as string | null) ?? new Date().toISOString().slice(0, 10);
+    const termEntries: Array<{
+      card: string | null;
+      upi: string | null;
+      clearingAccountId: string | null;
+      provider: string | null;
+      label: string | null;
+    }> = read.term_entries ?? [];
+    const accounts: Array<{
+      id: string;
+      stationId: string | null;
+      accountType: string;
+      provider: string | null;
+      createdAt: string;
+    }> = read.accounts ?? [];
+
+    // In-memory account resolution mirroring ensureAccount / ensureClearingForProvider:
+    // station-scoped first (oldest), org-shared fallback for CASH_IN_HAND, provider
+    // matched case-insensitively for clearing. Missing accounts are collected and
+    // created in ONE batched insert (first-ever close only).
+    const stationClearing = accounts.filter(
+      (a) => a.accountType === 'MERCHANT_CLEARING' && a.stationId === shift.stationId,
+    );
+    const toCreate: Array<{ key: string; name: string; metadata: { provider: string } | null }> =
+      [];
+    const pendingKeys = new Map<string, string>(); // resolution key -> toCreate key
+    const clearingFor = (providerRaw: string | null | undefined): string | { pending: string } => {
+      const prov = normalizeProvider(providerRaw);
+      if (prov) {
+        const match = stationClearing.find(
+          (a) => (a.provider ?? '').toLowerCase() === prov.toLowerCase(),
+        );
+        if (match) return match.id;
+        const key = `clearing:${prov.toLowerCase()}`;
+        if (!pendingKeys.has(key)) {
+          pendingKeys.set(key, key);
+          toCreate.push({ key, name: `${prov} Clearing`, metadata: { provider: prov } });
+        }
+        return { pending: key };
+      }
+      const def = stationClearing.find((a) => a.provider == null);
+      if (def) return def.id;
+      const key = 'clearing:__default__';
+      if (!pendingKeys.has(key)) {
+        pendingKeys.set(key, key);
+        toCreate.push({ key, name: DEFAULT_ACCOUNT_NAME.MERCHANT_CLEARING, metadata: null });
+      }
+      return { pending: key };
+    };
+
+    const cardPosts: Array<{
+      account: string | { pending: string };
+      amount: number;
+      note: string;
+    }> = [];
     for (const e of termEntries) {
       const amt = Number(e.card ?? 0) + Number(e.upi ?? 0);
       if (amt <= 0) continue;
-      const accountId =
-        e.clearingAccountId ??
-        (await provisioner.ensureClearingForProvider(organizationId, shift.stationId, e.provider));
-      cardPosts.push({ accountId, amount: amt, note: `Shift card/UPI · ${e.label || 'terminal'}` });
+      const account = e.clearingAccountId ?? clearingFor(e.provider);
+      cardPosts.push({ account, amount: amt, note: `Shift card/UPI · ${e.label || 'terminal'}` });
     }
 
     // Fallback: aggregate card/UPI declared on the handover without a per-terminal
     // split (legacy / single-acquirer). Route to the station's clearing account.
     if (cardPosts.length === 0) {
-      const handovers = await this.db
-        .select({
-          card: schema.attendantHandovers.cardHandedOver,
-          upi: schema.attendantHandovers.upiHandedOver,
-        })
-        .from(schema.attendantHandovers)
-        .where(eq(schema.attendantHandovers.shiftId, shift.id));
-      const cardUpi = handovers.reduce(
-        (acc, h) => acc + Number(h.card ?? 0) + Number(h.upi ?? 0),
-        0,
-      );
+      const cardUpi = Number(read.handover_card_upi ?? 0);
       if (cardUpi > 0) {
         // Card/UPI money implies a machine was used → create a clearing account if
         // none exists yet (money-driven, not a pre-provisioned empty bucket).
-        const existing = await this.db
-          .select({ id: schema.financialAccounts.id })
-          .from(schema.financialAccounts)
-          .where(
-            and(
-              eq(schema.financialAccounts.organizationId, organizationId),
-              eq(schema.financialAccounts.stationId, shift.stationId),
-              eq(schema.financialAccounts.accountType, 'MERCHANT_CLEARING'),
-            ),
-          )
-          .orderBy(schema.financialAccounts.createdAt)
-          .limit(1);
-        const accountId =
-          existing[0]?.id ??
-          (await provisioner.ensureClearingForProvider(organizationId, shift.stationId, null));
-        cardPosts.push({ accountId, amount: cardUpi, note: 'Shift card/UPI (terminal batch)' });
+        const account = stationClearing[0]?.id ?? clearingFor(null);
+        cardPosts.push({ account, amount: cardUpi, note: 'Shift card/UPI (terminal batch)' });
       }
     }
 
-    await this.reverseShiftClose(shift.id);
-
+    let cashAccount: string | { pending: string } | null = null;
     if (cash > 0) {
-      const cashAccount = await this.ensureAccount(organizationId, shift.stationId, 'CASH_IN_HAND');
-      await this.postEntry({
-        organizationId,
-        stationId: shift.stationId,
-        accountId: cashAccount,
-        direction: 'in',
-        amount: String(cash),
-        entryDate,
-        sourceType: 'SALE_CASH',
-        sourceId: shift.id,
-        businessDayId: shift.businessDayId,
-        shiftId: shift.id,
-        notes: 'Shift cash sales',
-      });
+      const stationCash = accounts.find(
+        (a) => a.accountType === 'CASH_IN_HAND' && a.stationId === shift.stationId,
+      );
+      const sharedCash = accounts.find(
+        (a) => a.accountType === 'CASH_IN_HAND' && a.stationId === null,
+      );
+      if (stationCash) cashAccount = stationCash.id;
+      else if (sharedCash) cashAccount = sharedCash.id;
+      else {
+        const key = 'cash:__default__';
+        if (!pendingKeys.has(key)) {
+          pendingKeys.set(key, key);
+          toCreate.push({ key, name: DEFAULT_ACCOUNT_NAME.CASH_IN_HAND, metadata: null });
+        }
+        cashAccount = { pending: key };
+      }
     }
 
-    for (const p of cardPosts) {
-      await this.postEntry({
-        organizationId,
-        stationId: shift.stationId,
-        accountId: p.accountId,
-        direction: 'in',
-        amount: String(p.amount),
-        entryDate,
-        sourceType: 'SALE_CARD',
-        sourceId: shift.id,
-        businessDayId: shift.businessDayId,
-        shiftId: shift.id,
-        notes: p.note,
-      });
+    // Cold path: create every missing account in one statement.
+    const createdByKey = new Map<string, string>();
+    if (toCreate.length > 0) {
+      const created = await this.db
+        .insert(schema.financialAccounts)
+        .values(
+          toCreate.map((t) => ({
+            organizationId,
+            stationId: shift.stationId,
+            accountType: (t.key.startsWith('cash:')
+              ? 'CASH_IN_HAND'
+              : 'MERCHANT_CLEARING') as FinancialAccountType,
+            name: t.name,
+            openingBalance: '0',
+            openingDate: null,
+            metadata: t.metadata,
+            isActive: true,
+          })),
+        )
+        .returning({ id: schema.financialAccounts.id, name: schema.financialAccounts.name });
+      toCreate.forEach((t, i) => createdByKey.set(t.key, created[i].id));
     }
+    const resolve = (a: string | { pending: string }): string =>
+      typeof a === 'string' ? a : createdByKey.get(a.pending)!;
+
+    const entryBase = {
+      organizationId,
+      stationId: shift.stationId,
+      entryDate,
+      transferId: null,
+      sourceId: shift.id,
+      businessDayId: shift.businessDayId,
+      shiftId: shift.id,
+      reconciled: false,
+    };
+    const values = [
+      ...(cash > 0 && cashAccount
+        ? [
+            {
+              ...entryBase,
+              accountId: resolve(cashAccount),
+              direction: 'in',
+              amount: String(cash),
+              sourceType: 'SALE_CASH',
+              notes: 'Shift cash sales',
+            },
+          ]
+        : []),
+      ...cardPosts
+        .filter((p) => Number(p.amount) > 0)
+        .map((p) => ({
+          ...entryBase,
+          accountId: resolve(p.account),
+          direction: 'in',
+          amount: String(p.amount),
+          sourceType: 'SALE_CARD',
+          notes: p.note,
+        })),
+    ];
+    // Replace prior shift-close postings and write the new ones in ONE
+    // data-modifying-CTE statement (idempotent re-close / reopen).
+    const removal = sql`
+      DELETE FROM ledger_entries
+      WHERE shift_id = ${shift.id} AND source_type IN ('SALE_CASH', 'SALE_CARD')
+    `;
+    if (values.length === 0) {
+      await this.db.execute(removal);
+      return;
+    }
+    const rows = sql.join(
+      values.map(
+        (v) => sql`(
+          ${v.organizationId}, ${v.stationId}, ${v.accountId}::uuid, ${v.direction},
+          ${v.amount}::numeric, ${v.entryDate}, ${v.sourceType}, ${v.sourceId},
+          ${v.businessDayId}, ${v.shiftId}, false, ${v.notes}
+        )`,
+      ),
+      sql`, `,
+    );
+    await this.db.execute(sql`
+      WITH removed AS (${removal})
+      INSERT INTO ledger_entries (
+        organization_id, station_id, account_id, direction, amount, entry_date,
+        source_type, source_id, business_day_id, shift_id, reconciled, notes
+      ) VALUES ${rows}
+    `);
   }
 }
