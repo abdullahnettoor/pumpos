@@ -1,0 +1,91 @@
+// @vitest-environment jsdom
+import React from 'react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, screen, within } from '@testing-library/react';
+import { renderWithProviders } from '../../test/renderWithProviders.js';
+
+/**
+ * The Closed & Locked Shifts history is what an operator checks a past shift
+ * against. Every column here is read-path only — it reads fields the list
+ * endpoint returns — and the failure mode is quiet: a column that reads a name
+ * the API never sends renders its fallback for every row and looks like real
+ * data ("Custom", "Closed", "Unknown", "₹0"). These pin the field names (#224).
+ */
+const summaries = vi.fn<[], unknown[]>(() => []);
+
+vi.mock('../../query/hooks.js', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  useShiftSummaries: () => ({ data: summaries(), isPending: false, isLoading: false }),
+}));
+
+const { ShiftHistoryTab } = await import('./ShiftHistoryTab.js');
+
+const STATION = { id: 'station-1', name: 'Test RO', settings: {} } as never;
+
+/** One row in the shape `GET /shift-summaries` actually returns. */
+const apiRow = (over: Record<string, unknown> = {}) => ({
+  shiftId: 'shift-1',
+  status: 'CLOSED',
+  openedAt: '2026-03-01T00:30:00.000Z',
+  closedAt: '2026-03-01T08:30:00.000Z',
+  generatedAt: '2026-03-01T08:30:00.000Z',
+  businessDate: '2026-03-01',
+  templateName: 'Morning',
+  snapshotData: {
+    closedByName: 'Priya Nair',
+    expectedCash: 18200,
+    closingCash: 18500,
+    cashVariance: 300,
+  },
+  ...over,
+});
+
+/** Scoped to the rows: the page heading also contains "Closed" and "Locked". */
+const body = () => within(document.querySelector('tbody') as HTMLElement);
+
+const render = (rows: unknown[]) => {
+  summaries.mockReturnValue(rows);
+  renderWithProviders(<ShiftHistoryTab selectedStation={STATION} userRole="Owner" />);
+};
+
+describe('ShiftHistoryTab', () => {
+  afterEach(() => {
+    cleanup();
+    summaries.mockReset();
+  });
+
+  it('shows the template the shift was opened from', () => {
+    render([apiRow()]);
+    expect(body().getByText('Morning')).toBeDefined();
+    expect(body().queryByText('Custom')).toBeNull();
+  });
+
+  it('prefers the joined template name over the snapshot copy', () => {
+    render([apiRow({ snapshotData: { ...apiRow().snapshotData, templateName: 'Stale' } })]);
+    expect(screen.getByText('Morning')).toBeDefined();
+    expect(screen.queryByText('Stale')).toBeNull();
+  });
+
+  it('falls back gracefully for test-era rows with no template at all', () => {
+    render([apiRow({ templateName: null, snapshotData: {} })]);
+    expect(body().getByText('Custom')).toBeDefined();
+  });
+
+  it('badges a locked shift as Locked, not merely Closed', () => {
+    render([apiRow({ status: 'LOCKED' })]);
+    expect(body().getByText(/Locked/i)).toBeDefined();
+    expect(body().queryByText(/Closed/i)).toBeNull();
+  });
+
+  it('badges a closed shift as Closed', () => {
+    render([apiRow()]);
+    expect(body().getByText(/Closed/i)).toBeDefined();
+    expect(body().queryByText(/Locked/i)).toBeNull();
+  });
+
+  it('shows who reconciled the shift and the expected drawer', () => {
+    render([apiRow()]);
+    expect(screen.getByText('Priya Nair')).toBeDefined();
+    expect(screen.getByText(/18,200/)).toBeDefined();
+  });
+});
