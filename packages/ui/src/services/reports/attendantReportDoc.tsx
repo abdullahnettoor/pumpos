@@ -13,11 +13,8 @@ import {
   type Col,
   type Cell,
 } from './shiftSummaryDoc.js';
-import type {
-  AttendantReportDispenser,
-  AttendantReportEntry,
-  AttendantReportShift,
-} from '@pump/shared';
+import type { AttendantReportDispenser, AttendantReportShift } from '@pump/shared';
+import type { AttendantStatementData } from './attendantStatementData.js';
 import { sliceAttendantStatementByDay } from './attendantStatementDays.js';
 import type { AttendantReportSection, AttendantReportConfig } from './reportConfig.js';
 import { DEFAULT_ATTENDANT_REPORT_CONFIG } from './reportConfig.js';
@@ -32,15 +29,8 @@ export {
  * Attendant Handover Report — a per-Attendant statement for one Business-Date
  * range, built for the conversation that follows a persistent shortage. Every
  * figure comes from closed Shifts, so the document never restates later.
- *
- * `data` is one attendant entry from the report plus its period meta.
  */
-export interface AttendantStatementData extends AttendantReportEntry {
-  from: string;
-  to: string;
-  /** The instant the report was composed — never the moment of printing. */
-  generatedAt: string;
-}
+export type { AttendantStatementData };
 
 const shiftLabel = (shift: AttendantReportShift): string =>
   `${shift.businessDate}${shift.shiftTemplateName ? ` · ${shift.shiftTemplateName}` : ''}`;
@@ -326,12 +316,27 @@ const builders: Record<
   ),
 };
 
-/** Sections that describe the range as a whole — the cover page of a multi-day statement. */
-const COVER_SECTIONS: AttendantReportSection[] = ['header', 'summary', 'variance'];
+/**
+ * Where each section belongs once a statement paginates by day.
+ *
+ * `cover` describes the range as a whole, `day` describes one day's shifts,
+ * and `variance` is `both` — the cover carries the net figure the recovery
+ * conversation opens with, each day carries its own. Exhaustive by type, so a
+ * new section fails to compile until it has been placed.
+ */
+const SECTION_PLACEMENT: Record<AttendantReportSection, 'cover' | 'day' | 'both'> = {
+  header: 'cover',
+  summary: 'cover',
+  signature: 'cover',
+  fuelSales: 'day',
+  merchandise: 'day',
+  creditSales: 'day',
+  terminals: 'day',
+  variance: 'both',
+};
 
-/** Sections a single Business Day renders; the cover already carried the letterhead. */
-const isDaySection = (key: AttendantReportSection) =>
-  key !== 'header' && key !== 'summary' && key !== 'signature';
+const placedOn = (where: 'cover' | 'day') => (key: AttendantReportSection) =>
+  SECTION_PLACEMENT[key] === where || SECTION_PLACEMENT[key] === 'both';
 
 /** A day page's own title — larger than a section head, it is the page's subject. */
 const dayTitle = { fontSize: 13, color: C.ink, fontWeight: 700 as const, marginBottom: 2 };
@@ -371,15 +376,15 @@ export const AttendantReportDoc: React.FC<{
     );
   }
 
-  const daySections = config.sections.filter(isDaySection);
-  const signature = config.sections.includes('signature');
+  const daySections = config.sections.filter(placedOn('day'));
+  const coverSections = config.sections.filter(placedOn('cover'));
 
   return (
     <Document>
       <Page size={config.paper} style={s.page}>
-        {COVER_SECTIONS.filter((key) => config.sections.includes(key)).map((key) =>
-          builders[key]?.(data, config),
-        )}
+        {coverSections
+          .filter((key) => key !== 'signature')
+          .map((key) => builders[key]?.(data, config))}
         <View style={{ marginTop: 12 }}>
           <Text style={s.h2}>Days in this statement</Text>
           <Text style={s.sub}>
@@ -387,7 +392,9 @@ export const AttendantReportDoc: React.FC<{
             {days[days.length - 1].businessDate}.
           </Text>
         </View>
-        {signature ? builders.signature?.(data, config) : null}
+        {/* Signed at the end of the cover: the acknowledgement is of the
+            period's net variance, not of any one day. */}
+        {coverSections.includes('signature') ? builders.signature?.(data, config) : null}
         <PageFooter generatedAt={data.generatedAt} />
       </Page>
 

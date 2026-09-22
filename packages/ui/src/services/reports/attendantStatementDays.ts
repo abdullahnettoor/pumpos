@@ -1,5 +1,5 @@
 import type { AttendantReportShift, AttendantReportTotals } from '@pump/shared';
-import type { AttendantStatementData } from './attendantReportDoc.js';
+import type { AttendantStatementData } from './attendantStatementData.js';
 
 /**
  * One Business Day of an Attendant's statement.
@@ -30,9 +30,15 @@ const emptyTotals = (): AttendantReportTotals => ({
 /**
  * Totals of one day, summed from its Shifts.
  *
- * Shift figures are themselves sums of that Shift's Handovers, which is what
- * the period totals were accumulated from — so the days always add back up to
- * the period. Nothing here re-derives a figure the composer already computed.
+ * This is a re-partition, not a second source of truth: every figure added
+ * here was computed by `composeAttendantHandoverReport` and is only being
+ * re-grouped under a narrower heading for the page that shows it. No figure is
+ * derived from anything the composer did not already state, which is why the
+ * days always add back up to the period the composer computed — asserted in
+ * this module's tests.
+ *
+ * If a day ever needs a figure the composer does not emit, it belongs in core
+ * with the rest of the report arithmetic, not here.
  */
 function totalsOf(shifts: AttendantReportShift[]): AttendantReportTotals {
   const totals = emptyTotals();

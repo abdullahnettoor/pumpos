@@ -398,6 +398,12 @@ describe('Reports PDF with PumpOS Mark in Letterhead', () => {
       return streamToBuffer(stream);
     };
 
+    /*
+     * Counted off the raw PDF objects: @react-pdf exposes no page count, and
+     * rendering to text loses it. If a future renderer writes pages into
+     * object streams this stops matching — it would under-count, not silently
+     * pass, so the test still fails loudly.
+     */
     const pageCount = (buffer: Buffer) =>
       (buffer.toString('latin1').match(/\/Type\s*\/Page[^s]/g) || []).length;
 

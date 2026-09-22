@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, within } from '@testing-library/react';
 import type { AttendantHandoverReport } from '@pump/shared';
 import { renderWithProviders } from '../../test/renderWithProviders.js';
+import { inr } from '../../utils/format.js';
 
 /**
  * The attendant statement drawer is where an operator decides whether a
@@ -173,8 +174,7 @@ describe('AttendantHandoverReportPanel drawer', () => {
   it('names who owes the shift\u2019s fuel-on-credit, and totals to the shift figure', () => {
     openDrawer();
 
-    // Tables in drawer order: summary, the shift's nozzles, its credit chits.
-    const creditTable = screen.getAllByRole('table')[2];
+    const creditTable = screen.getByRole('table', { name: 'Fuel-on-credit chits' });
     const rows = within(creditTable)
       .getAllByRole('row')
       .map((r) =>
@@ -184,8 +184,9 @@ describe('AttendantHandoverReportPanel drawer', () => {
       )
       .filter((cells) => cells.length > 0);
 
-    expect(rows[0]).toEqual(['Anand Transports', 'KL-07-AB-1234', 'Diesel', '20', '₹800.00']);
-    // A chit that recorded no product or vehicle is still listed, still counted.
+    expect(rows[0]).toEqual(['Anand Transports', 'KL-07-AB-1234', 'Diesel', '20.000', '₹800.00']);
+    // A chit that recorded no product or vehicle is still listed, still counted —
+    // and an absent quantity is a dash, not a formatted zero.
     expect(rows[1]).toEqual(['Zenith Logistics', '—', '—', '—', '₹200.00']);
     expect(rows[2]).toEqual(['Total', '', '', '', '₹1,000.00']);
   });
@@ -193,7 +194,7 @@ describe('AttendantHandoverReportPanel drawer', () => {
   it('lists the nozzles in the order the dispenser is walked', () => {
     openDrawer();
 
-    const nozzleTable = screen.getAllByRole('table')[1];
+    const nozzleTable = screen.getByRole('table', { name: 'DU 1 nozzle readings' });
     const names = within(nozzleTable)
       .getAllByRole('row')
       .slice(1)
@@ -206,11 +207,17 @@ describe('AttendantHandoverReportPanel drawer', () => {
   it('opens on the range figures an export would carry', () => {
     openDrawer();
 
-    // The KPI header the PDF's cover page carries, in the same terms.
-    for (const label of ['Shifts', 'Cash handed over', 'Card + UPI', 'Net variance']) {
-      expect(screen.getAllByText(label).length).toBeGreaterThan(0);
-    }
-    // Fuel-on-credit appears twice: the range KPI and the shift's breakdown head.
-    expect(screen.getAllByText('Fuel-on-credit').length).toBeGreaterThan(1);
+    // The figures the PDF's cover page carries, in the same terms — labels
+    // alone would pass on an empty statement.
+    const totals = report.attendants[0].totals;
+    // Scoped to the drawer: the page behind it carries KPIs of its own.
+    const drawer = within(document.querySelector('.drawer-container') as HTMLElement);
+    // KpiTile: label span → label row → tile, whose text carries the value.
+    const kpi = (label: string) =>
+      drawer.getByText(label).closest('div')!.parentElement!.textContent;
+
+    expect(kpi('Cash handed over')).toContain(inr(totals.cashHandedOver));
+    expect(kpi('Card + UPI')).toContain(inr(totals.cardHandedOver + totals.upiHandedOver));
+    expect(kpi('Net variance')).toContain(inr(totals.varianceAmount));
   });
 });

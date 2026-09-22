@@ -1,20 +1,25 @@
 import React, { type ReactNode } from 'react';
 import { cn } from '../lib/cn.js';
 
-/**
- * A column of a StatementTable. `align: 'right'` also renders the cells in
- * mono — a numeric column reads as one, and the digits line up.
- */
+/** A column of a StatementTable. */
 export interface StatementColumn<T> {
   header: ReactNode;
   /** Cell content for a row. Return a plain string for a plain cell. */
   cell: (row: T) => ReactNode;
   align?: 'left' | 'right';
+  /**
+   * Render the cells in mono so the digits line up. Defaults to on for a
+   * right-aligned column — that is what right-alignment is nearly always for —
+   * pass `false` for a right-aligned column of words.
+   */
+  mono?: boolean;
   /** Emphasise the column (the figure the row is about). */
   strong?: boolean;
   /** Fraction of the table width; defaults to an equal share. */
   width?: string;
 }
+
+type CellStyle = Pick<StatementColumn<unknown>, 'align' | 'mono' | 'strong'>;
 
 export interface StatementTableProps<T> {
   columns: StatementColumn<T>[];
@@ -25,15 +30,21 @@ export interface StatementTableProps<T> {
    * rows explain — never a second, re-derived one.
    */
   total?: ReactNode[];
+  /**
+   * Accessible name for the table. A statement stacks several of these, and
+   * "table" three times tells a screen-reader user nothing.
+   */
+  label?: string;
   /** Shown instead of the table when there are no rows. Omit to render nothing. */
   emptyMessage?: string;
   className?: string;
 }
 
-const cellClass = (col: { align?: 'left' | 'right'; strong?: boolean }) =>
+const cellClass = (col: CellStyle) =>
   cn(
     'px-2 py-1 align-top',
-    col.align === 'right' ? 'text-right font-mono tabular-nums' : 'text-left',
+    col.align === 'right' ? 'text-right' : 'text-left',
+    (col.mono ?? col.align === 'right') && 'font-mono tabular-nums',
     col.strong && 'font-semibold',
   );
 
@@ -51,6 +62,7 @@ export function StatementTable<T>({
   rows,
   rowKey,
   total,
+  label,
   emptyMessage,
   className,
 }: StatementTableProps<T>) {
@@ -61,14 +73,18 @@ export function StatementTable<T>({
   }
 
   return (
-    <table className={cn('w-full border-collapse text-[11px] text-ink-default', className)}>
+    <table
+      aria-label={label}
+      className={cn('w-full border-collapse text-[11px] text-ink-default', className)}
+    >
       <thead>
         <tr className="border-b border-border-soft text-[10px] uppercase tracking-[0.04em] text-ink-faint">
           {columns.map((col, i) => (
             <th
               key={i}
               scope="col"
-              className={cn(cellClass({ align: col.align }), 'font-medium')}
+              // The header is words even above a mono column.
+              className={cn(cellClass({ align: col.align, mono: false }), 'font-medium')}
               style={col.width ? { width: col.width } : undefined}
             >
               {col.header}

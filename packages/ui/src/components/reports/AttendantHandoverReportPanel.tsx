@@ -12,7 +12,7 @@ import { computeRange } from '../primitives/DateRangeField.js';
 import type { DateRange } from '../primitives/DateRangeField.js';
 import { Field, Select } from '../primitives/Field.js';
 import { Drawer } from '../Drawer.js';
-import { inr } from '../../utils/format.js';
+import { formatDateTime, formatQty, inr } from '../../utils/format.js';
 import {
   KpiStrip,
   KpiTile,
@@ -34,18 +34,32 @@ export interface AttendantHandoverReportPanelProps {
   selectedStation: { id: string; name?: string; settings?: Record<string, unknown> } | null;
 }
 
+/*
+ * Styles for the attendants summary table only — a navigational list (clickable
+ * rows opening the drawer), not a statement, so it is deliberately not the
+ * read-only `StatementTable`. Replacing it is a `DataTable` job of its own.
+ */
 const th: React.CSSProperties = { padding: '8px 10px', fontWeight: 600 };
 const thR: React.CSSProperties = { ...th, textAlign: 'right' };
 const td: React.CSSProperties = { padding: '8px 10px', color: 'var(--text-default)' };
 const tdR: React.CSSProperties = { ...td, textAlign: 'right', fontFamily: 'var(--font-mono)' };
 
-/** Variance reads as money owed either way, so its sign carries the meaning. */
-const varianceColor = (amount: number): string =>
-  amount < 0 ? 'var(--text-danger)' : amount > 0 ? 'var(--text-success)' : 'var(--text-muted)';
+/**
+ * Variance reads as money owed either way, so its sign carries the meaning.
+ * One reading, expressed as a design-system tone; the summary table below is
+ * still inline-styled markup, so it maps that tone to its own colour rather
+ * than deciding the sign a second time.
+ */
+type VarianceTone = 'danger' | 'success' | 'neutral';
 
-/** The same reading, as a semantic tone the design-system primitives take. */
-const varianceTone = (amount: number): 'danger' | 'success' | 'neutral' =>
+const varianceTone = (amount: number): VarianceTone =>
   amount < 0 ? 'danger' : amount > 0 ? 'success' : 'neutral';
+
+const TONE_COLOR: Record<VarianceTone, string> = {
+  danger: 'var(--text-danger)',
+  success: 'var(--text-success)',
+  neutral: 'var(--text-muted)',
+};
 
 const DispenserDetail: React.FC<{ dispenser: AttendantReportDispenser }> = ({ dispenser }) => (
   <div className="mt-2">
@@ -59,13 +73,19 @@ const DispenserDetail: React.FC<{ dispenser: AttendantReportDispenser }> = ({ di
     </div>
 
     <StatementTable
+      label={`${dispenser.duName} nozzle readings`}
       columns={[
         { header: 'Nozzle', cell: (n) => n.nozzleName },
         { header: 'Product', cell: (n) => n.productName ?? '—' },
-        { header: 'Opening', align: 'right', cell: (n) => n.openingReading },
-        { header: 'Closing', align: 'right', cell: (n) => n.closingReading },
-        { header: 'Volume', align: 'right', strong: true, cell: (n) => n.volumeSold },
-        { header: 'Testing', align: 'right', cell: (n) => n.testingVolume },
+        { header: 'Opening', align: 'right', cell: (n) => formatQty(n.openingReading, 3) },
+        { header: 'Closing', align: 'right', cell: (n) => formatQty(n.closingReading, 3) },
+        {
+          header: 'Volume',
+          align: 'right',
+          strong: true,
+          cell: (n) => formatQty(n.volumeSold, 3),
+        },
+        { header: 'Testing', align: 'right', cell: (n) => formatQty(n.testingVolume, 3) },
       ]}
       rows={dispenser.nozzles}
       rowKey={(n) => n.nozzleId}
@@ -74,6 +94,7 @@ const DispenserDetail: React.FC<{ dispenser: AttendantReportDispenser }> = ({ di
     {dispenser.terminals.length > 0 ? (
       <StatementTable
         className="mt-1"
+        label={`${dispenser.duName} payment terminals`}
         columns={[
           { header: 'Terminal', cell: (t) => t.terminalName },
           { header: 'Batch', cell: (t) => t.batchRef || '—' },
@@ -105,11 +126,17 @@ const CreditBreakdown: React.FC<{ shift: AttendantReportShift }> = ({ shift }) =
     <div className="mt-3">
       <div className="text-[11px] font-semibold text-ink-strong">Fuel-on-credit</div>
       <StatementTable
+        label="Fuel-on-credit chits"
         columns={[
           { header: 'Customer', cell: (l) => l.customerName || 'Unknown customer' },
           { header: 'Vehicle', cell: (l) => l.vehicleRegistration || '—' },
           { header: 'Product', cell: (l) => l.productName ?? '—' },
-          { header: 'Qty', align: 'right', cell: (l) => l.quantity ?? '—' },
+          {
+            header: 'Qty',
+            align: 'right',
+            // A chit that recorded no quantity is a dash, not a formatted zero.
+            cell: (l) => (l.quantity == null ? '—' : formatQty(l.quantity, 3)),
+          },
           { header: 'Amount', align: 'right', strong: true, cell: (l) => inr(l.amount) },
         ]}
         rows={shift.creditSaleLines}
@@ -130,7 +157,18 @@ const CreditBreakdown: React.FC<{ shift: AttendantReportShift }> = ({ shift }) =
  */
 const ShiftCard: React.FC<{ shift: AttendantReportShift }> = ({ shift }) => (
   <Panel
-    title={shift.shiftTemplateName ?? 'Shift'}
+    // Closing time disambiguates two shifts of one day on the same template —
+    // without it they would read as the same card twice.
+    title={
+      <span className="flex items-baseline gap-2">
+        {shift.shiftTemplateName ?? 'Shift'}
+        {shift.closedAt && (
+          <span className="font-mono text-[11px] font-normal text-ink-muted">
+            closed {formatDateTime(shift.closedAt)}
+          </span>
+        )}
+      </span>
+    }
     action={
       <Chip tone={varianceTone(shift.varianceAmount)} size="xs" variant="soft">
         Variance {inr(shift.varianceAmount)}
@@ -425,7 +463,9 @@ const AttendantHandoverReportBody: React.FC<AttendantHandoverReportPanelProps> =
                       <td style={tdR}>{inr(a.totals.billedSales)}</td>
                       <td style={tdR}>{inr(a.totals.handoverProductSales)}</td>
                       <td style={tdR}>{inr(a.totals.creditSales)}</td>
-                      <td style={{ ...tdR, color: varianceColor(a.totals.varianceAmount) }}>
+                      <td
+                        style={{ ...tdR, color: TONE_COLOR[varianceTone(a.totals.varianceAmount)] }}
+                      >
                         {inr(a.totals.varianceAmount)}
                       </td>
                       <td style={td}>
