@@ -49,6 +49,7 @@ import { buildContext, createCommandTrace } from '../infra/context.js';
 import type { AuthenticatedPrincipal } from '../infra/authenticated-principal.js';
 import { loadStationClock, stationExistsInOrg, stationNotFound } from '../infra/station-clock.js';
 import { authorizeShiftStation, findShiftStation } from '../infra/shift-station.js';
+import { authorizeRowStation, type BusinessDayAnchoredTable } from '../infra/row-station.js';
 import { lockStationInventory, runInTransaction } from '../infra/transaction.js';
 import { refreshShiftSummaryForShift } from '../infra/shift-summary-projection.js';
 import { TimestampDocumentNumberGenerator } from '../infra/doc-numbers.js';
@@ -177,19 +178,33 @@ async function guardShiftStation(
   };
 }
 
-async function belongsToOrg(
-  db: DbClient,
-  table: any,
+/**
+ * Station guard for a mutation that names only a row id, and the station its
+ * context must carry (#247).
+ *
+ * Replaces the old organization-only `belongsToOrg`: same organization but the
+ * wrong station still lets a Manager change another station's Business Day.
+ * Shaped like `guardShiftStation` above — one call returning both the refusal
+ * and the station to anchor to, so a route cannot take one and miss the other.
+ */
+async function guardRowStation(
+  c: Context<{ Variables: Variables }>,
+  table: BusinessDayAnchoredTable,
   id: string,
-  organizationId: string,
-): Promise<boolean> {
-  const [row] = await db
-    .select({ id: table.id })
-    .from(table)
-    .innerJoin(schema.businessDays, eq(table.businessDayId, schema.businessDays.id))
-    .where(and(eq(table.id, id), eq(schema.businessDays.organizationId, organizationId)))
-    .limit(1);
-  return !!row;
+  notFoundMessage: string,
+): Promise<{ ok: true; stationId: string } | { ok: false; response: Response }> {
+  const decision = await authorizeRowStation(c.var.db, c.var.user, table, id);
+  if (decision.authorized) return { ok: true, stationId: decision.stationId };
+  return {
+    ok: false,
+    response:
+      decision.reason === 'FORBIDDEN'
+        ? c.json(
+            { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
+            403,
+          )
+        : c.json({ success: false, error: { code: 'NOT_FOUND', message: notFoundMessage } }, 404),
+  };
 }
 
 const DEFAULT_EXPENSE_CATEGORIES = [
@@ -1178,18 +1193,17 @@ transactionsRouter.post(
     }
     const id = c.req.param('id');
     const body = await c.req.json().catch(() => ({}));
-    if (!(await belongsToOrg(c.var.db, schema.otherIncome, id, user.organizationId))) {
-      return c.json(
-        { success: false, error: { code: 'NOT_FOUND', message: 'Income entry not found' } },
-        404,
-      );
-    }
+    const rowStation = await guardRowStation(c, schema.otherIncome, id, 'Income entry not found');
+    if (!rowStation.ok) return rowStation.response;
     const result = await runInTransaction(c.var.db, async (tx, events) => {
       const r = await new VoidIncome({
         income: new DrizzleIncomeRepository(tx),
         shifts: new DrizzleShiftRepository(tx),
         events,
-      }).execute({ id, reason: body?.reason }, buildContext(user));
+      }).execute(
+        { id, reason: body?.reason },
+        buildContext(user, { stationId: rowStation.stationId }),
+      );
       if (r.success) await new LedgerPostingService(tx).reverseIncome(id);
       return r;
     });
@@ -1384,18 +1398,17 @@ transactionsRouter.post(
     }
     const id = c.req.param('id');
     const body = await c.req.json().catch(() => ({}));
-    if (!(await belongsToOrg(c.var.db, schema.expenses, id, user.organizationId))) {
-      return c.json(
-        { success: false, error: { code: 'NOT_FOUND', message: 'Expense not found' } },
-        404,
-      );
-    }
+    const rowStation = await guardRowStation(c, schema.expenses, id, 'Expense not found');
+    if (!rowStation.ok) return rowStation.response;
     const result = await runInTransaction(c.var.db, async (tx, events) => {
       const r = await new VoidExpense({
         expenses: new DrizzleExpenseRepository(tx),
         shifts: new DrizzleShiftRepository(tx),
         events,
-      }).execute({ id, reason: body?.reason }, buildContext(user));
+      }).execute(
+        { id, reason: body?.reason },
+        buildContext(user, { stationId: rowStation.stationId }),
+      );
       if (r.success) {
         await new LedgerPostingService(tx).reverseExpense(id);
         await refreshShiftSummaryForShift(tx, events, user, (r.data as any)?.shiftId);
@@ -1503,55 +1516,32 @@ transactionsRouter.post(
 );
 
 /**
- * Authorization for in-shift ledger voids (credit / OMC card sales): the
- * caller needs handover-recording permission, and the entry must resolve —
- * through its owning business day — to a station the caller may act on within
- * their organization. Returns an error Response, or null when authorized.
+ * Authorization for in-shift ledger voids (credit / OMC card sales): the caller
+ * needs handover-recording permission, and the entry must resolve — through its
+ * owning Business Day — to a station the caller may act on within their
+ * organization.
+ *
+ * Returns the resolved station so the void is anchored to it. It used to return
+ * only null-or-Response, which authorized correctly but left the context with
+ * no station at all (#247).
  */
 async function authorizeLedgerVoid(
-  db: DbClient,
-  user: { organizationId: string; role: Role; assignedStationIds: string[] },
+  c: Context<{ Variables: Variables }>,
   id: string,
-) {
-  if (!canRecordHandover(user.role)) {
-    return Response.json(
-      {
-        success: false,
-        error: { code: 'FORBIDDEN', message: 'Insufficient permissions to void this entry' },
-      },
-      { status: 403 },
-    );
+): Promise<{ ok: true; stationId: string } | { ok: false; response: Response }> {
+  if (!canRecordHandover(c.var.user.role)) {
+    return {
+      ok: false,
+      response: c.json(
+        {
+          success: false,
+          error: { code: 'FORBIDDEN', message: 'Insufficient permissions to void this entry' },
+        },
+        403,
+      ),
+    };
   }
-  const [row] = await db
-    .select({
-      organizationId: schema.businessDays.organizationId,
-      stationId: schema.businessDays.stationId,
-    })
-    .from(schema.customerTransactions)
-    .innerJoin(
-      schema.businessDays,
-      eq(schema.businessDays.id, schema.customerTransactions.businessDayId),
-    )
-    .where(eq(schema.customerTransactions.id, id))
-    .limit(1);
-  if (!row || row.organizationId !== user.organizationId) {
-    return Response.json(
-      { success: false, error: { code: 'NOT_FOUND', message: 'Entry not found' } },
-      { status: 404 },
-    );
-  }
-  if (
-    !isAuthorizedForStation(user, {
-      organizationId: user.organizationId,
-      stationId: row.stationId,
-    })
-  ) {
-    return Response.json(
-      { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
-      { status: 403 },
-    );
-  }
-  return null;
+  return guardRowStation(c, schema.customerTransactions, id, 'Entry not found');
 }
 
 // Void a credit fuel sale (correction while the shift is still open). The
@@ -1562,14 +1552,14 @@ transactionsRouter.delete(
   async (c) => {
     const user = c.var.user;
     const id = c.req.param('id');
-    const guard = await authorizeLedgerVoid(c.var.db, user, id);
-    if (guard) return guard;
+    const guard = await authorizeLedgerVoid(c, id);
+    if (!guard.ok) return guard.response;
     const result = await runInTransaction(c.var.db, (tx, events) =>
       new VoidCreditSale({
         ledger: new DrizzleCustomerLedgerRepository(tx),
         shifts: new DrizzleShiftRepository(tx),
         events,
-      }).execute({ id }, buildContext(user)),
+      }).execute({ id }, buildContext(user, { stationId: guard.stationId })),
     );
     return sendResult(c, result);
   },
@@ -1583,14 +1573,14 @@ transactionsRouter.delete(
   async (c) => {
     const user = c.var.user;
     const id = c.req.param('id');
-    const guard = await authorizeLedgerVoid(c.var.db, user, id);
-    if (guard) return guard;
+    const guard = await authorizeLedgerVoid(c, id);
+    if (!guard.ok) return guard.response;
     const result = await runInTransaction(c.var.db, async (tx, events) => {
       const r = await new VoidOmcCardSale({
         ledger: new DrizzleCustomerLedgerRepository(tx),
         shifts: new DrizzleShiftRepository(tx),
         events,
-      }).execute({ id }, buildContext(user));
+      }).execute({ id }, buildContext(user, { stationId: guard.stationId }));
       if (r.success) await new LedgerPostingService(tx).reverseOmcCardSale(id);
       return r;
     });
@@ -2862,6 +2852,7 @@ transactionsRouter.delete(
       .select({
         shiftStatus: schema.shifts.status,
         orgId: schema.businessDays.organizationId,
+        stationId: schema.businessDays.stationId,
         capture: schema.sales.captureMechanism,
       })
       .from(schema.sales)
@@ -2874,6 +2865,19 @@ transactionsRouter.delete(
       return c.json(
         { success: false, error: { code: 'NOT_FOUND', message: 'Merchandise handover not found' } },
         404,
+      );
+    }
+    // The row's own station, from its Business Day: this delete names only a
+    // sale id, so there is nothing else honest to authorize against (#247).
+    if (
+      !isAuthorizedForStation(user, {
+        organizationId: user.organizationId,
+        stationId: row.stationId,
+      })
+    ) {
+      return c.json(
+        { success: false, error: { code: 'FORBIDDEN', message: 'No access to this station' } },
+        403,
       );
     }
     if (row.shiftStatus !== 'OPEN') {
