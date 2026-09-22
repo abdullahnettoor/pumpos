@@ -8,6 +8,10 @@ import type {
 } from '@pump/shared';
 import { ATTENDANT_REPORT_CAPABILITY } from '@pump/shared';
 import { useAttendantHandoverReport } from '../../query/hooks.js';
+import {
+  creditChitRows,
+  shiftShowsCreditBreakdown,
+} from '../../services/reports/attendantCreditLines.js';
 import { computeRange } from '../primitives/DateRangeField.js';
 import type { DateRange } from '../primitives/DateRangeField.js';
 import { Field, Select } from '../primitives/Field.js';
@@ -119,28 +123,30 @@ const DispenserDetail: React.FC<{ dispenser: AttendantReportDispenser }> = ({ di
  * Who owes the shift's fuel-on-credit. The chits sum to the shift's credit
  * total by construction, so the total is printed beneath them as the same
  * figure the shift line already showed — not a second, re-derived number.
+ *
+ * Which rows appear, and how each cell reads, come from
+ * `attendantCreditLines` — the same source the exported PDF renders from, so
+ * the drawer and the export cannot teach the operator two different statements
+ * (#244). That shared rule is why a shift carrying a credit total with no
+ * chits now shows a placeholder row here instead of nothing at all.
  */
 const CreditBreakdown: React.FC<{ shift: AttendantReportShift }> = ({ shift }) => {
-  if (shift.creditSaleLines.length === 0) return null;
+  if (!shiftShowsCreditBreakdown(shift)) return null;
+  const rows = creditChitRows(shift);
   return (
     <div className="mt-3">
       <div className="text-[11px] font-semibold text-ink-strong">Fuel-on-credit</div>
       <StatementTable
         label="Fuel-on-credit chits"
         columns={[
-          { header: 'Customer', cell: (l) => l.customerName || 'Unknown customer' },
-          { header: 'Vehicle', cell: (l) => l.vehicleRegistration || '—' },
-          { header: 'Product', cell: (l) => l.productName ?? '—' },
-          {
-            header: 'Qty',
-            align: 'right',
-            // A chit that recorded no quantity is a dash, not a formatted zero.
-            cell: (l) => (l.quantity == null ? '—' : formatQty(l.quantity, 3)),
-          },
-          { header: 'Amount', align: 'right', strong: true, cell: (l) => inr(l.amount) },
+          { header: 'Customer', cell: (r) => r.customerName },
+          { header: 'Vehicle', cell: (r) => r.vehicle },
+          { header: 'Product', cell: (r) => r.product },
+          { header: 'Qty', align: 'right', cell: (r) => r.quantity },
+          { header: 'Amount', align: 'right', strong: true, cell: (r) => inr(r.amount) },
         ]}
-        rows={shift.creditSaleLines}
-        rowKey={(l) => l.transactionId}
+        rows={rows}
+        rowKey={(r) => r.key}
         total={['Total', '', '', '', inr(shift.creditSales)]}
       />
     </div>

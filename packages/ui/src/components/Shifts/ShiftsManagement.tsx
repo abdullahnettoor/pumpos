@@ -98,7 +98,12 @@ interface ShiftsManagementProps {
   selectedStation: Station | null;
   userRole: 'Owner' | 'Manager' | 'Accountant' | 'Staff';
   userName: string;
-  onNavigate?: (path: string) => void;
+  /**
+   * Required, not optional (#244). Both shells pass it; making it mandatory
+   * means a future host cannot quietly drop the Business Day tab's "See older"
+   * affordance, which is the only route to a day beyond the recent window.
+   */
+  onNavigate: (path: string) => void;
 }
 
 export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({

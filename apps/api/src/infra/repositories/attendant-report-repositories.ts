@@ -266,6 +266,7 @@ export class DrizzleAttendantHandoverReportReader implements AttendantHandoverRe
         vehicleRegistration: schema.customerVehicles.registrationNumber,
         productName: schema.products.name,
         quantity: schema.customerTransactions.quantity,
+        unit: schema.products.unit,
         unitPrice: schema.customerTransactions.unitPrice,
         amount: schema.customerTransactions.amount,
       })
@@ -295,6 +296,7 @@ export class DrizzleAttendantHandoverReportReader implements AttendantHandoverRe
       vehicleRegistration: r.vehicleRegistration ?? null,
       productName: r.productName ?? null,
       quantity: r.quantity == null ? null : num(r.quantity),
+      unit: r.unit ?? null,
       unitPrice: r.unitPrice == null ? null : num(r.unitPrice),
       amount: num(r.amount),
     }));

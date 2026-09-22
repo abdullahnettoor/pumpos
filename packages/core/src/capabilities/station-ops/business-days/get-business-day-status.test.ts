@@ -4,6 +4,7 @@ import type { ExecutionContext } from '../../../kernel/index.js';
 import {
   GetBusinessDayStatus,
   type BusinessDayStatusItem,
+  type BusinessDayStatusQuery,
   type BusinessDayStatusReader,
 } from './get-business-day-status.js';
 
@@ -11,13 +12,11 @@ class Reader implements BusinessDayStatusReader {
   /** The window start the use-case asked for, captured for assertion. */
   recentFrom: string | null = null;
   constructor(readonly rows: BusinessDayStatusItem[]) {}
-  async loadSlices(
-    org: string,
-    station: string,
-    requestedDate: string,
-    currentDate: string,
-    recentFromDate: string,
-  ) {
+  async loadSlices({
+    requestedBusinessDate: requestedDate,
+    currentBusinessDate: currentDate,
+    recentFromBusinessDate: recentFromDate,
+  }: BusinessDayStatusQuery) {
     this.recentFrom = recentFromDate;
     const open = this.rows.filter((row) => row.status === 'OPEN');
     return {

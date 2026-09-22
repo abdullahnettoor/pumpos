@@ -97,6 +97,7 @@ const report: AttendantHandoverReport = {
               vehicleRegistration: 'KL-07-AB-1234',
               productName: 'Diesel',
               quantity: 20,
+              unit: 'L',
               unitPrice: 40,
               amount: 800,
             },
@@ -107,6 +108,7 @@ const report: AttendantHandoverReport = {
               vehicleRegistration: null,
               productName: null,
               quantity: null,
+              unit: null,
               unitPrice: null,
               amount: 200,
             },
@@ -137,9 +139,12 @@ const report: AttendantHandoverReport = {
   ],
 };
 
+/** The report the panel sees. Swappable so a case can vary one field. */
+let currentReport: AttendantHandoverReport = report;
+
 vi.mock('../../query/hooks.js', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  useAttendantHandoverReport: () => ({ data: report, isLoading: false, error: null }),
+  useAttendantHandoverReport: () => ({ data: currentReport, isLoading: false, error: null }),
 }));
 
 // The capability gate is a separate axis, covered by its own tests; here the
@@ -160,7 +165,10 @@ function openDrawer() {
 }
 
 describe('AttendantHandoverReportPanel drawer', () => {
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    currentReport = report;
+  });
 
   it('groups the shifts under the business day they belong to', () => {
     openDrawer();
@@ -184,7 +192,9 @@ describe('AttendantHandoverReportPanel drawer', () => {
       )
       .filter((cells) => cells.length > 0);
 
-    expect(rows[0]).toEqual(['Anand Transports', 'KL-07-AB-1234', 'Diesel', '20.000', '₹800.00']);
+    // The quantity carries its unit, as the exported PDF has always printed
+    // it — the drawer used to show a bare number (#244).
+    expect(rows[0]).toEqual(['Anand Transports', 'KL-07-AB-1234', 'Diesel', '20.000 L', '₹800.00']);
     // A chit that recorded no product or vehicle is still listed, still counted —
     // and an absent quantity is a dash, not a formatted zero.
     expect(rows[1]).toEqual(['Zenith Logistics', '—', '—', '—', '₹200.00']);
@@ -219,5 +229,46 @@ describe('AttendantHandoverReportPanel drawer', () => {
     expect(kpi('Cash handed over')).toContain(inr(totals.cashHandedOver));
     expect(kpi('Card + UPI')).toContain(inr(totals.cardHandedOver + totals.upiHandedOver));
     expect(kpi('Net variance')).toContain(inr(totals.varianceAmount));
+  });
+
+  /**
+   * A Shift can carry a credit total with no chits under it — a back-office
+   * entry raised against the Shift outside any attendant's handover. The PDF
+   * has always printed a placeholder row so its section still sums to the
+   * Shift line; the drawer rendered nothing and dropped that money out of the
+   * breakdown entirely (#244).
+   */
+  it('still shows the credit breakdown when the total has no chits behind it', () => {
+    const noChits: AttendantHandoverReport = {
+      ...report,
+      attendants: [
+        {
+          ...report.attendants[0],
+          shifts: [
+            {
+              ...report.attendants[0].shifts[0],
+              creditSales: 900,
+              creditSaleLines: [],
+            },
+          ],
+        },
+      ],
+    };
+    currentReport = noChits;
+    openDrawer();
+
+    const creditTable = screen.getByRole('table', { name: 'Fuel-on-credit chits' });
+    const rows = within(creditTable)
+      .getAllByRole('row')
+      .map((r) =>
+        within(r)
+          .queryAllByRole('cell')
+          .map((c) => c.textContent),
+      )
+      .filter((cells) => cells.length > 0);
+
+    // One placeholder row carrying the money, then the total it sums to.
+    expect(rows[0]).toEqual(['—', '—', '—', '—', '₹900.00']);
+    expect(rows[1]).toEqual(['Total', '', '', '', '₹900.00']);
   });
 });

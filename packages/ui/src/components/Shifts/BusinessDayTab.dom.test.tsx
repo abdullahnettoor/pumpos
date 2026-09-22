@@ -84,6 +84,7 @@ const renderTab = (props: Record<string, unknown> = {}, seed: Seed = {}) => {
     <BusinessDayTab
       selectedStation={STATION}
       userRole="Owner"
+      onNavigate={vi.fn()}
       {...(props as Record<string, never>)}
     />,
     { queryClient: client },
@@ -110,7 +111,9 @@ describe('BusinessDayTab', () => {
   });
 
   it('asks for a station before showing anything', () => {
-    renderWithProviders(<BusinessDayTab selectedStation={null} userRole="Owner" />);
+    renderWithProviders(
+      <BusinessDayTab selectedStation={null} userRole="Owner" onNavigate={vi.fn()} />,
+    );
     expect(screen.getByText(/Please select a station/i)).toBeDefined();
   });
 
@@ -213,6 +216,7 @@ describe('BusinessDayTab', () => {
           userRole="Owner"
           requestedBusinessDate={TODAY}
           onBusinessDateSelected={onBusinessDateSelected}
+          onNavigate={vi.fn()}
         />,
       );
       await waitFor(() => expect(onBusinessDateSelected).toHaveBeenCalled());
@@ -306,14 +310,14 @@ describe('BusinessDayTab', () => {
       expect(onNavigate).toHaveBeenCalledWith('/reports');
     });
 
-    it.each(['Owner', 'Manager', 'Accountant'] as const)(
-      'offers "See older" to %s, who may open Reports',
-      async (userRole) => {
-        const onNavigate = vi.fn();
-        renderTab({ onNavigate, userRole }, { recentBusinessDays: [day({})] });
-        expect(await screen.findByRole('button', { name: /See older/i })).toBeDefined();
-      },
-    );
+    it('offers "See older" to an Accountant, who may open Reports', async () => {
+      // Accountant is the non-obvious member of the back-office set; Owner is
+      // already covered by the navigation case above. Enumerating all three
+      // would only restate `canViewReports`'s own list back to it.
+      const onNavigate = vi.fn();
+      renderTab({ onNavigate, userRole: 'Accountant' }, { recentBusinessDays: [day({})] });
+      expect(await screen.findByRole('button', { name: /See older/i })).toBeDefined();
+    });
 
     it('hides "See older" from Staff, whose nav has no Reports page', async () => {
       // Routing them there lands on a page their own nav does not list and
@@ -384,9 +388,10 @@ describe('BusinessDayTab', () => {
     client.setQueryData(queryKeys.shiftStatus(STATION.id, true), { activeShift: null });
     client.setQueryData(queryKeys.customers(true), []);
 
-    renderWithProviders(<BusinessDayTab selectedStation={STATION} userRole="Owner" />, {
-      queryClient: client,
-    });
+    renderWithProviders(
+      <BusinessDayTab selectedStation={STATION} userRole="Owner" onNavigate={vi.fn()} />,
+      { queryClient: client },
+    );
 
     // Today is open and composed live — so the absence of "Live" after the
     // click is a real change, not a vacuous assertion.

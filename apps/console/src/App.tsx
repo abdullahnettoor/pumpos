@@ -40,7 +40,7 @@ import {
   clearNavIntent,
 } from '@pump/ui';
 import type { NavIntent } from '@pump/ui';
-import { canOnboardStation, Station } from '@pump/shared';
+import { canOnboardStation, REPORTS_ROLES, Station } from '@pump/shared';
 import { MobileBlock, useIsUnsupportedMobile } from './MobileBlock.js';
 
 const resolveApiUrl = (): string | undefined => {
@@ -307,7 +307,7 @@ export const App: React.FC = () => {
         { label: 'Pricing', path: '/pricing', roles: ['Owner', 'Manager'] },
         { label: 'Accounts', path: '/accounts', roles: ['Owner', 'Manager', 'Accountant'] },
         { label: 'Customers', path: '/customers' },
-        { label: 'Reports', path: '/reports', roles: ['Owner', 'Manager', 'Accountant'] },
+        { label: 'Reports', path: '/reports', roles: [...REPORTS_ROLES] },
         { label: 'Organization', path: '/organization', roles: ['Owner'] },
       ]
     : [
