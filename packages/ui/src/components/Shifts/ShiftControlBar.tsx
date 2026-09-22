@@ -1,5 +1,5 @@
 import React from 'react';
-import { inr } from '../../utils/format.js';
+import { inr, formatElapsedSince } from '../../utils/format.js';
 import { Clock3, FileText, Fuel, Receipt, ShoppingBag, ShoppingCart, Wallet } from 'lucide-react';
 import { Button, Chip, Icon } from '../../pump-ds/index.js';
 import { ShiftBusinessDateContext } from './ShiftBusinessDateContext.js';
@@ -34,16 +34,6 @@ interface ShiftControlBarProps {
   timeZone?: string;
 }
 
-function formatElapsed(openedAt: string): string {
-  const opened = new Date(openedAt).getTime();
-  const now = Date.now();
-  const diffMs = Math.max(0, now - opened);
-  const mins = Math.floor(diffMs / 60000);
-  const hours = Math.floor(mins / 60);
-  const remMins = mins % 60;
-  return `${hours}h ${remMins}m`;
-}
-
 const iconForKey = (key: string) => {
   switch (key) {
     case 'expense':
@@ -73,7 +63,7 @@ export const ShiftControlBar: React.FC<ShiftControlBarProps> = ({
   currentBusinessDate,
   timeZone,
 }) => {
-  const elapsed = formatElapsed(activeShift.openedAt);
+  const elapsed = formatElapsedSince(activeShift.openedAt);
   const allHandoversDone = handoversAssigned > 0 && handoversCompleted >= handoversAssigned;
   const closePromoted = allHandoversDone || isPreparingClose;
 

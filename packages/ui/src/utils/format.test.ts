@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { formatMoney, inr, formatBusinessDate } from './format.js';
+import { describe, expect, it, vi, afterEach } from 'vitest';
+import { formatMoney, inr, formatBusinessDate, formatElapsedSince } from './format.js';
 
 describe('formatMoney', () => {
   it('formats INR with Indian grouping and exactly two decimal places', () => {
@@ -25,5 +25,33 @@ describe('formatBusinessDate', () => {
 
   it('returns the input unchanged when it is not a valid date', () => {
     expect(formatBusinessDate('not-a-date')).toBe('not-a-date');
+  });
+});
+
+describe('formatElapsedSince', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('formats hours and minutes since the open time as "Nh Nm"', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-22T12:12:00.000Z'));
+    expect(formatElapsedSince('2026-09-22T06:00:00.000Z')).toBe('6h 12m');
+  });
+
+  it('always includes the hours segment, even under an hour', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-22T06:12:00.000Z'));
+    expect(formatElapsedSince('2026-09-22T06:00:00.000Z')).toBe('0h 12m');
+  });
+
+  it('clamps a future open time to 0h 0m', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-22T06:00:00.000Z'));
+    expect(formatElapsedSince('2026-09-22T07:00:00.000Z')).toBe('0h 0m');
+  });
+
+  it('returns the fallback for an unparseable input', () => {
+    expect(formatElapsedSince(null)).toBe('—');
   });
 });
