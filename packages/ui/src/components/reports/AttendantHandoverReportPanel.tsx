@@ -6,7 +6,7 @@ import type {
   AttendantReportEntry,
   AttendantReportShift,
 } from '@pump/shared';
-import { ATTENDANT_REPORT_CAPABILITY } from '@pump/shared';
+import { ATTENDANT_REPORT_CAPABILITY, shiftDisplayLabel } from '@pump/shared';
 import { useAttendantHandoverReport } from '../../query/hooks.js';
 import {
   creditChitRows,
@@ -163,11 +163,14 @@ const CreditBreakdown: React.FC<{ shift: AttendantReportShift }> = ({ shift }) =
  */
 const ShiftCard: React.FC<{ shift: AttendantReportShift }> = ({ shift }) => (
   <Panel
-    // Closing time disambiguates two shifts of one day on the same template —
-    // without it they would read as the same card twice.
+    // The shift's readable name (#228) names the card; closing time stays
+    // because it answers a different question — when it was reconciled.
     title={
       <span className="flex items-baseline gap-2">
         {shift.shiftTemplateName ?? 'Shift'}
+        <span className="font-mono text-[11px] font-normal text-ink-muted">
+          {shiftDisplayLabel(shift)}
+        </span>
         {shift.closedAt && (
           <span className="font-mono text-[11px] font-normal text-ink-muted">
             closed {formatDateTime(shift.closedAt)}

@@ -4,7 +4,7 @@ import { Eye } from 'lucide-react';
 import { Panel, Button, StatusChip, DateText } from '../../pump-ds/index.js';
 import { DataTable } from '../primitives/DataTable.js';
 import { inr } from '../../utils/format.js';
-import { formatStationDateTime } from '@pump/shared';
+import { formatStationDateTime, shiftDisplayLabel } from '@pump/shared';
 import { useShiftSummaries } from '../../query/hooks.js';
 import { ShiftSummaryView } from './ShiftSummaryView.js';
 import { useRunTask } from '../../utils/runTask.js';
@@ -80,6 +80,17 @@ export const ShiftHistoryTab: React.FC<ShiftHistoryTabProps> = ({
         cell: ({ row }) => (
           <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
             {formatStationDateTime(row.original.generatedAt, timeZone)}
+          </span>
+        ),
+      },
+      // The shift's readable name (#228) — `YYYYMMDD-N`, the same string the
+      // shift-summary PDF and the attendant statement print.
+      {
+        id: 'shiftLabel',
+        header: 'Shift',
+        cell: ({ row }) => (
+          <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-default)' }}>
+            {shiftDisplayLabel(row.original)}
           </span>
         ),
       },

@@ -169,6 +169,7 @@ export function composeAttendantHandoverReport(
       shift = {
         shiftId: row.shiftId,
         businessDate: row.businessDate,
+        shiftSequence: row.shiftSequence ?? null,
         shiftTemplateName: row.shiftTemplateName,
         closedAt: row.closedAt,
         dispensers: [],

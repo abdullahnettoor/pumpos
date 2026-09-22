@@ -41,6 +41,8 @@ export interface AttendantHandoverSourceRow {
   handoverId: string;
   shiftId: string;
   businessDate: string;
+  /** Position within the business day; the `N` of the `YYYYMMDD-N` label. */
+  shiftSequence?: number | null;
   shiftTemplateName: string | null;
   closedAt: string | null;
   attendantId: string;

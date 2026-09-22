@@ -33,6 +33,7 @@ import type { AuthenticatedPrincipal } from '../infra/authenticated-principal.js
 import { loadStationClock, stationNotFound } from '../infra/station-clock.js';
 import { lockStationInventory, runInTransaction } from '../infra/transaction.js';
 import { rowJson, rowJsonNullable, tsIso } from '../infra/sql-json.js';
+import { shiftSequenceSql } from '../infra/shift-sequence-sql.js';
 import { assembleReconTotals, reconTotalsJson } from '../infra/repositories/shift-recon-sql.js';
 import {
   DrizzleNozzleRepository,
@@ -205,6 +206,7 @@ shiftsRouter.get('/dashboard-summary', async (c) => {
         s.business_day_id AS "businessDayId",
         COALESCE(t.name, 'Custom') AS "templateName",
         bd.business_date AS "businessDate",
+        ${shiftSequenceSql('s')} AS "shiftSequence",
         COALESCE(u.full_name, 'System') AS "openedByName",
         ${sql.raw(isoTs('s.opened_at'))} AS "openedAt",
         s.opening_cash AS "openingCash"
@@ -221,6 +223,8 @@ shiftsRouter.get('/dashboard-summary', async (c) => {
         s.status,
         COALESCE(t.name, 'Custom') AS "templateName",
         ${sql.raw(isoTs('s.closed_at'))} AS "closedAt",
+        bd.business_date AS "businessDate",
+        ${shiftSequenceSql('s')} AS "shiftSequence",
         bd.status AS "dayStatus",
         (ss.shift_id IS NOT NULL) AS "hasSummary",
         COALESCE((ss.snapshot_data ->> 'totalVolumeSold')::numeric,
@@ -263,6 +267,7 @@ shiftsRouter.get('/dashboard-summary', async (c) => {
         businessDayId: openRaw.businessDayId,
         templateName: openRaw.templateName,
         businessDate: openRaw.businessDate ?? null,
+        shiftSequence: openRaw.shiftSequence ?? null,
         openedByName: openRaw.openedByName,
         openedAt: openRaw.openedAt,
         openingCash: openRaw.openingCash,
@@ -290,6 +295,8 @@ shiftsRouter.get('/dashboard-summary', async (c) => {
       status: lastRaw.status,
       templateName: lastRaw.templateName,
       closedAt: lastRaw.closedAt,
+      businessDate: lastRaw.businessDate ?? null,
+      shiftSequence: lastRaw.shiftSequence ?? null,
     };
     lastShiftSummary = lastRaw.hasSummary
       ? {
@@ -412,6 +419,7 @@ shiftsRouter.get('/status', async (c) => {
         SELECT ${shiftJson} || jsonb_build_object(
           'templateName', COALESCE(t.name, 'Custom'),
           'businessDate', bd.business_date,
+          'shiftSequence', ${shiftSequenceSql('s')},
           'scheduledStartTime', t.start_time,
           'scheduledEndTime', t.end_time,
           'openedByName', COALESCE(u.full_name, 'System')
@@ -425,10 +433,13 @@ shiftsRouter.get('/status', async (c) => {
       ),
       recent AS (
         SELECT ${shiftJson} || jsonb_build_object(
-          'templateName', COALESCE(t.name, 'Custom')
+          'templateName', COALESCE(t.name, 'Custom'),
+          'businessDate', bd.business_date,
+          'shiftSequence', ${shiftSequenceSql('s')}
         ) AS j
         FROM shifts s
         LEFT JOIN shift_templates t ON t.id = s.shift_template_id
+        LEFT JOIN business_days bd ON bd.id = s.business_day_id
         WHERE s.organization_id = ${orgId} AND s.station_id = ${stationId}
           AND s.status = 'CLOSED' AND s.closed_at > ${graceCutoff}
         ORDER BY s.closed_at DESC
@@ -471,10 +482,13 @@ shiftsRouter.get('/status', async (c) => {
       (SELECT ${rowJson(schema.businessDays, 'd')} FROM business_days d
         WHERE d.station_id = ${stationId} AND d.status = 'OPEN'
         ORDER BY d.business_date DESC LIMIT 1) AS business_day,
-      (SELECT ${rowJson(schema.shifts, 's')} FROM shifts s
+      (SELECT ${rowJson(schema.shifts, 's')} || jsonb_build_object(
+          'shiftSequence', ${shiftSequenceSql('s')}) FROM shifts s
         WHERE s.station_id = ${stationId} AND s.status = 'OPEN' LIMIT 1) AS active_shift,
       (SELECT jsonb_build_object(
-          'shift', ${rowJson(schema.shifts, 's')},
+          'shift', ${rowJson(schema.shifts, 's')} || jsonb_build_object(
+            'shiftSequence', ${shiftSequenceSql('s')},
+            'businessDate', (SELECT bd.business_date FROM business_days bd WHERE bd.id = s.business_day_id)),
           'templateName', t.name,
           'closedByName', u.full_name,
           'summary', (SELECT ${rowJson(schema.shiftSummaries, 'ss')} FROM shift_summaries ss
@@ -491,9 +505,12 @@ shiftsRouter.get('/status', async (c) => {
         LIMIT 1) AS last_shift,
       COALESCE((SELECT jsonb_agg(x.j ORDER BY x.closed_at DESC) FROM (
           SELECT s.closed_at, (${rowJson(schema.shifts, 's')} || jsonb_build_object(
-            'templateName', COALESCE(t.name, 'Custom'))) AS j
+            'templateName', COALESCE(t.name, 'Custom'),
+            'businessDate', bd.business_date,
+            'shiftSequence', ${shiftSequenceSql('s')})) AS j
           FROM shifts s
           LEFT JOIN shift_templates t ON t.id = s.shift_template_id
+          LEFT JOIN business_days bd ON bd.id = s.business_day_id
           WHERE s.organization_id = ${orgId} AND s.station_id = ${stationId}
             AND s.status = 'CLOSED' AND s.closed_at > ${graceCutoffIso}
           ORDER BY s.closed_at DESC
@@ -1804,6 +1821,7 @@ shiftsRouter.get('/shift-summaries', async (c) => {
       snapshotData: schema.shiftSummaries.snapshotData,
       generatedAt: schema.shiftSummaries.generatedAt,
       businessDate: schema.businessDays.businessDate,
+      shiftSequence: shiftSequenceSql('shifts'),
       templateName: schema.shiftTemplates.name,
     })
     .from(schema.shiftSummaries)
@@ -1827,6 +1845,7 @@ shiftsRouter.get('/shift-summaries', async (c) => {
     closedAt: r.shift.closedAt,
     businessDayId: r.shift.businessDayId,
     businessDate: r.businessDate,
+    shiftSequence: r.shiftSequence ?? null,
     templateName: r.templateName ?? null,
     generatedAt: r.generatedAt,
     snapshotData: r.snapshotData,

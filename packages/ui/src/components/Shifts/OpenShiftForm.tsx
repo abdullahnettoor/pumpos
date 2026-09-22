@@ -3,7 +3,12 @@ import { FileText, Info, Play } from 'lucide-react';
 import { Panel, Button, Chip, Form } from '../../pump-ds/index.js';
 import { Field, Select, NumberInput, DateField } from '../primitives/Field.js';
 import type { BusinessDayStatusItem } from '../../services/cloud.js';
-import { compareByDispenserThenNozzle, dispenserLabel, formatStationDateTime } from '@pump/shared';
+import {
+  compareByDispenserThenNozzle,
+  dispenserLabel,
+  formatStationDateTime,
+  shiftDisplayLabel,
+} from '@pump/shared';
 import { createOpenShiftFormSchema, type OpenShiftFormValues } from '@pump/shared';
 import { ShiftBusinessDateContext } from './ShiftBusinessDateContext.js';
 import { useZodForm } from '../../forms/useZodForm.js';
@@ -316,11 +321,13 @@ export const OpenShiftForm: React.FC<OpenShiftFormProps> = ({
             }}
           >
             <span>
-              Shift ID:{' '}
+              Shift:{' '}
               <strong style={{ color: 'var(--text-default)', fontFamily: 'var(--font-mono)' }}>
-                {lastShiftSummary.shiftId?.slice(0, 8) ||
-                  lastShiftSummary.snapshotData?.shiftId?.slice(0, 8) ||
-                  '—'}
+                {shiftDisplayLabel({
+                  businessDate: lastShift?.businessDate ?? lastShiftSummary.businessDate,
+                  shiftSequence: lastShift?.shiftSequence ?? lastShiftSummary.shiftSequence,
+                  shiftId: lastShiftSummary.shiftId ?? lastShiftSummary.snapshotData?.shiftId,
+                })}
               </strong>
             </span>
             <span>

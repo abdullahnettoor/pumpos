@@ -70,6 +70,8 @@ describe('GET /dashboard-summary', () => {
               status: 'CLOSED',
               templateName: 'Morning',
               closedAt,
+              businessDate: '2026-03-15',
+              shiftSequence: 1,
               dayStatus: 'OPEN',
               hasSummary: true,
               totalVolumeSold: '740.5',
@@ -101,11 +103,15 @@ describe('GET /dashboard-summary', () => {
     expect(typeof body.data.today.businessDate).toBe('string');
 
     expect(body.data.activeShift).toBeNull();
+    // businessDate + shiftSequence are what the UI turns into the readable
+    // `YYYYMMDD-N` label instead of a UUID fragment (#228).
     expect(body.data.lastShift).toEqual({
       id: 'sh-last',
       status: 'CLOSED',
       templateName: 'Morning',
       closedAt,
+      businessDate: '2026-03-15',
+      shiftSequence: 1,
     });
     expect(body.data.lastShiftSummary).toEqual({
       totalVolumeSold: 740.5,
@@ -129,6 +135,7 @@ describe('GET /dashboard-summary', () => {
               businessDayId: 'bd-1',
               templateName: 'Morning',
               businessDate: '2026-03-15',
+              shiftSequence: 2,
               openedByName: 'Asha',
               openedAt,
               openingCash: '5000',
@@ -149,6 +156,7 @@ describe('GET /dashboard-summary', () => {
       businessDayId: 'bd-1',
       templateName: 'Morning',
       businessDate: '2026-03-15',
+      shiftSequence: 2,
       openedByName: 'Asha',
       openedAt,
       openingCash: '5000',
