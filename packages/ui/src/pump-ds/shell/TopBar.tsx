@@ -312,7 +312,7 @@ export const TopBar: React.FC<TopBarProps> = ({
           <span
             data-testid="topbar-station"
             className={cn(
-              'select-none truncate text-[12.5px] font-medium text-ink-strong',
+              'select-none truncate text-[12.5px] font-medium text-ink-default',
               titleBar && 'pointer-events-none',
             )}
             title={stationName}

@@ -8,6 +8,8 @@ import {
 } from '../pump-ds/index.js';
 import { useBusinessDayStatus } from '../query/hooks.js';
 import { useStationBusinessDate } from '../hooks/useStationBusinessDate.js';
+import { formatBusinessDate } from '../utils/format.js';
+import type { BusinessDayStatusItem } from '../services/cloud.js';
 
 /**
  * AppStatusBar — the data container for the pure pump-ds `StatusBar` (the
@@ -37,19 +39,6 @@ export interface AppStatusBarProps {
   onUpdate?: () => void;
 }
 
-function formatDayLabel(iso: string): string {
-  // iso is YYYY-MM-DD; render as "09 Jul 2026".
-  const [y, m, d] = iso.split('-').map(Number);
-  if (!y || !m || !d) return iso;
-  const dt = new Date(Date.UTC(y, m - 1, d));
-  return dt.toLocaleDateString('en-IN', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    timeZone: 'UTC',
-  });
-}
-
 export const AppStatusBar: React.FC<AppStatusBarProps> = ({
   selectedStation,
   syncStatus,
@@ -63,9 +52,12 @@ export const AppStatusBar: React.FC<AppStatusBarProps> = ({
   const stationId = selectedStation?.id;
 
   // --- business day ---
-  const settings: any = (selectedStation as any)?.settings || {};
+  const settings = ((selectedStation?.settings ?? {}) as {
+    timezone?: string;
+    business_day_starts_at?: string;
+  });
   const businessIso = useStationBusinessDate(settings.timezone, settings.business_day_starts_at);
-  const businessDate = formatDayLabel(businessIso);
+  const businessDate = formatBusinessDate(businessIso);
   const dayStatusQ = useBusinessDayStatus(stationId, businessIso, {
     enabled: !!stationId && stationReady,
   } as any);
@@ -81,10 +73,10 @@ export const AppStatusBar: React.FC<AppStatusBarProps> = ({
           : 'not-created';
 
   const businessDays: BusinessDayOption[] = useMemo(() => {
-    return (dayStatus?.pastOpenBusinessDays ?? []).map((day: any) => ({
+    return ((dayStatus?.pastOpenBusinessDays ?? []) as BusinessDayStatusItem[]).map((day) => ({
       date: day.businessDate,
-      label: formatDayLabel(day.businessDate),
-      status: 'open',
+      label: formatBusinessDate(day.businessDate),
+      status: 'open' as const,
       openShiftCount: Number(day.openShiftCount),
       closedShiftCount: Number(day.closedShiftCount),
       lastActivityAt: day.lastActivityAt,
@@ -104,6 +96,12 @@ export const AppStatusBar: React.FC<AppStatusBarProps> = ({
         dayStatusQ.isError ? 'unavailable' : dayStatusQ.isPending ? 'loading' : 'ready'
       }
       onSelectBusinessDay={(date) => onNavigate('/shifts', { openBusinessDayDate: date })}
+      // openShiftLabel is intentionally not wired yet: the shell has no cached
+      // shift-status query hook, and adding one (with its tiered caching and
+      // operational invalidations) is tracked separately. The pure StatusBar
+      // already supports the indicator so the container can pass it in a
+      // follow-up without touching pump-ds. See issue #263 (open-shift
+      // indicator deferred).
       appVersion={appVersion}
       updateAvailableVersion={updateAvailableVersion}
       onUpdate={onUpdate}
