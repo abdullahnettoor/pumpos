@@ -18,6 +18,7 @@ import type {
   AttendantReportEntry,
   AttendantReportShift,
 } from '@pump/shared';
+import { sliceAttendantStatementByDay } from './attendantStatementDays.js';
 import type { AttendantReportSection, AttendantReportConfig } from './reportConfig.js';
 import { DEFAULT_ATTENDANT_REPORT_CONFIG } from './reportConfig.js';
 
@@ -325,19 +326,85 @@ const builders: Record<
   ),
 };
 
+/** Sections that describe the range as a whole — the cover page of a multi-day statement. */
+const COVER_SECTIONS: AttendantReportSection[] = ['header', 'summary', 'variance'];
+
+/** Sections a single Business Day renders; the cover already carried the letterhead. */
+const isDaySection = (key: AttendantReportSection) =>
+  key !== 'header' && key !== 'summary' && key !== 'signature';
+
+/** A day page's own title — larger than a section head, it is the page's subject. */
+const dayTitle = { fontSize: 13, color: C.ink, fontWeight: 700 as const, marginBottom: 2 };
+
+const PageFooter: React.FC<{ generatedAt: string }> = ({ generatedAt }) => (
+  <View style={s.foot} fixed>
+    {/* The instant the report was composed — a re-print must not claim to
+        be newer than the data it prints. */}
+    <Text>Generated {fmtDateTime(generatedAt)}</Text>
+    <Text render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} />
+  </View>
+);
+
+/**
+ * Attendant statement.
+ *
+ * One Business Day reads as one document — so a single-day export stays a
+ * single flow, and a range is cut into a page per day behind a cover carrying
+ * the range's collective figures. The day pages are the same statement
+ * sections pointed at one day's shifts (see `sliceAttendantStatementByDay`),
+ * so a figure never has two renderers that could drift apart.
+ */
 export const AttendantReportDoc: React.FC<{
   data: AttendantStatementData;
   config?: AttendantReportConfig;
-}> = ({ data, config = DEFAULT_ATTENDANT_REPORT_CONFIG }) => (
-  <Document>
-    <Page size={config.paper} style={s.page}>
-      {config.sections.map((key) => builders[key]?.(data, config))}
-      <View style={s.foot} fixed>
-        {/* The instant the report was composed — a re-print must not claim to
-            be newer than the data it prints. */}
-        <Text>Generated {fmtDateTime(data.generatedAt)}</Text>
-        <Text render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} />
-      </View>
-    </Page>
-  </Document>
-);
+}> = ({ data, config = DEFAULT_ATTENDANT_REPORT_CONFIG }) => {
+  const days = sliceAttendantStatementByDay(data);
+
+  if (days.length <= 1) {
+    return (
+      <Document>
+        <Page size={config.paper} style={s.page}>
+          {config.sections.map((key) => builders[key]?.(data, config))}
+          <PageFooter generatedAt={data.generatedAt} />
+        </Page>
+      </Document>
+    );
+  }
+
+  const daySections = config.sections.filter(isDaySection);
+  const signature = config.sections.includes('signature');
+
+  return (
+    <Document>
+      <Page size={config.paper} style={s.page}>
+        {COVER_SECTIONS.filter((key) => config.sections.includes(key)).map((key) =>
+          builders[key]?.(data, config),
+        )}
+        <View style={{ marginTop: 12 }}>
+          <Text style={s.h2}>Days in this statement</Text>
+          <Text style={s.sub}>
+            {days.length} business days · one page each, from {days[0].businessDate} to{' '}
+            {days[days.length - 1].businessDate}.
+          </Text>
+        </View>
+        {signature ? builders.signature?.(data, config) : null}
+        <PageFooter generatedAt={data.generatedAt} />
+      </Page>
+
+      {days.map((day) => (
+        <Page key={day.businessDate} size={config.paper} style={s.page}>
+          <View>
+            <Text style={dayTitle}>{day.businessDate}</Text>
+            <Text style={s.sub}>
+              {data.attendantName} · {day.data.shiftsWorked}{' '}
+              {day.data.shiftsWorked === 1 ? 'shift' : 'shifts'} · net variance{' '}
+              {inr(day.data.totals.varianceAmount)}
+            </Text>
+          </View>
+          {daySections.map((key) => builders[key]?.(day.data, config))}
+          <PageFooter generatedAt={data.generatedAt} />
+        </Page>
+      ))}
+    </Document>
+  );
+};

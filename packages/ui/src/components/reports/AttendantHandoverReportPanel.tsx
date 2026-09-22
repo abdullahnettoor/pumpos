@@ -13,11 +13,21 @@ import type { DateRange } from '../primitives/DateRangeField.js';
 import { Field, Select } from '../primitives/Field.js';
 import { Drawer } from '../Drawer.js';
 import { inr } from '../../utils/format.js';
-import { KpiStrip, KpiTile, Panel, EmptyState, Icon, Button } from '../../pump-ds/index.js';
+import {
+  KpiStrip,
+  KpiTile,
+  Panel,
+  EmptyState,
+  Icon,
+  Button,
+  Chip,
+  StatementTable,
+} from '../../pump-ds/index.js';
 import { ReportRangeBar } from './ReportRangeBar.js';
 import { LoadingSpinner } from '../LoadingSpinner.js';
 import { CapabilityRoute } from '../../access/CapabilityGate.js';
 import { generateAttendantReportPdf } from '../../services/reports/generate.js';
+import { groupShiftsByBusinessDay } from '../../services/reports/attendantStatementDays.js';
 import { useRunTask } from '../../utils/runTask.js';
 
 export interface AttendantHandoverReportPanelProps {
@@ -30,57 +40,53 @@ const td: React.CSSProperties = { padding: '8px 10px', color: 'var(--text-defaul
 const tdR: React.CSSProperties = { ...td, textAlign: 'right', fontFamily: 'var(--font-mono)' };
 
 /** Variance reads as money owed either way, so its sign carries the meaning. */
-const varianceTone = (amount: number): string =>
+const varianceColor = (amount: number): string =>
   amount < 0 ? 'var(--text-danger)' : amount > 0 ? 'var(--text-success)' : 'var(--text-muted)';
 
-const shiftLabel = (shift: AttendantReportShift): string =>
-  `${shift.businessDate}${shift.shiftTemplateName ? ` · ${shift.shiftTemplateName}` : ''}`;
+/** The same reading, as a semantic tone the design-system primitives take. */
+const varianceTone = (amount: number): 'danger' | 'success' | 'neutral' =>
+  amount < 0 ? 'danger' : amount > 0 ? 'success' : 'neutral';
 
 const DispenserDetail: React.FC<{ dispenser: AttendantReportDispenser }> = ({ dispenser }) => (
-  <div style={{ marginTop: '8px' }}>
-    <div style={{ fontSize: '11px', fontWeight: 600 }}>{dispenser.duName}</div>
-    {dispenser.nozzles.length > 0 && (
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
-        <thead>
-          <tr style={{ color: 'var(--text-faint)' }}>
-            <th style={th}>Nozzle</th>
-            <th style={th}>Product</th>
-            <th style={thR}>Opening</th>
-            <th style={thR}>Closing</th>
-            <th style={thR}>Volume</th>
-            <th style={thR}>Testing</th>
-          </tr>
-        </thead>
-        <tbody>
-          {dispenser.nozzles.map((n) => (
-            <tr key={n.nozzleId}>
-              <td style={td}>{n.nozzleName}</td>
-              <td style={td}>{n.productName ?? '—'}</td>
-              <td style={tdR}>{n.openingReading}</td>
-              <td style={tdR}>{n.closingReading}</td>
-              <td style={tdR}>{n.volumeSold}</td>
-              <td style={tdR}>{n.testingVolume}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    )}
-    {dispenser.creditSales !== 0 && (
-      <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
-        Fuel-on-credit from this dispenser: {inr(dispenser.creditSales)}
-      </div>
-    )}
+  <div className="mt-2">
+    <div className="flex items-center justify-between gap-2">
+      <span className="text-[11px] font-semibold text-ink-strong">{dispenser.duName}</span>
+      {dispenser.creditSales !== 0 && (
+        <Chip tone="info" size="xs" variant="soft">
+          Credit {inr(dispenser.creditSales)}
+        </Chip>
+      )}
+    </div>
+
+    <StatementTable
+      columns={[
+        { header: 'Nozzle', cell: (n) => n.nozzleName },
+        { header: 'Product', cell: (n) => n.productName ?? '—' },
+        { header: 'Opening', align: 'right', cell: (n) => n.openingReading },
+        { header: 'Closing', align: 'right', cell: (n) => n.closingReading },
+        { header: 'Volume', align: 'right', strong: true, cell: (n) => n.volumeSold },
+        { header: 'Testing', align: 'right', cell: (n) => n.testingVolume },
+      ]}
+      rows={dispenser.nozzles}
+      rowKey={(n) => n.nozzleId}
+    />
+
     {dispenser.terminals.length > 0 ? (
-      <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
-        {dispenser.terminals.map((t) => (
-          <div key={t.terminalId}>
-            {t.terminalName}: card {inr(t.cardAmount)}, UPI {inr(t.upiAmount)}
-            {t.batchRef ? ` · batch ${t.batchRef}` : ''}
-          </div>
-        ))}
-      </div>
+      <StatementTable
+        className="mt-1"
+        columns={[
+          { header: 'Terminal', cell: (t) => t.terminalName },
+          { header: 'Batch', cell: (t) => t.batchRef || '—' },
+          { header: 'Card', align: 'right', cell: (t) => inr(t.cardAmount) },
+          { header: 'UPI', align: 'right', cell: (t) => inr(t.upiAmount) },
+        ]}
+        rows={dispenser.terminals}
+        rowKey={(t) => t.terminalId}
+      />
     ) : (
-      <div style={{ fontSize: '11px', color: 'var(--text-faint)', marginTop: '4px' }}>
+      // A station declaring aggregate card/UPI has no per-terminal batches to
+      // show; saying so beats an empty table the operator has to interpret.
+      <div className="mt-1 px-2 text-[11px] text-ink-faint">
         Aggregate declaration — card {inr(dispenser.cardHandedOver)}, UPI{' '}
         {inr(dispenser.upiHandedOver)}
       </div>
@@ -96,112 +102,141 @@ const DispenserDetail: React.FC<{ dispenser: AttendantReportDispenser }> = ({ di
 const CreditBreakdown: React.FC<{ shift: AttendantReportShift }> = ({ shift }) => {
   if (shift.creditSaleLines.length === 0) return null;
   return (
-    <div style={{ marginTop: '8px' }}>
-      <div style={{ fontSize: '11px', fontWeight: 600 }}>Fuel-on-credit</div>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
-        <thead>
-          <tr style={{ color: 'var(--text-faint)' }}>
-            <th style={th}>Customer</th>
-            <th style={th}>Vehicle</th>
-            <th style={th}>Product</th>
-            <th style={thR}>Qty</th>
-            <th style={thR}>Amount</th>
-          </tr>
-        </thead>
-        <tbody>
-          {shift.creditSaleLines.map((line) => (
-            <tr key={line.transactionId}>
-              <td style={td}>{line.customerName || 'Unknown customer'}</td>
-              <td style={td}>{line.vehicleRegistration || '—'}</td>
-              <td style={td}>{line.productName ?? '—'}</td>
-              <td style={tdR}>{line.quantity ?? '—'}</td>
-              <td style={tdR}>{inr(line.amount)}</td>
-            </tr>
-          ))}
-          <tr>
-            <td style={{ ...td, fontWeight: 600 }} colSpan={4}>
-              Total
-            </td>
-            <td style={{ ...tdR, fontWeight: 600 }}>{inr(shift.creditSales)}</td>
-          </tr>
-        </tbody>
-      </table>
+    <div className="mt-3">
+      <div className="text-[11px] font-semibold text-ink-strong">Fuel-on-credit</div>
+      <StatementTable
+        columns={[
+          { header: 'Customer', cell: (l) => l.customerName || 'Unknown customer' },
+          { header: 'Vehicle', cell: (l) => l.vehicleRegistration || '—' },
+          { header: 'Product', cell: (l) => l.productName ?? '—' },
+          { header: 'Qty', align: 'right', cell: (l) => l.quantity ?? '—' },
+          { header: 'Amount', align: 'right', strong: true, cell: (l) => inr(l.amount) },
+        ]}
+        rows={shift.creditSaleLines}
+        rowKey={(l) => l.transactionId}
+        total={['Total', '', '', '', inr(shift.creditSales)]}
+      />
     </div>
   );
 };
 
-/** One attendant's shifts: dispensers, their nozzles, terminals and variance. */
+/**
+ * One Shift of the statement: its variance, its sales components, then the
+ * dispensers it was handed over from and the credit it raised.
+ *
+ * A Panel per Shift, nested under the Business Day it belongs to — the same
+ * structure the exported PDF prints, so the drawer and the export never teach
+ * the operator two different shapes for one statement.
+ */
+const ShiftCard: React.FC<{ shift: AttendantReportShift }> = ({ shift }) => (
+  <Panel
+    title={shift.shiftTemplateName ?? 'Shift'}
+    action={
+      <Chip tone={varianceTone(shift.varianceAmount)} size="xs" variant="soft">
+        Variance {inr(shift.varianceAmount)}
+      </Chip>
+    }
+  >
+    <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-ink-muted">
+      <span>Billed {inr(shift.billedSales)}</span>
+      <span>Merch. handover {inr(shift.handoverProductSales)}</span>
+      <span>Credit {inr(shift.creditSales)}</span>
+      <span>Fuel expected {inr(shift.expectedFuelSales)}</span>
+    </div>
+
+    {shift.dispensers.map((dispenser) => (
+      <DispenserDetail key={dispenser.handoverId} dispenser={dispenser} />
+    ))}
+
+    <CreditBreakdown shift={shift} />
+  </Panel>
+);
+
+/**
+ * One Attendant's statement: range KPIs, then a section per Business Day.
+ *
+ * Mirrors the exported PDF — cover figures first, then the days — because the
+ * drawer is where the operator decides whether the export is worth sending.
+ */
 const AttendantDetailDrawer: React.FC<{
   attendant: AttendantReportEntry | null;
   range: DateRange;
   onClose: () => void;
   onExport: () => void;
-}> = ({ attendant, range, onClose, onExport }) => (
-  <Drawer
-    isOpen={attendant !== null}
-    onClose={onClose}
-    title={attendant ? `${attendant.attendantName} — handovers` : 'Handovers'}
-    widthVariant="wide"
-    footer={
-      <Button size="sm" variant="secondary" onClick={onExport}>
-        <Download size={13} /> Export statement
-      </Button>
-    }
-  >
-    {attendant && (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-        <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-          {range.from} to {range.to} · {attendant.shiftsWorked} shifts ·{' '}
-          <span style={{ color: varianceTone(attendant.totals.varianceAmount) }}>
-            net variance {inr(attendant.totals.varianceAmount)}
-          </span>
-        </div>
+}> = ({ attendant, range, onClose, onExport }) => {
+  const days = useMemo(
+    () => (attendant ? groupShiftsByBusinessDay(attendant.shifts) : []),
+    [attendant],
+  );
 
-        {attendant.shifts.map((shift) => (
-          <div
-            key={shift.shiftId}
-            style={{
-              border: '1px solid var(--border-soft)',
-              borderRadius: '6px',
-              padding: '10px 12px',
-            }}
-          >
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                gap: '12px',
-                flexWrap: 'wrap',
-              }}
-            >
-              <strong style={{ fontSize: '12px' }}>{shiftLabel(shift)}</strong>
-              <span
-                style={{
-                  fontSize: '12px',
-                  fontFamily: 'var(--font-mono)',
-                  color: varianceTone(shift.varianceAmount),
-                }}
-              >
-                Variance {inr(shift.varianceAmount)}
-              </span>
-            </div>
+  return (
+    <Drawer
+      isOpen={attendant !== null}
+      onClose={onClose}
+      title={attendant ? `${attendant.attendantName} — handovers` : 'Handovers'}
+      widthVariant="wide"
+      footer={
+        <Button size="sm" variant="secondary" onClick={onExport}>
+          <Download size={13} /> Export statement
+        </Button>
+      }
+    >
+      {attendant && (
+        <div className="flex flex-col gap-3">
+          <KpiStrip>
+            <KpiTile size="sm" label="Shifts" value={String(attendant.shiftsWorked)} />
+            <KpiTile
+              size="sm"
+              label="Cash handed over"
+              value={inr(attendant.totals.cashHandedOver)}
+            />
+            <KpiTile
+              size="sm"
+              label="Card + UPI"
+              value={inr(attendant.totals.cardHandedOver + attendant.totals.upiHandedOver)}
+            />
+            <KpiTile size="sm" label="Fuel-on-credit" value={inr(attendant.totals.creditSales)} />
+            <KpiTile
+              size="sm"
+              label="Net variance"
+              value={inr(attendant.totals.varianceAmount)}
+              valueTone={
+                attendant.totals.varianceAmount === 0
+                  ? undefined
+                  : varianceTone(attendant.totals.varianceAmount)
+              }
+            />
+          </KpiStrip>
 
-            <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
-              Billed {inr(shift.billedSales)} · Merch. handover {inr(shift.handoverProductSales)} ·
-              Credit {inr(shift.creditSales)} · Fuel expected {inr(shift.expectedFuelSales)}
-            </div>
-
-            {shift.dispensers.map((dispenser) => (
-              <DispenserDetail key={dispenser.handoverId} dispenser={dispenser} />
-            ))}
-
-            <CreditBreakdown shift={shift} />
+          <div className="text-[11px] text-ink-muted">
+            {range.from} to {range.to} · closed shifts only
           </div>
-        ))}
-      </div>
-    )}
-  </Drawer>
-);
+
+          {days.map((day) => (
+            <section key={day.businessDate} className="flex flex-col gap-2">
+              <div className="flex items-baseline justify-between gap-2 border-b border-border-soft pb-1">
+                <h3 className="text-[12px] font-semibold text-ink-strong">{day.businessDate}</h3>
+                <span className="font-mono text-[11px] text-ink-muted">
+                  {day.shifts.length} {day.shifts.length === 1 ? 'shift' : 'shifts'}
+                </span>
+              </div>
+              {day.shifts.map((shift) => (
+                <ShiftCard key={shift.shiftId} shift={shift} />
+              ))}
+            </section>
+          ))}
+
+          {days.length === 0 && (
+            <EmptyState
+              title="No handovers"
+              description="This attendant has no closed-shift handovers in the selected range."
+            />
+          )}
+        </div>
+      )}
+    </Drawer>
+  );
+};
 
 /**
  * Attendant Handover Report — per-Attendant accountability across a
@@ -390,7 +425,7 @@ const AttendantHandoverReportBody: React.FC<AttendantHandoverReportPanelProps> =
                       <td style={tdR}>{inr(a.totals.billedSales)}</td>
                       <td style={tdR}>{inr(a.totals.handoverProductSales)}</td>
                       <td style={tdR}>{inr(a.totals.creditSales)}</td>
-                      <td style={{ ...tdR, color: varianceTone(a.totals.varianceAmount) }}>
+                      <td style={{ ...tdR, color: varianceColor(a.totals.varianceAmount) }}>
                         {inr(a.totals.varianceAmount)}
                       </td>
                       <td style={td}>
