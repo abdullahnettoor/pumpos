@@ -48,17 +48,17 @@ Onboarding runs on the **web console** only — the desktop app shows a notice
 to finish setup on the web. Sidebar → **Onboarding Setup** opens a full-screen
 9-step wizard. Progress is saved as a draft; you can leave and resume.
 
-| Step | What you enter |
-|---|---|
-| 1. Station Basics | Station name, address, contact details |
-| 2. Business Rules | Timezone, **business-day start time** (e.g. 06:00), 24/7 toggle, tax regime |
-| 3. Fuels & Rates | **Add Fuel** for each fuel sold (MS, HSD, XP…) with current rate |
-| 4. Tanks | One entry per underground tank: fuel, capacity, current stock |
-| 5. Dispensers & Nozzles | **Add Dual (2 Nozzles)** / **Add Quad (4 Nozzles)** per dispenser unit; map each nozzle to a tank |
-| 6. Opening / Current Values | Current totalizer reading per nozzle, current tank stock |
-| 7. Shift Templates | Your shift pattern (e.g. Morning 06:00–14:00, Evening, Night) |
-| 8. Payment Terminals | **Add Payment Terminal**: Provider/Acquirer, Terminal ID (TID), label — one per POS machine |
-| 9. Review & Provision | Summary counts; fix any "Add at least one…" validation, then provision |
+| Step                        | What you enter                                                                                    |
+| --------------------------- | ------------------------------------------------------------------------------------------------- |
+| 1. Station Basics           | Station name, address, contact details                                                            |
+| 2. Business Rules           | Timezone, **business-day start time** (e.g. 06:00), 24/7 toggle, tax regime                       |
+| 3. Fuels & Rates            | **Add Fuel** for each fuel sold (MS, HSD, XP…) with current rate                                  |
+| 4. Tanks                    | One entry per underground tank: fuel, capacity, current stock                                     |
+| 5. Dispensers & Nozzles     | **Add Dual (2 Nozzles)** / **Add Quad (4 Nozzles)** per dispenser unit; map each nozzle to a tank |
+| 6. Opening / Current Values | Current totalizer reading per nozzle, current tank stock                                          |
+| 7. Shift Templates          | Your shift pattern (e.g. Morning 06:00–14:00, Evening, Night)                                     |
+| 8. Payment Terminals        | **Add Payment Terminal**: Provider/Acquirer, Terminal ID (TID), label — one per POS machine       |
+| 9. Review & Provision       | Summary counts; fix any "Add at least one…" validation, then provision                            |
 
 Done when: the review step provisions the station and the full app unlocks.
 
@@ -109,13 +109,13 @@ email/phone, role → **Add Member**. The member gets an email invite (step 1).
 
 Roles:
 
-| Role | Use for |
-|---|---|
-| Owner | Global admin, sees everything incl. P&L |
-| Manager | Runs the station: shifts, setup, day close |
-| Accountant | Finance entries and reports |
-| Staff | Day-to-day operational entries |
-| Attendant | Mobile-only; accountable for one dispenser unit (DU) per shift |
+| Role       | Use for                                                        |
+| ---------- | -------------------------------------------------------------- |
+| Owner      | Global admin, sees everything incl. P&L                        |
+| Manager    | Runs the station: shifts, setup, day close                     |
+| Accountant | Finance entries and reports                                    |
+| Staff      | Day-to-day operational entries                                 |
+| Attendant  | Mobile-only; accountable for one dispenser unit (DU) per shift |
 
 ## 6. Open a shift
 
