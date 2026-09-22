@@ -21,3 +21,43 @@ export function byNaturalField<T>(
 ): (a: T, b: T) => number {
   return (a, b) => compareNatural(field(a), field(b));
 }
+
+/**
+ * How a dispenser unit is labelled for ordering: its code when it has one,
+ * otherwise its name.
+ *
+ * Shared because the fallback IS the rule. Deduplicating only the
+ * dispenser-then-nozzle cascade while each site kept its own idea of the
+ * dispenser key would leave three rules wearing one name — the API ordered by
+ * `duName` alone, so a dispenser named "Pump A" with code "DU-2" landed in a
+ * different position in the payload than in the grid that re-sorts it.
+ */
+export function dispenserLabel(du: {
+  duCode?: string | null;
+  duName?: string | null;
+}): string | null | undefined {
+  return du.duCode || du.duName;
+}
+
+/**
+ * The order a nozzle list is read in: by dispenser unit, then by nozzle, both
+ * naturally.
+ *
+ * The cascade itself — not just the natural compare under it — is the shared
+ * rule. It was written out three times in three shapes (the shift-status
+ * route, the readings grid, the open-shift form), each reaching for its
+ * dispenser label differently, so the same hardware could be listed in
+ * different orders on three screens and an attendant reading down a handover
+ * drawer would lose their place.
+ *
+ * Still takes accessors because the sites genuinely disagree about what the
+ * nozzle field is called (`nozzleName` vs `name`). The dispenser side no
+ * longer disagrees: pass `dispenserLabel`.
+ */
+export function compareByDispenserThenNozzle<T>(
+  dispenser: (item: T) => string | null | undefined,
+  nozzle: (item: T) => string | null | undefined,
+): (a: T, b: T) => number {
+  return (a, b) =>
+    compareNatural(dispenser(a), dispenser(b)) || compareNatural(nozzle(a), nozzle(b));
+}

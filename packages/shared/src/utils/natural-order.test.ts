@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { byNaturalField, compareNatural } from './natural-order.js';
+import { byNaturalField, compareByDispenserThenNozzle, compareNatural } from './natural-order.js';
 
 describe('compareNatural', () => {
   it('orders nozzle labels the way an operator reads them', () => {
@@ -41,5 +41,87 @@ describe('compareNatural', () => {
       'N2',
       'N10',
     ]);
+  });
+});
+
+/**
+ * The composite rule — dispenser first, then nozzle — was written out three
+ * times in three shapes (route, readings grid, open-shift form), so the three
+ * surfaces could silently disagree about the order of the same hardware.
+ */
+describe('compareByDispenserThenNozzle', () => {
+  const order = (rows: { du: string | null; nozzle: string }[]): string[] =>
+    [...rows]
+      .sort(
+        compareByDispenserThenNozzle(
+          (r) => r.du,
+          (r) => r.nozzle,
+        ),
+      )
+      .map((r) => `${r.du}/${r.nozzle}`);
+
+  it('groups by dispenser before it looks at the nozzle', () => {
+    expect(
+      order([
+        { du: 'DU-2', nozzle: 'N1' },
+        { du: 'DU-1', nozzle: 'N2' },
+        { du: 'DU-1', nozzle: 'N1' },
+      ]),
+    ).toEqual(['DU-1/N1', 'DU-1/N2', 'DU-2/N1']);
+  });
+
+  it('orders both levels naturally, so N10 follows N2 inside DU-10', () => {
+    expect(
+      order([
+        { du: 'DU-10', nozzle: 'N10' },
+        { du: 'DU-10', nozzle: 'N2' },
+        { du: 'DU-2', nozzle: 'N1' },
+      ]),
+    ).toEqual(['DU-2/N1', 'DU-10/N2', 'DU-10/N10']);
+  });
+
+  it('falls through to the nozzle only when the dispensers tie', () => {
+    const cmp = compareByDispenserThenNozzle(
+      (r: { du: string; nozzle: string }) => r.du,
+      (r) => r.nozzle,
+    );
+    expect(cmp({ du: 'DU-1', nozzle: 'N9' }, { du: 'DU-2', nozzle: 'N1' })).toBeLessThan(0);
+    expect(cmp({ du: 'DU-1', nozzle: 'N1' }, { du: 'DU-1', nozzle: 'N2' })).toBeLessThan(0);
+    expect(cmp({ du: 'DU-1', nozzle: 'N1' }, { du: 'DU-1', nozzle: 'N1' })).toBe(0);
+  });
+
+  it('sorts a dispenser-less row last without disturbing the rest', () => {
+    expect(
+      order([
+        { du: null, nozzle: 'N1' },
+        { du: 'DU-2', nozzle: 'N1' },
+        { du: 'DU-1', nozzle: 'N1' },
+      ]),
+    ).toEqual(['DU-1/N1', 'DU-2/N1', 'null/N1']);
+  });
+
+  /**
+   * #241 moved two UI surfaces onto the shared comparator, which quietly made
+   * them case-insensitive. That is right for hardware labels — `n2` and `N2`
+   * are the same nozzle, and a rename must not make a row jump the list — but
+   * it was an untested behaviour delta. Held deliberately here.
+   */
+  describe('case, which #241 changed on two surfaces without a test', () => {
+    it('treats a lower-cased nozzle as the same label for ordering', () => {
+      expect(
+        order([
+          { du: 'du-1', nozzle: 'n10' },
+          { du: 'DU-1', nozzle: 'N2' },
+        ]),
+      ).toEqual(['DU-1/N2', 'du-1/n10']);
+    });
+
+    it('does not let case alone decide the order', () => {
+      const cmp = compareByDispenserThenNozzle(
+        (r: { du: string; nozzle: string }) => r.du,
+        (r) => r.nozzle,
+      );
+      expect(cmp({ du: 'du-1', nozzle: 'n1' }, { du: 'DU-1', nozzle: 'N1' })).toBe(0);
+    });
   });
 });
