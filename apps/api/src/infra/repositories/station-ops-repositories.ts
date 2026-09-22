@@ -1,4 +1,4 @@
-import { and, eq, inArray, desc, ne, or, sql } from 'drizzle-orm';
+import { and, eq, gte, inArray, desc, ne, or, sql } from 'drizzle-orm';
 import { schema, type DbClient } from '@pump/db';
 import type {
   BusinessDay,
@@ -84,10 +84,16 @@ export class DrizzleBusinessDayStatusReader implements BusinessDayStatusReader {
     stationId: string,
     requestedBusinessDate: string,
     currentBusinessDate: string,
+    recentFromBusinessDate: string,
   ): Promise<BusinessDayStatusSlices> {
-    // ONE query for all three slices (#155): the requested date's day plus
-    // every OPEN day. `pastOpen` is a pure subset of `open`, and `requested`
-    // is a lookup by date, so classification happens here, not in SQL.
+    // ONE query for all four slices (#155): the requested date's day, every
+    // OPEN day, and every day inside the recent window. Classification happens
+    // here, not in SQL — the slices overlap heavily, and four queries would be
+    // four round-trips of Worker CPU for one panel.
+    //
+    // `business_date` is varchar(10) YYYY-MM-DD, so `>=` is a lexicographic
+    // comparison that coincides with chronological order. That is only true
+    // because the format is zero-padded and fixed-width.
     const rows = await this.db
       .select(this.projection())
       .from(schema.businessDays)
@@ -98,6 +104,7 @@ export class DrizzleBusinessDayStatusReader implements BusinessDayStatusReader {
           or(
             eq(schema.businessDays.businessDate, requestedBusinessDate),
             eq(schema.businessDays.status, 'OPEN'),
+            gte(schema.businessDays.businessDate, recentFromBusinessDate),
           ),
         ),
       )
@@ -108,6 +115,16 @@ export class DrizzleBusinessDayStatusReader implements BusinessDayStatusReader {
       requested: items.find((i) => i.businessDate === requestedBusinessDate) ?? null,
       open,
       pastOpen: open.filter((i) => i.businessDate < currentBusinessDate),
+      // The window, plus any open day outside it. The window is bounded at
+      // BOTH ends: a future-dated day pulled in for the `requested` slice is
+      // one the operator navigated to, not a recent one. An OPEN day is kept
+      // at any age — including a future-dated one — because it still needs
+      // closing and this list replaced the panel that was showing it.
+      recent: items.filter(
+        (i) =>
+          (i.businessDate >= recentFromBusinessDate && i.businessDate <= currentBusinessDate) ||
+          i.status === 'OPEN',
+      ),
     };
   }
 }

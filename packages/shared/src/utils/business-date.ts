@@ -81,6 +81,20 @@ export function resolveBusinessDate(opts: BusinessDateOptions = {}): string {
   return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
 
+/**
+ * A business date shifted by whole days, staying in `YYYY-MM-DD`.
+ *
+ * Business dates are calendar labels, not instants, so the arithmetic is done
+ * in UTC deliberately — it must not be perturbed by a timezone or by a DST
+ * transition in the station's zone. Rolling a month or year boundary is the
+ * point: naive `${y}-${m}-${d - 13}` produces `2026-03-(-8)`.
+ */
+export function shiftBusinessDate(businessDate: string, deltaDays: number): string {
+  const d = new Date(`${businessDate}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + deltaDays);
+  return d.toISOString().slice(0, 10);
+}
+
 /** Extract date-resolution settings from a station `settings` JSONB blob. */
 export function businessDateSettings(settings: unknown): { timeZone: string; dayStartsAt: string } {
   const s = (settings ?? {}) as Record<string, unknown>;

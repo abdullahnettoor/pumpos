@@ -568,6 +568,14 @@ export interface BusinessDayStatusResponse {
   requestedBusinessDay: BusinessDayStatusItem | null;
   openBusinessDays: BusinessDayStatusItem[];
   pastOpenBusinessDays: BusinessDayStatusItem[];
+  /**
+   * The last 14 days, open and closed, newest first — plus any open day older
+   * than that, which still needs closing. Closed days appear here and nowhere
+   * else in this payload (#226).
+   */
+  recentBusinessDays: BusinessDayStatusItem[];
+  /** Inclusive start of that window, so the UI can label it without guessing. */
+  recentFromBusinessDate: string;
 }
 
 export class CloudShiftService {

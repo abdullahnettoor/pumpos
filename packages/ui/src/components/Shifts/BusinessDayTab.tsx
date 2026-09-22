@@ -27,6 +27,7 @@ import {
   queryKeys,
 } from '../../query/hooks.js';
 import { useStationBusinessDate } from '../../hooks/useStationBusinessDate.js';
+import type { BusinessDayStatusItem } from '../../services/cloud.js';
 
 const shiftService = new CloudShiftService();
 
@@ -36,6 +37,12 @@ interface BusinessDayTabProps {
   activeBusinessDayId?: string | null;
   requestedBusinessDate?: string | null;
   onBusinessDateSelected?: () => void;
+  /**
+   * Route elsewhere in the app. Only used by "See older", which hands days
+   * beyond the recent window to the Reports page's Daily DSSR list (#226).
+   * Optional: an embed that cannot route simply does not get the affordance.
+   */
+  onNavigate?: (path: string) => void;
 }
 
 const rowStyle: React.CSSProperties = {
@@ -76,6 +83,7 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
   activeBusinessDayId,
   requestedBusinessDate,
   onBusinessDateSelected,
+  onNavigate,
 }) => {
   const stationId = selectedStation?.id ?? null;
   const settings = (selectedStation?.settings ?? {}) as {
@@ -145,6 +153,27 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
       b.businessDate.localeCompare(a.businessDate),
     );
   }, [currentBusinessDayStatusQ.data]);
+
+  /**
+   * The last 14 days, open AND closed. This replaces an open-days-only panel,
+   * which made a closed day invisible — an operator had no way to reach, say,
+   * 16 Sept from here at all. The server already orders it newest first and
+   * already keeps any older still-open day in it.
+   */
+  const recentBusinessDays: BusinessDayStatusItem[] = useMemo(
+    () => currentBusinessDayStatusQ.data?.recentBusinessDays ?? [],
+    [currentBusinessDayStatusQ.data],
+  );
+  const recentFromBusinessDate: string | undefined =
+    currentBusinessDayStatusQ.data?.recentFromBusinessDate;
+
+  /**
+   * "See older" hands the operator to the Reports page, which is role-gated to
+   * Owner / Manager / Accountant. Offering it to Staff would route them to a
+   * page their own nav does not list and whose reads refuse them.
+   */
+  const mayOpenReports =
+    userRole === 'Owner' || userRole === 'Manager' || userRole === 'Accountant';
 
   useEffect(() => {
     if (
@@ -394,13 +423,13 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
         </div>
       </div>
 
-      <Panel flush title={`Open Business Days · ${openBusinessDays.length}`}>
+      <Panel flush title={`Recent Business Days · ${recentBusinessDays.length}`}>
         {currentBusinessDayStatusQ.isPending ? (
           <div style={{ padding: '12px' }}>
             <EmptyState
               compact
               icon={<CalendarRange />}
-              title="Loading open Business Days"
+              title="Loading Business Days"
               description="Checking the Station's Business Day lifecycle."
             />
           </div>
@@ -410,22 +439,27 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
               compact
               icon={<CalendarRange />}
               title="Business Day status unavailable"
-              description="Open days could not be loaded. Check the connection and retry."
+              description="Recent Business Days could not be loaded. Check the connection and retry."
             />
           </div>
-        ) : openBusinessDays.length === 0 ? (
+        ) : recentBusinessDays.length === 0 ? (
           <div style={{ padding: '12px' }}>
             <EmptyState
               compact
               icon={<CalendarRange />}
-              title="No open Business Days"
-              description="There are no open days requiring attention."
+              title={
+                recentFromBusinessDate
+                  ? `No Business Days since ${formatDate(recentFromBusinessDate)}`
+                  : 'No recent Business Days'
+              }
+              description="Open a shift to start a Business Day, or see older days in Reports."
             />
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column' }}>
-            {openBusinessDays.map((day: any) => {
+            {recentBusinessDays.map((day) => {
               const selected = day.businessDate === businessDate;
+              const isOpen = day.status === 'OPEN';
               return (
                 <button
                   key={day.id}
@@ -444,10 +478,11 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
                     fontFamily: 'inherit',
                   }}
                 >
-                  <div style={{ minWidth: 120 }}>
+                  <div style={{ minWidth: 180, display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <span style={{ color: 'var(--text-strong)', fontWeight: 600 }}>
-                      {formatDate(day.businessDate)} · Open
+                      {formatDate(day.businessDate)}
                     </span>
+                    <StatusChip status={isOpen ? 'open' : 'closed'} size="sm" />
                   </div>
                   <div style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
                     {Number(day.closedShiftCount)} closed · {Number(day.openShiftCount)} open
@@ -472,6 +507,16 @@ export const BusinessDayTab: React.FC<BusinessDayTabProps> = ({
                 </button>
               );
             })}
+            {/* Days beyond the window live in the Reports page's Daily DSSR
+                list, which already reads them. Offered only when the app gave
+                us somewhere to route — a dead button is worse than none. */}
+            {onNavigate && mayOpenReports && (
+              <div style={{ padding: '8px 16px' }}>
+                <Button variant="ghost" size="xs" onClick={() => onNavigate('/reports')}>
+                  See older Business Days
+                </Button>
+              </div>
+            )}
           </div>
         )}
       </Panel>

@@ -29,6 +29,14 @@ const USER = '00000000-0000-0000-0000-00000000a103';
 const TEMPLATE = '00000000-0000-0000-0000-00000000a104';
 const DAY_WITH_SHIFTS = '00000000-0000-0000-0000-00000000c101';
 const DAY_QUIET = '00000000-0000-0000-0000-00000000c102';
+// The recent-window fixtures (#226). CURRENT is 2026-03-12, so a 14-day
+// window inclusive of it starts at 2026-02-27.
+const DAY_CLOSED_IN_WINDOW = '00000000-0000-0000-0000-00000000c103';
+const DAY_CLOSED_BEFORE_WINDOW = '00000000-0000-0000-0000-00000000c104';
+const DAY_STALE_OPEN = '00000000-0000-0000-0000-00000000c105';
+const DAY_FUTURE = '00000000-0000-0000-0000-00000000c106';
+const CURRENT_BUSINESS_DATE = '2026-03-12';
+const RECENT_FROM = '2026-02-27';
 
 const DAY_UPDATED_AT = new Date('2026-03-10T10:00:00.000Z');
 const SHIFT_1_UPDATED_AT = new Date('2026-03-10T14:00:00.000Z');
@@ -126,16 +134,22 @@ describe.skipIf(!CONNECTION)('Business Day status reader against real Postgres',
       endTime: '14:00',
     });
 
-    for (const [id, date] of [
-      [DAY_WITH_SHIFTS, '2026-03-10'],
-      [DAY_QUIET, '2026-03-11'],
+    for (const [id, date, status] of [
+      [DAY_WITH_SHIFTS, '2026-03-10', 'OPEN'],
+      [DAY_QUIET, '2026-03-11', 'OPEN'],
+      // Closed and inside the window: the day the old panel could not show.
+      [DAY_CLOSED_IN_WINDOW, '2026-03-04', 'CLOSED'],
+      // Closed and older than the window: reachable via "See older" only.
+      [DAY_CLOSED_BEFORE_WINDOW, '2026-01-15', 'CLOSED'],
+      // Open and older than the window: still needs closing, so still listed.
+      [DAY_STALE_OPEN, '2026-01-20', 'OPEN'],
     ] as const) {
       await db.insert(schema.businessDays).values({
         id,
         organizationId: ORG,
         stationId: STATION,
         businessDate: date,
-        status: 'OPEN',
+        status,
         openedBy: USER,
         updatedAt: DAY_UPDATED_AT,
       });
@@ -162,7 +176,13 @@ describe.skipIf(!CONNECTION)('Business Day status reader against real Postgres',
   }
 
   const load = (requestedDate: string) =>
-    new DrizzleBusinessDayStatusReader(db).loadSlices(ORG, STATION, requestedDate, '2026-03-12');
+    new DrizzleBusinessDayStatusReader(db).loadSlices(
+      ORG,
+      STATION,
+      requestedDate,
+      CURRENT_BUSINESS_DATE,
+      RECENT_FROM,
+    );
 
   it('counts the day’s closed and open shifts (not zero)', async () => {
     const slices = await load('2026-03-10');
@@ -190,5 +210,56 @@ describe.skipIf(!CONNECTION)('Business Day status reader against real Postgres',
   it('keeps the quiet day’s last activity at its own updated_at', async () => {
     const slices = await load('2026-03-11');
     expect(slices.requested?.lastActivityAt).toBe(DAY_UPDATED_AT.toISOString());
+  });
+
+  describe('the recent window (#226)', () => {
+    const recentIds = async () => (await load(CURRENT_BUSINESS_DATE)).recent.map((d) => d.id);
+
+    it('includes a CLOSED day inside the window', async () => {
+      // The whole point of the issue: 16 Sept was closed, so invisible.
+      expect(await recentIds()).toContain(DAY_CLOSED_IN_WINDOW);
+    });
+
+    it('excludes a CLOSED day older than the window', async () => {
+      expect(await recentIds()).not.toContain(DAY_CLOSED_BEFORE_WINDOW);
+    });
+
+    it('still includes an OPEN day older than the window', async () => {
+      expect(await recentIds()).toContain(DAY_STALE_OPEN);
+    });
+
+    it('carries real shift counts on a recent row, not the #225 zeros', async () => {
+      const day = (await load(CURRENT_BUSINESS_DATE)).recent.find((d) => d.id === DAY_WITH_SHIFTS);
+      expect(day).toMatchObject({ closedShiftCount: 2, openShiftCount: 1 });
+    });
+
+    it('does not let the wider window widen the open/pastOpen slices', async () => {
+      // Asserted as exact id sets, not as `every(status === 'OPEN')` — the
+      // latter restates the filter's definition and cannot fail.
+      const slices = await load(CURRENT_BUSINESS_DATE);
+      expect(slices.open.map((d) => d.id).sort()).toEqual(
+        [DAY_WITH_SHIFTS, DAY_QUIET, DAY_STALE_OPEN].sort(),
+      );
+      expect(slices.pastOpen.map((d) => d.id).sort()).toEqual(
+        [DAY_WITH_SHIFTS, DAY_QUIET, DAY_STALE_OPEN].sort(),
+      );
+    });
+
+    it('bounds the window at the top as well as the bottom', async () => {
+      // A future-dated day the operator navigated to is pulled in for the
+      // `requested` slice; it is not a *recent* day.
+      await db.insert(schema.businessDays).values({
+        id: DAY_FUTURE,
+        organizationId: ORG,
+        stationId: STATION,
+        businessDate: '2026-04-20',
+        status: 'CLOSED',
+        openedBy: USER,
+        updatedAt: DAY_UPDATED_AT,
+      });
+      const slices = await load('2026-04-20');
+      expect(slices.requested?.id).toBe(DAY_FUTURE);
+      expect(slices.recent.map((d) => d.id)).not.toContain(DAY_FUTURE);
+    });
   });
 });

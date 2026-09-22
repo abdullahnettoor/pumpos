@@ -58,20 +58,30 @@ export const ShiftHistoryTab: React.FC<ShiftHistoryTabProps> = ({
 
   const columns = useMemo<ColumnDef<any, any>[]>(
     () => [
-      {
-        accessorKey: 'generatedAt',
-        header: 'Closure Date',
-        cell: ({ row }) => <span>{formatStationDateTime(row.original.generatedAt, timeZone)}</span>,
-      },
+      // Business Day leads, and it is the primary read (#226). A shift closing
+      // 05:11 on the 17th belongs to the 16th; leading with the closure
+      // timestamp invited reading that row as the 17th's.
       {
         id: 'businessDate',
         header: 'Business Day',
         cell: ({ row }) =>
           row.original.businessDate ? (
-            <DateText value={row.original.businessDate} />
+            <span style={{ color: 'var(--text-strong)', fontWeight: 600 }}>
+              <DateText value={row.original.businessDate} />
+            </span>
           ) : (
             <span style={{ color: 'var(--text-faint)' }}>—</span>
           ),
+      },
+      // Demoted, not dropped: still the answer to "when was this reconciled?".
+      {
+        accessorKey: 'generatedAt',
+        header: 'Closed At',
+        cell: ({ row }) => (
+          <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
+            {formatStationDateTime(row.original.generatedAt, timeZone)}
+          </span>
+        ),
       },
       {
         id: 'template',

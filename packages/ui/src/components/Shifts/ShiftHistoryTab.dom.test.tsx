@@ -88,4 +88,34 @@ describe('ShiftHistoryTab', () => {
     expect(screen.getByText('Priya Nair')).toBeDefined();
     expect(screen.getByText(/18,200/)).toBeDefined();
   });
+
+  describe('which column leads (#226)', () => {
+    const headers = () =>
+      Array.from(document.querySelectorAll('thead th')).map((th) => th.textContent?.trim());
+
+    it('leads with Business Day, not the closure timestamp', () => {
+      // A shift closing 05:11 on the 17th belongs to the 16th. Leading with
+      // the closure time invites reading that row as the 17th's.
+      render([apiRow()]);
+      expect(headers()[0]).toMatch(/Business Day/i);
+    });
+
+    it('still shows the closure time, demoted rather than dropped', () => {
+      render([apiRow()]);
+      const closureIndex = headers().findIndex((h) => /Closed/i.test(h ?? ''));
+      expect(closureIndex).toBeGreaterThan(0);
+    });
+
+    it('renders the business date in the leading cell', () => {
+      render([apiRow()]);
+      const first = body().getAllByRole('row')[0].querySelectorAll('td')[0];
+      expect(first.textContent).toMatch(/Mar/i);
+    });
+
+    it('marks a row with no business date instead of leaving the lead cell blank', () => {
+      render([apiRow({ businessDate: null })]);
+      const first = body().getAllByRole('row')[0].querySelectorAll('td')[0];
+      expect(first.textContent?.trim()).toBe('—');
+    });
+  });
 });
