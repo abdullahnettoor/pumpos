@@ -514,4 +514,94 @@ describe('OpenShiftForm', () => {
       expect(screen.queryByRole('group', { name: /Shift-wide/i })).toBeNull();
     });
   });
+
+  /**
+   * A dispenser can only be assigned an attendant at shift open — nothing
+   * writes `shift_staff_assignments` afterwards. So a dispenser opened without
+   * one cannot be handed over for the life of that shift, and the only way out
+   * is to close and re-open, discarding the opening readings (#258).
+   *
+   * The escape hatch is not a per-shift toggle: a pump that nobody is working
+   * is a pump that is not in use, which is what the dispenser's own
+   * MAINTENANCE status already means — and such a dispenser is never offered
+   * here. One attendant may cover several pumps, so a short-staffed shift
+   * spreads rather than skips.
+   */
+  describe('requiring an attendant on every dispenser', () => {
+    const DUS = [
+      { id: 'du-1', code: 'DU-1', name: 'Pump One' },
+      { id: 'du-2', code: 'DU-2', name: 'Pump Two' },
+    ];
+    const STAFF = [{ id: 'u-1', fullName: 'Ravi' }];
+
+    const withAssignments = (assignments: { duId: string; userId: string }[]) =>
+      renderForm({ dispensers: DUS, staff: STAFF, staffAssignments: assignments });
+
+    /**
+     * The blocking message specifically, not any text mentioning attendants —
+     * the section description says "every pump in service needs an attendant"
+     * on every render, and a looser matcher silently matched that instead.
+     */
+    const blockingMessage = () => screen.queryByRole('alert');
+
+    it('blocks the open while a dispenser has no attendant', () => {
+      withAssignments([
+        { duId: 'du-1', userId: 'u-1' },
+        { duId: 'du-2', userId: '' },
+      ]);
+      expect(openButton().disabled).toBe(true);
+      expect(blockingMessage()).not.toBeNull();
+    });
+
+    it('names the dispensers holding it up, so the operator knows which card', () => {
+      withAssignments([
+        { duId: 'du-1', userId: '' },
+        { duId: 'du-2', userId: '' },
+      ]);
+      expect(blockingMessage()?.textContent).toMatch(/DU-1, DU-2 need an attendant/i);
+    });
+
+    it('names only the one holding it up when a single pump is short', () => {
+      withAssignments([
+        { duId: 'du-1', userId: 'u-1' },
+        { duId: 'du-2', userId: '' },
+      ]);
+      const text = blockingMessage()?.textContent ?? '';
+      expect(text).toMatch(/DU-2 needs an attendant/i);
+      expect(text).not.toMatch(/DU-1/);
+    });
+
+    it('allows the open once every dispenser has one', () => {
+      withAssignments([
+        { duId: 'du-1', userId: 'u-1' },
+        { duId: 'du-2', userId: 'u-1' },
+      ]);
+      expect(openButton().disabled).toBe(false);
+      // One attendant covering both pumps is deliberately enough.
+      expect(blockingMessage()).toBeNull();
+    });
+
+    it('does not block a station that runs no dispensers', () => {
+      renderForm({ dispensers: [], staff: STAFF, staffAssignments: [] });
+      expect(openButton().disabled).toBe(false);
+    });
+
+    it('blocks for the business-day reason independently of the attendant one', () => {
+      // Both pumps are covered, so only the business-day clause can be
+      // disabling this — otherwise the test passes for the wrong reason.
+      renderForm(
+        {
+          dispensers: DUS,
+          staff: STAFF,
+          staffAssignments: [
+            { duId: 'du-1', userId: 'u-1' },
+            { duId: 'du-2', userId: 'u-1' },
+          ],
+        },
+        { requestedState: 'CLOSED', openBusinessDays: [] },
+      );
+      expect(blockingMessage()).toBeNull();
+      expect(openButton().disabled).toBe(true);
+    });
+  });
 });

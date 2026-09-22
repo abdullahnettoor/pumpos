@@ -126,7 +126,15 @@ export class UpdateDispenser implements UseCase<UpdateDispenserCommand, Dispense
         aggregateType: 'DispenserUnit',
         aggregateId: updated.id,
         stationId: updated.stationId,
-        payload: { dispenserId: updated.id },
+        // Status carries the from/to: taking a pump out of service changes
+        // what a shift can open with and stops its nozzles being read (#258),
+        // so the audit log must not have it look like a rename.
+        payload: {
+          dispenserId: updated.id,
+          ...(updated.status !== existing.status
+            ? { statusFrom: existing.status, statusTo: updated.status }
+            : {}),
+        },
       }),
     ]);
     return ok(updated);

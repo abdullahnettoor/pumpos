@@ -33,6 +33,8 @@ const CLOSED_SHIFT = '00000000-0000-0000-0000-00000000e108';
 const FUEL = '00000000-0000-0000-0000-00000000e109';
 const TANK = '00000000-0000-0000-0000-00000000e10a';
 const DU = '00000000-0000-0000-0000-00000000e10b';
+const DU_MAINTENANCE = '00000000-0000-0000-0000-0000000000f1';
+const NOZZLE_MAINTENANCE = '00000000-0000-0000-0000-0000000000f2';
 const NOZZLE = '00000000-0000-0000-0000-00000000e10c';
 const TERMINAL = '00000000-0000-0000-0000-00000000e10d';
 const HANDOVER = '00000000-0000-0000-0000-00000000e10e';
@@ -180,6 +182,27 @@ describe.skipIf(!CONNECTION)('GET /shifts/status full mode against real Postgres
       name: 'N1',
       currentReading: '100',
     });
+    // A pump out of service, and its nozzle. The dispenser list already
+    // filtered these out; the nozzle list did not, so the opening-readings
+    // grid still asked for a reading on a pump nobody can work (#258).
+    await db.insert(schema.dispenserUnits).values({
+      id: DU_MAINTENANCE,
+      organizationId: ORG,
+      stationId: STATION,
+      name: 'DU-2',
+      code: 'DU2',
+      status: 'MAINTENANCE',
+    });
+    await db.insert(schema.nozzles).values({
+      id: NOZZLE_MAINTENANCE,
+      organizationId: ORG,
+      stationId: STATION,
+      duId: DU_MAINTENANCE,
+      tankId: TANK,
+      productId: FUEL,
+      name: 'N9',
+      currentReading: '100',
+    });
     await db.insert(schema.paymentTerminals).values({
       id: TERMINAL,
       organizationId: ORG,
@@ -227,6 +250,16 @@ describe.skipIf(!CONNECTION)('GET /shifts/status full mode against real Postgres
     await db.insert(schema.nozzleReadings).values({
       shiftId: OPEN_SHIFT,
       nozzleId: NOZZLE,
+      openingReading: '100',
+      closingReading: '100',
+      volumeSold: '0',
+      unitPrice: '100',
+    });
+    // A reading already taken on the pump that later went out of service.
+    // Its shift must still be closable.
+    await db.insert(schema.nozzleReadings).values({
+      shiftId: OPEN_SHIFT,
+      nozzleId: NOZZLE_MAINTENANCE,
       openingReading: '100',
       closingReading: '100',
       volumeSold: '0',
@@ -319,7 +352,9 @@ describe.skipIf(!CONNECTION)('GET /shifts/status full mode against real Postgres
       openedByName: 'Meera',
     });
     expect(data.shift.id).toBe(OPEN_SHIFT);
-    expect(data.readings).toHaveLength(1);
+    // Two nozzles were read at open; one of their pumps has since gone out of
+    // service, and its reading stays with the shift regardless.
+    expect(data.readings).toHaveLength(2);
   });
 
   it('enriches nozzle readings with nozzle/product/tank/DU names', () => {
@@ -413,5 +448,27 @@ describe.skipIf(!CONNECTION)('GET /shifts/status full mode against real Postgres
     expect(data.staff.map((u: any) => u.fullName).sort()).toEqual(['Arun', 'Meera']);
     expect(data.dispensers[0]).toMatchObject({ name: 'DU-1' });
     expect(data.terminals[0]).toMatchObject({ label: 'POS 1' });
+  });
+
+  describe('a dispenser out of service (#258)', () => {
+    it('leaves it out of the dispenser list', () => {
+      expect(data.dispensers.map((d: any) => d.name)).toEqual(['DU-1']);
+    });
+
+    it('leaves its nozzles out too, so it disappears completely', () => {
+      // Half-filtering is worse than not filtering: the pump vanishes from
+      // assignment but its nozzle still demands an opening reading, and with
+      // the open now blocked on unassigned pumps the two halves have to agree.
+      expect(data.nozzles.map((n: any) => n.name)).toEqual(['N1']);
+    });
+
+    it('still carries readings already taken on it by the running shift', () => {
+      // The filter governs the reference data a shift is STARTED from, not a
+      // shift already running. Dropping these would strand an open shift:
+      // a pump put out of service mid-shift would lose the closing reading
+      // its own opening reading demands, and the shift could never close.
+      const onShift = data.activeShift.nozzleReadings.map((r: any) => r.nozzleName ?? r.nozzleId);
+      expect(onShift).toHaveLength(2);
+    });
   });
 });

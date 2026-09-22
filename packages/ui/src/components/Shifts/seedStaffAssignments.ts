@@ -1,29 +1,18 @@
 /**
  * Seeding the shift-open form's per-dispenser attendant selection.
  *
- * Every dispenser is preselected with the first available member of staff.
- * That looks like the wrong default — staff assignment is what makes an
- * attendant accountable for that dispenser's drawer cash at handover, and
- * `staff[0]` is whoever the API happened to return first — and while
- * restructuring the form (#223) it was briefly changed to leave dispensers
- * unassigned unless there was exactly one candidate.
+ * Nobody is preselected. Staff assignment is what makes an attendant
+ * accountable for that dispenser's drawer cash at handover, so it is a
+ * decision to be made rather than defaulted — and `staff[0]` is whoever the
+ * API returned first, which at most stations is the owner.
  *
- * That was worse, because of where assignments can be written: only at shift
- * open (`OpenShift`), from `staffAssignments`, which the submit path filters
- * empties out of. There is no route that adds an assignment to a shift that is
- * already open. So a shift opened with none is a shift where
- * `GET /shifts/my-assignment` answers null for every attendant, no handover
- * can be recorded at all, and the only way out is to close and re-open —
- * discarding the opening readings.
- *
- * A misassignment is visible on the dispenser's own card and is one click to
- * correct; even unnoticed, it attributes a shortage to a named person, which
- * is auditable and disputable. An absent assignment is neither, and cannot be
- * repaired. Preselecting is the safer wrong.
- *
- * The real hole is that zero assignments is reachable at all — an operator can
- * still set every card to Unassigned by hand. That wants a guard at open
- * rather than a seeding trick, and is filed separately.
+ * This only became the safe answer once `OpenShift` started refusing a shift
+ * whose in-service dispensers are not all assigned (#258). Before that, a
+ * preselected wrong name was genuinely better than none, because assignments
+ * can only be written at open: an unassigned dispenser could never be handed
+ * over, and the only way out was to close and re-open, discarding the opening
+ * readings. Now that state cannot be opened into at all, so the reason for
+ * defaulting to an arbitrary person is gone with it.
  */
 export interface SeededStaffAssignment {
   duId: string;
@@ -33,8 +22,6 @@ export interface SeededStaffAssignment {
 
 export function seedStaffAssignments(
   dispensers: { id: string }[] | null | undefined,
-  staff: { id: string }[] | null | undefined,
 ): SeededStaffAssignment[] {
-  const defaultUserId = staff?.[0]?.id ?? '';
-  return (dispensers ?? []).map((du) => ({ duId: du.id, userId: defaultUserId }));
+  return (dispensers ?? []).map((du) => ({ duId: du.id, userId: '' }));
 }

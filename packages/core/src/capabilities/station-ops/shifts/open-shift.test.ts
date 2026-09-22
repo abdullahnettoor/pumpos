@@ -96,6 +96,14 @@ class NozzleRepo implements NozzleRepository {
   }
 }
 
+/** The dispensers a station is currently running on. */
+class InServiceDispenserRepo {
+  constructor(readonly ids: string[]) {}
+  async listInServiceIds() {
+    return this.ids;
+  }
+}
+
 class ReadingRepo implements NozzleReadingRepository {
   readonly saved: NozzleReading[] = [];
   constructor(private readonly lastClosing: Record<string, number> = {}) {}
@@ -175,12 +183,16 @@ describe('OpenShift', () => {
       nozzles,
       nozzleReadings,
       fuelPrices,
+      // Both seeded nozzles sit on du-1, which this case runs and assigns.
+      dispensers: new InServiceDispenserRepo(['du-1']),
       events,
     }).execute(
       {
         stationId: 'st-1',
         shiftTemplateId: 'tpl-1',
         openingCash: 5000,
+        // du-1 is in service, so it needs an attendant before the open (#258).
+        staffAssignments: [{ userId: 'u-1', duId: 'du-1' }],
         terminalLinks: [{ terminalId: 't1', duId: 'du-1' }],
       },
       makeContext(),
@@ -228,6 +240,9 @@ describe('OpenShift', () => {
       nozzles: new NozzleRepo([]),
       nozzleReadings: new ReadingRepo(),
       fuelPrices: new PriceRepo([]),
+      // These cases predate the attendant rule and assign nobody, so the
+      // station runs no dispensers for their purposes.
+      dispensers: new InServiceDispenserRepo([]),
       events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
     }).execute({ stationId: 'st-1', shiftTemplateId: 'tpl-1', openingCash: 0 }, ctx);
     expect(result.success).toBe(true);
@@ -275,6 +290,9 @@ describe('OpenShift', () => {
       nozzles: new NozzleRepo([]),
       nozzleReadings: new ReadingRepo(),
       fuelPrices: new PriceRepo([]),
+      // These cases predate the attendant rule and assign nobody, so the
+      // station runs no dispensers for their purposes.
+      dispensers: new InServiceDispenserRepo([]),
       events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
     }).execute({ stationId: 'st-1', shiftTemplateId: 'tpl-1', openingCash: 0 }, makeContext());
 
@@ -305,6 +323,9 @@ describe('OpenShift', () => {
       nozzles: new NozzleRepo([]),
       nozzleReadings: new ReadingRepo(),
       fuelPrices: new PriceRepo([]),
+      // These cases predate the attendant rule and assign nobody, so the
+      // station runs no dispensers for their purposes.
+      dispensers: new InServiceDispenserRepo([]),
       events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
     }).execute(
       { stationId: 'st-1', shiftTemplateId: 'tpl-1', openingCash: 0, businessDate: '2026-03-14' },
@@ -325,6 +346,9 @@ describe('OpenShift', () => {
       nozzles: new NozzleRepo([]),
       nozzleReadings: new ReadingRepo(),
       fuelPrices: new PriceRepo([]),
+      // These cases predate the attendant rule and assign nobody, so the
+      // station runs no dispensers for their purposes.
+      dispensers: new InServiceDispenserRepo([]),
       events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
     }).execute(
       { stationId: 'st-1', shiftTemplateId: 'tpl-1', openingCash: 0, businessDate: '2026-03-14' },
@@ -359,6 +383,9 @@ describe('OpenShift', () => {
       nozzles: new NozzleRepo([]),
       nozzleReadings: new ReadingRepo(),
       fuelPrices: new PriceRepo([]),
+      // These cases predate the attendant rule and assign nobody, so the
+      // station runs no dispensers for their purposes.
+      dispensers: new InServiceDispenserRepo([]),
       events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
     }).execute(
       { stationId: 'st-1', shiftTemplateId: 'tpl-1', openingCash: 0, businessDate: '2026-03-14' },
@@ -385,6 +412,9 @@ describe('OpenShift', () => {
       nozzles: new NozzleRepo([]),
       nozzleReadings: new ReadingRepo(),
       fuelPrices: new PriceRepo([]),
+      // These cases predate the attendant rule and assign nobody, so the
+      // station runs no dispensers for their purposes.
+      dispensers: new InServiceDispenserRepo([]),
       events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
     }).execute(
       { stationId: 'st-1', shiftTemplateId: 'tpl-1', openingCash: 0, businessDate: '2026-03-16' },
@@ -402,6 +432,9 @@ describe('OpenShift', () => {
       nozzles: new NozzleRepo([]),
       nozzleReadings: new ReadingRepo(),
       fuelPrices: new PriceRepo([]),
+      // These cases predate the attendant rule and assign nobody, so the
+      // station runs no dispensers for their purposes.
+      dispensers: new InServiceDispenserRepo([]),
       events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
     }).execute(
       { stationId: 'st-1', shiftTemplateId: 'tpl-1', openingCash: 0, businessDate: '2026-02-31' },
@@ -437,9 +470,116 @@ describe('OpenShift', () => {
       nozzles: new NozzleRepo([]),
       nozzleReadings: new ReadingRepo(),
       fuelPrices: new PriceRepo([]),
+      // These cases predate the attendant rule and assign nobody, so the
+      // station runs no dispensers for their purposes.
+      dispensers: new InServiceDispenserRepo([]),
       events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
     }).execute({ stationId: 'st-1', shiftTemplateId: 'tpl-1', openingCash: 0 }, makeContext());
     expect(result.success).toBe(false);
     if (!result.success) expect(result.error.code).toBe('CONFLICT');
+  });
+});
+
+/**
+ * A dispenser can only be given an attendant here. Nothing writes
+ * `shift_staff_assignments` afterwards, so a dispenser opened without one
+ * cannot be handed over for the life of the shift and the only way out is to
+ * close and re-open, discarding the opening readings (#258).
+ *
+ * The rule lives in the use-case rather than the form because the form is not
+ * the only caller: the mobile client, a replayed offline write and any API
+ * caller all reach this.
+ */
+describe('OpenShift attendant requirement', () => {
+  const openWith = (opts: {
+    inService: string[];
+    staffAssignments?: { userId: string; duId: string }[];
+    nozzles?: Nozzle[];
+  }) => {
+    const readings = new ReadingRepo();
+    const shifts = new ShiftRepo();
+    return {
+      readings,
+      shifts,
+      run: () =>
+        new OpenShift({
+          shifts,
+          businessDays: new BdRepo(),
+          nozzles: new NozzleRepo(opts.nozzles ?? []),
+          nozzleReadings: readings,
+          fuelPrices: new PriceRepo([]),
+          dispensers: new InServiceDispenserRepo(opts.inService),
+          events: new InProcessEventDispatcher({ store: new InMemoryEventStore() }),
+        }).execute(
+          {
+            stationId: 'st-1',
+            shiftTemplateId: 'tpl-1',
+            openingCash: 0,
+            staffAssignments: opts.staffAssignments,
+          },
+          makeContext(),
+        ),
+    };
+  };
+
+  it('refuses when an in-service dispenser has nobody on it', async () => {
+    const result = await openWith({
+      inService: ['du-1', 'du-2'],
+      staffAssignments: [{ userId: 'u-1', duId: 'du-1' }],
+    }).run();
+
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error.code).toBe('VALIDATION_ERROR');
+  });
+
+  it('names the dispensers it refused for, so the caller can say which', async () => {
+    const result = await openWith({ inService: ['du-1', 'du-2'], staffAssignments: [] }).run();
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect((result.error.details as any)?.duIds).toEqual(['du-1', 'du-2']);
+    }
+  });
+
+  it('opens when every in-service dispenser has someone', async () => {
+    const result = await openWith({
+      inService: ['du-1', 'du-2'],
+      staffAssignments: [
+        { userId: 'u-1', duId: 'du-1' },
+        { userId: 'u-1', duId: 'du-2' },
+      ],
+    }).run();
+    expect(result.success).toBe(true);
+  });
+
+  it('ignores a dispenser that is out of service', async () => {
+    // The escape hatch: a pump nobody works is a pump not in use.
+    const result = await openWith({
+      inService: ['du-1'],
+      staffAssignments: [{ userId: 'u-1', duId: 'du-1' }],
+    }).run();
+    expect(result.success).toBe(true);
+  });
+
+  it('opens a station that runs no dispensers at all', async () => {
+    const result = await openWith({ inService: [], staffAssignments: [] }).run();
+    expect(result.success).toBe(true);
+  });
+
+  it('does not seed a reading for an out-of-service dispenser’s nozzle', async () => {
+    // The half that was missing: filtering the *reference* list only hid the
+    // pump from the form, while the shift still grew reading rows for it —
+    // which then appeared on the close screen for a pump with no attendant.
+    const { readings, run } = openWith({
+      inService: ['du-1'],
+      staffAssignments: [{ userId: 'u-1', duId: 'du-1' }],
+      nozzles: [
+        { ...nozzle('n1', 'pet', '100'), duId: 'du-1' },
+        { ...nozzle('n9', 'pet', '100'), duId: 'du-of-service' },
+      ],
+    });
+    const result = await run();
+
+    expect(result.success).toBe(true);
+    expect(readings.saved.map((r) => r.nozzleId)).toEqual(['n1']);
   });
 });
