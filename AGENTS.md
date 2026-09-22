@@ -704,6 +704,10 @@ Issues live in GitHub Issues for `abdullahnettoor/pumpos`; long-range planning r
 
 Single-context: one `CONTEXT.md` at the repo root plus `docs/adr/`. See `docs/agents/domain.md`.
 
+### User flow
+
+For any "how does an operator do X in the app" question — which screen, which button, the end-to-end order of onboarding → shifts → day close — see `docs/USER-FLOW.md` (navigation map: `docs/screenshots/FLOWS.md`).
+
 <!-- graft:start -->
 
 ## Graft — repo context graph
