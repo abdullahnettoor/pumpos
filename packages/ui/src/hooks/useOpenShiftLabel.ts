@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { formatShiftLabel } from '@pump/shared';
 import { useShiftStatus } from '../query/hooks.js';
+import { formatElapsedSince } from '../utils/format.js';
 
 /**
  * The status-bar's open-shift indicator, e.g. `Shift 20260922-2 open · 6h 12m`.
@@ -25,26 +26,18 @@ export function useOpenShiftLabel(stationId: string | null | undefined): string 
   const openedAt: string | null = activeShift?.openedAt ?? null;
 
   // Re-render about once a minute so the elapsed time stays current without
-  // touching the network. Only ticks while a shift is open.
-  const [now, setNow] = useState(() => Date.now());
+  // touching the network. Only ticks while a shift is open. The tick value is
+  // unused — it exists purely to re-run the render, where formatElapsedSince
+  // reads the wall clock.
+  const [, setTick] = useState(0);
   useEffect(() => {
     if (!openedAt) return;
-    const timer = window.setInterval(() => setNow(Date.now()), 60_000);
+    const timer = window.setInterval(() => setTick((t) => t + 1), 60_000);
     return () => window.clearInterval(timer);
   }, [openedAt]);
 
   const label = formatShiftLabel(businessDate, shiftSequence);
   if (!label || !openedAt) return undefined;
 
-  const elapsed = formatElapsed(now - new Date(openedAt).getTime());
-  return `Shift ${label} open${elapsed ? ` \u00b7 ${elapsed}` : ''}`;
-}
-
-/** `4_320_000ms` → `1h 12m`. Sub-minute rounds to `0m`; negative clamps to empty. */
-function formatElapsed(ms: number): string {
-  if (!Number.isFinite(ms) || ms < 0) return '';
-  const totalMinutes = Math.floor(ms / 60_000);
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+  return `Shift ${label} open \u00b7 ${formatElapsedSince(openedAt)}`;
 }

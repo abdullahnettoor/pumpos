@@ -109,3 +109,19 @@ export function formatTime(
   if (!d) return opts.fallback ?? '—';
   return d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
 }
+
+/**
+ * Elapsed time since a shift opened, as `Nh Nm` (e.g. `6h 12m`) — the format
+ * operators read for a shift's age in the status bar and the shift control bar.
+ * Always includes the hours segment so both surfaces print the same shape.
+ * Clamps negatives to `0h 0m`; returns the fallback for an unparseable input.
+ */
+export function formatElapsedSince(
+  openedAt: string | number | Date | null | undefined,
+  opts: { fallback?: string } = {},
+): string {
+  const d = toDate(openedAt);
+  if (!d) return opts.fallback ?? '—';
+  const mins = Math.floor(Math.max(0, Date.now() - d.getTime()) / 60_000);
+  return `${Math.floor(mins / 60)}h ${mins % 60}m`;
+}
