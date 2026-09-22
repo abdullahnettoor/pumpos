@@ -874,6 +874,7 @@ export const ShiftsManagement: React.FC<ShiftsManagementProps> = ({
           activeBusinessDayId={activeShift?.businessDayId ?? null}
           requestedBusinessDate={requestedBusinessDayDate}
           onBusinessDateSelected={() => setRequestedBusinessDayDate(null)}
+          onNavigate={onNavigate}
         />
       </div>
     );
