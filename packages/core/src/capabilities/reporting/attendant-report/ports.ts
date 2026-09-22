@@ -95,9 +95,10 @@ export interface AttendantCreditSaleSourceRow {
    */
   duId: string | null;
   /**
-   * The customer the receivable is owed by. A credit sale always names one;
-   * null only guards the anonymous OMC-fleet-card row shape, which this
-   * reader's `CREDIT_SALE` filter already excludes.
+   * The customer the receivable is owed by. Nullable because the ledger row
+   * shape allows an anonymous OMC fleet-card sale; a `CREDIT_SALE` chit always
+   * names one, and a reader that cannot must still produce the row rather than
+   * drop money out of a breakdown that has to sum to the Shift total.
    */
   customerId: string | null;
   customerName: string | null;

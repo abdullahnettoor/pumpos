@@ -177,9 +177,10 @@ const builders: Record<
     if (shifts.length === 0) return null;
     /*
      * One row per chit, not per shift: the operator chasing a receivable needs
-     * the name behind the number. A shift whose chits predate the breakdown
-     * still prints its own row, so the section total never loses money that
-     * the shift line accounted for.
+     * the name behind the number. A shift can carry a credit total with no
+     * chits under it — a back-office entry raised against the shift outside
+     * any attendant's handover — and it still prints its own row, so the
+     * section total never loses money the shift line accounted for.
      */
     const rows: Cell[][] = [];
     for (const shift of shifts) {
